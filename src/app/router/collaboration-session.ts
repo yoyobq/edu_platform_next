@@ -18,7 +18,7 @@ export type EntryCard = {
   kind: 'route';
 };
 
-export type SidecarSessionState = {
+export type CollaborationSessionState = {
   mode: EntryMode;
   status: SessionStatus;
   messages: SessionMessage[];
@@ -27,20 +27,22 @@ export type SidecarSessionState = {
   query: string;
 };
 
-export type SidecarSessionContextValue = {
-  session: SidecarSessionState;
+export type CollaborationSessionContextValue = {
+  session: CollaborationSessionState;
   resetSession: () => void;
   setQuery: (value: string) => void;
   submitQuery: (payload: { message: string; mode: EntryMode }) => void;
 };
 
-export const SidecarSessionContext = createContext<SidecarSessionContextValue | null>(null);
+export const CollaborationSessionContext = createContext<CollaborationSessionContextValue | null>(
+  null,
+);
 
-export function useSidecarSession() {
-  const contextValue = useContext(SidecarSessionContext);
+export function useCollaborationSession() {
+  const contextValue = useContext(CollaborationSessionContext);
 
   if (!contextValue) {
-    throw new Error('useSidecarSession must be used within SidecarSessionProvider.');
+    throw new Error('useCollaborationSession must be used within CollaborationSessionProvider.');
   }
 
   return contextValue;

@@ -1,14 +1,14 @@
 import { type ReactNode, useMemo, useReducer } from 'react';
 
 import {
+  CollaborationSessionContext,
+  type CollaborationSessionContextValue,
+  type CollaborationSessionState,
   type EntryMode,
   type SessionMessage,
-  SidecarSessionContext,
-  type SidecarSessionContextValue,
-  type SidecarSessionState,
-} from './sidecar-session';
+} from './collaboration-session';
 
-type SidecarSessionAction =
+type CollaborationSessionAction =
   | { type: 'reset' }
   | { type: 'set-query'; payload: string }
   | {
@@ -19,7 +19,7 @@ type SidecarSessionAction =
       };
     };
 
-const INITIAL_SESSION_STATE: SidecarSessionState = {
+const INITIAL_SESSION_STATE: CollaborationSessionState = {
   mode: 'local',
   status: 'idle',
   messages: [],
@@ -49,10 +49,10 @@ function buildSystemReply(mode: EntryMode): string {
   return '我先记下这个目标。下一步会结合上下文帮你整理页面、信息或草稿。';
 }
 
-function sidecarSessionReducer(
-  state: SidecarSessionState,
-  action: SidecarSessionAction,
-): SidecarSessionState {
+function collaborationSessionReducer(
+  state: CollaborationSessionState,
+  action: CollaborationSessionAction,
+): CollaborationSessionState {
   switch (action.type) {
     case 'reset':
       return INITIAL_SESSION_STATE;
@@ -87,10 +87,10 @@ function sidecarSessionReducer(
   }
 }
 
-export function SidecarSessionProvider({ children }: { children: ReactNode }) {
-  const [session, dispatch] = useReducer(sidecarSessionReducer, INITIAL_SESSION_STATE);
+export function CollaborationSessionProvider({ children }: { children: ReactNode }) {
+  const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
 
-  const value = useMemo<SidecarSessionContextValue>(
+  const value = useMemo<CollaborationSessionContextValue>(
     () => ({
       session,
       resetSession: () => dispatch({ type: 'reset' }),
@@ -100,5 +100,9 @@ export function SidecarSessionProvider({ children }: { children: ReactNode }) {
     [session],
   );
 
-  return <SidecarSessionContext.Provider value={value}>{children}</SidecarSessionContext.Provider>;
+  return (
+    <CollaborationSessionContext.Provider value={value}>
+      {children}
+    </CollaborationSessionContext.Provider>
+  );
 }

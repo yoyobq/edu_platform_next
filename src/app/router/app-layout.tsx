@@ -4,7 +4,7 @@ import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { AiSidecar } from './ai-sidecar';
-import { SidecarSessionProvider } from './sidecar-session-provider';
+import { CollaborationSessionProvider } from './collaboration-session-provider';
 import { useSidecarState } from './sidecar-state';
 import { SidecarStateProvider } from './sidecar-state-provider';
 import { useWidthBand } from './use-width-band';
@@ -144,9 +144,9 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 export function AppLayout(props: AppLayoutProps) {
   return (
     <SidecarStateProvider>
-      <SidecarSessionProvider>
+      <CollaborationSessionProvider>
         <AppLayoutFrame {...props} />
-      </SidecarSessionProvider>
+      </CollaborationSessionProvider>
     </SidecarStateProvider>
   );
 }

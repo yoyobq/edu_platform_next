@@ -2,7 +2,7 @@ import { type CSSProperties, useRef } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import { Alert, Divider, Drawer, Typography } from 'antd';
 
-import { useSidecarSession } from './sidecar-session';
+import { useCollaborationSession } from './collaboration-session';
 import { useSidecarState } from './sidecar-state';
 import { useWidthBand } from './use-width-band';
 
@@ -22,7 +22,7 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 
 export function AiSidecar() {
   const { availability, close, isOpen } = useSidecarState();
-  const { session, setQuery, submitQuery } = useSidecarSession();
+  const { session, setQuery, submitQuery } = useCollaborationSession();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const isUnavailable = availability === 'unavailable';
