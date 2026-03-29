@@ -71,3 +71,8 @@ Simple interpretation:
 ## Testing
 
 - Testing conventions and E2E setup live in [docs/testing.md](./docs/testing.md)
+
+## Env
+
+- shared and future dev env examples live under `env/`
+- development mode example lives in `env/.env.development.example`
