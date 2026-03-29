@@ -18,7 +18,7 @@ test('shows which projects are live and supports live-only filtering', async ({ 
     projectFixtures.paused.status,
   );
 
-  await page.getByRole('checkbox', { name: 'Only live' }).check();
+  await page.getByRole('checkbox', { name: '只看上线项目' }).check();
 
   await expect(projectCard(page, projectFixtures.live.id)).toBeVisible();
   await expect(projectCard(page, projectFixtures.paused.id)).toHaveCount(0);

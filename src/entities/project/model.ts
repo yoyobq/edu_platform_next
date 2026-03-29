@@ -12,16 +12,16 @@ export type Project = {
 export const demoProjects: readonly Project[] = [
   {
     id: 'realtime-pricing',
-    name: 'Realtime Pricing',
-    summary: 'Serving current pricing signals to production users.',
+    name: '实时定价',
+    summary: '向生产用户持续提供最新价格信号。',
     monthlyPrice: '$299',
     status: 'live',
     updatedAt: '2026-03-29 11:00 UTC',
   },
   {
     id: 'backfill-importer',
-    name: 'Backfill Importer',
-    summary: 'Internal recovery job kept visible for operator review.',
+    name: '回补导入器',
+    summary: '用于内部恢复的任务，当前保留给操作人员观察。',
     monthlyPrice: '$0',
     status: 'paused',
     updatedAt: '2026-03-28 18:30 UTC',

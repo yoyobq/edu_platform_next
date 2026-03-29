@@ -34,14 +34,14 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const menuItems: ItemType[] = [
     {
       key: getBaseURL('/', search),
-      label: <Link to={getBaseURL('/', search)}>Home</Link>,
+      label: <Link to={getBaseURL('/', search)}>首页</Link>,
     },
   ];
 
   if (currentAppEnv === 'dev' || currentAppEnv === 'test') {
     menuItems.push({
       key: getBaseURL('/sandbox/playground', search),
-      label: <Link to={getBaseURL('/sandbox/playground', search)}>Sandbox Playground</Link>,
+      label: <Link to={getBaseURL('/sandbox/playground', search)}>沙盒演练场</Link>,
     });
   }
 
@@ -63,7 +63,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                   aigc-friendly-frontend
                 </Typography.Title>
                 <Typography.Text type="secondary">
-                  env: {currentAppEnv} | role: {new URLSearchParams(search).get('role') || 'guest'}
+                  环境：{currentAppEnv} | 角色：
+                  {new URLSearchParams(search).get('role') || 'guest'}
                 </Typography.Text>
               </div>
 
@@ -83,8 +84,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               {isLabsRoute ? (
                 <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    `labs` routes require access checks. Use `?role=admin` to simulate the current
-                    allowed role.
+                    `labs` 路由需要通过访问控制。可使用 `?role=admin` 模拟当前允许角色。
                   </Typography.Paragraph>
                 </div>
               ) : null}
@@ -95,7 +95,6 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 
         <AiSidecar />
 
-        {/* Global Assistant Trigger (FAB) */}
         <div className="fixed bottom-8 right-8 z-top-control-bar shadow-lg rounded-full">
           <Button
             ref={triggerRef}
@@ -112,7 +111,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg">✨</span>
-              <span className="font-medium">Assistant</span>
+              <span className="font-medium">开始</span>
             </div>
           </Button>
         </div>

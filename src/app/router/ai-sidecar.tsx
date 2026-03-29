@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Sender } from '@ant-design/x';
+import { Bubble, Sender } from '@ant-design/x';
 import { Divider, Drawer, Typography } from 'antd';
 
 import { useSidecarState } from './sidecar-state';
@@ -29,7 +29,7 @@ export function AiSidecar() {
       title={
         <div className="flex items-center gap-2">
           <span className="text-lg">✨</span>
-          <span>Assistant</span>
+          <span>从这里开始</span>
         </div>
       }
       placement="right"
@@ -54,19 +54,24 @@ export function AiSidecar() {
     >
       <div ref={panelRef} className="flex h-full flex-col space-y-4">
         <Typography.Paragraph style={{ marginBottom: 0 }}>
-          The assistant is an enhancement layer. Closing it must not break the main workflow.
+          这里是语义入口与协作层。关闭后，不影响主业务操作。
         </Typography.Paragraph>
 
         <Divider style={{ marginBlock: 0 }} />
 
         <div className="flex-1 overflow-y-auto">
-          <div className="flex h-full items-center justify-center">
-            <Typography.Text type="secondary">Conversation space...</Typography.Text>
+          <div className="flex h-full flex-col justify-center gap-4">
+            <div className="max-w-[85%]">
+              <Bubble placement="start" content="请问你要做什么？" />
+            </div>
+            <Typography.Text type="secondary">
+              你可以直接描述目标，我会帮你找到页面、整理信息或起草下一步。
+            </Typography.Text>
           </div>
         </div>
 
         <div className="rounded-2xl border border-border bg-bg-container p-4 shadow-sm">
-          <Sender placeholder="Ask or draft here" />
+          <Sender placeholder="告诉我你想查看什么，或想完成什么" />
         </div>
       </div>
     </Drawer>

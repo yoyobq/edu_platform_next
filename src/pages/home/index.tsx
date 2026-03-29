@@ -17,12 +17,12 @@ export function HomePage() {
   return (
     <Flex vertical gap={24}>
       <Flex wrap gap={12}>
-        <Button type="primary">Ant Design OK</Button>
+        <Button type="primary">Ant Design 正常</Button>
         <Checkbox
           checked={showOnlyLive}
           onChange={(event) => setShowOnlyLive(event.target.checked)}
         >
-          Only live
+          只看上线项目
         </Checkbox>
       </Flex>
 
@@ -30,14 +30,14 @@ export function HomePage() {
         <Flex align="center" justify="space-between" gap={16} className="mb-4">
           <div>
             <Typography.Title level={3} style={{ marginBottom: 4 }}>
-              Project Health
+              项目状态面板
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              Use this panel to observe which projects are live before changing exposure.
+              在调整暴露范围前，可先用这里观察哪些项目当前处于上线状态。
             </Typography.Paragraph>
           </div>
 
-          <Tag color="blue">{visibleProjects.length} visible</Tag>
+          <Tag color="blue">当前可见 {visibleProjects.length} 项</Tag>
         </Flex>
 
         {visibleProjects.length > 0 ? (
@@ -52,7 +52,7 @@ export function HomePage() {
                   title={
                     <Flex align="center" justify="space-between" gap={12}>
                       <span>{project.name}</span>
-                      <Tag color={isLive ? 'green' : 'default'}>{isLive ? 'LIVE' : 'PAUSED'}</Tag>
+                      <Tag color={isLive ? 'green' : 'default'}>{isLive ? '已上线' : '已暂停'}</Tag>
                     </Flex>
                   }
                 >
@@ -71,7 +71,7 @@ export function HomePage() {
           </div>
         ) : (
           <Card>
-            <Empty description="No live projects to show." />
+            <Empty description="当前没有可展示的上线项目。" />
           </Card>
         )}
       </section>

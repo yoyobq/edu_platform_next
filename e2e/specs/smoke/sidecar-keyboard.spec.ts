@@ -7,14 +7,14 @@ test('opens the assistant sidecar and closes it with escape while restoring focu
 }) => {
   await openHome(page);
 
-  const trigger = page.getByRole('button', { name: 'Assistant' });
+  const trigger = page.getByRole('button', { name: '开始' });
 
   await trigger.click();
-  await expect(page.getByRole('dialog', { name: 'Assistant' })).toBeVisible();
-  await expect(page.getByPlaceholder('Ask or draft here')).toBeFocused();
+  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+  await expect(page.getByPlaceholder('告诉我你想查看什么，或想完成什么')).toBeFocused();
 
   await page.keyboard.press('Escape');
 
-  await expect(page.getByRole('dialog', { name: 'Assistant' })).toHaveCount(0);
+  await expect(page.getByRole('dialog', { name: '从这里开始' })).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });

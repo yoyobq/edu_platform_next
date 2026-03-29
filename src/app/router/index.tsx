@@ -64,9 +64,9 @@ function RouteErrorPage() {
     if (error.status === 403) {
       return (
         <div className="rounded-2xl border border-warning-border bg-warning-bg p-6">
-          <Typography.Title level={3}>Access denied</Typography.Title>
+          <Typography.Title level={3}>访问被拒绝</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
-            This route is currently blocked by access rules.
+            当前路由已被访问控制规则拦截。
           </Typography.Paragraph>
         </div>
       );
@@ -75,9 +75,9 @@ function RouteErrorPage() {
     if (error.status === 404) {
       return (
         <div className="rounded-2xl border border-border bg-bg-layout p-6">
-          <Typography.Title level={3}>Route not found</Typography.Title>
+          <Typography.Title level={3}>路由不存在</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
-            This route is not currently exposed in the active environment.
+            当前环境下未暴露此路由。
           </Typography.Paragraph>
         </div>
       );
@@ -86,9 +86,9 @@ function RouteErrorPage() {
 
   return (
     <div className="rounded-2xl border border-error-border bg-error-bg p-6">
-      <Typography.Title level={3}>Unexpected route error</Typography.Title>
+      <Typography.Title level={3}>路由出现异常</Typography.Title>
       <Typography.Paragraph style={{ marginBottom: 0 }}>
-        The route failed before rendering.
+        路由在渲染前发生错误。
       </Typography.Paragraph>
     </div>
   );

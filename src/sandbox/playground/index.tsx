@@ -6,10 +6,10 @@ export function SandboxPlaygroundPage() {
       <Card>
         <div className="space-y-3">
           <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            Sandbox Playground
+            Sandbox 演练场
           </Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
-            Free-form prototype area. Keep it self-contained and dev-only.
+            自由原型试验区。保持自包含，并仅限 dev / test 环境使用。
           </Typography.Paragraph>
         </div>
       </Card>
