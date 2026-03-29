@@ -257,7 +257,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - 不需要真实 AI 也能把壳层跑通
 - 当前前置状态已落为 mock unavailable；P1 只需在此基础上补齐 readonly / available / degraded
 
-### [ ] 10. 建立 `main` 容器真实宽度响应机制
+### [x] 10. 建立 `main` 容器真实宽度响应机制
 
 目标：
 
@@ -270,6 +270,12 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - Sidecar 打开后，`main` 内部关键内容不会因为“视口没变”而错过响应式切换
 - 同时提供基于 `ResizeObserver` 的 fallback，用于向样式层注入真实宽度变量或等效状态
 - 不把主链路完全绑定在纯 CSS 容器查询上
+
+当前状态：
+
+- `main` 与 `sidecar` 都已通过 `ResizeObserver` 暴露真实宽度变量与 band
+- Sidecar 打开时，layout 会根据实测 sidecar 宽度为 `main` 与顶部控制层真实让位
+- Sidecar 已去除遮罩并允许主区继续交互，主链路 E2E 已覆盖“sidecar 打开时主区仍可跳转”
 
 ### [ ] 11. 补主链路 E2E
 

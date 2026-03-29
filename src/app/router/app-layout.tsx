@@ -21,7 +21,7 @@ function getBaseURL(pathname: string, search: string): string {
 
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const location = useLocation();
-  const { close, isOpen, open } = useSidecarState();
+  const { close, isOpen, measuredWidth, open } = useSidecarState();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(isOpen);
@@ -95,6 +95,18 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     });
   }
 
+  const reservedSidecarWidth =
+    isOpen && mainWidthBand !== 'compact' ? Math.max(measuredWidth + 24, 480) : 0;
+  const frameShiftStyle = reservedSidecarWidth
+    ? ({
+        paddingRight: reservedSidecarWidth,
+        transition: 'padding-right 180ms ease',
+      } as const)
+    : ({
+        paddingRight: 0,
+        transition: 'padding-right 180ms ease',
+      } as const);
+
   return (
     <ConfigProvider theme={{ cssVar: {} }}>
       <div className="min-h-screen bg-bg-layout text-text">
@@ -107,7 +119,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               lineHeight: 'normal',
             }}
           >
-            <div className="mx-auto max-w-7xl py-4">
+            <div className="mx-auto max-w-7xl py-4" style={frameShiftStyle}>
               <div className="rounded-3xl border border-border bg-bg-container px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
@@ -143,12 +155,17 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             <div
               ref={mainRef}
               data-main-width-band={mainWidthBand}
-              style={{ '--layout-main-width': `${Math.round(mainWidth)}px` } as CSSProperties}
+              style={
+                {
+                  '--layout-main-width': `${Math.round(mainWidth)}px`,
+                  ...frameShiftStyle,
+                } as CSSProperties
+              }
             >
               <Flex
                 vertical
                 gap={mainWidthBand === 'compact' ? 16 : 24}
-                className="mx-auto max-w-7xl pt-6"
+                className="mx-auto max-w-7xl pt-6 transition-[gap]"
               >
                 {isLabsRoute ? (
                   <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">

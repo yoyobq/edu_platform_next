@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import type { SenderRef } from '@ant-design/x/es/sender';
 import { Alert, Button, Card, Divider, Drawer, Typography } from 'antd';
@@ -24,7 +24,7 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 }
 
 export function EntrySidecar() {
-  const { close, isOpen } = useSidecarState();
+  const { close, isOpen, reportMeasuredWidth } = useSidecarState();
   const { session, submitQuery } = useCollaborationSession();
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
@@ -52,6 +52,10 @@ export function EntrySidecar() {
     close();
   }, [close]);
 
+  useEffect(() => {
+    reportMeasuredWidth(sidecarWidth);
+  }, [reportMeasuredWidth, sidecarWidth]);
+
   useRegisterKeyboardShortcut(
     {
       key: 'Escape',
@@ -72,6 +76,7 @@ export function EntrySidecar() {
       }
       placement="right"
       size="large"
+      mask={false}
       onClose={close}
       afterOpenChange={(nextOpen) => {
         if (!nextOpen) {
@@ -86,6 +91,8 @@ export function EntrySidecar() {
       destroyOnHidden={false}
       zIndex={sidecarZIndex}
       styles={{
+        wrapper: { pointerEvents: 'none' },
+        section: { pointerEvents: 'auto' },
         body: { paddingTop: 16, display: 'flex', flexDirection: 'column' },
       }}
     >
