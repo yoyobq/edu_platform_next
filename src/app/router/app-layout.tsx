@@ -144,7 +144,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 export function AppLayout(props: AppLayoutProps) {
   return (
     <SidecarStateProvider>
-      <CollaborationSessionProvider>
+      <CollaborationSessionProvider currentAppEnv={props.currentAppEnv}>
         <AppLayoutFrame {...props} />
       </CollaborationSessionProvider>
     </SidecarStateProvider>

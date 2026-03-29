@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 
+export type AppEnv = 'dev' | 'test' | 'prod';
 export type EntryMode = 'ai' | 'local';
 export type CollaborationAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
 export type SessionStatus = 'idle' | 'ready' | 'loading' | 'error';
@@ -9,6 +10,7 @@ export type SessionMessage = {
   id: string;
   role: SessionMessageRole;
   content: string;
+  cards?: EntryCard[];
 };
 
 export type EntryCard = {
@@ -24,14 +26,13 @@ export type CollaborationSessionState = {
   mode: EntryMode;
   status: SessionStatus;
   messages: SessionMessage[];
-  cards: EntryCard[];
   errorMessage: string | null;
 };
 
 export type CollaborationSessionContextValue = {
   session: CollaborationSessionState;
   resetSession: () => void;
-  submitQuery: (payload: { message: string; mode: EntryMode }) => void;
+  submitQuery: (message: string) => void;
 };
 
 export const CollaborationSessionContext = createContext<CollaborationSessionContextValue | null>(

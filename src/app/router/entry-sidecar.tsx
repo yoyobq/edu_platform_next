@@ -1,6 +1,8 @@
 import { type CSSProperties, useRef, useState } from 'react';
-import { Bubble, Sender, type SenderRef } from '@ant-design/x';
-import { Alert, Divider, Drawer, Typography } from 'antd';
+import { Bubble, Sender } from '@ant-design/x';
+import type { SenderRef } from '@ant-design/x/es/sender';
+import { Alert, Button, Card, Divider, Drawer, Typography } from 'antd';
+import { useNavigate } from 'react-router';
 
 import { useCollaborationSession } from './collaboration-session';
 import { useSidecarState } from './sidecar-state';
@@ -23,6 +25,7 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 export function EntrySidecar() {
   const { close, isOpen } = useSidecarState();
   const { session, submitQuery } = useCollaborationSession();
+  const navigate = useNavigate();
   const [draft, setDraft] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
   const senderRef = useRef<SenderRef | null>(null);
@@ -93,18 +96,73 @@ export function EntrySidecar() {
             className="flex h-full flex-col justify-center"
             style={{ gap: sidecarWidthBand === 'compact' ? 12 : 16 }}
           >
-            {visibleMessages.map((message) => (
-              <div
-                key={message.id}
-                className={message.role === 'user' ? 'ml-auto' : undefined}
-                style={{ maxWidth: sidecarWidthBand === 'compact' ? '100%' : '85%' }}
-              >
-                <Bubble
-                  placement={message.role === 'user' ? 'end' : 'start'}
-                  content={message.content}
-                />
-              </div>
-            ))}
+            {visibleMessages.map((message) => {
+              return (
+                <div
+                  key={message.id}
+                  className={message.role === 'user' ? 'ml-auto' : undefined}
+                  style={{ maxWidth: sidecarWidthBand === 'compact' ? '100%' : '85%' }}
+                >
+                  <Bubble
+                    placement={message.role === 'user' ? 'end' : 'start'}
+                    content={message.content}
+                  />
+
+                  {message.cards && message.cards.length > 0 ? (
+                    <div className="mt-3 space-y-2">
+                      {message.cards.map((card) => (
+                        <div key={card.id} className="transition-shadow hover:shadow-sm">
+                          <Card
+                            hoverable
+                            size="small"
+                            onClick={() => {
+                              navigate(card.to);
+                            }}
+                            styles={{
+                              body: { padding: '8px 12px' },
+                            }}
+                            style={{
+                              boxShadow: 'none',
+                              borderColor: 'var(--ant-color-border-secondary)',
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <Typography.Text strong style={{ fontSize: 13 }}>
+                                  {card.title}
+                                </Typography.Text>
+                                {card.description ? (
+                                  <Typography.Paragraph
+                                    type="secondary"
+                                    style={{ margin: 0, fontSize: 12 }}
+                                    ellipsis={{ rows: 1 }}
+                                  >
+                                    {card.description}
+                                  </Typography.Paragraph>
+                                ) : null}
+                              </div>
+
+                              <Button
+                                aria-label={`进入${card.title}`}
+                                size="small"
+                                type="text"
+                                style={{ padding: '0 4px', fontSize: 12 }}
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(card.to);
+                                }}
+                              >
+                                进入
+                              </Button>
+                            </div>
+                          </Card>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
             <Typography.Text type="secondary">
               {isUnavailable
                 ? '智能入口暂未连接。你仍可输入目标页面名称，先查看相关入口卡片，再进入对应页面。'
@@ -122,10 +180,7 @@ export function EntrySidecar() {
             value={draft}
             onChange={(value) => setDraft(value)}
             onSubmit={(message) => {
-              submitQuery({
-                message,
-                mode: isUnavailable ? 'local' : 'ai',
-              });
+              submitQuery(message);
               setDraft('');
             }}
             placeholder={
