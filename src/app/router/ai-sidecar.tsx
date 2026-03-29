@@ -1,5 +1,5 @@
 import { type CSSProperties, useRef, useState } from 'react';
-import { Bubble, Sender } from '@ant-design/x';
+import { Bubble, Sender, type SenderRef } from '@ant-design/x';
 import { Alert, Divider, Drawer, Typography } from 'antd';
 
 import { useCollaborationSession } from './collaboration-session';
@@ -25,6 +25,7 @@ export function AiSidecar() {
   const { session, submitQuery } = useCollaborationSession();
   const [draft, setDraft] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const senderRef = useRef<SenderRef | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const isUnavailable = session.availability === 'unavailable';
   const { band: sidecarWidthBand, width: sidecarWidth } = useWidthBand(
@@ -61,10 +62,7 @@ export function AiSidecar() {
         }
 
         window.requestAnimationFrame(() => {
-          const focusTarget = panelRef.current?.querySelector<HTMLElement>(
-            'textarea:not([disabled]), input:not([disabled]), button',
-          );
-          focusTarget?.focus();
+          senderRef.current?.inputElement?.focus();
         });
       }}
       keyboard
@@ -120,6 +118,7 @@ export function AiSidecar() {
           style={{ padding: sidecarWidthBand === 'compact' ? 12 : 16 }}
         >
           <Sender
+            ref={senderRef}
             value={draft}
             onChange={(value) => setDraft(value)}
             onSubmit={(message) => {
