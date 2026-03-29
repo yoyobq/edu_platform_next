@@ -1,4 +1,4 @@
-import { Card, Typography } from 'antd'
+import { Card, Typography } from 'antd';
 
 export function SandboxPlaygroundPage() {
   return (
@@ -7,5 +7,5 @@ export function SandboxPlaygroundPage() {
         Free-form prototype area. Keep it self-contained and dev-only.
       </Typography.Paragraph>
     </Card>
-  )
+  );
 }

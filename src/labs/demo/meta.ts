@@ -5,4 +5,4 @@ export const demoLabMeta = {
   reviewAt: '2026-04-30',
   rollback: 'Remove the lab route and hide the entry from any menu exposure.',
   exception: [] as string[],
-} as const
+} as const;
