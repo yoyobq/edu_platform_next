@@ -77,3 +77,7 @@ Simple interpretation:
 - shared and future dev env examples live under `env/`
 - development mode example lives in `env/.env.development.example`
 - production mode example lives in `env/.env.production.example`
+
+## Routing
+
+- client routing uses React Router Data Mode

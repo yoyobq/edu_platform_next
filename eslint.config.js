@@ -60,6 +60,10 @@ export default defineConfig([
               allow: [
                 { to: { type: 'app', captured: { moduleName: '{{from.moduleName}}' } } },
                 { to: { type: ['pages', 'widgets', 'features', 'entities', 'shared'] } },
+                {
+                  from: { captured: { moduleName: 'router' } },
+                  to: { type: ['labs', 'sandbox'] },
+                },
               ],
             },
             {

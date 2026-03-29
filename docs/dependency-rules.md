@@ -20,6 +20,7 @@
 - `sandbox` 和 `labs` 都不得依赖正式区私有实现
 - 正式区不得依赖 `sandbox`
 - 正式区不得依赖 `labs`
+- 当前已人工确认 `app/router` 可依赖 `labs` 与 `sandbox` 的公开入口，仅用于路由注册与入口治理
 
 ## 规则执行方式
 
@@ -45,4 +46,4 @@
 - ESLint 不会自动根据 `labs/<name>/meta.ts` 中的 `exception` 放行
 - 真实例外必须先人工确认，再写入对应 `meta.ts`
 - 不允许通过深层 import、相对路径或关闭规则来绕过
-- 若未来出现 `app/router` 这类组合根接入 `labs` 或 `sandbox` 的场景，必须单独人工评审
+- `app/router` 接入 `labs` / `sandbox` 已作为当前人工确认例外落地；其他正式区模块仍不得依赖它们

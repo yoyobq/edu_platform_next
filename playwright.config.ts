@@ -18,6 +18,7 @@ const host = process.env.PLAYWRIGHT_HOST || fileEnv.PLAYWRIGHT_HOST || '::1';
 const port = Number.parseInt(process.env.PLAYWRIGHT_PORT || fileEnv.PLAYWRIGHT_PORT || '42173', 10);
 const externalBaseURL =
   (process.env.PLAYWRIGHT_BASE_URL ?? fileEnv.PLAYWRIGHT_BASE_URL ?? '').trim() || undefined;
+const appEnv = process.env.PLAYWRIGHT_APP_ENV || fileEnv.PLAYWRIGHT_APP_ENV || 'test';
 const noProxyAppend =
   process.env.PLAYWRIGHT_NO_PROXY_APPEND || fileEnv.PLAYWRIGHT_NO_PROXY_APPEND || '';
 const webServerCommand = 'node scripts/e2e/start-vite.mjs';
@@ -56,6 +57,7 @@ export default defineConfig({
         env: {
           ...process.env,
           FORCE_COLOR: '0',
+          PLAYWRIGHT_APP_ENV: appEnv,
           PLAYWRIGHT_HOST: host,
           PLAYWRIGHT_NO_PROXY_APPEND: noProxyAppend,
           PLAYWRIGHT_PORT: String(port),

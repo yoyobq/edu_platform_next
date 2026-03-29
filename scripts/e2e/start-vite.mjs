@@ -16,10 +16,13 @@ console.log(`[E2E Server] bootstrap: starting Vite on ${formatBaseURL(host, port
 
 const viteProcess = spawn(
   process.execPath,
-  [viteCliPath, '--host', host, '--port', port, '--strictPort'],
+  [viteCliPath, '--mode', 'test', '--host', host, '--port', port, '--strictPort'],
   {
     cwd: process.cwd(),
-    env: process.env,
+    env: {
+      ...process.env,
+      VITE_APP_ENV: process.env.PLAYWRIGHT_APP_ENV || 'test',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   },
 );

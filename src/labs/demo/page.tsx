@@ -5,8 +5,11 @@ import { demoLabMeta } from './meta';
 
 export function DemoLabPage() {
   return (
-    <Card title="Labs Demo" className="max-w-3xl">
+    <Card className="max-w-3xl">
       <div className="space-y-3">
+        <Typography.Title level={3} className="mb-0">
+          Labs Demo
+        </Typography.Title>
         <Typography.Paragraph className="mb-0">{demoLabMeta.purpose}</Typography.Paragraph>
         <div className="flex flex-wrap gap-2">
           <Tag color="blue">owner: {demoLabMeta.owner}</Tag>

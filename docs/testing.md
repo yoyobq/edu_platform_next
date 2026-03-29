@@ -31,6 +31,7 @@ npm run test:e2e
 当前 E2E 相关变量：
 
 - `PLAYWRIGHT_BASE_URL`
+- `PLAYWRIGHT_APP_ENV`
 - `PLAYWRIGHT_HOST`
 - `PLAYWRIGHT_NO_PROXY_APPEND`
 - `PLAYWRIGHT_PORT`
@@ -40,6 +41,7 @@ npm run test:e2e
 - `vite.config.ts` 负责读取 `env/` 下的 development / production 配置
 - `playwright.config.ts` 负责读取 `env/` 下的 E2E 配置
 - Playwright 使用 `webServer` 启动本地 Vite
+- Playwright 启动的 Vite 明确运行在 `test` mode
 - `scripts/e2e/start-vite.mjs` 只负责打印启动日志并转发关闭信号
 
 ## 环境说明
