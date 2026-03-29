@@ -30,6 +30,7 @@ Detailed rules live in [docs/README.md](./docs/README.md).
 npm install
 npm run dev
 npm run check
+npm run test:e2e
 ```
 
 Other useful commands:
@@ -69,4 +70,4 @@ Simple interpretation:
 
 ## Testing
 
-`vitest` is installed, but test setup is not enabled yet.
+- Testing conventions and E2E setup live in [docs/testing.md](./docs/testing.md)

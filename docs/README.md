@@ -15,6 +15,7 @@ This directory contains project documentation.
 - 想跨模块引用、调整 import、判断依赖是否合法时，先看 [dependency-rules.md](./dependency-rules.md)
 - 想新增或修改 `labs` 功能时，先看 [labs-rules.md](./labs-rules.md)
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
+- 想了解测试约定、Playwright E2E 入口或 `env` 配置时，先看 [testing.md](./testing.md)
 - 想判断 AI 生成结果该先落哪层、何时能进入 `stable` 时，先看 [ai-workflow.md](./ai-workflow.md)
 - 想了解当前仍未完全定稿的事项、已知限制或背景决策时，再看 [open-decisions.md](./open-decisions.md)
 
@@ -24,6 +25,7 @@ This directory contains project documentation.
 - [dependency-rules.md](./dependency-rules.md)
 - [labs-rules.md](./labs-rules.md)
 - [sandbox-rules.md](./sandbox-rules.md)
+- [testing.md](./testing.md)
 - [ai-workflow.md](./ai-workflow.md)
 - [open-decisions.md](./open-decisions.md)
 
@@ -44,6 +46,7 @@ docs/
   layer-model.md
   open-decisions.md
   sandbox-rules.md
+  testing.md
   human/
     frontend-rules-v0.5.md
 ```
