@@ -26,13 +26,11 @@ export type CollaborationSessionState = {
   messages: SessionMessage[];
   cards: EntryCard[];
   errorMessage: string | null;
-  query: string;
 };
 
 export type CollaborationSessionContextValue = {
   session: CollaborationSessionState;
   resetSession: () => void;
-  setQuery: (value: string) => void;
   submitQuery: (payload: { message: string; mode: EntryMode }) => void;
 };
 

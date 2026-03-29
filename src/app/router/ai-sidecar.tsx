@@ -1,4 +1,4 @@
-import { type CSSProperties, useRef } from 'react';
+import { type CSSProperties, useRef, useState } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import { Alert, Divider, Drawer, Typography } from 'antd';
 
@@ -22,7 +22,8 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 
 export function AiSidecar() {
   const { close, isOpen } = useSidecarState();
-  const { session, setQuery, submitQuery } = useCollaborationSession();
+  const { session, submitQuery } = useCollaborationSession();
+  const [draft, setDraft] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const isUnavailable = session.availability === 'unavailable';
@@ -119,14 +120,15 @@ export function AiSidecar() {
           style={{ padding: sidecarWidthBand === 'compact' ? 12 : 16 }}
         >
           <Sender
-            value={session.query}
-            onChange={(value) => setQuery(value)}
-            onSubmit={(message) =>
+            value={draft}
+            onChange={(value) => setDraft(value)}
+            onSubmit={(message) => {
               submitQuery({
                 message,
                 mode: isUnavailable ? 'local' : 'ai',
-              })
-            }
+              });
+              setDraft('');
+            }}
             placeholder={
               isUnavailable ? '输入你想去的页面名称' : '告诉我你想查看什么，或想完成什么'
             }

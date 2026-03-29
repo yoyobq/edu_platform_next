@@ -12,7 +12,6 @@ const MOCK_COLLABORATION_AVAILABILITY = 'unavailable' as const;
 
 type CollaborationSessionAction =
   | { type: 'reset' }
-  | { type: 'set-query'; payload: string }
   | {
       type: 'submit-query';
       payload: {
@@ -28,7 +27,6 @@ const INITIAL_SESSION_STATE: CollaborationSessionState = {
   messages: [],
   cards: [],
   errorMessage: null,
-  query: '',
 };
 
 function createSessionMessage(role: SessionMessage['role'], content: string): SessionMessage {
@@ -59,11 +57,6 @@ function collaborationSessionReducer(
   switch (action.type) {
     case 'reset':
       return INITIAL_SESSION_STATE;
-    case 'set-query':
-      return {
-        ...state,
-        query: action.payload,
-      };
     case 'submit-query': {
       const trimmedMessage = action.payload.message.trim();
 
@@ -76,7 +69,6 @@ function collaborationSessionReducer(
         mode: action.payload.mode,
         status: 'ready',
         errorMessage: null,
-        query: '',
         cards: [],
         messages: [
           ...state.messages,
@@ -97,7 +89,6 @@ export function CollaborationSessionProvider({ children }: { children: ReactNode
     () => ({
       session,
       resetSession: () => dispatch({ type: 'reset' }),
-      setQuery: (value) => dispatch({ type: 'set-query', payload: value }),
       submitQuery: (payload) => dispatch({ type: 'submit-query', payload }),
     }),
     [session],
