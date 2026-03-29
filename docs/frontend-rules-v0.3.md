@@ -383,7 +383,7 @@ export const demoLabMeta = {
   reviewAt: '2026-04-30',
   rollback: '移除实验路由并隐藏入口',
   exception: ['依赖 @/entities/user 的公开内容'],
-} as const
+} as const;
 ```
 
 字段说明：
@@ -471,6 +471,13 @@ src/sandbox/<prototype-name>/
 - 正式区不得依赖 `sandbox`
 - 正式区不得依赖 `labs`
 - 小项目允许先少分层，不要求为了对齐目录而强行拆分
+
+人工判定提醒：
+
+- ESLint 负责拦截默认违规依赖，但不会自动根据 `labs/<name>/meta.ts` 中的 `exception` 放行
+- 若某次依赖确属例外，必须先由人工确认，再写入对应 `labs` 模块的 `meta.ts`
+- 不允许为了通过 ESLint，直接改成深层 import、相对路径绕过或临时关闭规则
+- 若未来出现 `app/router` 这类组合根需要接入 `labs` 或 `sandbox` 的场景，必须单独人工评审并明确写入规则，不能默认放开
 
 ## 6. access list 规则（仅用于 labs）
 
