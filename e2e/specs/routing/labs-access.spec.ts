@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../test';
 
 test('blocks labs demo when the access rule is not matched', async ({ page }) => {
   await page.goto('/labs/demo');

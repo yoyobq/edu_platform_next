@@ -31,3 +31,13 @@
   --z-index-sidecar-overlay: 1150;
   --z-index-cross-layer-prompt: 2000;
 }
+
+html.disable-motion *,
+html.disable-motion *::before,
+html.disable-motion *::after {
+  animation-delay: 0s !important;
+  animation-duration: 0s !important;
+  scroll-behavior: auto !important;
+  transition-delay: 0s !important;
+  transition-duration: 0s !important;
+}

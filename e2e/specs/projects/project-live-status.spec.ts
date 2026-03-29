@@ -1,7 +1,6 @@
-import { expect, test } from '@playwright/test';
-
 import { projectFixtures } from '../../fixtures/project-data';
 import { openHome, projectCard } from '../../helpers/app';
+import { expect, test } from '../../test';
 
 test('shows which projects are live and supports live-only filtering', async ({ page }) => {
   await openHome(page);

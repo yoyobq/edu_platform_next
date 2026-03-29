@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test';
-
 import { openHome } from '../../helpers/app';
+import { expect, test } from '../../test';
 
 test('navigates through local semantic entry cards when the intelligent entry is unavailable', async ({
   page,

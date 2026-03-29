@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../test';
 
 test('falls back to local entry cards when the enhanced entry is degraded', async ({ page }) => {
   await page.goto('/?availability=degraded');

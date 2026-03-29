@@ -190,7 +190,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 
 ## P1 主线增强项
 
-### [ ] 6. 分离 `Session State` 与 `View State`
+### [x] 6. 分离 `Session State` 与 `View State`
 
 目标：
 
@@ -201,6 +201,13 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - 会话消息、生成状态、错误状态不直接耦合到某一个 UI 入口
 - Sidecar、未来的 `Omni-bar`、未来的第三工作区可共享同一会话层
 - Sidecar 是否打开、宽度、第三工作区是否展开等仍保留为视图层状态
+
+当前状态：
+
+- `CollaborationSession` 已承接共享会话状态，不再绑定到 Sidecar 命名
+- availability 已从 view state 移出，归入协作会话层
+- 输入草稿已回收为本地状态，不再通过全局 session 高频驱动重渲染
+- Sidecar 开闭与实测宽度仍保留在独立的 view state 中
 
 ### [x] 7. 建立集中式快捷键栈
 
@@ -291,7 +298,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - Sidecar 打开时，layout 会根据实测 sidecar 宽度为 `main` 与顶部控制层真实让位
 - Sidecar 已去除遮罩并允许主区继续交互，主链路 E2E 已覆盖“sidecar 打开时主区仍可跳转”
 
-### [ ] 11. 补主链路 E2E
+### [x] 11. 补主链路 E2E
 
 目标：
 
@@ -307,6 +314,16 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - 测试环境存在统一的禁用动效开关，避免动画导致的 flaky
 - 优先通过在 `html` 或 `body` 上注入统一类名，并使用全局样式强制关闭 `animation` / `transition`
 - 不依赖散落在各业务组件中的 `if (isTest)` 逻辑去逐个关闭动画
+
+当前状态：
+
+- 已覆盖：
+  - `main` 在无增强能力下可用
+  - Sidecar 可打开/关闭
+  - 增强入口不可用时不破坏主业务
+  - 路由切换不直接摧毁 Sidecar 壳层，且切换后仍可继续使用本地入口
+- E2E 已通过统一 `e2e/test.ts` 在 `html` 上注入 `disable-motion` 类
+- 全局样式已统一关闭测试环境下的 `animation` / `transition`
 
 ## P2 低风险顺手项
 

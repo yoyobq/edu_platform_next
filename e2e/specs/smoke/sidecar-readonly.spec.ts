@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../test';
 
 test('shows readonly state and disables new input when the entry panel is readonly', async ({
   page,

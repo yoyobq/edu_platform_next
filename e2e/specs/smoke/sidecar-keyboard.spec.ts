@@ -1,6 +1,5 @@
-import { expect, test } from '@playwright/test';
-
 import { openHome } from '../../helpers/app';
+import { expect, test } from '../../test';
 
 test('opens the entry sidecar with keyboard and closes it with escape while restoring focus', async ({
   page,

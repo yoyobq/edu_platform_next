@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from '../../test';
 
 test('exposes sandbox playground in development mode', async ({ page }) => {
   await page.goto('/sandbox/playground');
