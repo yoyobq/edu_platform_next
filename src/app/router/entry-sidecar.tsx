@@ -20,7 +20,7 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
   return Number.isNaN(parsedValue) ? fallbackValue : parsedValue;
 }
 
-export function AiSidecar() {
+export function EntrySidecar() {
   const { close, isOpen } = useSidecarState();
   const { session, submitQuery } = useCollaborationSession();
   const [draft, setDraft] = useState('');

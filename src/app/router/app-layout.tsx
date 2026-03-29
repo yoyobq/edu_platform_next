@@ -3,8 +3,8 @@ import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { AiSidecar } from './ai-sidecar';
 import { CollaborationSessionProvider } from './collaboration-session-provider';
+import { EntrySidecar } from './entry-sidecar';
 import { useSidecarState } from './sidecar-state';
 import { SidecarStateProvider } from './sidecar-state-provider';
 import { useWidthBand } from './use-width-band';
@@ -114,7 +114,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           </Layout.Content>
         </Layout>
 
-        <AiSidecar />
+        <EntrySidecar />
 
         <div className="fixed bottom-8 right-8 z-top-control-bar shadow-lg rounded-full">
           <Button
