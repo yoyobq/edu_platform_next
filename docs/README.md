@@ -15,6 +15,7 @@ This directory contains project documentation.
 - 想跨模块引用、调整 import、判断依赖是否合法时，先看 [dependency-rules.md](./dependency-rules.md)
 - 想明确 `app/` 壳层、主内容区与 AI sidecar 的布局原则时，先看 [layout.md](./layout.md)
 - 想参考更激进的 AI-native layout 想法、给生成或设计探索提供输入时，再看 [layout-ideas.md](./layout-ideas.md)
+- 想明确 `antd`、`antdX` 和 `tailwindcss` 的职责分工时，先看 [ui-stack-rules.md](./ui-stack-rules.md)
 - 想新增或修改 `labs` 功能时，先看 [labs-rules.md](./labs-rules.md)
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想了解测试约定、Playwright E2E 入口或 `env` 配置时，先看 [testing.md](./testing.md)
@@ -25,6 +26,7 @@ This directory contains project documentation.
 
 - [layer-model.md](./layer-model.md)
 - [layout.md](./layout.md)
+- [ui-stack-rules.md](./ui-stack-rules.md)
 - [dependency-rules.md](./dependency-rules.md)
 - [labs-rules.md](./labs-rules.md)
 - [sandbox-rules.md](./sandbox-rules.md)
@@ -51,6 +53,7 @@ docs/
   dependency-rules.md
   layout.md
   layout-ideas.md
+  ui-stack-rules.md
   labs-rules.md
   layer-model.md
   open-decisions.md
