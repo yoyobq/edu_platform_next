@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
@@ -7,6 +7,7 @@ import { AiSidecar } from './ai-sidecar';
 import { SidecarSessionProvider } from './sidecar-session-provider';
 import { useSidecarState } from './sidecar-state';
 import { SidecarStateProvider } from './sidecar-state-provider';
+import { useWidthBand } from './use-width-band';
 
 type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
@@ -19,9 +20,18 @@ function getBaseURL(pathname: string, search: string): string {
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const location = useLocation();
   const { close, isOpen, open } = useSidecarState();
+  const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(isOpen);
   const isLabsRoute = location.pathname.startsWith('/labs/');
+  const { band: mainWidthBand, width: mainWidth } = useWidthBand(
+    mainRef,
+    [
+      { max: 720, value: 'compact' },
+      { max: 1100, value: 'comfortable' },
+    ],
+    'wide',
+  );
 
   useEffect(() => {
     if (wasOpenRef.current && !isOpen) {
@@ -81,16 +91,26 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           </Layout.Header>
 
           <Layout.Content style={{ padding: '0 24px 32px' }}>
-            <Flex vertical gap={24} className="mx-auto max-w-7xl pt-6">
-              {isLabsRoute ? (
-                <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">
-                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    `labs` 路由需要通过访问控制。可使用 `?role=admin` 模拟当前允许角色。
-                  </Typography.Paragraph>
-                </div>
-              ) : null}
-              <Outlet />
-            </Flex>
+            <div
+              ref={mainRef}
+              data-main-width-band={mainWidthBand}
+              style={{ '--layout-main-width': `${Math.round(mainWidth)}px` } as CSSProperties}
+            >
+              <Flex
+                vertical
+                gap={mainWidthBand === 'compact' ? 16 : 24}
+                className="mx-auto max-w-7xl pt-6"
+              >
+                {isLabsRoute ? (
+                  <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                      `labs` 路由需要通过访问控制。可使用 `?role=admin` 模拟当前允许角色。
+                    </Typography.Paragraph>
+                  </div>
+                ) : null}
+                <Outlet />
+              </Flex>
+            </div>
           </Layout.Content>
         </Layout>
 

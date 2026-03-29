@@ -1,9 +1,10 @@
-import { useRef } from 'react';
+import { type CSSProperties, useRef } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import { Alert, Divider, Drawer, Typography } from 'antd';
 
 import { useSidecarSession } from './sidecar-session';
 import { useSidecarState } from './sidecar-state';
+import { useWidthBand } from './use-width-band';
 
 function readZIndexToken(tokenName: string, fallbackValue: number): number {
   if (typeof window === 'undefined') {
@@ -25,6 +26,11 @@ export function AiSidecar() {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const isUnavailable = availability === 'unavailable';
+  const { band: sidecarWidthBand, width: sidecarWidth } = useWidthBand(
+    panelRef,
+    [{ max: 440, value: 'compact' }],
+    'comfortable',
+  );
   const visibleMessages =
     session.messages.length > 0
       ? session.messages
@@ -67,7 +73,12 @@ export function AiSidecar() {
         body: { paddingTop: 16, display: 'flex', flexDirection: 'column' },
       }}
     >
-      <div ref={panelRef} className="flex h-full flex-col space-y-4">
+      <div
+        ref={panelRef}
+        className="flex h-full flex-col space-y-4"
+        data-sidecar-width-band={sidecarWidthBand}
+        style={{ '--layout-sidecar-width': `${Math.round(sidecarWidth)}px` } as CSSProperties}
+      >
         {isUnavailable ? (
           <Alert type="info" showIcon title="智能入口暂未开启，你仍可正常使用项目功能。" />
         ) : (
@@ -79,11 +90,15 @@ export function AiSidecar() {
         <Divider style={{ marginBlock: 0 }} />
 
         <div className="flex-1 overflow-y-auto">
-          <div className="flex h-full flex-col justify-center gap-4">
+          <div
+            className="flex h-full flex-col justify-center"
+            style={{ gap: sidecarWidthBand === 'compact' ? 12 : 16 }}
+          >
             {visibleMessages.map((message) => (
               <div
                 key={message.id}
-                className={message.role === 'user' ? 'ml-auto max-w-[85%]' : 'max-w-[85%]'}
+                className={message.role === 'user' ? 'ml-auto' : undefined}
+                style={{ maxWidth: sidecarWidthBand === 'compact' ? '100%' : '85%' }}
               >
                 <Bubble
                   placement={message.role === 'user' ? 'end' : 'start'}
@@ -99,7 +114,10 @@ export function AiSidecar() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-border bg-bg-container p-4 shadow-sm">
+        <div
+          className="rounded-2xl border border-border bg-bg-container shadow-sm"
+          style={{ padding: sidecarWidthBand === 'compact' ? 12 : 16 }}
+        >
           <Sender
             value={session.query}
             onChange={(value) => setQuery(value)}
