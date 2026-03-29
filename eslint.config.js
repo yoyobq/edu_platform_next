@@ -53,7 +53,7 @@ export default defineConfig([
         {
           default: 'disallow',
           message:
-            'Import violates docs/frontend-rules-v0.3.md. 如确属真实例外，必须人工评审后再记录到对应 labs 模块的 meta.ts exception 字段。不要用深层 import 或相对路径绕过规则。',
+            'Import violates boundary rules. 请查阅 docs/dependency-rules.md。 如需例外，必须先人工评审并记录到对应 labs 模块的 meta.ts exception。禁止用深层 import 或相对路径绕过规则。',
           rules: [
             {
               from: { type: 'app' },
@@ -101,6 +101,7 @@ export default defineConfig([
             {
               from: { type: 'labs' },
               allow: [
+                // labs 依赖 entities 时仍受 no-restricted-imports 约束，只能使用 @/entities/<name> 公开入口
                 { to: { type: 'labs', captured: { moduleName: '{{from.moduleName}}' } } },
                 { to: { type: ['shared', 'entities'] } },
               ],
@@ -108,6 +109,7 @@ export default defineConfig([
             {
               from: { type: 'sandbox' },
               allow: [
+                // sandbox 依赖 entities 时仍受 no-restricted-imports 约束，只能使用 @/entities/<name> 公开入口
                 {
                   to: { type: 'sandbox', captured: { moduleName: '{{from.moduleName}}' } },
                 },

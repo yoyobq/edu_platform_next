@@ -1,73 +1,72 @@
-# React + TypeScript + Vite
+# aigc-friendly-frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+AI-friendly frontend project based on `Vite + React + TypeScript + Ant Design + Tailwind CSS`.
 
-Currently, two official plugins are available:
+## AI Entry
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Before generating or modifying code, read [docs/README.md](./docs/README.md).
 
-## React Compiler
+That document set is the source of truth for structure, dependencies, and promotion rules.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Overview
 
-## Expanding the ESLint configuration
+This project is built for a workflow where AI can generate quickly, experiments stay isolated, and only manually-governed code enters the long-term stable area.
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+Detailed rules live in [docs/README.md](./docs/README.md).
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Stack
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+- Vite
+- React 19
+- TypeScript
+- Ant Design
+- Ant Design X
+- Tailwind CSS 4
+- ESLint + Prettier
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+## Commands
+
+```bash
+npm install
+npm run dev
+npm run check
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Other useful commands:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x';
-import reactDom from 'eslint-plugin-react-dom';
+- `npm run lint`
+- `npm run lint:fix`
+- `npm run format`
+- `npm run format:check`
+- `npm run build`
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-]);
+## Directory Model
+
+```txt
+src/
+  app/
+  pages/
+  widgets/
+  features/
+  entities/
+  shared/
+  labs/
+  sandbox/
 ```
+
+Simple interpretation:
+
+- `stable`: long-term formal code
+- `labs`: controlled experiments that may enter production
+- `sandbox`: dev-only prototypes and trial code
+
+## Tooling
+
+- Prettier handles formatting
+- ESLint handles architectural boundaries and import sorting
+- VS Code workspace settings enable format-on-save and ESLint fixes
+- Husky + lint-staged run lightweight staged-file checks on commit
+
+## Testing
+
+`vitest` is installed, but test setup is not enabled yet.
