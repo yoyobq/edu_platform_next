@@ -3,6 +3,7 @@ import boundaries from 'eslint-plugin-boundaries';
 import globals from 'globals';
 import reactHooks from 'eslint-plugin-react-hooks';
 import reactRefresh from 'eslint-plugin-react-refresh';
+import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
@@ -12,6 +13,7 @@ export default defineConfig([
     files: ['**/*.{ts,tsx}'],
     plugins: {
       boundaries,
+      'simple-import-sort': simpleImportSort,
     },
     extends: [
       js.configs.recommended,
@@ -51,7 +53,7 @@ export default defineConfig([
         {
           default: 'disallow',
           message:
-            "Import violates docs/frontend-rules-v0.3.md. 如确属真实例外，必须人工评审后再记录到对应 labs 模块的 meta.ts exception 字段。不要用深层 import 或相对路径绕过规则。",
+            'Import violates docs/frontend-rules-v0.3.md. 如确属真实例外，必须人工评审后再记录到对应 labs 模块的 meta.ts exception 字段。不要用深层 import 或相对路径绕过规则。',
           rules: [
             {
               from: { type: 'app' },
@@ -142,6 +144,24 @@ export default defineConfig([
           ],
         },
       ],
+      'simple-import-sort/imports': [
+        'error',
+        {
+          groups: [
+            ['^\\u0000'],
+            ['^react$', '^react-dom$', '^@?\\w'],
+            ['^@/app(?:/.*|$)'],
+            ['^@/pages(?:/.*|$)', '^@/widgets(?:/.*|$)', '^@/features(?:/.*|$)'],
+            ['^@/entities(?:/.*|$)'],
+            ['^@/shared(?:/.*|$)'],
+            ['^@/labs(?:/.*|$)', '^@/sandbox(?:/.*|$)'],
+            ['^\\.\\.(?!/?$)', '^\\.\\./?$'],
+            ['^\\./(?=.*/)(?!/?$)', '^\\.(?!/?$)', '^\\./?$'],
+            ['^.+\\.css$'],
+          ],
+        },
+      ],
+      'simple-import-sort/exports': 'error',
     },
   },
 ]);
