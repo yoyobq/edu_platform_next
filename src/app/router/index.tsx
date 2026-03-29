@@ -69,7 +69,7 @@ function RouteErrorPage() {
   if (isRouteErrorResponse(error)) {
     if (error.status === 403) {
       return (
-        <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
+        <div className="rounded-2xl border border-warning-border bg-warning-bg p-6">
           <Typography.Title level={3}>Access denied</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             This route is currently blocked by access rules.
@@ -80,7 +80,7 @@ function RouteErrorPage() {
 
     if (error.status === 404) {
       return (
-        <div className="rounded-2xl border border-slate-300 bg-slate-50 p-6">
+        <div className="rounded-2xl border border-border bg-bg-layout p-6">
           <Typography.Title level={3}>Route not found</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             This route is not currently exposed in the active environment.
@@ -91,7 +91,7 @@ function RouteErrorPage() {
   }
 
   return (
-    <div className="rounded-2xl border border-rose-300 bg-rose-50 p-6">
+    <div className="rounded-2xl border border-error-border bg-error-bg p-6">
       <Typography.Title level={3}>Unexpected route error</Typography.Title>
       <Typography.Paragraph style={{ marginBottom: 0 }}>
         The route failed before rendering.
@@ -123,8 +123,8 @@ function AppShell() {
   }
 
   return (
-    <ConfigProvider>
-      <div className="min-h-screen bg-white">
+    <ConfigProvider theme={{ cssVar: {} }}>
+      <div className="min-h-screen bg-bg-layout text-text">
         <Layout style={{ minHeight: '100%', background: 'transparent' }}>
           <Layout.Header
             style={{

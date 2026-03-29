@@ -1,1 +1,33 @@
 @import 'tailwindcss';
+
+@theme inline {
+  --color-primary: var(--ant-color-primary);
+  --color-text: var(--ant-color-text);
+  --color-text-secondary: var(--ant-color-text-secondary);
+  --color-border: var(--ant-color-border);
+  --color-bg-layout: var(--ant-color-bg-layout);
+  --color-bg-container: var(--ant-color-bg-container);
+  --color-warning-bg: var(--ant-color-warning-bg);
+  --color-warning-border: var(--ant-color-warning-border);
+  --color-error-bg: var(--ant-color-error-bg);
+  --color-error-border: var(--ant-color-error-border);
+  --color-success: var(--ant-color-success);
+  --color-success-bg: var(--ant-color-success-bg);
+  --color-success-border: var(--ant-color-success-border);
+  --color-info: var(--ant-color-info);
+  --color-info-bg: var(--ant-color-info-bg);
+  --color-info-border: var(--ant-color-info-border);
+  --color-fill-secondary: var(--ant-color-fill-secondary);
+  --color-fill-tertiary: var(--ant-color-fill-tertiary);
+  --color-bg-mask: var(--ant-color-bg-mask);
+  --radius-lg: var(--ant-border-radius-lg);
+  --shadow-popover: var(--ant-box-shadow-secondary);
+
+  /* Layout Z-Index Tokens (Semantic Layer Tokens) */
+  --z-index-main-base: 0;
+  --z-index-top-control-bar: 900;
+  --z-index-main-modal: 1000;
+  --z-index-sidecar-container: 1100;
+  --z-index-sidecar-overlay: 1150;
+  --z-index-cross-layer-prompt: 2000;
+}
