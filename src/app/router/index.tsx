@@ -6,12 +6,12 @@ import {
   useRouteError,
 } from 'react-router';
 
+import { AppLayout } from '@/app/layout';
+
 import { HomePage } from '@/pages/home';
 
 import { demoLabAccess, DemoLabPage } from '@/labs/demo';
 import { SandboxPlaygroundPage } from '@/sandbox/playground';
-
-import { AppLayout } from './app-layout';
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppRole = 'guest' | 'admin';

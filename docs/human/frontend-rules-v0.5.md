@@ -245,6 +245,9 @@ src/
 - `app/` 负责 provider、router、应用壳层与全局 layout
 - `app/` 的职责是“把页面挂起来”，不是承载页面内容本身
 - 像 `HomePage` 这种正式页面内容应放在 `pages/`
+- `app/lib` 放纯逻辑、纯数据结构与纯计算；去掉 React context / state / effect 后仍成立的实现，优先归入 `app/lib`
+- `app/providers` 放状态宿主、Context、跨树共享状态与应用级挂载
+- `providers` 应尽量薄；复杂计算和纯逻辑应优先下沉到 `app/lib`
 
 禁止内容：
 

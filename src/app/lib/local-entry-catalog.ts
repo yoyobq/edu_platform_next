@@ -1,4 +1,4 @@
-import type { EntryCard } from './collaboration-session';
+import type { EntryCard } from './entry-card';
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppRole = 'guest' | 'admin';

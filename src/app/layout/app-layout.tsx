@@ -3,12 +3,15 @@ import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
-import { CollaborationSessionProvider } from './collaboration-session-provider';
+import {
+  CollaborationSessionProvider,
+  KeyboardShortcutStackProvider,
+  SidecarStateProvider,
+  useRegisterKeyboardShortcut,
+  useSidecarState,
+} from '@/app/providers';
+
 import { EntrySidecar } from './entry-sidecar';
-import { useRegisterKeyboardShortcut } from './keyboard-shortcut-stack';
-import { KeyboardShortcutStackProvider } from './keyboard-shortcut-stack-provider';
-import { useSidecarState } from './sidecar-state';
-import { SidecarStateProvider } from './sidecar-state-provider';
 import { useWidthBand } from './use-width-band';
 
 type AppLayoutProps = {
@@ -229,12 +232,12 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 }
 
-export function AppLayout(props: AppLayoutProps) {
+export function AppLayout({ currentAppEnv }: AppLayoutProps) {
   return (
     <KeyboardShortcutStackProvider>
       <SidecarStateProvider>
-        <CollaborationSessionProvider currentAppEnv={props.currentAppEnv}>
-          <AppLayoutFrame {...props} />
+        <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
+          <AppLayoutFrame currentAppEnv={currentAppEnv} />
         </CollaborationSessionProvider>
       </SidecarStateProvider>
     </KeyboardShortcutStackProvider>

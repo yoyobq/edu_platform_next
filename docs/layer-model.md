@@ -79,6 +79,13 @@
 
 - `app/router` 作为组合根，可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册、暴露控制与环境隔离
 - 该能力不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
+- `app/router` 应尽量收窄为路由树、loader / guard 与注册逻辑
+- 全局 layout、入口 Sidecar、全局 provider 等应用壳层实现，应优先放在 `app/layout`、`app/providers` 等 `app/` 子目录中
+- `app/` 内部不同子目录之间允许协作，但应尽量通过各自的公开出口进行导入，而不是继续堆叠深层相对路径
+- `app/lib` 与 `app/providers` 的判断：
+  - `app/lib` 放纯逻辑、纯数据结构、纯计算；去掉 React context / state / effect 后仍能成立的实现，优先归入 `app/lib`
+  - `app/providers` 放状态宿主、Context、跨树共享状态与应用级挂载
+  - `providers` 应尽量薄，复杂计算和纯逻辑应优先下沉到 `app/lib`
 - 像 `HomePage` 这种正式页面内容应放在 `pages/`，不应继续堆在 `app/`
 - `app/` 只负责“把页面挂起来”，不负责承载页面本身的业务展示
 

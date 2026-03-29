@@ -2,20 +2,21 @@ import { type ReactNode, useMemo, useReducer } from 'react';
 import { useLocation } from 'react-router';
 
 import {
+  buildLocalEntryReply,
+  type EntryCard,
+  getAvailableLocalEntryCards,
+  matchLocalEntryCards,
+} from '@/app/lib';
+
+import {
   type AppEnv,
   type CollaborationAvailability,
   CollaborationSessionContext,
   type CollaborationSessionContextValue,
   type CollaborationSessionState,
-  type EntryCard,
   type EntryMode,
   type SessionMessage,
 } from './collaboration-session';
-import {
-  buildLocalEntryReply,
-  getAvailableLocalEntryCards,
-  matchLocalEntryCards,
-} from './local-entry-catalog';
 
 const MOCK_COLLABORATION_AVAILABILITY = 'unavailable' as const;
 type AppRole = 'guest' | 'admin';

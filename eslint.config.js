@@ -269,7 +269,7 @@ export default defineConfig([
             {
               from: { type: 'app' },
               allow: [
-                { to: { type: 'app', captured: { moduleName: '{{from.moduleName}}' } } },
+                { to: { type: 'app' } },
                 { to: { type: ['pages', 'widgets', 'features', 'entities', 'shared'] } },
                 {
                   from: { captured: { moduleName: 'router' } },

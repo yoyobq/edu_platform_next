@@ -8,9 +8,10 @@ import {
   type CollaborationAvailability,
   type SessionMessage,
   useCollaborationSession,
-} from './collaboration-session';
-import { useRegisterKeyboardShortcut } from './keyboard-shortcut-stack';
-import { useSidecarState } from './sidecar-state';
+  useRegisterKeyboardShortcut,
+  useSidecarState,
+} from '@/app/providers';
+
 import { useWidthBand } from './use-width-band';
 
 function readZIndexToken(tokenName: string, fallbackValue: number): number {
@@ -34,7 +35,7 @@ function getDefaultMessages(
     return [
       {
         id: 'system-readonly',
-        role: 'system' as const,
+        role: 'system',
         content: '当前入口已切换为只读模式。你可以先查看已有内容，新的输入会在恢复后开放。',
       },
     ];
@@ -43,7 +44,7 @@ function getDefaultMessages(
   return [
     {
       id: 'system-welcome',
-      role: 'system' as const,
+      role: 'system',
       content: '请问你要做什么？',
     },
   ];

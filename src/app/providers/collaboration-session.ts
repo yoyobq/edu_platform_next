@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
 
+import type { EntryCard } from '@/app/lib';
+
 export type AppEnv = 'dev' | 'test' | 'prod';
 export type EntryMode = 'ai' | 'local';
 export type CollaborationAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
@@ -11,14 +13,6 @@ export type SessionMessage = {
   role: SessionMessageRole;
   content: string;
   cards?: EntryCard[];
-};
-
-export type EntryCard = {
-  id: string;
-  title: string;
-  description?: string;
-  to: string;
-  kind: 'route';
 };
 
 export type CollaborationSessionState = {
