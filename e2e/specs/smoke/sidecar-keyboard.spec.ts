@@ -11,7 +11,8 @@ test('opens the assistant sidecar and closes it with escape while restoring focu
 
   await trigger.click();
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
-  await expect(page.getByPlaceholder('告诉我你想查看什么，或想完成什么')).toBeFocused();
+  await expect(page.getByText('智能入口暂未开启，你仍可正常使用项目功能。')).toBeVisible();
+  await expect(page.getByPlaceholder('输入你想去的页面名称')).toBeDisabled();
 
   await page.keyboard.press('Escape');
 

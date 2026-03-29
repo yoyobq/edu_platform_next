@@ -67,6 +67,14 @@ layout 相关任务默认按以下维度综合排序：
 
 真正的集中式快捷键栈放到 P1 跟进；P0 只允许非常克制的临时处理，且不得与 `main` 的原生弹层冲突。
 
+P1 开始前先固定的优先级约定：
+
+- `main` 内阻断型 Modal 优先于所有其他快捷键
+- `main` 内局部浮层（如 Select、Popover、Dropdown）优先于 Sidecar
+- Sidecar 高于页面级全局快捷键
+- 页面级全局快捷键最低
+- 后续统一通过注册栈管理，不允许各组件继续裸绑全局监听抢占优先级
+
 ### 2. P1 最危险的问题是状态来源失控
 
 一旦 Sidecar、未来的 `Omni-bar`、`Artifacts Canvas` 各自维护会话状态，后续同步会非常痛苦。
@@ -77,6 +85,12 @@ layout 相关任务默认按以下维度综合排序：
 - `View State`：Sidecar 是否打开、当前视图形态、第三工作区是否展开
 
 这两类状态必须分离，不能混写进同一个临时 UI store。
+
+当前前置约定：
+
+- 在真实 AI 能力接入前，availability 先以 mock 形式提供
+- 当前默认使用 `unavailable` 作为降级源，先跑通 UI 壳层与主业务不受影响的链路
+- 后续切换为真实状态源时，不改变 `Session State / View State` 的拆分方向
 
 ### 3. P1 以后不能再只靠 viewport media query
 
@@ -199,6 +213,8 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - Sidecar 与 `main` 内部弹层不再靠临时事件碰撞决定优先级
 - 快捷键注册和注销通过统一机制管理
 - 后续 `Omni-bar` 或其他全局入口可复用同一套注册能力
+- 优先级表与当前实现一致：
+  - Modal > 局部浮层 > Sidecar > 页面级快捷键
 
 ### [ ] 8. 顶部轻量控制层落为真实结构
 
@@ -225,6 +241,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 
 - 各状态的 UI 区分清楚
 - 不需要真实 AI 也能把壳层跑通
+- 当前前置状态已落为 mock unavailable；P1 只需在此基础上补齐 readonly / available / degraded
 
 ### [ ] 10. 建立 `main` 容器真实宽度响应机制
 
