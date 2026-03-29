@@ -8,6 +8,8 @@ import {
   type SessionMessage,
 } from './collaboration-session';
 
+const MOCK_COLLABORATION_AVAILABILITY = 'unavailable' as const;
+
 type CollaborationSessionAction =
   | { type: 'reset' }
   | { type: 'set-query'; payload: string }
@@ -20,6 +22,7 @@ type CollaborationSessionAction =
     };
 
 const INITIAL_SESSION_STATE: CollaborationSessionState = {
+  availability: MOCK_COLLABORATION_AVAILABILITY,
   mode: 'local',
   status: 'idle',
   messages: [],

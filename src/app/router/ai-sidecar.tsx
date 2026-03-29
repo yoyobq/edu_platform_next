@@ -21,11 +21,11 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 }
 
 export function AiSidecar() {
-  const { availability, close, isOpen } = useSidecarState();
+  const { close, isOpen } = useSidecarState();
   const { session, setQuery, submitQuery } = useCollaborationSession();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
-  const isUnavailable = availability === 'unavailable';
+  const isUnavailable = session.availability === 'unavailable';
   const { band: sidecarWidthBand, width: sidecarWidth } = useWidthBand(
     panelRef,
     [{ max: 440, value: 'compact' }],

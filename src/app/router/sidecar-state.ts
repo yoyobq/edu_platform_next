@@ -1,9 +1,6 @@
 import { createContext, useContext } from 'react';
 
-export type AiAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
-
 export type SidecarState = {
-  availability: AiAvailability;
   isOpen: boolean;
   close: () => void;
   open: () => void;

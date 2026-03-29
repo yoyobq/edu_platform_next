@@ -1,6 +1,7 @@
 import { createContext, useContext } from 'react';
 
 export type EntryMode = 'ai' | 'local';
+export type CollaborationAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
 export type SessionStatus = 'idle' | 'ready' | 'loading' | 'error';
 export type SessionMessageRole = 'system' | 'user';
 
@@ -19,6 +20,7 @@ export type EntryCard = {
 };
 
 export type CollaborationSessionState = {
+  availability: CollaborationAvailability;
   mode: EntryMode;
   status: SessionStatus;
   messages: SessionMessage[];
