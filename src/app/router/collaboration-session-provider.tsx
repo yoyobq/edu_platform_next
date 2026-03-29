@@ -3,6 +3,7 @@ import { useLocation } from 'react-router';
 
 import {
   type AppEnv,
+  type CollaborationAvailability,
   CollaborationSessionContext,
   type CollaborationSessionContextValue,
   type CollaborationSessionState,
@@ -73,6 +74,21 @@ function getCurrentRole(search: string): AppRole {
   return new URLSearchParams(search).get('role') === 'admin' ? 'admin' : 'guest';
 }
 
+function getCurrentAvailability(search: string): CollaborationAvailability {
+  const value = new URLSearchParams(search).get('availability');
+
+  if (
+    value === 'available' ||
+    value === 'degraded' ||
+    value === 'readonly' ||
+    value === 'unavailable'
+  ) {
+    return value;
+  }
+
+  return MOCK_COLLABORATION_AVAILABILITY;
+}
+
 function collaborationSessionReducer(
   state: CollaborationSessionState,
   action: CollaborationSessionAction,
@@ -119,10 +135,14 @@ export function CollaborationSessionProvider({
 }: CollaborationSessionProviderProps) {
   const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
   const location = useLocation();
+  const currentAvailability = getCurrentAvailability(location.search);
 
   const value = useMemo<CollaborationSessionContextValue>(
     () => ({
-      session,
+      session: {
+        ...session,
+        availability: currentAvailability,
+      },
       resetSession: () => dispatch({ type: 'reset' }),
       submitQuery: (message) => {
         const trimmedMessage = message.trim();
@@ -131,9 +151,14 @@ export function CollaborationSessionProvider({
           return;
         }
 
-        const isUnavailable = session.availability === 'unavailable';
-        const mode: EntryMode = isUnavailable ? 'local' : 'ai';
-        const cards: EntryCard[] = isUnavailable
+        if (currentAvailability === 'readonly') {
+          return;
+        }
+
+        const prefersLocalEntry =
+          currentAvailability === 'unavailable' || currentAvailability === 'degraded';
+        const mode: EntryMode = prefersLocalEntry ? 'local' : 'ai';
+        const cards: EntryCard[] = prefersLocalEntry
           ? matchLocalEntryCards(
               trimmedMessage,
               getAvailableLocalEntryCards({
@@ -150,12 +175,14 @@ export function CollaborationSessionProvider({
             message: trimmedMessage,
             cards,
             mode,
-            systemReply: isUnavailable ? buildLocalEntryReply(trimmedMessage, cards) : undefined,
+            systemReply: prefersLocalEntry
+              ? buildLocalEntryReply(trimmedMessage, cards)
+              : undefined,
           },
         });
       },
     }),
-    [currentAppEnv, location.search, session],
+    [currentAppEnv, currentAvailability, location.search, session],
   );
 
   return (

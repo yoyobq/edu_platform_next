@@ -4,7 +4,11 @@ import type { SenderRef } from '@ant-design/x/es/sender';
 import { Alert, Button, Card, Divider, Drawer, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
-import { useCollaborationSession } from './collaboration-session';
+import {
+  type CollaborationAvailability,
+  type SessionMessage,
+  useCollaborationSession,
+} from './collaboration-session';
 import { useRegisterKeyboardShortcut } from './keyboard-shortcut-stack';
 import { useSidecarState } from './sidecar-state';
 import { useWidthBand } from './use-width-band';
@@ -23,6 +27,37 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
   return Number.isNaN(parsedValue) ? fallbackValue : parsedValue;
 }
 
+function getDefaultMessages(
+  availability: ReturnType<typeof getAvailabilityViewState>,
+): SessionMessage[] {
+  if (availability.isReadonly) {
+    return [
+      {
+        id: 'system-readonly',
+        role: 'system' as const,
+        content: '当前入口已切换为只读模式。你可以先查看已有内容，新的输入会在恢复后开放。',
+      },
+    ];
+  }
+
+  return [
+    {
+      id: 'system-welcome',
+      role: 'system' as const,
+      content: '请问你要做什么？',
+    },
+  ];
+}
+
+function getAvailabilityViewState(availability: CollaborationAvailability) {
+  return {
+    isAvailable: availability === 'available',
+    isDegraded: availability === 'degraded',
+    isReadonly: availability === 'readonly',
+    isUnavailable: availability === 'unavailable',
+  };
+}
+
 export function EntrySidecar() {
   const { close, isOpen, reportMeasuredWidth } = useSidecarState();
   const { session, submitQuery } = useCollaborationSession();
@@ -31,22 +66,14 @@ export function EntrySidecar() {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const senderRef = useRef<SenderRef | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
-  const isUnavailable = session.availability === 'unavailable';
+  const availabilityView = getAvailabilityViewState(session.availability);
   const { band: sidecarWidthBand, width: sidecarWidth } = useWidthBand(
     panelRef,
     [{ max: 440, value: 'compact' }],
     'comfortable',
   );
   const visibleMessages =
-    session.messages.length > 0
-      ? session.messages
-      : [
-          {
-            id: 'system-welcome',
-            role: 'system' as const,
-            content: '请问你要做什么？',
-          },
-        ];
+    session.messages.length > 0 ? session.messages : getDefaultMessages(availabilityView);
 
   const closeSidecar = useCallback(() => {
     close();
@@ -102,8 +129,16 @@ export function EntrySidecar() {
         data-sidecar-width-band={sidecarWidthBand}
         style={{ '--layout-sidecar-width': `${Math.round(sidecarWidth)}px` } as CSSProperties}
       >
-        {isUnavailable ? (
-          <Alert type="info" showIcon title="智能入口暂未开启，你仍可正常使用项目功能。" />
+        {availabilityView.isUnavailable ? (
+          <Alert type="info" showIcon title="增强入口暂未连接，你仍可正常使用项目功能。" />
+        ) : availabilityView.isDegraded ? (
+          <Alert
+            type="warning"
+            showIcon
+            title="增强入口当前已降级，复杂协作会优先回退到本地入口。"
+          />
+        ) : availabilityView.isReadonly ? (
+          <Alert type="info" showIcon title="当前入口为只读模式，你仍可查看已有内容。" />
         ) : (
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             这里是语义入口与协作层。关闭后，不影响主业务操作。
@@ -185,9 +220,13 @@ export function EntrySidecar() {
               );
             })}
             <Typography.Text type="secondary">
-              {isUnavailable
-                ? '智能入口暂未连接。你仍可输入目标页面名称，先查看相关入口卡片，再进入对应页面。'
-                : '你可以直接描述目标，我会帮你找到页面、整理信息或起草下一步。'}
+              {availabilityView.isReadonly
+                ? '当前入口暂不接收新输入。你仍可浏览已有记录，待入口恢复后再继续。'
+                : availabilityView.isUnavailable
+                  ? '增强入口暂未连接。你仍可输入目标页面名称，先查看相关入口卡片，再进入对应页面。'
+                  : availabilityView.isDegraded
+                    ? '增强入口当前不稳定。你仍可输入目标页面名称或操作意图，我会优先给出本地入口。'
+                    : '你可以直接描述目标，我会帮你找到页面、整理信息或起草下一步。'}
             </Typography.Text>
           </div>
         </div>
@@ -200,12 +239,19 @@ export function EntrySidecar() {
             ref={senderRef}
             value={draft}
             onChange={(value) => setDraft(value)}
+            disabled={availabilityView.isReadonly}
             onSubmit={(message) => {
               submitQuery(message);
               setDraft('');
             }}
             placeholder={
-              isUnavailable ? '输入你想去的页面名称' : '告诉我你想查看什么，或想完成什么'
+              availabilityView.isReadonly
+                ? '当前为只读模式'
+                : availabilityView.isUnavailable
+                  ? '输入你想去的页面名称'
+                  : availabilityView.isDegraded
+                    ? '输入目标页面名称或操作意图'
+                    : '告诉我你想查看什么，或想完成什么'
             }
           />
         </div>
