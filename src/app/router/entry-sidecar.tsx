@@ -1,10 +1,11 @@
-import { type CSSProperties, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useRef, useState } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import type { SenderRef } from '@ant-design/x/es/sender';
 import { Alert, Button, Card, Divider, Drawer, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
 import { useCollaborationSession } from './collaboration-session';
+import { useRegisterKeyboardShortcut } from './keyboard-shortcut-stack';
 import { useSidecarState } from './sidecar-state';
 import { useWidthBand } from './use-width-band';
 
@@ -47,6 +48,19 @@ export function EntrySidecar() {
           },
         ];
 
+  const closeSidecar = useCallback(() => {
+    close();
+  }, [close]);
+
+  useRegisterKeyboardShortcut(
+    {
+      key: 'Escape',
+      priority: 'sidecar',
+      handler: closeSidecar,
+    },
+    isOpen,
+  );
+
   return (
     <Drawer
       open={isOpen}
@@ -68,7 +82,7 @@ export function EntrySidecar() {
           senderRef.current?.inputElement?.focus();
         });
       }}
-      keyboard
+      keyboard={false}
       destroyOnHidden={false}
       zIndex={sidecarZIndex}
       styles={{

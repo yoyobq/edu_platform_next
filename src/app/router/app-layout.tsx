@@ -1,10 +1,12 @@
-import { type CSSProperties, useEffect, useRef } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
 import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { CollaborationSessionProvider } from './collaboration-session-provider';
 import { EntrySidecar } from './entry-sidecar';
+import { useRegisterKeyboardShortcut } from './keyboard-shortcut-stack';
+import { KeyboardShortcutStackProvider } from './keyboard-shortcut-stack-provider';
 import { useSidecarState } from './sidecar-state';
 import { SidecarStateProvider } from './sidecar-state-provider';
 import { useWidthBand } from './use-width-band';
@@ -40,6 +42,22 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 
     wasOpenRef.current = isOpen;
   }, [isOpen]);
+
+  const openEntrySidecar = useCallback(() => {
+    if (!isOpen) {
+      open();
+    }
+  }, [isOpen, open]);
+
+  useRegisterKeyboardShortcut(
+    {
+      key: 'k',
+      altKey: true,
+      priority: 'page',
+      handler: openEntrySidecar,
+    },
+    true,
+  );
 
   const search = location.search;
   const menuItems: ItemType[] = [
@@ -122,6 +140,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             type={isOpen ? 'default' : 'primary'}
             size="large"
             shape="round"
+            aria-keyshortcuts="Alt+K"
             onClick={() => {
               if (isOpen) {
                 close();
@@ -143,10 +162,12 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 
 export function AppLayout(props: AppLayoutProps) {
   return (
-    <SidecarStateProvider>
-      <CollaborationSessionProvider currentAppEnv={props.currentAppEnv}>
-        <AppLayoutFrame {...props} />
-      </CollaborationSessionProvider>
-    </SidecarStateProvider>
+    <KeyboardShortcutStackProvider>
+      <SidecarStateProvider>
+        <CollaborationSessionProvider currentAppEnv={props.currentAppEnv}>
+          <AppLayoutFrame {...props} />
+        </CollaborationSessionProvider>
+      </SidecarStateProvider>
+    </KeyboardShortcutStackProvider>
   );
 }
