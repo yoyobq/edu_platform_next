@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Sender } from '@ant-design/x';
 import { Button, Card, Checkbox, Empty, Flex, Tag, Typography } from 'antd';
 
 import { demoProjects, isProjectLive } from '@/entities/project';
@@ -26,10 +25,6 @@ export function HomePage() {
           Only live
         </Checkbox>
       </Flex>
-
-      <div className="max-w-xl rounded-2xl border p-4">
-        <Sender placeholder="Ant Design X OK" />
-      </div>
 
       <section className="max-w-5xl">
         <Flex align="center" justify="space-between" gap={16} className="mb-4">

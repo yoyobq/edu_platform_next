@@ -1,12 +1,8 @@
-import { ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
-import type { ItemType } from 'antd/es/menu/interface';
+import { Typography } from 'antd';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
-  Link,
-  Outlet,
   RouterProvider,
-  useLocation,
   useRouteError,
 } from 'react-router';
 
@@ -14,6 +10,8 @@ import { HomePage } from '@/pages/home';
 
 import { demoLabAccess, DemoLabPage } from '@/labs/demo';
 import { SandboxPlaygroundPage } from '@/sandbox/playground';
+
+import { AppLayout } from './app-layout';
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppRole = 'guest' | 'admin';
@@ -29,10 +27,6 @@ function getCurrentAppEnv(): AppEnv {
 }
 
 const currentAppEnv = getCurrentAppEnv();
-
-function getBaseURL(pathname: string, search: string): string {
-  return search ? `${pathname}${search}` : pathname;
-}
 
 function getRequestRole(request: Request): AppRole {
   const requestURL = new URL(request.url);
@@ -104,76 +98,10 @@ function RouteHydrateFallback() {
   return null;
 }
 
-function AppShell() {
-  const location = useLocation();
-
-  const search = location.search;
-  const menuItems: ItemType[] = [
-    {
-      key: getBaseURL('/', search),
-      label: <Link to={getBaseURL('/', search)}>Home</Link>,
-    },
-  ];
-
-  if (currentAppEnv === 'dev' || currentAppEnv === 'test') {
-    menuItems.push({
-      key: getBaseURL('/sandbox/playground', search),
-      label: <Link to={getBaseURL('/sandbox/playground', search)}>Sandbox Playground</Link>,
-    });
-  }
-
-  return (
-    <ConfigProvider theme={{ cssVar: {} }}>
-      <div className="min-h-screen bg-bg-layout text-text">
-        <Layout style={{ minHeight: '100%', background: 'transparent' }}>
-          <Layout.Header
-            style={{
-              background: 'transparent',
-              paddingInline: 24,
-              height: 'auto',
-              lineHeight: 'normal',
-            }}
-          >
-            <div className="flex items-center justify-between gap-4 py-4">
-              <div>
-                <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                  aigc-friendly-frontend
-                </Typography.Title>
-                <Typography.Text type="secondary">
-                  env: {currentAppEnv} | role: {new URLSearchParams(search).get('role') || 'guest'}
-                </Typography.Text>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <Menu
-                  mode="horizontal"
-                  selectedKeys={[getBaseURL(location.pathname, search)]}
-                  items={menuItems}
-                  style={{ justifyContent: 'flex-end', borderBottom: 'none' }}
-                />
-              </div>
-            </div>
-          </Layout.Header>
-
-          <Layout.Content style={{ padding: '32px' }}>
-            <Flex vertical gap={16}>
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                `labs` routes require access checks. Use `?role=admin` to simulate the current
-                allowed role.
-              </Typography.Paragraph>
-              <Outlet />
-            </Flex>
-          </Layout.Content>
-        </Layout>
-      </div>
-    </ConfigProvider>
-  );
-}
-
 const router = createBrowserRouter([
   {
     path: '/',
-    Component: AppShell,
+    Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
     ErrorBoundary: RouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
     children: [
