@@ -1,7 +1,7 @@
 import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('shows a clear fallback reply when no local entry matches the query', async ({ page }) => {
+test('本地语义入口无匹配时，应给出清晰兜底回复', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();

@@ -1,7 +1,7 @@
 import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('keeps conversation history after route navigation', async ({ page }) => {
+test('跨路由跳转后，应保留入口面板中的对话历史', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();
@@ -21,7 +21,7 @@ test('keeps conversation history after route navigation', async ({ page }) => {
   await expect(page.getByText('先帮你找到 1 个和“沙盒”相关的入口，确认后即可进入。')).toBeVisible();
 });
 
-test('keeps sidecar state stable through browser back navigation', async ({ page }) => {
+test('浏览器后退后，应保持入口面板状态与历史内容稳定', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();

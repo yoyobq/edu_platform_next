@@ -1,6 +1,6 @@
 import { expect, test } from '../../test';
 
-test('exposes sandbox playground in development mode', async ({ page }) => {
+test('开发模式下应暴露 sandbox 演练场', async ({ page }) => {
   await page.goto('/sandbox/playground');
 
   await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();

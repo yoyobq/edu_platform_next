@@ -1,9 +1,7 @@
 import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('navigates through local semantic entry cards when the intelligent entry is unavailable', async ({
-  page,
-}) => {
+test('增强入口不可用时，应通过本地语义入口卡片完成导航', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();

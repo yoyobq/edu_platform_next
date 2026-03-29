@@ -2,7 +2,7 @@ import { projectFixtures } from '../../fixtures/project-data';
 import { openHome, projectCard } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('shows which projects are live and supports live-only filtering', async ({ page }) => {
+test('展示项目上线状态，并支持只看上线项目筛选', async ({ page }) => {
   await openHome(page);
 
   await expect(projectCard(page, projectFixtures.live.id)).toContainText(projectFixtures.live.name);

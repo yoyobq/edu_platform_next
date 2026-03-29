@@ -1,7 +1,7 @@
 import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('keeps main area interactive while the entry sidecar is open', async ({ page }) => {
+test('入口面板打开时，主内容区仍应保持可交互', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();
@@ -14,7 +14,7 @@ test('keeps main area interactive while the entry sidecar is open', async ({ pag
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
 });
 
-test('keeps the entry shell usable after a route change', async ({ page }) => {
+test('路由切换后，入口面板仍应保持可继续使用', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();

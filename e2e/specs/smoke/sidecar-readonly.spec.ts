@@ -1,8 +1,6 @@
 import { expect, test } from '../../test';
 
-test('shows readonly state and disables new input when the entry panel is readonly', async ({
-  page,
-}) => {
+test('入口面板处于只读状态时，应展示只读提示并禁用新输入', async ({ page }) => {
   await page.goto('/?availability=readonly');
 
   await page.getByRole('button', { name: '开始' }).click();

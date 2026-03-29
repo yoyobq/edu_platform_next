@@ -1,9 +1,7 @@
 import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('keeps the entry shell closed after route changes when the user has closed it', async ({
-  page,
-}) => {
+test('用户主动关闭入口面板后，跨路由切换也不应自动重新打开', async ({ page }) => {
   await openHome(page);
 
   await page.getByRole('button', { name: '开始' }).click();

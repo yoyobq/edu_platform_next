@@ -1,6 +1,6 @@
 import { expect, test } from '../../test';
 
-test('falls back to local entry cards when the enhanced entry is degraded', async ({ page }) => {
+test('增强入口降级时，应回退到本地语义入口卡片', async ({ page }) => {
   await page.goto('/?availability=degraded');
 
   await page.getByRole('button', { name: '开始' }).click();
