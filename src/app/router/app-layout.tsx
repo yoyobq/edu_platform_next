@@ -4,6 +4,7 @@ import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
 import { AiSidecar } from './ai-sidecar';
+import { SidecarSessionProvider } from './sidecar-session-provider';
 import { useSidecarState } from './sidecar-state';
 import { SidecarStateProvider } from './sidecar-state-provider';
 
@@ -123,7 +124,9 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 export function AppLayout(props: AppLayoutProps) {
   return (
     <SidecarStateProvider>
-      <AppLayoutFrame {...props} />
+      <SidecarSessionProvider>
+        <AppLayoutFrame {...props} />
+      </SidecarSessionProvider>
     </SidecarStateProvider>
   );
 }

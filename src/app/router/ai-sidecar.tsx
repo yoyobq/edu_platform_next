@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import { Alert, Divider, Drawer, Typography } from 'antd';
 
+import { useSidecarSession } from './sidecar-session';
 import { useSidecarState } from './sidecar-state';
 
 function readZIndexToken(tokenName: string, fallbackValue: number): number {
@@ -20,9 +21,20 @@ function readZIndexToken(tokenName: string, fallbackValue: number): number {
 
 export function AiSidecar() {
   const { availability, close, isOpen } = useSidecarState();
+  const { session, setQuery, submitQuery } = useSidecarSession();
   const panelRef = useRef<HTMLDivElement | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const isUnavailable = availability === 'unavailable';
+  const visibleMessages =
+    session.messages.length > 0
+      ? session.messages
+      : [
+          {
+            id: 'system-welcome',
+            role: 'system' as const,
+            content: '请问你要做什么？',
+          },
+        ];
 
   return (
     <Drawer
@@ -68,9 +80,17 @@ export function AiSidecar() {
 
         <div className="flex-1 overflow-y-auto">
           <div className="flex h-full flex-col justify-center gap-4">
-            <div className="max-w-[85%]">
-              <Bubble placement="start" content="请问你要做什么？" />
-            </div>
+            {visibleMessages.map((message) => (
+              <div
+                key={message.id}
+                className={message.role === 'user' ? 'ml-auto max-w-[85%]' : 'max-w-[85%]'}
+              >
+                <Bubble
+                  placement={message.role === 'user' ? 'end' : 'start'}
+                  content={message.content}
+                />
+              </div>
+            ))}
             <Typography.Text type="secondary">
               {isUnavailable
                 ? '智能入口暂未连接。你仍可输入目标页面名称，先查看相关入口卡片，再进入对应页面。'
@@ -81,6 +101,14 @@ export function AiSidecar() {
 
         <div className="rounded-2xl border border-border bg-bg-container p-4 shadow-sm">
           <Sender
+            value={session.query}
+            onChange={(value) => setQuery(value)}
+            onSubmit={(message) =>
+              submitQuery({
+                message,
+                mode: isUnavailable ? 'local' : 'ai',
+              })
+            }
             placeholder={
               isUnavailable ? '输入你想去的页面名称' : '告诉我你想查看什么，或想完成什么'
             }
