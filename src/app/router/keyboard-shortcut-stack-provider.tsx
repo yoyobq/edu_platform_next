@@ -21,7 +21,7 @@ const PRIORITY_ORDER: Record<ShortcutPriority, number> = {
 
 function matchesShortcut(event: KeyboardEvent, shortcut: ShortcutDefinition): boolean {
   return (
-    event.key === shortcut.key &&
+    event.key.toLowerCase() === shortcut.key.toLowerCase() &&
     Boolean(shortcut.ctrlKey) === event.ctrlKey &&
     Boolean(shortcut.metaKey) === event.metaKey &&
     Boolean(shortcut.shiftKey) === event.shiftKey &&

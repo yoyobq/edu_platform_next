@@ -1,4 +1,4 @@
-import { type CSSProperties, useCallback, useEffect, useRef } from 'react';
+import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
@@ -25,6 +25,9 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(isOpen);
+  const [showShortcutHint, setShowShortcutHint] = useState(() =>
+    typeof document !== 'undefined' ? document.hasFocus() : false,
+  );
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
     mainRef,
@@ -43,6 +46,23 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     wasOpenRef.current = isOpen;
   }, [isOpen]);
 
+  useEffect(() => {
+    function syncPageFocus() {
+      setShowShortcutHint(document.hasFocus() && document.visibilityState === 'visible');
+    }
+
+    syncPageFocus();
+    window.addEventListener('focus', syncPageFocus);
+    window.addEventListener('blur', syncPageFocus);
+    document.addEventListener('visibilitychange', syncPageFocus);
+
+    return () => {
+      window.removeEventListener('focus', syncPageFocus);
+      window.removeEventListener('blur', syncPageFocus);
+      document.removeEventListener('visibilitychange', syncPageFocus);
+    };
+  }, []);
+
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
       open();
@@ -60,6 +80,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 
   const search = location.search;
+  const currentRole = new URLSearchParams(search).get('role') || 'guest';
   const menuItems: ItemType[] = [
     {
       key: getBaseURL('/', search),
@@ -86,24 +107,34 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               lineHeight: 'normal',
             }}
           >
-            <div className="flex items-center justify-between gap-4 py-4">
-              <div>
-                <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                  aigc-friendly-frontend
-                </Typography.Title>
-                <Typography.Text type="secondary">
-                  环境：{currentAppEnv} | 角色：
-                  {new URLSearchParams(search).get('role') || 'guest'}
-                </Typography.Text>
-              </div>
+            <div className="mx-auto max-w-7xl py-4">
+              <div className="rounded-3xl border border-border bg-bg-container px-5 py-4 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                      aigc-friendly-frontend
+                    </Typography.Title>
+                    <Typography.Text type="secondary">主内容优先，入口协作增强。</Typography.Text>
+                  </div>
 
-              <div className="min-w-0 flex-1">
-                <Menu
-                  mode="horizontal"
-                  selectedKeys={[getBaseURL(location.pathname, search)]}
-                  items={menuItems}
-                  style={{ justifyContent: 'flex-end', borderBottom: 'none' }}
-                />
+                  <div className="min-w-0 flex-1">
+                    <Menu
+                      mode="horizontal"
+                      selectedKeys={[getBaseURL(location.pathname, search)]}
+                      items={menuItems}
+                      style={{ justifyContent: 'center', borderBottom: 'none' }}
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center justify-end gap-3">
+                    <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
+                      环境：{currentAppEnv}
+                    </div>
+                    <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
+                      角色：{currentRole}
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </Layout.Header>
@@ -134,7 +165,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 
         <EntrySidecar />
 
-        <div className="fixed bottom-8 right-8 z-top-control-bar shadow-lg rounded-full">
+        <div className="fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-lg">
           <Button
             ref={triggerRef}
             type={isOpen ? 'default' : 'primary'}
@@ -152,6 +183,11 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             <div className="flex items-center gap-2">
               <span className="text-lg">✨</span>
               <span className="font-medium">开始</span>
+              {showShortcutHint ? (
+                <span className="rounded-full border border-current/15 px-2 py-0.5 text-xs text-current/75">
+                  Alt+K
+                </span>
+              ) : null}
             </div>
           </Button>
         </div>
