@@ -7,12 +7,223 @@ import simpleImportSort from 'eslint-plugin-simple-import-sort';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
+const localRules = {
+  'no-design-system-classname': {
+    meta: {
+      type: 'problem',
+      docs: {
+        description:
+          'Disallow className on Ant Design and Ant Design X component bodies; use wrappers instead.',
+      },
+      schema: [],
+      messages: {
+        noClassName:
+          'Do not attach `className` to {{component}} from {{source}}. Tailwind must stay on wrapper elements.',
+      },
+    },
+    create(context) {
+      const imports = new Map();
+
+      function getTagInfo(nameNode) {
+        if (nameNode.type === 'JSXIdentifier') {
+          const source = imports.get(nameNode.name);
+          if (source) {
+            return { source, root: nameNode.name, component: nameNode.name };
+          }
+        }
+
+        if (
+          nameNode.type === 'JSXMemberExpression' &&
+          nameNode.object.type === 'JSXIdentifier' &&
+          nameNode.property.type === 'JSXIdentifier'
+        ) {
+          const source = imports.get(nameNode.object.name);
+          if (source) {
+            return {
+              source,
+              root: nameNode.object.name,
+              component: `${nameNode.object.name}.${nameNode.property.name}`,
+            };
+          }
+        }
+
+        return null;
+      }
+
+      return {
+        ImportDeclaration(node) {
+          if (node.source.value !== 'antd' && node.source.value !== '@ant-design/x') {
+            return;
+          }
+
+          for (const specifier of node.specifiers) {
+            if (specifier.type === 'ImportSpecifier') {
+              imports.set(specifier.local.name, node.source.value);
+            }
+          }
+        },
+        JSXOpeningElement(node) {
+          const tagInfo = getTagInfo(node.name);
+
+          if (!tagInfo) {
+            return;
+          }
+
+          if (tagInfo.source === 'antd' && tagInfo.root === 'Flex') {
+            return;
+          }
+
+          const classNameAttribute = node.attributes.find(
+            (attribute) =>
+              attribute.type === 'JSXAttribute' &&
+              attribute.name.type === 'JSXIdentifier' &&
+              attribute.name.name === 'className',
+          );
+
+          if (!classNameAttribute) {
+            return;
+          }
+
+          context.report({
+            node: classNameAttribute,
+            messageId: 'noClassName',
+            data: {
+              component: tagInfo.component,
+              source: tagInfo.source,
+            },
+          });
+        },
+      };
+    },
+  },
+  'no-tailwind-magic-colors': {
+    meta: {
+      type: 'problem',
+      docs: {
+        description: 'Disallow magic color values inside JSX className strings.',
+      },
+      schema: [],
+      messages: {
+        noMagicColor:
+          'Do not use magic color values in `className`. Use shared tokens or CSS variables instead.',
+      },
+    },
+    create(context) {
+      const magicColorPattern = /#[0-9a-fA-F]{3,8}|\b(?:rgb|hsl)a?\s*\(/;
+
+      function getStaticClassNameValue(attributeValue) {
+        if (!attributeValue) {
+          return null;
+        }
+
+        if (attributeValue.type === 'Literal' && typeof attributeValue.value === 'string') {
+          return attributeValue.value;
+        }
+
+        if (
+          attributeValue.type === 'JSXExpressionContainer' &&
+          attributeValue.expression.type === 'Literal' &&
+          typeof attributeValue.expression.value === 'string'
+        ) {
+          return attributeValue.expression.value;
+        }
+
+        if (
+          attributeValue.type === 'JSXExpressionContainer' &&
+          attributeValue.expression.type === 'TemplateLiteral' &&
+          attributeValue.expression.expressions.length === 0
+        ) {
+          return attributeValue.expression.quasis.map((quasi) => quasi.value.cooked ?? '').join('');
+        }
+
+        return null;
+      }
+
+      return {
+        JSXAttribute(node) {
+          if (node.name.type !== 'JSXIdentifier' || node.name.name !== 'className') {
+            return;
+          }
+
+          const classNameValue = getStaticClassNameValue(node.value);
+          if (!classNameValue) {
+            return;
+          }
+
+          if (!magicColorPattern.test(classNameValue)) {
+            return;
+          }
+
+          context.report({
+            node,
+            messageId: 'noMagicColor',
+          });
+        },
+      };
+    },
+  },
+  'no-inline-zindex': {
+    meta: {
+      type: 'problem',
+      docs: {
+        description: 'Disallow raw inline zIndex values; use semantic layer tokens instead.',
+      },
+      schema: [],
+      messages: {
+        noInlineZIndex:
+          'Do not set raw `zIndex` inline. Use semantic layer tokens or shared style variables.',
+      },
+    },
+    create(context) {
+      return {
+        JSXAttribute(node) {
+          if (node.name.type !== 'JSXIdentifier' || node.name.name !== 'style') {
+            return;
+          }
+
+          if (!node.value || node.value.type !== 'JSXExpressionContainer') {
+            return;
+          }
+
+          const expression = node.value.expression;
+          if (expression.type !== 'ObjectExpression') {
+            return;
+          }
+
+          for (const property of expression.properties) {
+            if (property.type !== 'Property') {
+              continue;
+            }
+
+            const keyName =
+              property.key.type === 'Identifier'
+                ? property.key.name
+                : property.key.type === 'Literal'
+                  ? property.key.value
+                  : null;
+
+            if (keyName !== 'zIndex') {
+              continue;
+            }
+
+            context.report({
+              node: property,
+              messageId: 'noInlineZIndex',
+            });
+          }
+        },
+      };
+    },
+  },
+};
+
 export default defineConfig([
   globalIgnores(['dist']),
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
       boundaries,
+      local: { rules: localRules },
       'simple-import-sort': simpleImportSort,
     },
     extends: [
@@ -168,6 +379,9 @@ export default defineConfig([
         },
       ],
       'simple-import-sort/exports': 'error',
+      'local/no-design-system-classname': 'error',
+      'local/no-tailwind-magic-colors': 'error',
+      'local/no-inline-zindex': 'error',
     },
   },
 ]);

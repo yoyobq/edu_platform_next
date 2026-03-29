@@ -34,10 +34,10 @@ export function HomePage() {
       <section className="max-w-5xl">
         <Flex align="center" justify="space-between" gap={16} className="mb-4">
           <div>
-            <Typography.Title level={3} className="mb-1">
+            <Typography.Title level={3} style={{ marginBottom: 4 }}>
               Project Health
             </Typography.Title>
-            <Typography.Paragraph type="secondary" className="mb-0">
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
               Use this panel to observe which projects are live before changing exposure.
             </Typography.Paragraph>
           </div>
@@ -62,7 +62,9 @@ export function HomePage() {
                   }
                 >
                   <Flex vertical gap={8}>
-                    <Typography.Paragraph className="mb-0">{project.summary}</Typography.Paragraph>
+                    <Typography.Paragraph style={{ marginBottom: 0 }}>
+                      {project.summary}
+                    </Typography.Paragraph>
                     <Typography.Text strong>{project.monthlyPrice} / month</Typography.Text>
                     <Typography.Text type="secondary">
                       Updated at {project.updatedAt}

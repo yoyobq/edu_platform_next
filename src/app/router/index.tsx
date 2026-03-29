@@ -71,7 +71,7 @@ function RouteErrorPage() {
       return (
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
           <Typography.Title level={3}>Access denied</Typography.Title>
-          <Typography.Paragraph className="mb-0">
+          <Typography.Paragraph style={{ marginBottom: 0 }}>
             This route is currently blocked by access rules.
           </Typography.Paragraph>
         </div>
@@ -82,7 +82,7 @@ function RouteErrorPage() {
       return (
         <div className="rounded-2xl border border-slate-300 bg-slate-50 p-6">
           <Typography.Title level={3}>Route not found</Typography.Title>
-          <Typography.Paragraph className="mb-0">
+          <Typography.Paragraph style={{ marginBottom: 0 }}>
             This route is not currently exposed in the active environment.
           </Typography.Paragraph>
         </div>
@@ -93,7 +93,7 @@ function RouteErrorPage() {
   return (
     <div className="rounded-2xl border border-rose-300 bg-rose-50 p-6">
       <Typography.Title level={3}>Unexpected route error</Typography.Title>
-      <Typography.Paragraph className="mb-0">
+      <Typography.Paragraph style={{ marginBottom: 0 }}>
         The route failed before rendering.
       </Typography.Paragraph>
     </div>
@@ -124,35 +124,48 @@ function AppShell() {
 
   return (
     <ConfigProvider>
-      <Layout className="min-h-screen bg-white">
-        <Layout.Header className="flex items-center justify-between bg-white px-6">
-          <div>
-            <Typography.Title level={4} className="!mb-0">
-              aigc-friendly-frontend
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              env: {currentAppEnv} | role: {new URLSearchParams(search).get('role') || 'guest'}
-            </Typography.Text>
-          </div>
+      <div className="min-h-screen bg-white">
+        <Layout style={{ minHeight: '100%', background: 'transparent' }}>
+          <Layout.Header
+            style={{
+              background: 'transparent',
+              paddingInline: 24,
+              height: 'auto',
+              lineHeight: 'normal',
+            }}
+          >
+            <div className="flex items-center justify-between gap-4 py-4">
+              <div>
+                <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                  aigc-friendly-frontend
+                </Typography.Title>
+                <Typography.Text type="secondary">
+                  env: {currentAppEnv} | role: {new URLSearchParams(search).get('role') || 'guest'}
+                </Typography.Text>
+              </div>
 
-          <Menu
-            mode="horizontal"
-            selectedKeys={[getBaseURL(location.pathname, search)]}
-            items={menuItems}
-            className="min-w-0 flex-1 justify-end border-none"
-          />
-        </Layout.Header>
+              <div className="min-w-0 flex-1">
+                <Menu
+                  mode="horizontal"
+                  selectedKeys={[getBaseURL(location.pathname, search)]}
+                  items={menuItems}
+                  style={{ justifyContent: 'flex-end', borderBottom: 'none' }}
+                />
+              </div>
+            </div>
+          </Layout.Header>
 
-        <Layout.Content className="px-8 py-8">
-          <Flex vertical gap={16}>
-            <Typography.Paragraph type="secondary" className="mb-0">
-              `labs` routes require access checks. Use `?role=admin` to simulate the current allowed
-              role.
-            </Typography.Paragraph>
-            <Outlet />
-          </Flex>
-        </Layout.Content>
-      </Layout>
+          <Layout.Content style={{ padding: '32px' }}>
+            <Flex vertical gap={16}>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                `labs` routes require access checks. Use `?role=admin` to simulate the current
+                allowed role.
+              </Typography.Paragraph>
+              <Outlet />
+            </Flex>
+          </Layout.Content>
+        </Layout>
+      </div>
     </ConfigProvider>
   );
 }
