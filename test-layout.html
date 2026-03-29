@@ -1,0 +1,55 @@
+<!doctype html>
+<html>
+  <head>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      .header {
+        padding: 0 24px;
+        background: #eee;
+      }
+      .mx-auto {
+        margin-left: auto;
+        margin-right: auto;
+      }
+      .max-w-7xl {
+        max-width: 1280px;
+      }
+      .w-full {
+        width: 100%;
+      }
+      .bg-red {
+        background: red;
+        height: 50px;
+      }
+      .bg-blue {
+        background: blue;
+        height: 50px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="header">
+      <div class="mx-auto max-w-7xl bg-red" style="width: calc(100% - 400px)">Header Content</div>
+    </div>
+    <div style="padding: 0 24px">
+      <div style="width: calc(100% - 400px)">
+        <div class="mx-auto max-w-7xl bg-blue">Main Content</div>
+      </div>
+    </div>
+    <div
+      style="
+        position: fixed;
+        right: 0;
+        top: 0;
+        width: 400px;
+        height: 100vh;
+        background: rgba(0, 255, 0, 0.5);
+      "
+    >
+      Sidecar
+    </div>
+  </body>
+</html>

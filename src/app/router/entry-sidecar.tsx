@@ -83,6 +83,30 @@ export function EntrySidecar() {
     reportMeasuredWidth(sidecarWidth);
   }, [reportMeasuredWidth, sidecarWidth]);
 
+  useEffect(() => {
+    const drawerWrapper = panelRef.current?.closest('.ant-drawer-content-wrapper');
+
+    if (!drawerWrapper) {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+
+      if (!entry) {
+        return;
+      }
+
+      reportMeasuredWidth(entry.contentRect.width);
+    });
+
+    observer.observe(drawerWrapper);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [isOpen, reportMeasuredWidth]);
+
   useRegisterKeyboardShortcut(
     {
       key: 'Escape',
@@ -102,7 +126,6 @@ export function EntrySidecar() {
         </div>
       }
       placement="right"
-      size="large"
       mask={false}
       onClose={close}
       afterOpenChange={(nextOpen) => {
@@ -118,14 +141,14 @@ export function EntrySidecar() {
       destroyOnHidden={false}
       zIndex={sidecarZIndex}
       styles={{
-        wrapper: { pointerEvents: 'none' },
+        wrapper: { pointerEvents: 'none', width: 'clamp(360px, 36vw, 560px)', maxWidth: '100vw' },
         section: { pointerEvents: 'auto' },
         body: { paddingTop: 16, display: 'flex', flexDirection: 'column' },
       }}
     >
       <div
         ref={panelRef}
-        className="flex h-full flex-col space-y-4"
+        className="flex h-full w-full flex-col space-y-4"
         data-sidecar-width-band={sidecarWidthBand}
         style={{ '--layout-sidecar-width': `${Math.round(sidecarWidth)}px` } as CSSProperties}
       >

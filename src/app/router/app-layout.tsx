@@ -15,6 +15,10 @@ type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
 };
 
+type MainFrameStyle = CSSProperties & {
+  '--layout-main-width': string;
+};
+
 function getBaseURL(pathname: string, search: string): string {
   return search ? `${pathname}${search}` : pathname;
 }
@@ -27,6 +31,9 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const wasOpenRef = useRef(isOpen);
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
+  );
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1440,
   );
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
@@ -63,6 +70,19 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     };
   }, []);
 
+  useEffect(() => {
+    function syncViewportWidth() {
+      setViewportWidth(window.innerWidth);
+    }
+
+    syncViewportWidth();
+    window.addEventListener('resize', syncViewportWidth);
+
+    return () => {
+      window.removeEventListener('resize', syncViewportWidth);
+    };
+  }, []);
+
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
       open();
@@ -95,17 +115,22 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     });
   }
 
+  const preferredSidecarWidth = Math.min(Math.max(viewportWidth * 0.36, 360), 560);
   const reservedSidecarWidth =
-    isOpen && mainWidthBand !== 'compact' ? Math.max(measuredWidth + 24, 480) : 0;
+    isOpen && mainWidthBand !== 'compact' ? Math.max(measuredWidth, preferredSidecarWidth) + 24 : 0;
   const frameShiftStyle = reservedSidecarWidth
     ? ({
-        paddingRight: reservedSidecarWidth,
-        transition: 'padding-right 180ms ease',
-      } as const)
+        width: `calc(100% - ${reservedSidecarWidth}px)`,
+        transition: 'width 180ms ease',
+      } satisfies CSSProperties)
     : ({
-        paddingRight: 0,
-        transition: 'padding-right 180ms ease',
-      } as const);
+        width: '100%',
+        transition: 'width 180ms ease',
+      } satisfies CSSProperties);
+  const mainFrameStyle: MainFrameStyle = {
+    '--layout-main-width': `${Math.round(mainWidth)}px`,
+    ...frameShiftStyle,
+  };
 
   return (
     <ConfigProvider theme={{ cssVar: {} }}>
@@ -152,16 +177,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           </Layout.Header>
 
           <Layout.Content style={{ padding: '0 24px 32px' }}>
-            <div
-              ref={mainRef}
-              data-main-width-band={mainWidthBand}
-              style={
-                {
-                  '--layout-main-width': `${Math.round(mainWidth)}px`,
-                  ...frameShiftStyle,
-                } as CSSProperties
-              }
-            >
+            <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
               <Flex
                 vertical
                 gap={mainWidthBand === 'compact' ? 16 : 24}
