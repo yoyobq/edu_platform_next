@@ -20,8 +20,12 @@ npm run test:e2e
 
 环境变量文件位于 `env/`：
 
-- `env/.env.example`：通用环境变量示例，预留给未来 dev / shared 配置
+- `env/.env.example`：通用环境变量示例，预留给未来 shared 配置
+- `env/.env.development.example`：development 模式示例
+- `env/.env.production.example`：production 模式示例
 - `env/.env.e2e.example`：E2E 专用示例
+- `env/.env.development.local`：本地实际使用的 development 配置，不提交到 git
+- `env/.env.production.local`：本地实际使用的 production 配置，不提交到 git
 - `env/.env.e2e.local`：本地实际使用的 E2E 配置，不提交到 git
 
 当前 E2E 相关变量：
@@ -33,6 +37,7 @@ npm run test:e2e
 
 ## 当前实现
 
+- `vite.config.ts` 负责读取 `env/` 下的 development / production 配置
 - `playwright.config.ts` 负责读取 `env/` 下的 E2E 配置
 - Playwright 使用 `webServer` 启动本地 Vite
 - `scripts/e2e/start-vite.mjs` 只负责打印启动日志并转发关闭信号

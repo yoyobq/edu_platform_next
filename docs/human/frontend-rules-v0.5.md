@@ -222,6 +222,19 @@ src/
 - 主题接入
 - 应用启动逻辑
 
+环境配置约定：
+
+- Vite 相关环境变量统一放在仓库根下的 `env/`
+- 按 mode 区分配置文件，例如 `development`、`production`、`e2e`
+- 进入版本控制的应是 `*.example`
+- 本地实际值使用 `*.local`，不提交到 git
+- 具体变量与测试约定见 `docs/testing.md`
+
+当前人工确认例外：
+
+- `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，仅用于路由注册、暴露控制与环境隔离
+- 这不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
+
 禁止内容：
 
 - 具体业务规则
