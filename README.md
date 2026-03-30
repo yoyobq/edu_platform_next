@@ -14,6 +14,25 @@ This project is built for a workflow where AI can generate quickly, experiments 
 
 Detailed rules live in [docs/README.md](./docs/README.md).
 
+## Architecture Model
+
+The project uses a two-dimensional governance model:
+
+- First dimension: lifecycle and exposure governance
+  - `stable`: formal long-term code
+  - `labs`: controlled production experiments
+  - `sandbox`: development-only trials
+- Second dimension: internal responsibility layering inside `stable` only
+  - outer slice model: `app / pages / widgets / features / entities / shared`
+  - inner clean model: introduce `domain / application / infrastructure / ui` only when a stable business slice has enough complexity
+
+Important constraints:
+
+- `labs` and `sandbox` do not use the second dimension by default
+- not every frontend module needs Clean Architecture
+- layout shells, page composition, and simple presentation modules should remain simple
+- only stable slices with real business rules, orchestration, or external adapters should introduce clean layering
+
 ## Stack
 
 - Vite
@@ -60,6 +79,7 @@ Simple interpretation:
 - `stable`: long-term formal code
 - `labs`: controlled experiments that may enter production
 - `sandbox`: dev-only prototypes and trial code
+- `stable` may use extra internal clean layering when complexity justifies it
 
 ## Tooling
 
@@ -75,6 +95,7 @@ Simple interpretation:
 ## Plans
 
 - Layout implementation backlog lives in [plans/layout-todo.md](./plans/layout-todo.md)
+- Stable clean adoption plan lives in [plans/stable-clean-adoption-plan.md](./plans/stable-clean-adoption-plan.md)
 - Chunk splitting strategy lives in [docs/chunk-strategy.md](./docs/chunk-strategy.md)
 
 ## Env

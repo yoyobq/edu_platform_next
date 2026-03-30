@@ -75,6 +75,13 @@
 - `entities`：稳定业务对象相关内容
 - `shared`：真正通用、无业务归属或业务弱相关内容
 
+当前二维治理补充：
+
+- 第一维仍是 `stable / labs / sandbox` 与 `app / pages / widgets / features / entities / shared`
+- 第二维只在 `stable` 内部按需要引入，用于高复杂度稳定业务切片的职责分层
+- `labs` 与 `sandbox` 默认不采用第二维，避免把试验区过早工程化
+- 第二维的具体规则见 [stable-clean-architecture.md](./stable-clean-architecture.md)
+
 当前补充说明：
 
 - `app/router` 作为组合根，可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册、暴露控制与环境隔离

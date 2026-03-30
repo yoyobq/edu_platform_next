@@ -19,6 +19,13 @@
 - 实验代码与正式代码隔离
 - 在人工确认与监督下，实验能力可由 AI 协助整理后迁入正式区
 
+当前补充：
+
+- 项目采用二维治理
+- 第一维是 `stable / labs / sandbox` 与 `app / pages / widgets / features / entities / shared`
+- 第二维只作用于 `stable`，用于在高复杂度稳定业务切片内部按需引入 Clean Architecture / Hexagonal Architecture
+- `labs` 与 `sandbox` 默认不采用第二维，避免把实验区过早工程化
+
 界面语言提醒：
 
 - 当前首批用户以中文用户为主，默认用户可见界面文案应优先使用中文
