@@ -32,6 +32,46 @@
   --z-index-cross-layer-prompt: 2000;
 }
 
+[data-layout-surface='sidecar'] {
+  --sidecar-root-gap: 16px;
+  --sidecar-stack-gap: 16px;
+  --sidecar-panel-padding: 16px;
+  --sidecar-card-padding-block: 8px;
+  --sidecar-card-padding-inline: 12px;
+  --sidecar-message-max-width: 85%;
+  --sidecar-surface-radius: 16px;
+}
+
+[data-layout-surface='sidecar'][data-sidecar-density='compact'] {
+  --sidecar-root-gap: 12px;
+  --sidecar-stack-gap: 12px;
+  --sidecar-panel-padding: 12px;
+  --sidecar-card-padding-inline: 10px;
+  --sidecar-message-max-width: 100%;
+  --sidecar-surface-radius: 14px;
+}
+
+[data-layout-surface='sidecar'] .sidecar-root-stack {
+  gap: var(--sidecar-root-gap);
+}
+
+[data-layout-surface='sidecar'] .sidecar-scroll-stack {
+  gap: var(--sidecar-stack-gap);
+}
+
+[data-layout-surface='sidecar'] .sidecar-message-shell {
+  max-width: var(--sidecar-message-max-width);
+}
+
+[data-layout-surface='sidecar'] .sidecar-input-shell {
+  border-radius: var(--sidecar-surface-radius);
+  padding: var(--sidecar-panel-padding);
+}
+
+[data-layout-surface='sidecar'] .sidecar-entry-card .ant-card-body {
+  padding: var(--sidecar-card-padding-block) var(--sidecar-card-padding-inline);
+}
+
 html.disable-motion *,
 html.disable-motion *::before,
 html.disable-motion *::after {
