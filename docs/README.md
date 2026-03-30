@@ -53,6 +53,7 @@ This directory contains project documentation.
 ## Plans
 
 - [../plans/layout-todo.md](../plans/layout-todo.md)
+- [../plans/workbench-entry-plan.md](../plans/workbench-entry-plan.md)
 - [../plans/stable-clean-adoption-plan.md](../plans/stable-clean-adoption-plan.md)
 
 ## Project Convention Docs
