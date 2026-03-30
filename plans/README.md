@@ -22,6 +22,7 @@ plan 不负责定义稳定规则。
 1. 先看当前 plan 本身，确认目标、范围、优先级和产出物
 2. 若 plan 明确引用了某份 rule，再按需打开对应 `docs` 文档
 3. 若多个 rule 可能冲突，再看 [docs/rule-precedence.md](../docs/rule-precedence.md)
+4. 若当前 plan 需要真实后端字段、类型或权限语义，先看 [docs/backend/README.md](../docs/backend/README.md)，再按需打开本地 `docs/backend/schema.graphql`
 
 ## 与 Docs 的关系
 
@@ -33,6 +34,7 @@ plan 不负责定义稳定规则。
 - 若 plan 里写着“已移入规则的内容”，不要再把 plan 当成主规则来源
 - 若需要判断正式边界，优先去 `docs/README.md` 查对应主题入口
 - 若只是执行某个 plan 中的单一事项，只打开该事项直接引用的文档即可
+- 若需要后端契约，先确认本地是否存在 `docs/backend/schema.graphql`，只查与当前任务直接相关的 type / query / mutation / input，不做全文通读
 
 ## Token 友好建议
 
@@ -40,8 +42,10 @@ plan 不负责定义稳定规则。
 - 优先只读取：
 - 当前 plan 直接引用的 rule 文档
 - `docs/README.md` 中与当前主题直接相关的 1 到 2 个入口文档
+- 若任务依赖后端契约，先看 [docs/backend/README.md](../docs/backend/README.md)，再读取本地 `docs/backend/schema.graphql` 中直接相关的片段
 - 只有在规则重叠、冲突或边界不清时，再补读 [docs/rule-precedence.md](../docs/rule-precedence.md)
 - `open-decisions.md` 不是默认必读，只有 plan 明确需要相关背景时再打开
+- `schema.graphql` 不是默认必读，且默认不提交；只有当前任务确实依赖后端字段、类型或权限语义时，才在本地按需打开
 
 一句话原则：
 
