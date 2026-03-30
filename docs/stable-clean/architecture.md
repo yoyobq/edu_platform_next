@@ -200,6 +200,7 @@ src/app/layout/
 - `entities/project`
 - 未来与“项目目录 / 项目筛选 / 项目状态面板”相关的 `features`
 - 后续若 Sidecar 协作流程出现稳定 use case，可在对应 `features` 中引入第二维，而不是堆在 `app/layout`
+- 当前没有达到第二维阈值的稳定切片时，不为了推进计划而硬拆新 feature
 
 ## 最小落地规则
 
