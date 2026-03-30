@@ -1,2 +1,9 @@
 export { demoLabAccess } from './access';
-export { DemoLabPage } from './page';
+
+export async function loadDemoLabRouteModule() {
+  const { DemoLabPage } = await import('./page');
+
+  return {
+    Component: DemoLabPage,
+  };
+}

@@ -10,8 +10,8 @@ import { AppLayout } from '@/app/layout';
 
 import { HomePage } from '@/pages/home';
 
-import { demoLabAccess, DemoLabPage } from '@/labs/demo';
-import { SandboxPlaygroundPage } from '@/sandbox/playground';
+import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
+import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppRole = 'guest' | 'admin';
@@ -112,12 +112,12 @@ const router = createBrowserRouter([
       {
         path: 'labs/demo',
         loader: demoLabLoader,
-        Component: DemoLabPage,
+        lazy: loadDemoLabRouteModule,
       },
       {
         path: 'sandbox/playground',
         loader: sandboxLoader,
-        Component: SandboxPlaygroundPage,
+        lazy: loadSandboxPlaygroundRouteModule,
       },
     ],
   },
