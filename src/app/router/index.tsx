@@ -57,6 +57,8 @@ function hasLabAccess(access: LabAccess): boolean {
 }
 
 async function demoLabLoader() {
+  await restoreSession();
+
   if (!hasLabAccess(demoLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
   }

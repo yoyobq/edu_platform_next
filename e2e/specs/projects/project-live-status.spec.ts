@@ -1,24 +1,15 @@
-import { projectFixtures } from '../../fixtures/project-data';
-import { openHome, projectCard } from '../../helpers/app';
+import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('展示项目上线状态，并支持只看上线项目筛选', async ({ page }) => {
+test('首页应展示 API 状态面板，并支持重新检测', async ({ page }) => {
   await openHome(page);
 
-  await expect(projectCard(page, projectFixtures.live.id)).toContainText(projectFixtures.live.name);
-  await expect(projectCard(page, projectFixtures.live.id)).toContainText(
-    projectFixtures.live.status,
-  );
+  await expect(page.getByRole('heading', { name: 'API 状态面板' })).toBeVisible();
+  await expect(page.getByText('2/2 成功')).toBeVisible();
+  await expect(page.getByText('后端连通性')).toBeVisible();
+  await expect(page.getByText('数据库就绪')).toBeVisible();
+  await expect(page.getByText('ok')).toHaveCount(2);
 
-  await expect(projectCard(page, projectFixtures.paused.id)).toContainText(
-    projectFixtures.paused.name,
-  );
-  await expect(projectCard(page, projectFixtures.paused.id)).toContainText(
-    projectFixtures.paused.status,
-  );
-
-  await page.getByRole('checkbox', { name: '只看上线项目' }).check();
-
-  await expect(projectCard(page, projectFixtures.live.id)).toBeVisible();
-  await expect(projectCard(page, projectFixtures.paused.id)).toHaveCount(0);
+  await page.getByRole('button', { name: '重新检测' }).click();
+  await expect(page.getByText('2/2 成功')).toBeVisible();
 });

@@ -1,7 +1,11 @@
+import { routes } from '../../fixtures/routes';
+import { mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('labs 中的第三工作区 demo 应可把结果物跳到独立工作区', async ({ page }) => {
-  await page.goto('/labs/demo?role=admin');
+  await mockApiHealth(page);
+  await seedAuthSession(page, { role: 'ADMIN' });
+  await page.goto(routes.labsDemo);
 
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
 

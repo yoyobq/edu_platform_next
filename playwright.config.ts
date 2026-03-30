@@ -56,6 +56,7 @@ export default defineConfig({
         cwd: process.cwd(),
         env: {
           ...process.env,
+          ...fileEnv,
           FORCE_COLOR: '0',
           PLAYWRIGHT_APP_ENV: appEnv,
           PLAYWRIGHT_HOST: host,
