@@ -17,10 +17,6 @@ function withSearch(pathname: string, search: string): string {
   return search ? `${pathname}${search}` : pathname;
 }
 
-function getEffectiveLabEnv(appEnv: AppEnv): Exclude<AppEnv, 'test'> {
-  return appEnv === 'test' ? 'dev' : appEnv;
-}
-
 function normalizeText(value: string): string {
   return value.trim().toLowerCase();
 }
@@ -63,10 +59,10 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
     {
       id: 'route-home',
       title: '首页',
-      description: '返回项目状态面板与默认入口页。',
+      description: '返回 API 状态面板与默认入口页。',
       to: withSearch('/', context.search),
       kind: 'route',
-      keywords: ['home', 'index', '项目', '项目状态', '状态面板', '首页'],
+      keywords: ['home', 'index', 'api', 'health', '状态面板', '首页'],
     },
   ];
 
@@ -78,18 +74,6 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
       to: withSearch('/sandbox/playground', context.search),
       kind: 'route',
       keywords: ['sandbox', '演练场', '原型', '试玩', '试验区', '沙盒'],
-    });
-  }
-
-  const effectiveLabEnv = getEffectiveLabEnv(context.appEnv);
-  if ((effectiveLabEnv === 'dev' || effectiveLabEnv === 'prod') && context.role === 'admin') {
-    cards.push({
-      id: 'route-labs-demo',
-      title: '第三工作区跳层 Demo',
-      description: '进入受控实验页，查看结果物跳到第三工作区后的阅读与撤离体验。',
-      to: withSearch('/labs/demo', context.search),
-      kind: 'route',
-      keywords: ['labs', '实验', 'demo', '第三工作区', '跳层', 'artifacts', 'canvas'],
     });
   }
 

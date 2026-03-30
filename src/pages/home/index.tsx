@@ -1,14 +1,11 @@
-import { Button, Flex } from 'antd';
+import { Flex } from 'antd';
 
-import { ProjectStatusPanel } from '@/features/project-catalog';
+import { ApiHealthStatusPanel } from '@/features/api-health-status';
 
 export function HomePage() {
   return (
     <Flex vertical gap={24}>
-      <div>
-        <Button type="primary">Ant Design 正常</Button>
-      </div>
-      <ProjectStatusPanel />
+      <ApiHealthStatusPanel />
     </Flex>
   );
 }

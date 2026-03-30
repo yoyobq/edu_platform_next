@@ -15,6 +15,10 @@ import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppRole = 'guest' | 'admin';
+type LabAccess = {
+  env: readonly ('dev' | 'prod')[];
+  roles: readonly AppRole[];
+};
 
 function getCurrentAppEnv(): AppEnv {
   const configuredAppEnv = import.meta.env.VITE_APP_ENV;
@@ -33,7 +37,7 @@ function getRequestRole(request: Request): AppRole {
   return requestURL.searchParams.get('role') === 'admin' ? 'admin' : 'guest';
 }
 
-function hasLabAccess(request: Request, access: typeof demoLabAccess): boolean {
+function hasLabAccess(request: Request, access: LabAccess): boolean {
   const role = getRequestRole(request);
   const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
   return (

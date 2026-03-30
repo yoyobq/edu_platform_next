@@ -47,6 +47,7 @@
 - 外部 API 原始 DTO 只允许停留在 `infrastructure`
 - `application` 不直接消费第三方或后端原始响应类型
 - `domain` 不直接承担“兼容外部脏字段”的职责
+- env 读取、base URL 解析、endpoint 拼接等运行时配置适配，按 `infrastructure` 处理
 
 防腐层负责：
 
@@ -78,6 +79,12 @@ Mapper 落点规则：
 - 但“何时触发写 URL”“哪些业务状态需要同步到 URL”的决策属于 `application`
 - `application` 可以调用 `infrastructure` 提供的 URL adapter，但不把触发时机反向下沉到 `infrastructure`
 - `infrastructure` 负责参数格式适配、序列化与反序列化，不负责决定业务流程何时更新 URL
+
+## Port 装配边界
+
+- 当 UI 需要通过 port 调用外部能力时，优先在所属 feature 内部的 entry、boundary 或 composition 文件完成 concrete adapter 装配
+- 不因为要做 port 注入，就把具体 adapter 的装配上抬到 `pages` 或 `app`
+- `pages` 与 `app` 继续只感知 feature 的公开入口，不感知 feature 内部的基础设施细节
 
 ## stable
 
