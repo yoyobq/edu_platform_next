@@ -61,7 +61,7 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
     {
       id: 'route-home',
       title: '首页',
-      description: '返回 API 状态面板与默认入口页。',
+      description: '返回当前过渡态首页与 API 状态面板。',
       to: withSearch('/', context.search),
       kind: 'route',
       keywords: ['home', 'index', 'api', 'health', '状态面板', '首页'],

@@ -1,7 +1,7 @@
 // src/shared/third-workspace-demo/model.ts
 
 export const THIRD_WORKSPACE_DEMO_SEARCH_PARAM = 'workspaceDemo';
-export const THIRD_WORKSPACE_DEMO_TRIGGER = '跳层简报';
+export const THIRD_WORKSPACE_DEMO_TRIGGER = 'demo 跳层简报';
 
 export type ThirdWorkspaceDemoArtifact = {
   id: string;
@@ -75,11 +75,13 @@ export function resolveThirdWorkspaceDemoTrigger(query: string) {
     return null;
   }
 
-  if (
-    normalizedQuery.includes(THIRD_WORKSPACE_DEMO_TRIGGER) ||
-    normalizedQuery.includes('第三工作区') ||
-    normalizedQuery.includes('artifacts canvas')
-  ) {
+  const demoTriggerCandidates = [
+    THIRD_WORKSPACE_DEMO_TRIGGER,
+    'demo 第三工作区',
+    'demo artifacts canvas',
+  ];
+
+  if (demoTriggerCandidates.some((candidate) => normalizedQuery.includes(candidate))) {
     return THIRD_WORKSPACE_DEMO_ARTIFACTS[0] ?? null;
   }
 

@@ -183,7 +183,7 @@ export function CollaborationSessionProvider({
               message: trimmedMessage,
               cards: [],
               mode: 'local',
-              systemReply: `已按触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”为你打开第三工作区 demo。你可以先在主区继续浏览，再决定是否关闭它。`,
+              systemReply: `已按 demo 验证触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”为你打开第三工作区 demo。这条链路只用于跳层验证，不代表正式默认入口能力。`,
             },
           });
           return;
