@@ -191,6 +191,10 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           </Layout.Content>
         </Layout>
 
+        <div data-layout-layer="third-workspace-root" aria-hidden="true">
+          <div data-workspace-mount="artifacts-canvas" />
+        </div>
+
         <EntrySidecar />
 
         <div data-layout-layer="global-overlay-root" aria-hidden="true">

@@ -85,6 +85,22 @@
   width: 100%;
 }
 
+[data-layout-layer='third-workspace-root'] {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  visibility: hidden;
+  z-index: var(--z-index-sidecar-container);
+}
+
+[data-layout-layer='third-workspace-root'] [data-workspace-mount='artifacts-canvas'] {
+  height: 100%;
+  margin-left: auto;
+  max-width: min(72vw, 1200px);
+  position: relative;
+  width: 100%;
+}
+
 html.disable-motion *,
 html.disable-motion *::before,
 html.disable-motion *::after {
