@@ -65,6 +65,7 @@
 - 明确哪些全局 host 继续常驻，哪些只属于登录后工作台壳层
 - 这是后续登录接入和 `/` 路由治理的前置决策
 - 产出物：一份未登录入口壳层方案说明，至少回答路由挂载位置、是否复用现有 `AppLayout` 的局部能力、以及各类 host 的归属边界
+- 当前产出见 [workbench-entry-unauth-shell.md](./workbench-entry-unauth-shell.md)
 
 ### 2. 明确最小登录链路与用户信息来源
 
@@ -72,13 +73,17 @@
 - 先明确用户身份、角色、能力范围由谁提供
 - 在这一步完成前，不把 URL 上的临时 query 语义继续外溢成正式产品契约
 - 产出物：一份最小登录链路说明，至少回答身份来源、权限来源、默认编排来源分别由谁提供，以及它们在前端的接入边界
+- 当前产出见 [workbench-entry-min-auth.md](./workbench-entry-min-auth.md)
 
 ### 3. 围绕已确定的 `/` 默认入口推进实现
 
 - 登录后的 `/` 默认进入工作台，已是正式规则，不在本 plan 中重新开放
 - 后续实现应围绕这个默认入口补齐登录接入、用户态来源和首页工作台承载面
 - 若未来真的需要改动默认入口，应先修改 rule，再回写 plan，而不是在 plan 内直接保留反向分支
+- `P0-3` 的稳定实现依赖 `P0-2` 先提供可恢复的 session 判断基础，例如 session restore、已登录态判断与会话失效回退
+- 因此 `P0-3` 可以先设计分流语义，但真正落地 protected / public 分支守卫前，应先完成 `P0-2` 的最小认证基础
 - 产出物：一份默认入口接入清单，至少覆盖登录后跳转路径、未登录拦截或展示路径、以及 `/` 在前后态下的职责说明
+- 当前产出见 [workbench-entry-root-routing.md](./workbench-entry-root-routing.md)
 
 ## P1
 
@@ -87,6 +92,7 @@
 - 明确首页模块最小需要回答什么：摘要数据、主动作、空态、错误态、不可见策略、进入正式页面的跳转位
 - 该 contract 只服务 workbench 首页，不扩展成仓库级通用模块规范
 - 产出物：一份首页模块最小 contract，至少包含摘要数据、主动作、空态、错误态、可见性规则、跳转位这几类统一结构
+- 当前产出见 [workbench-entry-home-module-contract.md](./workbench-entry-home-module-contract.md)
 
 ### 2. 标记并隔离当前 demo 语义
 
@@ -98,12 +104,14 @@
 - 文案上明确哪些能力是 demo、过渡验证或实验能力
 - 目录归属上避免 demo 逻辑继续长进正式首页工作台语义层
 - 产出物：一份 demo 语义清单，标明哪些逻辑属于过渡验证、分别通过什么方式隔离、后续准备迁移到哪里、哪些不进入正式工作台语义
+- 当前产出见 [workbench-entry-demo-semantics-isolation.md](./workbench-entry-demo-semantics-isolation.md)
 
 ### 3. 准备最小默认工作台兜底
 
 - 在没有角色模板、没有个人偏好时，先有一个最小默认工作台
 - 该兜底只承接最基础的状态概览、常用入口或最近上下文
 - 产出物：一份最小默认工作台草案，至少回答默认出现哪些模块类型、空白用户首次进入时看到什么、以及缺少偏好配置时如何降级
+- 当前产出见 [workbench-entry-default-workbench-fallback.md](./workbench-entry-default-workbench-fallback.md)
 
 ## P2
 
