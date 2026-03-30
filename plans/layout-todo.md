@@ -354,7 +354,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - 代码中已有明确挂载位
 - 不影响当前 `main + Sidecar` 主链路
 
-### [ ] 14. 为跨区域视觉能力预留全局 Overlay 挂载层
+### [x] 14. 为跨区域视觉能力预留全局 Overlay 挂载层
 
 目标：
 
@@ -364,6 +364,11 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 
 - layout 中存在明确的全局 Overlay 挂载位
 - 未来跨区域视觉能力不需要反向侵入 `main` 或 Sidecar 的私有 DOM 结构
+
+当前状态：
+
+- layout 已补全局 Overlay root，并预留独立的跨区域视觉挂载位
+- Overlay root 默认 `pointer-events: none`，当前仅承担结构预留，不介入现有主链路交互
 
 ### [ ] 15. 为 Omni-bar 预留触发位
 

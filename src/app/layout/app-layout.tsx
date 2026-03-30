@@ -183,6 +183,10 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 
         <EntrySidecar />
 
+        <div data-layout-layer="global-overlay-root" aria-hidden="true">
+          <div data-overlay-mount="cross-region-visual" />
+        </div>
+
         <div className="fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-lg">
           <Button
             ref={triggerRef}

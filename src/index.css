@@ -72,6 +72,19 @@
   padding: var(--sidecar-card-padding-block) var(--sidecar-card-padding-inline);
 }
 
+[data-layout-layer='global-overlay-root'] {
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+  z-index: var(--z-index-sidecar-overlay);
+}
+
+[data-layout-layer='global-overlay-root'] [data-overlay-mount='cross-region-visual'] {
+  height: 100%;
+  position: relative;
+  width: 100%;
+}
+
 html.disable-motion *,
 html.disable-motion *::before,
 html.disable-motion *::after {
