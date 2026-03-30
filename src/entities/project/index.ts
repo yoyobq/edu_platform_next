@@ -1,2 +1,2 @@
-export type { Project, ProjectStatus } from './model';
-export { demoProjects, isProjectLive } from './model';
+export type { Project, ProjectStatus } from './domain/project';
+export { isProjectLive } from './domain/project-policy';

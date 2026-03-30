@@ -1,15 +1,8 @@
-export type ProjectStatus = 'live' | 'paused';
+import type { Project } from '@/entities/project';
 
-export type Project = {
-  id: string;
-  name: string;
-  summary: string;
-  monthlyPrice: string;
-  status: ProjectStatus;
-  updatedAt: string;
-};
+import type { ProjectCatalogRepository } from '../application/ports';
 
-export const demoProjects: readonly Project[] = [
+const demoProjects: readonly Project[] = [
   {
     id: 'realtime-pricing',
     name: '实时定价',
@@ -28,6 +21,6 @@ export const demoProjects: readonly Project[] = [
   },
 ] as const;
 
-export function isProjectLive(project: Project): boolean {
-  return project.status === 'live';
-}
+export const demoProjectCatalogRepository: ProjectCatalogRepository = {
+  listProjects: () => demoProjects,
+};
