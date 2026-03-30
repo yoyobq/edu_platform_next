@@ -59,6 +59,12 @@ function getAvailabilityViewState(availability: CollaborationAvailability) {
   };
 }
 
+function getSidecarSurfaceStyle(sidecarWidth: number): CSSProperties {
+  return {
+    '--layout-sidecar-width': `${Math.round(sidecarWidth)}px`,
+  } as CSSProperties;
+}
+
 export function EntrySidecar() {
   const { close, isOpen, reportMeasuredWidth } = useSidecarState();
   const { session, submitQuery } = useCollaborationSession();
@@ -149,9 +155,11 @@ export function EntrySidecar() {
     >
       <div
         ref={panelRef}
-        className="flex h-full w-full flex-col space-y-4"
+        className="sidecar-root-stack flex h-full w-full flex-col"
+        data-layout-surface="sidecar"
+        data-sidecar-density={sidecarWidthBand}
         data-sidecar-width-band={sidecarWidthBand}
-        style={{ '--layout-sidecar-width': `${Math.round(sidecarWidth)}px` } as CSSProperties}
+        style={getSidecarSurfaceStyle(sidecarWidth)}
       >
         {availabilityView.isUnavailable ? (
           <Alert type="info" showIcon title="增强入口暂未连接，你仍可正常使用项目功能。" />
@@ -172,16 +180,12 @@ export function EntrySidecar() {
         <Divider style={{ marginBlock: 0 }} />
 
         <div className="flex-1 overflow-y-auto">
-          <div
-            className="flex h-full flex-col justify-center"
-            style={{ gap: sidecarWidthBand === 'compact' ? 12 : 16 }}
-          >
+          <div className="sidecar-scroll-stack flex h-full flex-col justify-center">
             {visibleMessages.map((message) => {
               return (
                 <div
                   key={message.id}
-                  className={message.role === 'user' ? 'ml-auto' : undefined}
-                  style={{ maxWidth: sidecarWidthBand === 'compact' ? '100%' : '85%' }}
+                  className={`sidecar-message-shell${message.role === 'user' ? ' ml-auto' : ''}`}
                 >
                   <Bubble
                     placement={message.role === 'user' ? 'end' : 'start'}
@@ -191,15 +195,15 @@ export function EntrySidecar() {
                   {message.cards && message.cards.length > 0 ? (
                     <div className="mt-3 space-y-2">
                       {message.cards.map((card) => (
-                        <div key={card.id} className="transition-shadow hover:shadow-sm">
+                        <div
+                          key={card.id}
+                          className="sidecar-entry-card transition-shadow hover:shadow-sm"
+                        >
                           <Card
                             hoverable
                             size="small"
                             onClick={() => {
                               navigate(card.to);
-                            }}
-                            styles={{
-                              body: { padding: '8px 12px' },
                             }}
                             style={{
                               boxShadow: 'none',
@@ -255,10 +259,7 @@ export function EntrySidecar() {
           </div>
         </div>
 
-        <div
-          className="rounded-2xl border border-border bg-bg-container shadow-sm"
-          style={{ padding: sidecarWidthBand === 'compact' ? 12 : 16 }}
-        >
+        <div className="sidecar-input-shell border border-border bg-bg-container shadow-sm">
           <Sender
             ref={senderRef}
             value={draft}

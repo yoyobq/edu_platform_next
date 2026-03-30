@@ -12,6 +12,7 @@ import {
 } from '@/app/providers';
 
 import { EntrySidecar } from './entry-sidecar';
+import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
 
 type AppLayoutProps = {
@@ -35,9 +36,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
   );
-  const [viewportWidth, setViewportWidth] = useState(() =>
-    typeof window !== 'undefined' ? window.innerWidth : 1440,
-  );
+  const isDesktop = useMediaQuery('(min-width: 1024px)');
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
     mainRef,
@@ -73,19 +72,6 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     };
   }, []);
 
-  useEffect(() => {
-    function syncViewportWidth() {
-      setViewportWidth(window.innerWidth);
-    }
-
-    syncViewportWidth();
-    window.addEventListener('resize', syncViewportWidth);
-
-    return () => {
-      window.removeEventListener('resize', syncViewportWidth);
-    };
-  }, []);
-
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
       open();
@@ -118,14 +104,10 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     });
   }
 
-  const preferredSidecarWidth = Math.min(Math.max(viewportWidth * 0.36, 360), 560);
-  const shouldReserveSidecarSpace = isOpen && viewportWidth >= 1024;
-  const reservedSidecarWidth = shouldReserveSidecarSpace
-    ? Math.max(measuredWidth, preferredSidecarWidth) + 24
-    : 0;
-  const frameShiftStyle = reservedSidecarWidth
+  const shouldReserveSidecarSpace = isOpen && isDesktop;
+  const frameShiftStyle = shouldReserveSidecarSpace
     ? ({
-        width: `calc(100% - ${reservedSidecarWidth}px)`,
+        width: `calc(100% - max(${measuredWidth}px, clamp(360px, 36vw, 560px)) - 24px)`,
       } satisfies CSSProperties)
     : ({
         width: '100%',
