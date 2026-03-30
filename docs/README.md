@@ -43,6 +43,11 @@ This directory contains project documentation.
 
 - [layout-ideas.md](./layout-ideas.md)
 
+## Plans
+
+- [../plans/layout-todo.md](../plans/layout-todo.md)
+- [../plans/chunk-strategy.md](../plans/chunk-strategy.md)
+
 ## Project Convention Docs
 
 - [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)

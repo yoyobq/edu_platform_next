@@ -72,6 +72,11 @@ Simple interpretation:
 
 - Testing conventions and E2E setup live in [docs/testing.md](./docs/testing.md)
 
+## Plans
+
+- Layout implementation backlog lives in [plans/layout-todo.md](./plans/layout-todo.md)
+- Chunk splitting strategy lives in [plans/chunk-strategy.md](./plans/chunk-strategy.md)
+
 ## Env
 
 - shared and future dev env examples live under `env/`
