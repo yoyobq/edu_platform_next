@@ -75,7 +75,7 @@ Simple interpretation:
 ## Plans
 
 - Layout implementation backlog lives in [plans/layout-todo.md](./plans/layout-todo.md)
-- Chunk splitting strategy lives in [plans/chunk-strategy.md](./plans/chunk-strategy.md)
+- Chunk splitting strategy lives in [docs/chunk-strategy.md](./docs/chunk-strategy.md)
 
 ## Env
 

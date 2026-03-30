@@ -423,7 +423,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 
 当前约定：
 
-- 实施口径已落到 `plans/chunk-strategy.md`
+- 实施口径已落到 `docs/chunk-strategy.md`
 
 ## 执行顺序建议
 

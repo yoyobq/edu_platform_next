@@ -31,6 +31,7 @@ This directory contains project documentation.
 - [rule-precedence.md](./rule-precedence.md)
 - [layer-model.md](./layer-model.md)
 - [layout.md](./layout.md)
+- [chunk-strategy.md](./chunk-strategy.md)
 - [ui-stack-rules.md](./ui-stack-rules.md)
 - [dependency-rules.md](./dependency-rules.md)
 - [labs-rules.md](./labs-rules.md)
@@ -46,7 +47,6 @@ This directory contains project documentation.
 ## Plans
 
 - [../plans/layout-todo.md](../plans/layout-todo.md)
-- [../plans/chunk-strategy.md](../plans/chunk-strategy.md)
 
 ## Project Convention Docs
 
