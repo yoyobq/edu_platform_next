@@ -119,16 +119,16 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   }
 
   const preferredSidecarWidth = Math.min(Math.max(viewportWidth * 0.36, 360), 560);
-  const reservedSidecarWidth =
-    isOpen && mainWidthBand !== 'compact' ? Math.max(measuredWidth, preferredSidecarWidth) + 24 : 0;
+  const shouldReserveSidecarSpace = isOpen && viewportWidth >= 1024;
+  const reservedSidecarWidth = shouldReserveSidecarSpace
+    ? Math.max(measuredWidth, preferredSidecarWidth) + 24
+    : 0;
   const frameShiftStyle = reservedSidecarWidth
     ? ({
         width: `calc(100% - ${reservedSidecarWidth}px)`,
-        transition: 'width 180ms ease',
       } satisfies CSSProperties)
     : ({
         width: '100%',
-        transition: 'width 180ms ease',
       } satisfies CSSProperties);
   const mainFrameStyle: MainFrameStyle = {
     '--layout-main-width': `${Math.round(mainWidth)}px`,
