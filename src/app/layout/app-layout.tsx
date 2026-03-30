@@ -4,7 +4,7 @@ import { type CSSProperties, useCallback, useEffect, useRef, useState } from 're
 import { SearchOutlined } from '@ant-design/icons';
 import { Button, ConfigProvider, Flex, Layout, Menu, Tooltip, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { Link, Outlet, useLocation } from 'react-router';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 
 import {
   CollaborationSessionProvider,
@@ -13,6 +13,8 @@ import {
   useRegisterKeyboardShortcut,
   useSidecarState,
 } from '@/app/providers';
+
+import { logout, useAuthSessionState } from '@/features/auth';
 
 import { EntrySidecar } from './entry-sidecar';
 import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
@@ -33,6 +35,9 @@ function getBaseURL(pathname: string, search: string): string {
 
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const authSession = useAuthSessionState();
+  const authenticatedSnapshot = authSession.snapshot;
   const { close, isOpen, measuredWidth, open } = useSidecarState();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -93,7 +98,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 
   const search = location.search;
-  const currentRole = new URLSearchParams(search).get('role') || 'guest';
+  const currentRole = authSession.snapshot?.role?.toLowerCase() || 'guest';
   const menuItems: ItemType[] = [
     {
       key: getBaseURL('/', search),
@@ -168,6 +173,26 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                     <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
                       角色：{currentRole}
                     </div>
+                    {authSession.status === 'authenticated' && authenticatedSnapshot ? (
+                      <>
+                        <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
+                          {authenticatedSnapshot.displayName}
+                        </div>
+                        <Button
+                          type="default"
+                          onClick={() => {
+                            logout();
+                            navigate('/login', { replace: true });
+                          }}
+                        >
+                          退出
+                        </Button>
+                      </>
+                    ) : (
+                      <Button type="primary" onClick={() => navigate('/login')}>
+                        登录
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -184,7 +209,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 {isLabsRoute ? (
                   <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">
                     <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      `labs` 路由需要通过访问控制。可使用 `?role=admin` 模拟当前允许角色。
+                      `labs` 路由需要通过当前登录会话的访问控制规则。
                     </Typography.Paragraph>
                   </div>
                 ) : null}

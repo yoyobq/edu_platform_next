@@ -10,6 +10,8 @@ import {
   matchLocalEntryCards,
 } from '@/app/lib';
 
+import { useAuthSessionState } from '@/features/auth';
+
 import {
   resolveThirdWorkspaceDemoTrigger,
   THIRD_WORKSPACE_DEMO_TRIGGER,
@@ -79,8 +81,8 @@ function buildSystemReply(mode: EntryMode, systemReply?: string): string {
   return '我先记下这个目标。下一步会结合上下文帮你整理页面、信息或草稿。';
 }
 
-function getCurrentRole(search: string): AppRole {
-  return new URLSearchParams(search).get('role') === 'admin' ? 'admin' : 'guest';
+function getCurrentRoleFromSession(role: string | undefined): AppRole {
+  return role === 'ADMIN' ? 'admin' : 'guest';
 }
 
 function getCurrentAvailability(search: string): CollaborationAvailability {
@@ -145,6 +147,7 @@ export function CollaborationSessionProvider({
   const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
   const location = useLocation();
   const navigate = useNavigate();
+  const authSession = useAuthSessionState();
   const currentAvailability = getCurrentAvailability(location.search);
 
   const value = useMemo<CollaborationSessionContextValue>(
@@ -197,7 +200,7 @@ export function CollaborationSessionProvider({
               trimmedMessage,
               getAvailableLocalEntryCards({
                 appEnv: currentAppEnv,
-                role: getCurrentRole(location.search),
+                role: getCurrentRoleFromSession(authSession.snapshot?.role),
                 search: location.search,
               }),
             )
@@ -216,7 +219,15 @@ export function CollaborationSessionProvider({
         });
       },
     }),
-    [currentAppEnv, currentAvailability, location.pathname, location.search, navigate, session],
+    [
+      authSession.snapshot?.role,
+      currentAppEnv,
+      currentAvailability,
+      location.pathname,
+      location.search,
+      navigate,
+      session,
+    ],
   );
 
   return (

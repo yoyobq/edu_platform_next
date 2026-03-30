@@ -1,6 +1,7 @@
 // src/app/router/index.tsx
 
-import { Typography } from 'antd';
+import { type ReactNode, useEffect } from 'react';
+import { Spin, Typography } from 'antd';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
@@ -11,6 +12,8 @@ import {
 import { AppLayout } from '@/app/layout';
 
 import { HomePage } from '@/pages/home';
+import { LoginPage } from '@/pages/login';
+import { getAuthSessionSnapshot, restoreSession, useAuthSessionState } from '@/features/auth';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
@@ -34,21 +37,27 @@ function getCurrentAppEnv(): AppEnv {
 
 const currentAppEnv = getCurrentAppEnv();
 
-function getRequestRole(request: Request): AppRole {
-  const requestURL = new URL(request.url);
-  return requestURL.searchParams.get('role') === 'admin' ? 'admin' : 'guest';
+function getCurrentSessionRole(): AppRole {
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    return 'guest';
+  }
+
+  return snapshot.role === 'ADMIN' || snapshot.accessGroup.includes('ADMIN') ? 'admin' : 'guest';
 }
 
-function hasLabAccess(request: Request, access: LabAccess): boolean {
-  const role = getRequestRole(request);
+function hasLabAccess(access: LabAccess): boolean {
+  const role = getCurrentSessionRole();
   const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
+
   return (
     access.env.includes(effectiveLabEnv) && access.roles.some((allowedRole) => allowedRole === role)
   );
 }
 
-async function demoLabLoader({ request }: { request: Request }) {
-  if (!hasLabAccess(request, demoLabAccess)) {
+async function demoLabLoader() {
+  if (!hasLabAccess(demoLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -104,7 +113,31 @@ function RouteHydrateFallback() {
   return null;
 }
 
+function AuthBootstrapGate({ children }: { children: ReactNode }) {
+  const authSession = useAuthSessionState();
+
+  useEffect(() => {
+    void restoreSession();
+  }, []);
+
+  if (authSession.status === 'restoring') {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-bg-layout">
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  return <>{children}</>;
+}
+
 const router = createBrowserRouter([
+  {
+    path: '/login',
+    Component: LoginPage,
+    ErrorBoundary: RouteErrorPage,
+    HydrateFallback: RouteHydrateFallback,
+  },
   {
     path: '/',
     Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
@@ -130,5 +163,9 @@ const router = createBrowserRouter([
 ]);
 
 export function App() {
-  return <RouterProvider router={router} />;
+  return (
+    <AuthBootstrapGate>
+      <RouterProvider router={router} />
+    </AuthBootstrapGate>
+  );
 }

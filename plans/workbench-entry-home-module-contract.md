@@ -191,9 +191,12 @@ type HomeModuleAction = {
 - `primaryAction` 必填，回答“用户从这里最应该先做什么”
 - `secondaryActions` 选填，避免一个模块堆太多按钮
 - 若 `kind` 为 `navigate`，`to` 必须是站内受控目标
+- `navigate` 只用于进入站内受控路由，不承担局部提交流程或协作 intent
+- `trigger` 只用于不发生路由切换的站内受控 action；它可以同步，也可以是受控异步提交或重试
 - 模块的正式进入位默认由 `primaryAction` 或某个明确的 `secondaryAction` 承担，不再额外维持第二套 `destination` 真相来源
 - 若当前还没有稳定正式页面，模块可以只有受控 `trigger`，但不能假装自己已经具备正式跳转位
 - 若某个动作会触发局部异步提交或重试，可通过 `loading` 表达该动作自己的瞬态状态，而不是让整个模块退回首屏 loading 语义
+- 若某个动作需要打开 Sidecar、切入第三工作区或触发更复杂协作 intent，不应由模块自行发明协议，仍应通过页面或壳层预先声明的受控 action / intent 接入
 
 ## 空态 contract
 
