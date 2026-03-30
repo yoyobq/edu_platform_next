@@ -52,6 +52,7 @@
 例如：
 
 - [layout.md](./layout.md) 负责 `app shell`、`main`、`Sidecar`、workspace 行为边界
+- [infrastructure-rules.md](./infrastructure-rules.md) 负责 API、storage、URL 参数、SDK、mock 的收束规则
 - [ui-stack-rules.md](./ui-stack-rules.md) 负责 `antd`、`@ant-design/x`、Tailwind 的分工
 - [labs-rules.md](./labs-rules.md) 负责 `labs` 的 access、meta 与治理要求
 - [sandbox-rules.md](./sandbox-rules.md) 负责 `sandbox` 的试验边界

@@ -34,8 +34,17 @@
 src/sandbox/<prototype-name>/
   index.tsx
   mock.ts
+  api.ts      # optional
+  infrastructure/  # optional
   assets/
 ```
+
+补充：
+
+- `sandbox` 也要收束外部边界，但不要求正式命名
+- 若只有一个轻量 mock，保留 `mock.ts`
+- 若出现多个 adapter 或 mock / real 切换，再补 `api.ts`、`infrastructure/` 或其他原型内目录
+- 具体收束规则见 [infrastructure-rules.md](./infrastructure-rules.md)
 
 ## 禁止项
 

@@ -28,7 +28,26 @@ src/labs/<lab-name>/
   meta.ts
   ui/
   lib/
+  infrastructure/   # optional
+  mock.ts           # optional
 ```
+
+补充：
+
+- `labs` 不要求完整第二维
+- 但 API、storage、URL 参数、SDK、mock 等外部边界，应收束在当前实验模块内
+- 简单实验可用 `mock.ts`
+- 边界增多时，改为 `infrastructure/`
+- 具体收束规则见 [infrastructure-rules.md](./infrastructure-rules.md)
+
+## 借用方向
+
+- `labs` 不建立与 `stable-clean` 对等的 `labs-clean` 体系
+- `labs` 不强制补齐 `domain / application / infrastructure / ui`
+- 但当实验开始出现稳定外部边界、轻量流程编排或 mock / real 切换时，优先借用 `stable-clean` 的边界收束思路
+- 这里的“借用”只表示优先让职责更清晰，不表示必须把实验模块工程化为完整 Clean 分层
+- 若实验仍然是轻量验证、一次性观察或短生命周期实现，继续保持简单结构即可
+- 若实验后续被确认长期保留，再在迁入 `stable` 时判断是否需要正式进入第二维
 
 ## access.ts
 

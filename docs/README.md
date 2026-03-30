@@ -14,6 +14,7 @@ This directory contains project documentation.
 - 规则看起来有重叠、边界有冲突、不确定该按哪份文档执行时，先看 [rule-precedence.md](./rule-precedence.md)
 - 不确定组件、页面或模块该放哪层时，先看 [layer-model.md](./layer-model.md)
 - 已确定在看 `stable` 第二维问题时，先看 [stable-clean/README.md](./stable-clean/README.md)
+- 想判断 API、storage、URL 参数、SDK、mock 该放哪时，先看 [infrastructure-rules.md](./infrastructure-rules.md)
 - 想跨模块引用、调整 import、判断依赖是否合法时，先看 [dependency-rules.md](./dependency-rules.md)
 - 想明确 `app/` 壳层、主内容区与 AI sidecar 的布局原则时，先看 [layout.md](./layout.md)
 - 想参考更激进的 AI-native layout 想法、给生成或设计探索提供输入时，再看 [layout-ideas.md](./layout-ideas.md)
@@ -32,6 +33,7 @@ This directory contains project documentation.
 - [rule-precedence.md](./rule-precedence.md)
 - [layer-model.md](./layer-model.md)
 - [stable-clean/README.md](./stable-clean/README.md)
+- [infrastructure-rules.md](./infrastructure-rules.md)
 - [layout.md](./layout.md)
 - [chunk-strategy.md](./chunk-strategy.md)
 - [ui-stack-rules.md](./ui-stack-rules.md)
@@ -63,6 +65,7 @@ This directory contains project documentation.
 - 多份文档同时适用但边界不清晰时，优先按 [rule-precedence.md](./rule-precedence.md) 裁决
 - `app / pages / widgets / features / entities / shared` 的细分职责当前见 [layer-model.md](./layer-model.md)
 - `stable` 区内部何时需要第二维 Clean 分层，当前见 [stable-clean/architecture.md](./stable-clean/architecture.md)
+- API、storage、URL 参数、SDK、mock 的统一收束规则当前见 [infrastructure-rules.md](./infrastructure-rules.md)
 - `stable` 第二维主题当前按“先列清单，再记录具体决策”的方式推进
 - `stable` 第二维的最小目录模板当前见 [stable-clean/templates.md](./stable-clean/templates.md)
 - [open-decisions.md](./open-decisions.md) 只记录真正的开放项、已知限制与关键背景决策
@@ -74,6 +77,7 @@ docs/
   README.md
   ai-workflow.md
   dependency-rules.md
+  infrastructure-rules.md
   layout.md
   layout-ideas.md
   stable-clean/
