@@ -16,6 +16,8 @@ npm run test:e2e
 
 这个命令本质上是 `playwright test`。
 
+若需要按测试目标区分 `core` / `smoke`、按目录运行，或跑单文件，请同时查看 [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)。
+
 ## E2E 配置文件
 
 环境变量文件位于 `env/`：
@@ -67,8 +69,10 @@ npm run test:e2e
 
 ## 现有用例
 
-当前已接入一个最小 E2E 用例：
+当前已接入的 E2E 已不止一个最小用例，主要分布在：
 
-- `e2e/specs/projects/project-live-status.spec.ts`
+- `e2e/specs/projects/`
+- `e2e/specs/routing/`
+- `e2e/specs/smoke/`
 
-它用于验证“项目是否 live”的最小展示与筛选闭环。
+更细的分组语义与运行建议见 [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)。
