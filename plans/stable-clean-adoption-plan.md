@@ -33,7 +33,7 @@
 
 动作：
 
-- 新增 `docs/stable-clean-architecture.md`
+- 新增 `docs/stable-clean/architecture.md`
 - 在 `README.md` 与 `docs/README.md` 写入二维治理入口
 - 在 `layer-model` 中声明第二维仅适用于 `stable`
 

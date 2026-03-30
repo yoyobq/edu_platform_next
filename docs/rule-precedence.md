@@ -42,8 +42,8 @@
 
 补充：
 
-- 若代码已经明确属于 `stable`，再用 [stable-clean-architecture.md](./stable-clean-architecture.md) 判断它在切片内部是否需要第二维职责分层
-- `stable-clean-architecture.md` 只能细化 `stable` 内部结构，不能改写 `layer-model` 与 `dependency-rules` 的第一维边界
+- 若代码已经明确属于 `stable`，再用 [stable-clean/architecture.md](./stable-clean/architecture.md) 判断它在切片内部是否需要第二维职责分层
+- `stable-clean/architecture.md` 只能细化 `stable` 内部结构，不能改写 `layer-model` 与 `dependency-rules` 的第一维边界
 
 ### 2. 主题规则只在自己的范围内细化
 

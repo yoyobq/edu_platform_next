@@ -20,12 +20,12 @@
 - 代码应该先进入 `stable`、`labs` 还是 `sandbox`
 - 代码应该先落在 `pages`、`features`、`entities` 还是 `shared`
 
-这些问题仍由 [layer-model.md](./layer-model.md) 与 [ai-workflow.md](./ai-workflow.md) 处理。
+这些问题仍由 [../layer-model.md](../layer-model.md) 与 [../ai-workflow.md](../ai-workflow.md) 处理。
 
 ## 方法说明
 
-- 先用 [stable-clean-checklist.md](./stable-clean-checklist.md) 做第一次判断
-- 真实边界案例再写入 [stable-clean-decisions.md](./stable-clean-decisions.md)
+- 先用 [checklist.md](./checklist.md) 做第一次判断
+- 真实边界案例再写入 [decisions.md](./decisions.md)
 - 决策记录可以反向修订清单
 
 ## 核心原则
@@ -108,6 +108,14 @@
 - 先判断这段复杂性属于哪个 `feature` 或 `entity`
 - 只有在下沉到对应 `feature / entity` 之后，才继续判断是否需要第二维
 - `shared` 同理：不在 `shared/lib` 内补第二维，先判断归属
+
+`widget` 下沉操作方式：
+
+- 将业务逻辑抽离为独立函数或模块
+- 业务对象规则移入对应 `entity/domain`
+- use case、query、command、workflow 移入对应 `feature/application`
+- `widget` 只通过 import 使用这些能力，不在内部保留带业务语义的核心逻辑
+- 不允许通过局部函数、闭包或组件内部私有实现，继续包裹应下沉的业务逻辑
 
 `shared/lib` 规则：
 
@@ -214,5 +222,6 @@ src/app/layout/
 
 ## 相关文档
 
-- [stable-clean-checklist.md](./stable-clean-checklist.md)
-- [stable-clean-decisions.md](./stable-clean-decisions.md)
+- [checklist.md](./checklist.md)
+- [decisions.md](./decisions.md)
+- [templates.md](./templates.md)
