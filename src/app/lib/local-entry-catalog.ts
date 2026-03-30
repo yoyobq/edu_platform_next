@@ -85,11 +85,11 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
   if ((effectiveLabEnv === 'dev' || effectiveLabEnv === 'prod') && context.role === 'admin') {
     cards.push({
       id: 'route-labs-demo',
-      title: 'Labs 示例页',
-      description: '进入受控实验页，查看 labs 的最小脚手架与访问控制效果。',
+      title: '第三工作区跳层 Demo',
+      description: '进入受控实验页，查看结果物跳到第三工作区后的阅读与撤离体验。',
       to: withSearch('/labs/demo', context.search),
       kind: 'route',
-      keywords: ['labs', '实验', '示例', 'demo', '受控实验'],
+      keywords: ['labs', '实验', 'demo', '第三工作区', '跳层', 'artifacts', 'canvas'],
     });
   }
 

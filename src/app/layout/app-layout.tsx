@@ -13,6 +13,7 @@ import {
 } from '@/app/providers';
 
 import { EntrySidecar } from './entry-sidecar';
+import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
 
@@ -194,6 +195,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
         <div data-layout-layer="third-workspace-root" aria-hidden="true">
           <div data-workspace-mount="artifacts-canvas" />
         </div>
+
+        <ThirdWorkspaceDemoHost />
 
         <EntrySidecar />
 

@@ -93,6 +93,11 @@
   z-index: var(--z-index-sidecar-container);
 }
 
+[data-layout-layer='third-workspace-root'][data-workspace-state='open'] {
+  pointer-events: auto;
+  visibility: visible;
+}
+
 [data-layout-layer='third-workspace-root'] [data-workspace-mount='artifacts-canvas'] {
   height: 100%;
   margin-left: auto;

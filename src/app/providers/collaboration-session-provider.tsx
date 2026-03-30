@@ -1,5 +1,5 @@
 import { type ReactNode, useMemo, useReducer } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import {
   buildLocalEntryReply,
@@ -7,6 +7,12 @@ import {
   getAvailableLocalEntryCards,
   matchLocalEntryCards,
 } from '@/app/lib';
+
+import {
+  resolveThirdWorkspaceDemoTrigger,
+  THIRD_WORKSPACE_DEMO_TRIGGER,
+  withThirdWorkspaceDemo,
+} from '@/shared/third-workspace-demo';
 
 import {
   type AppEnv,
@@ -136,6 +142,7 @@ export function CollaborationSessionProvider({
 }: CollaborationSessionProviderProps) {
   const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
   const location = useLocation();
+  const navigate = useNavigate();
   const currentAvailability = getCurrentAvailability(location.search);
 
   const value = useMemo<CollaborationSessionContextValue>(
@@ -153,6 +160,30 @@ export function CollaborationSessionProvider({
         }
 
         if (currentAvailability === 'readonly') {
+          return;
+        }
+
+        const matchedWorkspaceArtifact =
+          location.pathname === '/' ? resolveThirdWorkspaceDemoTrigger(trimmedMessage) : null;
+
+        if (matchedWorkspaceArtifact) {
+          navigate(
+            {
+              pathname: location.pathname,
+              search: withThirdWorkspaceDemo(location.search, matchedWorkspaceArtifact.id),
+            },
+            { replace: false },
+          );
+
+          dispatch({
+            type: 'submit-query',
+            payload: {
+              message: trimmedMessage,
+              cards: [],
+              mode: 'local',
+              systemReply: `已按触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”为你打开第三工作区 demo。你可以先在主区继续浏览，再决定是否关闭它。`,
+            },
+          });
           return;
         }
 
@@ -183,7 +214,7 @@ export function CollaborationSessionProvider({
         });
       },
     }),
-    [currentAppEnv, currentAvailability, location.search, session],
+    [currentAppEnv, currentAvailability, location.pathname, location.search, navigate, session],
   );
 
   return (
