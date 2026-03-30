@@ -162,6 +162,8 @@ src/features/project-catalog/
 - `infrastructure` 放所有外部技术边界与适配实现，例如 API client、storage、URL search params 读写、SDK 初始化与封装、mapper、repository adapter
 - `ui` 放该 feature 自己的交互入口和展示适配
 
+统一收束标准见 [../infrastructure-rules.md](../infrastructure-rules.md)。
+
 `infrastructure` 包括：
 
 - `localStorage` / `sessionStorage` 读写
