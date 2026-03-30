@@ -1,5 +1,6 @@
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
-import { Button, ConfigProvider, Flex, Layout, Menu, Typography } from 'antd';
+import { SearchOutlined } from '@ant-design/icons';
+import { Button, ConfigProvider, Flex, Layout, Menu, Tooltip, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation } from 'react-router';
 
@@ -149,6 +150,15 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                   </div>
 
                   <div className="flex flex-wrap items-center justify-end gap-3">
+                    <Tooltip title="全局搜索与命令 (预留)">
+                      <Button
+                        type="text"
+                        shape="circle"
+                        icon={<SearchOutlined />}
+                        data-layout-slot="omni-bar-trigger"
+                        aria-label="全局搜索与命令"
+                      />
+                    </Tooltip>
                     <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
                       环境：{currentAppEnv}
                     </div>

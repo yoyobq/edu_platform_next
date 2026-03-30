@@ -370,7 +370,7 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 - layout 已补全局 Overlay root，并预留独立的跨区域视觉挂载位
 - Overlay root 默认 `pointer-events: none`，当前仅承担结构预留，不介入现有主链路交互
 
-### [ ] 15. 为 Omni-bar 预留触发位
+### [x] 15. 为 Omni-bar 预留触发位
 
 目标：
 
@@ -381,6 +381,11 @@ Sidecar 挤压后，视口没变，但 `main` 已经变窄。
 
 - 顶部控制层可自然接入一个轻量命令入口
 - 不需要为此重写整个 layout
+
+当前状态：
+
+- 顶部控制层已补独立的 Omni-bar trigger slot，当前落为图标按钮加 tooltip 的轻量占位入口
+- 当前仅完成结构接入，不引入新的快捷键、弹层或会话逻辑
 
 ## P3 探索项
 
