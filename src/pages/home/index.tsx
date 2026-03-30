@@ -1,3 +1,5 @@
+// src/pages/home/index.tsx
+
 import { Flex } from 'antd';
 
 import { ApiHealthStatusPanel } from '@/features/api-health-status';

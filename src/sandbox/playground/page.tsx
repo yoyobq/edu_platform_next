@@ -1,3 +1,5 @@
+// src/sandbox/playground/page.tsx
+
 import { Card, Typography } from 'antd';
 
 export function SandboxPlaygroundPage() {

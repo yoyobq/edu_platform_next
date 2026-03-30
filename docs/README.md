@@ -1,3 +1,5 @@
+<!-- docs/README.md -->
+
 # Docs
 
 This directory contains project documentation.

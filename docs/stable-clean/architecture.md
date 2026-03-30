@@ -1,3 +1,5 @@
+<!-- docs/stable-clean/architecture.md -->
+
 # Stable Clean Architecture
 
 本文件定义 `stable` 区内部在何时、以何种方式引入 Clean Architecture / Hexagonal Architecture。

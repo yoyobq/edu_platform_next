@@ -1,3 +1,5 @@
+// src/shared/third-workspace-demo/canvas.tsx
+
 import { CloseOutlined } from '@ant-design/icons';
 import { Button, Card, Divider, Typography } from 'antd';
 

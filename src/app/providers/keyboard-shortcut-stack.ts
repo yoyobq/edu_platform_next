@@ -1,3 +1,5 @@
+// src/app/providers/keyboard-shortcut-stack.ts
+
 import { createContext, useContext, useEffect } from 'react';
 
 export type ShortcutPriority = 'page' | 'sidecar' | 'local-layer' | 'modal';

@@ -1,3 +1,5 @@
+// src/features/project-catalog/application/get-visible-projects.ts
+
 import { isProjectLive, type Project } from '@/entities/project';
 
 import type { ProjectCatalogRepository } from './ports';

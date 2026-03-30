@@ -1,3 +1,5 @@
+// src/app/layout/entry-sidecar.tsx
+
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { Bubble, Sender } from '@ant-design/x';
 import type { SenderRef } from '@ant-design/x/es/sender';

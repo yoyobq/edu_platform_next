@@ -1,3 +1,5 @@
+// src/shared/third-workspace-demo/index.ts
+
 export { ThirdWorkspaceDemoCanvas } from './canvas';
 export type { ThirdWorkspaceDemoArtifact } from './model';
 export {

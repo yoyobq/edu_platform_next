@@ -1,3 +1,5 @@
+<!-- docs/layout-ideas.md -->
+
 # Layout Ideas
 
 本文件不是正式规则，也不是当前实现清单。

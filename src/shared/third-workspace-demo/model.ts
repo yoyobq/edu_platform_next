@@ -1,3 +1,5 @@
+// src/shared/third-workspace-demo/model.ts
+
 export const THIRD_WORKSPACE_DEMO_SEARCH_PARAM = 'workspaceDemo';
 export const THIRD_WORKSPACE_DEMO_TRIGGER = '跳层简报';
 

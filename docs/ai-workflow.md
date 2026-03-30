@@ -1,3 +1,5 @@
+<!-- docs/ai-workflow.md -->
+
 # AI Workflow
 
 本文件是当前 AI workflow 主题的直接规则文档。

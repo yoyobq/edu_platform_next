@@ -1,3 +1,5 @@
+<!-- docs/sandbox-rules.md -->
+
 # Sandbox Rules
 
 本文件是当前 sandbox 主题的直接规则文档。

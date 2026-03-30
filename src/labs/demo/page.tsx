@@ -1,3 +1,5 @@
+// src/labs/demo/page.tsx
+
 import { useMemo, useState } from 'react';
 import { ArrowRightOutlined, ExpandOutlined } from '@ant-design/icons';
 import { Button, Card, Divider, Space, Tag, Typography } from 'antd';

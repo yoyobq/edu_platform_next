@@ -1,3 +1,5 @@
+<!-- docs/project-convention/form-input-normalization.md -->
+
 # Form Input Normalization
 
 本文件是当前表单输入与 URL Search Params 收敛主题的直接规则文档。

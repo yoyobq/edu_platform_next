@@ -1,3 +1,5 @@
+<!-- docs/stable-clean/templates.md -->
+
 # Stable Clean Templates
 
 本文件提供 `stable` 第二维的最小模板。

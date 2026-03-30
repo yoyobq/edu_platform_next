@@ -1,3 +1,5 @@
+// src/app/layout/app-layout.tsx
+
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { SearchOutlined } from '@ant-design/icons';
 import { Button, ConfigProvider, Flex, Layout, Menu, Tooltip, Typography } from 'antd';

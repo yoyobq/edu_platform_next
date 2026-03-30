@@ -1,3 +1,5 @@
+<!-- docs/layout.md -->
+
 # Layout
 
 本文件记录当前项目的 layout 方向与结构原则。

@@ -1,3 +1,5 @@
+<!-- docs/project-convention/time-display-semantics.md -->
+
 # Time Display Semantics
 
 本文件是当前时间展示与时间语义主题的直接规则文档。

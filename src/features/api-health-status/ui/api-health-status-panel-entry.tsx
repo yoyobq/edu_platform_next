@@ -1,3 +1,5 @@
+// src/features/api-health-status/ui/api-health-status-panel-entry.tsx
+
 import { useMemo } from 'react';
 
 import type { ApiHealthCheckPort } from '../application/get-api-health-statuses';

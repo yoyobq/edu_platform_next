@@ -1,3 +1,5 @@
+<!-- docs/rule-precedence.md -->
+
 # Rule Precedence
 
 本文件是当前规则裁决主题的直接规则文档。

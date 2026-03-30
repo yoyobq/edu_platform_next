@@ -1,3 +1,5 @@
+<!-- docs/labs-rules.md -->
+
 # Labs Rules
 
 本文件是当前 labs 主题的直接规则文档。

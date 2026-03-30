@@ -1,3 +1,5 @@
+<!-- docs/project-convention/e2e-test-groups.md -->
+
 # E2E Test Groups
 
 本文件是当前 E2E 分组与执行语义主题的直接规则文档。

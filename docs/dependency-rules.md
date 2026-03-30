@@ -1,3 +1,5 @@
+<!-- docs/dependency-rules.md -->
+
 # Dependency Rules
 
 本文件是当前依赖规则主题的直接规则文档。

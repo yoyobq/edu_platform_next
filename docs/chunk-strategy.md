@@ -1,3 +1,5 @@
+<!-- docs/chunk-strategy.md -->
+
 # Chunk Strategy
 
 本文件是构建 chunk 拆分与体积治理的实施约定。

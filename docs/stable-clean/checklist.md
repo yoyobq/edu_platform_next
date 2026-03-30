@@ -1,3 +1,5 @@
+<!-- docs/stable-clean/checklist.md -->
+
 # Stable Clean Checklist
 
 本文件提供 `stable` 区第二维判断的最小清单。

@@ -1,3 +1,5 @@
+// src/app/providers/index.ts
+
 export {
   type AppEnv,
   type CollaborationAvailability,

@@ -1,3 +1,5 @@
+<!-- docs/ui-stack-rules.md -->
+
 # UI Stack Rules
 
 本文件用于明确当前项目中 `antd`、`@ant-design/x` 与 `tailwindcss` 的分工边界。

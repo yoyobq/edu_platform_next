@@ -1,3 +1,5 @@
+// src/app/lib/local-entry-catalog.ts
+
 import type { EntryCard } from './entry-card';
 
 type AppEnv = 'dev' | 'test' | 'prod';

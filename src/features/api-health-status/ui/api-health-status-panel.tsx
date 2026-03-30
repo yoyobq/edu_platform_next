@@ -1,3 +1,5 @@
+// src/features/api-health-status/ui/api-health-status-panel.tsx
+
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
 

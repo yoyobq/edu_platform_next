@@ -1,3 +1,5 @@
+<!-- docs/stable-clean/README.md -->
+
 # Stable Clean
 
 本目录收纳 `stable` 第二维治理的全部文档。

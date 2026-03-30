@@ -1,3 +1,5 @@
+<!-- docs/infrastructure-rules.md -->
+
 # Infrastructure Rules
 
 本文件定义项目中 `infrastructure` 的收束标准。

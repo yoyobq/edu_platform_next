@@ -1,3 +1,5 @@
+// src/entities/project/domain/project.ts
+
 export type ProjectStatus = 'live' | 'paused';
 
 export type Project = {

@@ -1,3 +1,5 @@
+// src/app/providers/collaboration-session.ts
+
 import { createContext, useContext } from 'react';
 
 import type { EntryCard } from '@/app/lib';

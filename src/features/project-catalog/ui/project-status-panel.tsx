@@ -1,3 +1,5 @@
+// src/features/project-catalog/ui/project-status-panel.tsx
+
 import { useState } from 'react';
 import { Card, Checkbox, Empty, Flex, Tag, Typography } from 'antd';
 

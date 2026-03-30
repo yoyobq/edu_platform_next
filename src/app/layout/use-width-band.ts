@@ -1,3 +1,5 @@
+// src/app/layout/use-width-band.ts
+
 import { type RefObject, useEffect, useState } from 'react';
 
 type WidthBandRule<Band extends string> = {

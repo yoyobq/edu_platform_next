@@ -1,3 +1,5 @@
+// src/app/providers/sidecar-state.ts
+
 import { createContext, useContext } from 'react';
 
 export type SidecarState = {

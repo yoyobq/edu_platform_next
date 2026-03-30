@@ -1,3 +1,5 @@
+// src/app/providers/keyboard-shortcut-stack-provider.tsx
+
 import { type ReactNode, useEffect, useMemo, useRef } from 'react';
 
 import {

@@ -1,3 +1,5 @@
+<!-- docs/stable-clean/decisions.md -->
+
 # Stable Clean Decisions
 
 本文件记录当前仓库中，与 `stable` 第二维治理相关的具体判定先例。

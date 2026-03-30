@@ -1,3 +1,5 @@
+// src/labs/demo/meta.ts
+
 export const demoLabMeta = {
   name: 'demo',
   purpose: '用于验证第三工作区从 Sidecar / 主内容区跳层承载大结果物时的阅读与撤离体验。',

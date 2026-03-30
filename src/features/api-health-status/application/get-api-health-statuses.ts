@@ -1,3 +1,5 @@
+// src/features/api-health-status/application/get-api-health-statuses.ts
+
 export type ApiHealthCheckDefinition = {
   id: 'health' | 'readiness';
   title: string;

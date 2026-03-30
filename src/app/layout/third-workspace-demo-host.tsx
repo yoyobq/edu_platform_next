@@ -1,3 +1,5 @@
+// src/app/layout/third-workspace-demo-host.tsx
+
 import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';

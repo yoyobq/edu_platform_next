@@ -1,3 +1,5 @@
+<!-- docs/open-decisions.md -->
+
 # Open Decisions
 
 本文件记录当前真正的开放项、已知限制，以及少量需要保留的关键背景决策。

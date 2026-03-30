@@ -1,3 +1,5 @@
+// src/app/providers/collaboration-session-provider.tsx
+
 import { type ReactNode, useMemo, useReducer } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 

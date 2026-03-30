@@ -1,3 +1,5 @@
+// src/labs/demo/index.ts
+
 export { demoLabAccess } from './access';
 
 export async function loadDemoLabRouteModule() {

@@ -1,3 +1,5 @@
+// src/app/providers/sidecar-state-provider.tsx
+
 import { type ReactNode, useMemo, useState } from 'react';
 
 import { type SidecarState, SidecarStateContext } from './sidecar-state';
