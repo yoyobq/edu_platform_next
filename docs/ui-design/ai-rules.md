@@ -29,7 +29,7 @@
 
 ## 层级 (Z-index)
 
-- 禁止使用 `z-10`、`z-50` 等 Tailwind 内置数字类，只用语义类：`z-base` / `z-sidecar` / `z-omni-bar` / `z-tooltip`
+- 禁止使用 `z-10`、`z-50` 等 Tailwind 内置数字类，只用语义类：`z-main-base` / `z-top-control-bar` / `z-sidecar-container` / `z-sidecar-overlay` / `z-cross-layer-prompt`
 - antd 组件层级通过 ConfigProvider `zIndexPopupBase` 控制，不修改 `--z-index-*` 变量
 
 ## 宽度

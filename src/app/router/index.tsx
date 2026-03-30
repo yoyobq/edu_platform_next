@@ -80,7 +80,7 @@ function RouteErrorPage() {
   if (isRouteErrorResponse(error)) {
     if (error.status === 403) {
       return (
-        <div className="rounded-2xl border border-warning-border bg-warning-bg p-6">
+        <div className="rounded-block border border-warning-border bg-warning-bg p-6">
           <Typography.Title level={3}>访问被拒绝</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             当前路由已被访问控制规则拦截。
@@ -91,7 +91,7 @@ function RouteErrorPage() {
 
     if (error.status === 404) {
       return (
-        <div className="rounded-2xl border border-border bg-bg-layout p-6">
+        <div className="rounded-block border border-border bg-bg-layout p-6">
           <Typography.Title level={3}>路由不存在</Typography.Title>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             当前环境下未暴露此路由。
@@ -102,7 +102,7 @@ function RouteErrorPage() {
   }
 
   return (
-    <div className="rounded-2xl border border-error-border bg-error-bg p-6">
+    <div className="rounded-block border border-error-border bg-error-bg p-6">
       <Typography.Title level={3}>路由出现异常</Typography.Title>
       <Typography.Paragraph style={{ marginBottom: 0 }}>
         路由在渲染前发生错误。

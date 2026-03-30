@@ -39,11 +39,12 @@
   --color-fill-hover: var(--ant-color-fill-secondary);
 
   /* 层级（禁止手写裸数字；antd 弹层由 ConfigProvider zIndexPopupBase 管理，与此独立） */
-  --z-index-base: 0;
-  --z-index-sidecar: 100; /* AI Sidecar 面板 */
-  --z-index-omni-bar: 200; /* 全局 AI 唤起命令栏 */
-  --z-index-modal: 1000; /* 与 antd zIndexPopupBase 默认值对齐，仅供参考 */
-  --z-index-tooltip: 1030; /* 自定义 tooltip */
+  --z-index-main-base: 0;
+  --z-index-top-control-bar: 900; /* 顶部全局浮层按钟 */
+  --z-index-main-modal: 1000; /* 与 antd zIndexPopupBase 默认对齐 */
+  --z-index-sidecar-container: 1100; /* AI Sidecar 面板容器 */
+  --z-index-sidecar-overlay: 1150; /* Sidecar 遮罩层 */
+  --z-index-cross-layer-prompt: 2000; /* 跨层浮层提示（最高层） */
 }
 
 @layer base {

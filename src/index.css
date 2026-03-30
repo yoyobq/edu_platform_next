@@ -2,6 +2,9 @@
 
 @import 'tailwindcss';
 
+/* Tailwind v4：dark: 变体绑定到 .dark class，支持手动切换（默认是 prefers-color-scheme） */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme inline {
   --color-primary: var(--ant-color-primary);
   --color-text: var(--ant-color-text);
@@ -24,6 +27,35 @@
   --color-bg-mask: var(--ant-color-bg-mask);
   --radius-lg: var(--ant-border-radius-lg);
   --shadow-popover: var(--ant-box-shadow-secondary);
+
+  /* 链接色（回退值防止 antd 注入前短暂空白） */
+  --color-link: var(--ant-color-link, #1255cc);
+  --color-link-hover: var(--ant-color-link-hover, #1040a8);
+  --color-link-active: var(--ant-color-link-active, #0d3285);
+
+  /* AI 强调色（独立变量，不走 antd token） */
+  /* color-mix 基线：Chrome 111+ / Firefox 113+ / Safari 16.2+，与 Tailwind v4 一致；white 为注入前回退 */
+  --color-ai-accent: #29b8f0;
+  --color-ai-accent-hover: #1fa8e0;
+  --color-ai-accent-bg: color-mix(in srgb, #29b8f0 12%, var(--ant-color-bg-container, white));
+  --color-ai-accent-bg-hover: color-mix(in srgb, #29b8f0 18%, var(--ant-color-bg-container, white));
+
+  /* 语义圆角（wrapper 层） */
+  --radius-block: 10px;
+  --radius-card: 10px;
+  --radius-surface: 16px;
+  --radius-badge: 6px;
+
+  /* 阴影（wrapper 层消费） */
+  --shadow-card: var(--ant-box-shadow-tertiary);
+  --shadow-card-hover: 0 4px 12px rgba(0, 0, 0, 0.08); /* 唯一硬编码例外；深色下 .dark 覆盖 */
+  --shadow-surface: var(--ant-box-shadow-secondary);
+
+  /* 内容区舅适阅读宽度（表单、详情、设置页；表格/看板不适用） */
+  --width-content-readable: 1200px;
+
+  /* Hover 填充 */
+  --color-fill-hover: var(--ant-color-fill-secondary);
 
   /* Layout Z-Index Tokens (Semantic Layer Tokens) */
   --z-index-main-base: 0;
@@ -116,4 +148,43 @@ html.disable-motion *::after {
   scroll-behavior: auto !important;
   transition-delay: 0s !important;
   transition-duration: 0s !important;
+}
+
+@layer base {
+  a:not([class]) {
+    color: var(--ant-color-link);
+  }
+  a:not([class]):hover {
+    color: var(--ant-color-link-hover);
+    text-decoration: underline;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--ant-color-border);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--ant-color-text-quaternary);
+  }
+
+  /* 键盘用户专用（鼠标点击不触发）；antd CSS-in-JS 优先级高于 @layer base，组件本体 focus 不受影响 */
+  :focus-visible {
+    outline: 2px solid var(--ant-color-primary-border);
+    outline-offset: 2px;
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+}
+
+/* 深色模式：仅覆盖无法由 antd darkAlgorithm 自动跟随的变量 */
+.dark {
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
 }

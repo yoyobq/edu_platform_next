@@ -135,12 +135,13 @@ antd 默认 1.57 不改。大段说明文字在 wrapper div 上加 `leading-rela
 
 z-index 只能走语义化 token，禁止手写裸数字（包括 Tailwind 内置的 `z-10`、`z-50` 等数字类）。
 
-| Token                | 值   | 场景                     | Tailwind 类  |
-| -------------------- | ---- | ------------------------ | ------------ |
-| `--z-index-base`     | 0    | 主内容区基准层           | `z-base`     |
-| `--z-index-sidecar`  | 100  | AI Sidecar 面板          | `z-sidecar`  |
-| `--z-index-omni-bar` | 200  | 全局 AI 唤起命令栏       | `z-omni-bar` |
-| `--z-index-modal`    | 1000 | 与 antd Modal 默认值对齐 | — 仅供参考   |
-| `--z-index-tooltip`  | 1030 | 自定义 tooltip           | `z-tooltip`  |
+| Token                          | 值   | 场景                         | Tailwind 类            |
+| ------------------------------ | ---- | ---------------------------- | ---------------------- |
+| `--z-index-main-base`          | 0    | 主内容区基准层               | `z-main-base`          |
+| `--z-index-top-control-bar`    | 900  | 顶部全局浮层按钟（开始按钟） | `z-top-control-bar`    |
+| `--z-index-main-modal`         | 1000 | 与 antd Modal 默认对齐       | `z-main-modal`         |
+| `--z-index-sidecar-container`  | 1100 | AI Sidecar 面板容器          | `z-sidecar-container`  |
+| `--z-index-sidecar-overlay`    | 1150 | Sidecar 遮罩层               | `z-sidecar-overlay`    |
+| `--z-index-cross-layer-prompt` | 2000 | 跨层浮层提示（最高层）       | `z-cross-layer-prompt` |
 
-**antd 组件层级**由 ConfigProvider `zIndexPopupBase`（默认 1000）统一管理，不受上表变量控制。`--z-index-modal` / `--z-index-tooltip` 仅作为参考对齐，不用于 antd 组件本体。
+**antd 组件层级**由 ConfigProvider `zIndexPopupBase`（默认 1000）统一管理，与上表变量独立。自定义 Sidecar 面板通过 `readZIndexToken('--z-index-sidecar-container', 1100)` 动态读取该 token 传给 antd Drawer 的 `zIndex` prop。

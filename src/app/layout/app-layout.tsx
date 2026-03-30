@@ -127,7 +127,21 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   };
 
   return (
-    <ConfigProvider theme={{ cssVar: {} }}>
+    <ConfigProvider
+      theme={{
+        cssVar: {},
+        token: {
+          colorPrimary: '#1255CC',
+          colorError: '#D93025',
+          colorLink: '#1255CC',
+          colorBgLayout: '#F4F6FA',
+          colorBgContainer: '#FFFFFF',
+          borderRadius: 8,
+          borderRadiusLG: 12,
+          borderRadiusSM: 4,
+        },
+      }}
+    >
       <div className="min-h-screen bg-bg-layout text-text">
         <Layout style={{ minHeight: '100%', background: 'transparent' }}>
           <Layout.Header
@@ -139,7 +153,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             }}
           >
             <div className="mx-auto max-w-7xl py-4" style={frameShiftStyle}>
-              <div className="rounded-3xl border border-border bg-bg-container px-5 py-4 shadow-sm">
+              <div className="rounded-surface border border-border bg-bg-container px-5 py-4 shadow-card">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <Typography.Title level={4} style={{ marginBottom: 0 }}>
@@ -207,7 +221,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 className="mx-auto max-w-7xl pt-6 transition-[gap]"
               >
                 {isLabsRoute ? (
-                  <div className="rounded-lg border border-warning-border bg-warning-bg px-4 py-2">
+                  <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
                     <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                       `labs` 路由需要通过当前登录会话的访问控制规则。
                     </Typography.Paragraph>
@@ -231,7 +245,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           <div data-overlay-mount="cross-region-visual" />
         </div>
 
-        <div className="fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-lg">
+        <div className="fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface">
           <Button
             ref={triggerRef}
             type={isOpen ? 'default' : 'primary'}

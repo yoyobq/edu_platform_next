@@ -6,6 +6,12 @@
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>aigc-friendly-frontend</title>
+    <!-- 防止深色模式刷新时的白屏闪烁（FOUC）：在 React 挂载前提前设 .dark class -->
+    <script>
+      if (localStorage.getItem('app-theme') === 'dark') {
+        document.documentElement.classList.add('dark');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

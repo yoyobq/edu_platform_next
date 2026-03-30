@@ -74,7 +74,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
   const healthyCount = state.results.filter((result) => result.ok).length;
 
   return (
-    <section className="max-w-5xl rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
+    <section className="max-w-5xl rounded-card bg-bg-container p-6 shadow-card">
       <Flex align="center" justify="space-between" gap={16} className="mb-6">
         <div>
           <Typography.Title level={3} style={{ marginBottom: 4 }}>
@@ -97,7 +97,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
       </Flex>
 
       {state.isLoading ? (
-        <div className="rounded-xl">
+        <div className="rounded-card">
           <Skeleton active paragraph={{ rows: 3 }} />
         </div>
       ) : (
@@ -116,22 +116,22 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
                     {result.description}
                   </Typography.Paragraph>
 
-                  <div className="space-y-2">
+                  <div className="flex flex-col gap-2">
                     <div className="text-xs">
-                      <span className="font-semibold text-gray-500">Endpoint&nbsp;</span>
-                      <span className="text-gray-400">{result.url || '未配置'}</span>
+                      <span className="font-semibold text-text-secondary">Endpoint </span>
+                      <span className="text-text-secondary">{result.url || '未配置'}</span>
                     </div>
-                    <div className="flex gap-6 text-xs text-gray-400">
+                    <div className="flex gap-6 text-xs text-text-secondary">
                       <span>
-                        <span className="font-semibold text-gray-500">Status&nbsp;</span>
+                        <span className="font-semibold text-text-secondary">Status </span>
                         <span>{result.status ?? '—'}</span>
                       </span>
                       <span>
-                        <span className="font-semibold text-gray-500">耗时&nbsp;</span>
+                        <span className="font-semibold text-text-secondary">耗时 </span>
                         <span>{result.durationMs != null ? `${result.durationMs}ms` : '—'}</span>
                       </span>
                       <span>
-                        <span className="font-semibold text-gray-500">检测时间&nbsp;</span>
+                        <span className="font-semibold text-text-secondary">检测时间 </span>
                         <span>{formatCheckedAt(result.checkedAt)}</span>
                       </span>
                     </div>

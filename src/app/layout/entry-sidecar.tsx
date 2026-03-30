@@ -199,7 +199,7 @@ export function EntrySidecar() {
                       {message.cards.map((card) => (
                         <div
                           key={card.id}
-                          className="sidecar-entry-card transition-shadow hover:shadow-sm"
+                          className="sidecar-entry-card transition-shadow hover:shadow-card"
                         >
                           <Card
                             hoverable
@@ -261,7 +261,7 @@ export function EntrySidecar() {
           </div>
         </div>
 
-        <div className="sidecar-input-shell border border-border bg-bg-container shadow-sm">
+        <div className="sidecar-input-shell border border-border bg-bg-container shadow-card">
           <Sender
             ref={senderRef}
             value={draft}
