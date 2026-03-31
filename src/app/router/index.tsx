@@ -15,6 +15,12 @@ import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
+import {
+  InviteIntentPage,
+  MagicLinkIntentPage,
+  ResetPasswordIntentPage,
+  VerifyEmailIntentPage,
+} from '@/pages/verification-intent';
 import { getAuthSessionSnapshot, restoreSession, useAuthSessionState } from '@/features/auth';
 
 import { resolveLoginRedirectTarget, sanitizeRedirectTarget } from '@/shared/navigation';
@@ -205,54 +211,67 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
 
 const router = createBrowserRouter([
   {
-    path: '/login',
-    loader: loginRouteLoader,
     Component: PublicEntryLayout,
     ErrorBoundary: RouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
     children: [
       {
-        index: true,
+        path: '/login',
+        loader: loginRouteLoader,
         Component: LoginPage,
       },
-    ],
-  },
-  {
-    path: '/',
-    loader: protectedWorkbenchLoader,
-    Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
-    ErrorBoundary: RouteErrorPage,
-    HydrateFallback: RouteHydrateFallback,
-    children: [
       {
-        index: true,
-        Component: HomePage,
+        path: '/invite/:inviteType/:verificationCode',
+        Component: InviteIntentPage,
+      },
+      {
+        path: '/verify/email/:verificationCode',
+        Component: VerifyEmailIntentPage,
+      },
+      {
+        path: '/reset-password/:verificationCode',
+        Component: ResetPasswordIntentPage,
+      },
+      {
+        path: '/magic-link/:verificationCode',
+        Component: MagicLinkIntentPage,
       },
     ],
   },
   {
-    path: '/labs',
     Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
     ErrorBoundary: RouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
     children: [
       {
-        path: 'demo',
-        loader: demoLabLoader,
-        lazy: loadDemoLabRouteModule,
+        path: '/',
+        loader: protectedWorkbenchLoader,
+        children: [
+          {
+            index: true,
+            Component: HomePage,
+          },
+        ],
       },
-    ],
-  },
-  {
-    path: '/sandbox',
-    Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
-    ErrorBoundary: RouteErrorPage,
-    HydrateFallback: RouteHydrateFallback,
-    children: [
       {
-        path: 'playground',
-        loader: sandboxLoader,
-        lazy: loadSandboxPlaygroundRouteModule,
+        path: '/labs',
+        children: [
+          {
+            path: 'demo',
+            loader: demoLabLoader,
+            lazy: loadDemoLabRouteModule,
+          },
+        ],
+      },
+      {
+        path: '/sandbox',
+        children: [
+          {
+            path: 'playground',
+            loader: sandboxLoader,
+            lazy: loadSandboxPlaygroundRouteModule,
+          },
+        ],
       },
     ],
   },

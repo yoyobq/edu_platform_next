@@ -1,7 +1,8 @@
+import { openHomeWithSearch } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('入口面板处于只读状态时，应展示只读提示并禁用新输入', async ({ page }) => {
-  await page.goto('/?availability=readonly');
+  await openHomeWithSearch(page, '?availability=readonly');
 
   await page.getByRole('button', { name: '开始' }).click();
 

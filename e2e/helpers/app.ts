@@ -55,13 +55,18 @@ export async function seedAuthSession(
 
 export async function openHome(page: Page): Promise<void> {
   await mockApiHealth(page);
+  await seedAuthSession(page, { role: 'ADMIN' });
   await page.goto(routes.home);
   await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
 }
 
 export async function openHomeAsAdmin(page: Page): Promise<void> {
+  await openHome(page);
+}
+
+export async function openHomeWithSearch(page: Page, search: string): Promise<void> {
   await mockApiHealth(page);
   await seedAuthSession(page, { role: 'ADMIN' });
-  await page.goto(routes.home);
+  await page.goto(`${routes.home}${search}`);
   await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
 }

@@ -137,7 +137,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
                     </div>
                   </div>
 
-                  <Alert type={result.ok ? 'success' : 'error'} showIcon message={result.summary} />
+                  <Alert type={result.ok ? 'success' : 'error'} showIcon title={result.summary} />
                 </Flex>
               </Card>
             ))}

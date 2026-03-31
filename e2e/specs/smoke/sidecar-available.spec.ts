@@ -1,7 +1,8 @@
+import { openHomeWithSearch } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('入口处于可用状态时，应保持增强模式而不是回退到本地卡片', async ({ page }) => {
-  await page.goto('/?availability=available');
+  await openHomeWithSearch(page, '?availability=available');
 
   await page.getByRole('button', { name: '开始' }).click();
 
