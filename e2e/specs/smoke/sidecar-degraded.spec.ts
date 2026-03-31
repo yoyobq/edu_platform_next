@@ -1,10 +1,10 @@
-import { openHomeWithSearch } from '../../helpers/app';
+import { openEntrySidecar, openHomeWithSearch } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('增强入口降级时，应回退到本地语义入口卡片', async ({ page }) => {
   await openHomeWithSearch(page, '?availability=degraded');
 
-  await page.getByRole('button', { name: '开始' }).click();
+  await openEntrySidecar(page);
 
   await expect(page.getByText('增强入口当前已降级，复杂协作会优先回退到本地入口。')).toBeVisible();
 

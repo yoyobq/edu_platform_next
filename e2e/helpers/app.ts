@@ -53,11 +53,18 @@ export async function seedAuthSession(
   );
 }
 
-export async function openHome(page: Page): Promise<void> {
+export async function openHomeAs(
+  page: Page,
+  sessionOptions: SeedAuthSessionOptions = { role: 'ADMIN' },
+): Promise<void> {
   await mockApiHealth(page);
-  await seedAuthSession(page, { role: 'ADMIN' });
+  await seedAuthSession(page, sessionOptions);
   await page.goto(routes.home);
   await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
+}
+
+export async function openHome(page: Page): Promise<void> {
+  await openHomeAs(page, { role: 'ADMIN' });
 }
 
 export async function openHomeAsAdmin(page: Page): Promise<void> {
@@ -69,4 +76,13 @@ export async function openHomeWithSearch(page: Page, search: string): Promise<vo
   await seedAuthSession(page, { role: 'ADMIN' });
   await page.goto(`${routes.home}${search}`);
   await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
+}
+
+export async function openEntrySidecar(page: Page): Promise<void> {
+  await getEntrySidecarTrigger(page).click();
+  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+}
+
+export function getEntrySidecarTrigger(page: Page) {
+  return page.locator('button[aria-keyshortcuts="Alt+K"]');
 }

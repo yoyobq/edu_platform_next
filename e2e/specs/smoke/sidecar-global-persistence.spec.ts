@@ -1,10 +1,10 @@
-import { openHome } from '../../helpers/app';
+import { openEntrySidecar, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('跨路由跳转后，应保留入口面板中的对话历史', async ({ page }) => {
   await openHome(page);
 
-  await page.getByRole('button', { name: '开始' }).click();
+  await openEntrySidecar(page);
 
   const input = page.getByPlaceholder('输入你想去的页面名称');
   await input.fill('沙盒');
@@ -24,7 +24,7 @@ test('跨路由跳转后，应保留入口面板中的对话历史', async ({ pa
 test('浏览器后退后，应保持入口面板状态与历史内容稳定', async ({ page }) => {
   await openHome(page);
 
-  await page.getByRole('button', { name: '开始' }).click();
+  await openEntrySidecar(page);
   await page.getByPlaceholder('输入你想去的页面名称').fill('沙盒');
   await page.getByPlaceholder('输入你想去的页面名称').press('Enter');
 

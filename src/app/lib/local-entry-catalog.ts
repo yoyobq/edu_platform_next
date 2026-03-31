@@ -1,5 +1,7 @@
 // src/app/lib/local-entry-catalog.ts
 
+import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
+
 import type { EntryCard } from './entry-card';
 
 type AppEnv = 'dev' | 'test' | 'prod';
@@ -16,7 +18,7 @@ type LocalEntryContext = {
 };
 
 function withSearch(pathname: string, search: string): string {
-  return search ? `${pathname}${search}` : pathname;
+  return withWorkbenchSearch(pathname, search);
 }
 
 function normalizeText(value: string): string {
@@ -61,10 +63,10 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
     {
       id: 'route-home',
       title: '首页',
-      description: '返回当前过渡态首页与 API 状态面板。',
+      description: '返回当前默认工作台首页，查看状态概览、主动作入口与最近上下文。',
       to: withSearch('/', context.search),
       kind: 'route',
-      keywords: ['home', 'index', 'api', 'health', '状态面板', '首页'],
+      keywords: ['home', 'index', '默认工作台', '状态概览', '首页'],
     },
   ];
 

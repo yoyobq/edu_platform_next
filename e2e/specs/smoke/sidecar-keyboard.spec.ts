@@ -1,10 +1,10 @@
-import { openHome } from '../../helpers/app';
+import { getEntrySidecarTrigger, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('应可通过快捷键打开入口面板，并在按下 Escape 后关闭并恢复焦点', async ({ page }) => {
   await openHome(page);
 
-  const trigger = page.getByRole('button', { name: '开始' });
+  const trigger = getEntrySidecarTrigger(page);
 
   await page.evaluate(() => {
     document.dispatchEvent(

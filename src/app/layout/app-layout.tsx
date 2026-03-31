@@ -16,6 +16,9 @@ import {
 
 import { logout, useAuthSessionState } from '@/features/auth';
 
+import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
+import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
+
 import { EntrySidecar } from './entry-sidecar';
 import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
@@ -30,7 +33,7 @@ type MainFrameStyle = CSSProperties & {
 };
 
 function getBaseURL(pathname: string, search: string): string {
-  return search ? `${pathname}${search}` : pathname;
+  return withWorkbenchSearch(pathname, search);
 }
 
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
@@ -86,6 +89,18 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       open();
     }
   }, [isOpen, open]);
+
+  useEffect(() => {
+    const handleOpenRequest = () => {
+      open();
+    };
+
+    window.addEventListener(ENTRY_SIDECAR_OPEN_EVENT, handleOpenRequest);
+
+    return () => {
+      window.removeEventListener(ENTRY_SIDECAR_OPEN_EVENT, handleOpenRequest);
+    };
+  }, [open]);
 
   useRegisterKeyboardShortcut(
     {

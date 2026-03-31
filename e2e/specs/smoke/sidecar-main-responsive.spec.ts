@@ -1,4 +1,4 @@
-import { openHome } from '../../helpers/app';
+import { openEntrySidecar, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('宽屏下打开入口面板后，主内容区应收缩避让', async ({ page }) => {
@@ -8,8 +8,7 @@ test('宽屏下打开入口面板后，主内容区应收缩避让', async ({ pa
   const contentColumn = page.locator('[data-main-width-band] > .mx-auto.max-w-7xl.pt-6').first();
   const beforeColumnBox = await contentColumn.boundingBox();
 
-  await page.getByRole('button', { name: '开始' }).click();
-  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+  await openEntrySidecar(page);
 
   const afterColumnBox = await contentColumn.boundingBox();
   const sidecar = page.getByRole('dialog', { name: '从这里开始' });
@@ -26,8 +25,7 @@ test('窄屏下打开入口面板后，主内容区不应被挤压', async ({ pa
   const contentColumn = page.locator('[data-main-width-band] > .mx-auto.max-w-7xl.pt-6').first();
   const beforeColumnBox = await contentColumn.boundingBox();
 
-  await page.getByRole('button', { name: '开始' }).click();
-  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+  await openEntrySidecar(page);
 
   const afterColumnBox = await contentColumn.boundingBox();
 

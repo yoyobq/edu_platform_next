@@ -17,13 +17,14 @@ const THIRD_WORKSPACE_MOUNT_SELECTOR = '[data-workspace-mount="artifacts-canvas"
 export function ThirdWorkspaceDemoHost() {
   const location = useLocation();
   const navigate = useNavigate();
+  const isDemoRoute = location.pathname === '/labs/demo';
   const mountNode =
     typeof document !== 'undefined'
       ? document.querySelector<HTMLElement>(THIRD_WORKSPACE_MOUNT_SELECTOR)
       : null;
-  const artifact = getThirdWorkspaceDemoArtifactById(
-    readThirdWorkspaceDemoArtifactId(location.search),
-  );
+  const artifact = isDemoRoute
+    ? getThirdWorkspaceDemoArtifactById(readThirdWorkspaceDemoArtifactId(location.search))
+    : null;
   const isOpen = Boolean(artifact);
 
   useEffect(() => {

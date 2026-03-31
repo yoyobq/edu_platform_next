@@ -6,8 +6,10 @@ export {
   getThirdWorkspaceDemoArtifactById,
   readThirdWorkspaceDemoArtifactId,
   resolveThirdWorkspaceDemoTrigger,
+  stripThirdWorkspaceDemo,
   THIRD_WORKSPACE_DEMO_ARTIFACTS,
   THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
+  withWorkbenchSearch,
 } from './model';

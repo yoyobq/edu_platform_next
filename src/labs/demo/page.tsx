@@ -51,7 +51,7 @@ export function DemoLabPage() {
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             这不是正式的 Artifacts Canvas，只是验证当结果物超出 Sidecar 的舒适阅读范围时，
-            是否应该临时跳到更宽的第三工作区。在主页 sidecar 输入 demo 验证触发词
+            是否应该临时跳到更宽的第三工作区。在当前 labs demo 的 Sidecar 中输入 demo 验证触发词
             <Typography.Text code>{THIRD_WORKSPACE_DEMO_TRIGGER}</Typography.Text>
             也能直接打开同一个 demo。
           </Typography.Paragraph>

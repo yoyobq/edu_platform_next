@@ -68,6 +68,21 @@ export function withThirdWorkspaceDemo(search: string, artifactId: string | null
   return nextSearch ? `?${nextSearch}` : '';
 }
 
+export function stripThirdWorkspaceDemo(search: string) {
+  const searchParams = new URLSearchParams(search);
+
+  searchParams.delete(THIRD_WORKSPACE_DEMO_SEARCH_PARAM);
+
+  const nextSearch = searchParams.toString();
+  return nextSearch ? `?${nextSearch}` : '';
+}
+
+export function withWorkbenchSearch(pathname: string, search: string) {
+  return pathname === '/labs/demo'
+    ? `${pathname}${search}`
+    : `${pathname}${stripThirdWorkspaceDemo(search)}`;
+}
+
 export function resolveThirdWorkspaceDemoTrigger(query: string) {
   const normalizedQuery = query.trim().toLowerCase();
 

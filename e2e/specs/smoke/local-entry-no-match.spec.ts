@@ -1,10 +1,10 @@
-import { openHome } from '../../helpers/app';
+import { openEntrySidecar, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('本地语义入口无匹配时，应给出清晰兜底回复', async ({ page }) => {
   await openHome(page);
 
-  await page.getByRole('button', { name: '开始' }).click();
+  await openEntrySidecar(page);
 
   const input = page.getByPlaceholder('输入你想去的页面名称');
   await input.fill('完全不存在的页面');

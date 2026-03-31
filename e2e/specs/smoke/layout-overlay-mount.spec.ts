@@ -1,4 +1,4 @@
-import { openHome } from '../../helpers/app';
+import { openEntrySidecar, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('layout 应预留全局 overlay 挂载位，且不影响主链路交互', async ({ page }) => {
@@ -10,6 +10,5 @@ test('layout 应预留全局 overlay 挂载位，且不影响主链路交互', a
   await expect(overlayRoot).toBeVisible();
   await expect(overlayMount).toBeAttached();
 
-  await page.getByRole('button', { name: '开始' }).click();
-  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+  await openEntrySidecar(page);
 });

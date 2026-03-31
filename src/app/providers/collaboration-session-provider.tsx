@@ -169,7 +169,9 @@ export function CollaborationSessionProvider({
         }
 
         const matchedWorkspaceArtifact =
-          location.pathname === '/' ? resolveThirdWorkspaceDemoTrigger(trimmedMessage) : null;
+          location.pathname === '/labs/demo'
+            ? resolveThirdWorkspaceDemoTrigger(trimmedMessage)
+            : null;
 
         if (matchedWorkspaceArtifact) {
           navigate(
@@ -186,7 +188,7 @@ export function CollaborationSessionProvider({
               message: trimmedMessage,
               cards: [],
               mode: 'local',
-              systemReply: `已按 demo 验证触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”为你打开第三工作区 demo。这条链路只用于跳层验证，不代表正式默认入口能力。`,
+              systemReply: `已按 demo 验证触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”打开 labs 受控第三工作区 demo。这条链路只用于跳层验证，不属于正式首页或正式 Sidecar 合同。`,
             },
           });
           return;
