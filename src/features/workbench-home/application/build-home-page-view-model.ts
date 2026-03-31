@@ -1,4 +1,4 @@
-import type { HomeModuleContract, HomePageViewModel } from '@/shared/home-modules';
+import { createVisibleHomeModule, type HomeModuleContract } from '@/shared/home-modules';
 
 export const OPEN_ENTRY_SIDECAR_ACTION_ID = 'workbench-home.open-entry-sidecar';
 
@@ -9,6 +9,13 @@ type HomePageSessionContext = {
 };
 
 type WorkbenchTemplateKey = 'admin-default' | 'member-default' | 'minimal-default';
+
+export type HomePageViewModel = {
+  templateDescription: string;
+  templateKey: WorkbenchTemplateKey;
+  templateLabel: string;
+  modules: readonly HomeModuleContract[];
+};
 
 const ADMIN_IDENTITIES = ['ADMIN', 'MANAGER', 'STAFF', 'COACH'] as const;
 const MEMBER_IDENTITIES = ['CUSTOMER', 'LEARNER', 'STUDENT', 'REGISTRANT'] as const;
@@ -77,14 +84,10 @@ function createPrimaryEntryModule(
         ? '当前工作台先保持“状态确认 + 下一步入口”组合。'
         : '当前工作台先保持最小兜底组合。';
 
-  return {
+  return createVisibleHomeModule({
     id: 'primary-entry-shortcuts',
     title: '主动作入口',
     intent: '给出当前默认工作台里最稳定的下一步，而不是把试验能力塞回首页。',
-    visibility: {
-      visible: true,
-      reason: 'allowed',
-    },
     state: {
       kind: 'ready',
       summary: {
@@ -123,20 +126,16 @@ function createPrimaryEntryModule(
         kind: 'trigger',
       },
     },
-  };
+  });
 }
 
 function createRecentContextModule(session: HomePageSessionContext): HomeModuleContract {
   const displayName = session.displayName?.trim() || '当前账号';
 
-  return {
+  return createVisibleHomeModule({
     id: 'recent-context',
     title: '最近上下文',
     intent: '承接登录后回到点；在真实上下文接入前，先稳定表达空态与后续去向。',
-    visibility: {
-      visible: true,
-      reason: 'allowed',
-    },
     state: {
       kind: 'empty',
       empty: {
@@ -156,7 +155,7 @@ function createRecentContextModule(session: HomePageSessionContext): HomeModuleC
         kind: 'trigger',
       },
     },
-  };
+  });
 }
 
 type BuildHomePageViewModelInput = {

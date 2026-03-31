@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import type { HomeModuleContract, HomeModuleSummaryItem } from '@/shared/home-modules';
+import {
+  createVisibleHomeModule,
+  type HomeModuleContract,
+  type HomeModuleSummaryItem,
+} from '@/shared/home-modules';
 
 import { runApiHealthCheck } from '../infrastructure/run-api-health-check';
 
@@ -127,14 +131,10 @@ export function useApiHealthStatusHomeModule(): {
     };
 
     if (state.errorMessage) {
-      return {
+      return createVisibleHomeModule({
         id: 'status-overview',
         title: '系统状态概览',
         intent: '快速确认关键链路是否仍适合继续当前工作台操作。',
-        visibility: {
-          visible: true,
-          reason: 'allowed',
-        },
         state: {
           kind: 'error',
           error: {
@@ -147,18 +147,14 @@ export function useApiHealthStatusHomeModule(): {
         entry: {
           primaryAction,
         },
-      };
+      });
     }
 
     if (state.hasLoaded && state.results.length === 0) {
-      return {
+      return createVisibleHomeModule({
         id: 'status-overview',
         title: '系统状态概览',
         intent: '快速确认关键链路是否仍适合继续当前工作台操作。',
-        visibility: {
-          visible: true,
-          reason: 'allowed',
-        },
         state: {
           kind: 'empty',
           empty: {
@@ -170,17 +166,13 @@ export function useApiHealthStatusHomeModule(): {
         entry: {
           primaryAction,
         },
-      };
+      });
     }
 
-    return {
+    return createVisibleHomeModule({
       id: 'status-overview',
       title: '系统状态概览',
       intent: '快速确认关键链路是否仍适合继续当前工作台操作。',
-      visibility: {
-        visible: true,
-        reason: 'allowed',
-      },
       state: {
         kind: 'ready',
         summary: {
@@ -203,7 +195,7 @@ export function useApiHealthStatusHomeModule(): {
       entry: {
         primaryAction,
       },
-    };
+    });
   }, [state.errorMessage, state.hasLoaded, state.isLoading, state.results]);
 
   return {
