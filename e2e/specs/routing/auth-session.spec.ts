@@ -72,6 +72,14 @@ function layoutBanner(page: Page) {
   return page.getByRole('banner');
 }
 
+test('未登录访问首页时，应跳到携带 redirect 的登录页', async ({ page }) => {
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(layoutBanner(page)).toHaveCount(0);
+});
+
 test('登录成功后，应按 redirect 进入目标页并呈现已认证状态', async ({ page }) => {
   await mockPlatformStatus(page);
   await mockLoginMutation(page, {
@@ -129,7 +137,10 @@ test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ pa
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 
   await page.goto(routes.labsDemo);
-  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsDemo)}$`),
+  );
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
 test('redirect 指向站外地址时，登录后应回退到首页', async ({ page }) => {
@@ -144,5 +155,21 @@ test('redirect 指向站外地址时，登录后应回退到首页', async ({ pa
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
+  await expect(layoutBanner(page).getByText('admin-user')).toBeVisible();
+});
+
+test('redirect 重新指向登录页时，登录后应回退到首页而不是形成回环', async ({ page }) => {
+  await mockPlatformStatus(page);
+  await mockLoginMutation(page, {
+    displayName: 'admin-user',
+    role: 'ADMIN',
+  });
+
+  await page.goto(
+    `${routes.login}?redirect=${encodeURIComponent('/login?redirect=%2Flabs%2Fdemo')}`,
+  );
+  await submitLogin(page);
+
+  await expect(page).toHaveURL(/\/$/);
   await expect(layoutBanner(page).getByText('admin-user')).toBeVisible();
 });

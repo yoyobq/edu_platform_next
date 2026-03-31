@@ -1,16 +1,22 @@
 import { routes } from '../../fixtures/routes';
 import { expect, test } from '../../test';
 
-test('未命中访问规则时，应拦截 labs 示例页', async ({ page }) => {
+test('未登录访问 labs 示例页时，应先跳登录并保留原目标', async ({ page }) => {
   await page.goto(routes.labsDemo);
 
-  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsDemo)}$`),
+  );
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
-test('仅带站内参数时，不应放宽 labs 示例页访问规则', async ({ page }) => {
-  await page.goto(`${routes.labsDemo}?role=admin`);
+test('未登录访问带查询参数的 labs 示例页时，应保留完整站内目标', async ({ page }) => {
+  const target = `${routes.labsDemo}?role=admin`;
 
-  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+  await page.goto(target);
+
+  await expect(page).toHaveURL(new RegExp(`/login\\?redirect=${encodeURIComponent(target)}$`));
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
 test('已登录但不具备 admin 权限时，应继续拦截 labs 示例页', async ({ page }) => {
