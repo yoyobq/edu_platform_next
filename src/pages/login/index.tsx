@@ -1,7 +1,7 @@
 // src/pages/login/index.tsx
 
 import { useState } from 'react';
-import { Card, Flex, Typography } from 'antd';
+import { Button, Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
 import { login, LoginForm, useAuthSessionState } from '@/features/auth';
@@ -74,6 +74,14 @@ export function LoginPage() {
                     }
                   }}
                 />
+
+                <Button
+                  type="link"
+                  style={{ paddingLeft: 0, width: 'fit-content' }}
+                  onClick={() => navigate('/forgot-password')}
+                >
+                  忘记密码
+                </Button>
               </Flex>
             </Card>
           </div>

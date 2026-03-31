@@ -13,6 +13,7 @@ import {
 
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
+import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import {
@@ -219,6 +220,10 @@ const router = createBrowserRouter([
         path: '/login',
         loader: loginRouteLoader,
         Component: LoginPage,
+      },
+      {
+        path: '/forgot-password',
+        Component: ForgotPasswordPage,
       },
       {
         path: '/invite/:inviteType/:verificationCode',

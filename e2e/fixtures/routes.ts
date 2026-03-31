@@ -1,4 +1,5 @@
 export const routes = {
+  forgotPassword: '/forgot-password',
   home: '/',
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>
     `/invite/${inviteType}/${verificationCode}`,

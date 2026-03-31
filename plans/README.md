@@ -65,5 +65,8 @@ plan 不负责定义稳定规则。
 ## 当前计划
 
 - [layout-todo.md](./layout-todo.md)
+- [public-auth-flows-plan.md](./public-auth-flows-plan.md)
+- [public-auth-flows-now.md](./public-auth-flows-now.md)
+- [public-auth-flows-future.md](./public-auth-flows-future.md)
 - [workbench-entry-plan.md](./workbench-entry-plan.md)
 - [stable-clean-adoption-plan.md](./stable-clean-adoption-plan.md)

@@ -60,6 +60,9 @@ This directory contains project documentation.
 ## Plans
 
 - [../plans/layout-todo.md](../plans/layout-todo.md)
+- [../plans/public-auth-flows-plan.md](../plans/public-auth-flows-plan.md)
+- [../plans/public-auth-flows-now.md](../plans/public-auth-flows-now.md)
+- [../plans/public-auth-flows-future.md](../plans/public-auth-flows-future.md)
 - [../plans/workbench-entry-plan.md](../plans/workbench-entry-plan.md)
 - [../plans/stable-clean-adoption-plan.md](../plans/stable-clean-adoption-plan.md)
 
