@@ -1,6 +1,12 @@
-# Workbench Entry Root Routing Proposal
+# Workbench Entry Root Routing
 
 本文件是 `workbench entry` 主题下 P0-3 的当前产出物。
+
+当前状态：
+
+- 已完成首阶段最小闭环（2026-03-31）
+- 当前已落地 `public entry shell`、`workbench shell`、`/` 登录前后分流、`/login?redirect=...` 回跳与 governed experiment branch 的基本治理顺序
+- verification intent 仍保留为后续 path-first 扩展项；它已与普通 `redirect` 语义分层，但不作为 P0-3 完成前置
 
 它只回答以下问题：
 
@@ -25,13 +31,14 @@
 - 让后续登录接入、首页工作台和路由守卫可以沿同一条路径推进
 - 把普通 `redirect` 回跳与 verification intent 入口语义分开
 
-## 当前判断
+## 当前落地状态
 
-- 当前路由实现仍是单根壳层：`/` 直接挂 `AppLayout`，index 直接渲染 `HomePage`
-- 当前 `HomePage` 仍是过渡态 API 状态面板，不代表正式登录后工作台
-- 当前未登录访问 `/` 时并不会被分流到登录页，也没有真正的会话恢复与守卫
-- 因此 P0-3 的稳定实现依赖 P0-2 先给出 session restore、已登录态判断与会话失效回退基础
-- 因此 P0-3 需要明确的不是“首页该长什么样”，而是“`/` 在前后态下怎么正确分流”
+- `/login` 已独立挂到 `public entry shell`
+- `/` 已作为受保护的 `workbench shell` 默认入口，未登录时统一跳到 `/login?redirect=%2F`
+- 登录页已统一消费合法 `redirect`，登录成功后优先回原目标，否则回 `/`
+- 已登录访问 `/login` 时，会在 loader 中提前回跳，不再停留在 public entry 分支
+- `labs / sandbox` 已从 `/` 默认入口语义中拆出，继续按各自环境、access 与登录态规则治理
+- 当前 `HomePage` 仍是过渡态 API 状态面板，但它现在只在登录后的 `/` 下承接默认首页，不再兼任未登录入口
 
 ## 结论
 
@@ -162,6 +169,12 @@
 - 当 verification intent 需要先登录时，登录成功后应优先继续该 intent，而不是简单回到普通 `redirect`
 - 当 verification intent 不需要登录时，不必强迫用户先经过工作台入口
 
+当前状态补充：
+
+- 这组 verification intent path 仍未在当前代码中展开
+- 但当前代码已经明确 `redirect` 只承接普通受保护页回跳，不承接 verification business intent
+- 因此 verification path-first 扩展属于 P0-3 之后的增量接入，不阻塞本阶段默认入口分流闭环
+
 ## 未登录拦截路径
 
 ### `/`
@@ -258,6 +271,22 @@ P0-3 不把 `labs / sandbox` 重写成默认入口的一部分。
 - 解析后端登录 DTO
 - 维护 token 持久化
 - 决定首页模块细节
+
+## P0-3 完成判断
+
+当前将 P0-3 标记完成，依据如下：
+
+- 已存在独立的 `public entry shell`，未登录入口不再默认进入完整 `workbench shell`
+- 已存在最小可恢复 session 基础，根路由分流不再依赖页面副作用补跳
+- `/` 已稳定为登录后默认工作台入口，未登录访问时统一跳转登录页
+- 登录成功后已具备统一回跳到原受保护目标或 `/` 的闭环
+- `labs / sandbox` 没有被并入 `/` 默认入口语义，而继续保留各自治理边界
+
+本阶段不要求：
+
+- verification intent path 已全部实现
+- 首页正式模块 contract 已定稿
+- 默认工作台模板已完成业务化承载
 
 ## `pages/login` 的接入职责
 

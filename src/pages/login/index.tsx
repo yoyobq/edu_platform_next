@@ -1,32 +1,12 @@
 // src/pages/login/index.tsx
 
 import { useState } from 'react';
-import { Button, Card, Flex, Typography } from 'antd';
+import { Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
 import { login, LoginForm, useAuthSessionState } from '@/features/auth';
 
-function sanitizeRedirectTarget(candidate: string | null): string {
-  if (!candidate || !candidate.startsWith('/')) {
-    return '/';
-  }
-
-  if (candidate.startsWith('//')) {
-    return '/';
-  }
-
-  try {
-    const parsedURL = new URL(candidate, window.location.origin);
-
-    if (parsedURL.origin !== window.location.origin) {
-      return '/';
-    }
-
-    return `${parsedURL.pathname}${parsedURL.search}${parsedURL.hash}`;
-  } catch {
-    return '/';
-  }
-}
+import { resolveLoginRedirectTarget } from '@/shared/navigation';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -34,7 +14,7 @@ export function LoginPage() {
   const authSession = useAuthSessionState();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const redirectTarget = sanitizeRedirectTarget(
+  const redirectTarget = resolveLoginRedirectTarget(
     new URLSearchParams(location.search).get('redirect'),
   );
 
@@ -57,12 +37,6 @@ export function LoginPage() {
                 若没有目标，则回到工作台入口。
               </Typography.Paragraph>
             </div>
-
-            <Flex gap={12} wrap>
-              <Button size="large" onClick={() => navigate('/')}>
-                返回首页
-              </Button>
-            </Flex>
           </Flex>
 
           <div className="min-w-[320px] flex-1">

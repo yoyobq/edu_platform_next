@@ -5,15 +5,19 @@ import { Spin, Typography } from 'antd';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
+  type LoaderFunctionArgs,
+  redirect,
   RouterProvider,
   useRouteError,
 } from 'react-router';
 
-import { AppLayout } from '@/app/layout';
+import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { getAuthSessionSnapshot, restoreSession, useAuthSessionState } from '@/features/auth';
+
+import { resolveLoginRedirectTarget, sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
@@ -56,8 +60,72 @@ function hasLabAccess(access: LabAccess): boolean {
   );
 }
 
-async function demoLabLoader() {
+function hasLabEnvExposure(access: LabAccess): boolean {
+  const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
+
+  return access.env.includes(effectiveLabEnv);
+}
+
+function hasGuestLabAccess(access: LabAccess): boolean {
+  return access.roles.includes('guest');
+}
+
+function getRequestTarget(request: Request) {
+  const url = new URL(request.url);
+
+  return {
+    origin: url.origin,
+    redirectTarget: sanitizeRedirectTarget(`${url.pathname}${url.search}${url.hash}`, url.origin),
+    url,
+  };
+}
+
+function buildLoginRedirectURL(request: Request) {
+  const { redirectTarget } = getRequestTarget(request);
+
+  return `/login?redirect=${encodeURIComponent(redirectTarget)}`;
+}
+
+async function loginRouteLoader({ request }: LoaderFunctionArgs) {
   await restoreSession();
+
+  if (getAuthSessionSnapshot()) {
+    const { url } = getRequestTarget(request);
+
+    throw redirect(resolveLoginRedirectTarget(url.searchParams.get('redirect'), url.origin));
+  }
+
+  return null;
+}
+
+async function ensureAuthenticatedSession(request: Request) {
+  await restoreSession();
+
+  if (!getAuthSessionSnapshot()) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+}
+
+async function protectedWorkbenchLoader({ request }: LoaderFunctionArgs) {
+  await ensureAuthenticatedSession(request);
+
+  return null;
+}
+
+async function demoLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(demoLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  await restoreSession();
+
+  if (!getAuthSessionSnapshot()) {
+    if (hasGuestLabAccess(demoLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
 
   if (!hasLabAccess(demoLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
@@ -66,10 +134,12 @@ async function demoLabLoader() {
   return null;
 }
 
-async function sandboxLoader() {
+async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
   }
+
+  await ensureAuthenticatedSession(request);
 
   return null;
 }
@@ -136,12 +206,20 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
 const router = createBrowserRouter([
   {
     path: '/login',
-    Component: LoginPage,
+    loader: loginRouteLoader,
+    Component: PublicEntryLayout,
     ErrorBoundary: RouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
+    children: [
+      {
+        index: true,
+        Component: LoginPage,
+      },
+    ],
   },
   {
     path: '/',
+    loader: protectedWorkbenchLoader,
     Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
     ErrorBoundary: RouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
@@ -150,13 +228,29 @@ const router = createBrowserRouter([
         index: true,
         Component: HomePage,
       },
+    ],
+  },
+  {
+    path: '/labs',
+    Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
+    ErrorBoundary: RouteErrorPage,
+    HydrateFallback: RouteHydrateFallback,
+    children: [
       {
-        path: 'labs/demo',
+        path: 'demo',
         loader: demoLabLoader,
         lazy: loadDemoLabRouteModule,
       },
+    ],
+  },
+  {
+    path: '/sandbox',
+    Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
+    ErrorBoundary: RouteErrorPage,
+    HydrateFallback: RouteHydrateFallback,
+    children: [
       {
-        path: 'sandbox/playground',
+        path: 'playground',
         loader: sandboxLoader,
         lazy: loadSandboxPlaygroundRouteModule,
       },
