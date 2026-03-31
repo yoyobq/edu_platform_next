@@ -18,29 +18,13 @@ async function mockForgotPasswordMutations(page: Page) {
       return;
     }
 
-    if (payload.query.includes('mutation CreatePasswordResetVerificationRecord')) {
+    if (payload.query.includes('mutation RequestPasswordResetEmail')) {
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            createVerificationRecord: {
+            requestPasswordResetEmail: {
               message: null,
               success: true,
-              token: 'reset-token-001',
-            },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-
-    if (payload.query.includes('mutation QueuePasswordResetEmail')) {
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            queueEmail: {
-              queued: true,
             },
           },
         }),

@@ -12,6 +12,7 @@ export type {
 } from './application/types';
 export { ForgotPasswordForm } from './ui/forgot-password-form';
 export { ResetPasswordForm } from './ui/reset-password-form';
+export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 
 const publicAuthPorts: PublicAuthPorts = {
   api: publicAuthApi,

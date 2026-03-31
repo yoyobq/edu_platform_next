@@ -11,17 +11,10 @@ type GraphQLResponse<TData> = {
   }>;
 };
 
-type CreateVerificationRecordResponse = {
-  createVerificationRecord: {
+type RequestPasswordResetEmailResponse = {
+  requestPasswordResetEmail: {
     message?: string | null;
     success: boolean;
-    token?: string | null;
-  };
-};
-
-type QueueEmailResponse = {
-  queueEmail: {
-    queued: boolean;
   };
 };
 
@@ -39,22 +32,11 @@ type ResetPasswordResponse = {
   };
 };
 
-const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
-
-const CREATE_PASSWORD_RESET_RECORD_MUTATION = `
-  mutation CreatePasswordResetVerificationRecord($input: CreateVerificationRecordInput!) {
-    createVerificationRecord(input: $input) {
+const REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
+  mutation RequestPasswordResetEmail($input: RequestPasswordResetEmailInput!) {
+    requestPasswordResetEmail(input: $input) {
       message
       success
-      token
-    }
-  }
-`;
-
-const QUEUE_PASSWORD_RESET_EMAIL_MUTATION = `
-  mutation QueuePasswordResetEmail($input: QueueEmailInput!) {
-    queueEmail(input: $input) {
-      queued
     }
   }
 `;
@@ -120,72 +102,22 @@ async function requestGraphQL<TData, TVariables>(
   return payload.data;
 }
 
-function buildPasswordResetLink(token: string) {
-  if (typeof window === 'undefined') {
-    return `/reset-password/${encodeURIComponent(token)}`;
-  }
-
-  return `${window.location.origin}/reset-password/${encodeURIComponent(token)}`;
-}
-
-function buildPasswordResetEmailText(link: string) {
-  return [
-    '你正在申请重置密码。',
-    '如果这不是你的操作，请忽略这封邮件。',
-    '',
-    `请打开以下链接继续重置密码：${link}`,
-  ].join('\n');
-}
-
-async function createPasswordResetVerificationRecord(email: string) {
+async function requestPasswordResetEmail(email: string) {
   const response = await requestGraphQL<
-    CreateVerificationRecordResponse,
+    RequestPasswordResetEmailResponse,
     {
       input: {
-        expiresAt: string;
-        payload: { email: string };
-        returnToken: boolean;
-        type: 'PASSWORD_RESET';
+        email: string;
       };
     }
-  >(CREATE_PASSWORD_RESET_RECORD_MUTATION, {
+  >(REQUEST_PASSWORD_RESET_EMAIL_MUTATION, {
     input: {
-      expiresAt: new Date(Date.now() + PASSWORD_RESET_TTL_MS).toISOString(),
-      payload: {
-        email,
-      },
-      returnToken: true,
-      type: 'PASSWORD_RESET',
+      email,
     },
   });
 
-  if (!response.createVerificationRecord.success || !response.createVerificationRecord.token) {
-    throw new Error(response.createVerificationRecord.message || '暂时无法创建重置链接。');
-  }
-
-  return response.createVerificationRecord.token;
-}
-
-async function queuePasswordResetEmail(email: string, token: string) {
-  const response = await requestGraphQL<
-    QueueEmailResponse,
-    {
-      input: {
-        subject: string;
-        text: string;
-        to: string;
-      };
-    }
-  >(QUEUE_PASSWORD_RESET_EMAIL_MUTATION, {
-    input: {
-      subject: '密码重置',
-      text: buildPasswordResetEmailText(buildPasswordResetLink(token)),
-      to: email,
-    },
-  });
-
-  if (!response.queueEmail.queued) {
-    throw new Error('暂时无法发送重置邮件。');
+  if (!response.requestPasswordResetEmail.success) {
+    throw new Error(response.requestPasswordResetEmail.message || '暂时无法发送重置邮件。');
   }
 }
 
@@ -221,9 +153,7 @@ async function findResetPasswordIntent(
 
 export const publicAuthApi: PublicAuthApiPort = {
   async requestPasswordReset(input) {
-    const token = await createPasswordResetVerificationRecord(input.email);
-
-    await queuePasswordResetEmail(input.email, token);
+    await requestPasswordResetEmail(input.email);
   },
   async resetPassword(input) {
     try {
