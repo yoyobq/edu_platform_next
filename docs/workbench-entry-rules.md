@@ -87,6 +87,8 @@
 - `trigger` 只触发受控站内动作
 - 首页模块不得额外再维护一套平行的 destination 真相来源
 - 默认编排、排序、折叠与个人偏好，不属于单模块 contract
+- `shared/home-modules` 只保留 contract type、type guard 与轻量 constructors 这类共享出口
+- 首页模板解析、页面级 view model 与具体模块构建逻辑继续留在对应 feature 或页面侧
 - 模块的具体 view model 可继续由对应 feature 拥有，但消费面必须保持统一
 
 ### 7. 首页模块必须有准入理由

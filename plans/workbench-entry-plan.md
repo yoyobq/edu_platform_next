@@ -38,6 +38,7 @@
 
 - `P1` 已完成：
   - 首页模块 contract 已收口为统一消费面
+  - `shared/home-modules` 已收敛为 contract / guards / constructors 出口，页面级 view model 不再停留在 shared
   - 默认工作台已形成 `admin-default / member-default / minimal-default` 三档模板映射
   - demo trigger 已收回到 `/labs/demo`
   - `workspaceDemo` 已限制在 demo 实验域内，不再污染正式首页路径
