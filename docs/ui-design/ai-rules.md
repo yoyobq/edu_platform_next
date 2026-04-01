@@ -4,10 +4,15 @@
 
 ## 颜色
 
-- 不写魔法值，消费 CSS 变量或 Tailwind 语义类（`text-link`、`bg-ai-accent-bg`、`bg-fill-hover` 等）
+- 不写魔法值，消费 CSS 变量或 Tailwind 语义类（`text-text-secondary`、`text-link`、`bg-ai-accent-bg`、`bg-fill-hover` 等）
 - AI 元素 hover 态用 `--color-ai-accent-hover` / `--color-ai-accent-bg-hover`，不自己加深颜色
 - `--color-ai-accent` 禁止用于正文文字（对比度不足），只允许用于图标、边框、背景填充、大号标签
 - hover 背景统一 `bg-fill-hover`，不用 `bg-gray-*`
+
+补充：
+
+- 正式文本角色优先走 `Typography`，不要为了用 Tailwind 文本类而回退成原生标题和正文
+- Tailwind 文本类只用于 pure wrapper、原生 HTML 和局部元信息，不用于 `antd` 组件本体
 
 ## 圆角
 

@@ -46,30 +46,12 @@
 
 ## 排版
 
-### 字号
+文本层级、标题角色与页面文本组合方式，统一收敛到 [typography.md](./typography.md)。
 
-沿用 antd 默认 `fontSize: 14`，不自定义。
+这里仅保留两条与 token 相关的排版结论：
 
-| 场景       | 用法                               |
-| ---------- | ---------------------------------- |
-| 页面大标题 | `Typography.Title level={3}`       |
-| 模块标题   | `Typography.Title level={4}`       |
-| 卡片标题   | `Typography.Title level={5}`       |
-| 正文       | `Typography.Text`                  |
-| 辅助说明   | `Typography.Text type="secondary"` |
-| 超链接     | `Typography.Link` 或裸 `<a>`       |
-
-### 字重
-
-两档：`400`（正文）、`600`（标题/强调）。不用 500、700。
-
-### 行高
-
-antd 默认 1.57 不改。大段说明文字在 wrapper div 上加 `leading-relaxed`（1.625）。
-
-### 裸链接
-
-`index.css` 的 `@layer base` 统一裸 `<a>`（`:not([class])`）：默认 `colorLink`，hover 加下划线 + `colorLinkHover`，不区分 visited。
+- antd 默认 `fontSize: 14` 与默认行高继续沿用，不单独发明一套字号 token
+- 裸 `<a>` 由 `index.css` 的 `@layer base` 统一：默认 `colorLink`，hover 加下划线 + `colorLinkHover`
 
 ---
 
