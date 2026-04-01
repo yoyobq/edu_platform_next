@@ -23,7 +23,7 @@ This directory contains project documentation.
 - 想参考更激进的 AI-native layout 想法、给生成或设计探索提供输入时，再看 [layout-ideas.md](./layout-ideas.md)
 - 想明确 `antd`、`antdX` 和 `tailwindcss` 的职责分工时，先看 [ui-stack-rules.md](./ui-stack-rules.md)
 - 想确认颜色、圆角、间距、排版的视觉基准与 token 约定时，先看 [ui-design/README.md](./ui-design/README.md)
-- 想快速判断什么时候该用页面、抽屉、弹窗、Popover、Tooltip 等交互容器时，先看 [ui-design/ux-guidelines.md](./ui-design/ux-guidelines.md)
+- 想快速判断什么时候该用页面、抽屉、弹窗、Popover、Popconfirm、Tooltip 等交互容器，或判断确认边界与反馈形式时，先看 [ui-design/ux-guidelines.md](./ui-design/ux-guidelines.md)
 - 想新增或修改 `labs` 功能时，先看 [labs-rules.md](./labs-rules.md)
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想统一表单值、URL search params、筛选条件的空值与 normalize 语义时，先看 [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
