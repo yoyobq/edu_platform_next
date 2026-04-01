@@ -17,9 +17,17 @@ export function ForgotPasswordPage() {
           <Flex vertical gap={20} className="min-w-[280px] flex-1">
             <div>
               <Typography.Text type="secondary">Public Auth / Password Recovery</Typography.Text>
-              <Typography.Title style={{ marginBottom: 12, marginTop: 8 }}>
+              <h1
+                style={{
+                  fontSize: 'var(--ant-font-size-heading-3)',
+                  fontWeight: 'var(--ant-font-weight-heading)',
+                  lineHeight: 'var(--ant-line-height-heading-3)',
+                  marginBottom: 12,
+                  marginTop: 8,
+                }}
+              >
                 找回你的账户密码
-              </Typography.Title>
+              </h1>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
                 当前阶段先补齐最小自助恢复闭环。输入邮箱后，我们会按统一反馈处理，不暴露账户是否存在。
               </Typography.Paragraph>
@@ -32,7 +40,7 @@ export function ForgotPasswordPage() {
                 {submitted ? (
                   <>
                     <div>
-                      <Typography.Title level={3} style={{ marginBottom: 8 }}>
+                      <Typography.Title level={4} style={{ marginBottom: 8 }}>
                         请检查你的邮箱
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
@@ -47,7 +55,7 @@ export function ForgotPasswordPage() {
                 ) : (
                   <>
                     <div>
-                      <Typography.Title level={3} style={{ marginBottom: 8 }}>
+                      <Typography.Title level={4} style={{ marginBottom: 8 }}>
                         发送重置邮件
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

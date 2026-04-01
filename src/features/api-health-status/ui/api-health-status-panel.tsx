@@ -110,7 +110,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
 
           <div className="grid gap-4 md:grid-cols-2">
             {state.results.map((result) => (
-              <Card key={result.id} title={<span className="font-medium">{result.title}</span>}>
+              <Card key={result.id} title={result.title}>
                 <Flex vertical gap={12}>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                     {result.description}

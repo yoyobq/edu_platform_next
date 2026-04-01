@@ -277,7 +277,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           >
             <div className="flex items-center gap-2">
               <span className="text-lg">✨</span>
-              <span className="font-medium">开始</span>
+              <span>开始</span>
               {showShortcutHint ? (
                 <span className="rounded-full border border-current/15 px-2 py-0.5 text-xs text-current/75">
                   Alt+K

@@ -19,9 +19,17 @@ function VerificationIntentShell({
           <Flex vertical gap={20} className="min-w-[280px] flex-1">
             <div>
               <Typography.Text type="secondary">Verification Intent / Path-First</Typography.Text>
-              <Typography.Title style={{ marginBottom: 12, marginTop: 8 }}>
+              <h1
+                style={{
+                  fontSize: 'var(--ant-font-size-heading-3)',
+                  fontWeight: 'var(--ant-font-weight-heading)',
+                  lineHeight: 'var(--ant-line-height-heading-3)',
+                  marginBottom: 12,
+                  marginTop: 8,
+                }}
+              >
                 {title}
-              </Typography.Title>
+              </h1>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
                 {description}
               </Typography.Paragraph>

@@ -135,7 +135,7 @@ function HomeModuleCard({
     <Card styles={{ body: { display: 'flex', flexDirection: 'column', gap: 20, height: '100%' } }}>
       <div className="space-y-3">
         <Flex align="center" justify="space-between" gap={12} wrap>
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
+          <Typography.Title level={5} style={{ marginBottom: 0 }}>
             {module.title}
           </Typography.Title>
           <Tag color="processing">允许显示</Tag>
@@ -210,7 +210,7 @@ export function HomePage() {
       <Card>
         <Flex vertical gap={12}>
           <Flex align="center" gap={12} wrap>
-            <Typography.Title level={2} style={{ marginBottom: 0 }}>
+            <Typography.Title level={3} style={{ marginBottom: 0 }}>
               默认工作台
             </Typography.Title>
             <Tag color="blue">登录后默认入口</Tag>
