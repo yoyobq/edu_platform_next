@@ -1,6 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  CompressOutlined,
+  CopyOutlined,
+  DeleteOutlined,
+  EditOutlined,
+  ExpandOutlined,
+  LoadingOutlined,
+  MoonOutlined,
+  SunOutlined,
+} from '@ant-design/icons';
 import { CodeHighlighter } from '@ant-design/x';
-import { Button, Card, Input, Tag, Typography } from 'antd';
+import { Button, Card, Input, Switch, Tag, Typography } from 'antd';
+import type { TextAreaRef } from 'antd/es/input/TextArea';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism/index.js';
 
 import { payloadCryptoLabAccess } from './access';
@@ -15,8 +26,8 @@ type SstsPayloadDebugResultDTO = {
 
 type CodeThemeMode = 'dark' | 'light';
 
-const ENCRYPT_MUTATION = `
-  mutation DebugEncryptSstsPayload($input: DebugEncryptSstsPayloadInput!) {
+const ENCRYPT_QUERY = `
+  query DebugEncryptSstsPayload($input: DebugEncryptSstsPayloadInput!) {
     debugEncryptSstsPayload(input: $input) {
       encryptedData
       operation
@@ -25,8 +36,8 @@ const ENCRYPT_MUTATION = `
   }
 `;
 
-const DECRYPT_MUTATION = `
-  mutation DebugDecryptSstsPayload($input: DebugDecryptSstsPayloadInput!) {
+const DECRYPT_QUERY = `
+  query DebugDecryptSstsPayload($input: DebugDecryptSstsPayloadInput!) {
     debugDecryptSstsPayload(input: $input) {
       encryptedData
       operation
@@ -66,7 +77,7 @@ async function apiEncrypt(payload: string): Promise<string> {
     const data = await requestGraphQL<
       { debugEncryptSstsPayload: SstsPayloadDebugResultDTO },
       { input: { plainTextData: unknown } }
-    >(ENCRYPT_MUTATION, { input: { plainTextData: parsedPayload } });
+    >(ENCRYPT_QUERY, { input: { plainTextData: parsedPayload } });
     return data.debugEncryptSstsPayload.encryptedData;
   } catch (err: unknown) {
     return `Error encrypting payload: ${err instanceof Error ? err.message : 'Unknown error'}`;
@@ -78,7 +89,7 @@ async function apiDecrypt(payload: string): Promise<string> {
     const data = await requestGraphQL<
       { debugDecryptSstsPayload: SstsPayloadDebugResultDTO },
       { input: { encryptedData: string } }
-    >(DECRYPT_MUTATION, { input: { encryptedData: payload } });
+    >(DECRYPT_QUERY, { input: { encryptedData: payload } });
     return JSON.stringify(data.debugDecryptSstsPayload.plainTextData, null, 2);
   } catch (err: unknown) {
     return `Error decrypting payload: ${err instanceof Error ? err.message : 'Unknown error'}`;
@@ -89,14 +100,19 @@ export function PayloadCryptoLabPage() {
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isPasting, setIsPasting] = useState(false);
+  const [isPasteOverlayVisible, setIsPasteOverlayVisible] = useState(true);
   const [codeThemeMode, setCodeThemeMode] = useState<CodeThemeMode>('dark');
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
   );
+  const inputRef = useRef<TextAreaRef | null>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
 
   const normalizedInput = normalizeInput(input);
   const canProcess = Boolean(normalizedInput) && !loading;
+  const showPasteOverlay = !normalizedInput && isPasteOverlayVisible;
   const isInputCompressed = Boolean(result) && !isInputExpanded;
   const gridClassName = isInputExpanded
     ? 'grid gap-4 xl:grid-cols-[minmax(300px,1fr)_minmax(0,1.5fr)]'
@@ -153,24 +169,87 @@ export function PayloadCryptoLabPage() {
     };
   }, []);
 
-  const handleProcess = useCallback(async () => {
-    const normalizedInput = normalizeInput(input);
-    if (!normalizedInput) {
+  const processPayload = useCallback(async (rawInput: string) => {
+    const normalizedPayload = normalizeInput(rawInput);
+    if (!normalizedPayload) {
       return;
     }
 
     setLoading(true);
 
     try {
-      const nextResult = isJsonInput(normalizedInput)
-        ? await apiEncrypt(normalizedInput)
-        : await apiDecrypt(normalizedInput);
+      const nextResult = isJsonInput(normalizedPayload)
+        ? await apiEncrypt(normalizedPayload)
+        : await apiDecrypt(normalizedPayload);
 
       setResult(nextResult);
     } finally {
       setLoading(false);
     }
-  }, [input]);
+  }, []);
+
+  const handleProcess = useCallback(async () => {
+    await processPayload(input);
+  }, [input, processPayload]);
+
+  const scrollToResult = useCallback(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      resultRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, []);
+
+  const handlePasteInput = useCallback(async () => {
+    inputRef.current?.focus();
+
+    if (
+      typeof navigator === 'undefined' ||
+      !window.isSecureContext ||
+      typeof navigator.clipboard?.readText !== 'function'
+    ) {
+      return;
+    }
+
+    setIsPasting(true);
+
+    try {
+      const clipboardText = await navigator.clipboard.readText();
+
+      if (!clipboardText.trim()) {
+        return;
+      }
+
+      setIsPasteOverlayVisible(false);
+      setInput(clipboardText);
+      await processPayload(clipboardText);
+      scrollToResult();
+    } catch {
+      inputRef.current?.focus();
+    } finally {
+      setIsPasting(false);
+    }
+  }, [processPayload, scrollToResult]);
+
+  const handleManualInput = useCallback(() => {
+    setIsPasteOverlayVisible(false);
+    inputRef.current?.focus();
+  }, []);
+
+  const handlePrimaryAction = useCallback(async () => {
+    if (!normalizedInput) {
+      handleManualInput();
+      return;
+    }
+
+    await handleProcess();
+    scrollToResult();
+  }, [handleManualInput, handleProcess, normalizedInput, scrollToResult]);
 
   useEffect(() => {
     if (!canProcess) {
@@ -183,7 +262,7 @@ export function PayloadCryptoLabPage() {
       }
 
       event.preventDefault();
-      void handleProcess();
+      void handlePrimaryAction();
     }
 
     document.addEventListener('keydown', handleKeyDown);
@@ -191,7 +270,7 @@ export function PayloadCryptoLabPage() {
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [canProcess, handleProcess]);
+  }, [canProcess, handlePrimaryAction]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -219,38 +298,80 @@ export function PayloadCryptoLabPage() {
         <Card
           title="输入载荷"
           extra={
-            <Button
-              size="small"
-              type="text"
-              onClick={() => setIsInputExpanded((currentValue) => !currentValue)}
-            >
-              {isInputExpanded ? '恢复紧凑' : '展开输入区'}
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                aria-label="清空输入载荷"
+                disabled={!normalizedInput}
+                icon={<DeleteOutlined />}
+                size="small"
+                title="清空输入载荷"
+                type="text"
+                onClick={() => {
+                  setInput('');
+                  setResult('');
+                  setIsPasteOverlayVisible(true);
+                }}
+              />
+              <Button
+                aria-label={isInputExpanded ? '恢复紧凑输入区' : '展开输入区'}
+                icon={isInputExpanded ? <CompressOutlined /> : <ExpandOutlined />}
+                size="small"
+                title={isInputExpanded ? '恢复紧凑输入区' : '展开输入区'}
+                type="text"
+                onClick={() => setIsInputExpanded((currentValue) => !currentValue)}
+              />
+            </div>
           }
         >
           <div className="flex flex-col gap-4">
-            <Input.TextArea
-              autoSize={inputAutoSize}
-              placeholder="粘贴载荷后自动识别：JSON 会加密，其他内容会解密"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              style={{ fontFamily: 'monospace' }}
-            />
-            <Typography.Text type="secondary">
-              更适合粘贴即处理的流转；输入区会在结果出现后自动收缩，把空间让给结果。
-            </Typography.Text>
+            <div className="relative">
+              <Input.TextArea
+                ref={inputRef}
+                autoSize={inputAutoSize}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setIsPasteOverlayVisible(!e.target.value);
+                }}
+                style={{ fontFamily: 'monospace' }}
+              />
+              {showPasteOverlay ? (
+                <div className="absolute inset-0 flex items-center justify-center rounded-lg border border-dashed border-black/10 bg-white/72 p-4 backdrop-blur-[1px]">
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <button
+                      aria-label="点击粘贴载荷"
+                      className="flex flex-col items-center gap-2 text-left text-(--ant-color-text-tertiary) transition hover:text-text-secondary"
+                      type="button"
+                      onClick={() => void handlePasteInput()}
+                    >
+                      {isPasting ? (
+                        <LoadingOutlined style={{ fontSize: 18 }} />
+                      ) : (
+                        <CopyOutlined
+                          style={{
+                            color: 'var(--ant-color-text-tertiary)',
+                            fontSize: 18,
+                          }}
+                        />
+                      )}
+                      <Typography.Text type="secondary">
+                        {isPasting ? '正在读取剪贴板' : '点击粘贴载荷'}
+                      </Typography.Text>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <Button
-              type="primary"
-              size="large"
-              shape="round"
+              type={normalizedInput ? 'primary' : 'dashed'}
+              icon={normalizedInput ? undefined : <EditOutlined />}
               aria-keyshortcuts="Control+Enter"
               loading={loading}
-              disabled={!normalizedInput}
-              onClick={() => void handleProcess()}
+              onClick={() => void handlePrimaryAction()}
             >
               <div className="flex items-center gap-2">
-                <span>自动处理</span>
-                {showShortcutHint ? (
+                <span>{normalizedInput ? '查看结果' : '手动输入'}</span>
+                {showShortcutHint && normalizedInput ? (
                   <span className="rounded-full border border-current/15 px-2 py-0.5 text-xs text-current/75">
                     Ctrl+Enter
                   </span>
@@ -260,43 +381,67 @@ export function PayloadCryptoLabPage() {
           </div>
         </Card>
 
-        <Card
-          title="结果"
-          extra={
-            <Button
-              size="small"
-              type={codeThemeMode === 'dark' ? 'primary' : 'default'}
-              onClick={() =>
-                setCodeThemeMode((currentValue) => (currentValue === 'dark' ? 'light' : 'dark'))
-              }
-            >
-              {codeThemeMode === 'dark' ? '切到亮色' : '切到暗色'}
-            </Button>
-          }
-        >
-          {result ? (
-            <CodeHighlighter
-              lang="json"
-              highlightProps={codeHighlightProps}
-              style={{ width: '100%' }}
-              styles={{
-                code: {
-                  fontSize: 'var(--ant-font-size-sm)',
-                  lineHeight: 1.6,
-                },
-                root: {
-                  overflow: 'hidden',
-                },
-              }}
-            >
-              {result}
-            </CodeHighlighter>
-          ) : (
-            <div className="flex h-full min-h-[300px] items-center justify-center">
-              <Typography.Text type="secondary">暂无结果，请先执行加解密操作</Typography.Text>
-            </div>
-          )}
-        </Card>
+        <div ref={resultRef}>
+          <Card
+            title="结果"
+            extra={
+              <div className="flex items-center gap-2">
+                <SunOutlined
+                  style={{
+                    color:
+                      codeThemeMode === 'light'
+                        ? 'var(--ant-color-warning)'
+                        : 'var(--ant-color-text-tertiary)',
+                    fontSize: 14,
+                  }}
+                />
+                <Switch
+                  aria-label="切换结果区明暗主题"
+                  checked={codeThemeMode === 'dark'}
+                  size="small"
+                  onChange={(checked) => setCodeThemeMode(checked ? 'dark' : 'light')}
+                />
+                <MoonOutlined
+                  style={{
+                    color:
+                      codeThemeMode === 'dark'
+                        ? 'var(--ant-color-text)'
+                        : 'var(--ant-color-text-tertiary)',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+            }
+            styles={{
+              body: {
+                padding: 8,
+              },
+            }}
+          >
+            {result ? (
+              <CodeHighlighter
+                lang="json"
+                highlightProps={codeHighlightProps}
+                style={{ width: '100%' }}
+                styles={{
+                  code: {
+                    fontSize: 'var(--ant-font-size-sm)',
+                    lineHeight: 1.6,
+                  },
+                  root: {
+                    overflow: 'hidden',
+                  },
+                }}
+              >
+                {result}
+              </CodeHighlighter>
+            ) : (
+              <div className="flex h-full min-h-[300px] items-center justify-center">
+                <Typography.Text type="secondary">暂无结果，请先执行加解密操作</Typography.Text>
+              </div>
+            )}
+          </Card>
+        </div>
       </div>
     </div>
   );
