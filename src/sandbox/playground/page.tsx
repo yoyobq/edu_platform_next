@@ -6,7 +6,7 @@ export function SandboxPlaygroundPage() {
   return (
     <div className="max-w-3xl">
       <Card>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <Typography.Title level={3} style={{ marginBottom: 0 }}>
             Sandbox 演练场
           </Typography.Title>

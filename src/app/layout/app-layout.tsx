@@ -168,7 +168,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             }}
           >
             <div className="mx-auto max-w-7xl py-4" style={frameShiftStyle}>
-              <div className="rounded-surface border border-border bg-bg-container px-5 py-4 shadow-card">
+              <div className="rounded-surface border border-border bg-bg-container px-6 py-4 shadow-card">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
                     <Typography.Title level={4} style={{ marginBottom: 0 }}>

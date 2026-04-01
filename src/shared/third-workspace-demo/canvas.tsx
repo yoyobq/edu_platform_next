@@ -49,7 +49,7 @@ export function ThirdWorkspaceDemoCanvas({
           <Divider />
 
           <div className="grid flex-1 gap-6 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_280px]">
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               {artifact.sections.map((section) => (
                 <Card key={section} size="small">
                   <Typography.Paragraph style={{ marginBottom: 0 }}>{section}</Typography.Paragraph>
@@ -59,7 +59,7 @@ export function ThirdWorkspaceDemoCanvas({
 
             <div className="h-fit">
               <Card size="small">
-                <div className="space-y-3">
+                <div className="flex flex-col gap-3">
                   <Typography.Text strong>为什么要跳层</Typography.Text>
                   <Typography.Paragraph style={{ marginBottom: 0 }}>
                     这块内容故意比 Sidecar 更长、更宽，用来验证“大结果物是否值得暂时脱离右侧侧栏”。

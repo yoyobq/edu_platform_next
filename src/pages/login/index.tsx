@@ -26,7 +26,7 @@ export function LoginPage() {
     <div className="min-h-screen bg-bg-layout px-6 py-12 text-text">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
         <Flex gap={32} className="w-full" wrap>
-          <Flex vertical gap={20} className="min-w-[280px] flex-1">
+          <Flex vertical gap={24} className="min-w-[280px] flex-1">
             <div>
               <Typography.Text type="secondary">Workbench Entry / P0-2</Typography.Text>
               <h1
@@ -49,7 +49,7 @@ export function LoginPage() {
 
           <div className="min-w-[320px] flex-1">
             <Card styles={{ body: { padding: 24 } }}>
-              <Flex vertical gap={20}>
+              <Flex vertical gap={24}>
                 <div>
                   <Typography.Title level={4} style={{ marginBottom: 8 }}>
                     账户登录
