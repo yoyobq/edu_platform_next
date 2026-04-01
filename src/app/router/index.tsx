@@ -27,6 +27,7 @@ import { getAuthSessionSnapshot, restoreSession, useAuthSessionState } from '@/f
 import { resolveLoginRedirectTarget, sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
+import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 type AppEnv = 'dev' | 'test' | 'prod';
@@ -136,6 +137,35 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
 
   if (!hasLabAccess(demoLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(payloadCryptoLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  await restoreSession();
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasGuestLabAccess(payloadCryptoLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  // 硬编码验证：只有 (accountId 是 1 或者 2) 且 (accessGroup 里有 ADMIN 项) 的用户才可以进入
+  const hasSpecificAccess =
+    (snapshot.accountId === 1 || snapshot.accountId === 2) &&
+    snapshot.accessGroup.includes('ADMIN');
+
+  if (!hasSpecificAccess) {
+    throw new Response('Not Found', { status: 404 });
   }
 
   return null;
@@ -265,6 +295,11 @@ const router = createBrowserRouter([
             path: 'demo',
             loader: demoLabLoader,
             lazy: loadDemoLabRouteModule,
+          },
+          {
+            path: 'payload-crypto',
+            loader: payloadCryptoLabLoader,
+            lazy: loadPayloadCryptoLabRouteModule,
           },
         ],
       },
