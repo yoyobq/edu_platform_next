@@ -1,5 +1,5 @@
 import { Card, Flex, Tag, Typography } from 'antd';
-import { useParams } from 'react-router';
+import { useParams, useSearchParams } from 'react-router';
 
 import { ResetPasswordIntentPanel } from '@/features/public-auth';
 
@@ -97,7 +97,9 @@ export function VerifyEmailIntentPage() {
 }
 
 export function ResetPasswordIntentPage() {
-  const { verificationCode = '' } = useParams();
+  const { verificationCode: verificationCodeFromPath = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const verificationCode = verificationCodeFromPath || searchParams.get('token') || '';
 
   return (
     <VerificationIntentShell

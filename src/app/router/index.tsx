@@ -256,6 +256,10 @@ const router = createBrowserRouter([
         Component: ForgotPasswordPage,
       },
       {
+        path: '/reset-password',
+        Component: ResetPasswordIntentPage,
+      },
+      {
         path: '/invite/:inviteType/:verificationCode',
         Component: InviteIntentPage,
       },

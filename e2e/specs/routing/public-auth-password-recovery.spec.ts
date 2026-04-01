@@ -143,6 +143,15 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
 });
 
+test('query token 形式的 reset link 也应进入重置页面', async ({ page }) => {
+  await mockResetPasswordFlow(page, 'active');
+
+  await page.goto(routes.resetPasswordWithTokenQuery('reset-token-query-active'));
+
+  await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
+  await expect(page.getByText('reset-token-query-active')).toBeVisible();
+});
+
 test('reset code 提交时若已过期，应切换到失败态', async ({ page }) => {
   await mockResetPasswordFlow(page, 'active', {
     resetPasswordErrorMessage: 'verification token expired',
