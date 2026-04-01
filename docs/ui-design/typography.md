@@ -35,7 +35,8 @@
 
 - `Typography` 负责项目的大部分正式文本角色
 - 但 HTML 语义优先级高于纯视觉级别
-- 当前 `antd@6.3.4` 的 `Typography.Title` 不提供“视觉 level 与底层标签解耦”的稳定能力，因此不要把 `level={3}` 机械等同为所有页面都该渲染 `<h3>`
+- `Typography.Title` 的 `level` 同时控制视觉尺寸与底层 HTML 标签（`level={3}` 渲染 `<h3>`），视觉与语义是绑定的
+- antd 不提供“只改视觉、保留独立语义”的能力；当页面主标题需要 `<h1>` 语义时，不要机械把 `level` 写成视觉值，应参考下面“文本角色”节的语义补充方案
 
 ### 3. `Typography` 与 Tailwind 文本类的决策顺序
 
@@ -95,7 +96,8 @@ edu 后台信息密度高，不需要营销级大标题。页面标题使用 `le
 
 - `level` 先表示视觉层级，不自动等同页面大纲层级
 - 若页面主标题承担当前路由的语义主标题职责，应优先保证页面存在单个 `<h1>`
-- 当 `Typography.Title` 无法同时满足视觉与语义时，允许以原生标题元素承载语义，再用受控样式保持视觉接近本规范
+- 当 `Typography.Title` 无法同时满足视觉与语义时，允许以原生标题元素承载语义，再通过 `style` prop 消费 antd heading CSS 变量（如 `--ant-font-size-heading-3`、`--ant-font-weight-heading`）保持视觉接近本规范
+- 此场景下不要用 Tailwind 硬编码字号替代
 
 | 角色                       | 推荐写法                                                                      | 视觉方向                         | 行数建议            | 说明                                      |
 | -------------------------- | ----------------------------------------------------------------------------- | -------------------------------- | ------------------- | ----------------------------------------- |
@@ -103,7 +105,7 @@ edu 后台信息密度高，不需要营销级大标题。页面标题使用 `le
 | 页面副标题/导语            | `Typography.Paragraph type="secondary"` 或 `Typography.Text type="secondary"` | 对标题做解释，不抢主层级         | 1-3 行              | 短说明可用 `Text`，成段说明用 `Paragraph` |
 | 内容区标题                 | `Typography.Title level={4}`                                                  | 页面内一级分组标题               | 1 行优先，最多 2 行 | 如“基本信息”“学习进度”                    |
 | 卡片标题                   | `Typography.Title level={5}`                                                  | 卡片头部标题，弱于内容区标题     | 1 行优先，最多 2 行 | 可与 `extra/actions` 并列                 |
-| 弹层标题（Modal / Drawer） | 组件 `title` 传入 `Typography.Title level={5}`                                | 与卡片标题同级，不与页面标题竞争 | 1 行优先，最多 2 行 | 不额外叠加手写标题间距                    |
+| 弹层标题（Modal / Drawer） | 组件 `title` prop 直接传字符串                                                | 与卡片标题同级，不与页面标题竞争 | 1 行优先，最多 2 行 | antd 已内建标题样式，无需手动设置；不要在 `title` prop 内嵌套 `Typography.Title` |
 | 区块内小标题               | `Typography.Text strong`                                                      | 卡片内部再分组                   | 1 行                | 不再继续升 `Title`                        |
 | 正文                       | `Typography.Text` 或 `Typography.Paragraph`                                   | 默认阅读文本                     | 1-4 行              | 成段内容优先 `Paragraph`                  |
 | 辅助说明                   | `Typography.Text type="secondary"`                                            | 次要说明、提示、上下文补充       | 1-2 行              | 不承载主信息                              |
@@ -251,6 +253,7 @@ edu 后台信息密度高，不需要营销级大标题。页面标题使用 `le
 - 描述、提示、注释默认 `Typography.Text type="secondary"`
 - 胶囊、徽标、局部元信息若不用 `Typography`，可在原生节点上用 `text-text-secondary`
 - 不要优先生成 `text-sm font-medium text-gray-500` 这类游离文本样式
+- 弹层（`Modal` / `Drawer`）的 `title` prop 直接传字符串，不嵌套 `Typography.Title`
 
 ## 禁止项
 
@@ -262,3 +265,4 @@ edu 后台信息密度高，不需要营销级大标题。页面标题使用 `le
 - 不要把正文、辅助说明、元信息拆成三四档灰度文本
 - 不要用 AI 强调色写正文小字
 - 不要为了强调，把普通说明直接升级成 `Title`
+- 不要在 `Modal` / `Drawer` 的 `title` prop 内嵌套 `Typography.Title`（组件已内建标题样式）
