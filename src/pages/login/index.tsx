@@ -29,9 +29,17 @@ export function LoginPage() {
           <Flex vertical gap={20} className="min-w-[280px] flex-1">
             <div>
               <Typography.Text type="secondary">Workbench Entry / P0-2</Typography.Text>
-              <Typography.Title style={{ marginBottom: 12, marginTop: 8 }}>
+              <h1
+                style={{
+                  fontSize: 'var(--ant-font-size-heading-3)',
+                  fontWeight: 'var(--ant-font-weight-heading)',
+                  lineHeight: 'var(--ant-line-height-heading-3)',
+                  marginBottom: 12,
+                  marginTop: 8,
+                }}
+              >
                 登录后再进入工作台
-              </Typography.Title>
+              </h1>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
                 当前阶段先建立最小可恢复会话基础。登录成功后会优先回到你原本要访问的站内目标，
                 若没有目标，则回到工作台入口。
@@ -43,7 +51,7 @@ export function LoginPage() {
             <Card styles={{ body: { padding: 24 } }}>
               <Flex vertical gap={20}>
                 <div>
-                  <Typography.Title level={3} style={{ marginBottom: 8 }}>
+                  <Typography.Title level={4} style={{ marginBottom: 8 }}>
                     账户登录
                   </Typography.Title>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

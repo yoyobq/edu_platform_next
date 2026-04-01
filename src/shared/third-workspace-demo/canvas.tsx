@@ -14,7 +14,7 @@ export function ThirdWorkspaceDemoCanvas({
 }) {
   return (
     <div className="h-full w-full p-4 md:p-6">
-      <div className="h-full overflow-hidden rounded-3xl shadow-2xl">
+      <div className="h-full overflow-hidden rounded-surface shadow-surface">
         <Card
           data-testid="third-workspace-canvas"
           styles={{
