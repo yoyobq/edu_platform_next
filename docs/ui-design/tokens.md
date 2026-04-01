@@ -111,7 +111,7 @@
 
 ## 图标与 Avatar
 
-- 图标统一 `@ant-design/icons`，大小 `1em`，对齐用 `flex items-center gap-2`
+- 图标统一 `@ant-design/icons`；尺寸、颜色、可访问性与语义规则见 [brand/ui-icons.md](./brand/ui-icons.md)
 - Avatar 圆形（用户）/ 方形（课程 `shape="square"`），不叠加 Tailwind `rounded-*`
 - 空头像：`<Avatar icon={<UserOutlined />} />` 或 `<Avatar>{name[0]}</Avatar>`
 
