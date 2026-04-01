@@ -30,10 +30,10 @@ export function DemoLabPage() {
   const openedArtifactId = readThirdWorkspaceDemoArtifactId(location.search);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       <Card>
-        <div className="space-y-4">
-          <div className="space-y-3">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-3">
             <Typography.Title level={3} style={{ marginBottom: 0 }}>
               第三工作区跳层 Demo
             </Typography.Title>
@@ -60,7 +60,7 @@ export function DemoLabPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,420px)]">
         <Card title="候选结果物">
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3">
             {THIRD_WORKSPACE_DEMO_ARTIFACTS.map((artifact) => {
               const isActive = artifact.id === selectedArtifactId;
 
@@ -77,7 +77,7 @@ export function DemoLabPage() {
                       : 'var(--ant-color-border-secondary)',
                   }}
                 >
-                  <div className="space-y-3">
+                  <div className="flex flex-col gap-3">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <Typography.Text strong>{artifact.title}</Typography.Text>
@@ -135,7 +135,7 @@ export function DemoLabPage() {
           }
         >
           {selectedArtifact ? (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               <div>
                 <Typography.Text strong>{selectedArtifact.title}</Typography.Text>
                 <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

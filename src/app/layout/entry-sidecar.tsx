@@ -195,7 +195,7 @@ export function EntrySidecar() {
                   />
 
                   {message.cards && message.cards.length > 0 ? (
-                    <div className="mt-3 space-y-2">
+                    <div className="mt-3 flex flex-col gap-2">
                       {message.cards.map((card) => (
                         <div
                           key={card.id}

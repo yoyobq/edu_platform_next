@@ -28,6 +28,15 @@
 
 不要用一串 `mb-*` 把整个页面堆出来。
 
+**`space-y-*` / `space-x-*` 的处理**：
+
+Tailwind 的 `space-y-*` / `space-x-*` 通过 `> * + *` 选择器给相邻兄弟加 margin，效果近似 `gap`，但本质是自动化的 margin。在当前项目中：
+
+- 优先使用 `flex flex-col gap-*` 替代 `space-y-*`
+- 优先使用 `flex gap-*` 替代 `space-x-*`
+- 若容器已经是 `flex` 或 `grid`，**禁止** `space-*`，直接用 `gap-*`
+- `space-*` 的唯一合法场景：非 flex/grid 容器内的临时过渡，且应在重复出现后上收为 flex+gap
+
 ### 3. 先消除原生 margin 叠加，再用 `gap` 建立节奏
 
 **问题**：`antd` 的 `Typography.Title`、`Typography.Paragraph` 等显示型组件默认自带垂直 margin。直接放进 `flex / grid + gap-*` 的 wrapper 时，实际节奏 = 组件 margin + wrapper gap 的叠加值，不可控。
@@ -68,9 +77,25 @@
 
 补充约束：
 
-- `gap-3` 只用于行内紧凑对齐（如 `[图标]+[文字]+[操作]` 同行，`gap-2` 偏紧 `gap-4` 偏松时），不用于主节奏
+- `gap-3`（12px）允许用于行内紧凑对齐（`[图标]+[文字]+[操作]` 同行），也允许用于紧凑垂直分组（标题+说明文案对、简短卡片头），但不用于页面或区块级主节奏
+- 方向性 padding（`px-*`、`py-*`、`pt-*`、`pb-*`）同样只使用约定档位值（3/4/6），不要出现 `px-5`、`py-7` 等
 - `margin` 若必须使用，优先跟随 4px 网格，不单独发明零碎值
-- **禁止**：`p-5`（20px）、`p-7`（28px）等非约定档位
+- **禁止**：`p-5`（20px）、`p-7`（28px）、`gap-5`（20px）等非约定档位
+- **禁止**：在 antd `Flex` 组件的 `gap` prop 或 CSS `gap` 属性中使用不在 4px 网格上或不在约定档位中的像素值（如 `gap={20}`）
+
+### 6. antd `Flex` 组件的 `gap` prop 遵守同一套档位
+
+antd 的 `<Flex gap={N}>` 接受像素值。该 prop 的值必须落在约定档位上：
+
+| `gap` prop 值 | 等价 Tailwind | 说明         |
+| ------------- | ------------- | ------------ |
+| `4`           | `gap-1`       | 极小间距     |
+| `8`           | `gap-2`       | 行内间距     |
+| `12`          | `gap-3`       | 紧凑对齐     |
+| `16`          | `gap-4`       | 条目标准间距 |
+| `24`          | `gap-6`       | 区块间距     |
+
+不要出现 `gap={20}`、`gap={18}`、`gap={10}` 等非约定值。若从设计上觉得 16 偏紧、24 偏松，优先选择结构调整，而不是发明中间值。
 
 ---
 
@@ -79,6 +104,41 @@
 - 行内多用 `gap-2`
 - 组件组多用 `gap-4`
 - 页面区块多用 `gap-6`
+
+---
+
+## 页面上下文
+
+与 [typography.md](./typography.md) 一致，间距节奏也区分两种页面上下文。
+
+### 工作台页面（Workbench）
+
+登录后的主工作区页面，由 `AppLayout` 壳层包裹。
+
+- 壳层已提供外层 padding 和顶部控制栏
+- 页面内容区由 `<Flex vertical gap={...}>` 组织主节奏
+- 响应式压缩：壳层在窄屏时将主 gap 从 24px 收缩为 16px（`mainWidthBand === 'compact' ? 16 : 24`）
+- 页面内部组件遵循标准内容节奏
+
+已落地参考：`src/app/layout/app-layout.tsx` 中的 `Layout.Content` 区域。
+
+### 公共入口页面（Public Entry）
+
+登录前的独立页面（登录、找回密码、验证入口），无 `AppLayout` 壳层，采用左右两栏布局。
+
+间距特点：
+
+| 位置                        | 间距                                               | 说明                                                      |
+| --------------------------- | -------------------------------------------------- | --------------------------------------------------------- |
+| 页面外壳 padding            | `px-6 py-12`                                       | 全屏页面留白                                              |
+| 左右两栏之间                | `Flex gap={32}`                                    | 两栏结构分隔；`wrap` 确保窄屏堆叠时同样保持 32px 垂直间距 |
+| 左栏内部（语义标题 + 说明） | `Flex vertical gap={24}`                           | 介绍区段落间距                                            |
+| 右栏 Card 内部              | `body: { padding: 24 }` + `Flex vertical gap={24}` | 操作卡片内部                                              |
+| 标题与说明文案（紧凑对）    | 自然块级堆叠                                       | 标题 `marginBottom: 12`，说明 `marginBottom: 0`           |
+
+公共入口的 `gap={32}` 是项目唯一允许超出标准内容档位的 layout 例外。这个值用于两栏结构分隔，不可扩散到工作台页面。
+
+已落地参考：`src/pages/login/index.tsx`、`src/pages/forgot-password/index.tsx`、`src/pages/verification-intent/index.tsx`。
 
 ---
 
@@ -248,10 +308,11 @@ Sidecar 允许比 `main` 更紧凑，但不能乱。
 
 操作顺序：
 
-1. 先用 wrapper `gap` 排版
-2. 再把 `Typography` 等组件默认 margin 归零（`style={{ margin: 0 }}`）
-3. 标准业务表单不默认重写 `Form.Item` 的垂直节奏
-4. Sidecar 主栈优先复用 `sidecar-root-stack` / `sidecar-scroll-stack`，不直接写死 `gap-*`
+1. 先用 wrapper `flex flex-col gap-*` 排版，不要用 `space-y-*`
+2. 再把 `Typography` 等组件默认 margin 归零（`style={{ marginBottom: 0 }}`）
+3. antd `<Flex>` 的 `gap` prop 只传约定档位像素值（4/8/12/16/24）
+4. 标准业务表单不默认重写 `Form.Item` 的垂直节奏
+5. Sidecar 主栈优先复用 `sidecar-root-stack` / `sidecar-scroll-stack`，不直接写死 `gap-*`
 
 ---
 
@@ -263,6 +324,10 @@ Sidecar 允许比 `main` 更紧凑，但不能乱。
 - 不要把 `gap-3` 当成页面或区块默认间距
 - 不要为了"紧凑"把 `p-3` 和 `gap-2` 扩散成全站默认
 - 不要使用临时硬编码值，如 `marginTop: 18`、`padding: 20`
-- 不要使用 `p-5`、`p-7` 等非约定档位
-- 不��在 Sidecar 主内容栈上硬写 `gap-4` / `gap-6`，会覆盖 density 变体
+- 不要使用 `p-5`、`p-7`、`gap-5` 等非约定档位
+- 不要在 antd `Flex` 组件的 `gap` prop 中使用非约定值（如 `gap={20}`、`gap={10}`）
+- 不要在 Sidecar 主内容栈上硬写 `gap-4` / `gap-6`，会覆盖 density 变体
 - 不要在未补正式 token 的情况下临时发明 `p-8` / `gap-8`
+- 不要用 `space-y-*` / `space-x-*` 替代 flex/grid 容器的 `gap-*`；已有 `space-y-*` 应逐步迁移为 `flex flex-col gap-*`
+- 不要用 `mb-*` / `mt-*` 在父容器中建立兄弟元素之间的结构节奏（应改用外层 flex/grid + gap）
+- 不要在公共入口页面之外使用 `gap={32}` 这类超出标准内容档位的 layout 级间距

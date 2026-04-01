@@ -61,7 +61,7 @@ function HomeModuleCard({
   if (module.state.kind === 'ready') {
     stateContent = (
       <Flex vertical gap={16}>
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3">
           <Typography.Text strong>{module.state.summary.headline}</Typography.Text>
           {module.state.summary.items && module.state.summary.items.length > 0 ? (
             <div className="grid gap-3 md:grid-cols-2">
@@ -132,8 +132,8 @@ function HomeModuleCard({
   }
 
   return (
-    <Card styles={{ body: { display: 'flex', flexDirection: 'column', gap: 20, height: '100%' } }}>
-      <div className="space-y-3">
+    <Card styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16, height: '100%' } }}>
+      <div className="flex flex-col gap-3">
         <Flex align="center" justify="space-between" gap={12} wrap>
           <Typography.Title level={5} style={{ marginBottom: 0 }}>
             {module.title}

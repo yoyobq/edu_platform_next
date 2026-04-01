@@ -22,16 +22,16 @@ export function ProjectStatusPanel() {
           只看上线项目
         </Checkbox>
 
-        <div>
-          <Flex align="center" justify="space-between" gap={16} className="mb-4">
-            <div>
-              <Typography.Title level={3} style={{ marginBottom: 4 }}>
+        <Flex vertical gap={16}>
+          <Flex align="center" justify="space-between" gap={16}>
+            <Flex vertical gap={4}>
+              <Typography.Title level={3} style={{ marginBottom: 0 }}>
                 项目状态面板
               </Typography.Title>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
                 在调整暴露范围前，可先用这里观察哪些项目当前处于上线状态。
               </Typography.Paragraph>
-            </div>
+            </Flex>
 
             <Tag color="blue">当前可见 {visibleProjects.length} 项</Tag>
           </Flex>
@@ -72,7 +72,7 @@ export function ProjectStatusPanel() {
               <Empty description="当前没有可展示的上线项目。" />
             </Card>
           )}
-        </div>
+        </Flex>
       </Flex>
     </section>
   );
