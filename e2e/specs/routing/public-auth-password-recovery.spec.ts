@@ -149,7 +149,21 @@ test('query token 形式的 reset link 也应进入重置页面', async ({ page 
   await page.goto(routes.resetPasswordWithTokenQuery('reset-token-query-active'));
 
   await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
-  await expect(page.getByText('reset-token-query-active')).toBeVisible();
+  await expect(page.getByText('公共认证入口')).toHaveCount(0);
+  await expect(page.getByText('验证代码')).toHaveCount(0);
+  await expect(page.getByText('reset-token-query-active')).toHaveCount(0);
+});
+
+test('reset password 页面应在首次输入时给出字段级密码校验', async ({ page }) => {
+  await mockResetPasswordFlow(page, 'active');
+
+  await page.goto(routes.resetPassword('reset-token-password-rules'));
+
+  await page.getByLabel('新密码', { exact: true }).fill('abcdefgh');
+
+  await expect(
+    page.getByText('密码至少 8 位，且需包含字母、数字、符号中的至少两种。'),
+  ).toBeVisible();
 });
 
 test('reset code 提交时若已过期，应切换到失败态', async ({ page }) => {

@@ -83,10 +83,10 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
       <Flex vertical gap={16}>
         <div>
           <Typography.Title level={4} style={{ marginBottom: 8 }}>
-            设置新密码
+            输入新密码
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            重置链接已验证通过。输入新密码后即可回到登录页继续。
+            输入过程中会即时检查密码规则，确认通过后即可完成更新。
           </Typography.Paragraph>
         </div>
 

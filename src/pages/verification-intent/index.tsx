@@ -1,4 +1,4 @@
-import { Card, Flex, Tag, Typography } from 'antd';
+import { Card, Flex, Typography } from 'antd';
 import { useParams, useSearchParams } from 'react-router';
 
 import { ResetPasswordIntentPanel } from '@/features/public-auth';
@@ -8,10 +8,12 @@ import { BrandLockup } from '@/shared/ui/brand';
 function VerificationIntentShell({
   children,
   description,
+  showEntryLabel = true,
   title,
 }: {
   children: React.ReactNode;
   description: string;
+  showEntryLabel?: boolean;
   title: string;
 }) {
   return (
@@ -41,7 +43,9 @@ function VerificationIntentShell({
           <div className="min-w-[320px] flex-1">
             <Card styles={{ body: { padding: 24 } }}>
               <Flex vertical gap={16}>
-                <Tag color="processing">Public Entry</Tag>
+                {showEntryLabel ? (
+                  <Typography.Text type="secondary">公共认证入口</Typography.Text>
+                ) : null}
                 {children}
               </Flex>
             </Card>
@@ -105,10 +109,10 @@ export function ResetPasswordIntentPage() {
 
   return (
     <VerificationIntentShell
-      title="重置密码入口"
-      description="重置密码流程使用显式 path 承载一次性业务语义，避免和普通登录后回跳参数混写。"
+      title="设置新密码"
+      description="为保证账户安全，请设置一个符合要求的新密码。修改完成后即可返回登录页继续使用。"
+      showEntryLabel={false}
     >
-      <VerificationIntentDetails details={[{ label: '验证代码', value: verificationCode }]} />
       <ResetPasswordIntentPanel verificationCode={verificationCode} />
     </VerificationIntentShell>
   );
