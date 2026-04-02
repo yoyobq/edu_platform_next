@@ -4,6 +4,7 @@ import { routes } from '../../fixtures/routes';
 import { expect, test } from '../../test';
 
 type ResetIntentStatus = 'active' | 'expired' | 'used' | 'invalid';
+type VerificationRecordFailureReason = 'EXPIRED' | 'INVALID' | 'USED';
 
 async function mockForgotPasswordMutations(page: Page) {
   await page.route('**/graphql', async (route) => {
@@ -41,7 +42,7 @@ async function mockForgotPasswordMutations(page: Page) {
 async function mockResetPasswordFlow(
   page: Page,
   status: ResetIntentStatus,
-  options?: { resetPasswordErrorMessage?: string },
+  options?: { resetPasswordFailureReason?: VerificationRecordFailureReason },
 ) {
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
@@ -56,19 +57,28 @@ async function mockResetPasswordFlow(
     }
 
     if (payload.query.includes('query FindPasswordResetVerificationRecord')) {
-      const record =
-        status === 'invalid'
-          ? null
+      const result =
+        status === 'active'
+          ? {
+              message: null,
+              reason: null,
+              record: {
+                notBefore: null,
+                status: 'ACTIVE',
+              },
+              success: true,
+            }
           : {
-              notBefore: null,
-              status:
-                status === 'active' ? 'ACTIVE' : status === 'expired' ? 'EXPIRED' : 'CONSUMED',
+              message: null,
+              reason: status === 'expired' ? 'EXPIRED' : status === 'used' ? 'USED' : 'INVALID',
+              record: null,
+              success: false,
             };
 
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            findVerificationRecord: record,
+            findVerificationRecord: result,
           },
         }),
         contentType: 'application/json',
@@ -78,14 +88,16 @@ async function mockResetPasswordFlow(
     }
 
     if (payload.query.includes('mutation ResetPassword')) {
-      if (options?.resetPasswordErrorMessage) {
+      if (options?.resetPasswordFailureReason) {
         await route.fulfill({
           body: JSON.stringify({
-            errors: [
-              {
-                message: options.resetPasswordErrorMessage,
+            data: {
+              resetPassword: {
+                message: null,
+                reason: options.resetPasswordFailureReason,
+                success: false,
               },
-            ],
+            },
           }),
           contentType: 'application/json',
           status: 200,
@@ -168,7 +180,7 @@ test('reset password 页面应在首次输入时给出字段级密码校验', as
 
 test('reset code 提交时若已过期，应切换到失败态', async ({ page }) => {
   await mockResetPasswordFlow(page, 'active', {
-    resetPasswordErrorMessage: 'verification token expired',
+    resetPasswordFailureReason: 'EXPIRED',
   });
 
   await page.goto(routes.resetPassword('reset-token-expired-on-submit'));

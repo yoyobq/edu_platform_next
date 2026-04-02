@@ -2,7 +2,10 @@ import type { PublicAuthApiPort } from '../application/ports';
 import type { ResetPasswordResult, VerificationIntentResult } from '../application/types';
 
 import { mapVerificationRecordToIntentResult } from './mapper';
-import { resolveVerificationFailureReason } from './resolve-verification-failure-reason';
+import {
+  mapVerificationFailureReason,
+  resolveVerificationFailureReason,
+} from './resolve-verification-failure-reason';
 
 type GraphQLResponse<TData> = {
   data?: TData;
@@ -18,16 +21,24 @@ type RequestPasswordResetEmailResponse = {
   };
 };
 
+type VerificationRecordFailureReason = 'EXPIRED' | 'INVALID' | 'USED';
+
 type FindVerificationRecordResponse = {
   findVerificationRecord: {
-    notBefore?: string | null;
-    status: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
-  } | null;
+    message?: string | null;
+    reason?: VerificationRecordFailureReason | null;
+    record?: {
+      notBefore?: string | null;
+      status: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
+    } | null;
+    success: boolean;
+  };
 };
 
 type ResetPasswordResponse = {
   resetPassword: {
     message?: string | null;
+    reason?: VerificationRecordFailureReason | null;
     success: boolean;
   };
 };
@@ -44,8 +55,13 @@ const REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
 const FIND_PASSWORD_RESET_RECORD_QUERY = `
   query FindPasswordResetVerificationRecord($input: FindVerificationRecordInput!) {
     findVerificationRecord(input: $input) {
-      notBefore
-      status
+      message
+      reason
+      success
+      record {
+        notBefore
+        status
+      }
     }
   }
 `;
@@ -54,6 +70,7 @@ const RESET_PASSWORD_MUTATION = `
   mutation ResetPassword($input: ResetPasswordInput!) {
     resetPassword(input: $input) {
       message
+      reason
       success
     }
   }
@@ -141,14 +158,36 @@ async function findResetPasswordIntent(
     },
   });
 
-  if (!response.findVerificationRecord) {
+  const result = response.findVerificationRecord;
+
+  if (result.success && result.record) {
+    return mapVerificationRecordToIntentResult(result.record);
+  }
+
+  const reason = mapVerificationFailureReason(result.reason);
+
+  if (reason === 'expired') {
     return {
-      status: 'invalid',
-      reason: 'invalid',
+      status: 'expired',
+      reason,
     };
   }
 
-  return mapVerificationRecordToIntentResult(response.findVerificationRecord);
+  if (reason === 'used') {
+    return {
+      status: 'used',
+      reason,
+    };
+  }
+
+  if (reason === 'invalid') {
+    return {
+      status: 'invalid',
+      reason,
+    };
+  }
+
+  throw new Error(result.message || '暂时无法确认重置链接状态。');
 }
 
 export const publicAuthApi: PublicAuthApiPort = {
@@ -176,9 +215,19 @@ export const publicAuthApi: PublicAuthApiPort = {
         return { status: 'success' };
       }
 
-      return toResetPasswordResult(
-        new Error(response.resetPassword.message || '暂时无法完成密码重置。'),
-      );
+      const reason = mapVerificationFailureReason(response.resetPassword.reason);
+
+      if (reason !== 'unknown') {
+        return {
+          status: 'failure',
+          reason,
+        };
+      }
+
+      return {
+        status: 'error',
+        message: response.resetPassword.message || '暂时无法完成密码重置。',
+      };
     } catch (error) {
       return toResetPasswordResult(error);
     }
