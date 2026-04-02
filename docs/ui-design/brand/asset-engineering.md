@@ -14,14 +14,14 @@
 
 ## 命名约定
 
-| 文件名                  | 用途                         |
-| ----------------------- | ---------------------------- |
-| `logo.svg`              | 彩色 Logo（页面渲染）        |
-| `logo-dark.svg`         | 深色背景 Logo（占位）        |
-| `icon.svg`              | 浏览器图标（黑底白标）       |
-| `icon-light.svg`        | 浏览器图标（白底黑标，占位） |
-| `favicon.ico`           | 传统 favicon                 |
-| `icon-maskable-512.png` | PWA maskable 图标            |
+| 文件名                  | 用途                      |
+| ----------------------- | ------------------------- |
+| `logo.svg`              | 彩色 Logo（标准品牌展示） |
+| `logo-dark.svg`         | 深色背景 Logo（反白版）   |
+| `icon.svg`              | 浏览器图标（黑底白标）    |
+| `icon-light.svg`        | 浏览器图标（白底黑标）    |
+| `favicon.ico`           | 传统 favicon              |
+| `icon-maskable-512.png` | PWA maskable 图标         |
 
 禁止临时文件名、日期、人名或导出工具默认命名。
 
@@ -29,7 +29,7 @@
 
 - 品牌源资产保留真矢量版本
 - 运行时按目标平台导出 SVG / PNG / ICO
-- **当前已知问题**：`public/logo.svg` 和 `public/icon.svg` 为位图包裹型 SVG，可暂时继续使用，但不作为长期 source of truth
+- `public/logo.svg`、`public/logo-dark.svg`、`public/icon.svg`、`public/icon-light.svg` 应始终保持为真矢量 SVG
 - 交付用 SVG 应保持洁净：剔除无用 `defs`、冗余 `g` 编组、隐藏图层、编辑器元数据
 
 ## Code Review 检查点

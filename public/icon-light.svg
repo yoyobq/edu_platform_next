@@ -2,11 +2,11 @@
   xmlns="http://www.w3.org/2000/svg"
   viewBox="0 0 211.09 211.09"
   role="img"
-  aria-labelledby="iconTitle"
+  aria-labelledby="iconLightTitle"
 >
-  <title id="iconTitle">AIGC Friendly Frontend app icon</title>
-  <rect width="211.09" height="211.09" rx="42" fill="#0B0B0B" />
-  <g transform="translate(22.79 19) scale(0.82)" fill="#FFFFFF">
+  <title id="iconLightTitle">AIGC Friendly Frontend app icon for light backgrounds</title>
+  <rect width="211.09" height="211.09" rx="42" fill="#FFFFFF" />
+  <g transform="translate(22.79 19) scale(0.82)" fill="#0B0B0B">
     <g>
       <path d="M150.98 150.28c-.11 0-.23 0-.36 0 .04 0 .09.01.13.01 .09-.01.16-.01.23-.01Z" />
       <path d="M134.8 127.02c4.91-5.44 8.15-12.33 8.87-20.03 1.84-19.81-13.67-37.45-34.64-39.39-20.97-1.94-39.45 12.54-41.29 32.35-1.84 19.81 13.67 37.45 34.64 39.39 5.26.49 10.36-.06 15.09-1.46 10.99 5.65 23.84 6.15 27.64 6.14-4.04.02-7.76-8.91-10.31-17Z" />

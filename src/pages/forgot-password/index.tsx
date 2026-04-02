@@ -15,8 +15,13 @@ export function ForgotPasswordPage() {
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
         <Flex gap={32} className="w-full" wrap>
           <Flex vertical gap={24} className="min-w-[280px] flex-1">
+            <Typography.Text
+              type="secondary"
+              style={{ fontSize: 'var(--ant-font-size-sm)', letterSpacing: '0.04em' }}
+            >
+              aigc-friendly-frontend
+            </Typography.Text>
             <div>
-              <Typography.Text type="secondary">Public Auth / Password Recovery</Typography.Text>
               <h1
                 style={{
                   fontSize: 'var(--ant-font-size-heading-3)',
