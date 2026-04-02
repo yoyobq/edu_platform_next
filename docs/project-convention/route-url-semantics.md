@@ -22,9 +22,9 @@
 
 - `/login`
 - `/welcome`
-- `/invite/coach/:verificationCode`
-- `/invite/manager/:verificationCode`
-- `/invite/learner/:verificationCode`
+- `/invite/teacher/:verificationCode`
+- `/invite/student/:verificationCode`
+- `/invite/leader/:verificationCode`
 - `/verify/email/:verificationCode`
 - `/reset-password/:verificationCode`
 - `/magic-link/:verificationCode`

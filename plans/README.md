@@ -65,6 +65,10 @@ plan 不负责定义稳定规则。
 ## 当前计划
 
 - [layout-todo.md](./layout-todo.md)
+- [identity-access-model-now.md](./identity-access-model-now.md)
+- [identity-access-model-future.md](./identity-access-model-future.md)
+- [identity-access-model-explainer.md](./identity-access-model-explainer.md)
+- [identity-access-model-record.md](./identity-access-model-record.md)
 - [public-auth-flows-plan.md](./public-auth-flows-plan.md)
 - [public-auth-flows-now.md](./public-auth-flows-now.md)
 - [public-auth-flows-future.md](./public-auth-flows-future.md)
