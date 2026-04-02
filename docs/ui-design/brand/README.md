@@ -1,37 +1,21 @@
 <!-- docs/ui-design/brand/README.md -->
 
-# Brand Docs
+# Brand
 
-品牌目录只处理三类问题：
+品牌目录处理三件事：调性判断、资产使用边界、资产工程维护。
 
-1. 品牌调性与默认审美判断
-2. Logo / App Icon / UI Icon 的使用边界
-3. 品牌资产的工程维护方式
+## 路由
 
-若只是判断“这个页面该不该再加点东西”，先看 [brand-tone.md](./brand-tone.md)。
-若已确定要用哪类资产，再进入对应子文档。
-
-## 阅读顺序
-
-默认按下面顺序查阅：
-
-1. [brand-tone.md](./brand-tone.md)
-   适合做总判断：该收还是该放、该退还是该响。
-
-2. [logo.md](./logo.md)
-   适合判断页面中的品牌位、弱露出和 Logo 使用边界。
-
-3. [app-icons.md](./app-icons.md)
-   适合判断浏览器、桌面入口、收藏等小尺寸品牌图标。
-
-4. [ui-icons.md](./ui-icons.md)
-   适合判断产品内部导航、操作、状态和提示图标。
-
-5. [asset-engineering.md](./asset-engineering.md)
-   适合处理品牌资产命名、格式、运行时交付和 SVG 工程清洁度。
+| 需要做什么                | 看哪个文件                                     |
+| ------------------------- | ---------------------------------------------- |
+| 判断品牌存在感该强还是弱  | [brand-tone.md](./brand-tone.md)               |
+| 确定 Logo 使用位置与规则  | [logo.md](./logo.md)                           |
+| 确认浏览器 / 桌面入口图标 | [app-icons.md](./app-icons.md)                 |
+| 确认业务 UI 功能图标规则  | [ui-icons.md](./ui-icons.md)                   |
+| 处理资产命名、格式、交付  | [asset-engineering.md](./asset-engineering.md) |
 
 ## 优先级
 
-- 调性冲突时：`brand-tone.md` 优先
-- 资产类型冲突时：先判断它到底是 Logo、App Icon 还是 UI Icon
-- 工程落地问题：`asset-engineering.md` 只回答“怎么交付和维护”，不改写调性判断
+- 调性冲突 → `brand-tone.md` 优先
+- 资产类型不清 → 先判断是 Logo、App Icon 还是 UI Icon
+- 工程问题 → `asset-engineering.md` 只管交付方式，不改调性

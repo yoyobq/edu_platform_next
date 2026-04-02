@@ -44,7 +44,7 @@
 ## 组件
 
 - antd 组件本体的视觉问题回 ConfigProvider token 解决，不堆 Tailwind 类修补
-- 图标统一 `@ant-design/icons`
+- 图标统一 `@ant-design/icons`（详细规则见 [brand/ui-icons.md](./brand/ui-icons.md)）
 - Avatar 不叠加 Tailwind `rounded-*`
 
 ---
