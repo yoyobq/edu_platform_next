@@ -12,7 +12,11 @@ import {
 import { CodeHighlighter } from '@ant-design/x';
 import { Button, Card, Input, Switch, Tag, Typography } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
-import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism/index.js';
+
+import {
+  type CodeHighlightThemeMode,
+  createCodeHighlighterProps,
+} from '@/shared/ui/code-highlighter';
 
 import { payloadCryptoLabAccess } from './access';
 import { requestGraphQL } from './api';
@@ -23,8 +27,6 @@ type SstsPayloadDebugResultDTO = {
   operation: string;
   plainTextData: unknown;
 };
-
-type CodeThemeMode = 'dark' | 'light';
 
 const ENCRYPT_QUERY = `
   query DebugEncryptSstsPayload($input: DebugEncryptSstsPayloadInput!) {
@@ -102,7 +104,7 @@ export function PayloadCryptoLabPage() {
   const [loading, setLoading] = useState(false);
   const [isPasting, setIsPasting] = useState(false);
   const [isPasteOverlayVisible, setIsPasteOverlayVisible] = useState(true);
-  const [codeThemeMode, setCodeThemeMode] = useState<CodeThemeMode>('dark');
+  const [codeThemeMode, setCodeThemeMode] = useState<CodeHighlightThemeMode>('dark');
   const [isInputExpanded, setIsInputExpanded] = useState(false);
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
@@ -130,27 +132,10 @@ export function PayloadCryptoLabPage() {
 
     return { maxRows: 10, minRows: 5 };
   }, [isInputCompressed, isInputExpanded]);
-  const codeHighlightProps = {
-    codeTagProps: {
-      style: {
-        background: 'transparent',
-        overflowWrap: 'anywhere',
-        whiteSpace: 'pre-wrap',
-      },
-    },
-    wrapLongLines: true,
-    ...(codeThemeMode === 'dark'
-      ? {
-          style: {
-            ...vscDarkPlus,
-            'pre[class*="language-"]': {
-              ...vscDarkPlus['pre[class*="language-"]'],
-              margin: 0,
-            },
-          },
-        }
-      : null),
-  };
+  const codeHighlightProps = useMemo(
+    () => createCodeHighlighterProps(codeThemeMode),
+    [codeThemeMode],
+  );
 
   useEffect(() => {
     function syncPageFocus() {
@@ -419,20 +404,7 @@ export function PayloadCryptoLabPage() {
             }}
           >
             {result ? (
-              <CodeHighlighter
-                lang="json"
-                highlightProps={codeHighlightProps}
-                style={{ width: '100%' }}
-                styles={{
-                  code: {
-                    fontSize: 'var(--ant-font-size-sm)',
-                    lineHeight: 1.6,
-                  },
-                  root: {
-                    overflow: 'hidden',
-                  },
-                }}
-              >
+              <CodeHighlighter lang="json" {...codeHighlightProps}>
                 {result}
               </CodeHighlighter>
             ) : (
