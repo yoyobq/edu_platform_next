@@ -17,6 +17,7 @@ import {
 import { logout, useAuthSessionState } from '@/features/auth';
 
 import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
+import { BrandLockup } from '@/shared/ui/brand';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
 import { EntrySidecar } from './entry-sidecar';
@@ -171,10 +172,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               <div className="rounded-surface border border-border bg-bg-container px-6 py-4 shadow-card">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                   <div className="min-w-0">
-                    <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                      aigc-friendly-frontend
-                    </Typography.Title>
-                    <Typography.Text type="secondary">主内容优先，入口协作增强。</Typography.Text>
+                    <BrandLockup variant="header" />
                   </div>
 
                   <div className="min-w-0 flex-1">

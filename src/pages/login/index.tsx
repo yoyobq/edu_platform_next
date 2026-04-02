@@ -7,6 +7,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import { login, LoginForm, useAuthSessionState } from '@/features/auth';
 
 import { resolveLoginRedirectTarget } from '@/shared/navigation';
+import { BrandLockup } from '@/shared/ui/brand';
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -27,12 +28,7 @@ export function LoginPage() {
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
         <Flex gap={32} className="w-full" wrap>
           <Flex vertical gap={24} className="min-w-[280px] flex-1">
-            <Typography.Text
-              type="secondary"
-              style={{ fontSize: 'var(--ant-font-size-sm)', letterSpacing: '0.04em' }}
-            >
-              aigc-friendly-frontend
-            </Typography.Text>
+            <BrandLockup variant="public-entry" />
             <div>
               <h1
                 style={{
