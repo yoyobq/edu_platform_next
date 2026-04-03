@@ -1,0 +1,116 @@
+<!-- docs/project-convention/identity-access-session.md -->
+
+# Identity Access Session
+
+本文件记录当前已稳定的身份、授权摘要与前端会话契约。
+
+## 当前会话入口
+
+- `login`：建立会话，只返回 `accessToken` 与 `refreshToken`
+- `refresh`：续期会话，只返回新的 `accessToken` 与 `refreshToken`
+- `me`：返回前端当前会话权威快照
+- `logout`：前端当前按纯本地退出处理，直接清本地会话
+
+当前前端统一按两步处理登录态：
+
+1. `login / refresh` 只负责拿 token
+2. `me` 负责重建前端消费的当前会话快照
+
+页面刷新后的恢复链路为：
+
+1. 先使用当前 `accessToken` 调 `me`
+2. 若失败，再用 `refreshToken` 调 `refresh`
+3. `refresh` 成功后，再次调用 `me`
+4. 任一步失败，前端强制登出并清空本地会话
+
+## 当前会话快照
+
+当前前端会话快照收敛为：
+
+- `accountId`
+- `account`
+- `userInfo`
+- `identity`
+- `accessToken`
+- `refreshToken`
+- `slotGroup`
+
+字段边界如下：
+
+- `account`：认证主体与账户侧信息
+- `userInfo`：公共资料与 `accessGroup`
+- `identity`：当前主身份的详情补充；仅在存在独立身份实体时返回
+- `slotGroup`：来自 access token 的增量授权摘要
+
+## 当前身份与授权摘要
+
+当前主身份只收敛为：
+
+- `ADMIN`
+- `GUEST`
+- `STAFF`
+- `STUDENT`
+
+当前 `accessGroup` 只消费上述四项。
+
+当前 `identity` 只收敛为：
+
+- `StaffType`
+- `StudentType`
+
+当前前端规则为：
+
+- `ADMIN / GUEST` 不要求存在独立 `identity`
+- `STAFF / STUDENT` 的业务主视角由 `identity` 详情补充
+- 前端不得因实体缺失自行推断 `GUEST`
+- `GUEST` 只能由后端显式给出
+
+## 当前摘要字段语义
+
+- `accessGroup`：全局入口授权输入，回答“能进哪里”
+- `slotGroup`：全局增量授权摘要，回答“还能多做什么”
+- `identityHint`：后端账户侧提示字段，不是前端权威身份输入
+- `activeRole`：仅允许作为前端本地展示偏好，不参与授权
+
+当前明确不进入 `accessGroup / slotGroup` 的包括：
+
+- `teacher`
+
+课程、班级等资源访问继续走业务关系判定，不并入当前全局会话快照。
+
+## 当前 JWT 使用边界
+
+当前 access token 基线：
+
+- 必含 `sub`
+- 必含 `username`
+- 必含 `email`
+- 必含 `accessGroup`
+- 可选 `slotGroup`
+- 必含 `type: 'access'`
+
+当前 refresh token 基线：
+
+- 必含 `sub`
+- 必含 `type: 'refresh'`
+- 必含 `tokenVersion`
+
+当前前端规则为：
+
+- access token 只承载粗粒度鉴权输入，不承载 `identity`
+- 前端可以直接消费 `accessGroup / slotGroup`
+- 前端不得根据 token 自行推断正式 `identity`
+
+## 当前前端异常处理
+
+- token 过期或无效：强制登出
+- `me` 失败：先尝试 `refresh -> me`
+- `refresh` 成功后 `me` 再失败：强制登出
+- 关键 claim 缺失：强制登出
+- 后端未明确给出 `GUEST` 时，前端不得进入 `GUEST` 流程
+
+## 当前前端落地状态
+
+- 认证会话已按 `login / refresh / me / logout` 收敛
+- 本地会话存储已切到 `auth.session.v2`
+- 当前 E2E 已覆盖登录、恢复、刷新、强制登出与基础路由正反路径

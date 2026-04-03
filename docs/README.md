@@ -29,6 +29,7 @@ This directory contains project documentation.
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想统一表单值、URL search params、筛选条件的空值与 normalize 语义时，先看 [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
 - 想统一业务入口 path、`redirect`、筛选 query 等 URL 语义时，先看 [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
+- 想确认当前身份、授权摘要与前端会话恢复边界时，先看 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - 想明确“事件时间 / 业务日期 / 业务日期时间”的展示与存储语义时，先看 [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - 想按测试目标区分 `core` 和 `smoke` E2E，或想跑单文件时，先看 [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
 - 想了解测试约定、Playwright E2E 入口或 `env` 配置时，先看 [testing.md](./testing.md)
@@ -71,6 +72,7 @@ This directory contains project documentation.
 ## Project Convention Docs
 
 - [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
+- [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
@@ -116,6 +118,7 @@ docs/
   project-convention/
     e2e-test-groups.md
     form-input-normalization.md
+    identity-access-session.md
     route-url-semantics.md
     time-display-semantics.md
   human/

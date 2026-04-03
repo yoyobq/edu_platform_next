@@ -2,7 +2,7 @@
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { SearchOutlined } from '@ant-design/icons';
-import { Button, ConfigProvider, Flex, Layout, Menu, Tooltip, Typography } from 'antd';
+import { Button, ConfigProvider, Flex, Layout, Menu, Popconfirm, Tooltip, Typography } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 
@@ -205,15 +205,19 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                         <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
                           {authenticatedSnapshot.displayName}
                         </div>
-                        <Button
-                          type="default"
-                          onClick={() => {
+                        <Popconfirm
+                          cancelText="不累"
+                          description="且将公事付清风，他日相逢再续行"
+                          okText="江湖再见"
+                          placement="bottomRight"
+                          title="结束会话"
+                          onConfirm={() => {
                             logout();
                             navigate('/login', { replace: true });
                           }}
                         >
-                          退出
-                        </Button>
+                          <Button type="default">退出</Button>
+                        </Popconfirm>
                       </>
                     ) : (
                       <Button type="primary" onClick={() => navigate('/login')}>

@@ -102,6 +102,25 @@ test('本地 access token 失效时，应走 refresh 后恢复会话', async ({ 
   await expect(layoutBanner(page).getByText('身份：admin')).toBeVisible();
 });
 
+test('refresh 成功后 me 再失败时，应强制回到登录页', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: createAdminSession({ displayName: 'stale-admin' }),
+    meErrorSequence: ['TOKEN_INVALID', 'TOKEN_INVALID_AFTER_REFRESH'],
+    refreshSession: createAdminSession({ displayName: 'refreshed-admin' }),
+  });
+  await seedAuthSession(page, createAdminSession({ displayName: 'stale-admin' }));
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('当前会话已失效，请重新登录。');
+  await expect(
+    page.evaluate(() => window.localStorage.getItem('aigc-friendly-frontend.auth.session.v2')),
+  ).resolves.toBeNull();
+});
+
 test('本地会话失效且 refresh 失败时，应强制回到登录页', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
@@ -134,6 +153,8 @@ test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ pa
   await expect(layoutBanner(page).getByText('admin-user')).toBeVisible();
 
   await page.getByRole('button', { name: /退\s*出/ }).click();
+  await expect(page.getByText('退出当前会话？')).toBeVisible();
+  await page.getByRole('button', { name: '退出' }).click();
 
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
