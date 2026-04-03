@@ -114,7 +114,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 
   const search = location.search;
-  const currentRole = authSession.snapshot?.role?.toLowerCase() || 'guest';
+  const currentIdentity = authSession.snapshot?.primaryAccessGroup.toLowerCase() || 'guest';
   const menuItems: ItemType[] = [
     {
       key: getBaseURL('/', search),
@@ -198,7 +198,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                       环境：{currentAppEnv}
                     </div>
                     <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
-                      角色：{currentRole}
+                      身份：{currentIdentity}
                     </div>
                     {authSession.status === 'authenticated' && authenticatedSnapshot ? (
                       <>
@@ -208,7 +208,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                         <Button
                           type="default"
                           onClick={() => {
-                            logout();
+                            void logout();
                             navigate('/login', { replace: true });
                           }}
                         >

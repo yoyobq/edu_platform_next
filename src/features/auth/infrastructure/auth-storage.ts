@@ -4,7 +4,7 @@ import type { AuthStoragePort } from '../application/ports';
 
 import { deserializeSessionSnapshot, serializeSessionSnapshot } from './mapper';
 
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v1';
+const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';

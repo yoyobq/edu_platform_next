@@ -10,7 +10,7 @@ import {
   matchLocalEntryCards,
 } from '@/app/lib';
 
-import { useAuthSessionState } from '@/features/auth';
+import { hasAdminAccess, useAuthSessionState } from '@/features/auth';
 
 import {
   resolveThirdWorkspaceDemoTrigger,
@@ -29,7 +29,7 @@ import {
 } from './collaboration-session';
 
 const MOCK_COLLABORATION_AVAILABILITY = 'unavailable' as const;
-type AppRole = 'guest' | 'admin';
+type AppAccessLevel = 'guest' | 'admin';
 
 type CollaborationSessionAction =
   | { type: 'reset' }
@@ -81,8 +81,8 @@ function buildSystemReply(mode: EntryMode, systemReply?: string): string {
   return '我先记下这个目标。下一步会结合上下文帮你整理页面、信息或草稿。';
 }
 
-function getCurrentRoleFromSession(role: string | undefined): AppRole {
-  return role === 'ADMIN' ? 'admin' : 'guest';
+function getCurrentAccessLevelFromSession(isAdmin: boolean): AppAccessLevel {
+  return isAdmin ? 'admin' : 'guest';
 }
 
 function getCurrentAvailability(search: string): CollaborationAvailability {
@@ -202,7 +202,7 @@ export function CollaborationSessionProvider({
               trimmedMessage,
               getAvailableLocalEntryCards({
                 appEnv: currentAppEnv,
-                role: getCurrentRoleFromSession(authSession.snapshot?.role),
+                accessLevel: getCurrentAccessLevelFromSession(hasAdminAccess(authSession.snapshot)),
                 search: location.search,
               }),
             )
@@ -222,7 +222,7 @@ export function CollaborationSessionProvider({
       },
     }),
     [
-      authSession.snapshot?.role,
+      authSession.snapshot,
       currentAppEnv,
       currentAvailability,
       location.pathname,

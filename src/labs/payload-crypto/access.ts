@@ -1,5 +1,5 @@
 export const payloadCryptoLabAccess = {
+  allowedAccessLevels: ['admin'],
   env: ['dev', 'prod'],
-  roles: ['admin'],
   menu: false,
 } as const;

@@ -46,7 +46,7 @@ export function DemoLabPage() {
             <Tag color="blue">负责人：{demoLabMeta.owner}</Tag>
             <Tag color="purple">复核时间：{demoLabMeta.reviewAt}</Tag>
             <Tag color="green">环境：{demoLabAccess.env.join(', ')}</Tag>
-            <Tag color="gold">角色：{demoLabAccess.roles.join(', ')}</Tag>
+            <Tag color="gold">访问级别：{demoLabAccess.allowedAccessLevels.join(', ')}</Tag>
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>

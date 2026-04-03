@@ -177,9 +177,9 @@ export function HomePage() {
   const { isPending, module: statusOverviewModule, retry } = useApiHealthStatusHomeModule();
   const viewModel = buildHomePageViewModel({
     session: {
-      accessGroup: authSession.snapshot?.accessGroup,
+      accessGroup: authSession.snapshot?.userInfo.accessGroup,
       displayName: authSession.snapshot?.displayName,
-      role: authSession.snapshot?.role,
+      primaryAccessGroup: authSession.snapshot?.primaryAccessGroup,
     },
     statusOverviewModule,
   });

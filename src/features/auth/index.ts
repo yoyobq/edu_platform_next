@@ -11,11 +11,18 @@ export {
   useAuthSessionState,
 } from './application/session-store';
 export type {
-  AuthIdentityType,
+  AuthAccessGroup,
   AuthLoginInput,
+  AuthSessionIdentity,
   AuthSessionSnapshot,
   AuthSessionState,
+  AuthSessionUserInfo,
   AuthStatus,
+} from './application/types';
+export {
+  getSessionAccessGroup,
+  hasAdminAccess,
+  resolvePrimaryAccessGroup,
 } from './application/types';
 import type { AuthLoginInput } from './application/types';
 import { authApi } from './infrastructure/auth-api';

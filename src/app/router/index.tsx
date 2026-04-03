@@ -22,7 +22,12 @@ import {
   ResetPasswordIntentPage,
   VerifyEmailIntentPage,
 } from '@/pages/verification-intent';
-import { getAuthSessionSnapshot, restoreSession, useAuthSessionState } from '@/features/auth';
+import {
+  getAuthSessionSnapshot,
+  hasAdminAccess,
+  restoreSession,
+  useAuthSessionState,
+} from '@/features/auth';
 
 import { resolveLoginRedirectTarget, sanitizeRedirectTarget } from '@/shared/navigation';
 
@@ -31,10 +36,10 @@ import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 type AppEnv = 'dev' | 'test' | 'prod';
-type AppRole = 'guest' | 'admin';
+type AppAccessLevel = 'guest' | 'admin';
 type LabAccess = {
+  allowedAccessLevels: readonly AppAccessLevel[];
   env: readonly ('dev' | 'prod')[];
-  roles: readonly AppRole[];
 };
 
 function getCurrentAppEnv(): AppEnv {
@@ -49,22 +54,19 @@ function getCurrentAppEnv(): AppEnv {
 
 const currentAppEnv = getCurrentAppEnv();
 
-function getCurrentSessionRole(): AppRole {
+function getCurrentSessionAccessLevel(): AppAccessLevel {
   const snapshot = getAuthSessionSnapshot();
 
-  if (!snapshot) {
-    return 'guest';
-  }
-
-  return snapshot.role === 'ADMIN' || snapshot.accessGroup.includes('ADMIN') ? 'admin' : 'guest';
+  return hasAdminAccess(snapshot) ? 'admin' : 'guest';
 }
 
 function hasLabAccess(access: LabAccess): boolean {
-  const role = getCurrentSessionRole();
+  const accessLevel = getCurrentSessionAccessLevel();
   const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
 
   return (
-    access.env.includes(effectiveLabEnv) && access.roles.some((allowedRole) => allowedRole === role)
+    access.env.includes(effectiveLabEnv) &&
+    access.allowedAccessLevels.some((allowedAccessLevel) => allowedAccessLevel === accessLevel)
   );
 }
 
@@ -75,7 +77,7 @@ function hasLabEnvExposure(access: LabAccess): boolean {
 }
 
 function hasGuestLabAccess(access: LabAccess): boolean {
-  return access.roles.includes('guest');
+  return access.allowedAccessLevels.includes('guest');
 }
 
 function getRequestTarget(request: Request) {
@@ -161,8 +163,7 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
 
   // 硬编码验证：只有 (accountId 是 1 或者 2) 且 (accessGroup 里有 ADMIN 项) 的用户才可以进入
   const hasSpecificAccess =
-    (snapshot.accountId === 1 || snapshot.accountId === 2) &&
-    snapshot.accessGroup.includes('ADMIN');
+    (snapshot.accountId === 1 || snapshot.accountId === 2) && hasAdminAccess(snapshot);
 
   if (!hasSpecificAccess) {
     throw new Response('Not Found', { status: 404 });

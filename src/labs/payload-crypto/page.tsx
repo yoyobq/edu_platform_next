@@ -274,7 +274,9 @@ export function PayloadCryptoLabPage() {
             <Tag color="blue">负责人：{payloadCryptoLabMeta.owner}</Tag>
             <Tag color="purple">复核时间：{payloadCryptoLabMeta.reviewAt}</Tag>
             <Tag color="green">环境：{payloadCryptoLabAccess.env.join(', ')}</Tag>
-            <Tag color="gold">角色：{payloadCryptoLabAccess.roles.join(', ')}</Tag>
+            <Tag color="gold">
+              访问级别：{payloadCryptoLabAccess.allowedAccessLevels.join(', ')}
+            </Tag>
           </div>
         </div>
       </Card>

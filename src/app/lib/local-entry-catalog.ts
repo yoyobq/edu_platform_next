@@ -5,15 +5,15 @@ import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 import type { EntryCard } from './entry-card';
 
 type AppEnv = 'dev' | 'test' | 'prod';
-type AppRole = 'guest' | 'admin';
+type AppAccessLevel = 'guest' | 'admin';
 
 type LocalEntryCatalogItem = EntryCard & {
   keywords: string[];
 };
 
 type LocalEntryContext = {
+  accessLevel: AppAccessLevel;
   appEnv: AppEnv;
-  role: AppRole;
   search: string;
 };
 

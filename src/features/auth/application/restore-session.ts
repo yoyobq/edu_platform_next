@@ -31,8 +31,18 @@ export async function restoreSession(ports: AuthPorts): Promise<AuthSessionSnaps
       return null;
     }
 
-    setAuthenticatedSession(snapshot);
-    return snapshot;
+    try {
+      const restoredSnapshot = await ports.api.restore(snapshot);
+
+      ports.storage.writeSession(restoredSnapshot);
+      setAuthenticatedSession(restoredSnapshot);
+
+      return restoredSnapshot;
+    } catch {
+      ports.storage.clearSession();
+      setUnauthenticatedSession('当前会话已失效，请重新登录。');
+      return null;
+    }
   })().finally(() => {
     restorePromise = null;
   });

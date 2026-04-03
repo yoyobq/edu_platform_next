@@ -3,7 +3,7 @@
 import type { AuthApiPort } from '../application/ports';
 import type { AuthLoginInput, AuthSessionSnapshot } from '../application/types';
 
-import { mapLoginResultToSessionSnapshot } from './mapper';
+import { mapSessionResultToSessionSnapshot } from './mapper';
 
 type GraphQLResponse<TData> = {
   data?: TData;
@@ -12,31 +12,139 @@ type GraphQLResponse<TData> = {
   }>;
 };
 
-type LoginMutationResponse = {
-  login: {
-    accessToken: string;
-    accountId: number;
-    refreshToken: string;
-    role: AuthSessionSnapshot['role'];
-    userInfo: {
-      accessGroup: readonly AuthSessionSnapshot['role'][];
-      avatarUrl: string | null;
-      nickname: string | null;
-    } | null;
+type SessionTokensDTO = {
+  accessToken: string;
+  refreshToken: string;
+};
+
+type SessionQueryDTO = {
+  account: {
+    id: number;
+    identityHint: string | null;
+    loginEmail: string | null;
+    loginName: string | null;
+    status: string;
   };
+  accountId: number;
+  identity:
+    | {
+        __typename: 'StaffType';
+        accountId: number;
+        createdAt: string;
+        departmentId: string | null;
+        employmentStatus: string;
+        id: string;
+        jobTitle: string | null;
+        name: string;
+        remark: string | null;
+        updatedAt: string;
+      }
+    | {
+        __typename: 'StudentType';
+        accountId: number;
+        classId: number | null;
+        createdAt: string;
+        id: string;
+        name: string;
+        remarks: string | null;
+        studentDepartmentId: string;
+        studentStatus: string;
+        updatedAt: string;
+      }
+    | null;
+  userInfo: {
+    accessGroup: readonly string[];
+    avatarUrl: string | null;
+    email: string | null;
+    nickname: string | null;
+  };
+};
+
+type LoginMutationResponse = {
+  login: SessionTokensDTO;
+};
+
+type LogoutMutationResponse = {
+  logout: {
+    success: boolean;
+  };
+};
+
+type MeQueryResponse = {
+  me: SessionQueryDTO;
+};
+
+type RefreshMutationResponse = {
+  refresh: SessionTokensDTO;
 };
 
 const LOGIN_MUTATION = `
   mutation Login($input: AuthLoginInput!) {
     login(input: $input) {
       accessToken
-      accountId
       refreshToken
-      role
+    }
+  }
+`;
+
+const REFRESH_MUTATION = `
+  mutation Refresh($input: AuthRefreshInput!) {
+    refresh(input: $input) {
+      accessToken
+      refreshToken
+    }
+  }
+`;
+
+const LOGOUT_MUTATION = `
+  mutation Logout {
+    logout {
+      success
+    }
+  }
+`;
+
+const ME_QUERY = `
+  query Me {
+    me {
+      accountId
+      account {
+        id
+        identityHint
+        loginEmail
+        loginName
+        status
+      }
       userInfo {
         accessGroup
         avatarUrl
+        email
         nickname
+      }
+      identity {
+        __typename
+        ... on StaffType {
+          accountId
+          createdAt
+          departmentId
+          employmentStatus
+          id
+          jobTitle
+          name
+          remark
+          updatedAt
+        }
+        ... on StudentType {
+          accountId
+          classId
+          createdAt
+          studentDepartmentId: departmentId
+          id
+          name
+          remarks
+          studentStatus
+          updatedAt
+        }
       }
     }
   }
@@ -55,13 +163,22 @@ function getGraphQLEndpoint(): string {
 async function requestGraphQL<TData, TVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    accessToken?: string;
+  },
 ): Promise<TData> {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'Content-Type': 'application/json',
+  };
+
+  if (options?.accessToken) {
+    headers.Authorization = `Bearer ${options.accessToken}`;
+  }
+
   const response = await fetch(getGraphQLEndpoint(), {
     method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       query,
       variables,
@@ -87,6 +204,22 @@ async function requestGraphQL<TData, TVariables>(
   return payload.data;
 }
 
+async function fetchSession(accessToken: string) {
+  const response = await requestGraphQL<MeQueryResponse, Record<string, never>>(
+    ME_QUERY,
+    {},
+    { accessToken },
+  );
+
+  return response.me;
+}
+
+async function hydrateSession(tokens: SessionTokensDTO): Promise<AuthSessionSnapshot> {
+  const session = await fetchSession(tokens.accessToken);
+
+  return mapSessionResultToSessionSnapshot(tokens, session);
+}
+
 export const authApi: AuthApiPort = {
   async login(input: AuthLoginInput) {
     const response = await requestGraphQL<LoginMutationResponse, { input: AuthLoginInput }>(
@@ -94,6 +227,33 @@ export const authApi: AuthApiPort = {
       { input },
     );
 
-    return mapLoginResultToSessionSnapshot(response.login);
+    return hydrateSession(response.login);
+  },
+  async logout(session) {
+    if (!session?.accessToken) {
+      return;
+    }
+
+    await requestGraphQL<LogoutMutationResponse, Record<string, never>>(
+      LOGOUT_MUTATION,
+      {},
+      { accessToken: session.accessToken },
+    );
+  },
+  async restore(session) {
+    try {
+      return await hydrateSession(session);
+    } catch {
+      const refreshResponse = await requestGraphQL<
+        RefreshMutationResponse,
+        { input: { refreshToken: string } }
+      >(REFRESH_MUTATION, {
+        input: {
+          refreshToken: session.refreshToken,
+        },
+      });
+
+      return hydrateSession(refreshResponse.refresh);
+    }
   },
 };

@@ -5,7 +5,7 @@ export const OPEN_ENTRY_SIDECAR_ACTION_ID = 'workbench-home.open-entry-sidecar';
 type HomePageSessionContext = {
   accessGroup?: readonly string[] | null;
   displayName?: string | null;
-  role?: string | null;
+  primaryAccessGroup?: string | null;
 };
 
 type WorkbenchTemplateKey = 'admin-default' | 'member-default' | 'minimal-default';
@@ -17,13 +17,13 @@ export type HomePageViewModel = {
   modules: readonly HomeModuleContract[];
 };
 
-const ADMIN_IDENTITIES = ['ADMIN', 'MANAGER', 'STAFF', 'COACH'] as const;
-const MEMBER_IDENTITIES = ['CUSTOMER', 'LEARNER', 'STUDENT', 'REGISTRANT'] as const;
+const ADMIN_IDENTITIES = ['ADMIN'] as const;
+const MEMBER_IDENTITIES = ['STAFF', 'STUDENT'] as const;
 
 function normalizeIdentities(session: HomePageSessionContext) {
   return Array.from(
     new Set(
-      [session.role, ...(session.accessGroup ?? [])]
+      [session.primaryAccessGroup, ...(session.accessGroup ?? [])]
         .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
         .map((value) => value.toUpperCase()),
     ),
@@ -72,7 +72,7 @@ function createPrimaryEntryModule(
   session: HomePageSessionContext,
   templateKey: WorkbenchTemplateKey,
 ): HomeModuleContract {
-  const roleLabel = session.role?.toUpperCase() ?? 'GUEST';
+  const primaryIdentityLabel = session.primaryAccessGroup?.toUpperCase() ?? 'GUEST';
   const accessGroupLabel =
     session.accessGroup && session.accessGroup.length > 0
       ? session.accessGroup.join(', ')
@@ -94,8 +94,8 @@ function createPrimaryEntryModule(
         headline,
         items: [
           {
-            label: '当前角色',
-            value: roleLabel,
+            label: '当前主身份',
+            value: primaryIdentityLabel,
           },
           {
             label: '访问组',

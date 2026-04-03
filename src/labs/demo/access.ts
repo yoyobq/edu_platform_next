@@ -1,7 +1,7 @@
 // src/labs/demo/access.ts
 
 export const demoLabAccess = {
+  allowedAccessLevels: ['admin'],
   env: ['dev', 'prod'],
-  roles: ['admin'],
   menu: false,
 } as const;
