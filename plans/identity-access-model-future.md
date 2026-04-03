@@ -75,7 +75,7 @@
 
 在当前基线基础上，建议后续按以下顺序继续推进：
 
-1. 先收束前端对 `identityHint / accessGroup / staff/student` 的最小理解
+1. 先收束前端对 `identity / identityHint / accessGroup / staff/student` 的最小理解
 2. 再讨论前端最小路由权限模型
 3. 最后才进入更细的页面级、动作级权限体系
 
@@ -83,7 +83,7 @@
 
 后续若出现下列情况，应把内容从 `plans/` 迁入 `docs/`：
 
-- `accessGroup`、`slotGroup`、`identityHint` 命名与语义稳定
+- `identity`、`accessGroup`、`slotGroup`、`identityHint` 命名与语义稳定
 - Token 错误码与会话异常处理稳定
 - 路由静态配置字段稳定
 - `base_identity_binding` 与 `slotGroup` 产出链路稳定

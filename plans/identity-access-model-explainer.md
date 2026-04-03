@@ -24,16 +24,26 @@
 
 当前模型就是为了解开这几层。
 
-## 为什么拆成 identityHint、accessGroup、slotGroup、activeRole
+## 为什么拆成 identity、identityHint、accessGroup、slotGroup、activeRole
+
+### identity
+
+`identity` 用来表达：
+
+- 后端当前认定的主身份落点
+- 前端应直接消费的权威身份快照
+- 它应由后端权威接口返回，例如登录返回、refresh 返回或 `/me` 返回
+
+它不是展示偏好，也不应由前端自行推断，更不要求进入 JWT。
 
 ### identityHint
 
 `identityHint` 用来表达：
 
-- 默认从哪个身份分支理解当前账户
-- 默认沿哪条身份链路落点
+- 后端账户侧默认从哪个身份分支理解当前账户
+- 后端账户侧默认沿哪条身份链路落点
 
-它不是权限集合。
+它不是前端权威身份输入，也不是权限集合。
 
 ### accessGroup
 
@@ -86,7 +96,8 @@
 
 因此当前规则要求：
 
-- 若 `identityHint === 'GUEST'`，前端直接按 `GUEST` 处理
+- 若后端权威接口返回的 `identity` 明确为 `GUEST`，前端直接按 `GUEST` 处理
+- 若暂未拿到 `staff/student` 实体，也不能仅凭实体缺失就推断为 `GUEST`
 - 路由与页面判断消费的是归一化后的身份快照
 
 这里的核心不是“前端更强”，而是“后端事实优先于前端摘要”。
@@ -157,11 +168,12 @@
 - 全局入口授权使用粗粒度 RBAC
 - 细粒度功能增量使用 capability / permission 思路
 - 课程、班级等资源访问使用 relationship-based authorization
+- 当前主身份由后端权威接口返回的 `identity` 提供
 - 默认身份提示由 `identityHint` 提供，且其来源与更新由后端负责
 
 同时：
 
-- `STAFF/STUDENT` 的业务主视角由 `accessGroup` 直接决定
+- `STAFF/STUDENT` 的业务主视角由后端权威接口返回的 `identity` 直接决定
 - 纯 `ADMIN` 用户的默认工作台在前端布局与模块组织上复用 `STAFF` 视角，但不表示身份等同于 `STAFF`
 - 若仍保留额外前端展示偏好，则由本地 `activeRole` 负责 `ADMIN` 与业务身份之间的首页或工作台组织切换
 
@@ -170,5 +182,6 @@
 - `accessGroup` 管“能进哪里”
 - `slotGroup` 管“还能多做什么”
 - 业务关系管“对哪门课、哪个班、哪类资源能做什么”
-- `identityHint` 管“当前默认按哪条身份链路理解用户”
+- `identity` 管“当前后端认定用户应落在哪个主身份面”，且来源于后端权威接口返回
+- `identityHint` 管“后端账户侧默认按哪条身份链路理解用户”
 - `activeRole` 管“当前工作台按哪种方式组织”

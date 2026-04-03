@@ -11,7 +11,8 @@
 
 - `account` 是认证主体
 - `userInfo` 是账户下的公共资料层
-- `identityHint` 负责默认身份提示
+- `identityHint` 是后端账户侧身份提示字段
+- `identity` 是由后端权威接口返回、供前端消费的身份快照
 - `staff` / `student` 是 `userInfo` 之下的业务实体分支
 - `accessGroup` 表达当前有效的全局身份集合
 - `slotGroup` 表达当前有效的全局增量授权摘要
@@ -33,7 +34,8 @@ account
 
 - `account` 负责登录、凭证、账户状态等认证层语义
 - `userInfo` 负责昵称、头像、邮箱等公共资料
-- `identityHint` 指示当前账户默认沿哪条身份链路理解
+- `identityHint` 只表示后端账户侧默认身份提示
+- `identity` 才是前端应消费的权威身份快照，其来源是后端权威接口返回，例如登录返回、refresh 返回或 `/me` 返回
 - 具体业务实体落到 `staff` 或 `student`
 
 前端当前应坚持两条原则：
@@ -47,6 +49,7 @@ account
 
 - `account`
 - `userInfo`
+- `identity`
 - `staff` 或 `student` 相关数据
 
 若 `staff/student` 链路暂未补齐，仍允许登录，但前端不能把这类用户当成普通完整身份用户继续放行，而应进入特殊处理分支。当前可接受的特殊处理包括：
@@ -55,7 +58,7 @@ account
 - 补充信息
 - 受控兜底流程
 
-具体交互仍待后续再定。
+这类受控流程不应建立在“前端自行判断身份未完成”之上，而应由后端显式返回正式身份结果，例如 `GUEST`。
 
 ## Schema 与 Token 基线
 
@@ -69,6 +72,7 @@ account
 
 这说明后端已经在区分：
 
+- 权威身份返回
 - 默认身份提示
 - 全局身份集合
 - 具体身份实体
@@ -94,19 +98,24 @@ account
 
 前端当前应按下面方式理解：
 
+- `identity` 属于当前已认证会话的必需输入
 - `accessGroup` 是前端权限判断最直接的来源
 - `slotGroup` 是前端增量授权判断的直接来源
 - `sub / username / email` 用于基础会话与展示
 - refresh token 不参与前端权限建模
-- `identityHint` 的来源与更新由后端负责
+- 当前 JWT 不要求承载 `identity`
+- 当前 JWT 不应假定包含 `identityHint`
+- `identityHint` 的来源与更新由后端负责，但它属于后端账户字段，不等于前端权威身份输入
+- 若前端需要消费当前主身份，应读取后端权威接口返回的 `identity`，例如登录返回、refresh 返回或 `/me` 返回，而不是假定从 JWT 推导
 - 前端可在本地维护 `activeRole`，但它只用于工作台组织方式
 - `activeRole` 不参与授权判断，也不回写后端身份事实
+- 若后端权威接口返回缺失 `identity`，应按认证有效性异常处理，而不是进入业务兜底流程
 - `accessGroup` 属于当前会话必需字段；若缺失，应按认证有效性异常处理
 - `slotGroup` 字段为非必填；若 JWT 中未出现 `slotGroup`，或其值为空数组，前端只按基础身份能力理解，不做额外 slot 增权
 
-## Token 异常处理基线
+## 认证与身份输入异常处理基线
 
-当前前端还应补充一组生产可用的 token 异常处理兜底规则：
+当前前端还应补充一组生产可用的认证与身份输入异常处理兜底规则：
 
 - Token 过期：清除会话并跳转登录
 - 认证有效性异常：强制登出
@@ -118,11 +127,12 @@ account
 - 避免把异常 token 误降级成仍可继续使用的会话
 - 避免异常 token 状态在前端停留成不确定中间态
 
-### 1. 认证有效性异常
+### 1. 认证有效性或身份输入异常
 
 - 签名校验失败
 - token 结构不合法
 - 关键 claim 缺失，包括 `accessGroup`
+- 后端权威接口返回缺失 `identity`
 - 无法通过后端校验
 
 以上情况统一强制登出，不进入 `GUEST` 流程。
@@ -133,12 +143,12 @@ account
 - token 无效可被统一识别
 - 关键 claim 缺失优先并入 token 无效，或由后端单独提供稳定错误码
 
-前端的职责是根据后端错误码执行固定动作，例如清除会话、跳转登录或强制登出，而不是自行判断某个 token 是否只是“兼容问题”。
+前端的职责是根据后端错误码执行固定动作，例如清除会话、跳转登录或强制登出，而不是自行判断某个 token、返回结构或身份输入异常是否只是“兼容问题”。
 
 ### 2. 已认证但退避为 `GUEST`
 
 - 仅当后端明确返回已认证且身份为 `GUEST`
-- 例如 `identityHint === 'GUEST'`
+- 例如后端权威接口返回的 `identity` 明确给出 `GUEST`
 
 只有这类情况，前端才进入 `GUEST` 兜底流程。
 
@@ -247,13 +257,15 @@ account
 
 当前 `GUEST` 的认定按下面优先级处理：
 
-1. 若 `identityHint === 'GUEST'`，直接按 `GUEST` 处理
-2. 即使 `accessGroup` 内容更丰富，只要 `identityHint === 'GUEST'`，前端仍优先把该用户视为 `GUEST`
-3. 若 `staff` 与 `student` 实体都缺失，也自动推断为 `GUEST`
+1. 仅当后端权威接口返回明确给出 `GUEST` 身份时，前端才按 `GUEST` 处理
+2. 当前更适合以后端权威接口返回的 `identity` 作为最小实现锚点，而不是读取 `identityHint`
+3. 即使 `accessGroup` 内容更丰富，只要后端权威接口返回明确给出 `GUEST`，前端仍优先把该用户视为 `GUEST`
+4. 若 `staff` 与 `student` 实体都缺失，前端也不自动推断为 `GUEST`
 
 由此还应直接补一条前端归一化规则：
 
-- 当 `identityHint === 'GUEST'` 时，`accessGroup` 直接退避为 `['GUEST']`
+- 当后端权威接口返回的 `identity` 明确为 `GUEST` 时，`accessGroup` 直接退避为 `['GUEST']`
+- 若后端未明确返回 `identity`，前端按认证有效性异常处理并强制登出，而不是自行降级成 `GUEST`
 - 路由守卫与页面判断消费的是归一化后的身份快照，而不是未经收束的原始 token claim
 
 ### STAFF 与 STUDENT 的关系
@@ -266,9 +278,9 @@ account
 因此：
 
 - 不存在在 `STAFF` 与 `STUDENT` 之间自由切换默认主身份的问题
-- 用户当前业务主视角可直接由 `accessGroup` 中存在的那一项推出
-- 若 `accessGroup` 含 `STAFF`，业务主视角默认按 `STAFF` 理解
-- 若 `accessGroup` 含 `STUDENT`，业务主视角默认按 `STUDENT` 理解
+- 用户当前业务主视角应由后端权威接口返回的 `identity` 直接给出
+- 若 `identity` 明确为 `STAFF`，业务主视角默认按 `STAFF` 理解
+- 若 `identity` 明确为 `STUDENT`，业务主视角默认按 `STUDENT` 理解
 
 ## slot、teacher 与 activeRole
 
@@ -325,7 +337,8 @@ account
 当前应明确：
 
 - `accessGroup` 才是权限判断主依据
-- `identityHint` 负责默认身份提示
+- `identity` 负责当前主身份落点，且它由后端权威接口返回
+- `identityHint` 仍只属于后端账户侧提示字段
 - `activeRole` 只负责前端工作台组织方式
 - `activeRole` 只保留为前端本地展示偏好
 - 当前前端基线不依赖 `activeRole` 做授权判断
@@ -335,29 +348,31 @@ account
 
 当前第一阶段的权限分层建议为：
 
-- 路由守卫主要消费 `accessGroup`
+- 路由守卫先消费 `identity`，再消费 `accessGroup`
 - 模块、页面入口、菜单曝光与页面内部判断都可消费 `slotGroup`
 - 课程、班级、作业等资源级权限继续消费业务关系
 
 一句话说：
 
+- `identity` 管当前主身份落点，来源于后端权威接口返回
 - `accessGroup` 管授权入口
-- `identityHint` 管默认身份提示
+- `identityHint` 管后端账户侧默认身份提示
 - `activeRole` 管工作台组织方式
 - `slotGroup` 管全局增量授权
 - 业务关系管资源级访问
 
-## 前端会话最小集合
+## 前端最小鉴权输入
 
-登录后前端持久化的 session snapshot，当前更适合只保留最小必要信息，例如：
+当前文档只约束前端鉴权所需的最小输入，不预设前端必须如何持久化它们。
 
-- `accountId`
-- `identityHint`
+前端进行路由守卫与页面授权判断时，至少应拿到：
+
+- `identity`
 - `accessGroup`
-- 基础展示信息，例如昵称、头像
-- 必要的 token
+- `slotGroup`
+- 必要的认证态信息，例如 token 或其他可验证会话凭据
 
-而不应无差别把完整业务实体大对象长期塞进本地状态。
+而不应把完整业务实体大对象作为路由守卫的必需输入。
 
 ## 页面访问静态配置草案
 
@@ -428,7 +443,9 @@ account
 - 表示进入该路由或页面所需的最小 `accessGroup` 条件
 - 它只在 `authRequirement` 允许当前用户进入认证态页面后继续生效
 - 按“满足其一即可”解释
-- 当 `requiredAccessGroups` 为空时，表示该页面不要求额外的身份门槛；是否要求登录仍由 `authRequirement` 决定
+- 当前基线下，`requiredAccessGroups` 不应为空
+- 若出现空数组，应视为路由配置异常，而不是“默认放行”
+- 这类异常应按 fail-closed 处理，执行退避或拒绝访问，而不继续进入正常授权流程
 
 `slotGroups`
 
@@ -436,6 +453,8 @@ account
 - 没有则表示只靠 `accessGroup`
 - 有则表示页面入口、菜单曝光、首页模块或页面内部内容都可能继续受 `slotGroup` 影响
 - 这里使用的值，直接对应 JWT 中的 `slotGroup` 枚举值
+- 当 `slotGroups` 为空或未定义时，直接跳过 `slotGroup` 判定
+- 只有配置了非空 `slotGroups` 时，才进入 `slotGroupMatch`
 
 `slotGroupMatch`
 
@@ -488,7 +507,10 @@ account
 type RouteAccessConfig = {
   routeKey: string;
   authRequirement: 'required' | 'optional' | 'forbidden';
-  requiredAccessGroups: readonly ('ADMIN' | 'GUEST' | 'STAFF' | 'STUDENT')[];
+  requiredAccessGroups: readonly [
+    'ADMIN' | 'GUEST' | 'STAFF' | 'STUDENT',
+    ...('ADMIN' | 'GUEST' | 'STAFF' | 'STUDENT')[],
+  ];
   slotGroups?: readonly string[];
   slotGroupMatch?: 'any' | 'all';
   slotGroupScope?: 'page' | 'content';
@@ -511,10 +533,11 @@ type RouteAccessConfig = {
 
 1. 校验会话有效性
 2. 归一化身份快照
-3. 先过认证门槛，再过 `accessGroup` 门槛
-4. 再做 `slotGroup` 判定
-5. 最后做资源关系判定
-6. 根据回退策略执行回退
+3. 先过认证门槛，再确认 `identity` 已归一化到正确主身份面
+4. 再过 `accessGroup` 门槛
+5. 再做 `slotGroup` 判定
+6. 最后做资源关系判定
+7. 根据回退策略执行回退
 
 可用下面的伪代码理解：
 
@@ -525,14 +548,16 @@ function resolvePageAccess(session, routeConfig, resourceContext) {
   }
 
   const snapshot = normalizeIdentitySnapshot({
-    identityHint: session.identityHint,
+    identity: session.identity,
     accessGroup: session.accessGroup,
     slotGroup: session.slotGroup ?? [],
-    staff: session.staff,
-    student: session.student,
   });
 
   if (!matchAuthRequirement(snapshot, routeConfig.authRequirement)) {
+    return { allowed: false, action: routeConfig.fallbackBehavior };
+  }
+
+  if (routeConfig.requiredAccessGroups.length === 0) {
     return { allowed: false, action: routeConfig.fallbackBehavior };
   }
 
@@ -541,6 +566,7 @@ function resolvePageAccess(session, routeConfig, resourceContext) {
   }
 
   if (
+    (routeConfig.slotGroups?.length ?? 0) > 0 &&
     !matchSlotGroups(
       snapshot.slotGroup,
       routeConfig.slotGroups ?? [],
@@ -567,7 +593,9 @@ function resolvePageAccess(session, routeConfig, resourceContext) {
 
 - 会话有效性失败优先级最高，直接登出，不进入 `GUEST` 流程
 - 归一化后的身份快照才是路由守卫与页面判断的输入
-- `requiredAccessGroups` 按“满足其一即可”解释
+- `identity` 负责当前主身份面的归一化与判定，优先于 `accessGroup`
+- `requiredAccessGroups` 按“满足其一即可”解释，但当前基线下不允许为空；若为空，按配置异常 fail-closed 处理
+- `slotGroups` 为空或未定义时，直接跳过 `slotGroup` 判定
 - `slotGroup` 判定使用 `slotGroupMatch`
 - 资源关系判定永远晚于全局身份与 `slotGroup` 判定
 - 不满足条件时，统一按配置中的回退策略处理
