@@ -208,7 +208,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                         <Button
                           type="default"
                           onClick={() => {
-                            void logout();
+                            logout();
                             navigate('/login', { replace: true });
                           }}
                         >

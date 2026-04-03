@@ -64,12 +64,6 @@ type LoginMutationResponse = {
   login: SessionTokensDTO;
 };
 
-type LogoutMutationResponse = {
-  logout: {
-    success: boolean;
-  };
-};
-
 type MeQueryResponse = {
   me: SessionQueryDTO;
 };
@@ -92,14 +86,6 @@ const REFRESH_MUTATION = `
     refresh(input: $input) {
       accessToken
       refreshToken
-    }
-  }
-`;
-
-const LOGOUT_MUTATION = `
-  mutation Logout {
-    logout {
-      success
     }
   }
 `;
@@ -228,17 +214,6 @@ export const authApi: AuthApiPort = {
     );
 
     return hydrateSession(response.login);
-  },
-  async logout(session) {
-    if (!session?.accessToken) {
-      return;
-    }
-
-    await requestGraphQL<LogoutMutationResponse, Record<string, never>>(
-      LOGOUT_MUTATION,
-      {},
-      { accessToken: session.accessToken },
-    );
   },
   async restore(session) {
     try {
