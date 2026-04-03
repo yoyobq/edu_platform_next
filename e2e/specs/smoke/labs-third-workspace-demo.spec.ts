@@ -1,10 +1,16 @@
 import { routes } from '../../fixtures/routes';
-import { mockApiHealth, openEntrySidecar, seedAuthSession } from '../../helpers/app';
+import {
+  mockApiHealth,
+  mockAuthGraphQL,
+  openEntrySidecar,
+  seedAuthSession,
+} from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('labs 中的第三工作区 demo 应可把结果物跳到独立工作区', async ({ page }) => {
   await mockApiHealth(page);
-  await seedAuthSession(page, { role: 'ADMIN' });
+  await mockAuthGraphQL(page, { currentSession: { primaryAccessGroup: 'ADMIN' } });
+  await seedAuthSession(page, { primaryAccessGroup: 'ADMIN' });
   await page.goto(routes.labsDemo);
 
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
@@ -28,7 +34,8 @@ test('labs 中的第三工作区 demo 应可把结果物跳到独立工作区', 
 
 test('labs demo 的 sidecar 触发词仍可打开受控第三工作区 demo', async ({ page }) => {
   await mockApiHealth(page);
-  await seedAuthSession(page, { role: 'ADMIN' });
+  await mockAuthGraphQL(page, { currentSession: { primaryAccessGroup: 'ADMIN' } });
+  await seedAuthSession(page, { primaryAccessGroup: 'ADMIN' });
   await page.goto(`${routes.labsDemo}?availability=unavailable`);
 
   await openEntrySidecar(page);
@@ -51,7 +58,8 @@ test('labs demo 的 sidecar 触发词仍可打开受控第三工作区 demo', as
 
 test('从 labs demo 跳回首页时，不应继续携带第三工作区 demo query', async ({ page }) => {
   await mockApiHealth(page);
-  await seedAuthSession(page, { role: 'ADMIN' });
+  await mockAuthGraphQL(page, { currentSession: { primaryAccessGroup: 'ADMIN' } });
+  await seedAuthSession(page, { primaryAccessGroup: 'ADMIN' });
   await page.goto(routes.labsDemo);
 
   await page
