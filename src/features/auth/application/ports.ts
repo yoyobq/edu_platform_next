@@ -4,6 +4,7 @@ import type { AuthLoginInput, AuthSessionSnapshot } from './types';
 
 export type AuthApiPort = {
   login: (input: AuthLoginInput) => Promise<AuthSessionSnapshot>;
+  refresh: (input: { refreshToken: string }) => Promise<AuthSessionSnapshot>;
   restore: (
     session: Pick<AuthSessionSnapshot, 'accessToken' | 'refreshToken'>,
   ) => Promise<AuthSessionSnapshot>;

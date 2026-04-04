@@ -52,6 +52,7 @@ type SessionQueryDTO = {
         updatedAt: string;
       }
     | null;
+  needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: readonly string[];
     avatarUrl: string | null;
@@ -132,6 +133,7 @@ const ME_QUERY = `
           updatedAt
         }
       }
+      needsProfileCompletion
     }
   }
 `;
@@ -215,20 +217,23 @@ export const authApi: AuthApiPort = {
 
     return hydrateSession(response.login);
   },
+  async refresh(input: { refreshToken: string }) {
+    const response = await requestGraphQL<
+      RefreshMutationResponse,
+      { input: { refreshToken: string } }
+    >(REFRESH_MUTATION, {
+      input,
+    });
+
+    return hydrateSession(response.refresh);
+  },
   async restore(session) {
     try {
       return await hydrateSession(session);
     } catch {
-      const refreshResponse = await requestGraphQL<
-        RefreshMutationResponse,
-        { input: { refreshToken: string } }
-      >(REFRESH_MUTATION, {
-        input: {
-          refreshToken: session.refreshToken,
-        },
+      return this.refresh({
+        refreshToken: session.refreshToken,
       });
-
-      return hydrateSession(refreshResponse.refresh);
     }
   },
 };

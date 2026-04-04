@@ -22,6 +22,7 @@ import {
   ResetPasswordIntentPage,
   VerifyEmailIntentPage,
 } from '@/pages/verification-intent';
+import { WelcomePage } from '@/pages/welcome';
 import {
   getAuthSessionSnapshot,
   hasAdminAccess,
@@ -29,7 +30,12 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
-import { resolveLoginRedirectTarget, sanitizeRedirectTarget } from '@/shared/navigation';
+import {
+  buildWelcomeRedirectTarget,
+  resolveAuthenticatedRedirectTarget,
+  resolveWelcomeRedirectTarget,
+  sanitizeRedirectTarget,
+} from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
@@ -96,28 +102,70 @@ function buildLoginRedirectURL(request: Request) {
   return `/login?redirect=${encodeURIComponent(redirectTarget)}`;
 }
 
+function buildWelcomeRedirectURL(request: Request) {
+  const { redirectTarget, url } = getRequestTarget(request);
+
+  return buildWelcomeRedirectTarget(redirectTarget, url.origin);
+}
+
 async function loginRouteLoader({ request }: LoaderFunctionArgs) {
   await restoreSession();
 
-  if (getAuthSessionSnapshot()) {
+  const snapshot = getAuthSessionSnapshot();
+
+  if (snapshot) {
     const { url } = getRequestTarget(request);
 
-    throw redirect(resolveLoginRedirectTarget(url.searchParams.get('redirect'), url.origin));
+    throw redirect(
+      resolveAuthenticatedRedirectTarget(
+        url.searchParams.get('redirect'),
+        {
+          needsProfileCompletion: snapshot.needsProfileCompletion,
+        },
+        url.origin,
+      ),
+    );
   }
 
   return null;
 }
 
-async function ensureAuthenticatedSession(request: Request) {
+async function ensureAuthenticatedSession(
+  request: Request,
+  options: {
+    allowIncomplete?: boolean;
+  } = {},
+) {
   await restoreSession();
 
-  if (!getAuthSessionSnapshot()) {
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
     throw redirect(buildLoginRedirectURL(request));
   }
+
+  if (snapshot.needsProfileCompletion && !options.allowIncomplete) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  return snapshot;
 }
 
 async function protectedWorkbenchLoader({ request }: LoaderFunctionArgs) {
   await ensureAuthenticatedSession(request);
+
+  return null;
+}
+
+async function welcomeLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request, {
+    allowIncomplete: true,
+  });
+  const { url } = getRequestTarget(request);
+
+  if (!snapshot.needsProfileCompletion) {
+    throw redirect(resolveWelcomeRedirectTarget(url.searchParams.get('redirect'), url.origin));
+  }
 
   return null;
 }
@@ -128,13 +176,18 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   await restoreSession();
+  const snapshot = getAuthSessionSnapshot();
 
-  if (!getAuthSessionSnapshot()) {
+  if (!snapshot) {
     if (hasGuestLabAccess(demoLabAccess)) {
       return null;
     }
 
     throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
   }
 
   if (!hasLabAccess(demoLabAccess)) {
@@ -159,6 +212,10 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
     }
 
     throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
   }
 
   // 硬编码验证：只有 (accountId 是 1 或者 2) 且 (accessGroup 里有 ADMIN 项) 的用户才可以进入
@@ -292,6 +349,11 @@ const router = createBrowserRouter([
             Component: HomePage,
           },
         ],
+      },
+      {
+        path: '/welcome',
+        loader: welcomeLoader,
+        Component: WelcomePage,
       },
       {
         path: '/labs',

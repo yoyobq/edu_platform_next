@@ -11,4 +11,5 @@ export const routes = {
     `/reset-password?token=${verificationCode}`,
   sandboxPlayground: '/sandbox/playground',
   verifyEmail: (verificationCode = 'verify-email-001') => `/verify/email/${verificationCode}`,
+  welcome: '/welcome',
 } as const;

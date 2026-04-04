@@ -1,6 +1,6 @@
 // src/features/auth/application/types.ts
 
-export const AUTH_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'STAFF', 'STUDENT'] as const;
+export const AUTH_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'REGISTRANT', 'STAFF', 'STUDENT'] as const;
 
 export type AuthAccessGroup = (typeof AUTH_ACCESS_GROUPS)[number];
 export type AuthSlotGroup = string;
@@ -55,6 +55,7 @@ export type AuthSessionSnapshot = {
   displayName: string;
   identity: AuthSessionIdentity | null;
   isAuthenticated: true;
+  needsProfileCompletion: boolean;
   primaryAccessGroup: AuthAccessGroup;
   refreshToken: string;
   slotGroup: readonly AuthSlotGroup[];
@@ -93,6 +94,10 @@ export function resolvePrimaryAccessGroup(input: {
 
   if (input.accessGroup.includes('GUEST')) {
     return 'GUEST';
+  }
+
+  if (input.accessGroup.includes('REGISTRANT')) {
+    return 'REGISTRANT';
   }
 
   if (input.accessGroup.includes('ADMIN')) {

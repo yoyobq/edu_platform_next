@@ -49,6 +49,7 @@ type AuthSessionResultDTO = {
         updatedAt: string;
       }
     | null;
+  needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: unknown;
     avatarUrl: unknown;
@@ -63,6 +64,7 @@ type PersistedAuthSessionDTO = {
   accountId: number;
   displayName: string;
   identity: AuthSessionIdentity | null;
+  needsProfileCompletion: boolean;
   primaryAccessGroup: AuthAccessGroup;
   refreshToken: string;
   slotGroup: readonly AuthSlotGroup[];
@@ -217,6 +219,7 @@ export function mapSessionResultToSessionSnapshot(
     }),
     identity,
     isAuthenticated: true,
+    needsProfileCompletion: session.needsProfileCompletion === true,
     primaryAccessGroup,
     refreshToken: tokens.refreshToken,
     slotGroup: parsedClaims.slotGroup,
@@ -236,6 +239,7 @@ export function serializeSessionSnapshot(snapshot: AuthSessionSnapshot): string 
     accountId: snapshot.accountId,
     displayName: snapshot.displayName,
     identity: snapshot.identity,
+    needsProfileCompletion: snapshot.needsProfileCompletion,
     primaryAccessGroup: snapshot.primaryAccessGroup,
     refreshToken: snapshot.refreshToken,
     slotGroup: snapshot.slotGroup,
@@ -267,6 +271,7 @@ export function deserializeSessionSnapshot(rawValue: string): AuthSessionSnapsho
     typeof value.refreshToken !== 'string' ||
     typeof value.accountId !== 'number' ||
     typeof value.displayName !== 'string' ||
+    typeof value.needsProfileCompletion !== 'boolean' ||
     !value.account ||
     !value.userInfo
   ) {
@@ -293,6 +298,7 @@ export function deserializeSessionSnapshot(rawValue: string): AuthSessionSnapsho
         ? (value.identity as AuthSessionIdentity)
         : null,
     isAuthenticated: true,
+    needsProfileCompletion: value.needsProfileCompletion,
     primaryAccessGroup: isAuthAccessGroup(value.primaryAccessGroup)
       ? value.primaryAccessGroup
       : resolvePrimaryAccessGroup({

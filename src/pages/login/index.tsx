@@ -6,7 +6,7 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 
 import { login, LoginForm, useAuthSessionState } from '@/features/auth';
 
-import { resolveLoginRedirectTarget } from '@/shared/navigation';
+import { resolveAuthenticatedRedirectTarget } from '@/shared/navigation';
 import { BrandLockup } from '@/shared/ui/brand';
 
 export function LoginPage() {
@@ -15,8 +15,11 @@ export function LoginPage() {
   const authSession = useAuthSessionState();
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const redirectTarget = resolveLoginRedirectTarget(
+  const redirectTarget = resolveAuthenticatedRedirectTarget(
     new URLSearchParams(location.search).get('redirect'),
+    {
+      needsProfileCompletion: authSession.snapshot?.needsProfileCompletion ?? false,
+    },
   );
 
   if (authSession.status === 'authenticated') {
@@ -68,14 +71,22 @@ export function LoginPage() {
                     setSubmitError(null);
 
                     try {
-                      await login({
+                      const snapshot = await login({
                         audience: 'DESKTOP',
                         loginName: values.loginName,
                         loginPassword: values.loginPassword,
                         type: 'PASSWORD',
                       });
 
-                      navigate(redirectTarget, { replace: true });
+                      navigate(
+                        resolveAuthenticatedRedirectTarget(
+                          new URLSearchParams(location.search).get('redirect'),
+                          {
+                            needsProfileCompletion: snapshot.needsProfileCompletion,
+                          },
+                        ),
+                        { replace: true },
+                      );
                     } catch (error) {
                       setSubmitError(error instanceof Error ? error.message : '登录失败。');
                     } finally {

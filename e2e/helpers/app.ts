@@ -2,7 +2,7 @@ import { expect, type Page, type Route } from '@playwright/test';
 
 import { routes } from '../fixtures/routes';
 
-type AuthAccessGroup = 'ADMIN' | 'GUEST' | 'STAFF' | 'STUDENT';
+type AuthAccessGroup = 'ADMIN' | 'GUEST' | 'REGISTRANT' | 'STAFF' | 'STUDENT';
 type SessionIdentityKind = AuthAccessGroup;
 
 type StaffIdentitySeed = {
@@ -32,6 +32,8 @@ export type SeedAuthSessionOptions = {
   accountId?: number;
   displayName?: string;
   identity?: SessionIdentitySeed;
+  identityHint?: AuthAccessGroup | null;
+  needsProfileCompletion?: boolean;
   primaryAccessGroup?: SessionIdentityKind;
   slotGroup?: readonly string[];
 };
@@ -41,11 +43,15 @@ type SessionProfile = {
   accountId: number;
   displayName: string;
   identity: SessionIdentitySeed;
+  identityHint: AuthAccessGroup | null;
+  needsProfileCompletion: boolean;
   primaryAccessGroup: SessionIdentityKind;
   slotGroup: readonly string[];
 };
 
 type MockAuthGraphQLOptions = {
+  completeProfileErrorMessage?: string;
+  completeProfileSession?: SeedAuthSessionOptions;
   currentSession?: SeedAuthSessionOptions;
   loginErrorMessage?: string;
   loginSession?: SeedAuthSessionOptions;
@@ -72,6 +78,10 @@ function resolvePrimaryAccessGroup(options: SeedAuthSessionOptions): SessionIden
 
   if (options.accessGroup?.includes('GUEST')) {
     return 'GUEST';
+  }
+
+  if (options.accessGroup?.includes('REGISTRANT')) {
+    return 'REGISTRANT';
   }
 
   if (options.accessGroup?.includes('ADMIN')) {
@@ -110,9 +120,11 @@ function buildSessionProfile(options: SeedAuthSessionOptions = {}): SessionProfi
       ? ['ADMIN']
       : primaryAccessGroup === 'GUEST'
         ? ['GUEST']
-        : primaryAccessGroup === 'STAFF'
-          ? ['STAFF']
-          : ['STUDENT']);
+        : primaryAccessGroup === 'REGISTRANT'
+          ? ['REGISTRANT']
+          : primaryAccessGroup === 'STAFF'
+            ? ['STAFF']
+            : ['STUDENT']);
 
   return {
     accessGroup: defaultAccessGroup,
@@ -125,6 +137,15 @@ function buildSessionProfile(options: SeedAuthSessionOptions = {}): SessionProfi
         : primaryAccessGroup === 'STUDENT'
           ? { kind: 'STUDENT' }
           : null),
+    identityHint:
+      options.identityHint === undefined ? primaryAccessGroup : (options.identityHint ?? null),
+    needsProfileCompletion:
+      options.needsProfileCompletion ??
+      (defaultAccessGroup.includes('REGISTRANT') ||
+        (defaultAccessGroup.length === 1 &&
+          defaultAccessGroup[0] === 'ADMIN' &&
+          !options.identity &&
+          (options.identityHint === 'STAFF' || options.identityHint === 'STUDENT'))),
     primaryAccessGroup,
     slotGroup: options.slotGroup ?? [],
   };
@@ -146,7 +167,7 @@ function buildPersistedSession(profile: SessionProfile) {
     accessToken: tokens.accessToken,
     account: {
       id: profile.accountId,
-      identityHint: profile.primaryAccessGroup,
+      identityHint: profile.identityHint,
       loginEmail: `${profile.displayName}@example.com`,
       loginName: profile.displayName,
       status: 'ACTIVE',
@@ -181,6 +202,7 @@ function buildPersistedSession(profile: SessionProfile) {
               updatedAt: DEFAULT_TIMESTAMP,
             }
           : null,
+    needsProfileCompletion: profile.needsProfileCompletion,
     primaryAccessGroup: profile.primaryAccessGroup,
     refreshToken: tokens.refreshToken,
     slotGroup: profile.slotGroup,
@@ -198,7 +220,7 @@ function buildMePayload(profile: SessionProfile) {
   return {
     account: {
       id: profile.accountId,
-      identityHint: profile.primaryAccessGroup,
+      identityHint: profile.identityHint,
       loginEmail: `${profile.displayName}@example.com`,
       loginName: profile.displayName,
       status: 'ACTIVE',
@@ -232,6 +254,7 @@ function buildMePayload(profile: SessionProfile) {
               updatedAt: DEFAULT_TIMESTAMP,
             }
           : null,
+    needsProfileCompletion: profile.needsProfileCompletion,
     userInfo: {
       accessGroup: profile.accessGroup,
       avatarUrl: null,
@@ -307,6 +330,28 @@ export async function mockAuthGraphQL(
         body: JSON.stringify({
           data: {
             refresh: buildTokens(currentProfile),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation CompleteMyProfile')) {
+      if (options.completeProfileErrorMessage) {
+        await fulfillGraphQLError(route, options.completeProfileErrorMessage);
+        return;
+      }
+
+      currentProfile = buildSessionProfile(options.completeProfileSession ?? currentProfile);
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            completeMyProfile: {
+              success: true,
+            },
           },
         }),
         contentType: 'application/json',

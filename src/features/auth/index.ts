@@ -4,6 +4,7 @@ import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
 import { logout as runLogout } from './application/logout';
 import type { AuthPorts } from './application/ports';
+import { refreshSession as runRefreshSession } from './application/refresh-session';
 import { restoreSession as runRestoreSession } from './application/restore-session';
 export {
   getAuthSessionSnapshot,
@@ -40,6 +41,10 @@ export function login(input: AuthLoginInput) {
 
 export function restoreSession() {
   return runRestoreSession(authPorts);
+}
+
+export function refreshSession() {
+  return runRefreshSession(authPorts);
 }
 
 export function logout() {
