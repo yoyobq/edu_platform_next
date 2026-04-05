@@ -16,6 +16,19 @@
 1. `login / refresh` 只负责拿 token
 2. `me` 负责重建前端消费的当前会话快照
 
+当前前端 token 主权明确为：
+
+- `accessToken` 与 `refreshToken` 由前端当前会话负责持有
+- 只要后端要求鉴权，请求发起方就必须带上当前有效 `accessToken`
+- 后端不替前端保存“浏览器当前会话”这一层语义
+- GraphQL runtime、HTTP client、SDK wrapper 都不是 token 真源，只是请求时消费 token 的技术承载层
+- `shared/graphql` 当前不自动发起 `refresh`；会话恢复、续期与失效推进仍由 `features/auth` 负责
+- 运行时层不得在 auth feature 之外再维护一份独立 token 真源，避免与当前会话状态漂移
+- 若某个 runtime 需要鉴权，它必须在请求时读取当前 token，而不是长期缓存一份自己的 token 副本
+- `refresh` 成功后，后续请求必须使用最新 token；旧 token 只允许停留在失败中的历史请求上下文里
+- 这套“auth 主流程归 auth feature、shared/graphql 只做 transport/runtime”的划分，当前按长线方案执行
+- `ws / subscription` 不适用“每次请求现读 token”的 HTTP 语义；若后续启用，token 变化时必须按需重连
+
 页面刷新后的恢复链路为：
 
 1. 先使用当前 `accessToken` 调 `me`

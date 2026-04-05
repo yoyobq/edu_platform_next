@@ -33,6 +33,31 @@
 - 规划层仍优先使用 `runtime config / auth bridge / error model / imperative execute contract` 这些中性主语
 - `Apollo client / provider / cache / ws link` 主要作为当前实现承载方式来讨论
 
+## 当前实现口径
+
+为保持 auth 主权单一，当前实现先按更保守的口径收敛：
+
+- 所有 GraphQL 请求继续统一走 `shared/graphql`
+- `shared/graphql` 当前只负责统一 transport/runtime 入口，不自动接管 refresh
+- `auth` feature 继续独占 `login / refresh / restore / forceLogout`
+- `401 / UNAUTHENTICATED -> refresh -> retry` 当前不作为共享层默认行为
+
+当前这套口径应视为项目的长线默认方案，不是短期过渡后必然回到 shared auto-refresh。
+
+这样做的原因：
+
+- 避免 auth 自己的 `restore -> refresh -> hydrate` 与共享 middleware 自动 refresh 形成双主权
+- 避免实现中出现防重入例外、隐式恢复链和难解释的时序问题
+- 让没有当前上下文的人或 AI 更容易理解运行时边界
+
+若未来重新引入 shared auto-refresh，也只针对普通业务请求评估，不自动接管 auth feature 自己的认证主流程。
+
+`ws / subscription` 的长期边界也单独明确：
+
+- 当前不让 WS 反向主导 HTTP ingress 设计
+- 若未来启用 WS，必须接受“连接建连时读取 token，token 变化后按需重连”这套规则
+- 不允许把现有 WS 连接视为当前会话主权来源
+
 ## 起点
 
 在这轮尝试之前，GraphQL 调用基本处于分散状态：
@@ -149,13 +174,18 @@
 
 ### 6. `GraphQLProvider` 当前更像 runtime 注入器，不像明确的应用边界
 
-当前 provider 的主要作用是：
+当前这类 provider 曾经很容易被写成 runtime 注入器，它最容易承担的职责是：
 
 - 配置 `getAccessToken`
 - 获取 Apollo client
 - 挂一个 `ApolloProvider`
 
-这说明它还不是“清晰的 UI provider 语义”，更像 runtime bootstrap。
+但当前实现已经把这条边界收回来了：
+
+- `getAccessToken` 由 app bootstrap 注入
+- `GraphQLProvider` 只获取 Apollo client 并包裹 `ApolloProvider`
+
+这里保留这条分析，是为了强调不应再把 runtime bootstrap 搬回 provider。
 
 这里需要补一条更硬的约束：
 
@@ -211,12 +241,16 @@
 职责：
 
 - 由 app 层向 GraphQL runtime 注入认证相关能力
-- 暴露 `getAccessToken`
-- 暴露 `refreshSession`
-- 暴露 `onAuthFailure`
+- 当前最小桥接只暴露 `getAccessToken`
 - 保证 `shared/graphql` 不直接依赖 `features/auth`
 
-这是本轮必须补清楚的桥接层。
+当前实现已经按最小桥接收口：
+
+- app bootstrap 注入 `getAccessToken`
+- `shared/graphql` 不直接 import `features/auth`
+- `GraphQLProvider` 不再承担 runtime 真源初始化
+
+若未来重新评估 shared auto-refresh，再考虑是否扩展 `refreshSession` / `onAuthFailure` 一类能力。
 
 约束：
 
@@ -224,7 +258,7 @@
 - `shared/graphql` 不得直接 import `@/features/auth`
 - 不得把 session store、storage 落盘、强制登出主权下沉到共享层
 
-当前更合理的形态是“runtime adapter / auth bridge”，而不是让 GraphQL ingress 直接反调 auth domain。
+当前更合理的形态是“最小 runtime adapter”，而不是让 GraphQL ingress 直接反调 auth domain。
 
 ### 3. Middleware Layer
 
@@ -234,11 +268,20 @@
 - request metadata 注入
 - 网络异常归一
 - GraphQL error 归一
-- `401 / UNAUTHENTICATED` 的 refresh / retry
 - subscription transport 策略
 
 这是 ingress 最核心的横切层。
 凡是希望 hooks 和 imperative 调用共享的行为，都应优先沉到这里。
+
+当前明确不放进 middleware 的行为：
+
+- `401 / UNAUTHENTICATED -> refresh -> retry`
+
+原因：
+
+- auth feature 已经拥有 `restore / refresh / forceLogout` 主权
+- shared middleware 一旦自动接管 refresh，容易与 auth 主流程形成双主权
+- 这会把实现重新推回防重入开关、隐式例外和难解释的恢复链
 
 ### 4. Executor Layer
 
@@ -295,47 +338,7 @@
 
 如果这一步不先定，后续每接一个 feature 都会把入口层继续拉歪。
 
-### P0：单列 Auth Bridge / Runtime Adapter
-
-需要明确 GraphQL ingress 如何拿到 auth 能力，同时不破坏当前分层。
-
-本项目当前 auth 主权已经在 auth feature 内形成闭环，包括：
-
-- 当前会话快照读取
-- refresh
-- restore
-- 强制登出
-- storage 落盘
-
-因此本轮必须明确：
-
-- `shared/graphql` 不得直接依赖 `features/auth`
-- GraphQL runtime 只能通过注入拿到 `getAccessToken`
-- 若要支持自动 refresh，只能通过注入拿到 `refreshSession`
-- 若 refresh 最终失败，只能通过注入回调触发 `onAuthFailure`
-- `Auth Bridge` 不承接请求是否需要鉴权、是否允许 retry 之类 transport 策略判断
-
-建议最小接口方向：
-
-```ts
-type GraphQLAuthBridge = {
-  getAccessToken: () => string | null | undefined;
-  refreshSession: () => Promise<unknown>;
-  onAuthFailure: (reason: GraphQLIngressError) => void | Promise<void>;
-};
-```
-
-这一层必须由 app 层持有并注入，而不是让共享层反向 import auth feature。
-
-额外约束：
-
-- `isAuthenticatedRequest`
-- `shouldRetryAuthError`
-- `hasRetried`
-- `authMode`
-
-这类“请求级 transport 策略”不得进入 `Auth Bridge`。
-它们应由 GraphQL ingress 自己的 middleware 和 operation metadata 承担。
+### P0：落地最小 Runtime Adapter
 
 建议入口层后续提供显式请求语义，例如：
 
@@ -345,10 +348,10 @@ type GraphQLAuthMode = 'required' | 'none';
 
 推荐默认语义：
 
-- `required`：带 token，auth error 时允许 refresh + retry 一次
+- `required`：带 token
 - `none`：不带 token，也不参与 refresh
 
-这样可以把“auth 能力”和“transport 策略”明确拆开，保持分工清晰。
+这样可以先把“请求是否带鉴权”这件事单独收稳，而不把 auth 恢复策略混进共享层。
 
 这里再补一条硬约束：
 
@@ -367,21 +370,12 @@ type GraphQLAuthMode = 'required' | 'none';
 - `authMode` 默认值为 `required`
 - 公开请求应显式声明为 `none`
 
-`refreshSession()` 的 bridge 契约也进一步收紧为：
+当前落地口径：
 
-- 它只承诺“完成一次 refresh 流程”
-- 不要求对 GraphQL runtime 暴露固定返回结构
-- runtime 在 refresh 完成后，重新通过 `getAccessToken()` 读取当前最新 token
-
-这样可以避免把 auth session 快照结构直接耦合进共享层。
-
-`onAuthFailure()` 的边界也明确为：
-
-- 只负责把 auth 状态推进到统一失效路径
-- 可以清 session、更新 session store、写入失效原因
-- 不负责页面跳转
-
-页面跳转仍应由 router / 页面层根据当前 auth 状态自行处理，而不是由 auth bridge 或 GraphQL ingress 直接推动。
+- app bootstrap 只注入 `getAccessToken`
+- `shared/graphql` 根据 `authMode` 决定是否带默认 `Authorization`
+- `login / refresh / public-auth` 等公开请求显式声明 `authMode: 'none'`
+- auth 恢复、续期、失效推进继续留在 `features/auth`
 
 ### P0：定义稳定错误模型
 
@@ -450,50 +444,29 @@ export class GraphQLIngressError extends Error {
 因此，“服务器连不上时直接报错”这个判断是合理的；
 它属于明确的 transport failure，不应被透传成业务结果。
 
-### P0：明确鉴权模型与 refresh 挂点
+### P0：明确鉴权模型与 refresh 边界
 
-需要先定下面几件事：
+当前已经先定下面几件事：
 
 - 默认请求是否总是从当前 auth session 取 token
 - 哪些调用允许显式覆盖 token
-- `login / refresh / public-auth` 这类请求如何声明“不参与自动 refresh”
-- 遇到 `401` 或 `UNAUTHENTICATED` 时是否允许自动重试一次
-- 并发请求触发 refresh 时如何单飞
-- refresh 失败后由 ingress 还是 auth domain 触发 logout
+- `login / refresh / public-auth` 这类请求如何声明“不带默认鉴权”
 
-如果不先定这层，GraphQL 共享入口最终只会停留在“代替 fetch”。
+当前明确不做：
 
-这里需要明确把“refresh 单飞 + 排队重试”作为当前 ingress 的核心能力之一。
+- 由 `shared/graphql` 统一执行 `401 / UNAUTHENTICATED -> refresh -> retry`
 
-建议目标语义：
+当前担心：
 
-- 多个请求同时收到 `401` 或 `UNAUTHENTICATED` 时，只允许触发一次 refresh
-- refresh 期间到达的其他受保护请求等待同一个 refresh promise
-- refresh 成功后，等待中的请求统一使用新 token 重试一次
-- refresh 失败后，等待中的请求统一落到会话失效路径
+- auth 自己的 `restore -> refresh -> hydrate` 与 shared middleware 自动 refresh 形成双主权
+- `me -> refresh -> me` 这类认证主链路与共享层重试链路互相套娃
+- 为了兜住边界，不得不引入防重入开关、隐式例外和更难解释的时序
 
-建议的最小机制：
+因此当前结论是：
 
-```ts
-let refreshPromise: Promise<unknown> | null = null;
-```
-
-这里的返回值只表达“等待中的 refresh 结果”，不预设一定是裸 token；
-在当前项目语义下，它更可能对应新的 session 快照或其他可用于完成重试的认证结果。
-
-并要求入口层至少支持这些控制项：
-
-- 请求是否参与自动 refresh
-- 当前请求是否已经重试过一次
-- 哪些请求属于 refresh 自身或 public 请求，必须跳过 auth retry
-
-需要明确禁止的情况：
-
-- refresh 请求自己再次进入 refresh 流程
-- 同一请求 auth 失败后无限重试
-- 把普通 network error 错判为 auth error 并塞进 refresh 队列
-
-这套逻辑必须进入 Middleware Layer，而不是留在 feature API 或 `executeGraphQL()` 中。
+- `shared/graphql` 先做统一 transport/runtime
+- auth 相关恢复与失效逻辑继续留在 `features/auth`
+- 若未来重新评估 shared auto-refresh，必须建立在明确测试和更强 session runtime 抽象之上
 
 ### P1：把横切逻辑尽量下沉到 middleware，而不是堆在 executor
 
@@ -507,8 +480,11 @@ let refreshPromise: Promise<unknown> | null = null;
 - Authorization header 注入
 - request id / debug metadata
 - 错误归一
-- refresh / retry
 - subscription 连接鉴权
+
+当前不默认下沉到 middleware 的内容：
+
+- refresh / retry
 
 否则未来一旦页面开始用 `useQuery`，当前 `executeGraphQL()` 内的很多保护都会失效。
 
@@ -583,14 +559,14 @@ let refreshPromise: Promise<unknown> | null = null;
 当前建议动作：
 
 - 保留 ws link 工厂或相关代码结构
-- 默认不把 ws link compose 进主链路
-- 通过 feature flag 或显式运行时开关控制是否启用
+- 在没有真实 subscription 主线需求前，不把 WS 当成当前 auth 语义承诺的一部分
+- 若后续要把“默认关闭”收成硬约束，应再补显式运行时开关或 feature flag
 
 当前进一步确认：
 
 - WS 继续保留在 Apollo 底座能力范围内
-- 默认通过 feature flag 关闭
-- 在没有真实 subscription 场景前，不把 WS 注册进默认主链路
+- 当前代码仍会在可用时创建 ws link，这里暂不把“默认 feature flag 关闭”写成已落地事实
+- 在没有真实 subscription 场景前，不把 WS 视为当前默认主线能力
 
 建议只有在以下条件至少满足后，才考虑默认接入 WS：
 
@@ -622,9 +598,9 @@ let refreshPromise: Promise<unknown> | null = null;
 产出：
 
 - ingress 分层与职责确定
-- auth bridge 注入方式确定
+- 最小 runtime adapter 注入方式确定
 - 统一错误模型确定
-- 鉴权与 refresh 策略确定
+- 鉴权边界与 `authMode` 策略确定
 - `executeGraphQL` 的长期定位确定
 
 ### 阶段 1.5：先迁移一个 feature 作为试金石
@@ -668,15 +644,13 @@ let refreshPromise: Promise<unknown> | null = null;
 
 这一阶段要重点验证：
 
-- 自动 refresh 与现有 auth restore / refresh 语义是否冲突
-- ingress 的 refresh 单飞与 auth restore 单飞是否会叠出竞态
 - loader / imperative 调用在脱离 React provider 的情况下是否仍共享同一运行时行为
-- 会话失效后，auth bridge 是否能正确触发统一失败路径
+- `restore -> me -> refresh -> me` 这条链是否仍只由 auth feature 主导
+- `login / refresh / public-auth` 是否都能稳定走 `authMode: 'none'`
 
 建议验收标准：
 
-- authenticated 请求的 auth retry 只发生一次，不出现死循环
-- 并发 authenticated 请求不会重复触发多次 refresh
+- auth restore 失败路径不被 shared middleware 反向接管
 - refresh 失败后，session store 与持久化状态仍保持一致
 - loader 路径与普通 imperative API 路径在 auth error 上表现一致
 
