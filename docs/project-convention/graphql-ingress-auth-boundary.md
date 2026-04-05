@@ -180,6 +180,7 @@
 
 ## 相关文档
 
+- [graphql-error-model.md](./graphql-error-model.md)
 - [identity-access-session.md](./identity-access-session.md)
 - [../dependency-rules.md](../dependency-rules.md)
 - [../../plans/graphql-ingress-plan.md](../../plans/graphql-ingress-plan.md)
