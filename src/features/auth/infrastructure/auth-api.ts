@@ -1,16 +1,13 @@
 // src/features/auth/infrastructure/auth-api.ts
 
+import type { OperationVariables } from '@apollo/client';
+
+import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
+
 import type { AuthApiPort } from '../application/ports';
 import type { AuthLoginInput, AuthSessionSnapshot } from '../application/types';
 
 import { mapSessionResultToSessionSnapshot } from './mapper';
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: Array<{
-    message?: string;
-  }>;
-};
 
 type SessionTokensDTO = {
   accessToken: string;
@@ -138,58 +135,18 @@ const ME_QUERY = `
   }
 `;
 
-function getGraphQLEndpoint(): string {
-  const endpoint = import.meta.env.VITE_GRAPHQL_ENDPOINT;
-
-  if (typeof endpoint !== 'string' || !endpoint.trim()) {
-    throw new Error('未配置可用的 VITE_GRAPHQL_ENDPOINT。');
-  }
-
-  return endpoint;
-}
-
-async function requestGraphQL<TData, TVariables>(
+async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
   options?: {
     accessToken?: string;
+    authMode?: GraphQLAuthMode;
   },
 ): Promise<TData> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-    'Content-Type': 'application/json',
-  };
-
-  if (options?.accessToken) {
-    headers.Authorization = `Bearer ${options.accessToken}`;
-  }
-
-  const response = await fetch(getGraphQLEndpoint(), {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
+  return executeGraphQL(query, variables, {
+    accessToken: options?.accessToken,
+    authMode: options?.authMode,
   });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-
-  if (!response.ok) {
-    const responseError = payload.errors?.[0]?.message;
-
-    throw new Error(responseError || `请求失败（HTTP ${response.status}）。`);
-  }
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || 'GraphQL 请求失败。');
-  }
-
-  if (!payload.data) {
-    throw new Error('GraphQL 未返回 data。');
-  }
-
-  return payload.data;
 }
 
 async function fetchSession(accessToken: string) {
@@ -213,6 +170,7 @@ export const authApi: AuthApiPort = {
     const response = await requestGraphQL<LoginMutationResponse, { input: AuthLoginInput }>(
       LOGIN_MUTATION,
       { input },
+      { authMode: 'none' },
     );
 
     return hydrateSession(response.login);
@@ -221,9 +179,13 @@ export const authApi: AuthApiPort = {
     const response = await requestGraphQL<
       RefreshMutationResponse,
       { input: { refreshToken: string } }
-    >(REFRESH_MUTATION, {
-      input,
-    });
+    >(
+      REFRESH_MUTATION,
+      {
+        input,
+      },
+      { authMode: 'none' },
+    );
 
     return hydrateSession(response.refresh);
   },

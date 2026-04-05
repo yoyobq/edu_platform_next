@@ -11,6 +11,7 @@ export {
   useCollaborationSession,
 } from './collaboration-session';
 export { CollaborationSessionProvider } from './collaboration-session-provider';
+export { GraphQLProvider } from './graphql-provider';
 export {
   type KeyboardShortcutStackContextValue,
   type ShortcutPriority,

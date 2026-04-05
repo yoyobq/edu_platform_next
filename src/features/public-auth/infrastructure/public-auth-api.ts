@@ -1,3 +1,7 @@
+import type { OperationVariables } from '@apollo/client';
+
+import { executeGraphQL } from '@/shared/graphql';
+
 import type { PublicAuthApiPort } from '../application/ports';
 import type { ResetPasswordResult, VerificationIntentResult } from '../application/types';
 
@@ -6,13 +10,6 @@ import {
   mapVerificationFailureReason,
   resolveVerificationFailureReason,
 } from './resolve-verification-failure-reason';
-
-type GraphQLResponse<TData> = {
-  data?: TData;
-  errors?: Array<{
-    message?: string;
-  }>;
-};
 
 type RequestPasswordResetEmailResponse = {
   requestPasswordResetEmail: {
@@ -76,47 +73,13 @@ const RESET_PASSWORD_MUTATION = `
   }
 `;
 
-function getGraphQLEndpoint(): string {
-  const endpoint = import.meta.env.VITE_GRAPHQL_ENDPOINT;
-
-  if (typeof endpoint !== 'string' || !endpoint.trim()) {
-    throw new Error('未配置可用的 VITE_GRAPHQL_ENDPOINT。');
-  }
-
-  return endpoint;
-}
-
-async function requestGraphQL<TData, TVariables>(
+async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
 ): Promise<TData> {
-  const response = await fetch(getGraphQLEndpoint(), {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      query,
-      variables,
-    }),
+  return executeGraphQL(query, variables, {
+    authMode: 'none',
   });
-
-  const payload = (await response.json()) as GraphQLResponse<TData>;
-
-  if (!response.ok) {
-    throw new Error(payload.errors?.[0]?.message || `请求失败（HTTP ${response.status}）。`);
-  }
-
-  if (payload.errors?.length) {
-    throw new Error(payload.errors[0]?.message || 'GraphQL 请求失败。');
-  }
-
-  if (!payload.data) {
-    throw new Error('GraphQL 未返回 data。');
-  }
-
-  return payload.data;
 }
 
 async function requestPasswordResetEmail(email: string) {
