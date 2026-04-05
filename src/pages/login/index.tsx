@@ -4,9 +4,13 @@ import { useState } from 'react';
 import { Button, Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
-import { login, LoginForm, useAuthSessionState } from '@/features/auth';
+import {
+  login,
+  LoginForm,
+  resolveAuthenticatedRedirectTarget,
+  useAuthSessionState,
+} from '@/features/auth';
 
-import { resolveAuthenticatedRedirectTarget } from '@/shared/navigation';
 import { BrandLockup } from '@/shared/ui/brand';
 
 export function LoginPage() {

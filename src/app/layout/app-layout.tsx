@@ -37,6 +37,16 @@ function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
 }
 
+function hasPayloadCryptoMenuAccess(input: {
+  accountId?: number;
+  accessGroup?: readonly string[];
+}) {
+  const isSpecificAdmin = input.accountId === 1 || input.accountId === 2;
+  const hasAdminAccess = input.accessGroup?.includes('ADMIN') ?? false;
+
+  return isSpecificAdmin && hasAdminAccess;
+}
+
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -121,6 +131,18 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       label: <Link to={getBaseURL('/', search)}>首页</Link>,
     },
   ];
+
+  if (
+    hasPayloadCryptoMenuAccess({
+      accountId: authenticatedSnapshot?.accountId,
+      accessGroup: authenticatedSnapshot?.userInfo.accessGroup,
+    })
+  ) {
+    menuItems.push({
+      key: getBaseURL('/labs/payload-crypto', search),
+      label: <Link to={getBaseURL('/labs/payload-crypto', search)}>载荷加解密</Link>,
+    });
+  }
 
   if (currentAppEnv === 'dev' || currentAppEnv === 'test') {
     menuItems.push({

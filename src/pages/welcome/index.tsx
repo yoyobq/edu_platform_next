@@ -6,6 +6,7 @@ import {
   type AuthAccessGroup,
   forceLogout,
   refreshSession,
+  resolveWelcomeRedirectTarget,
   useAuthSessionState,
 } from '@/features/auth';
 import {
@@ -15,9 +16,6 @@ import {
   type ProfileCompletionTargetIdentity,
   submitProfileCompletion,
 } from '@/features/profile-completion';
-
-import { resolveWelcomeRedirectTarget } from '@/shared/navigation';
-
 function resolveInitialTargetIdentity(
   identityHint: AuthAccessGroup | null | undefined,
 ): ProfileCompletionTargetIdentity | undefined {

@@ -24,18 +24,16 @@ import {
 } from '@/pages/verification-intent';
 import { WelcomePage } from '@/pages/welcome';
 import {
+  buildWelcomeRedirectTarget,
   getAuthSessionSnapshot,
   hasAdminAccess,
+  resolveAuthenticatedRedirectTarget,
+  resolveWelcomeRedirectTarget,
   restoreSession,
   useAuthSessionState,
 } from '@/features/auth';
 
-import {
-  buildWelcomeRedirectTarget,
-  resolveAuthenticatedRedirectTarget,
-  resolveWelcomeRedirectTarget,
-  sanitizeRedirectTarget,
-} from '@/shared/navigation';
+import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';

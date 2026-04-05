@@ -55,3 +55,51 @@ test('具备 admin 权限的已登录会话，应允许进入 labs 示例页', a
 
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
 });
+
+test('仅工号 1/2 的管理员会在顶栏看到载荷加解密入口并可进入', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      accountId: 1,
+      displayName: 'root-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto(routes.home);
+
+  await expect(page.getByRole('link', { name: '载荷加解密' })).toBeVisible();
+  await page.getByRole('link', { name: '载荷加解密' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`${routes.labsPayloadCrypto}$`));
+  await expect(page.getByRole('heading', { name: '载荷加解密工具' })).toBeVisible();
+});
+
+test('其他管理员不应在顶栏看到载荷加解密入口，且直接访问仍会被拦截', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      accountId: 9527,
+      displayName: 'normal-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    accountId: 9527,
+    displayName: 'normal-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto(routes.home);
+
+  await expect(page.getByRole('link', { name: '载荷加解密' })).toHaveCount(0);
+
+  await page.goto(routes.labsPayloadCrypto);
+
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+});

@@ -4,6 +4,12 @@ import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
 import { logout as runLogout } from './application/logout';
 import type { AuthPorts } from './application/ports';
+import {
+  buildWelcomeRedirectTarget,
+  resolveAuthenticatedRedirectTarget,
+  resolveLoginRedirectTarget,
+  resolveWelcomeRedirectTarget,
+} from './application/redirect-target';
 import { refreshSession as runRefreshSession } from './application/refresh-session';
 import { restoreSession as runRestoreSession } from './application/restore-session';
 export {
@@ -25,6 +31,12 @@ export {
   hasAdminAccess,
   resolvePrimaryAccessGroup,
 } from './application/types';
+export {
+  buildWelcomeRedirectTarget,
+  resolveAuthenticatedRedirectTarget,
+  resolveLoginRedirectTarget,
+  resolveWelcomeRedirectTarget,
+};
 import type { AuthLoginInput } from './application/types';
 import { authApi } from './infrastructure/auth-api';
 import { authStorage } from './infrastructure/auth-storage';
