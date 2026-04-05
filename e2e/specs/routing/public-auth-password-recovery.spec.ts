@@ -274,7 +274,69 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
 });
 
 test('query token 形式的 reset link 也应进入重置页面', async ({ page }) => {
-  await mockResetPasswordFlow(page, 'active');
+  const observedVerificationTokens: string[] = [];
+  const observedResetTokens: string[] = [];
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: {
+            input?: {
+              token?: string;
+            };
+          };
+        }
+      | undefined;
+
+    if (typeof payload?.query !== 'string') {
+      await route.fallback();
+      return;
+    }
+
+    if (payload.query.includes('query FindPasswordResetVerificationRecord')) {
+      observedVerificationTokens.push(payload.variables?.input?.token ?? '');
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            findVerificationRecord: {
+              message: null,
+              reason: null,
+              record: {
+                notBefore: null,
+                status: 'ACTIVE',
+              },
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (payload.query.includes('mutation ResetPassword')) {
+      observedResetTokens.push(payload.variables?.input?.token ?? '');
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            resetPassword: {
+              message: null,
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
 
   await page.goto(routes.resetPasswordWithTokenQuery('reset-token-query-active'));
 
@@ -282,6 +344,14 @@ test('query token 形式的 reset link 也应进入重置页面', async ({ page 
   await expect(page.getByText('公共认证入口')).toHaveCount(0);
   await expect(page.getByText('验证代码')).toHaveCount(0);
   await expect(page.getByText('reset-token-query-active')).toHaveCount(0);
+
+  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
+  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByRole('button', { name: '更新密码' }).click();
+
+  await expect(page.getByText('密码已更新')).toBeVisible();
+  expect(observedVerificationTokens).toEqual(['reset-token-query-active']);
+  expect(observedResetTokens).toEqual(['reset-token-query-active']);
 });
 
 test('reset intent 查询遇到 transport error 时，应进入 unknown 失败态', async ({ page }) => {
