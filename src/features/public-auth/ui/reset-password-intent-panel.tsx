@@ -142,5 +142,17 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
     );
   }
 
+  if (state.status === 'error') {
+    return (
+      <Flex vertical gap={16}>
+        <Alert type="error" showIcon title="操作失败" description={state.message} />
+        <Button type="primary" onClick={() => navigate('/forgot-password')}>
+          重新发送重置邮件
+        </Button>
+        <Button onClick={() => navigate('/login')}>返回登录</Button>
+      </Flex>
+    );
+  }
+
   return <ResetPasswordFailureState reason={state.reason} />;
 }

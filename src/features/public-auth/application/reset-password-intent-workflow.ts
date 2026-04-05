@@ -1,3 +1,5 @@
+import { isGraphQLIngressError } from '@/shared/graphql';
+
 import type { PublicAuthPorts } from './ports';
 import type { VerificationFailureReason } from './types';
 
@@ -5,7 +7,8 @@ export type ResetPasswordIntentWorkflowState =
   | { status: 'loading' }
   | { status: 'ready' }
   | { status: 'success' }
-  | { reason: VerificationFailureReason; status: 'failure' };
+  | { reason: VerificationFailureReason; status: 'failure' }
+  | { message: string; status: 'error' };
 
 export type ResetPasswordIntentSubmitResult =
   | { status: 'success' }
@@ -34,7 +37,14 @@ export async function loadResetPasswordIntent(
       status: 'failure',
       reason: result.reason,
     };
-  } catch {
+  } catch (error) {
+    if (isGraphQLIngressError(error)) {
+      return {
+        status: 'error',
+        message: error.userMessage,
+      };
+    }
+
     return {
       status: 'failure',
       reason: 'unknown',

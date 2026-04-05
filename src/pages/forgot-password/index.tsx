@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router';
 
 import { ForgotPasswordForm, requestPasswordReset } from '@/features/public-auth';
 
+import { isGraphQLIngressError } from '@/shared/graphql';
 import { BrandLockup } from '@/shared/ui/brand';
 
 export function ForgotPasswordPage() {
@@ -79,7 +80,11 @@ export function ForgotPasswordPage() {
                           setSubmitted(true);
                         } catch (error) {
                           setSubmitError(
-                            error instanceof Error ? error.message : '暂时无法发送重置邮件。',
+                            isGraphQLIngressError(error)
+                              ? error.userMessage
+                              : error instanceof Error
+                                ? error.message
+                                : '暂时无法发送重置邮件。',
                           );
                         } finally {
                           setSubmitting(false);

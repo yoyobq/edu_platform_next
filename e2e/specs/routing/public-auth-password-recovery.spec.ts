@@ -4,15 +4,57 @@ import { routes } from '../../fixtures/routes';
 import { expect, test } from '../../test';
 
 type ResetIntentStatus = 'active' | 'expired' | 'used' | 'invalid';
+type TransportFailureKind = 'graphql' | 'http' | 'network';
 type VerificationRecordFailureReason = 'EXPIRED' | 'INVALID' | 'USED';
+
+function getGraphQLPayload(
+  route: Parameters<Page['route']>[1] extends (route: infer T) => unknown ? T : never,
+) {
+  return route.request().postDataJSON() as
+    | {
+        query?: string;
+        variables?: {
+          input?: {
+            token?: string;
+          };
+        };
+      }
+    | undefined;
+}
+
+async function fulfillTransportFailure(
+  route: Parameters<Page['route']>[1] extends (route: infer T) => unknown ? T : never,
+  kind: TransportFailureKind,
+  message: string,
+) {
+  if (kind === 'network') {
+    await route.abort('failed');
+    return;
+  }
+
+  if (kind === 'http') {
+    await route.fulfill({
+      body: JSON.stringify({
+        errors: [{ message }],
+      }),
+      contentType: 'application/json',
+      status: 500,
+    });
+    return;
+  }
+
+  await route.fulfill({
+    body: JSON.stringify({
+      errors: [{ message }],
+    }),
+    contentType: 'application/json',
+    status: 200,
+  });
+}
 
 async function mockForgotPasswordMutations(page: Page) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
+    const payload = getGraphQLPayload(route);
 
     if (typeof payload?.query !== 'string') {
       await route.fallback();
@@ -39,13 +81,13 @@ async function mockForgotPasswordMutations(page: Page) {
   });
 }
 
-async function mockForgotPasswordTransportError(page: Page, message: string) {
+async function mockForgotPasswordTransportError(
+  page: Page,
+  kind: TransportFailureKind,
+  message: string,
+) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
+    const payload = getGraphQLPayload(route);
 
     if (typeof payload?.query !== 'string') {
       await route.fallback();
@@ -53,13 +95,7 @@ async function mockForgotPasswordTransportError(page: Page, message: string) {
     }
 
     if (payload.query.includes('mutation RequestPasswordResetEmail')) {
-      await route.fulfill({
-        body: JSON.stringify({
-          errors: [{ message }],
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
+      await fulfillTransportFailure(route, kind, message);
       return;
     }
 
@@ -73,11 +109,7 @@ async function mockResetPasswordFlow(
   options?: { resetPasswordFailureReason?: VerificationRecordFailureReason },
 ) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
+    const payload = getGraphQLPayload(route);
 
     if (typeof payload?.query !== 'string') {
       await route.fallback();
@@ -152,13 +184,13 @@ async function mockResetPasswordFlow(
   });
 }
 
-async function mockResetPasswordIntentTransportError(page: Page, message: string) {
+async function mockResetPasswordIntentTransportError(
+  page: Page,
+  kind: TransportFailureKind,
+  message: string,
+) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
+    const payload = getGraphQLPayload(route);
 
     if (typeof payload?.query !== 'string') {
       await route.fallback();
@@ -166,13 +198,7 @@ async function mockResetPasswordIntentTransportError(page: Page, message: string
     }
 
     if (payload.query.includes('query FindPasswordResetVerificationRecord')) {
-      await route.fulfill({
-        body: JSON.stringify({
-          errors: [{ message }],
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
+      await fulfillTransportFailure(route, kind, message);
       return;
     }
 
@@ -180,13 +206,13 @@ async function mockResetPasswordIntentTransportError(page: Page, message: string
   });
 }
 
-async function mockResetPasswordSubmitTransportError(page: Page, message: string) {
+async function mockResetPasswordSubmitTransportError(
+  page: Page,
+  kind: TransportFailureKind,
+  message: string,
+) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
+    const payload = getGraphQLPayload(route);
 
     if (typeof payload?.query !== 'string') {
       await route.fallback();
@@ -215,13 +241,7 @@ async function mockResetPasswordSubmitTransportError(page: Page, message: string
     }
 
     if (payload.query.includes('mutation ResetPassword')) {
-      await route.fulfill({
-        body: JSON.stringify({
-          errors: [{ message }],
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
+      await fulfillTransportFailure(route, kind, message);
       return;
     }
 
@@ -248,14 +268,25 @@ test('登录页应提供忘记密码入口，并能完成统一反馈', async ({
 test('忘记密码请求遇到 GraphQL transport error 时，应停留当前页并展示错误反馈', async ({
   page,
 }) => {
-  await mockForgotPasswordTransportError(page, 'PASSWORD_RESET_GATEWAY_DOWN');
+  await mockForgotPasswordTransportError(page, 'graphql', 'PASSWORD_RESET_GATEWAY_DOWN');
 
   await page.goto(routes.forgotPassword);
   await page.getByLabel('邮箱').fill('tester@example.com');
   await page.getByRole('button', { name: '发送重置邮件' }).click();
 
   await expect(page).toHaveURL(routes.forgotPassword);
-  await expect(page.getByRole('alert')).toContainText('PASSWORD_RESET_GATEWAY_DOWN');
+  await expect(page.getByRole('alert')).toContainText('请求处理失败，请稍后重试。');
+});
+
+test('忘记密码请求遇到 network transport error 时，应展示统一中文提示', async ({ page }) => {
+  await mockForgotPasswordTransportError(page, 'network', 'PASSWORD_RESET_NETWORK_DOWN');
+
+  await page.goto(routes.forgotPassword);
+  await page.getByLabel('邮箱').fill('tester@example.com');
+  await page.getByRole('button', { name: '发送重置邮件' }).click();
+
+  await expect(page).toHaveURL(routes.forgotPassword);
+  await expect(page.getByRole('alert')).toContainText('网络连接异常，请稍后重试。');
 });
 
 test('reset code 有效时，应允许更新密码并返回登录', async ({ page }) => {
@@ -354,13 +385,27 @@ test('query token 形式的 reset link 也应进入重置页面', async ({ page 
   expect(observedResetTokens).toEqual(['reset-token-query-active']);
 });
 
-test('reset intent 查询遇到 transport error 时，应进入 unknown 失败态', async ({ page }) => {
-  await mockResetPasswordIntentTransportError(page, 'RESET_INTENT_LOOKUP_FAILED');
+test('reset intent 查询遇到 GraphQL transport error 时，应进入 error 状态并展示统一提示', async ({
+  page,
+}) => {
+  await mockResetPasswordIntentTransportError(page, 'graphql', 'RESET_INTENT_LOOKUP_FAILED');
 
   await page.goto(routes.resetPassword('reset-token-transport-failed'));
 
-  await expect(page.getByText('重置链接不可用')).toBeVisible();
-  await expect(page.getByText('暂时无法确认这个重置链接的状态，请稍后再试。')).toBeVisible();
+  await expect(page.getByText('操作失败')).toBeVisible();
+  await expect(page.getByText('请求处理失败，请稍后重试。')).toBeVisible();
+  await expect(page.getByRole('button', { name: '重新发送重置邮件' })).toBeVisible();
+});
+
+test('reset intent 查询遇到 network transport error 时，应进入 error 状态并展示网络提示', async ({
+  page,
+}) => {
+  await mockResetPasswordIntentTransportError(page, 'network', 'RESET_INTENT_LOOKUP_NETWORK_DOWN');
+
+  await page.goto(routes.resetPassword('reset-token-network-failed'));
+
+  await expect(page.getByText('操作失败')).toBeVisible();
+  await expect(page.getByText('网络连接异常，请稍后重试。')).toBeVisible();
   await expect(page.getByRole('button', { name: '重新发送重置邮件' })).toBeVisible();
 });
 
@@ -394,7 +439,7 @@ test('reset code 提交时若已过期，应切换到失败态', async ({ page }
 });
 
 test('reset password 提交遇到 transport error 时，应停留表单态并展示错误反馈', async ({ page }) => {
-  await mockResetPasswordSubmitTransportError(page, 'RESET_PASSWORD_TRANSPORT_FAILED');
+  await mockResetPasswordSubmitTransportError(page, 'graphql', 'RESET_PASSWORD_TRANSPORT_FAILED');
 
   await page.goto(routes.resetPassword('reset-token-submit-transport-failed'));
 
@@ -404,7 +449,24 @@ test('reset password 提交遇到 transport error 时，应停留表单态并展
   await page.getByLabel('确认新密码').fill('password-1234');
   await page.getByRole('button', { name: '更新密码' }).click();
 
-  await expect(page.getByRole('alert')).toContainText('RESET_PASSWORD_TRANSPORT_FAILED');
+  await expect(page.getByRole('alert')).toContainText('请求处理失败，请稍后重试。');
+  await expect(page.getByRole('button', { name: '更新密码' })).toBeVisible();
+});
+
+test('reset password 提交遇到 http transport error 时，应停留表单态并展示服务异常提示', async ({
+  page,
+}) => {
+  await mockResetPasswordSubmitTransportError(page, 'http', 'RESET_PASSWORD_HTTP_FAILED');
+
+  await page.goto(routes.resetPassword('reset-token-submit-http-failed'));
+
+  await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
+
+  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
+  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByRole('button', { name: '更新密码' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');
   await expect(page.getByRole('button', { name: '更新密码' })).toBeVisible();
 });
 

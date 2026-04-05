@@ -1,6 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type { ResetPasswordResult, VerificationIntentResult } from '../application/types';
@@ -201,6 +201,13 @@ export const publicAuthApi: PublicAuthApiPort = {
 };
 
 function toResetPasswordResult(error: unknown): ResetPasswordResult {
+  if (isGraphQLIngressError(error)) {
+    return {
+      status: 'error',
+      message: error.userMessage,
+    };
+  }
+
   const reason = resolveVerificationFailureReason(error);
 
   if (reason !== 'unknown') {

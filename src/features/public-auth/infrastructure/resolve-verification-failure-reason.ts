@@ -1,3 +1,5 @@
+import { isGraphQLIngressError } from '@/shared/graphql';
+
 import type { VerificationFailureReason } from '../application/types';
 
 export function mapVerificationFailureReason(
@@ -29,6 +31,10 @@ export function mapVerificationFailureReason(
 }
 
 export function resolveVerificationFailureReason(error: unknown): VerificationFailureReason {
+  if (isGraphQLIngressError(error)) {
+    return 'unknown';
+  }
+
   if (!(error instanceof Error)) {
     return 'unknown';
   }
