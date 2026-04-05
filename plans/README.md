@@ -64,6 +64,7 @@ plan 不负责定义稳定规则。
 
 ## 当前计划
 
+- [graphql-error-model-plan.md](./graphql-error-model-plan.md)
 - [layout-todo.md](./layout-todo.md)
 - [identity-access-model-now.md](./identity-access-model-now.md)
 - [identity-access-model-future.md](./identity-access-model-future.md)

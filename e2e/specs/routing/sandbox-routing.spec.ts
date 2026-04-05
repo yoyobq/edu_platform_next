@@ -27,6 +27,37 @@ test('test 环境下具备会话时，应允许进入 sandbox 演练场', async 
   await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();
 });
 
+test('test 环境下待补全会话访问 sandbox 时，应优先分流到 /welcome', async ({ page }) => {
+  test.skip(process.env.PLAYWRIGHT_APP_ENV === 'prod');
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      accessGroup: ['REGISTRANT'],
+      displayName: 'pending-user',
+      identity: null,
+      identityHint: 'STUDENT',
+      needsProfileCompletion: true,
+      primaryAccessGroup: 'REGISTRANT',
+    },
+  });
+  await seedAuthSession(page, {
+    accessGroup: ['REGISTRANT'],
+    displayName: 'pending-user',
+    identity: null,
+    identityHint: 'STUDENT',
+    needsProfileCompletion: true,
+    primaryAccessGroup: 'REGISTRANT',
+  });
+
+  await page.goto('/sandbox/playground?tab=queue');
+
+  await expect(page).toHaveURL(
+    new RegExp(`/welcome\\?redirect=${encodeURIComponent('/sandbox/playground?tab=queue')}$`),
+  );
+  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+});
+
 test('prod 环境下访问 sandbox 时，应先按环境规则返回 404', async ({ page }) => {
   test.skip(process.env.PLAYWRIGHT_APP_ENV !== 'prod');
 
