@@ -76,7 +76,7 @@
 
 ## 当前这次尝试表达出来的意图
 
-按当前未提交变更看，意图已经比较明确：
+按当前已落地实现看，意图已经比较明确：
 
 1. 新增 [`src/shared/graphql`](../src/shared/graphql) 作为共享入口雏形
 2. 用 [`executeGraphQL`](../src/shared/graphql/request.ts) 先收掉各 feature 内重复的 `fetch` 逻辑
@@ -187,7 +187,7 @@
 
 这里保留这条分析，是为了强调不应再把 runtime bootstrap 搬回 provider。
 
-这里需要补一条更硬的约束：
+硬约束应保持为：
 
 - runtime 必须可脱离 React 工作
 - `GraphQLProvider` 只负责 React 集成，不负责建立唯一运行时语义
@@ -203,6 +203,8 @@
 3. ingress 对外暴露稳定的错误契约
 4. ingress 明确承接鉴权注入与未来 refresh 挂点
 5. imperative 调用与未来 hooks 调用必须共享同一套横切规则
+
+其中第 4 点当前只表示“保留可扩展边界”，不表示本轮要把 shared auto-refresh 重新做回共享层默认行为。
 
 ## 建议的目标分层
 

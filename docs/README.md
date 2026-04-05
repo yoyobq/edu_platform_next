@@ -63,12 +63,15 @@ This directory contains project documentation.
 
 ## Plans
 
+- [../plans/graphql-ingress-plan.md](../plans/graphql-ingress-plan.md)
+- [../plans/graphql-error-model-plan.md](../plans/graphql-error-model-plan.md)
 - [../plans/layout-todo.md](../plans/layout-todo.md)
+- [../plans/identity-access-model-future.md](../plans/identity-access-model-future.md)
 - [../plans/public-auth-flows-plan.md](../plans/public-auth-flows-plan.md)
 - [../plans/public-auth-flows-now.md](../plans/public-auth-flows-now.md)
 - [../plans/public-auth-flows-future.md](../plans/public-auth-flows-future.md)
+- [../plans/welcome-profile-completion-plan.md](../plans/welcome-profile-completion-plan.md)
 - [../plans/workbench-entry-plan.md](../plans/workbench-entry-plan.md)
-- [../plans/stable-clean-adoption-plan.md](../plans/stable-clean-adoption-plan.md)
 
 ## Project Convention Docs
 

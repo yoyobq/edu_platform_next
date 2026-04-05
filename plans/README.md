@@ -64,12 +64,12 @@ plan 不负责定义稳定规则。
 
 ## 当前计划
 
+- [graphql-ingress-plan.md](./graphql-ingress-plan.md)
 - [graphql-error-model-plan.md](./graphql-error-model-plan.md)
 - [layout-todo.md](./layout-todo.md)
-- [identity-access-model-now.md](./identity-access-model-now.md)
 - [identity-access-model-future.md](./identity-access-model-future.md)
 - [public-auth-flows-plan.md](./public-auth-flows-plan.md)
 - [public-auth-flows-now.md](./public-auth-flows-now.md)
 - [public-auth-flows-future.md](./public-auth-flows-future.md)
+- [welcome-profile-completion-plan.md](./welcome-profile-completion-plan.md)
 - [workbench-entry-plan.md](./workbench-entry-plan.md)
-- [stable-clean-adoption-plan.md](./stable-clean-adoption-plan.md)
