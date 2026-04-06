@@ -1,8 +1,14 @@
-import { ensureFreshSession, forceLogout, getAuthSessionSnapshot } from '@/features/auth';
+import {
+  ensureFreshSession,
+  forceLogout,
+  getAuthSessionSnapshot,
+  queueAuthRefreshFailureMessage,
+} from '@/features/auth';
 
 import { configureGraphQLRuntime } from '@/shared/graphql';
 
 let hasBootstrappedGraphQLRuntime = false;
+let refreshSessionPromise: Promise<void> | null = null;
 
 export function bootstrapGraphQLRuntime() {
   if (hasBootstrappedGraphQLRuntime) {
@@ -11,9 +17,24 @@ export function bootstrapGraphQLRuntime() {
 
   configureGraphQLRuntime({
     getAccessToken: () => getAuthSessionSnapshot()?.accessToken ?? null,
-    onAuthFailure: () => forceLogout(),
-    refreshSession: async () => {
-      await ensureFreshSession({ force: true });
+    onAuthFailure: () => {
+      queueAuthRefreshFailureMessage();
+      forceLogout(null);
+    },
+    refreshSession: () => {
+      if (refreshSessionPromise) {
+        return refreshSessionPromise;
+      }
+
+      refreshSessionPromise = (async () => {
+        try {
+          await ensureFreshSession({ force: true });
+        } finally {
+          refreshSessionPromise = null;
+        }
+      })();
+
+      return refreshSessionPromise;
     },
   });
 

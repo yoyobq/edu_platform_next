@@ -1,6 +1,8 @@
 import { ConfigProvider } from 'antd';
 import { Outlet } from 'react-router';
 
+import { AuthRefreshFeedbackBridge } from '@/app/providers';
+
 export function PublicEntryLayout() {
   return (
     <ConfigProvider
@@ -18,6 +20,7 @@ export function PublicEntryLayout() {
         },
       }}
     >
+      <AuthRefreshFeedbackBridge />
       <Outlet />
     </ConfigProvider>
   );

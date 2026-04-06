@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router';
 import {
   type AuthAccessGroup,
   forceLogout,
+  queueAuthRefreshRecoveredMessage,
   refreshSession,
   resolveWelcomeRedirectTarget,
   useAuthSessionState,
@@ -96,6 +97,8 @@ export function WelcomePage() {
         setSubmitError('资料已提交，但当前会话仍显示待补全，请联系管理员核查后端收敛。');
         return;
       }
+
+      queueAuthRefreshRecoveredMessage();
 
       startTransition(() => {
         navigate(redirectTarget, { replace: true });

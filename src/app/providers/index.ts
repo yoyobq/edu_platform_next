@@ -1,5 +1,6 @@
 // src/app/providers/index.ts
 
+export { AuthRefreshFeedbackBridge } from './auth-refresh-feedback';
 export {
   type AppEnv,
   type CollaborationAvailability,

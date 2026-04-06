@@ -201,6 +201,20 @@ public 白名单当前包括：
 - `/verify/`
 - `/magic-link/`
 
+### refresh 反馈承接
+
+当前 refresh 相关提示分两类：
+
+- 普通业务请求的 reactive refresh：默认不提示，保持无感
+- 页面级、用户已明确感知到的 refresh：允许补轻量提示
+
+当前已落地规则：
+
+- refresh 失败后的“登录状态已失效，请重新登录”由 auth feature 先写 flash，再由 layout 内的反馈 bridge 承接
+- 失败提示是单一路径，不再同时写 auth session `lastError` 和 toast
+- 页面级 refresh 成功提示采用同一套 flash 承接，避免页面跳转过快导致局部 message 宿主随页面一起卸载
+- 反馈形式统一使用 `antd message`，不使用 `notification`
+
 ## 当前长线方案
 
 当前项目长期按以下口径执行：

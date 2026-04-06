@@ -40,8 +40,18 @@ export {
 };
 import type { AuthLoginInput } from './application/types';
 import { authApi } from './infrastructure/auth-api';
+import {
+  queueAuthRefreshFailureMessage,
+  queueAuthRefreshRecoveredMessage,
+  readAuthRefreshFeedbackFlash,
+} from './infrastructure/auth-refresh-feedback';
 import { authStorage } from './infrastructure/auth-storage';
 export { LoginForm } from './ui/login-form';
+export {
+  queueAuthRefreshFailureMessage,
+  queueAuthRefreshRecoveredMessage,
+  readAuthRefreshFeedbackFlash,
+};
 
 const authPorts: AuthPorts = {
   api: authApi,
@@ -68,6 +78,6 @@ export function logout() {
   return runLogout(authPorts);
 }
 
-export function forceLogout(reason?: string) {
+export function forceLogout(reason?: string | null) {
   return runForceLogout(authPorts, reason);
 }

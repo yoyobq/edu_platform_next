@@ -7,6 +7,7 @@ import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation, useNavigate } from 'react-router';
 
 import {
+  AuthRefreshFeedbackBridge,
   CollaborationSessionProvider,
   KeyboardShortcutStackProvider,
   SidecarStateProvider,
@@ -180,6 +181,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
         },
       }}
     >
+      <AuthRefreshFeedbackBridge />
       <div className="min-h-screen bg-bg-layout text-text">
         <Layout style={{ minHeight: '100%', background: 'transparent' }}>
           <Layout.Header
