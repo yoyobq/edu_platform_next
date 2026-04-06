@@ -66,6 +66,7 @@
 - 根据 `401 / UNAUTHENTICATED` 自动发起 refresh
 - 自动决定何时发起 refresh
 - 自动决定会话失效后如何推进 auth 状态
+- protected route 进入前的前置续期判断
 
 ## auth feature 负责什么
 
@@ -79,6 +80,7 @@
 - 会话快照维护
 - 本地 session 持久化
 - `me` 水合后的当前会话重建
+- protected route / 页面显式边界上的前置续期（`ensureFreshSession()`）
 
 一句话要求：
 
@@ -127,6 +129,27 @@
 因此当前结论是：
 
 - 不为了“更自动”牺牲 auth 主权清晰度
+
+## 当前显式续期边界
+
+当前项目虽然不做 shared auto-refresh，但 auth feature 允许一条显式前置续期能力：
+
+- `ensureFreshSession()` 只由 auth feature 提供
+- 它只在 route loader、页面进入前这类显式边界调用
+- 它不会变成 `shared/graphql` 的全局错误拦截器
+
+这条能力的当前约束是：
+
+- 先看当前 token 是否临近过期
+- 若仍足够新鲜，则直接复用当前 snapshot
+- 若已接近过期，则由 auth feature 主动调用 `refresh`
+- 多个边界同时触发时，只允许一个 `refresh` 在飞
+- 失败后的 redirect / UI 反馈仍由调用方决定，不由 `shared/graphql` 接管
+
+一句话理解：
+
+- 可以有 auth 显式续期
+- 不做 shared 隐式拦截续期
 
 ## 当前长线方案
 

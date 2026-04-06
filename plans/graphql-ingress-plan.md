@@ -85,10 +85,13 @@
 
 - `JWT_TOKEN_EXPIRED`
 - `JWT_TOKEN_INVALID`
-- `AUTH_INVALID_REFRESH_TOKEN`
+- `INVALID_REFRESH_TOKEN`
 
 其中当前计划只将 `JWT_TOKEN_EXPIRED` 作为 silent refresh 的候选触发信号；
-`JWT_TOKEN_INVALID` 与 `AUTH_INVALID_REFRESH_TOKEN` 默认按认证失败处理，不进入自动续期重试。
+`JWT_TOKEN_INVALID` 与 `INVALID_REFRESH_TOKEN` 默认按认证失败处理，不进入自动续期重试。
+
+对齐来源以 `docs/backend/domain-error.ts` 与 `docs/backend/graphql-exception.filter.ts` 为准；
+`schema.graphql` 主要提供 GraphQL 类型、query、mutation 与显式业务结果，不负责穷举运行时错误码。
 
 ### single-flight 要求
 

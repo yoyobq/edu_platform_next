@@ -218,7 +218,7 @@ const localRules = {
 };
 
 export default defineConfig([
-  globalIgnores(['dist']),
+  globalIgnores(['dist', 'docs/backend/**']),
   {
     files: ['**/*.{ts,tsx}'],
     plugins: {
