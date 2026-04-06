@@ -12,6 +12,8 @@ import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 import { ResetPasswordForm } from './reset-password-form';
 
+const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
+
 function ResetPasswordFailureState({ reason }: { reason: VerificationFailureReason }) {
   const navigate = useNavigate();
   const description =
@@ -29,7 +31,7 @@ function ResetPasswordFailureState({ reason }: { reason: VerificationFailureReas
       <Button type="primary" onClick={() => navigate('/forgot-password')}>
         重新发送重置邮件
       </Button>
-      <Button onClick={() => navigate('/login')}>返回登录</Button>
+      <Button onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>返回登录</Button>
     </Flex>
   );
 }
@@ -135,7 +137,7 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
           title="密码已更新"
           description="你现在可以使用新密码重新登录。"
         />
-        <Button type="primary" onClick={() => navigate('/login')}>
+        <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
           返回登录
         </Button>
       </Flex>
@@ -149,7 +151,7 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
         <Button type="primary" onClick={() => navigate('/forgot-password')}>
           重新发送重置邮件
         </Button>
-        <Button onClick={() => navigate('/login')}>返回登录</Button>
+        <Button onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>返回登录</Button>
       </Flex>
     );
   }

@@ -1,4 +1,5 @@
 import { routes } from '../../fixtures/routes';
+import { mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 const verificationCases = [
@@ -53,3 +54,63 @@ for (const verificationCase of verificationCases) {
     }
   });
 }
+
+test('已有本地 session 时，invite/verify-email/magic-link 壳页不应主动触发 me 或 refresh', async ({
+  page,
+}) => {
+  let meRequestCount = 0;
+  let refreshRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    displayName: 'stale-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as { query?: string } | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query Me')) {
+      meRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            me: null,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refresh: null,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.invite('workspace', 'invite-code-001'));
+  await expect(page.getByRole('heading', { name: '邀请入口' })).toBeVisible();
+
+  await page.goto(routes.verifyEmail('verify-email-001'));
+  await expect(page.getByRole('heading', { name: '邮箱验证入口' })).toBeVisible();
+
+  await page.goto(routes.magicLink('magic-link-001'));
+  await expect(page.getByRole('heading', { name: 'Magic Link 入口' })).toBeVisible();
+
+  expect(meRequestCount).toBe(0);
+  expect(refreshRequestCount).toBe(0);
+});

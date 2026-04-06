@@ -120,13 +120,15 @@ function buildWelcomeRedirectURL(request: Request) {
 }
 
 async function loginRouteLoader({ request }: LoaderFunctionArgs) {
-  await restoreSession();
+  const { url } = getRequestTarget(request);
+
+  if (url.searchParams.get('skipRestore') !== '1') {
+    await restoreSession();
+  }
 
   const snapshot = getAuthSessionSnapshot();
 
   if (snapshot) {
-    const { url } = getRequestTarget(request);
-
     throw redirect(
       resolveAuthenticatedRedirectTarget(
         url.searchParams.get('redirect'),
@@ -294,10 +296,8 @@ function RouteHydrateFallback() {
 function AuthBootstrapGate({ children }: { children: ReactNode }) {
   const authSession = useAuthSessionState();
   const prevStatusRef = useRef(authSession.status);
-
-  useEffect(() => {
-    void restoreSession();
-  }, []);
+  const isCurrentPathPublic =
+    typeof window !== 'undefined' ? isPublicPath(window.location.pathname) : false;
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
@@ -314,7 +314,7 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
     }
   }, [authSession.status]);
 
-  if (authSession.status === 'restoring') {
+  if (authSession.status === 'restoring' && !isCurrentPathPublic) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-bg-layout">
         <Spin size="large" />

@@ -1,6 +1,7 @@
 import type { Page, Route } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
+import { mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 type ResetIntentStatus = 'active' | 'expired' | 'used' | 'invalid';
@@ -259,6 +260,143 @@ test('登录页应提供忘记密码入口，并能完成统一反馈', async ({
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
 });
 
+test('forgot-password 返回登录时，不应触发 restore -> me', async ({ page }) => {
+  let meRequestCount = 0;
+  let refreshRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    displayName: 'stale-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+  await mockForgotPasswordMutations(page);
+
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+
+    if (typeof payload?.query !== 'string') {
+      await route.fallback();
+      return;
+    }
+
+    if (payload.query.includes('query Me')) {
+      meRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({ data: { me: null } }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (payload.query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({ data: { refresh: null } }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.forgotPassword);
+  await page.getByLabel('邮箱').fill('tester@example.com');
+  await page.getByRole('button', { name: '发送重置邮件' }).click();
+  await page.getByRole('button', { name: '返回登录' }).click();
+
+  await expect(page).toHaveURL(/\/login\?skipRestore=1$/);
+  await expect(page.getByRole('heading', { name: '登录后再进入工作台' })).toBeVisible();
+  expect(meRequestCount).toBe(0);
+  expect(refreshRequestCount).toBe(0);
+});
+
+test('已有本地 session 时，forgot/reset 页面不应主动触发 me 或 refresh', async ({ page }) => {
+  let meRequestCount = 0;
+  let refreshRequestCount = 0;
+  let resetIntentRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    displayName: 'stale-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+
+    if (typeof payload?.query !== 'string') {
+      await route.fallback();
+      return;
+    }
+
+    if (payload.query.includes('query Me')) {
+      meRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            me: null,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (payload.query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refresh: null,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (payload.query.includes('query FindPasswordResetVerificationRecord')) {
+      resetIntentRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            findVerificationRecord: {
+              message: null,
+              reason: null,
+              record: {
+                notBefore: null,
+                status: 'ACTIVE',
+              },
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.forgotPassword);
+  await expect(page.getByRole('heading', { name: '找回你的账户密码' })).toBeVisible();
+
+  await page.goto(routes.resetPassword('reset-password-001'));
+  await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
+  await expect(page.getByLabel('新密码', { exact: true })).toBeVisible();
+
+  expect(meRequestCount).toBe(0);
+  expect(refreshRequestCount).toBe(0);
+  expect(resetIntentRequestCount).toBe(1);
+});
+
 test('忘记密码请求遇到 GraphQL transport error 时，应停留当前页并展示错误反馈', async ({
   page,
 }) => {
@@ -307,6 +445,60 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
 
   await expect(page.getByText('密码已更新')).toBeVisible();
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
+});
+
+test('reset-password 返回登录时，不应触发 restore -> me', async ({ page }) => {
+  let meRequestCount = 0;
+  let refreshRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    displayName: 'stale-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+  await mockResetPasswordFlow(page, 'active');
+
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+
+    if (typeof payload?.query !== 'string') {
+      await route.fallback();
+      return;
+    }
+
+    if (payload.query.includes('query Me')) {
+      meRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({ data: { me: null } }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (payload.query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({ data: { refresh: null } }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.resetPassword('reset-token-active'));
+  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
+  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByRole('button', { name: '更新密码' }).click();
+  await page.getByRole('button', { name: '返回登录' }).click();
+
+  await expect(page).toHaveURL(/\/login\?skipRestore=1$/);
+  await expect(page.getByRole('heading', { name: '登录后再进入工作台' })).toBeVisible();
+  expect(meRequestCount).toBe(0);
+  expect(refreshRequestCount).toBe(0);
 });
 
 test('query token 形式的 reset link 也应进入重置页面', async ({ page }) => {

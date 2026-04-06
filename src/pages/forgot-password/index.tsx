@@ -7,6 +7,8 @@ import { ForgotPasswordForm, requestPasswordReset } from '@/features/public-auth
 import { isGraphQLIngressError } from '@/shared/graphql';
 import { BrandLockup } from '@/shared/ui/brand';
 
+const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
+
 export function ForgotPasswordPage() {
   const navigate = useNavigate();
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -51,7 +53,7 @@ export function ForgotPasswordPage() {
                       </Typography.Paragraph>
                     </div>
 
-                    <Button type="primary" onClick={() => navigate('/login')}>
+                    <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
                       返回登录
                     </Button>
                   </>
@@ -95,7 +97,7 @@ export function ForgotPasswordPage() {
                     <Button
                       type="link"
                       style={{ paddingLeft: 0, width: 'fit-content' }}
-                      onClick={() => navigate('/login')}
+                      onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}
                     >
                       返回登录
                     </Button>
