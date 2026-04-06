@@ -88,9 +88,6 @@ export function WelcomePage() {
         refreshedSnapshot = await refreshSession();
       } catch {
         forceLogout('资料已提交，但当前会话刷新失败，请重新登录。');
-        startTransition(() => {
-          navigate('/login', { replace: true });
-        });
         return;
       }
 

@@ -1,30 +1,27 @@
-# Identity Access Model Future
+# Identity Access Model Follow-up
 
 本文件只记录 `identity-access` 当前未完成、明确留到后续推进的事项。
 
 当前已稳定口径见：
 
 - [docs/project-convention/identity-access-session.md](/var/www/platform_next/docs/project-convention/identity-access-session.md)
+- [welcome-profile-completion-plan.md](/var/www/platform_next/plans/welcome-profile-completion-plan.md)
 
-当前轮计划入口见：
+## Follow-up
 
-- [identity-access-model-now.md](/var/www/platform_next/plans/identity-access-model-now.md)
-
-## Future
-
-### 1. 登录后身份补齐交互
+### 1. 登录后身份补齐链路的后续收敛
 
 当前已确定：
 
-- 若 `staff / student` 链路暂未补齐，仍允许登录
-- 这类用户不能按普通完整身份继续放行
-- 退避身份必须由后端显式给出
+- `REGISTRANT` 已作为前端当前会话里的过渡态承接
+- `needsProfileCompletion` 已是登录后进入 `/welcome` 的稳定触发条件
+- 前端不得因实体缺失自行推断 `GUEST`
 
 后续仍需明确：
 
-- 继续注册
-- 补充信息
-- 进入受控兜底流程
+- `/welcome`、未来 `/register`、invite 激活之间的长期边界
+- `REGISTRANT` 作为过渡态在更完整 onboarding 完成后的收口方式
+- 登录后继续注册 / 补充资料 / 进入正式业务主流程的后续编排
 
 ### 2. slot 摘要层与产出链路
 

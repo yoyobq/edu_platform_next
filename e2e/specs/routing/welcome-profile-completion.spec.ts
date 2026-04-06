@@ -23,12 +23,82 @@ const completedStaffSession = {
   primaryAccessGroup: 'STAFF' as const,
 };
 
+const registrantWithoutCompletionRequirementSession = {
+  accessGroup: ['REGISTRANT'] as const,
+  displayName: 'registrant-no-welcome',
+  identity: null,
+  identityHint: 'STUDENT' as const,
+  needsProfileCompletion: false,
+  primaryAccessGroup: 'REGISTRANT' as const,
+};
+
+const guestSession = {
+  accessGroup: ['GUEST'] as const,
+  displayName: 'guest-user',
+  identity: null,
+  identityHint: null,
+  needsProfileCompletion: false,
+  primaryAccessGroup: 'GUEST' as const,
+};
+
+const adminPendingCompletionSession = {
+  accessGroup: ['ADMIN'] as const,
+  displayName: 'legacy-admin-pending',
+  identity: null,
+  identityHint: 'STAFF' as const,
+  needsProfileCompletion: true,
+  primaryAccessGroup: 'ADMIN' as const,
+};
+
 test('已登录且需补全时，访问受保护页会被分流到 /welcome', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: pendingRegistrantSession,
   });
   await seedAuthSession(page, pendingRegistrantSession);
+
+  await page.goto(routes.sandboxPlayground);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/welcome\\?redirect=${encodeURIComponent(routes.sandboxPlayground)}$`),
+  );
+  await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+});
+
+test('REGISTRANT 但 needsProfileCompletion=false 时，不应仅因 accessGroup 被带去 /welcome', async ({
+  page,
+}) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: registrantWithoutCompletionRequirementSession,
+  });
+  await seedAuthSession(page, registrantWithoutCompletionRequirementSession);
+
+  await page.goto(routes.sandboxPlayground);
+
+  await expect(page).toHaveURL(new RegExp(`${routes.sandboxPlayground}$`));
+  await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();
+});
+
+test('GUEST 且 identity=null 时，不应因实体缺失被推入 /welcome', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: guestSession,
+  });
+  await seedAuthSession(page, guestSession);
+
+  await page.goto(routes.sandboxPlayground);
+
+  await expect(page).toHaveURL(new RegExp(`${routes.sandboxPlayground}$`));
+  await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();
+});
+
+test('ADMIN 且 identityHint 指向正式身份但仍需补全时，也应进入 /welcome', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: adminPendingCompletionSession,
+  });
+  await seedAuthSession(page, adminPendingCompletionSession);
 
   await page.goto(routes.sandboxPlayground);
 
@@ -140,17 +210,28 @@ test('welcome 提交成功后若 refresh 失败，应强制回到登录页', asy
     refreshErrorMessage: 'TOKEN_INVALID',
   });
   await seedAuthSession(page, pendingRegistrantSession);
+  const visitedMainFrameURLs: string[] = [];
+
+  page.on('framenavigated', (frame) => {
+    if (frame === page.mainFrame()) {
+      visitedMainFrameURLs.push(frame.url());
+    }
+  });
 
   await page.goto(`${routes.welcome}?redirect=${encodeURIComponent(routes.sandboxPlayground)}`);
   await page.getByText('我是教职工').click();
   await page.getByLabel('姓名').fill('李老师');
   await page.getByRole('button', { name: '提交并继续' }).click();
 
-  await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
-  await expect(
-    page.evaluate(() => window.localStorage.getItem('aigc-friendly-frontend.auth.session.v2')),
-  ).resolves.toBeNull();
+  const expectedLoginURL = new RegExp(
+    `/login\\?redirect=${encodeURIComponent(
+      `${routes.welcome}?redirect=${encodeURIComponent(routes.sandboxPlayground)}`,
+    )}$`,
+  );
+
+  await expect
+    .poll(() => visitedMainFrameURLs.some((url) => expectedLoginURL.test(url)))
+    .toBe(true);
 });
 
 test('welcome 提交成功后若 refresh 后仍需补全，应停留当前页并展示异常反馈', async ({ page }) => {
