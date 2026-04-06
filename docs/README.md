@@ -73,7 +73,7 @@ This directory contains project documentation.
 - [../plans/public-auth-flows-explain.md](../plans/public-auth-flows-explain.md)
 - [../plans/public-auth-flows-now.md](../plans/public-auth-flows-now.md)
 - [../plans/public-auth-flows-future.md](../plans/public-auth-flows-future.md)
-- [../plans/welcome-profile-completion-plan.md](../plans/welcome-profile-completion-plan.md)
+- [../plans/welcome-profile-completion-followup.md](../plans/welcome-profile-completion-followup.md)
 - [../plans/workbench-entry-plan.md](../plans/workbench-entry-plan.md)
 
 ## Project Convention Docs

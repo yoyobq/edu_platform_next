@@ -5,7 +5,7 @@
 当前已稳定口径见：
 
 - [docs/project-convention/identity-access-session.md](/var/www/platform_next/docs/project-convention/identity-access-session.md)
-- [welcome-profile-completion-plan.md](/var/www/platform_next/plans/welcome-profile-completion-plan.md)
+- [welcome-profile-completion-followup.md](/var/www/platform_next/plans/welcome-profile-completion-followup.md)
 
 ## Follow-up
 
