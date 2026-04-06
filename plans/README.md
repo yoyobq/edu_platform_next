@@ -83,7 +83,7 @@ plan 不负责定义稳定规则。
 ## 当前计划
 
 - [graphql-ingress-followup.md](./graphql-ingress-followup.md)
-- [graphql-error-model-plan.md](./graphql-error-model-plan.md)
+- [graphql-error-model-followup.md](./graphql-error-model-followup.md)
 - [layout-todo.md](./layout-todo.md)
 - [identity-access-model-future.md](./identity-access-model-future.md)
 - [public-auth-flows-plan.md](./public-auth-flows-plan.md)

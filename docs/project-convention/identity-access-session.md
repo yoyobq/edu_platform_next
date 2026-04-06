@@ -95,14 +95,15 @@
 
 ## 当前身份与授权摘要
 
-当前主身份只收敛为：
+当前 `primaryAccessGroup` 只收敛为：
 
 - `ADMIN`
 - `GUEST`
+- `REGISTRANT`
 - `STAFF`
 - `STUDENT`
 
-当前 `accessGroup` 只消费上述四项。
+当前 `accessGroup` 只消费上述五项。
 
 当前 `identity` 只收敛为：
 
@@ -111,7 +112,8 @@
 
 当前前端规则为：
 
-- `ADMIN / GUEST` 不要求存在独立 `identity`
+- `ADMIN / GUEST / REGISTRANT` 不要求存在独立 `identity`
+- `REGISTRANT` 是登录后资料补全的过渡态，不等于 `GUEST`
 - `STAFF / STUDENT` 的业务主视角由 `identity` 详情补充
 - 前端不得因实体缺失自行推断 `GUEST`
 - `GUEST` 只能由后端显式给出

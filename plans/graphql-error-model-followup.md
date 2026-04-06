@@ -1,4 +1,4 @@
-# GraphQL Error Model Plan
+# GraphQL Error Model Follow-up
 
 本计划只保留当前仍未收尾的事项。
 
