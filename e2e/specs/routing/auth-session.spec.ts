@@ -174,27 +174,21 @@ test('本地会话失效且 refresh 失败时，应强制回到登录页', async
   ).resolves.toBeNull();
 });
 
-test('前置续期失败后，应清空会话并停留在登录页而不是形成回环', async ({ page }) => {
+test('access token 临近过期但 me 仍可用时，首页导航不应因前置续期被阻断', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
-    currentSession: createAdminSession({ displayName: 'expired-admin' }),
-    refreshErrorMessage: 'TOKEN_INVALID',
+    currentSession: createAdminSession({ displayName: 'stale-admin' }),
   });
-  await seedAuthSession(page, createAdminSession({ displayName: 'expired-admin' }));
+  await seedAuthSession(page, createAdminSession({ displayName: 'stale-admin' }));
   await replaceStoredAccessToken(page, createJwtWithExpOffsetMs(-120_000));
 
   await page.goto(routes.home);
 
-  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(layoutBanner(page).getByText('stale-admin')).toBeVisible();
   await expect(
     page.evaluate((storageKey) => window.localStorage.getItem(storageKey), AUTH_STORAGE_KEY),
-  ).resolves.toBeNull();
-
-  await page.reload();
-
-  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  ).resolves.not.toBeNull();
 });
 
 test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ page }) => {
@@ -213,7 +207,7 @@ test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ pa
   await expect(page.getByText('结束会话')).toBeVisible();
   await page.getByRole('button', { name: '江湖再见' }).click();
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
   await expect(
     page.evaluate(() => window.localStorage.getItem('aigc-friendly-frontend.auth.session.v2')),

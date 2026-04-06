@@ -66,7 +66,7 @@
 - `restore`
 - `forceLogout`
 - auth 主流程（`me` 水合、`restore -> refresh -> me`）的 retry
-- protected route 进入前的主动安全检查
+- protected route 进入前的默认同步续期
 - 会话失效后如何跳转（由 app 层 watcher 负责）
 
 ## auth feature 负责什么
@@ -81,7 +81,7 @@
 - 会话快照维护
 - 本地 session 持久化
 - `me` 水合后的当前会话重建
-- protected route / 页面显式边界上的主动续期（`ensureFreshSession()`）
+- auth 显式边界上的主动续期能力（`ensureFreshSession()`）
 - refresh single-flight（`ensureFreshPromise`）
 
 一句话要求：
@@ -163,7 +163,7 @@
 ### 1. 主动续期（proactive）
 
 - `ensureFreshSession()` 由 auth feature 提供
-- 它在 route loader、页面进入前这类显式边界调用
+- 它保留为 auth 的显式能力，但当前不作为 protected route 的默认同步门槛
 - 先看当前 token 是否临近过期（当前阈值：过期前 60 秒）
 - 若仍足够新鲜，则直接复用当前 snapshot
 - 若已接近过期，则由 auth feature 主动调用 `refresh`
@@ -210,7 +210,8 @@ public 白名单当前包括：
 - `features/auth` 长期负责 `login / refresh / restore / logout / forceLogout`
 - auth 主流程通过 `allowAuthRetry: false` 排除在 shared retry 之外
 - `authMode: 'required' | 'none'` 作为稳定请求语义长期保留
-- router 中的 `ensureFreshSession()` 是主动安全检查，请求层 reactive refresh 是兜底
+- router 默认只做 `restoreSession()` 与页面级分流，不同步等待 `ensureFreshSession()`
+- 请求层 reactive refresh 是当前默认兜底路径
 - `onAuthFailure` 只负责宣布会话失效；真正的页面跳转由 app 根部 watcher 响应 auth state 变化
 
 ## WS 边界

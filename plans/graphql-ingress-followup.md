@@ -14,7 +14,7 @@
 - `authMode: 'required' | 'none'`
 - 普通业务请求的 reactive refresh
 - auth 主流程通过 `allowAuthRetry: false` 排除在 shared retry 之外
-- `ensureFreshSession()` 的主动续期与 `ensureFreshPromise` single-flight
+- `ensureFreshSession()` 能力与 `ensureFreshPromise` single-flight
 - `refreshSession` / `onAuthFailure` 的 app bridge 注入
 - `forceLogout()` 与 app 根部 auth state watcher 的分工
 - 显式 `accessToken` 与 reactive retry 的约束

@@ -33,7 +33,7 @@
 当前前端还保留一条显式前置续期能力：
 
 - `ensureFreshSession()` 由 `features/auth` 提供
-- 它只在 auth 的显式边界上调用，例如 protected route loader
+- 它只在 auth 的显式边界上调用，不再作为 protected route 的默认同步门槛
 - 它不会下沉成 `shared/graphql` 自己的 refresh 主权
 
 当前规则为：
@@ -63,9 +63,9 @@
 进入 protected route 前的当前默认链路为：
 
 1. 先执行 `restoreSession()`
-2. 若当前已有会话，再执行 `ensureFreshSession()`
-3. 续期成功后，使用最新 snapshot 继续做 `needsProfileCompletion` 和访问控制判断
-4. 若续期失败，调用方先强制登出，再决定跳回登录页
+2. 若当前已有会话，直接使用当前 snapshot 做 `needsProfileCompletion` 和访问控制判断
+3. 不再在 route loader 中同步等待 `ensureFreshSession()`
+4. 后续若普通业务请求收到 `type: 'auth'`，再走请求层 reactive refresh / forceLogout
 
 当前会话失效后的页面响应规则为：
 
@@ -155,7 +155,6 @@
 ## 当前前端异常处理
 
 - token 过期或无效：强制登出
-- protected route 前置续期失败：由调用方强制登出并回到登录页
 - `me` 失败：先尝试 `refresh -> me`
 - `refresh` 成功后 `me` 再失败：强制登出
 - 关键 claim 缺失：强制登出

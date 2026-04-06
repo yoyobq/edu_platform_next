@@ -25,8 +25,6 @@ import {
 import { WelcomePage } from '@/pages/welcome';
 import {
   buildWelcomeRedirectTarget,
-  ensureFreshSession,
-  forceLogout,
   getAuthSessionSnapshot,
   hasAdminAccess,
   resolveAuthenticatedRedirectTarget,
@@ -121,15 +119,6 @@ function buildWelcomeRedirectURL(request: Request) {
   return buildWelcomeRedirectTarget(redirectTarget, url.origin);
 }
 
-async function refreshAuthenticatedSnapshotOrRedirect(request: Request) {
-  try {
-    return await ensureFreshSession();
-  } catch {
-    forceLogout();
-    throw redirect(buildLoginRedirectURL(request));
-  }
-}
-
 async function loginRouteLoader({ request }: LoaderFunctionArgs) {
   await restoreSession();
 
@@ -160,13 +149,11 @@ async function ensureAuthenticatedSession(
 ) {
   await restoreSession();
 
-  let snapshot = getAuthSessionSnapshot();
+  const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
     throw redirect(buildLoginRedirectURL(request));
   }
-
-  snapshot = await refreshAuthenticatedSnapshotOrRedirect(request);
 
   if (snapshot.needsProfileCompletion && !options.allowIncomplete) {
     throw redirect(buildWelcomeRedirectURL(request));
@@ -200,7 +187,7 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   await restoreSession();
-  let snapshot = getAuthSessionSnapshot();
+  const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
     if (hasGuestLabAccess(demoLabAccess)) {
@@ -209,8 +196,6 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
 
     throw redirect(buildLoginRedirectURL(request));
   }
-
-  snapshot = await refreshAuthenticatedSnapshotOrRedirect(request);
 
   if (snapshot.needsProfileCompletion) {
     throw redirect(buildWelcomeRedirectURL(request));
@@ -230,7 +215,7 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
 
   await restoreSession();
 
-  let snapshot = getAuthSessionSnapshot();
+  const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
     if (hasGuestLabAccess(payloadCryptoLabAccess)) {
@@ -239,8 +224,6 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
 
     throw redirect(buildLoginRedirectURL(request));
   }
-
-  snapshot = await refreshAuthenticatedSnapshotOrRedirect(request);
 
   if (snapshot.needsProfileCompletion) {
     throw redirect(buildWelcomeRedirectURL(request));
