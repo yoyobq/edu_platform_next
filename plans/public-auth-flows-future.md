@@ -9,12 +9,14 @@
 - 是否需要开放 `/register`
 - 公开注册成功后的邮箱验证续接
 - invite-first 与 self-signup 的正式边界
+- 非 `staff` 的其他 inviteType
 - 账户中心与资料编辑
 - 若当前阶段拿不到 session 契约，magic-link 可回落到这里继续等待
 
 ## 为什么继续延后
 
 - 当前项目真相里，`public-auth` 只有密码恢复是真实闭环；其余 intent 入口仍未进入产品定型阶段
+- 当前 invite 主线若先推进，也只先收 `staff invite`
 - 开放注册是否存在，取决于产品到底是 `invite-first` 还是 `self-signup`
 - 公开注册一旦放开，就会连带影响邮箱验证续接、默认落点与权限边界
 - 账户资料与账户中心不属于当前 public entry 验证入口主线
@@ -30,7 +32,15 @@
 - 注册成功后的邮箱验证续接
 - 公开注册与 invite-first 的边界
 
-### 2. 账户中心与资料编辑
+### 2. 其他 inviteType
+
+若 `staff invite` 先落地，其他 inviteType 继续单独评估：
+
+- 是否复用同一页面骨架
+- 是否需要不同的上游核对方式
+- 是否仍然落在 `public-auth`
+
+### 3. 账户中心与资料编辑
 
 这不是 public entry 当前阶段的默认目标。
 
@@ -40,7 +50,7 @@
 - 安全设置与密码管理的登录后入口
 - 账户中心与公开认证入口之间的职责边界
 
-### 3. Magic Link 回落场景
+### 4. Magic Link 回落场景
 
 若当前阶段仍拿不到“验证成功后直接建立 session”的后端契约，则：
 

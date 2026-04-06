@@ -29,10 +29,10 @@
 
 本轮优先推进：
 
-1. 先确认 `/invite/:inviteType/:verificationCode` 的后端契约，再决定它是“激活”“注册补全”还是别的 intent
+1. 先把 `/invite/staff/:verificationCode` 从壳页升级为真实流程
 2. 把 `/verify/email/:verificationCode` 从参数展示升级为真实成功 / 失败闭环
 3. 明确 `/magic-link/:verificationCode` 是否真的具备“验证成功后建立 session”的后端契约
-4. 为真正落地的 invite / verify-email / magic-link 流程补基础 E2E
+4. 为真正落地的 staff invite / verify-email / magic-link 流程补基础 E2E
 
 本轮不做：
 
@@ -52,8 +52,14 @@
 - 一次性业务入口继续保持 path-first，不折叠进普通 `redirect`
 - `verification-intent` 页面仍是这些入口的 page owner
 - 不能因为当前只剩 reset-password 真实化，就把 invite / verify-email / magic-link 又塞回 `features/auth`
-- 若后端没有每类 intent 独立的“预校验”接口，前端可以按独立 port 建模，但不能伪造不存在的成功语义
+- 当前 invite 先只推进 `staff` 这一路；其他 inviteType 继续留在后续项
 - invite 默认继续按 `invite-first` 设计，不因为本轮实现而顺手打开 `/register`
+- `staff invite` 的固定流程是：
+  - 先查 `publicInviteInfo(token)` 展示最小必要信息
+  - 用户确认后，再进入上游 staff 身份核对
+  - 上游核对通过后，回填只读 staff 信息，再提交最终 invite 注册 / 激活动作
+- 上游核对失败时，应给出明确中文提示并终止邀请继续流程；此时 `verificationCode` 不视为已消费
+- 最终提交时后端仍需再次核对 invite 与 staff 身份；前端不得把“上游核对通过”当作最终成功
 - 若 invite 或 magic-link 成功后后端未直接返回 session，则前端统一回 `/login`
 - magic-link 只有在后端明确支持“验证成功后建立 session”时才进入真实实现；否则本轮只记录 blocker，不伪造登录
 
@@ -61,25 +67,30 @@
 
 - 现在可以先做页面、状态机、port、API adapter 和 E2E
 - 但要先看 [docs/backend/README.md](/var/www/platform_next/docs/backend/README.md) 指向的后端真相，再决定哪些入口可真实推进
+- 其中 `staff invite` 已确认可依赖的后端真相至少包括：
+  - `publicInviteInfo(token)` 的公开 invite 最小信息查询
+  - `registerByInvite(input)` 的 invite 注册动作
+  - invite 相关 domain error code
 - 不要把 `/register`、账户资料、公开注册策略一起混入本轮
 
 ## 当前缺口
 
 当前真正缺的不是“密码恢复再抽象一次”，而是：
 
-- `src/features/public-auth` 里还没有 invite / verify-email / magic-link 的 application port
+- `src/features/public-auth` 里还没有 `staff invite` / verify-email / magic-link 的 application port
 - 也没有对应 infrastructure adapter
 - `verification-intent` 页面里这 3 个入口仍只是展示 path 参数
 - E2E 目前也只证明它们是 path-first shell，不证明任何真实业务闭环
 
 ## 当前阶段的 4 个步骤
 
-### 1. 先确认后端契约，再决定哪些入口可进入真实实现
+### 1. 先确认并收口 `staff invite` 契约
 
 完成内容：
 
 - 先按 [docs/backend/README.md](/var/www/platform_next/docs/backend/README.md) 查真相
-- 明确 invite / verify-email / magic-link 各自是否已有稳定接口
+- 明确 `staff invite` 依赖的公开查询、上游核对与最终注册动作
+- 明确 verify-email / magic-link 各自是否已有稳定接口
 - 明确哪些入口有预校验、哪些入口是调用即消费
 - 明确 magic-link 是否真的会直接建立 session
 
@@ -87,21 +98,29 @@
 
 - 不凭前端假设发明后端契约
 - 不把新的公开入口继续塞回 `features/auth`
-- 不把 invite / verify-email / magic-link 一次性揉成一个超大 API port
+- 不把 `staff invite`、verify-email、magic-link 一次性揉成一个超大 API port
 - 若某条入口当前拿不到真契约，先记 blocker，不伪实现
 
-### 2. 做 `/invite/:inviteType/:verificationCode`
+### 2. 做 `/invite/staff/:verificationCode`
 
 完成内容：
 
-- 在确认后端契约后，把 `InviteIntentPage` 从参数展示升级为真实流程
-- 为 invite intent 增加独立 use case / port / adapter
-- 有效时展示最小必要动作；失败时至少区分 `invalid / expired / used / unknown`
+- 在确认后端契约后，把 `InviteIntentPage` 从参数展示升级为 `staff invite` 真实流程
+- 为 `staff invite` 增加独立 use case / port / adapter
+- 流程至少拆成：
+  - invite 信息预览
+  - 用户确认
+  - 上游 staff 身份核对
+  - 最终注册 / 激活提交
+- 失败时至少区分 `invalid / expired / used / unknown`
 
 页面行为先固定为：
 
-- 入口仍保留 `inviteType + verificationCode` 的 path-first 语义
-- invite 有效时展示最小必要字段，不顺手扩成完整公开注册页
+- 入口仍保留 `inviteType + verificationCode` 的 path-first 语义，但当前只对 `inviteType=staff` 进入真实实现
+- 先展示 invite 最小必要信息，不顺手扩成完整公开注册页
+- 用户确认后才进入上游核对；输入用户名密码后，若姓名或工号任一不匹配，应给出明确中文提示并终止流程
+- 上游核对通过后，staff 相关信息只读回填，不允许用户修改
+- 最终提交时后端仍需再次核对 invite 与 staff 身份
 - 若激活 / 注册成功但后端未直接返回 session，则统一回 `/login`
 - 若后端已经支持直接返回 session，可再决定是否直接续接登录
 
@@ -131,8 +150,10 @@
 
 至少覆盖：
 
-- invite code 有效时可完成最小激活 / 注册
-- invite code 无效 / 过期 / 已使用时显示失败态
+- `staff invite` code 有效时可完成最小激活 / 注册
+- `staff invite` code 无效 / 过期 / 已使用时显示失败态
+- 上游 staff 核对失败时显示明确错误提示，且 invite 不被误消费
+- 上游 staff 核对通过后，回填字段为只读
 - verify-email 成功时可看到明确成功反馈
 - verify-email 失败时可看到明确失败反馈
 - magic-link 若接入真实流程，应覆盖成功续接与失败态
@@ -143,7 +164,7 @@
 满足以下条件即可认为当前计划完成：
 
 - 密码恢复闭环继续保持当前稳定基线，不再与新任务混写
-- `/invite/:inviteType/:verificationCode` 不再只是展示参数，或已被明确标记 blocker
+- `/invite/staff/:verificationCode` 不再只是展示参数，或已被明确标记 blocker
 - `/verify/email/:verificationCode` 已具备明确成功 / 失败闭环
 - `/magic-link/:verificationCode` 已拿到明确 go / no-go 结论
 - 上述真实落地的流程都继续停留在 `PublicEntryLayout`
