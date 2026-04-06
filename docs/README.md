@@ -70,7 +70,7 @@ This directory contains project documentation.
 - [../plans/graphql-error-model-followup.md](../plans/graphql-error-model-followup.md)
 - [../plans/layout-todo.md](../plans/layout-todo.md)
 - [../plans/identity-access-model-followup.md](../plans/identity-access-model-followup.md)
-- [../plans/public-auth-flows-plan.md](../plans/public-auth-flows-plan.md)
+- [../plans/public-auth-flows-explain.md](../plans/public-auth-flows-explain.md)
 - [../plans/public-auth-flows-now.md](../plans/public-auth-flows-now.md)
 - [../plans/public-auth-flows-future.md](../plans/public-auth-flows-future.md)
 - [../plans/welcome-profile-completion-plan.md](../plans/welcome-profile-completion-plan.md)

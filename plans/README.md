@@ -86,7 +86,7 @@ plan 不负责定义稳定规则。
 - [graphql-error-model-followup.md](./graphql-error-model-followup.md)
 - [layout-todo.md](./layout-todo.md)
 - [identity-access-model-followup.md](./identity-access-model-followup.md)
-- [public-auth-flows-plan.md](./public-auth-flows-plan.md)
+- [public-auth-flows-explain.md](./public-auth-flows-explain.md)
 - [public-auth-flows-now.md](./public-auth-flows-now.md)
 - [public-auth-flows-future.md](./public-auth-flows-future.md)
 - [welcome-profile-completion-plan.md](./welcome-profile-completion-plan.md)
