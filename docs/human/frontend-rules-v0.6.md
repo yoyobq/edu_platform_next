@@ -1,10 +1,32 @@
-<!-- docs/human/frontend-rules-v0.5.md -->
+<!-- docs/human/frontend-rules-v0.6.md -->
 
-# 前端分区规则（草案 v0.5）
+# 前端分区规则（汇编版 v0.6）
 
-本文件是当前前端规则的完整汇编版。
+本文件是当前前端规则的长文汇编版。
 
-按主题读取时，优先使用 `docs/` 下的拆分文档；需要一次性查看完整规则时，再阅读本文件。
+当前仓库已经把大部分稳定规则拆进 `docs/` 下的主题文档。
+
+因此：
+
+- 按主题读取时，优先使用 `docs/` 下的拆分文档
+- 需要一次性查看较完整的规则全景时，再阅读本文件
+- 若本文件与拆分文档出现冲突，以拆分文档为准
+
+## 0. 当前直接规则入口
+
+当前最应优先看的真相入口如下：
+
+- 分层与依赖：`layer-model.md`、`dependency-rules.md`
+- 基础设施收束：`infrastructure-rules.md`
+- layout 壳层与主内容区：`layout.md`
+- 登录后默认首页与首页模块 contract：`workbench-entry-rules.md`
+- labs / sandbox：`labs-rules.md`、`sandbox-rules.md`
+- 身份、授权摘要与会话：`project-convention/identity-access-session.md`
+- GraphQL runtime 与 auth 边界：`project-convention/graphql-ingress-auth-boundary.md`
+- GraphQL 错误模型：`project-convention/graphql-error-model.md`
+- 测试与 E2E：`testing.md`、`project-convention/e2e-test-groups.md`
+
+本文件后续内容只做汇编，不再试图替代这些主题文档。
 
 ## 1. 总体目标
 
@@ -139,13 +161,13 @@ src/
 
 ### 3.2 AI 生成代码可以进入项目，但不能默认进入 stable
 
-AI 生成结果可以：
+默认路径固定为：
 
 - 临时想法、一次性原型或纯开发期试错：先进入 `sandbox`
-- 有明确用途、准备进入真实观察：优先进入 `labs`（`labs` 本身应具备基本分层）
-- 在人工确认下，由 AI 协助整理后进入 `stable`
+- 有明确用途、准备进入真实观察：优先进入 `labs`
+- 长期保留：在人工确认下，由 AI 协助整理后进入 `stable`
 
-禁止把 AI 初稿直接视为正式模块。
+禁止把 AI 初稿直接视为正式模块；第 8 节只补充 AI 参与时的执行提醒，不再重复改写这条主原则。
 
 ### 3.3 迁入 stable 必须是一次人工确认的治理动作
 
@@ -154,14 +176,7 @@ AI 生成结果可以：
 - 是否迁入 `stable` 必须由人工确认
 - 整理、迁移、重构动作可以由 AI 在人工监督下执行
 
-最低完成线：
-
-- 重新判断归属层级
-- 对齐正式目录
-- 清理试验性代码
-- 删除实验暴露控制
-
-若要进一步提升长期维护性，建议继续完成共享部分抽离与命名整理。
+最低完成线见第 9 节“迁移时必须完成”；核心要求是重新判断归属层级、对齐正式目录、清理试验性代码并删除实验暴露控制。若要进一步提升长期维护性，再继续完成共享部分抽离与命名整理。
 
 ### 3.4 跨模块依赖必须走公开出口
 
@@ -221,7 +236,7 @@ src/
 
 - `UserCard`、`UserAvatar`、`NewsMeta`：更接近 `entities`
 - `LoginForm`、`SwitchAccount`、`UpdateUserProfile`：更接近 `features`
-- `Header`、`Sidebar`、`DashboardOverview`：更接近 `widgets`
+- `DashboardOverview`、`FilterPanel`、`ProfileSummaryBlock`：更接近 `widgets`
 
 ### 4.1 app/
 
@@ -247,11 +262,13 @@ src/
 当前人工确认例外：
 
 - `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，仅用于路由注册、暴露控制与环境隔离
-- 这不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
+- 其余依赖限制仍以第 5 节为准；这不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
 
 边界提醒：
 
 - `app/` 负责 provider、router、应用壳层与全局 layout
+- 当前 authenticated area 与 public area 已经分成 `AppLayout` 与 `PublicEntryLayout` 两套壳层
+- 侧边导航、顶部轻导航、Sidecar、第三工作区挂载位这类壳层能力，优先视为 `app/layout` 问题，而不是 `widgets` 问题
 - `app/` 的职责是“把页面挂起来”，不是承载页面内容本身
 - 像 `HomePage` 这种正式页面内容应放在 `pages/`
 - `app/lib` 放纯逻辑、纯数据结构与纯计算；去掉 React context / state / effect 后仍成立的实现，优先归入 `app/lib`
@@ -357,6 +374,17 @@ src/
 - 通用请求客户端、鉴权注入、错误归一化可放在 `shared`
 - 具体业务请求应按归属放在 `entities`、`features`、`labs` 或 `sandbox` 内
 - 不建议把 `shared/api` 作为默认全站请求目录
+
+当前项目补充：
+
+- `shared/graphql` 已作为统一 GraphQL runtime / imperative 请求入口存在
+- `shared/graphql` 可以承接：
+  - 认证头注入
+  - `authMode`
+  - `GraphQLIngressError`
+  - 普通业务请求的受控 reactive refresh
+- `features/auth` 继续保留 `login / refresh / restore / forceLogout` 主权
+- auth 主流程不得反向下沉到 `shared/graphql`
 
 禁止内容：
 
@@ -509,8 +537,15 @@ src/sandbox/<prototype-name>/
 - `entities -> shared`
 - `shared -> 不依赖业务层`
 
+补充说明：
+
+- `app` 作为全局壳层域，不列入上面的业务链条
+- `app` 默认以组合和挂载为主，向下消费正式区公开内容
+- 当前唯一已确认例外是 `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册与入口治理
+
 补充规则：
 
+- `app` 不得因为 `app/router` 这个例外，进一步承接 `labs` / `sandbox` 的业务实现
 - `labs` 只允许依赖 `shared`，必要时可依赖 `entities` 的公开内容
 - `labs` 默认不得依赖 `pages`、`widgets`、`features`
 - 如确有必要，必须在该 `labs` 模块的 `meta.ts` 中声明 `exception`，而不是默认放开
@@ -530,10 +565,9 @@ src/sandbox/<prototype-name>/
 
 人工判定提醒：
 
-- ESLint 负责拦截默认违规依赖，但不会自动根据 `labs/<name>/meta.ts` 中的 `exception` 放行
-- 若某次依赖确属例外，必须先由人工确认，再写入对应 `labs` 模块的 `meta.ts`
-- 不允许为了通过 ESLint，直接改成深层 import、相对路径绕过或临时关闭规则
-- 若未来出现 `app/router` 这类组合根需要接入 `labs` 或 `sandbox` 的场景，必须单独人工评审并明确写入规则，不能默认放开
+- ESLint 会拦截默认违规依赖，但不会自动根据 `labs/<name>/meta.ts` 中的 `exception` 放行
+- 若某次依赖确属例外，必须先人工确认，再写入对应 `meta.ts`；不允许通过深层 import、相对路径或临时关闭规则绕过
+- 若未来出现类似 `app/router` 的组合根例外，必须单独人工评审并明确写入规则，不能默认放开
 
 ## 6. access list 规则（仅用于 labs）
 
@@ -597,6 +631,29 @@ access list 只解决三件事：
 - 按正常权限和菜单体系管理
 - 作为长期维护对象存在
 
+当前项目补充：
+
+- 登录后的 `/` 已稳定为默认工作台入口
+- public entry 与 authenticated area 已分壳
+- demo trigger、demo query 与第三工作区 demo 语义不得反向污染 stable 首页与正式导航
+
+## 7.4 当前稳定会话与 GraphQL 口径
+
+- token 主权仍在前端当前会话
+- `login / refresh` 只负责拿 token，`me` 负责重建前端会话快照
+- `shared/graphql` 只做 transport/runtime，不成为 token 真源
+- 普通业务请求可走受控 reactive refresh
+- auth 主流程不参与 shared retry
+- `GraphQLIngressError` 是当前统一基础设施异常出口
+
+更细规则以：
+
+- `project-convention/identity-access-session.md`
+- `project-convention/graphql-ingress-auth-boundary.md`
+- `project-convention/graphql-error-model.md`
+
+为准
+
 ## 8. AI 参与规则
 
 ### 8.1 允许 AI 快速生成页面和功能草稿
@@ -611,13 +668,11 @@ AI 可用于：
 
 ### 8.2 AI 生成结果默认先落 sandbox 或 labs
 
-默认原则：
+延续 3.2 的默认路径：
 
-- 更常见路径：先以有基本分层的 `labs` 形态落地，验证通过后再迁入 `stable`
-- `sandbox` 主要承接临时想法、一次性原型、交互试玩和纯开发期试错
-- 未验证价值，且暂时不准备进入真实观察：进 `sandbox`
-- 有明确用途、准备进入真实观察：优先进 `labs`（`labs` 本身应具备基本分层）
-- 长期保留：在人工确认下，由 AI 协助整理后进 `stable`
+- 临时想法、一次性原型、交互试玩和纯开发期试错：先进入 `sandbox`
+- 有明确用途、准备进入真实观察：优先进 `labs`
+- 长期保留：在人工确认下，由 AI 协助整理后进入 `stable`
 
 ### 8.3 AI 生成代码不得绕过目录与边界规则
 
@@ -670,7 +725,7 @@ AI 可用于：
 - 抽离共享部分
 - 调整命名
 
-若某次迁移确实暂时无法完成建议项，仍应保证不影响正式区边界清晰、依赖方向和长期维护。
+若某次迁移暂时无法完成建议项，仍应保证不影响正式区边界清晰、依赖方向和长期维护。
 
 ## 10. 禁止事项
 

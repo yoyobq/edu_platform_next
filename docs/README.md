@@ -9,7 +9,7 @@ This directory contains project documentation.
 - Root [README.md](../README.md) is the quick project overview
 - This file is the docs index
 - The split docs below are the current direct rule entry points by topic
-- [frontend-rules-v0.5.md](./human/frontend-rules-v0.5.md) is the current long-form full version
+- [frontend-rules-v0.6.md](./human/frontend-rules-v0.6.md) is the current long-form full version
 
 ## Quick Routing
 
@@ -133,5 +133,5 @@ docs/
     route-url-semantics.md
     time-display-semantics.md
   human/
-    frontend-rules-v0.5.md
+    frontend-rules-v0.6.md
 ```
