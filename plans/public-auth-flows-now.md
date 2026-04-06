@@ -57,10 +57,11 @@
 - `staff invite` 的固定流程是：
   - 先查 `publicInviteInfo(token)` 展示最小必要信息
   - 用户确认后，再进入上游 staff 身份核对
-  - 上游核对通过后，回填只读 staff 信息，再提交最终 invite 注册 / 激活动作
-- 上游核对失败时，应给出明确中文提示并终止邀请继续流程；此时 `verificationCode` 不视为已消费
+  - 上游核对通过后，回填只读 staff 信息，再提交最终 `consumeVerificationFlowPublic` 注册消费动作
+- 前置上游核对失败时，应给出明确中文提示并终止邀请继续流程；此阶段 `verificationCode` 不视为已消费
 - 最终提交时后端仍需再次核对 invite 与 staff 身份；前端不得把“上游核对通过”当作最终成功
-- 若 invite 或 magic-link 成功后后端未直接返回 session，则前端统一回 `/login`
+- 最终提交阶段若后端复核 `personName / orgId / payload.staffId` 不一致，当前后端会强制消费 invite；前端需按既有 domain error 呈现失败态
+- `staff invite` 成功后当前后端不会直接返回 session，前端统一回 `/login`
 - magic-link 只有在后端明确支持“验证成功后建立 session”时才进入真实实现；否则本轮只记录 blocker，不伪造登录
 
 这意味着：
@@ -69,7 +70,8 @@
 - 但要先看 [docs/backend/README.md](/var/www/platform_next/docs/backend/README.md) 指向的后端真相，再决定哪些入口可真实推进
 - 其中 `staff invite` 已确认可依赖的后端真相至少包括：
   - `publicInviteInfo(token)` 的公开 invite 最小信息查询
-  - `registerByInvite(input)` 的 invite 注册动作
+  - `consumeVerificationFlowPublic(input)` 的公开 invite 消费动作
+  - `loginUpstreamSession(input)` 与 `fetchVerifiedStaffIdentity(sessionToken)` 的上游身份核对能力
   - invite 相关 domain error code
 - 不要把 `/register`、账户资料、公开注册策略一起混入本轮
 
@@ -118,11 +120,11 @@
 
 - 入口仍保留 `inviteType + verificationCode` 的 path-first 语义，但当前只对 `inviteType=staff` 进入真实实现
 - 先展示 invite 最小必要信息，不顺手扩成完整公开注册页
-- 用户确认后才进入上游核对；输入用户名密码后，若姓名或工号任一不匹配，应给出明确中文提示并终止流程
+- 用户确认后才进入上游核对；输入用户名密码后，若上游身份核对失败，应给出明确中文提示并终止流程
 - 上游核对通过后，staff 相关信息只读回填，不允许用户修改
-- 最终提交时后端仍需再次核对 invite 与 staff 身份
-- 若激活 / 注册成功但后端未直接返回 session，则统一回 `/login`
-- 若后端已经支持直接返回 session，可再决定是否直接续接登录
+- 回填信息至少覆盖后端最终严格比对所需字段：`staffName`、`staffDepartmentId`，以及与 invite payload 对齐的 staff 身份
+- 最终提交时后端仍需再次核对 invite 与 staff 身份；若 `personName / orgId / payload.staffId` 不一致，当前后端会消费 invite 以阻断重放
+- 若注册成功，统一回 `/login`
 
 ### 3. 做 `/verify/email/:verificationCode`
 
@@ -152,8 +154,9 @@
 
 - `staff invite` code 有效时可完成最小激活 / 注册
 - `staff invite` code 无效 / 过期 / 已使用时显示失败态
-- 上游 staff 核对失败时显示明确错误提示，且 invite 不被误消费
+- 前置上游 staff 核对失败时显示明确错误提示，且 invite 不被误消费
 - 上游 staff 核对通过后，回填字段为只读
+- 最终提交阶段若身份复核 mismatch，显示明确失败态，并记录该行为符合后端当前消费口径
 - verify-email 成功时可看到明确成功反馈
 - verify-email 失败时可看到明确失败反馈
 - magic-link 若接入真实流程，应覆盖成功续接与失败态
