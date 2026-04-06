@@ -1,6 +1,44 @@
+import type { Page } from '@playwright/test';
+
 import { routes } from '../../fixtures/routes';
 import { mockApiHealth, mockAuthGraphQL, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
+
+const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
+
+function createJwtWithExpOffsetMs(offsetMs: number) {
+  const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      exp: Math.floor((Date.now() + offsetMs) / 1000),
+    }),
+  ).toString('base64url');
+
+  return `${header}.${payload}.signature`;
+}
+
+async function replaceStoredAccessToken(page: Page, accessToken: string) {
+  await page.addInitScript(
+    ({ accessToken: nextAccessToken, storageKey }) => {
+      const raw = window.localStorage.getItem(storageKey);
+
+      if (!raw) {
+        throw new Error('missing auth session');
+      }
+
+      const parsed = JSON.parse(raw) as {
+        accessToken: string;
+      };
+
+      parsed.accessToken = nextAccessToken;
+      window.localStorage.setItem(storageKey, JSON.stringify(parsed));
+    },
+    {
+      accessToken,
+      storageKey: AUTH_STORAGE_KEY,
+    },
+  );
+}
 
 test('未登录访问 labs 示例页时，应先跳登录并保留原目标', async ({ page }) => {
   await page.goto(routes.labsDemo);
@@ -54,6 +92,48 @@ test('具备 admin 权限的已登录会话，应允许进入 labs 示例页', a
   await page.goto(routes.labsDemo);
 
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
+});
+
+test('具备 admin 权限但 access token 临近过期时，应先续期再进入 labs 示例页', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'stale-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+    refreshSession: {
+      displayName: 'refreshed-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+
+  let refreshRequestCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+        }
+      | undefined;
+
+    if (typeof payload?.query === 'string' && payload.query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+    }
+
+    await route.fallback();
+  });
+
+  await seedAuthSession(page, {
+    displayName: 'stale-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+  await replaceStoredAccessToken(page, createJwtWithExpOffsetMs(30_000));
+
+  await page.goto(routes.labsDemo);
+
+  await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
+  await expect(page.getByRole('banner').getByText('refreshed-admin')).toBeVisible();
+  expect(refreshRequestCount).toBe(1);
 });
 
 test('待补全会话访问 labs 示例页时，应优先分流到 /welcome 而不是返回 403', async ({ page }) => {

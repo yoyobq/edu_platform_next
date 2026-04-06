@@ -1,5 +1,6 @@
 // src/features/auth/index.ts
 
+import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
 import { logout as runLogout } from './application/logout';
@@ -53,6 +54,10 @@ export function login(input: AuthLoginInput) {
 
 export function restoreSession() {
   return runRestoreSession(authPorts);
+}
+
+export function ensureFreshSession() {
+  return runEnsureFreshSession(authPorts);
 }
 
 export function refreshSession() {

@@ -29,12 +29,33 @@
 - 这套“auth 主流程归 auth feature、shared/graphql 只做 transport/runtime”的划分，当前按长线方案执行
 - `ws / subscription` 不适用“每次请求现读 token”的 HTTP 语义；若后续启用，token 变化时必须按需重连
 
+当前前端还保留一条显式前置续期能力：
+
+- `ensureFreshSession()` 由 `features/auth` 提供
+- 它只在 auth 的显式边界上调用，例如 protected route loader
+- 它不会下沉到 `shared/graphql` 变成 transport 拦截器
+
+当前规则为：
+
+- 若 access token 距离过期仍有安全余量，则直接复用当前 snapshot，不产生网络开销
+- 若 access token 已接近过期或已过期，则由 auth feature 主动调用 `refresh`
+- 多个 loader / 页面边界同时触发时，前端只允许一个 `refresh` 在飞，其余调用等待同一结果
+- 无法可靠解析 token `exp` 时，按保守兼容处理，直接返回当前 snapshot，不阻塞当前流程
+- `refresh` 失败时，`ensureFreshSession()` 自身不决定页面跳转；由调用方决定是否 redirect 或展示错误
+
 页面刷新后的恢复链路为：
 
 1. 先使用当前 `accessToken` 调 `me`
 2. 若失败，再用 `refreshToken` 调 `refresh`
 3. `refresh` 成功后，再次调用 `me`
 4. 任一步失败，前端强制登出并清空本地会话
+
+进入 protected route 前的当前默认链路为：
+
+1. 先执行 `restoreSession()`
+2. 若当前已有会话，再执行 `ensureFreshSession()`
+3. 续期成功后，使用最新 snapshot 继续做 `needsProfileCompletion` 和访问控制判断
+4. 若续期失败，调用方先强制登出，再决定跳回登录页
 
 ## 当前会话快照
 
@@ -117,6 +138,7 @@
 ## 当前前端异常处理
 
 - token 过期或无效：强制登出
+- protected route 前置续期失败：由调用方强制登出并回到登录页
 - `me` 失败：先尝试 `refresh -> me`
 - `refresh` 成功后 `me` 再失败：强制登出
 - 关键 claim 缺失：强制登出

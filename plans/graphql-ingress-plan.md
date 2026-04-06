@@ -52,6 +52,126 @@
 
 若未来重新引入 shared auto-refresh，也只针对普通业务请求评估，不自动接管 auth feature 自己的认证主流程。
 
+## 下一阶段方向：从 Router 前置续期转向请求层 silent refresh
+
+下一阶段若继续优化续期体验，当前更合理的方向不是“让 router 继续承担更多续期逻辑”，也不是“让每个后端业务接口顺手回新 token”，而是：
+
+- router 只负责判断当前是否存在登录态
+- refresh 继续由 auth feature 保持主权
+- 请求层负责对普通 protected request 做受控的 silent refresh / retry
+
+一句话理解：
+
+- 请求层负责编排补救
+- auth 层负责 refresh 主权
+- router 不再承担续期
+
+### 目标效果
+
+目标中的前端续期机制应分成两层：
+
+1. 主动刷新
+   - 前端根据 access token 的 `exp`
+   - 在真正过期前的安全窗口内后台静默 `refresh`
+   - 当前建议窗口是“过期前 2 到 5 分钟”，具体阈值后续按体验与真实 token 寿命再定
+
+2. 兜底刷新
+   - 若某次普通 protected request 仍返回 `UNAUTHENTICATED`
+   - 且能稳定判断这是 `JWT_TOKEN_EXPIRED`
+   - 则触发一次 `refresh`
+   - `refresh` 成功后自动重放原请求一次
+
+当前已确认的后端相关 error code 包括：
+
+- `JWT_TOKEN_EXPIRED`
+- `JWT_TOKEN_INVALID`
+- `AUTH_INVALID_REFRESH_TOKEN`
+
+其中当前计划只将 `JWT_TOKEN_EXPIRED` 作为 silent refresh 的候选触发信号；
+`JWT_TOKEN_INVALID` 与 `AUTH_INVALID_REFRESH_TOKEN` 默认按认证失败处理，不进入自动续期重试。
+
+### single-flight 要求
+
+无论是主动刷新还是兜底刷新，都必须共享同一套 single-flight：
+
+- 同一时刻只允许一个 `refresh` 请求在飞
+- 其他并发请求等待这次 `refresh` 完成
+- 成功后复用同一结果
+- 失败后统一进入 auth failure 处理
+
+### router 的目标职责
+
+若后续按这条方向实现，router 应收敛为：
+
+- 只判断“有没有登录态”
+- 只判断 `needsProfileCompletion`、路由访问控制、redirect 等页面级分流
+- 不再把 token 续期作为默认前置阻塞条件
+
+这意味着：
+
+- 续期不再主要发生在 loader 里
+- 组件和页面导航的打断感应明显降低
+- 续期更像请求层的静默补救，而不是整页导航前的同步门槛
+
+### 请求层与 auth 层的职责拆分
+
+请求层 / GraphQL ingress 负责：
+
+- 识别这次失败是否属于“可补救的 token 过期”
+- 等待一次统一 `refresh`
+- 成功后重放原请求一次
+
+auth feature 负责：
+
+- 真正执行 `refresh`
+- 更新 session store 与 storage
+- 维护 single-flight 主权
+- `refresh` 失败后的 `forceLogout` / session failure 收口
+
+约束：
+
+- `shared/graphql` 不能直接反向依赖 `features/auth`
+- 仍然必须通过 app 层 bridge 注入 `refreshSession` / `onAuthFailure`
+
+### 必须排除的请求
+
+下列请求不应参与 silent refresh：
+
+- `authMode: 'none'`
+- `login`
+- `refresh`
+- `restore`
+- `me` 水合链
+- auth feature 自己的认证主流程
+
+换句话说：
+
+- silent refresh 只针对普通业务 protected request
+- auth 自己的闭环永远不由 shared 请求层接管
+
+### 当前为什么更倾向这条方向
+
+当前 router 前置续期虽然能工作，但体验上容易表现为：
+
+- 导航级等待
+- 整页被打断
+- 组件 state 与当前工作流更容易被续期时机影响
+
+而请求层 silent refresh 更接近当前项目想要的目标：
+
+- 不改后端显式 `refresh` mutation 模型
+- 不把续期逻辑散到每个业务接口
+- 不让用户频繁感知“进入页面前先等续期”
+
+### 实现前提
+
+若后续真的按这条方向推进，至少要先满足：
+
+- 后端能稳定区分“未认证”和“token 已过期”
+- 前端已有统一错误模型可识别 `auth`
+- app bridge 能注入 `refreshSession` 与 `onAuthFailure`
+- 已补齐并发、失败与排除链路的自动化测试
+
 `ws / subscription` 的长期边界也单独明确：
 
 - 当前不让 WS 反向主导 HTTP ingress 设计

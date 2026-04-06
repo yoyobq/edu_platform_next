@@ -9,6 +9,8 @@ import {
 } from '../../helpers/app';
 import { expect, test } from '../../test';
 
+const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
+
 function layoutBanner(page: Page) {
   return page.getByRole('banner');
 }
@@ -25,6 +27,40 @@ function createAdminSession(overrides: SeedAuthSessionOptions = {}): SeedAuthSes
     primaryAccessGroup: 'ADMIN',
     ...overrides,
   };
+}
+
+function createJwtWithExpOffsetMs(offsetMs: number) {
+  const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
+  const payload = Buffer.from(
+    JSON.stringify({
+      exp: Math.floor((Date.now() + offsetMs) / 1000),
+    }),
+  ).toString('base64url');
+
+  return `${header}.${payload}.signature`;
+}
+
+async function replaceStoredAccessToken(page: Page, accessToken: string) {
+  await page.addInitScript(
+    ({ accessToken: nextAccessToken, storageKey }) => {
+      const raw = window.localStorage.getItem(storageKey);
+
+      if (!raw) {
+        throw new Error('missing auth session');
+      }
+
+      const parsed = JSON.parse(raw) as {
+        accessToken: string;
+      };
+
+      parsed.accessToken = nextAccessToken;
+      window.localStorage.setItem(storageKey, JSON.stringify(parsed));
+    },
+    {
+      accessToken,
+      storageKey: AUTH_STORAGE_KEY,
+    },
+  );
 }
 
 test('未登录访问首页时，应跳到携带 redirect 的登录页', async ({ page }) => {
@@ -136,6 +172,29 @@ test('本地会话失效且 refresh 失败时，应强制回到登录页', async
   await expect(
     page.evaluate(() => window.localStorage.getItem('aigc-friendly-frontend.auth.session.v2')),
   ).resolves.toBeNull();
+});
+
+test('前置续期失败后，应清空会话并停留在登录页而不是形成回环', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: createAdminSession({ displayName: 'expired-admin' }),
+    refreshErrorMessage: 'TOKEN_INVALID',
+  });
+  await seedAuthSession(page, createAdminSession({ displayName: 'expired-admin' }));
+  await replaceStoredAccessToken(page, createJwtWithExpOffsetMs(-120_000));
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(
+    page.evaluate((storageKey) => window.localStorage.getItem(storageKey), AUTH_STORAGE_KEY),
+  ).resolves.toBeNull();
+
+  await page.reload();
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
 test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ page }) => {
