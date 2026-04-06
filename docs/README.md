@@ -66,7 +66,7 @@ This directory contains project documentation.
 
 ## Plans
 
-- [../plans/graphql-ingress-plan.md](../plans/graphql-ingress-plan.md)
+- [../plans/graphql-ingress-followup.md](../plans/graphql-ingress-followup.md)
 - [../plans/graphql-error-model-plan.md](../plans/graphql-error-model-plan.md)
 - [../plans/layout-todo.md](../plans/layout-todo.md)
 - [../plans/identity-access-model-future.md](../plans/identity-access-model-future.md)

@@ -15,6 +15,24 @@ plan 不负责定义稳定规则。
 
 若某条边界已经稳定，应进入 `docs/` 下对应 rule 文档，而不是继续留在 plan 里反复描述。
 
+## Plan 的生命周期与命名规范
+
+为明确工作流程，`plans/` 目录下的文档遵循以下生命周期和文件后缀语义：
+
+1. **初期构思阶段 (`-direction`)**
+   首次建立时，使用 `-direction` 后缀（如 `xxx-direction.md`），表示这是一个初步方向，等待团队讨论和对齐。
+2. **正式计划阶段 (`-plan` 或 `-explain` / `-now` / `-future`)**
+   经过讨论明确后，转为正式计划：
+   - **轻量级计划**：如果内容较少（200 行以内），保留为单一文件，使用 `-plan` 后缀（如 `xxx-plan.md`）。
+   - **重量级计划**：如果内容较多、涉及面广，拆分为三个文档：
+     - `-explain`：解释业务背景、核心模型或架构设计。
+     - `-now`：当前阶段或近期的具体实施步骤和 Action Items。
+     - `-future`：远期规划或 P3/P4 级别的未来演进方向。
+3. **落地与归档阶段 (`-followup`)**
+   一份 plan 落地后：
+   - **稳定规则归档**：大部分已确定的规则、模型和约定，应该移入 `docs/project-convention/` 目录下对应的文档中作为永久契约。
+   - **残余事项追踪**：对于因故延期、需要后续跟进的长尾任务或操作，留在 `plans/` 目录中，并将文件后缀改为 **`-followup`**（如 `xxx-followup.md`）。这代表该计划的主体已完结，仅剩具体的待办事项供后续操作。
+
 ## 读取顺序
 
 阅读某个 plan 时，优先按下面顺序处理：
@@ -64,7 +82,7 @@ plan 不负责定义稳定规则。
 
 ## 当前计划
 
-- [graphql-ingress-plan.md](./graphql-ingress-plan.md)
+- [graphql-ingress-followup.md](./graphql-ingress-followup.md)
 - [graphql-error-model-plan.md](./graphql-error-model-plan.md)
 - [layout-todo.md](./layout-todo.md)
 - [identity-access-model-future.md](./identity-access-model-future.md)

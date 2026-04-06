@@ -1,4 +1,4 @@
-# GraphQL Ingress Plan
+# GraphQL Ingress Follow-up
 
 本计划只记录 GraphQL ingress 仍未完成的事项。
 
