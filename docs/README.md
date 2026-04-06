@@ -68,7 +68,7 @@ This directory contains project documentation.
 
 - [../plans/graphql-ingress-followup.md](../plans/graphql-ingress-followup.md)
 - [../plans/graphql-error-model-followup.md](../plans/graphql-error-model-followup.md)
-- [../plans/layout-todo.md](../plans/layout-todo.md)
+- [../plans/layout-plan.md](../plans/layout-plan.md) - 当前 layout 计划与壳层能力演进
 - [../plans/identity-access-model-followup.md](../plans/identity-access-model-followup.md)
 - [../plans/public-auth-flows-explain.md](../plans/public-auth-flows-explain.md)
 - [../plans/public-auth-flows-now.md](../plans/public-auth-flows-now.md)

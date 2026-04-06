@@ -84,7 +84,7 @@ plan 不负责定义稳定规则。
 
 - [graphql-ingress-followup.md](./graphql-ingress-followup.md)
 - [graphql-error-model-followup.md](./graphql-error-model-followup.md)
-- [layout-todo.md](./layout-todo.md)
+- [layout-plan.md](./layout-plan.md) - 当前 layout 计划与壳层能力演进
 - [identity-access-model-followup.md](./identity-access-model-followup.md)
 - [public-auth-flows-explain.md](./public-auth-flows-explain.md)
 - [public-auth-flows-now.md](./public-auth-flows-now.md)
