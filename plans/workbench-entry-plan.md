@@ -11,19 +11,25 @@
 
 ## 当前状态
 
-截至 2026-03-31，`workbench entry` 主线已完成首阶段最小闭环：
+截至当前，`workbench entry` 主线已完成首阶段最小闭环：
 
 - 未登录入口已与登录后工作台壳层分开
 - `/` 已稳定为登录后默认工作台入口
 - public / protected / governed experiment 分流已形成可运行闭环
 - 首页已从过渡态单面板收口为默认工作台模块编排
 - 首页模块 contract、最小默认模板、demo 语义隔离都已落地
+- 当前首页模板已稳定为 `admin-default / member-default / minimal-default`
+- 当前首页最小模块组合已落地为：
+  - 状态总览模块
+  - 主动作入口模块
+  - 最近上下文模块
 
 这意味着：
 
 - 后续不需要再回到“`/` 是否默认进入工作台”这一层重新讨论
 - 后续不应再把 demo bridge、demo query 或实验入口拿来填正式首页空位
 - 后续若有业务接入，应直接按 rule 判断“是否进入首页”“是否上升到壳层”
+- 后续若 layout 引入 sidebar / nav-rail，也不应反向改写首页模块 contract 与 workbench 准入规则
 
 ## 历史收口摘要
 
@@ -47,6 +53,7 @@
 
 - 第三工作区挂载位继续保留在壳层中
 - Sidecar 继续作为全局壳层能力存在
+- sidebar / nav-rail 能力若回归，应视为 layout capability，而不是 workbench 自己的平行导航体系
 - verification intent 已有 public path-first 入口，但 intent 预解析与续接流程尚未展开
 - 个人偏好、默认编排细化、Sidecar 深层写入联动都还未进入当前主线
 
@@ -58,6 +65,7 @@
 - 哪些首页能力要上升为全局壳层能力
 - 第三工作区的正式状态模型
 - Sidecar 的深层页面写入联动
+- 把 sidebar / nav-rail 直接当作首页模块扩张的一部分来做
 - 默认编排编辑器与个人偏好细化机制
 
 原因：
@@ -75,6 +83,7 @@
 2. 业务页面稳定后，再判断它是否满足首页模块准入理由。
 3. 若满足准入理由，再补对应 feature 的首页摘要 use case 与模块 contract 输出。
 4. 若某项能力需要跨页面持续存在，再单独评估是否值得上升到 `layout`。
+5. 若某业务域更适合侧边导航，不要把它错误下沉成首页模块问题，而应回到 `layout-plan.md` 中的 sidebar capability 处理。
 
 ### 业务接入时的检查清单
 
@@ -83,6 +92,7 @@
 - 该能力进入首页后，是否仍只承载摘要与入口
 - 该能力若要打开 Sidecar 或触发协作动作，是否走受控 action
 - 该能力是否误复用了 demo route、demo trigger 或 demo query
+- 该能力若更适合通过侧边导航进入，是否应优先作为 layout capability 处理，而不是挤进首页模块
 
 ## 文档约束
 
