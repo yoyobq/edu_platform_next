@@ -196,6 +196,74 @@ test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', as
   expect(forgotPasswordAuthHeader).toBeNull();
 });
 
+test('public-auth 请求收到 auth 错时不应触发 refresh，且继续停留在 public 页', async ({ page }) => {
+  const session = {
+    accessToken: 'runtime-access-token',
+    accountId: 9527,
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN' as const,
+    refreshToken: 'runtime-refresh-token',
+  };
+  let forgotPasswordAuthHeader: string | null = 'UNSET';
+  let refreshRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedPersistedSession(page, session);
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, {
+        data: {
+          me: {
+            account: {
+              id: session.accountId,
+              identityHint: 'ADMIN',
+              loginEmail: `${session.displayName}@example.com`,
+              loginName: session.displayName,
+              status: 'ACTIVE',
+            },
+            accountId: session.accountId,
+            identity: null,
+            needsProfileCompletion: false,
+            userInfo: {
+              accessGroup: ['ADMIN'],
+              avatarUrl: null,
+              email: `${session.displayName}@example.com`,
+              nickname: session.displayName,
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await fulfillGraphQLError(route, 'UNEXPECTED_REFRESH');
+      return;
+    }
+
+    if (query.includes('mutation RequestPasswordResetEmail')) {
+      forgotPasswordAuthHeader = getAuthorization(route);
+      await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.forgotPassword);
+  await page.getByLabel('邮箱').fill('tester@example.com');
+  await page.getByRole('button', { name: '发送重置邮件' }).click();
+
+  await expect(page).toHaveURL(routes.forgotPassword);
+  await expect(page.getByRole('alert')).toContainText('登录状态已失效，请重新登录后再试。');
+  expect(forgotPasswordAuthHeader).toBeNull();
+  expect(refreshRequestCount).toBe(0);
+});
+
 test('资料补全请求应带显式 token，而 refresh 请求不应携带 Authorization', async ({ page }) => {
   const session = {
     accessGroup: ['REGISTRANT'] as const,
@@ -283,9 +351,7 @@ test('资料补全请求应带显式 token，而 refresh 请求不应携带 Auth
   expect(refreshAuthHeader).toBeNull();
 });
 
-test('普通 protected GraphQL 请求应携带 Authorization，且 UNAUTHENTICATED 不应触发 shared refresh', async ({
-  page,
-}) => {
+test('普通 protected 请求收到 UNAUTHENTICATED 后触发一次 refresh 并重放成功', async ({ page }) => {
   const session = {
     accessToken: 'admin-access-token',
     accountId: 1,
@@ -293,8 +359,9 @@ test('普通 protected GraphQL 请求应携带 Authorization，且 UNAUTHENTICAT
     primaryAccessGroup: 'ADMIN' as const,
     refreshToken: 'admin-refresh-token',
   };
-  let debugRequestAuthHeader: string | null = 'UNSET';
+  const debugRequestAuthHeaders: string[] = [];
   let refreshRequestCount = 0;
+  let debugRequestCount = 0;
 
   await mockApiHealth(page);
   await seedPersistedSession(page, session);
@@ -330,12 +397,103 @@ test('普通 protected GraphQL 请求应携带 Authorization，且 UNAUTHENTICAT
 
     if (query.includes('mutation Refresh')) {
       refreshRequestCount += 1;
-      await fulfillGraphQLError(route, 'UNEXPECTED_REFRESH');
+      await fulfillGraphQL(route, {
+        data: {
+          refresh: {
+            accessToken: 'refreshed-access-token',
+            refreshToken: 'refreshed-refresh-token',
+          },
+        },
+      });
       return;
     }
 
     if (query.includes('query DebugEncryptSstsPayload')) {
-      debugRequestAuthHeader = getAuthorization(route);
+      debugRequestCount += 1;
+      debugRequestAuthHeaders.push(getAuthorization(route) ?? 'NONE');
+
+      if (debugRequestCount === 1) {
+        await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
+        return;
+      }
+
+      await fulfillGraphQL(route, {
+        data: {
+          debugEncryptSstsPayload: {
+            encryptedData: 'encrypted-result',
+            operation: 'encrypt',
+            plainTextData: { value: 'demo' },
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsPayloadCrypto);
+  await page.getByRole('textbox').first().fill('{"value":"demo"}');
+  await page.getByRole('button', { name: '查看结果' }).click();
+
+  await expect(page.getByText('encrypted-result')).toBeVisible();
+  expect(debugRequestCount).toBe(2);
+  expect(refreshRequestCount).toBe(1);
+  expect(debugRequestAuthHeaders).toEqual([
+    'Bearer admin-access-token',
+    'Bearer refreshed-access-token',
+  ]);
+});
+
+test('普通 protected 请求收到 UNAUTHENTICATED 后 refresh 失败应触发 forceLogout', async ({
+  page,
+}) => {
+  const session = {
+    accessToken: 'admin-access-token',
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN' as const,
+    refreshToken: 'admin-refresh-token',
+  };
+
+  await mockApiHealth(page);
+  await seedPersistedSession(page, session);
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, {
+        data: {
+          me: {
+            account: {
+              id: session.accountId,
+              identityHint: 'ADMIN',
+              loginEmail: `${session.displayName}@example.com`,
+              loginName: session.displayName,
+              status: 'ACTIVE',
+            },
+            accountId: session.accountId,
+            identity: null,
+            needsProfileCompletion: false,
+            userInfo: {
+              accessGroup: ['ADMIN'],
+              avatarUrl: null,
+              email: `${session.displayName}@example.com`,
+              nickname: session.displayName,
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      await fulfillGraphQLError(route, 'INVALID_REFRESH_TOKEN', 'BAD_USER_INPUT');
+      return;
+    }
+
+    if (query.includes('query DebugEncryptSstsPayload')) {
       await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
       return;
     }
@@ -347,9 +505,89 @@ test('普通 protected GraphQL 请求应携带 Authorization，且 UNAUTHENTICAT
   await page.getByRole('textbox').first().fill('{"value":"demo"}');
   await page.getByRole('button', { name: '查看结果' }).click();
 
-  await expect(page.getByText('Error encrypting payload: UNAUTHENTICATED')).toBeVisible();
-  expect(debugRequestAuthHeader).toBe('Bearer admin-access-token');
-  expect(refreshRequestCount).toBe(0);
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsPayloadCrypto)}$`),
+  );
+});
+
+test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry', async ({ page }) => {
+  const session = {
+    accessToken: 'auth-flow-access-token',
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN' as const,
+    refreshToken: 'auth-flow-refresh-token',
+  };
+  let meRequestCount = 0;
+  let refreshRequestCount = 0;
+  const meAuthHeaders: string[] = [];
+
+  await mockApiHealth(page);
+  await seedPersistedSession(page, session);
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      meRequestCount += 1;
+      meAuthHeaders.push(getAuthorization(route) ?? 'NONE');
+
+      if (meRequestCount === 1) {
+        await fulfillGraphQLError(route, 'TOKEN_INVALID', 'UNAUTHENTICATED');
+        return;
+      }
+
+      await fulfillGraphQL(route, {
+        data: {
+          me: {
+            account: {
+              id: session.accountId,
+              identityHint: 'ADMIN',
+              loginEmail: `${session.displayName}@example.com`,
+              loginName: session.displayName,
+              status: 'ACTIVE',
+            },
+            accountId: session.accountId,
+            identity: null,
+            needsProfileCompletion: false,
+            userInfo: {
+              accessGroup: ['ADMIN'],
+              avatarUrl: null,
+              email: `${session.displayName}@example.com`,
+              nickname: session.displayName,
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await fulfillGraphQL(route, {
+        data: {
+          refresh: {
+            accessToken: 'fresh-admin-access-token',
+            refreshToken: 'fresh-admin-refresh-token',
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.home);
+  await expect(page.getByRole('banner')).toContainText('root-admin');
+
+  // auth 主流程 restore -> me 失败 -> 走 auth 自己的 refresh -> 再 me 成功
+  // shared retry 不应介入（refreshRequestCount 应为 1，来自 auth 自身的 restore 逻辑）
+  expect(refreshRequestCount).toBe(1);
+  expect(meAuthHeaders).toEqual([
+    'Bearer auth-flow-access-token',
+    'Bearer fresh-admin-access-token',
+  ]);
 });
 
 test('restore 触发 refresh 后，后续 me 请求应显式使用 refresh 返回的新 access token', async ({

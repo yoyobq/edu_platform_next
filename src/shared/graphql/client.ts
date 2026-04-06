@@ -6,6 +6,8 @@ import { createClient } from 'graphql-ws';
 
 type GraphQLRuntimeConfig = {
   getAccessToken?: () => string | null | undefined;
+  refreshSession?: () => Promise<void>;
+  onAuthFailure?: () => void;
 };
 
 let runtimeConfig: GraphQLRuntimeConfig = {};
@@ -163,6 +165,10 @@ export function configureGraphQLRuntime(config: GraphQLRuntimeConfig) {
     ...runtimeConfig,
     ...config,
   };
+}
+
+export function getGraphQLRuntimeConfig(): Readonly<GraphQLRuntimeConfig> {
+  return runtimeConfig;
 }
 
 export function getGraphQLClient() {

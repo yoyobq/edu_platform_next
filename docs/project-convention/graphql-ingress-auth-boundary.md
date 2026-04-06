@@ -7,7 +7,7 @@
 它回答的是：
 
 - 所有 GraphQL 请求为什么统一走 `shared/graphql`
-- 为什么当前不让 `shared/graphql` 自动接管 `refresh`
+- 当前 reactive refresh 与 auth 主流程如何分工
 - `auth` 与 `shared` 各自负责什么
 
 ## 当前结论
@@ -16,8 +16,9 @@
 
 - 所有 GraphQL 请求统一走 `src/shared/graphql`
 - `shared/graphql` 负责 transport 统一入口、endpoint、header 注入与基础运行时装配
+- `shared/graphql` 对普通业务请求提供受控的 reactive refresh
 - `auth` feature 继续负责 `login / refresh / restore / forceLogout`
-- auth 主流程当前不交给 `shared/graphql` 自动接管
+- auth 主流程不交给 `shared/graphql` 自动接管
 
 这不是临时折中，而是当前项目的长线默认方案。
 
@@ -55,6 +56,7 @@
 - 请求执行入口 `executeGraphQL`
 - 默认从当前 auth session 读取 token 并注入 `Authorization`
 - 显式公开请求的 `authMode: 'none'`
+- 普通业务请求收到 `type: 'auth'` 后的一次性 refresh / retry 编排
 - 为 React 集成提供 `ApolloProvider` 所需 client
 
 当前 `shared/graphql` 不负责：
@@ -63,10 +65,9 @@
 - `refresh`
 - `restore`
 - `forceLogout`
-- 根据 `401 / UNAUTHENTICATED` 自动发起 refresh
-- 自动决定何时发起 refresh
-- 自动决定会话失效后如何推进 auth 状态
-- protected route 进入前的前置续期判断
+- auth 主流程（`me` 水合、`restore -> refresh -> me`）的 retry
+- protected route 进入前的主动安全检查
+- 会话失效后如何跳转（由 app 层 watcher 负责）
 
 ## auth feature 负责什么
 
@@ -80,7 +81,8 @@
 - 会话快照维护
 - 本地 session 持久化
 - `me` 水合后的当前会话重建
-- protected route / 页面显式边界上的前置续期（`ensureFreshSession()`）
+- protected route / 页面显式边界上的主动续期（`ensureFreshSession()`）
+- refresh single-flight（`ensureFreshPromise`）
 
 一句话要求：
 
@@ -108,59 +110,108 @@
 - `refresh`
 - public auth（忘记密码、重置密码、验证链接等）
 
-## 当前明确不做的事
+## 后端 auth error 信号
 
-当前阶段，`shared/graphql` 明确不做：
+当前后端真相以 `docs/backend/domain-error.ts` 与 `docs/backend/graphql-exception.filter.ts` 为准：
 
-- `401 / UNAUTHENTICATED -> refresh -> retry`
+- `extensions.code` 是 GraphQL 标准大类
+- `extensions.errorCode` 是后端细粒度错误码
+- 生产环境默认不透出 `extensions.errorCode`
 
-原因：
+当前 JWT 相关错误在后端都会归到 `UNAUTHENTICATED`：
 
-- 这会与 auth feature 自己的 `restore / refresh / hydrate` 主流程形成双主权
-- 共享层一旦自动接管 refresh，就必须回答“refresh 失败后谁负责 forceLogout”
-- auth 主流程与共享 middleware 混写后，调用链更难排查，也更不利于 AI 理解
+- `JWT_TOKEN_EXPIRED`
+- `JWT_TOKEN_INVALID`
+- `JWT_TOKEN_NOT_BEFORE`
+- `JWT_TOKEN_VERIFICATION_FAILED`
+- `JWT_AUTHENTICATION_FAILED`
 
-当前明确担心：
+`INVALID_REFRESH_TOKEN` 较特殊：
 
-- `me` 失败后，auth 自己要不要 refresh，与 shared middleware 要不要 refresh 发生重叠
-- 共享层开始反向主导 auth 语义
-- 实现上出现防重入开关、隐式例外和难解释的恢复链
+- 它发生在 `refresh` mutation 中
+- 后端当前未将其映射到 `UNAUTHENTICATED`
+- 前端会看到 `extensions.code = 'BAD_USER_INPUT'`
+- 因此它最终会落到 `GraphQLIngressError.type = 'graphql'`，而不是 `type = 'auth'`
 
-因此当前结论是：
+## 当前请求层 reactive refresh 边界
 
-- 不为了“更自动”牺牲 auth 主权清晰度
+当前 `shared/graphql` 的 `executeGraphQL` 已具备受控的 reactive refresh：
 
-## 当前显式续期边界
+- 触发信号基于 `GraphQLIngressError.type === 'auth'`
+- 不依赖 `extensions.errorCode` 作为主开关，因为生产环境会抹掉该字段
+- 普通业务请求（`authMode` 默认为 `required` 且 `allowAuthRetry` 未显式禁用）收到 `type: 'auth'` 后，触发一次 `refreshSession`
+- `refreshSession` 由 app bridge 注入，内部调用 `ensureFreshSession({ force: true })`，复用 auth feature 的 single-flight
+- 成功后重放原请求一次（仅一次，不循环）
+- 失败后调用 `onAuthFailure`（当前为 `forceLogout()`）
 
-当前项目虽然不做 shared auto-refresh，但 auth feature 允许一条显式前置续期能力：
+以下请求不参与 reactive refresh：
 
-- `ensureFreshSession()` 只由 auth feature 提供
-- 它只在 route loader、页面进入前这类显式边界调用
-- 它不会变成 `shared/graphql` 的全局错误拦截器
+- `authMode: 'none'` 的所有请求
+- `allowAuthRetry: false` 的请求（auth 主流程统一标记此选项）
 
-这条能力的当前约束是：
+这条能力的约束是：
 
-- 先看当前 token 是否临近过期
+- `shared/graphql` 自身不决定 refresh 如何执行，只通过 bridge 调用
+- `shared/graphql` 自身不决定 auth failure 后如何跳转，只通过 `onAuthFailure` 回调
+- auth 主流程不会进入 shared retry，其闭环仍在 `features/auth` 内部
+- `force: true` 只用于“服务端已经实际拒绝了当前 token”的 reactive 路径，不改变 router 中的主动安全检查语义
+
+## 当前续期双机制
+
+当前项目存在两条续期路径，共享同一套 single-flight：
+
+### 1. 主动续期（proactive）
+
+- `ensureFreshSession()` 由 auth feature 提供
+- 它在 route loader、页面进入前这类显式边界调用
+- 先看当前 token 是否临近过期（当前阈值：过期前 60 秒）
 - 若仍足够新鲜，则直接复用当前 snapshot
 - 若已接近过期，则由 auth feature 主动调用 `refresh`
-- 多个边界同时触发时，只允许一个 `refresh` 在飞
-- 失败后的 redirect / UI 反馈仍由调用方决定，不由 `shared/graphql` 接管
+- 多个边界同时触发时，只允许一个 `refresh` 在飞（`ensureFreshPromise`）
+- 失败后的 redirect / UI 反馈仍由调用方决定
 
-一句话理解：
+### 2. 兜底续期（reactive）
 
-- 可以有 auth 显式续期
-- 不做 shared 隐式拦截续期
+- 由 `executeGraphQL` 的外层编排承载
+- 普通业务请求收到 `type: 'auth'` 后，通过 bridge 调用 `refreshSession`
+- bridge 内部调用 `ensureFreshSession({ force: true })`，强制跳过客户端 `isTokenFresh` 判断
+- 成功后重放原请求一次
+- 失败后调用 `onAuthFailure`
+- auth 主流程通过 `allowAuthRetry: false` 排除在外
+
+两条路径通过 `ensureFreshPromise` 共享 single-flight，不会产生并发 refresh。
+
+### 会话失效后的导航
+
+`forceLogout()` 只负责清除 session 状态，不负责导航跳转。
+
+跳转由 app 根部的 auth state watcher 承载：
+
+- 监听 auth state 从 `authenticated` 变为 `unauthenticated`
+- 若当前路径属于 protected area，则 `window.location.replace` 到 `/login?redirect=当前路径`
+- 若当前路径已在 public area（login、forgot-password 等），则不跳转
+- 使用硬跳转而非 `router.navigate`，因为 forceLogout 后 app state 不可信
+
+public 白名单当前包括：
+
+- `/login`
+- `/forgot-password`
+- `/reset-password`
+- `/invite/`
+- `/verify/`
+- `/magic-link/`
 
 ## 当前长线方案
 
-除非未来出现明确且持续的业务压力，否则当前项目长期按以下口径执行：
+当前项目长期按以下口径执行：
 
 - HTTP GraphQL 请求统一走 `shared/graphql`
-- `shared/graphql` 长期只负责 transport/runtime，不接管 auth 主流程
+- `shared/graphql` 负责 transport/runtime + 普通业务请求的 reactive refresh
 - `features/auth` 长期负责 `login / refresh / restore / logout / forceLogout`
+- auth 主流程通过 `allowAuthRetry: false` 排除在 shared retry 之外
 - `authMode: 'required' | 'none'` 作为稳定请求语义长期保留
-
-这套口径默认视为长期约束，而不是等待被更“自动”的 shared auto-refresh 替换。
+- router 中的 `ensureFreshSession()` 是主动安全检查，请求层 reactive refresh 是兜底
+- `onAuthFailure` 只负责宣布会话失效；真正的页面跳转由 app 根部 watcher 响应 auth state 变化
 
 ## WS 边界
 
@@ -179,24 +230,30 @@
 
 因此，当前长线方案对 HTTP/auth 是稳定的；对 WS，则要求后续启用时补齐“token 变化 -> 重连”规则，而不是默认沿用 HTTP 语义。
 
-## 如果将来要重新引入 auto-refresh
+## 显式 accessToken 与 reactive retry 的约束
 
-只有在以下前提都满足后，才重新评估：
+当前 reactive retry 的重放逻辑会清除请求级显式 `accessToken`（`options.accessToken = undefined`），让重放请求通过 runtime bridge 的 `getAccessToken()` 读取刷新后的最新 token。
 
-- auth feature 与 session 主权已经稳定
-- 已有明确业务场景需要共享层自动补救
-- 已补齐针对 `401 / UNAUTHENTICATED`、并发请求、失败路径的自动化测试
+这个策略的前提假设是：
 
-即便未来重新引入，也应遵守：
+- 调用方传入的显式 `accessToken` 代表的是当前 session 的 token
+- refresh 成功后，`getAccessToken()` 返回的就是正确的替代值
 
-- 只针对普通业务请求评估
-- 不自动接管 auth feature 自己的 `login / refresh / restore / me`
-- 不让 `shared/graphql` 成为 auth 主权来源
+对当前仓库中的所有调用点，这个假设成立：
+
+- `src/features/profile-completion/infrastructure/profile-completion-api.ts` — 传入当前 session 的 `accessToken`
+- `src/features/auth/infrastructure/auth-api.ts` — 传入当前 session 的 `accessToken`（且已通过 `allowAuthRetry: false` 排除 retry）
+
+**约束：**
+
+- 如果未来出现传入非当前 session 的专用 token 场景（例如第三方服务 token、临时凭证等），该请求必须同时传 `allowAuthRetry: false`
+- 否则 retry 会用当前 session token 替换原始 token，导致语义错误
+- 这条规则适用于所有通过 `executeGraphQL` 的调用方
 
 ## 与 React 的边界
 
 - runtime 必须可脱离 React 工作
-- runtime 当前只由 app bootstrap 注入 `getAccessToken`
+- runtime 当前由 app bootstrap 注入 `getAccessToken`、`refreshSession`、`onAuthFailure`
 - `GraphQLProvider` 只负责 React 集成
 - 运行时 bootstrap 在 app 启动阶段完成
 - 不能把 GraphQL runtime 主权藏进 provider 生命周期

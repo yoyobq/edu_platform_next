@@ -1,6 +1,6 @@
 // src/app/router/index.tsx
 
-import { type ReactNode, useEffect } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 import { Spin, Typography } from 'antd';
 import {
   createBrowserRouter,
@@ -40,6 +40,19 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
+
+const PUBLIC_PATH_PREFIXES = [
+  '/forgot-password',
+  '/invite/',
+  '/login',
+  '/magic-link/',
+  '/reset-password',
+  '/verify/',
+];
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 type AppEnv = 'dev' | 'test' | 'prod';
 type AppAccessLevel = 'guest' | 'admin';
@@ -297,10 +310,26 @@ function RouteHydrateFallback() {
 
 function AuthBootstrapGate({ children }: { children: ReactNode }) {
   const authSession = useAuthSessionState();
+  const prevStatusRef = useRef(authSession.status);
 
   useEffect(() => {
     void restoreSession();
   }, []);
+
+  useEffect(() => {
+    const prevStatus = prevStatusRef.current;
+    prevStatusRef.current = authSession.status;
+
+    if (prevStatus === 'authenticated' && authSession.status === 'unauthenticated') {
+      if (!isPublicPath(window.location.pathname)) {
+        const currentPath = sanitizeRedirectTarget(
+          `${window.location.pathname}${window.location.search}${window.location.hash}`,
+        );
+
+        window.location.replace(`/login?redirect=${encodeURIComponent(currentPath)}`);
+      }
+    }
+  }, [authSession.status]);
 
   if (authSession.status === 'restoring') {
     return (

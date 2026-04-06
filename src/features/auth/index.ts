@@ -56,8 +56,8 @@ export function restoreSession() {
   return runRestoreSession(authPorts);
 }
 
-export function ensureFreshSession() {
-  return runEnsureFreshSession(authPorts);
+export function ensureFreshSession(options?: { force?: boolean }) {
+  return runEnsureFreshSession(authPorts, options);
 }
 
 export function refreshSession() {

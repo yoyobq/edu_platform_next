@@ -34,14 +34,17 @@ function isTokenFresh(accessToken: string): boolean {
   return expiresAt - Date.now() > REFRESH_THRESHOLD_MS;
 }
 
-export async function ensureFreshSession(ports: AuthPorts): Promise<AuthSessionSnapshot> {
+export async function ensureFreshSession(
+  ports: AuthPorts,
+  options?: { force?: boolean },
+): Promise<AuthSessionSnapshot> {
   const snapshot = getAuthSessionSnapshot() ?? ports.storage.readSession();
 
   if (!snapshot) {
     throw new Error('当前没有可用的登录会话。');
   }
 
-  if (isTokenFresh(snapshot.accessToken)) {
+  if (!options?.force && isTokenFresh(snapshot.accessToken)) {
     return snapshot;
   }
 

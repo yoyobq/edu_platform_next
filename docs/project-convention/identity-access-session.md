@@ -23,6 +23,7 @@
 - 后端不替前端保存“浏览器当前会话”这一层语义
 - GraphQL runtime、HTTP client、SDK wrapper 都不是 token 真源，只是请求时消费 token 的技术承载层
 - `shared/graphql` 当前不自动发起 `refresh`；会话恢复、续期与失效推进仍由 `features/auth` 负责
+- `shared/graphql` 当前只对普通业务请求做受控的 reactive refresh；auth 主流程不参与
 - 运行时层不得在 auth feature 之外再维护一份独立 token 真源，避免与当前会话状态漂移
 - 若某个 runtime 需要鉴权，它必须在请求时读取当前 token，而不是长期缓存一份自己的 token 副本
 - `refresh` 成功后，后续请求必须使用最新 token；旧 token 只允许停留在失败中的历史请求上下文里
@@ -33,7 +34,7 @@
 
 - `ensureFreshSession()` 由 `features/auth` 提供
 - 它只在 auth 的显式边界上调用，例如 protected route loader
-- 它不会下沉到 `shared/graphql` 变成 transport 拦截器
+- 它不会下沉成 `shared/graphql` 自己的 refresh 主权
 
 当前规则为：
 
@@ -42,6 +43,15 @@
 - 多个 loader / 页面边界同时触发时，前端只允许一个 `refresh` 在飞，其余调用等待同一结果
 - 无法可靠解析 token `exp` 时，按保守兼容处理，直接返回当前 snapshot，不阻塞当前流程
 - `refresh` 失败时，`ensureFreshSession()` 自身不决定页面跳转；由调用方决定是否 redirect 或展示错误
+
+当前请求层还存在一条兜底续期路径：
+
+- 普通业务请求若收到 `GraphQLIngressError.type === 'auth'`
+- 则由 `shared/graphql` 通过 bridge 调用 `refreshSession`
+- bridge 内部调用 `ensureFreshSession({ force: true })`
+- `force: true` 只用于“服务端已经实际拒绝了当前 token”的场景，跳过客户端 `isTokenFresh` 判断
+- 成功后重放原请求一次；失败后调用 `onAuthFailure`
+- auth 主流程通过 `allowAuthRetry: false` 排除在此路径之外
 
 页面刷新后的恢复链路为：
 
@@ -56,6 +66,13 @@
 2. 若当前已有会话，再执行 `ensureFreshSession()`
 3. 续期成功后，使用最新 snapshot 继续做 `needsProfileCompletion` 和访问控制判断
 4. 若续期失败，调用方先强制登出，再决定跳回登录页
+
+当前会话失效后的页面响应规则为：
+
+- `forceLogout()` 只负责清 storage 和 auth store
+- app 根部 watcher 负责监听 `authenticated -> unauthenticated`
+- 当前路径若不在 public 白名单，则硬跳 `/login?redirect=当前路径`
+- 当前路径若已在 public 白名单，则不跳转
 
 ## 当前会话快照
 

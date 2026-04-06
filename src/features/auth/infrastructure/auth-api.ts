@@ -145,6 +145,7 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
 ): Promise<TData> {
   return executeGraphQL(query, variables, {
     accessToken: options?.accessToken,
+    allowAuthRetry: false,
     authMode: options?.authMode,
   });
 }

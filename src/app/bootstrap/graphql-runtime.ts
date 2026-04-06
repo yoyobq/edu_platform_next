@@ -1,4 +1,4 @@
-import { getAuthSessionSnapshot } from '@/features/auth';
+import { ensureFreshSession, forceLogout, getAuthSessionSnapshot } from '@/features/auth';
 
 import { configureGraphQLRuntime } from '@/shared/graphql';
 
@@ -11,6 +11,10 @@ export function bootstrapGraphQLRuntime() {
 
   configureGraphQLRuntime({
     getAccessToken: () => getAuthSessionSnapshot()?.accessToken ?? null,
+    onAuthFailure: () => forceLogout(),
+    refreshSession: async () => {
+      await ensureFreshSession({ force: true });
+    },
   });
 
   hasBootstrappedGraphQLRuntime = true;
