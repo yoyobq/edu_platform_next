@@ -2,7 +2,7 @@
 
 import type { AuthStoragePort } from '../application/ports';
 
-import { deserializeSessionSnapshot, serializeSessionSnapshot } from './mapper';
+import { deserializeStoredSession, serializeStoredSession } from './mapper';
 
 const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
@@ -29,7 +29,7 @@ export const authStorage: AuthStoragePort = {
       return null;
     }
 
-    const snapshot = deserializeSessionSnapshot(rawValue);
+    const snapshot = deserializeStoredSession(rawValue);
 
     if (!snapshot) {
       window.localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -42,6 +42,6 @@ export const authStorage: AuthStoragePort = {
       return;
     }
 
-    window.localStorage.setItem(AUTH_STORAGE_KEY, serializeSessionSnapshot(session));
+    window.localStorage.setItem(AUTH_STORAGE_KEY, serializeStoredSession(session));
   },
 };

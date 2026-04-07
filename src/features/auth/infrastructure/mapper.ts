@@ -2,10 +2,13 @@
 
 import {
   type AuthAccessGroup,
+  type AuthPendingSession,
   type AuthSessionIdentity,
   type AuthSessionSnapshot,
   type AuthSlotGroup,
+  type AuthStoredSession,
   isAuthAccessGroup,
+  isAuthPendingSession,
   resolvePrimaryAccessGroup,
 } from '../application/types';
 
@@ -70,6 +73,13 @@ type PersistedAuthSessionDTO = {
   slotGroup: readonly AuthSlotGroup[];
   userInfo: AuthSessionSnapshot['userInfo'];
   version: 2;
+};
+
+type PersistedPendingAuthSessionDTO = {
+  accessToken: string;
+  refreshToken: string;
+  stage: 'pending';
+  version: 3;
 };
 
 type ParsedAccessTokenClaims = {
@@ -232,25 +242,44 @@ export function mapSessionResultToSessionSnapshot(
   };
 }
 
-export function serializeSessionSnapshot(snapshot: AuthSessionSnapshot): string {
+export function mapTokensToPendingSession(tokens: AuthSessionTokensDTO): AuthPendingSession {
+  return {
+    accessToken: tokens.accessToken,
+    kind: 'PENDING',
+    refreshToken: tokens.refreshToken,
+  };
+}
+
+export function serializeStoredSession(session: AuthStoredSession): string {
+  if (isAuthPendingSession(session)) {
+    const pendingSession: PersistedPendingAuthSessionDTO = {
+      accessToken: session.accessToken,
+      refreshToken: session.refreshToken,
+      stage: 'pending',
+      version: 3,
+    };
+
+    return JSON.stringify(pendingSession);
+  }
+
   const persistedSession: PersistedAuthSessionDTO = {
-    accessToken: snapshot.accessToken,
-    account: snapshot.account,
-    accountId: snapshot.accountId,
-    displayName: snapshot.displayName,
-    identity: snapshot.identity,
-    needsProfileCompletion: snapshot.needsProfileCompletion,
-    primaryAccessGroup: snapshot.primaryAccessGroup,
-    refreshToken: snapshot.refreshToken,
-    slotGroup: snapshot.slotGroup,
-    userInfo: snapshot.userInfo,
+    accessToken: session.accessToken,
+    account: session.account,
+    accountId: session.accountId,
+    displayName: session.displayName,
+    identity: session.identity,
+    needsProfileCompletion: session.needsProfileCompletion,
+    primaryAccessGroup: session.primaryAccessGroup,
+    refreshToken: session.refreshToken,
+    slotGroup: session.slotGroup,
+    userInfo: session.userInfo,
     version: 2,
   };
 
   return JSON.stringify(persistedSession);
 }
 
-export function deserializeSessionSnapshot(rawValue: string): AuthSessionSnapshot | null {
+export function deserializeStoredSession(rawValue: string): AuthStoredSession | null {
   let parsedValue: unknown;
 
   try {
@@ -264,6 +293,19 @@ export function deserializeSessionSnapshot(rawValue: string): AuthSessionSnapsho
   }
 
   const value = parsedValue as Partial<PersistedAuthSessionDTO>;
+
+  if (
+    (parsedValue as Partial<PersistedPendingAuthSessionDTO>).version === 3 &&
+    (parsedValue as Partial<PersistedPendingAuthSessionDTO>).stage === 'pending' &&
+    typeof (parsedValue as Partial<PersistedPendingAuthSessionDTO>).accessToken === 'string' &&
+    typeof (parsedValue as Partial<PersistedPendingAuthSessionDTO>).refreshToken === 'string'
+  ) {
+    return {
+      accessToken: (parsedValue as PersistedPendingAuthSessionDTO).accessToken,
+      kind: 'PENDING',
+      refreshToken: (parsedValue as PersistedPendingAuthSessionDTO).refreshToken,
+    };
+  }
 
   if (
     value.version !== 2 ||

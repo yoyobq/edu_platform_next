@@ -8,7 +8,7 @@ import { isGraphQLIngressError } from '@/shared/graphql/errors';
 import type { AuthApiPort } from '../application/ports';
 import type { AuthLoginInput, AuthSessionSnapshot } from '../application/types';
 
-import { mapSessionResultToSessionSnapshot } from './mapper';
+import { mapSessionResultToSessionSnapshot, mapTokensToPendingSession } from './mapper';
 
 type SessionTokensDTO = {
   accessToken: string;
@@ -175,7 +175,7 @@ export const authApi: AuthApiPort = {
       { authMode: 'none' },
     );
 
-    return hydrateSession(response.login);
+    return mapTokensToPendingSession(response.login);
   },
   async refresh(input: { refreshToken: string }) {
     const response = await requestGraphQL<

@@ -1,19 +1,24 @@
 // src/features/auth/application/ports.ts
 
-import type { AuthLoginInput, AuthSessionSnapshot } from './types';
+import type {
+  AuthLoginInput,
+  AuthPendingSession,
+  AuthSessionSnapshot,
+  AuthStoredSession,
+} from './types';
 
 export type AuthApiPort = {
-  login: (input: AuthLoginInput) => Promise<AuthSessionSnapshot>;
+  login: (input: AuthLoginInput) => Promise<AuthPendingSession>;
   refresh: (input: { refreshToken: string }) => Promise<AuthSessionSnapshot>;
   restore: (
-    session: Pick<AuthSessionSnapshot, 'accessToken' | 'refreshToken'>,
+    session: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'>,
   ) => Promise<AuthSessionSnapshot>;
 };
 
 export type AuthStoragePort = {
   clearSession: () => void;
-  readSession: () => AuthSessionSnapshot | null;
-  writeSession: (session: AuthSessionSnapshot) => void;
+  readSession: () => AuthStoredSession | null;
+  writeSession: (session: AuthStoredSession) => void;
 };
 
 export type AuthPorts = {

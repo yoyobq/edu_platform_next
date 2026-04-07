@@ -2,9 +2,20 @@
 
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { SearchOutlined } from '@ant-design/icons';
-import { Button, ConfigProvider, Flex, Layout, Menu, Popconfirm, Tooltip, Typography } from 'antd';
+import {
+  Button,
+  Card,
+  ConfigProvider,
+  Flex,
+  Layout,
+  Menu,
+  Popconfirm,
+  Skeleton,
+  Tooltip,
+  Typography,
+} from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-router';
 
 import {
   AuthRefreshFeedbackBridge,
@@ -62,6 +73,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const isLabsRoute = location.pathname.startsWith('/labs/');
+  const isHydrating = authSession.status === 'hydrating';
+  const revalidator = useRevalidator();
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
     mainRef,
     [
@@ -96,6 +109,17 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     };
   }, []);
 
+  const previousAuthStatusRef = useRef(authSession.status);
+
+  useEffect(() => {
+    const previousStatus = previousAuthStatusRef.current;
+    previousAuthStatusRef.current = authSession.status;
+
+    if (previousStatus === 'hydrating' && authSession.status === 'authenticated') {
+      revalidator.revalidate();
+    }
+  }, [authSession.status, revalidator]);
+
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
       open();
@@ -125,7 +149,9 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 
   const search = location.search;
-  const currentIdentity = authSession.snapshot?.primaryAccessGroup.toLowerCase() || 'guest';
+  const currentIdentity = isHydrating
+    ? '同步中'
+    : authSession.snapshot?.primaryAccessGroup.toLowerCase() || 'guest';
   const menuItems: ItemType[] = [
     {
       key: getBaseURL('/', search),
@@ -243,6 +269,21 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                           <Button type="default">退出</Button>
                         </Popconfirm>
                       </>
+                    ) : isHydrating ? (
+                      <>
+                        <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
+                          正在同步账户信息
+                        </div>
+                        <Button
+                          type="default"
+                          onClick={() => {
+                            logout();
+                            navigate('/login', { replace: true });
+                          }}
+                        >
+                          取消登录
+                        </Button>
+                      </>
                     ) : (
                       <Button type="primary" onClick={() => navigate('/login')}>
                         登录
@@ -268,7 +309,23 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                     </Typography.Paragraph>
                   </div>
                 ) : null}
-                <Outlet />
+                {isHydrating ? (
+                  <Card>
+                    <Flex vertical gap={20}>
+                      <div className="flex flex-col gap-2">
+                        <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                          正在同步账户信息
+                        </Typography.Title>
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          已建立登录会话，正在补齐当前账号的身份与权限信息。
+                        </Typography.Paragraph>
+                      </div>
+                      <Skeleton active paragraph={{ rows: 6 }} />
+                    </Flex>
+                  </Card>
+                ) : (
+                  <Outlet />
+                )}
               </Flex>
             </div>
           </Layout.Content>

@@ -1,7 +1,7 @@
 import {
   ensureFreshSession,
   forceLogout,
-  getAuthSessionSnapshot,
+  getCurrentAuthSession,
   queueAuthRefreshFailureMessage,
 } from '@/features/auth';
 
@@ -16,7 +16,7 @@ export function bootstrapGraphQLRuntime() {
   }
 
   configureGraphQLRuntime({
-    getAccessToken: () => getAuthSessionSnapshot()?.accessToken ?? null,
+    getAccessToken: () => getCurrentAuthSession()?.accessToken ?? null,
     onAuthFailure: () => {
       queueAuthRefreshFailureMessage();
       forceLogout(null);

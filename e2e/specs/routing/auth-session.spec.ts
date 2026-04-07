@@ -86,6 +86,23 @@ test('登录成功后，应按 redirect 进入目标页并呈现已认证状态'
   await expect(layoutBanner(page).getByText('admin-user')).toBeVisible();
 });
 
+test('登录成功后不应等待 me 完成才离开登录页', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    loginSession: createAdminSession(),
+    meDelayMs: 1500,
+  });
+
+  await page.goto(routes.login);
+  await submitLogin(page);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: '正在同步账户信息' })).toBeVisible();
+  await expect(layoutBanner(page).getByRole('button', { name: '取消登录' })).toBeVisible();
+  await expect(layoutBanner(page).getByText('admin-user')).toBeVisible();
+  await expect(layoutBanner(page).getByText('身份：admin')).toBeVisible();
+});
+
 test('登录成功但 me 失败时，应停留在登录页并显示错误', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
@@ -96,7 +113,7 @@ test('登录成功但 me 失败时，应停留在登录页并显示错误', asyn
   await page.goto(routes.login);
   await submitLogin(page);
 
-  await expect(page).toHaveURL(/\/login$/);
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
   await expect(page.getByRole('alert')).toContainText('TOKEN_INVALID');
 });
 

@@ -1,6 +1,6 @@
 import type { AuthPorts } from './ports';
 import { refreshSessionWithLock } from './refresh-session';
-import { getAuthSessionSnapshot } from './session-store';
+import { getAuthSessionSnapshot, getCurrentAuthSession } from './session-store';
 import type { AuthSessionSnapshot } from './types';
 
 const REFRESH_THRESHOLD_MS = 60_000;
@@ -37,15 +37,16 @@ export async function ensureFreshSession(
   ports: AuthPorts,
   options?: { force?: boolean },
 ): Promise<AuthSessionSnapshot> {
-  const snapshot = getAuthSessionSnapshot() ?? ports.storage.readSession();
+  const snapshot = getAuthSessionSnapshot();
+  const currentSession = getCurrentAuthSession() ?? ports.storage.readSession();
 
-  if (!snapshot) {
+  if (!currentSession) {
     throw new Error('当前没有可用的登录会话。');
   }
 
-  if (!options?.force && isTokenFresh(snapshot.accessToken)) {
+  if (snapshot && !options?.force && isTokenFresh(snapshot.accessToken)) {
     return snapshot;
   }
 
-  return refreshSessionWithLock(ports, snapshot.refreshToken);
+  return refreshSessionWithLock(ports, currentSession.refreshToken);
 }

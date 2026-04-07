@@ -16,6 +16,31 @@
 1. `login / refresh` 只负责拿 token
 2. `me` 负责重建前端消费的当前会话快照
 
+当前前端会话状态机收敛为：
+
+- `unauthenticated`
+- `restoring`
+- `hydrating`
+- `authenticated`
+
+其中：
+
+- `restoring`：页面刷新或进入受保护路由时，前端正在尝试从本地会话恢复
+- `hydrating`：`login` 已成功返回 token，前端已离开 `/login`，正在壳层内异步执行 `me`
+- `authenticated`：`me` 已成功，当前完整会话快照可用于访问控制与页面渲染
+
+当前登录成功后的默认体验为：
+
+1. 调用 `login`
+2. 若成功，仅先写入 `accessToken / refreshToken`
+3. 立即离开 `/login`
+4. 在 app shell 内进入 `hydrating`
+5. 异步执行 `me`
+6. `me` 成功后进入 `authenticated`
+7. 若 `me` 失败，则清理会话并回到 `/login`
+
+这条规则的目的不是缩短真实总耗时，而是把“等待 `me`”从登录页内挪到壳层内，改善首次登录体感。
+
 当前前端 token 主权明确为：
 
 - `accessToken` 与 `refreshToken` 由前端当前会话负责持有
@@ -29,6 +54,13 @@
 - `refresh` 成功后，后续请求必须使用最新 token；旧 token 只允许停留在失败中的历史请求上下文里
 - 这套“auth 主流程归 auth feature、shared/graphql 只做 transport/runtime”的划分，当前按长线方案执行
 - `ws / subscription` 不适用“每次请求现读 token”的 HTTP 语义；若后续启用，token 变化时必须按需重连
+
+当前本地会话存储允许两种形态：
+
+- pending session：仅含 `accessToken / refreshToken`
+- hydrated snapshot：完整 `me` 水合结果
+
+前者只用于 `hydrating` 过渡态，后者才是正式业务页面消费的完整会话快照。
 
 当前前端还保留一条显式前置续期能力：
 
@@ -60,12 +92,20 @@
 3. `refresh` 成功后，再次调用 `me`
 4. 任一步失败，前端强制登出并清空本地会话
 
+如果本地存储中只有 pending session，则当前恢复链路退化为：
+
+1. 直接使用当前 `accessToken` 调 `me`
+2. 若命中 auth 失败，再用 `refreshToken` 调 `refresh`
+3. `refresh` 成功后，再次调用 `me`
+4. 任一步失败，前端清理 pending session，回到登录页
+
 进入 protected route 前的当前默认链路为：
 
 1. 先执行 `restoreSession()`
-2. 若当前已有会话，直接使用当前 snapshot 做 `needsProfileCompletion` 和访问控制判断
-3. 不再在 route loader 中同步等待 `ensureFreshSession()`
-4. 后续若普通业务请求收到 `type: 'auth'`，再走请求层 reactive refresh / forceLogout
+2. 若当前已有完整 snapshot，直接使用当前 snapshot 做 `needsProfileCompletion` 和访问控制判断
+3. 若当前只有 pending session，则允许先开 app shell，并在壳层内继续 `hydrating`
+4. 不再在 route loader 中同步等待 `ensureFreshSession()`
+5. 后续若普通业务请求收到 `type: 'auth'`，再走请求层 reactive refresh / forceLogout
 
 当前会话失效后的页面响应规则为：
 
@@ -73,6 +113,8 @@
 - app 根部 watcher 负责监听 `authenticated -> unauthenticated`
 - 当前路径若不在 public 白名单，则硬跳 `/login?redirect=当前路径`
 - 当前路径若已在 public 白名单，则不跳转
+- 若 `hydrating` 期间 `me` 失败，则同样清会话并回到 `/login`
+- 失败原因通过 flash 回传到登录页，避免只剩 toast 而丢失表单上下文
 
 当前 refresh 反馈规则为：
 
@@ -82,7 +124,14 @@
 - refresh 失败后的提示走单一路径，不再同时依赖登录页表单错误和 toast
 - 当前默认文案：
   - 成功：`已为你更新登录状态`
-  - 失败：`登录状态已失效，请重新登录`
+- 失败：`登录状态已失效，请重新登录`
+
+当前登录后 hydrate 失败的反馈规则为：
+
+- 不继续停留在 app shell
+- 清除 pending session
+- 回到 `/login?redirect=原目标`
+- 失败原因优先落到登录页 inline error；必要时可同时保留统一 flash 承接
 
 ## 当前会话快照
 
@@ -102,6 +151,12 @@
 - `userInfo`：公共资料与 `accessGroup`
 - `identity`：当前主身份的详情补充；仅在存在独立身份实体时返回
 - `slotGroup`：来自 access token 的增量授权摘要
+
+注意：
+
+- pending session 不是“会话快照”
+- `needsProfileCompletion`、`accountId`、`identity`、`userInfo` 等字段只有在 `me` 完成后才可信
+- 因此 `hydrating` 阶段只允许开壳，不允许把 pending session 当成完整业务身份输入
 
 ## 当前身份与授权摘要
 
@@ -175,5 +230,6 @@
 ## 当前前端落地状态
 
 - 认证会话已按 `login / refresh / me / logout` 收敛
-- 本地会话存储已切到 `auth.session.v2`
+- 登录成功后已改为“先 token、后 `me` 水合”的壳层内异步模式
+- 本地会话存储当前同时兼容 pending session 与 hydrated snapshot
 - 当前 E2E 已覆盖登录、恢复、刷新、强制登出与基础路由正反路径

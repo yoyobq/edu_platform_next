@@ -55,6 +55,7 @@ type MockAuthGraphQLOptions = {
   currentSession?: SeedAuthSessionOptions;
   loginErrorMessage?: string;
   loginSession?: SeedAuthSessionOptions;
+  meDelayMs?: number;
   meErrorSequence?: readonly string[];
   refreshErrorMessage?: string;
   refreshSession?: SeedAuthSessionOptions;
@@ -362,6 +363,10 @@ export async function mockAuthGraphQL(
 
     if (query.includes('query Me')) {
       const nextMeError = meErrorSequence.shift();
+
+      if (options.meDelayMs && options.meDelayMs > 0) {
+        await new Promise((resolve) => setTimeout(resolve, options.meDelayMs));
+      }
 
       if (nextMeError) {
         await fulfillGraphQLError(route, nextMeError);

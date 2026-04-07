@@ -68,6 +68,7 @@
 - auth 主流程（`me` 水合、`restore -> refresh -> me`）的 retry
 - protected route 进入前的默认同步续期
 - 会话失效后如何跳转（由 app 层 watcher 负责）
+- `login` 成功后是否立即离开 `/login`（由 auth + router/app shell 协同决定）
 
 ## auth feature 负责什么
 
@@ -81,6 +82,8 @@
 - 会话快照维护
 - 本地 session 持久化
 - `me` 水合后的当前会话重建
+- `login` 成功后的 pending session 过渡态
+- `hydrating -> authenticated / unauthenticated` 状态推进
 - auth 显式边界上的主动续期能力（`ensureFreshSession()`）
 - refresh single-flight（`ensureFreshPromise`）
 
@@ -167,7 +170,7 @@
 - 先看当前 token 是否临近过期（当前阈值：过期前 60 秒）
 - 若仍足够新鲜，则直接复用当前 snapshot
 - 若已接近过期，则由 auth feature 主动调用 `refresh`
-- 多个边界同时触发时，只允许一个 `refresh` 在飞（`ensureFreshPromise`）
+- 多个边界同时触发时，只允许一个 `refresh` 在飞（当前实现已收敛为 auth feature 内统一 single-flight）
 - 失败后的 redirect / UI 反馈仍由调用方决定
 
 ### 2. 兜底续期（reactive）
@@ -201,6 +204,12 @@ public 白名单当前包括：
 - `/verify/`
 - `/magic-link/`
 
+补充：
+
+- `hydrating` 期间若 `me` / `restore` 最终失败，也按“会话已失效”处理
+- 这类失败不再停留在壳层等待，而是清会话并回到 `/login`
+- 失败原因通过 auth feature 写入 flash，由登录页或 layout 宿主承接
+
 ### refresh 反馈承接
 
 当前 refresh 相关提示分两类：
@@ -215,6 +224,12 @@ public 白名单当前包括：
 - 页面级 refresh 成功提示采用同一套 flash 承接，避免页面跳转过快导致局部 message 宿主随页面一起卸载
 - 反馈形式统一使用 `antd message`，不使用 `notification`
 
+补充当前登录后 hydrate 规则：
+
+- `login` mutation 成功后，前端可立即离开 `/login`
+- app shell 在 `hydrating` 阶段显示受控占位，不提前渲染依赖 `me` 的正式业务内容
+- hydrate 失败时，错误优先回收到登录页 inline error，避免用户只看到瞬时 toast
+
 ## 当前长线方案
 
 当前项目长期按以下口径执行：
@@ -222,9 +237,11 @@ public 白名单当前包括：
 - HTTP GraphQL 请求统一走 `shared/graphql`
 - `shared/graphql` 负责 transport/runtime + 普通业务请求的 reactive refresh
 - `features/auth` 长期负责 `login / refresh / restore / logout / forceLogout`
+- `features/auth` 继续负责 pending session 与 `hydrating` 中间态
 - auth 主流程通过 `allowAuthRetry: false` 排除在 shared retry 之外
 - `authMode: 'required' | 'none'` 作为稳定请求语义长期保留
 - router 默认只做 `restoreSession()` 与页面级分流，不同步等待 `ensureFreshSession()`
+- router / app shell 允许在 pending session 存在时先开壳，再异步等待 `me`
 - 请求层 reactive refresh 是当前默认兜底路径
 - `onAuthFailure` 只负责宣布会话失效；真正的页面跳转由 app 根部 watcher 响应 auth state 变化
 

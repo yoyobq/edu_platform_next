@@ -46,10 +46,18 @@ export type AuthSessionUserInfo = {
   nickname: string;
 };
 
-export type AuthStatus = 'restoring' | 'authenticated' | 'unauthenticated';
+export type AuthStatus = 'restoring' | 'hydrating' | 'authenticated' | 'unauthenticated';
 
-export type AuthSessionSnapshot = {
+export type AuthSessionTokens = {
   accessToken: string;
+  refreshToken: string;
+};
+
+export type AuthPendingSession = AuthSessionTokens & {
+  kind: 'PENDING';
+};
+
+export type AuthSessionSnapshot = AuthSessionTokens & {
   account: AuthSessionAccount;
   accountId: number;
   displayName: string;
@@ -62,8 +70,11 @@ export type AuthSessionSnapshot = {
   userInfo: AuthSessionUserInfo;
 };
 
+export type AuthStoredSession = AuthPendingSession | AuthSessionSnapshot;
+
 export type AuthSessionState = {
   lastError: string | null;
+  pendingSession: AuthPendingSession | null;
   snapshot: AuthSessionSnapshot | null;
   status: AuthStatus;
 };
@@ -78,6 +89,12 @@ export type AuthLoginInput = {
 
 export function isAuthAccessGroup(value: unknown): value is AuthAccessGroup {
   return typeof value === 'string' && (AUTH_ACCESS_GROUPS as readonly string[]).includes(value);
+}
+
+export function isAuthPendingSession(
+  value: AuthStoredSession | AuthPendingSession | null | undefined,
+): value is AuthPendingSession {
+  return Boolean(value && 'kind' in value && value.kind === 'PENDING');
 }
 
 export function resolvePrimaryAccessGroup(input: {

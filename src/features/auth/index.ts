@@ -14,22 +14,27 @@ import {
 import { refreshSession as runRefreshSession } from './application/refresh-session';
 import { restoreSession as runRestoreSession } from './application/restore-session';
 export {
+  getAuthPendingSession,
   getAuthSessionSnapshot,
   getAuthSessionState,
+  getCurrentAuthSession,
   useAuthSessionState,
 } from './application/session-store';
 export type {
   AuthAccessGroup,
   AuthLoginInput,
+  AuthPendingSession,
   AuthSessionIdentity,
   AuthSessionSnapshot,
   AuthSessionState,
   AuthSessionUserInfo,
   AuthStatus,
+  AuthStoredSession,
 } from './application/types';
 export {
   getSessionAccessGroup,
   hasAdminAccess,
+  isAuthPendingSession,
   resolvePrimaryAccessGroup,
 } from './application/types';
 export {
@@ -62,8 +67,12 @@ export function login(input: AuthLoginInput) {
   return runLogin(authPorts, input);
 }
 
-export function restoreSession() {
-  return runRestoreSession(authPorts);
+export function restoreSession(options?: { background?: boolean }) {
+  return runRestoreSession(authPorts, options);
+}
+
+export function readStoredAuthSession() {
+  return authStorage.readSession();
 }
 
 export function ensureFreshSession(options?: { force?: boolean }) {

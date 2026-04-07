@@ -1,5 +1,5 @@
 import type { AuthPorts } from './ports';
-import { getAuthSessionState, setAuthenticatedSession } from './session-store';
+import { getCurrentAuthSession, setAuthenticatedSession } from './session-store';
 import type { AuthSessionSnapshot } from './types';
 
 let refreshPromise: Promise<AuthSessionSnapshot> | null = null;
@@ -29,7 +29,7 @@ export function refreshSessionWithLock(
 }
 
 export async function refreshSession(ports: AuthPorts): Promise<AuthSessionSnapshot> {
-  const currentSession = getAuthSessionState().snapshot ?? ports.storage.readSession();
+  const currentSession = getCurrentAuthSession() ?? ports.storage.readSession();
 
   if (!currentSession) {
     throw new Error('当前没有可刷新的登录会话。');

@@ -26,8 +26,12 @@ import { WelcomePage } from '@/pages/welcome';
 import {
   buildWelcomeRedirectTarget,
   getAuthSessionSnapshot,
+  getAuthSessionState,
   hasAdminAccess,
+  isAuthPendingSession,
+  readStoredAuthSession,
   resolveAuthenticatedRedirectTarget,
+  resolveLoginRedirectTarget,
   resolveWelcomeRedirectTarget,
   restoreSession,
   useAuthSessionState,
@@ -119,11 +123,25 @@ function buildWelcomeRedirectURL(request: Request) {
   return buildWelcomeRedirectTarget(redirectTarget, url.origin);
 }
 
+function hasHydratingSession() {
+  const authState = getAuthSessionState();
+
+  if (authState.status === 'hydrating') {
+    return true;
+  }
+
+  return isAuthPendingSession(readStoredAuthSession());
+}
+
 async function loginRouteLoader({ request }: LoaderFunctionArgs) {
   const { url } = getRequestTarget(request);
 
   if (url.searchParams.get('skipRestore') !== '1') {
-    await restoreSession();
+    if (hasHydratingSession()) {
+      void restoreSession({ background: true });
+    } else {
+      await restoreSession();
+    }
   }
 
   const snapshot = getAuthSessionSnapshot();
@@ -140,6 +158,10 @@ async function loginRouteLoader({ request }: LoaderFunctionArgs) {
     );
   }
 
+  if (hasHydratingSession()) {
+    throw redirect(resolveLoginRedirectTarget(url.searchParams.get('redirect'), url.origin));
+  }
+
   return null;
 }
 
@@ -149,11 +171,19 @@ async function ensureAuthenticatedSession(
     allowIncomplete?: boolean;
   } = {},
 ) {
-  await restoreSession();
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -176,6 +206,10 @@ async function welcomeLoader({ request }: LoaderFunctionArgs) {
   });
   const { url } = getRequestTarget(request);
 
+  if (!snapshot) {
+    return null;
+  }
+
   if (!snapshot.needsProfileCompletion) {
     throw redirect(resolveWelcomeRedirectTarget(url.searchParams.get('redirect'), url.origin));
   }
@@ -188,10 +222,18 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  await restoreSession();
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
     if (hasGuestLabAccess(demoLabAccess)) {
       return null;
     }
@@ -215,11 +257,19 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  await restoreSession();
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
     if (hasGuestLabAccess(payloadCryptoLabAccess)) {
       return null;
     }
@@ -303,7 +353,7 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
     const prevStatus = prevStatusRef.current;
     prevStatusRef.current = authSession.status;
 
-    if (prevStatus === 'authenticated' && authSession.status === 'unauthenticated') {
+    if (prevStatus !== 'unauthenticated' && authSession.status === 'unauthenticated') {
       if (!isPublicPath(window.location.pathname)) {
         const currentPath = sanitizeRedirectTarget(
           `${window.location.pathname}${window.location.search}${window.location.hash}`,

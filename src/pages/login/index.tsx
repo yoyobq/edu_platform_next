@@ -7,7 +7,9 @@ import { Navigate, useLocation, useNavigate } from 'react-router';
 import {
   login,
   LoginForm,
+  readAuthRefreshFeedbackFlash,
   resolveAuthenticatedRedirectTarget,
+  resolveLoginRedirectTarget,
   useAuthSessionState,
 } from '@/features/auth';
 
@@ -17,7 +19,11 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const authSession = useAuthSessionState();
-  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(() => {
+    const flash = readAuthRefreshFeedbackFlash();
+
+    return flash?.type === 'error' ? flash.content : null;
+  });
   const [submitting, setSubmitting] = useState(false);
   const redirectTarget = resolveAuthenticatedRedirectTarget(
     new URLSearchParams(location.search).get('redirect'),
@@ -28,6 +34,15 @@ export function LoginPage() {
 
   if (authSession.status === 'authenticated') {
     return <Navigate to={redirectTarget} replace />;
+  }
+
+  if (authSession.status === 'hydrating') {
+    return (
+      <Navigate
+        to={resolveLoginRedirectTarget(new URLSearchParams(location.search).get('redirect'))}
+        replace
+      />
+    );
   }
 
   return (
@@ -63,7 +78,7 @@ export function LoginPage() {
                     账户登录
                   </Typography.Title>
                   <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    使用后端 `login` mutation 建立首阶段 session snapshot。
+                    先用后端 `login` mutation 建立 token 会话，再在壳层内补齐当前账号信息。
                   </Typography.Paragraph>
                 </div>
 
@@ -75,7 +90,7 @@ export function LoginPage() {
                     setSubmitError(null);
 
                     try {
-                      const snapshot = await login({
+                      await login({
                         audience: 'DESKTOP',
                         loginName: values.loginName,
                         loginPassword: values.loginPassword,
@@ -83,11 +98,8 @@ export function LoginPage() {
                       });
 
                       navigate(
-                        resolveAuthenticatedRedirectTarget(
+                        resolveLoginRedirectTarget(
                           new URLSearchParams(location.search).get('redirect'),
-                          {
-                            needsProfileCompletion: snapshot.needsProfileCompletion,
-                          },
                         ),
                         { replace: true },
                       );
