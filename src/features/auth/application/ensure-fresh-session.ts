@@ -1,10 +1,9 @@
 import type { AuthPorts } from './ports';
-import { getAuthSessionSnapshot, setAuthenticatedSession } from './session-store';
+import { refreshSessionWithLock } from './refresh-session';
+import { getAuthSessionSnapshot } from './session-store';
 import type { AuthSessionSnapshot } from './types';
 
 const REFRESH_THRESHOLD_MS = 60_000;
-
-let ensureFreshPromise: Promise<AuthSessionSnapshot> | null = null;
 
 function getAccessTokenExpiresAt(accessToken: string): number | null {
   const [, payloadSegment] = accessToken.split('.');
@@ -48,22 +47,5 @@ export async function ensureFreshSession(
     return snapshot;
   }
 
-  if (ensureFreshPromise) {
-    return ensureFreshPromise;
-  }
-
-  ensureFreshPromise = (async () => {
-    const refreshedSnapshot = await ports.api.refresh({
-      refreshToken: snapshot.refreshToken,
-    });
-
-    ports.storage.writeSession(refreshedSnapshot);
-    setAuthenticatedSession(refreshedSnapshot);
-
-    return refreshedSnapshot;
-  })().finally(() => {
-    ensureFreshPromise = null;
-  });
-
-  return ensureFreshPromise;
+  return refreshSessionWithLock(ports, snapshot.refreshToken);
 }

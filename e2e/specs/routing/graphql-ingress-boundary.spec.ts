@@ -590,6 +590,49 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
   ]);
 });
 
+test('restore -> me 的非 auth 失败不应误触发 refresh', async ({ page }) => {
+  const session = {
+    accessToken: 'stale-access-token',
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN' as const,
+    refreshToken: 'stale-refresh-token',
+  };
+  let refreshRequestCount = 0;
+
+  await mockApiHealth(page);
+  await seedPersistedSession(page, session);
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQLError(route, 'TEMPORARY_ME_FAILURE');
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      refreshRequestCount += 1;
+      await fulfillGraphQL(route, {
+        data: {
+          refresh: {
+            accessToken: 'unexpected-access-token',
+            refreshToken: 'unexpected-refresh-token',
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  expect(refreshRequestCount).toBe(0);
+});
+
 test('restore 触发 refresh 后，后续 me 请求应显式使用 refresh 返回的新 access token', async ({
   page,
 }) => {
