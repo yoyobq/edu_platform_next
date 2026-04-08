@@ -16,5 +16,6 @@
 当前阶段的一句话结论：
 
 - 密码恢复闭环已完成，当前基线由 `/forgot-password` 发起阶段与 `/reset-password` 完成阶段组成
-- `/invite/:inviteType/:verificationCode`、`/verify/email/:verificationCode`、`/magic-link/:verificationCode` 当前仍只是 shell 页面
-- 下一阶段不是重做密码恢复，而是先把 `staff invite` 这条已确认方向的 intent 主线从 shell 升级为真实流程，再继续处理其余入口
+- `/invite/staff/:verificationCode` 已升级为真实流程：先读 invite 信息，再做上游教职工身份核对，最后提交 `consumeVerificationFlowPublic`
+- `/verify/email/:verificationCode` 与 `/magic-link/:verificationCode` 当前仍是 shell 页面
+- 当前下一阶段不再重做 password recovery 或 staff invite，而是继续补 `verify-email` 契约、明确 `magic-link` go / no-go，并为后续联调继续复用 `/labs/invite-issuer` 生成邀请链接

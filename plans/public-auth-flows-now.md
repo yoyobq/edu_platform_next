@@ -6,11 +6,14 @@
 
 - `/forgot-password` 已接入真实提交
 - `/reset-password/:verificationCode` 与 `/reset-password?token=...` 已接入真实校验、重置、错误模型与 E2E
-- `src/features/public-auth` 当前只包含密码恢复相关 use case / API / UI
-- `/invite/:inviteType/:verificationCode`、`/verify/email/:verificationCode`、`/magic-link/:verificationCode` 还停留在 [verification-intent/index.tsx](/var/www/platform_next/src/pages/verification-intent/index.tsx) 的参数展示壳页
+- `/invite/staff/:verificationCode` 已接入真实 staff invite 流程与基础 E2E
+- `src/features/public-auth` 当前已包含密码恢复与 `staff invite` 的 use case / API / UI
+- `/verify/email/:verificationCode`、`/magic-link/:verificationCode` 还停留在 [verification-intent/index.tsx](/var/www/platform_next/src/pages/verification-intent/index.tsx) 的壳页
+- 当前已有临时签发入口 [InviteIssuerLabPage](/var/www/platform_next/src/labs/invite-issuer/page.tsx)，直链 `/labs/invite-issuer`，用于调用 `inviteStaff` / `inviteStudent` 生成联调 invite link
 - 对应 E2E 现状也是：
   - [public-auth-password-recovery.spec.ts](./../e2e/specs/routing/public-auth-password-recovery.spec.ts) 覆盖真实密码恢复闭环
-  - [verification-intent.spec.ts](./../e2e/specs/routing/verification-intent.spec.ts) 只覆盖其余入口的 path-first shell 路由
+  - [public-auth-staff-invite.spec.ts](./../e2e/specs/routing/public-auth-staff-invite.spec.ts) 覆盖真实 staff invite 成功 / 失败主线
+  - [verification-intent.spec.ts](./../e2e/specs/routing/verification-intent.spec.ts) 只覆盖 `verify-email` / `magic-link` 及非 `staff` inviteType 的 path-first shell 路由
 
 ## 阶段切换
 
@@ -29,15 +32,16 @@
 
 本轮优先推进：
 
-1. 先把 `/invite/staff/:verificationCode` 从壳页升级为真实流程
-2. 把 `/verify/email/:verificationCode` 从参数展示升级为真实成功 / 失败闭环
-3. 明确 `/magic-link/:verificationCode` 是否真的具备“验证成功后建立 session”的后端契约
-4. 为真正落地的 staff invite / verify-email / magic-link 流程补基础 E2E
+1. 把 `/verify/email/:verificationCode` 从参数展示升级为真实成功 / 失败闭环
+2. 明确 `/magic-link/:verificationCode` 是否真的具备“验证成功后建立 session”的后端契约
+3. 为后续真正落地的 verify-email / magic-link 流程补基础 E2E
+4. staff invite 联调继续通过 `/labs/invite-issuer` 生成邀请链接，不再额外回退公开消费主线
 
 本轮不做：
 
 - 重做 `/forgot-password` 与 `/reset-password/:verificationCode`
 - 重开 `public-auth` 当前错误模型与 transport 约定
+- 重做已落地的 `/invite/staff/:verificationCode`
 - 开放公开注册 `/register`
 - 账户中心与资料编辑
 - 与公开认证无直接关系的第三方登录整合
@@ -66,14 +70,25 @@
 
 这意味着：
 
-- 现在可以先做页面、状态机、port、API adapter 和 E2E
-- 但要先看 [docs/backend/README.md](/var/www/platform_next/docs/backend/README.md) 指向的后端真相，再决定哪些入口可真实推进
-- 其中 `staff invite` 已确认可依赖的后端真相至少包括：
+- 现在已可以稳定联调 `staff invite`
+- 若需要新 token，不再临时手造或依赖缺失的管理页，而是直接进入 `/labs/invite-issuer`
+- `staff invite` 已确认可依赖的后端真相包括：
   - `publicInviteInfo(token)` 的公开 invite 最小信息查询
   - `consumeVerificationFlowPublic(input)` 的公开 invite 消费动作
   - `loginUpstreamSession(input)` 与 `fetchVerifiedStaffIdentity(sessionToken)` 的上游身份核对能力
   - invite 相关 domain error code
-- 不要把 `/register`、账户资料、公开注册策略一起混入本轮
+- 当前剩余 blocker 集中在 `verify-email` 与 `magic-link`，不要把 `/register`、账户资料、公开注册策略一起混入本轮
+
+## 最新补充
+
+- `staff invite` 当前前端实现口径已经固定：
+  - `loginEmail` 不再由页面提交，后端直接使用 invite 的 `invitedEmail` 作为登录邮箱
+  - 页面最终只收 `loginPassword`、`nickname` 与可选 `loginName`
+  - invite 成功后仍不建立 session，统一回 `/login`
+- 临时签发入口 `/labs/invite-issuer` 的定位是联调工具，不承担正式管理后台职责：
+  - 当前可签发 `staff` / `student` invite
+  - 返回后会直接展示 `token`、`expiresAt`、`recordId` 与可打开的邀请链接
+  - 该页不进入导航，仅保留直链使用
 
 ## 当前缺口
 

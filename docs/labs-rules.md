@@ -102,6 +102,17 @@ export const demoLabMeta = {
 - `rollback`：撤回方式
 - `exception`：可选，记录经过确认的例外依赖或特殊规则
 
+## 当前落地示例
+
+- `/labs/demo`
+  - 用于第三工作区跳层 demo
+- `/labs/payload-crypto`
+  - 用于载荷加解密调试
+- `/labs/invite-issuer`
+  - 用于临时调用 `inviteStaff` / `inviteStudent` 生成联调 invite link
+  - 属于实验性联调工具，不承担正式管理后台职责
+  - 若后续出现正式管理入口，应优先迁入正式区拥有者切片，而不是继续扩展该 labs 页面
+
 ## 例外声明位置
 
 - 若 `labs` 需要使用规则之外的例外依赖，必须记录在该实验自己的 `meta.ts` 中
