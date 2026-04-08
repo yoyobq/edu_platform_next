@@ -40,6 +40,7 @@ import {
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
+import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
@@ -292,6 +293,42 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(inviteIssuerLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(inviteIssuerLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(inviteIssuerLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -444,6 +481,11 @@ const router = createBrowserRouter([
             path: 'payload-crypto',
             loader: payloadCryptoLabLoader,
             lazy: loadPayloadCryptoLabRouteModule,
+          },
+          {
+            path: 'invite-issuer',
+            loader: inviteIssuerLabLoader,
+            lazy: loadInviteIssuerLabRouteModule,
           },
         ],
       },

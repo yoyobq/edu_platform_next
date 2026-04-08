@@ -4,6 +4,7 @@ export const routes = {
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>
     `/invite/${inviteType}/${verificationCode}`,
   labsDemo: '/labs/demo',
+  labsInviteIssuer: '/labs/invite-issuer',
   labsPayloadCrypto: '/labs/payload-crypto',
   login: '/login',
   magicLink: (verificationCode = 'magic-link-001') => `/magic-link/${verificationCode}`,
