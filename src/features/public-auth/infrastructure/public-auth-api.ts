@@ -3,7 +3,13 @@ import type { OperationVariables } from '@apollo/client';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
-import type { ResetPasswordResult, VerificationIntentResult } from '../application/types';
+import type {
+  ResetPasswordResult,
+  StaffInviteIdentity,
+  StaffInviteIntentResult,
+  VerificationFailureReason,
+  VerificationIntentResult,
+} from '../application/types';
 
 import { mapVerificationRecordToIntentResult } from './mapper';
 import {
@@ -40,6 +46,51 @@ type ResetPasswordResponse = {
   };
 };
 
+type PublicInviteInfoResponse = {
+  publicInviteInfo: {
+    info?: {
+      canProceed: boolean;
+      description?: string | null;
+      expiresAt: string;
+      invitedEmail: string;
+      issuer?: string | null;
+      statusReason: 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
+      title?: string | null;
+      type: 'INVITE_STAFF' | 'INVITE_STUDENT' | 'PASSWORD_RESET' | 'MAGIC_LINK';
+    } | null;
+    message?: string | null;
+    reason?: VerificationRecordFailureReason | null;
+    success: boolean;
+  };
+};
+
+type LoginUpstreamSessionResponse = {
+  loginUpstreamSession: {
+    expiresAt: string;
+    upstreamSessionToken: string;
+  };
+};
+
+type FetchVerifiedStaffIdentityResponse = {
+  fetchVerifiedStaffIdentity: {
+    expiresAt: string;
+    identityKind: string;
+    orgId?: string | null;
+    personId: string;
+    personName: string;
+    upstreamLoginId: string;
+    upstreamSessionToken: string;
+  };
+};
+
+type ConsumeStaffInviteResponse = {
+  consumeVerificationFlowPublic: {
+    accountId?: number | null;
+    message: string;
+    success: boolean;
+  };
+};
+
 const REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
   mutation RequestPasswordResetEmail($input: RequestPasswordResetEmailInput!) {
     requestPasswordResetEmail(input: $input) {
@@ -68,6 +119,59 @@ const RESET_PASSWORD_MUTATION = `
     resetPassword(input: $input) {
       message
       reason
+      success
+    }
+  }
+`;
+
+const PUBLIC_INVITE_INFO_QUERY = `
+  query PublicInviteInfo($token: String!) {
+    publicInviteInfo(token: $token) {
+      success
+      reason
+      message
+      info {
+        canProceed
+        description
+        expiresAt
+        invitedEmail
+        issuer
+        statusReason
+        title
+        type
+      }
+    }
+  }
+`;
+
+const LOGIN_UPSTREAM_SESSION_MUTATION = `
+  mutation LoginUpstreamSession($input: LoginUpstreamSessionInput!) {
+    loginUpstreamSession(input: $input) {
+      expiresAt
+      upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
+  query FetchVerifiedStaffIdentity($sessionToken: String!) {
+    fetchVerifiedStaffIdentity(sessionToken: $sessionToken) {
+      expiresAt
+      identityKind
+      orgId
+      personId
+      personName
+      upstreamLoginId
+      upstreamSessionToken
+    }
+  }
+`;
+
+const CONSUME_STAFF_INVITE_MUTATION = `
+  mutation ConsumeStaffInvite($input: ConsumeVerificationFlowPublicInput!) {
+    consumeVerificationFlowPublic(input: $input) {
+      accountId
+      message
       success
     }
   }
@@ -153,9 +257,297 @@ async function findResetPasswordIntent(
   throw new Error(result.message || '暂时无法确认重置链接状态。');
 }
 
+function mapInviteStatusReasonToFailureReason(
+  statusReason?: string | null,
+  reason?: string | null,
+): VerificationFailureReason {
+  const mappedStatusReason = mapVerificationFailureReason(statusReason);
+
+  if (mappedStatusReason !== 'unknown') {
+    return mappedStatusReason;
+  }
+
+  return mapVerificationFailureReason(reason);
+}
+
+function resolveInviteIntentFailureMessage(
+  reason: VerificationFailureReason,
+  fallback?: string | null,
+): string {
+  if (fallback) {
+    return fallback;
+  }
+
+  if (reason === 'expired') {
+    return '这个邀请链接已经过期，请联系管理员重新发起邀请。';
+  }
+
+  if (reason === 'used') {
+    return '这个邀请链接已经被使用，无法继续完成教职工邀请注册。';
+  }
+
+  if (reason === 'invalid') {
+    return '这个邀请链接无效，请确认链接是否完整。';
+  }
+
+  return '暂时无法确认邀请链接状态，请稍后重试。';
+}
+
+function getGraphQLErrorDetail(error: unknown): {
+  code?: string;
+  errorCode?: string;
+  message?: string;
+} | null {
+  if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
+    return null;
+  }
+
+  const [firstError] = error.graphqlErrors;
+  const extensions = (firstError.extensions as Record<string, unknown> | undefined) || {};
+
+  return {
+    code: typeof extensions.code === 'string' ? extensions.code : undefined,
+    errorCode: typeof extensions.errorCode === 'string' ? extensions.errorCode : undefined,
+    message:
+      typeof extensions.errorMessage === 'string'
+        ? extensions.errorMessage
+        : typeof firstError.message === 'string'
+          ? firstError.message
+          : undefined,
+  };
+}
+
+function resolveGraphQLErrorMessage(error: unknown): string | null {
+  const detail = getGraphQLErrorDetail(error);
+
+  if (!detail?.message) {
+    return null;
+  }
+
+  if (detail.message === detail.code || detail.message === detail.errorCode) {
+    return null;
+  }
+
+  return detail.message;
+}
+
+function resolvePublicAuthErrorMessage(error: unknown, fallback: string): string {
+  if (isGraphQLIngressError(error)) {
+    return resolveGraphQLErrorMessage(error) || error.userMessage;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
+
+function resolveStaffInviteIngressMessage(error: unknown, fallback: string): string {
+  const graphQLMessage = resolveGraphQLErrorMessage(error);
+
+  if (graphQLMessage) {
+    return graphQLMessage;
+  }
+
+  const detail = getGraphQLErrorDetail(error);
+
+  switch (detail?.errorCode) {
+    case 'EMAIL_TAKEN':
+      return '邀请邮箱已被注册，请直接返回登录页或联系管理员处理。';
+    case 'UPSTREAM_ACCESS_AUTH_FAILED':
+      return '上游账号或密码不正确，请重新核对。';
+    case 'UPSTREAM_ACCESS_SESSION_EXPIRED':
+      return '上游会话已失效，请重新进行身份核对。';
+    case 'UPSTREAM_ACCESS_AUTH_REQUIRED':
+      return '请先完成上游身份核对后再继续。';
+    case 'INVITE_EMAIL_MISMATCH':
+    case 'INVITE_IDENTITY_MISMATCH_WITH_INVITE':
+    case 'INVITE_STAFF_ID_MISMATCH':
+      return '当前教职工身份与邀请不一致，该邀请已不可继续使用。';
+    default:
+      return resolvePublicAuthErrorMessage(error, fallback);
+  }
+}
+
+async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
+  try {
+    const response = await requestGraphQL<
+      PublicInviteInfoResponse,
+      {
+        token: string;
+      }
+    >(PUBLIC_INVITE_INFO_QUERY, {
+      token: verificationCode,
+    });
+    const result = response.publicInviteInfo;
+    const info = result.info;
+
+    if (info?.type && info.type !== 'INVITE_STAFF') {
+      return {
+        status: 'failure',
+        reason: 'invalid',
+        message: '当前只支持教职工邀请链接。',
+      };
+    }
+
+    if (
+      result.success &&
+      info &&
+      info.type === 'INVITE_STAFF' &&
+      info.canProceed &&
+      info.statusReason === 'AVAILABLE'
+    ) {
+      return {
+        status: 'ready',
+        invite: {
+          description: info.description || null,
+          expiresAt: info.expiresAt,
+          invitedEmail: info.invitedEmail,
+          issuer: info.issuer || null,
+          title: info.title || null,
+        },
+      };
+    }
+
+    const reason = mapInviteStatusReasonToFailureReason(info?.statusReason, result.reason);
+
+    return {
+      status: 'failure',
+      reason,
+      message: resolveInviteIntentFailureMessage(reason, result.message),
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      message: resolvePublicAuthErrorMessage(error, '暂时无法读取邀请信息。'),
+    };
+  }
+}
+
+function normalizeOptionalText(value: string | undefined): string | undefined {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : undefined;
+}
+
+async function loginUpstreamSession(input: { password: string; userId: string }): Promise<{
+  upstreamSessionToken: string;
+}> {
+  try {
+    const response = await requestGraphQL<
+      LoginUpstreamSessionResponse,
+      {
+        input: {
+          password: string;
+          userId: string;
+        };
+      }
+    >(LOGIN_UPSTREAM_SESSION_MUTATION, {
+      input,
+    });
+
+    return {
+      upstreamSessionToken: response.loginUpstreamSession.upstreamSessionToken,
+    };
+  } catch (error) {
+    throw new Error(resolveStaffInviteIngressMessage(error, '上游身份核对失败，请稍后重试。'));
+  }
+}
+
+async function fetchVerifiedStaffIdentity(input: {
+  sessionToken: string;
+}): Promise<StaffInviteIdentity> {
+  try {
+    const response = await requestGraphQL<
+      FetchVerifiedStaffIdentityResponse,
+      {
+        sessionToken: string;
+      }
+    >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
+      sessionToken: input.sessionToken,
+    });
+    const identity = response.fetchVerifiedStaffIdentity;
+
+    if (!identity.identityKind.toUpperCase().includes('STAFF')) {
+      throw new Error('当前账号未通过教职工身份核对。');
+    }
+
+    return {
+      expiresAt: identity.expiresAt,
+      orgId: identity.orgId || null,
+      personId: identity.personId,
+      personName: identity.personName,
+      upstreamLoginId: identity.upstreamLoginId,
+      upstreamSessionToken: identity.upstreamSessionToken,
+    };
+  } catch (error) {
+    if (error instanceof Error && error.message === '当前账号未通过教职工身份核对。') {
+      throw error;
+    }
+
+    throw new Error(
+      resolveStaffInviteIngressMessage(error, '暂时无法确认教职工身份，请稍后重试。'),
+    );
+  }
+}
+
 export const publicAuthApi: PublicAuthApiPort = {
   async requestPasswordReset(input) {
     await requestPasswordResetEmail(input.email);
+  },
+  async getStaffInviteInfo(input) {
+    return findStaffInviteIntent(input.verificationCode);
+  },
+  async loginUpstreamSession(input) {
+    return loginUpstreamSession(input);
+  },
+  async fetchVerifiedStaffIdentity(input) {
+    return fetchVerifiedStaffIdentity(input);
+  },
+  async consumeStaffInvite(input) {
+    try {
+      const response = await requestGraphQL<
+        ConsumeStaffInviteResponse,
+        {
+          input: {
+            expectedType: 'INVITE_STAFF';
+            loginName?: string;
+            loginPassword: string;
+            nickname?: string;
+            staffDepartmentId: string | null;
+            staffName: string;
+            token: string;
+            upstreamSessionToken: string;
+          };
+        }
+      >(CONSUME_STAFF_INVITE_MUTATION, {
+        input: {
+          expectedType: 'INVITE_STAFF',
+          loginName: normalizeOptionalText(input.loginName),
+          loginPassword: input.loginPassword,
+          nickname: normalizeOptionalText(input.nickname),
+          staffDepartmentId: input.staffDepartmentId,
+          staffName: input.staffName,
+          token: input.verificationCode,
+          upstreamSessionToken: input.upstreamSessionToken,
+        },
+      });
+      const result = response.consumeVerificationFlowPublic;
+
+      if (result.success) {
+        return {
+          status: 'success',
+          accountId: result.accountId ?? null,
+        };
+      }
+
+      return {
+        status: 'failure',
+        message: result.message || '暂时无法完成邀请注册。',
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: resolveStaffInviteIngressMessage(error, '暂时无法完成邀请注册。'),
+      };
+    }
   },
   async resetPassword(input) {
     try {

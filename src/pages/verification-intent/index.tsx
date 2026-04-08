@@ -1,7 +1,7 @@
 import { Card, Flex, Typography } from 'antd';
 import { useParams, useSearchParams } from 'react-router';
 
-import { ResetPasswordIntentPanel } from '@/features/public-auth';
+import { ResetPasswordIntentPanel, StaffInviteIntentPanel } from '@/features/public-auth';
 
 import { BrandLockup } from '@/shared/ui/brand';
 
@@ -73,6 +73,18 @@ function VerificationIntentDetails({
 
 export function InviteIntentPage() {
   const { inviteType = '', verificationCode = '' } = useParams();
+  const normalizedInviteType = inviteType.trim().toLowerCase();
+
+  if (normalizedInviteType === 'staff') {
+    return (
+      <VerificationIntentShell
+        title="教职工邀请激活"
+        description="当前邀请流程会先确认链接状态，再完成上游教职工身份核对与最小注册。"
+      >
+        <StaffInviteIntentPanel verificationCode={verificationCode} />
+      </VerificationIntentShell>
+    );
+  }
 
   return (
     <VerificationIntentShell
