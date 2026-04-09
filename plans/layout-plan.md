@@ -96,6 +96,20 @@
 - 在 `AppLayout` capability 体系里补 sidebar / nav-rail 开关
 - 明确哪些页面或业务域可启用 `rail / full`
 - 明确侧边导航与顶部轻导航、Sidecar 的共存规则
+- 补一张左栏 / `main` / Sidecar 的空间分配表，明确谁先让位、何时折叠
+- 明确 `none / rail / full` 的宽度基线与视觉密度
+- 明确 `hydrating` 时正式菜单只显示结构兼容的中性骨架或空态，不先闪错误身份菜单
+- 明确 `rail -> drawer / flyout -> pin -> full` 的状态流转
+- 第一版 slot 菜单默认一级平铺，不嵌到别人的父节点下，不先做 context switcher
+- 明确壳层不补 Breadcrumb；需要回退路径时由页面 Header 提供返回动作
+- 明确菜单只承载稳定导航，不承载页面级操作
+- Command 入口补持续但克制的快捷键暗示
+
+当前不进入第一版基线的后续方向：
+
+- 左栏 / Sidecar 的自由拖拽调宽
+- 拖拽过程中的磁吸折叠
+- 顶栏透明 / 毛玻璃材质
 
 ### [x] 2. 第三工作区正式态不再继续以 URL 作为默认状态来源
 
