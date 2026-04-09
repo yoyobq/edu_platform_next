@@ -1,4 +1,6 @@
-import { Alert, Button, Form, Input } from 'antd';
+import { UserOutlined } from '@ant-design/icons';
+import type { FormInstance } from 'antd';
+import { Alert, Flex, Form, Input, Typography } from 'antd';
 
 import type { StaffInviteIdentity } from '../application/types';
 
@@ -11,10 +13,11 @@ type StaffInviteRegisterFormValues = {
 
 type StaffInviteRegisterFormProps = {
   errorMessage: string | null;
+  form: FormInstance<StaffInviteRegisterFormValues>;
+  formId: string;
   identity: StaffInviteIdentity;
   inviteEmail: string;
   onSubmit: (values: StaffInviteRegisterFormValues) => Promise<void>;
-  submitting: boolean;
 };
 
 const passwordValidationMessage = '密码至少 8 位，且需包含字母、数字、符号中的至少两种。';
@@ -31,106 +34,148 @@ function getPasswordRuleState(password: string) {
   };
 }
 
-function ReadonlyField({ label, value }: { label: string; value: string }) {
+function IdentityBlock({
+  identity,
+  inviteEmail,
+}: {
+  identity: StaffInviteIdentity;
+  inviteEmail: string;
+}) {
   return (
-    <Form.Item label={label}>
-      <Input readOnly value={value} />
-    </Form.Item>
+    <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
+      <Flex vertical gap={12}>
+        <Flex gap={8} align="center">
+          <UserOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 16 }} />
+          <Typography.Text strong>{identity.personName}</Typography.Text>
+        </Flex>
+        <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              邀请邮箱
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{inviteEmail}</Typography.Text>
+            </div>
+          </div>
+          {identity.orgId && (
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                部门
+              </Typography.Text>
+              <div style={{ marginTop: 2 }}>
+                <Typography.Text>{identity.orgId}</Typography.Text>
+              </div>
+            </div>
+          )}
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              编号
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{identity.personId}</Typography.Text>
+            </div>
+          </div>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              上游账号
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{identity.upstreamLoginId}</Typography.Text>
+            </div>
+          </div>
+        </Flex>
+      </Flex>
+    </div>
   );
 }
 
 export function StaffInviteRegisterForm({
   errorMessage,
+  form,
+  formId,
   identity,
   inviteEmail,
   onSubmit,
-  submitting,
 }: StaffInviteRegisterFormProps) {
   return (
-    <Form<StaffInviteRegisterFormValues>
-      layout="vertical"
-      requiredMark={false}
-      onFinish={onSubmit}
-      autoComplete="on"
-      size="large"
-    >
-      {errorMessage ? (
-        <Form.Item>
-          <Alert type="error" showIcon title={errorMessage} />
+    <Flex vertical gap={16}>
+      <IdentityBlock identity={identity} inviteEmail={inviteEmail} />
+
+      <Form<StaffInviteRegisterFormValues>
+        form={form}
+        id={formId}
+        layout="vertical"
+        requiredMark={false}
+        onFinish={onSubmit}
+        autoComplete="on"
+        size="large"
+      >
+        {errorMessage ? (
+          <Form.Item>
+            <Alert type="error" showIcon title={errorMessage} />
+          </Form.Item>
+        ) : null}
+
+        <Form.Item
+          label="昵称"
+          name="nickname"
+          rules={[{ required: true, message: '请输入昵称。', whitespace: true }]}
+        >
+          <Input placeholder="请输入昵称" autoComplete="nickname" />
         </Form.Item>
-      ) : null}
 
-      <ReadonlyField label="邀请邮箱" value={inviteEmail} />
-      <ReadonlyField label="教职工姓名" value={identity.personName} />
-      <ReadonlyField label="部门 ID" value={identity.orgId || '未提供'} />
-      <ReadonlyField label="教职工编号" value={identity.personId} />
-      <ReadonlyField label="上游登录账号" value={identity.upstreamLoginId} />
+        <Form.Item label="登录名（可选）" name="loginName" extra="留空时可直接使用邀请邮箱登录。">
+          <Input placeholder="可选填写一个单独的登录名" autoComplete="username" />
+        </Form.Item>
 
-      <Form.Item
-        label="昵称"
-        name="nickname"
-        rules={[{ required: true, message: '请输入昵称。', whitespace: true }]}
-      >
-        <Input placeholder="请输入昵称" autoComplete="nickname" />
-      </Form.Item>
+        <Form.Item
+          label="登录密码"
+          name="loginPassword"
+          validateFirst
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            { required: true, message: '请输入登录密码。' },
+            {
+              validator(_, value: string | undefined) {
+                if (!value) {
+                  return Promise.resolve();
+                }
 
-      <Form.Item label="登录名（可选）" name="loginName" extra="留空时可直接使用邀请邮箱登录。">
-        <Input placeholder="可选填写一个单独的登录名" autoComplete="username" />
-      </Form.Item>
+                const { hasMinLength, hasRequiredCharacterMix } = getPasswordRuleState(value);
 
-      <Form.Item
-        label="登录密码"
-        name="loginPassword"
-        validateFirst
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请输入登录密码。' },
-          {
-            validator(_, value: string | undefined) {
-              if (!value) {
-                return Promise.resolve();
-              }
+                if (hasMinLength && hasRequiredCharacterMix) {
+                  return Promise.resolve();
+                }
 
-              const { hasMinLength, hasRequiredCharacterMix } = getPasswordRuleState(value);
-
-              if (hasMinLength && hasRequiredCharacterMix) {
-                return Promise.resolve();
-              }
-
-              return Promise.reject(new Error(passwordValidationMessage));
+                return Promise.reject(new Error(passwordValidationMessage));
+              },
             },
-          },
-        ]}
-      >
-        <Input.Password placeholder="请输入登录密码" autoComplete="new-password" />
-      </Form.Item>
+          ]}
+        >
+          <Input.Password placeholder="请输入登录密码" autoComplete="new-password" />
+        </Form.Item>
 
-      <Form.Item
-        label="确认登录密码"
-        name="confirmPassword"
-        dependencies={['loginPassword']}
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请再次输入登录密码。' },
-          ({ getFieldValue }) => ({
-            validator(_, value) {
-              if (!value || getFieldValue('loginPassword') === value) {
-                return Promise.resolve();
-              }
+        <Form.Item
+          label="确认登录密码"
+          name="confirmPassword"
+          dependencies={['loginPassword']}
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            { required: true, message: '请再次输入登录密码。' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!value || getFieldValue('loginPassword') === value) {
+                  return Promise.resolve();
+                }
 
-              return Promise.reject(new Error('两次输入的密码不一致。'));
-            },
-          }),
-        ]}
-      >
-        <Input.Password placeholder="请再次输入登录密码" autoComplete="new-password" />
-      </Form.Item>
-
-      <Form.Item style={{ marginBottom: 0 }}>
-        <Button type="primary" htmlType="submit" block loading={submitting}>
-          完成邀请注册
-        </Button>
-      </Form.Item>
-    </Form>
+                return Promise.reject(new Error('两次输入的密码不一致。'));
+              },
+            }),
+          ]}
+        >
+          <Input.Password placeholder="请再次输入登录密码" autoComplete="new-password" />
+        </Form.Item>
+      </Form>
+    </Flex>
   );
 }
