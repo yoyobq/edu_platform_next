@@ -190,11 +190,34 @@
 - `identityHint`：后端账户侧提示字段，不是前端权威身份输入
 - `activeRole`：仅允许作为前端本地展示偏好，不参与授权
 
+在菜单语义上，当前进一步收口为：
+
+- `primaryAccessGroup` 决定正式一级菜单骨架
+- `REGISTRANT` 不进入正式菜单体系，只保留补全过程所需壳层与入口
+- `slotGroup` 只承接跨页面持续存在的全局职责插槽
+- 进入 `slotGroup` 的职责必须具备独立 landing page
+- 页面内对象权限、临时能力与资源关系不进入全局菜单
+
+当前第一版 slot 示例锚点为：
+
+- `CLASS_ADVISER`
+
+注意：
+
+- 这表示前端菜单与会话语义允许这类职责型插槽
+- 不自动代表后端已经稳定下发该值
+
 当前明确不进入 `accessGroup / slotGroup` 的包括：
 
 - `teacher`
 
 课程、班级等资源访问继续走业务关系判定，不并入当前全局会话快照。
+
+`teacher` 当前也不作为 slot 示例，原因是：
+
+- 它与 `STAFF` 视角高度重叠
+- 更接近资源关系被激活后的工作语义
+- 容易与页面上下文权限混淆
 
 ## 当前 JWT 使用边界
 
@@ -218,6 +241,7 @@
 - access token 只承载粗粒度鉴权输入，不承载 `identity`
 - 前端可以直接消费 `accessGroup / slotGroup`
 - 前端不得根据 token 自行推断正式 `identity`
+- 正式菜单最终消费 hydrated snapshot，而不是 `hydrating` 阶段的 pending token
 
 ## 当前前端异常处理
 
@@ -233,3 +257,28 @@
 - 登录成功后已改为“先 token、后 `me` 水合”的壳层内异步模式
 - 本地会话存储当前同时兼容 pending session 与 hydrated snapshot
 - 当前 E2E 已覆盖登录、恢复、刷新、强制登出与基础路由正反路径
+
+## `slotGroup` 导航语义
+
+`slotGroup` 代表增量的、跨页面持续存在的全局职责，其值影响菜单插槽入口的渲染。
+
+**进入全局菜单的准入门槛（同时满足）：**
+
+- 有明确职责边界，有独立 landing page
+- 能跨页面持续存在，不是单对象临时能力
+
+不满足以上条件的能力，继续留在页面级 action、首页模块入口或 Sidecar / command 入口，不进入全局菜单。
+
+**第一版示例锚点：** `CLASS_ADVISER`（在正式进入 token / `me` contract 之前先作导航语义示例）
+
+**呈现规则：**
+
+- `slotGroup` 不改变 `primaryAccessGroup` 的一级菜单骨架
+- 第一版默认一级平铺，不嵌入其他业务父节点
+- 不默认做成 context switcher；升级为 context switcher 需单独评估（需有独立 landing page、成体系二级菜单、与主骨架心智边界足够清晰）
+- 活跃 slot 超过导航密度阈值时，触发重新评估分组策略
+
+**枚举策略：**
+
+- `slotGroup` 的值应进入受控枚举，不允许任意字符串散长
+- canonical 枚举表待后续补充；补充时同步更新本节

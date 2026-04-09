@@ -21,5 +21,14 @@ export {
   useRegisterKeyboardShortcut,
 } from './keyboard-shortcut-stack';
 export { KeyboardShortcutStackProvider } from './keyboard-shortcut-stack-provider';
+export {
+  NAV_FULL_WIDTH,
+  NAV_MAIN_MIN_WIDTH_WITH_FULL,
+  NAV_RAIL_WIDTH,
+  type NavCapabilityState,
+  type NavMode,
+  useNavCapability,
+} from './nav-capability';
+export { NavCapabilityProvider } from './nav-capability-provider';
 export { useSidecarState } from './sidecar-state';
 export { SidecarStateProvider } from './sidecar-state-provider';

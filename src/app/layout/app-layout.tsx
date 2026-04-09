@@ -1,6 +1,6 @@
 // src/app/layout/app-layout.tsx
 
-import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { SearchOutlined } from '@ant-design/icons';
 import {
   Button,
@@ -21,7 +21,12 @@ import {
   AuthRefreshFeedbackBridge,
   CollaborationSessionProvider,
   KeyboardShortcutStackProvider,
+  NAV_FULL_WIDTH,
+  NAV_MAIN_MIN_WIDTH_WITH_FULL,
+  NAV_RAIL_WIDTH,
+  NavCapabilityProvider,
   SidecarStateProvider,
+  useNavCapability,
   useRegisterKeyboardShortcut,
   useSidecarState,
 } from '@/app/providers';
@@ -33,6 +38,8 @@ import { BrandLockup } from '@/shared/ui/brand';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
 import { EntrySidecar } from './entry-sidecar';
+import { NavSidebar } from './nav-sidebar';
+import { getNavigationItems, resolveNavMode } from './navigation-meta';
 import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
@@ -83,6 +90,34 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     ],
     'wide',
   );
+  const { mode: navMode, setMode: setNavMode } = useNavCapability();
+
+  // Activate nav mode based on primaryAccessGroup when session becomes authenticated.
+  useEffect(() => {
+    if (authSession.status === 'authenticated' && authenticatedSnapshot) {
+      const targetMode = resolveNavMode(authenticatedSnapshot.primaryAccessGroup);
+      if (navMode === 'none' && targetMode !== 'none') {
+        setNavMode(targetMode);
+      }
+    }
+
+    if (authSession.status === 'unauthenticated' && navMode !== 'none') {
+      setNavMode('none');
+    }
+  }, [authSession.status, authenticatedSnapshot, navMode, setNavMode]);
+
+  const navItems = useMemo(
+    () =>
+      authenticatedSnapshot
+        ? getNavigationItems({
+            primaryAccessGroup: authenticatedSnapshot.primaryAccessGroup,
+            accessGroup: authenticatedSnapshot.userInfo.accessGroup,
+            slotGroup: authenticatedSnapshot.slotGroup,
+            appEnv: currentAppEnv,
+          })
+        : [],
+    [authenticatedSnapshot, currentAppEnv],
+  );
 
   useEffect(() => {
     if (wasOpenRef.current && !isOpen) {
@@ -119,6 +154,12 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       revalidator.revalidate();
     }
   }, [authSession.status, revalidator]);
+
+  useEffect(() => {
+    if (navMode === 'full' && mainWidth > 0 && mainWidth < NAV_MAIN_MIN_WIDTH_WITH_FULL) {
+      setNavMode('rail');
+    }
+  }, [mainWidth, navMode, setNavMode]);
 
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
@@ -295,40 +336,50 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             </div>
           </Layout.Header>
 
-          <Layout.Content style={{ padding: '0 24px 32px' }}>
-            <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
-              <Flex
-                vertical
-                gap={mainWidthBand === 'compact' ? 16 : 24}
-                className="mx-auto max-w-7xl pt-6 transition-[gap]"
+          <Layout style={{ background: 'transparent' }}>
+            {navMode !== 'none' && navItems.length > 0 && (
+              <Layout.Sider
+                width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
+                style={{ background: 'var(--color-bg-container)' }}
               >
-                {isLabsRoute ? (
-                  <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
-                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      `labs` 路由需要通过当前登录会话的访问控制规则。
-                    </Typography.Paragraph>
-                  </div>
-                ) : null}
-                {isHydrating ? (
-                  <Card>
-                    <Flex vertical gap={20}>
-                      <div className="flex flex-col gap-2">
-                        <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                          正在同步账户信息
-                        </Typography.Title>
-                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                          已建立登录会话，正在补齐当前账号的身份与权限信息。
-                        </Typography.Paragraph>
-                      </div>
-                      <Skeleton active paragraph={{ rows: 6 }} />
-                    </Flex>
-                  </Card>
-                ) : (
-                  <Outlet />
-                )}
-              </Flex>
-            </div>
-          </Layout.Content>
+                <NavSidebar items={navItems} />
+              </Layout.Sider>
+            )}
+            <Layout.Content style={{ padding: '0 24px 32px' }}>
+              <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
+                <Flex
+                  vertical
+                  gap={mainWidthBand === 'compact' ? 16 : 24}
+                  className="mx-auto max-w-7xl pt-6 transition-[gap]"
+                >
+                  {isLabsRoute ? (
+                    <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
+                      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                        `labs` 路由需要通过当前登录会话的访问控制规则。
+                      </Typography.Paragraph>
+                    </div>
+                  ) : null}
+                  {isHydrating ? (
+                    <Card>
+                      <Flex vertical gap={20}>
+                        <div className="flex flex-col gap-2">
+                          <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                            正在同步账户信息
+                          </Typography.Title>
+                          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                            已建立登录会话，正在补齐当前账号的身份与权限信息。
+                          </Typography.Paragraph>
+                        </div>
+                        <Skeleton active paragraph={{ rows: 6 }} />
+                      </Flex>
+                    </Card>
+                  ) : (
+                    <Outlet />
+                  )}
+                </Flex>
+              </div>
+            </Layout.Content>
+          </Layout>
         </Layout>
 
         <div data-layout-layer="third-workspace-root" aria-hidden="true">
@@ -377,11 +428,13 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
 export function AppLayout({ currentAppEnv }: AppLayoutProps) {
   return (
     <KeyboardShortcutStackProvider>
-      <SidecarStateProvider>
-        <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
-          <AppLayoutFrame currentAppEnv={currentAppEnv} />
-        </CollaborationSessionProvider>
-      </SidecarStateProvider>
+      <NavCapabilityProvider>
+        <SidecarStateProvider>
+          <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
+            <AppLayoutFrame currentAppEnv={currentAppEnv} />
+          </CollaborationSessionProvider>
+        </SidecarStateProvider>
+      </NavCapabilityProvider>
     </KeyboardShortcutStackProvider>
   );
 }
