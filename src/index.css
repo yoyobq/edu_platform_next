@@ -24,6 +24,9 @@
   --color-info-border: var(--ant-color-info-border);
   --color-fill-secondary: var(--ant-color-fill-secondary);
   --color-fill-tertiary: var(--ant-color-fill-tertiary);
+  --color-sidebar-affordance: #e7ebf1;
+  --color-sidebar-affordance-hover: #dde3ec;
+  --color-sidebar-affordance-ink: #5b6576;
   --color-bg-mask: var(--ant-color-bg-mask);
   --radius-lg: var(--ant-border-radius-lg);
   --shadow-popover: var(--ant-box-shadow-secondary);
@@ -63,6 +66,7 @@
   --z-index-main-modal: 1000;
   --z-index-sidecar-container: 1100;
   --z-index-sidecar-overlay: 1150;
+  --z-index-sidebar-affordance: 10;
   --z-index-cross-layer-prompt: 2000;
 }
 
@@ -187,4 +191,66 @@ html.disable-motion *::after {
 /* 深色模式：仅覆盖无法由 antd darkAlgorithm 自动跟随的变量 */
 .dark {
   --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline {
+  background: transparent;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-item,
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-submenu-title {
+  margin-inline: 6px;
+  width: calc(100% - 12px);
+  transition: none !important;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-item-icon,
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-title-content,
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-submenu-arrow {
+  transition: none !important;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline:not(.ant-menu-inline-collapsed) .ant-menu-item,
+.app-nav-menu-shell
+  > .ant-menu.ant-menu-inline:not(.ant-menu-inline-collapsed)
+  .ant-menu-submenu-title {
+  padding-inline-start: 20px !important;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline .ant-menu-sub.ant-menu-inline .ant-menu-item,
+.app-nav-menu-shell
+  > .ant-menu.ant-menu-inline
+  .ant-menu-sub.ant-menu-inline
+  .ant-menu-submenu-title {
+  padding-inline-start: 40px !important;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline-collapsed > .ant-menu-item,
+.app-nav-menu-shell
+  > .ant-menu.ant-menu-inline-collapsed
+  > .ant-menu-submenu
+  > .ant-menu-submenu-title {
+  padding-inline: 20px !important;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline-collapsed > .ant-menu-item .ant-menu-item-icon,
+.app-nav-menu-shell
+  > .ant-menu.ant-menu-inline-collapsed
+  > .ant-menu-submenu
+  > .ant-menu-submenu-title
+  .ant-menu-item-icon {
+  margin-inline-end: 0;
+}
+
+.app-nav-menu-shell > .ant-menu.ant-menu-inline-collapsed > .ant-menu-item .ant-menu-title-content,
+.app-nav-menu-shell
+  > .ant-menu.ant-menu-inline-collapsed
+  > .ant-menu-submenu
+  > .ant-menu-submenu-title
+  .ant-menu-title-content {
+  display: none;
+}
+
+.app-nav-sidebar-toggle {
+  z-index: var(--z-index-sidebar-affordance);
 }

@@ -6,7 +6,7 @@ export function BrandLockup({ variant }: { variant: BrandLockupVariant }) {
   const isHeader = variant === 'header';
 
   return (
-    <Flex align="center" gap={12}>
+    <Flex align="center" gap={12} style={isHeader ? { flexShrink: 0 } : undefined}>
       {isHeader ? (
         <img
           alt=""
@@ -23,19 +23,30 @@ export function BrandLockup({ variant }: { variant: BrandLockupVariant }) {
         />
       )}
 
-      <Flex vertical gap={2}>
+      <Flex
+        vertical
+        gap={2}
+        style={isHeader ? { flexShrink: 0, minWidth: 'max-content' } : undefined}
+      >
         <Typography.Text
           type="secondary"
           style={
             isHeader
-              ? { fontSize: 'var(--ant-font-size)', lineHeight: 1.2, marginBottom: 0 }
+              ? {
+                  fontSize: 'var(--ant-font-size)',
+                  lineHeight: 1.2,
+                  marginBottom: 0,
+                  whiteSpace: 'nowrap',
+                }
               : { fontSize: 'var(--ant-font-size-sm)', letterSpacing: '0.04em' }
           }
         >
           aigc-friendly-frontend
         </Typography.Text>
         {isHeader ? (
-          <Typography.Text type="secondary">主内容优先，入口协作增强。</Typography.Text>
+          <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
+            主内容优先，入口协作增强。
+          </Typography.Text>
         ) : null}
       </Flex>
     </Flex>

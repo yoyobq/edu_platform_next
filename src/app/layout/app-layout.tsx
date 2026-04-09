@@ -22,6 +22,7 @@ import {
   CollaborationSessionProvider,
   KeyboardShortcutStackProvider,
   NAV_FULL_WIDTH,
+  NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL,
   NAV_MAIN_MIN_WIDTH_WITH_FULL,
   NAV_RAIL_WIDTH,
   NavCapabilityProvider,
@@ -39,7 +40,11 @@ import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
 import { EntrySidecar } from './entry-sidecar';
 import { NavSidebar } from './nav-sidebar';
-import { getNavigationItems, resolveNavMode } from './navigation-meta';
+import {
+  getNavigationItems,
+  hasPayloadCryptoNavigationAccess,
+  resolveNavMode,
+} from './navigation-meta';
 import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
@@ -56,21 +61,10 @@ function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
 }
 
-function hasPayloadCryptoMenuAccess(input: {
-  accountId?: number;
-  accessGroup?: readonly string[];
-}) {
-  const isSpecificAdmin = input.accountId === 1 || input.accountId === 2;
-  const hasAdminAccess = input.accessGroup?.includes('ADMIN') ?? false;
-
-  return isSpecificAdmin && hasAdminAccess;
-}
-
 function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const authSession = useAuthSessionState();
-  const authenticatedSnapshot = authSession.snapshot;
   const { close, isOpen, measuredWidth, open } = useSidecarState();
   const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
@@ -78,9 +72,14 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
   );
+  const [viewportWidth, setViewportWidth] = useState(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 0,
+  );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
+  const isSessionResolving = authSession.status === 'restoring' || isHydrating;
+  const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
   const revalidator = useRevalidator();
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
     mainRef,
@@ -90,12 +89,23 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     ],
     'wide',
   );
-  const { mode: navMode, setMode: setNavMode } = useNavCapability();
+  const {
+    autoFoldToRail,
+    clearManualFullOverride,
+    manualFullOverride,
+    mode: navMode,
+    prefersPinnedFull,
+    setMode: setNavMode,
+  } = useNavCapability();
 
   // Activate nav mode based on primaryAccessGroup when session becomes authenticated.
   useEffect(() => {
-    if (authSession.status === 'authenticated' && authenticatedSnapshot) {
-      const targetMode = resolveNavMode(authenticatedSnapshot.primaryAccessGroup);
+    if (authSession.status === 'authenticated' && activeSnapshot) {
+      const baseMode = resolveNavMode(activeSnapshot.primaryAccessGroup);
+      const targetMode =
+        baseMode === 'rail' && prefersPinnedFull && mainWidth >= NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL
+          ? 'full'
+          : baseMode;
       if (navMode === 'none' && targetMode !== 'none') {
         setNavMode(targetMode);
       }
@@ -104,19 +114,20 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     if (authSession.status === 'unauthenticated' && navMode !== 'none') {
       setNavMode('none');
     }
-  }, [authSession.status, authenticatedSnapshot, navMode, setNavMode]);
+  }, [activeSnapshot, authSession.status, mainWidth, navMode, prefersPinnedFull, setNavMode]);
 
   const navItems = useMemo(
     () =>
-      authenticatedSnapshot
+      activeSnapshot
         ? getNavigationItems({
-            primaryAccessGroup: authenticatedSnapshot.primaryAccessGroup,
-            accessGroup: authenticatedSnapshot.userInfo.accessGroup,
-            slotGroup: authenticatedSnapshot.slotGroup,
+            accountId: activeSnapshot.accountId,
+            primaryAccessGroup: activeSnapshot.primaryAccessGroup,
+            accessGroup: activeSnapshot.userInfo.accessGroup,
+            slotGroup: activeSnapshot.slotGroup,
             appEnv: currentAppEnv,
           })
         : [],
-    [authenticatedSnapshot, currentAppEnv],
+    [activeSnapshot, currentAppEnv],
   );
 
   useEffect(() => {
@@ -144,7 +155,28 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const handleResize = () => {
+      setViewportWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, []);
+
   const previousAuthStatusRef = useRef(authSession.status);
+  const previousMainWidthRef = useRef<number | null>(null);
+  const previousNavModeRef = useRef(navMode);
+  const previousViewportWidthRef = useRef(viewportWidth);
+  const previousSidecarOpenRef = useRef(isOpen);
+  const previousSidecarWidthRef = useRef(measuredWidth);
 
   useEffect(() => {
     const previousStatus = previousAuthStatusRef.current;
@@ -156,10 +188,67 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   }, [authSession.status, revalidator]);
 
   useEffect(() => {
-    if (navMode === 'full' && mainWidth > 0 && mainWidth < NAV_MAIN_MIN_WIDTH_WITH_FULL) {
-      setNavMode('rail');
+    const previousMainWidth = previousMainWidthRef.current;
+    const previousNavMode = previousNavModeRef.current;
+    const externalConstraintChanged =
+      previousViewportWidthRef.current !== viewportWidth ||
+      previousSidecarOpenRef.current !== isOpen ||
+      previousSidecarWidthRef.current !== measuredWidth;
+    const shouldAllowAutoFold = !manualFullOverride || externalConstraintChanged;
+
+    if (manualFullOverride && externalConstraintChanged) {
+      clearManualFullOverride();
     }
-  }, [mainWidth, navMode, setNavMode]);
+
+    if (navMode === 'full' && mainWidth > 0) {
+      const crossedBelowFullThreshold =
+        previousNavMode === 'full' &&
+        previousMainWidth !== null &&
+        previousMainWidth >= NAV_MAIN_MIN_WIDTH_WITH_FULL &&
+        mainWidth < NAV_MAIN_MIN_WIDTH_WITH_FULL;
+
+      if (shouldAllowAutoFold && crossedBelowFullThreshold) {
+        previousMainWidthRef.current = mainWidth;
+        previousViewportWidthRef.current = viewportWidth;
+        previousSidecarOpenRef.current = isOpen;
+        previousSidecarWidthRef.current = measuredWidth;
+        autoFoldToRail();
+        previousNavModeRef.current = 'rail';
+        return;
+      }
+    }
+
+    if (
+      navMode === 'rail' &&
+      prefersPinnedFull &&
+      mainWidth >= NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL
+    ) {
+      previousMainWidthRef.current = mainWidth;
+      previousViewportWidthRef.current = viewportWidth;
+      previousSidecarOpenRef.current = isOpen;
+      previousSidecarWidthRef.current = measuredWidth;
+      setNavMode('full');
+      previousNavModeRef.current = 'full';
+      return;
+    }
+
+    previousMainWidthRef.current = mainWidth;
+    previousNavModeRef.current = navMode;
+    previousViewportWidthRef.current = viewportWidth;
+    previousSidecarOpenRef.current = isOpen;
+    previousSidecarWidthRef.current = measuredWidth;
+  }, [
+    autoFoldToRail,
+    clearManualFullOverride,
+    isOpen,
+    mainWidth,
+    manualFullOverride,
+    measuredWidth,
+    navMode,
+    prefersPinnedFull,
+    setNavMode,
+    viewportWidth,
+  ]);
 
   const openEntrySidecar = useCallback(() => {
     if (!isOpen) {
@@ -190,34 +279,40 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 
   const search = location.search;
-  const currentIdentity = isHydrating
+  const currentIdentity = isSessionResolving
     ? '同步中'
-    : authSession.snapshot?.primaryAccessGroup.toLowerCase() || 'guest';
-  const menuItems: ItemType[] = [
-    {
-      key: getBaseURL('/', search),
-      label: <Link to={getBaseURL('/', search)}>首页</Link>,
-    },
-  ];
+    : activeSnapshot?.primaryAccessGroup.toLowerCase() || 'guest';
+  const hasSidebar =
+    authSession.status === 'authenticated' && navMode !== 'none' && navItems.length > 0;
 
-  if (
-    hasPayloadCryptoMenuAccess({
-      accountId: authenticatedSnapshot?.accountId,
-      accessGroup: authenticatedSnapshot?.userInfo.accessGroup,
-    })
-  ) {
-    menuItems.push({
-      key: getBaseURL('/labs/payload-crypto', search),
-      label: <Link to={getBaseURL('/labs/payload-crypto', search)}>载荷加解密</Link>,
-    });
-  }
-
-  if (currentAppEnv === 'dev' || currentAppEnv === 'test') {
-    menuItems.push({
-      key: getBaseURL('/sandbox/playground', search),
-      label: <Link to={getBaseURL('/sandbox/playground', search)}>沙盒演练场</Link>,
-    });
-  }
+  // Top bar menu items — only built when sidebar is not active.
+  const menuItems: ItemType[] = hasSidebar
+    ? []
+    : [
+        {
+          key: getBaseURL('/', search),
+          label: <Link to={getBaseURL('/', search)}>首页</Link>,
+        },
+        ...(hasPayloadCryptoNavigationAccess({
+          accountId: activeSnapshot?.accountId,
+          accessGroup: activeSnapshot?.userInfo.accessGroup,
+        })
+          ? [
+              {
+                key: getBaseURL('/labs/payload-crypto', search),
+                label: <Link to={getBaseURL('/labs/payload-crypto', search)}>载荷加解密</Link>,
+              },
+            ]
+          : []),
+        ...(currentAppEnv === 'dev' || currentAppEnv === 'test'
+          ? [
+              {
+                key: getBaseURL('/sandbox/playground', search),
+                label: <Link to={getBaseURL('/sandbox/playground', search)}>沙盒演练场</Link>,
+              },
+            ]
+          : []),
+      ];
 
   const shouldReserveSidecarSpace = isOpen && isDesktop;
   const frameShiftStyle = shouldReserveSidecarSpace
@@ -253,94 +348,115 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
         <Layout style={{ minHeight: '100%', background: 'transparent' }}>
           <Layout.Header
             style={{
-              background: 'transparent',
-              paddingInline: 24,
+              background: 'var(--color-bg-container)',
+              borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
+              paddingInline: 0,
               height: 'auto',
               lineHeight: 'normal',
             }}
           >
-            <div className="mx-auto max-w-7xl py-4" style={frameShiftStyle}>
-              <div className="rounded-surface border border-border bg-bg-container px-6 py-4 shadow-card">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0">
-                    <BrandLockup variant="header" />
-                  </div>
+            <div className="flex items-center justify-between gap-4 py-3" style={frameShiftStyle}>
+              <div
+                className="flex min-w-0 shrink-0 items-center"
+                style={{
+                  width: hasSidebar
+                    ? navMode === 'full'
+                      ? NAV_FULL_WIDTH
+                      : NAV_RAIL_WIDTH
+                    : undefined,
+                  paddingLeft: hasSidebar ? 20 : 24,
+                }}
+              >
+                <BrandLockup variant="header" />
+              </div>
 
-                  <div className="min-w-0 flex-1">
-                    <Menu
-                      mode="horizontal"
-                      selectedKeys={[getBaseURL(location.pathname, search)]}
-                      items={menuItems}
-                      style={{ justifyContent: 'center', borderBottom: 'none' }}
-                    />
-                  </div>
-
-                  <div className="flex flex-wrap items-center justify-end gap-3">
-                    <Tooltip title="全局搜索与命令 (预留)">
-                      <Button
-                        type="text"
-                        shape="circle"
-                        icon={<SearchOutlined />}
-                        data-layout-slot="omni-bar-trigger"
-                        aria-label="全局搜索与命令"
-                      />
-                    </Tooltip>
-                    <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
-                      环境：{currentAppEnv}
-                    </div>
-                    <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
-                      身份：{currentIdentity}
-                    </div>
-                    {authSession.status === 'authenticated' && authenticatedSnapshot ? (
-                      <>
-                        <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
-                          {authenticatedSnapshot.displayName}
-                        </div>
-                        <Popconfirm
-                          cancelText="不累"
-                          description="且将公事付清风，他日相逢再续行"
-                          okText="江湖再见"
-                          placement="bottomRight"
-                          title="结束会话"
-                          onConfirm={() => {
-                            logout();
-                            navigate('/login', { replace: true });
-                          }}
-                        >
-                          <Button type="default">退出</Button>
-                        </Popconfirm>
-                      </>
-                    ) : isHydrating ? (
-                      <>
-                        <div className="rounded-full border border-border bg-bg-layout px-3 py-1 text-sm text-text-secondary">
-                          正在同步账户信息
-                        </div>
-                        <Button
-                          type="default"
-                          onClick={() => {
-                            logout();
-                            navigate('/login', { replace: true });
-                          }}
-                        >
-                          取消登录
-                        </Button>
-                      </>
-                    ) : (
-                      <Button type="primary" onClick={() => navigate('/login')}>
-                        登录
-                      </Button>
-                    )}
-                  </div>
+              {menuItems.length > 0 && (
+                <div className="hidden min-w-0 flex-1 lg:block">
+                  <Menu
+                    mode="horizontal"
+                    selectedKeys={[getBaseURL(location.pathname, search)]}
+                    items={menuItems}
+                    style={{
+                      justifyContent: 'center',
+                      borderBottom: 'none',
+                      background: 'transparent',
+                    }}
+                  />
                 </div>
+              )}
+
+              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
+                <Tooltip title="全局搜索与命令 (预留)">
+                  <Button
+                    type="text"
+                    shape="circle"
+                    icon={<SearchOutlined />}
+                    data-layout-slot="omni-bar-trigger"
+                    aria-label="全局搜索与命令"
+                  />
+                </Tooltip>
+                <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                  {currentAppEnv}
+                </div>
+                <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                  {currentIdentity}
+                </div>
+                {authSession.status === 'authenticated' && activeSnapshot ? (
+                  <>
+                    <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                      {activeSnapshot.displayName}
+                    </div>
+                    <Popconfirm
+                      cancelText="不累"
+                      description="且将公事付清风，他日相逢再续行"
+                      okText="江湖再见"
+                      placement="bottomRight"
+                      title="结束会话"
+                      onConfirm={() => {
+                        logout();
+                        navigate('/login', { replace: true });
+                      }}
+                    >
+                      <Button type="text" size="small">
+                        退出
+                      </Button>
+                    </Popconfirm>
+                  </>
+                ) : isSessionResolving ? (
+                  <>
+                    <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                      正在同步账户信息
+                    </div>
+                    <Button
+                      type="text"
+                      size="small"
+                      onClick={() => {
+                        logout();
+                        navigate('/login', { replace: true });
+                      }}
+                    >
+                      取消登录
+                    </Button>
+                  </>
+                ) : (
+                  <Button type="primary" size="small" onClick={() => navigate('/login')}>
+                    登录
+                  </Button>
+                )}
               </div>
             </div>
           </Layout.Header>
 
           <Layout style={{ background: 'transparent' }}>
-            {navMode !== 'none' && navItems.length > 0 && (
+            {hasSidebar && (
               <Layout.Sider
                 width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
-                style={{ background: 'var(--color-bg-container)' }}
+                style={{
+                  background: 'var(--color-bg-container)',
+                  borderRight: '1px solid rgba(15, 23, 42, 0.08)',
+                  overflow: 'visible',
+                  position: 'relative',
+                }}
               >
                 <NavSidebar items={navItems} />
               </Layout.Sider>

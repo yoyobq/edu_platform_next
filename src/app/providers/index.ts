@@ -23,6 +23,7 @@ export {
 export { KeyboardShortcutStackProvider } from './keyboard-shortcut-stack-provider';
 export {
   NAV_FULL_WIDTH,
+  NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL,
   NAV_MAIN_MIN_WIDTH_WITH_FULL,
   NAV_RAIL_WIDTH,
   type NavCapabilityState,
