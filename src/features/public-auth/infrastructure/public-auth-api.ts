@@ -73,6 +73,7 @@ type LoginUpstreamSessionResponse = {
 
 type FetchVerifiedStaffIdentityResponse = {
   fetchVerifiedStaffIdentity: {
+    departmentName?: string | null;
     expiresAt: string;
     identityKind: string;
     orgId?: string | null;
@@ -156,6 +157,7 @@ const LOGIN_UPSTREAM_SESSION_MUTATION = `
 const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
   query FetchVerifiedStaffIdentity($sessionToken: String!) {
     fetchVerifiedStaffIdentity(sessionToken: $sessionToken) {
+      departmentName
       expiresAt
       identityKind
       orgId
@@ -470,6 +472,7 @@ async function fetchVerifiedStaffIdentity(input: {
     }
 
     return {
+      departmentName: identity.departmentName || null,
       expiresAt: identity.expiresAt,
       orgId: identity.orgId || null,
       personId: identity.personId,

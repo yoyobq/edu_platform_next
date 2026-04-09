@@ -41,6 +41,8 @@ function IdentityBlock({
   identity: StaffInviteIdentity;
   inviteEmail: string;
 }) {
+  const departmentDisplayName = identity.departmentName || identity.orgId;
+
   return (
     <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
       <Flex vertical gap={12}>
@@ -57,30 +59,22 @@ function IdentityBlock({
               <Typography.Text>{inviteEmail}</Typography.Text>
             </div>
           </div>
-          {identity.orgId && (
+          {departmentDisplayName && (
             <div>
               <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                 部门
               </Typography.Text>
               <div style={{ marginTop: 2 }}>
-                <Typography.Text>{identity.orgId}</Typography.Text>
+                <Typography.Text>{departmentDisplayName}</Typography.Text>
               </div>
             </div>
           )}
           <div>
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              编号
+              工号
             </Typography.Text>
             <div style={{ marginTop: 2 }}>
               <Typography.Text>{identity.personId}</Typography.Text>
-            </div>
-          </div>
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              上游账号
-            </Typography.Text>
-            <div style={{ marginTop: 2 }}>
-              <Typography.Text>{identity.upstreamLoginId}</Typography.Text>
             </div>
           </div>
         </Flex>

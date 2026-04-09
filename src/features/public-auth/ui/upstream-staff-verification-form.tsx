@@ -36,24 +36,23 @@ export function UpstreamStaffVerificationForm({
       ) : null}
 
       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-        这里填写的是学校或上游人事系统账号，不是当前平台登录账号。
+        这里填写的是校园网账号，不是当前平台登录账号。
       </Typography.Paragraph>
 
       <Form.Item
-        label="上游系统账号"
+        label="校园网工号"
         name="userId"
-        rules={[{ required: true, message: '请输入上游账号。', whitespace: true }]}
-        extra="使用学校或上游系统分配的账号标识。"
+        rules={[{ required: true, message: '请输入校园网工号。', whitespace: true }]}
       >
-        <Input placeholder="请输入上游账号" autoComplete="username" />
+        <Input placeholder="请输入校园网工号" autoComplete="username" />
       </Form.Item>
 
       <Form.Item
-        label="上游系统密码"
+        label="校园网密码"
         name="password"
-        rules={[{ required: true, message: '请输入上游密码。' }]}
+        rules={[{ required: true, message: '请输入校园网密码。' }]}
       >
-        <Input.Password placeholder="请输入上游密码" autoComplete="current-password" />
+        <Input.Password placeholder="请输入校园网密码" autoComplete="current-password" />
       </Form.Item>
     </Form>
   );

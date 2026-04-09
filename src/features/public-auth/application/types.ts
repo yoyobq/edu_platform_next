@@ -20,6 +20,7 @@ export type StaffInviteInfo = {
 };
 
 export type StaffInviteIdentity = {
+  departmentName: string | null;
   expiresAt: string;
   orgId: string | null;
   personId: string;

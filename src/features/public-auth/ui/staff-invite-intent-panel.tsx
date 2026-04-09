@@ -400,7 +400,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            {invite.description || '请完成上游身份核对后继续邀请注册。'}
+            {invite.description || '请核对邮箱，无误后进入身份核对流程。'}
           </Typography.Paragraph>
 
           <StaffInviteStepActions
