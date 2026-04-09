@@ -356,6 +356,190 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
   await expect(page).toHaveURL(routes.login + '?skipRestore=1');
 });
 
+test('有效 staff invite 设置登录名后，应可使用登录名完成登录', async ({ page }) => {
+  let consumeInput: Record<string, unknown> | null = null;
+  let loginInput: Record<string, unknown> | null = null;
+
+  await mockApiHealth(page);
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query PublicInviteInfo')) {
+      await fulfillGraphQL(route, {
+        data: {
+          publicInviteInfo: {
+            info: {
+              canProceed: true,
+              description: '请核对邮箱，无误后进入身份核对流程。',
+              expiresAt: '2026-04-30T03:00:00.000Z',
+              invitedEmail: 'invitee@example.com',
+              issuer: '系统管理员',
+              statusReason: 'AVAILABLE',
+              title: '教职工邀请',
+              type: 'INVITE_STAFF',
+            },
+            message: null,
+            reason: null,
+            success: true,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation LoginUpstreamSession')) {
+      await fulfillGraphQL(route, {
+        data: {
+          loginUpstreamSession: {
+            expiresAt: '2026-04-09T03:10:00.000Z',
+            upstreamSessionToken: 'upstream-session-001',
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('query FetchVerifiedStaffIdentity')) {
+      await fulfillGraphQL(route, {
+        data: {
+          fetchVerifiedStaffIdentity: {
+            departmentName: '数学系',
+            expiresAt: '2026-04-09T03:15:00.000Z',
+            identityKind: 'STAFF',
+            orgId: 'staff-department-001',
+            personId: 'staff-001',
+            personName: 'Alice Teacher',
+            upstreamLoginId: 'teacher.alice',
+            upstreamSessionToken: 'verified-session-001',
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation ConsumeStaffInvite')) {
+      consumeInput = payload?.variables?.input ?? null;
+      await fulfillGraphQL(route, {
+        data: {
+          consumeVerificationFlowPublic: {
+            accountId: 9527,
+            message: '邀请注册成功',
+            success: true,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Login')) {
+      loginInput = payload?.variables?.input ?? null;
+      await fulfillGraphQL(route, {
+        data: {
+          login: {
+            accessToken: 'staff-access-token',
+            refreshToken: 'staff-refresh-token',
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, {
+        data: {
+          me: {
+            account: {
+              id: 9527,
+              identityHint: 'STAFF',
+              loginEmail: 'invitee@example.com',
+              loginName: 'alice.teacher',
+              status: 'ACTIVE',
+            },
+            accountId: 9527,
+            identity: {
+              __typename: 'StaffType',
+              accountId: 9527,
+              createdAt: '2026-04-09T03:20:00.000Z',
+              departmentId: 'staff-department-001',
+              employmentStatus: 'ACTIVE',
+              id: 'staff-001',
+              jobTitle: null,
+              name: 'Alice Teacher',
+              remark: null,
+              updatedAt: '2026-04-09T03:20:00.000Z',
+            },
+            needsProfileCompletion: false,
+            userInfo: {
+              accessGroup: ['STAFF'],
+              avatarUrl: null,
+              email: 'invitee@example.com',
+              nickname: 'Alice',
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      await fulfillGraphQL(route, {
+        data: {
+          refresh: null,
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.invite('staff', 'staff-invite-login-name-001'));
+
+  await page.getByRole('button', { name: '下一步：身份核对' }).click();
+  await page.getByLabel('校园网工号').fill('teacher.alice');
+  await page.getByLabel('上游系统密码').fill('Password!123');
+  await page.getByRole('button', { name: '核对身份并继续' }).click();
+
+  await page.getByLabel('昵称').fill('Alice');
+  await page.getByLabel('登录名（可选）').fill('alice.teacher');
+  await page.locator('input#loginPassword').fill('Invite!234');
+  await page.locator('input#confirmPassword').fill('Invite!234');
+  await page.getByRole('button', { name: '完成激活' }).click();
+
+  expect(consumeInput).not.toBeNull();
+  expect(consumeInput).toMatchObject({
+    expectedType: 'INVITE_STAFF',
+    loginName: 'alice.teacher',
+    loginPassword: 'Invite!234',
+    nickname: 'Alice',
+    staffDepartmentId: 'staff-department-001',
+    staffName: 'Alice Teacher',
+    token: 'staff-invite-login-name-001',
+    upstreamSessionToken: 'verified-session-001',
+  });
+  expect(consumeInput).not.toHaveProperty('loginEmail');
+
+  await page.getByRole('button', { name: '前往登录' }).click();
+  await expect(page).toHaveURL(routes.login + '?skipRestore=1');
+
+  await page.getByLabel('登录名或邮箱').fill('alice.teacher');
+  await page.getByLabel('密码').fill('Invite!234');
+  await page.getByRole('button', { name: /登\s*录/ }).click();
+
+  expect(loginInput).not.toBeNull();
+  expect(loginInput).toMatchObject({
+    audience: 'DESKTOP',
+    loginName: 'alice.teacher',
+    loginPassword: 'Invite!234',
+    type: 'PASSWORD',
+  });
+
+  await expect(page).toHaveURL(routes.home);
+  await expect(page.getByRole('banner').getByText('Alice')).toBeVisible();
+  await expect(page.getByRole('banner').getByText('身份：staff')).toBeVisible();
+});
+
 for (const inviteCase of [
   {
     title: '已过期 invite 应显示失败态',

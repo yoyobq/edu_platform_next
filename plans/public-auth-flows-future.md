@@ -15,8 +15,8 @@
 
 ## 为什么继续延后
 
-- 当前项目真相里，`public-auth` 只有密码恢复是真实闭环；其余 intent 入口仍未进入产品定型阶段
-- 当前 invite 主线若先推进，也只先收 `staff invite`
+- 当前项目真相里，密码恢复与 `staff invite` 已是稳定闭环；其余 intent 入口仍未进入产品定型阶段
+- `staff invite` 已从计划项转为已实现基线，细节统一沉淀在 `docs/backend` 与 `docs/project-convention`，不再留在 future
 - 开放注册是否存在，取决于产品到底是 `invite-first` 还是 `self-signup`
 - 公开注册一旦放开，就会连带影响邮箱验证续接、默认落点与权限边界
 - 账户资料与账户中心不属于当前 public entry 验证入口主线
@@ -34,7 +34,7 @@
 
 ### 2. 其他 inviteType
 
-若 `staff invite` 先落地，其他 inviteType 继续单独评估：
+当前 `staff invite` 已落地，其他 inviteType 继续单独评估：
 
 - 是否复用同一页面骨架
 - 是否需要不同的上游核对方式

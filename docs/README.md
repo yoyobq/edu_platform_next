@@ -29,6 +29,7 @@ This directory contains project documentation.
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想统一表单值、URL search params、筛选条件的空值与 normalize 语义时，先看 [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
 - 想统一业务入口 path、`redirect`、筛选 query 等 URL 语义时，先看 [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
+- 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - 想确认当前身份、授权摘要、会话恢复以及 protected route 前置续期边界时，先看 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - 想确认 `shared/graphql` 与 `auth` 的运行时边界、主动/兜底续期、请求鉴权语义与会话失效跳转时，先看 [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
 - 想确认 `executeGraphQL()` 的统一异常出口、`GraphQLIngressError` 分类、Apollo 4.x 映射和默认中文错误提示时，先看 [project-convention/graphql-error-model.md](./project-convention/graphql-error-model.md)
@@ -82,6 +83,7 @@ This directory contains project documentation.
 - [project-convention/graphql-error-model.md](./project-convention/graphql-error-model.md)
 - [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
 - [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
+- [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
@@ -130,6 +132,7 @@ docs/
     graphql-error-model.md
     graphql-ingress-auth-boundary.md
     identity-access-session.md
+    public-auth-staff-invite.md
     route-url-semantics.md
     time-display-semantics.md
   human/
