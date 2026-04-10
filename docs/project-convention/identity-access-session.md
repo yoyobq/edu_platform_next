@@ -192,7 +192,8 @@
 
 在菜单语义上，当前进一步收口为：
 
-- `primaryAccessGroup` 决定正式一级菜单骨架
+- `primaryAccessGroup` 决定正式一级菜单的主身份语义
+- 当前 admin 导航 capability 以授权为准：只要 `accessGroup` 包含 `ADMIN`，即可启用 admin 导航入口
 - `REGISTRANT` 不进入正式菜单体系，只保留补全过程所需壳层与入口
 - `slotGroup` 只承接跨页面持续存在的全局职责插槽
 - 进入 `slotGroup` 的职责必须具备独立 landing page
@@ -276,7 +277,7 @@
 - `slotGroup` 不改变 `primaryAccessGroup` 的一级菜单骨架
 - 第一版默认一级平铺，不嵌入其他业务父节点
 - 不默认做成 context switcher；升级为 context switcher 需单独评估（需有独立 landing page、成体系二级菜单、与主骨架心智边界足够清晰）
-- 活跃 slot 超过导航密度阈值时，触发重新评估分组策略
+- 当活跃 slot 已明显压缩一级导航的可扫读性时，触发 IA review，再决定是否需要分组
 
 **枚举策略：**
 

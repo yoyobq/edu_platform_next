@@ -2,7 +2,7 @@
 
 # Navigation Plan
 
-> 状态：`-plan`（由 `navigation-direction.md` 升级）
+> 状态：进行中（基础 capability 已落地，业务投影与交互收尾仍在推进）
 
 ## 已锁定决策
 
@@ -12,7 +12,7 @@
 
 - 以 `none / rail / full` 档位存在，不是全站默认前提
 - 第一批启用范围只收 `admin` 域
-- 首页、轻工作台、AI 强协作页保持 `none`
+- 当前首页 `/` 已纳入首批 admin 菜单项；其他尚未拆出的轻壳页面仍可保持 `none`
 - 菜单回归后，首页仍是摘要与入口，不退化为普通菜单落地页
 - Sidecar 与协作入口保留独立角色，不被侧边菜单吞并
 
@@ -36,7 +36,7 @@
 
 - `slotGroup` 只往全局菜单插入职责型入口，不改变一级骨架所属身份
 - 第一版示例锚点：`CLASS_ADVISER`（正式进入 token / `me` contract 前先作示例）
-- 第一版默认一级平铺，不嵌入其他业务父节点；活跃 slot 超数量阈值时重新评估分组策略
+- 第一版默认一级平铺，不嵌入其他业务父节点；当活跃 slot 已明显压缩一级导航可扫读性时，再重新评估分组策略
 - context switcher 只在以下条件全部满足时再评估：有独立 landing page、有成体系二级菜单、与主骨架心智边界足够清晰
 
 **进入全局菜单的准入门槛（同时满足）：**
@@ -94,14 +94,26 @@
 - 菜单渲染消费完整 `me snapshot`，不在 `hydrating` 阶段用未完成 token 推断正式菜单
 - `primaryAccessGroup` 前端当前可基于 `identity + accessGroup` 推导，暂不强制进 JWT；跨端需统一时再评估
 
+## 当前实现检查
+
+- `AppLayout` 已接入 `NavCapabilityProvider` 与 `NavSidebar`，当前按 `accessGroup` 中是否包含 `ADMIN` 启用 admin 导航 capability
+- `ADMIN` 首批菜单投影已落在 `src/app/layout/navigation-meta.ts`，当前包含首页与 `Labs` 分组下的实验入口
+- 空间竞争阈值已落常量：`NAV_RAIL_WIDTH = 64`、`NAV_FULL_WIDTH = 240`、`NAV_MAIN_MIN_WIDTH_WITH_FULL = 480`、`NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL = 680`
+- pin 偏好已通过 `app.nav.prefersPinnedFull` 持久化；会话恢复后会结合可用宽度决定是否回到 `full`
+- `rail -> drawer / flyout` 目前只有状态接口，当前壳层 UI 尚未接线
+- 暂未看到导航状态机的专项 E2E 覆盖
+
 ## 开放项（实现前需收口）
 
 - [ ] `GUEST` 第一版轻导航形态与文案
 - [ ] `slotGroup` canonical 枚举表
 - [ ] `admin` 域各页面 `none / rail / full` 精确启用原则
+- [ ] `rail -> drawer / flyout` 真实交互接线
+- [ ] 各业务域导出自己的 navigation meta，接入壳层聚合
+- [ ] 导航专项 E2E 覆盖
 - [x] 左栏 / 主画布 / Sidecar 空间竞争的精确宽度阈值与折叠优先级表 → 已落 `NAV_MAIN_MIN_WIDTH_WITH_FULL = 480`，见 `docs/navigation.md`
-- [x] 菜单状态机持久化策略 → v1 不持久化，每次从 `none` 起始
-- [x] navigation manifest 最小字段名与承载位置 → 已落 `docs/navigation.md`
+- [x] pin 偏好持久化策略 → 已落 `app.nav.prefersPinnedFull`；进入壳层后再结合 capability 与宽度恢复
+- [x] navigation manifest 最小字段名与当前承载位置 → 已落 `src/app/layout/navigation-meta.ts`，后续再拆分到各业务域
 
 ## 行动项
 
@@ -112,7 +124,7 @@
 
 ### P1 — 收口为实现基准
 
-- [ ] `ADMIN` 一级菜单骨架草案（具体菜单项待 admin 路由建立时填入）
+- [x] `ADMIN` 一级菜单骨架首批草案 → 已落首页 + `Labs` 分组首批入口，见 `src/app/layout/navigation-meta.ts`
 - [ ] `GUEST` 第一版轻导航形态（当前已决定保持 `none`，文案待页面存在时收口）
 - [ ] `CLASS_ADVISER` 插槽示例挂载位置
 - [ ] `admin` 域页面 `rail / full` 精确启用原则
@@ -121,12 +133,15 @@
 - [ ] `STAFF + CLASS_ADVISER` 合并菜单投影示例
 - [ ] 跨主身份共享入口的 manifest 归属示例
 - [ ] 菜单尺寸基线、active indicator 与 hydrating 骨架的视觉基线
+- [ ] `rail -> drawer / flyout` 交互与视觉基线
 
 ### P2 — 实现
 
 1. [x] `AppLayout` 补 `sidebar / nav-rail` capability 开关 → `src/app/providers/nav-capability.ts`、`nav-capability-provider.tsx`，已接入 AppLayout
-2. [ ] `admin` 域按业务域逐步启用正式菜单，不一次性全站铺开
+2. [x] `admin` 域首批正式菜单已接入 → 当前集中 registry 已落首页、`Labs`、`invite-issuer`、`payload-crypto`、`sandbox/playground`
 3. [ ] 各业务域导出自己的 navigation meta，接入壳层聚合
+4. [ ] 将 `isDrawerOpen / openDrawer / closeDrawer` 接到真实 UI
+5. [ ] 为导航 capability 增加专项 E2E 覆盖
 
 ## 结论
 

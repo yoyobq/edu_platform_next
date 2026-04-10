@@ -23,12 +23,18 @@ type NavigationFilter = {
   appEnv: 'dev' | 'test' | 'prod';
 };
 
+export function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  return input.accessGroup?.includes('ADMIN') ?? false;
+}
+
 export function hasPayloadCryptoNavigationAccess(input: {
   accountId?: number;
   accessGroup?: readonly AuthAccessGroup[];
 }) {
   const isSpecificAdmin = input.accountId === 1 || input.accountId === 2;
-  const hasAdminAccess = input.accessGroup?.includes('ADMIN') ?? false;
+  const hasAdminAccess = hasAdminNavigationAccess({
+    accessGroup: input.accessGroup,
+  });
 
   return isSpecificAdmin && hasAdminAccess;
 }
@@ -135,11 +141,6 @@ function filterItem(item: NavigationMetaItem, filter: NavigationFilter): Navigat
   return item;
 }
 
-export function resolveNavMode(primaryAccessGroup: AuthAccessGroup): NavMode {
-  switch (primaryAccessGroup) {
-    case 'ADMIN':
-      return 'rail';
-    default:
-      return 'none';
-  }
+export function resolveNavMode(input: { accessGroup: readonly AuthAccessGroup[] }): NavMode {
+  return hasAdminNavigationAccess(input) ? 'rail' : 'none';
 }

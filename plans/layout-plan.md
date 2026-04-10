@@ -62,28 +62,27 @@
 - 继续把可选 host 能力收成明确的 layout capability 开关
 - 避免页面直接依赖布局私有状态
 
-### [ ] P1. 侧边导航能力回归为底座能力
+### [x] P1. 侧边导航能力回归为底座能力
 
-当前决策：
+当前结论：
 
 - 不把“完全不给左侧导航”继续写成底座前提
-- `AppLayout` 后续应补受控的 sidebar / nav-rail capability
+- `AppLayout` 已补受控的 `sidebar / nav-rail` capability，代码已落 `src/app/providers/nav-capability.ts`、`src/app/providers/nav-capability-provider.tsx`、`src/app/layout/app-layout.tsx`
 - 这项能力是底座可选项，不是新的默认统治布局
 
 当前固定边界：
 
 - 默认仍保持当前轻导航方向
 - 侧边导航能力与 `main`、Sidecar、第三工作区并存，不替代它们
-- 首页、轻工作台、AI 强协作页可以继续不启用侧边导航
+- public entry 与其他尚未拆出的轻壳页面可以继续不启用侧边导航
 - 信息架构更深、模块更多的业务域可按需启用侧边导航
 
-推荐收敛方式：
+当前落地范围：
 
-- 先按能力档位设计，而不是直接回退到传统中后台壳
-- 建议至少保留：
-- `none`
-- `rail`
-- `full`
+- capability 已按 `none / rail / full` 三档接入
+- 当前 admin 导航 capability 按 `accessGroup` 中是否包含 `ADMIN` 启用；首页 `/` 已纳入首批 admin 菜单投影
+- 首批菜单投影已集中落在 `src/app/layout/navigation-meta.ts`，覆盖首页与 `Labs` 分组下的实验入口
+- `full -> rail` 自动折叠与 `rail -> full` 恢复阈值已落地（`480 / 680`）
 
 保留的提醒：
 
@@ -91,19 +90,19 @@
 - 不让侧边导航与 Sidecar 争夺主协作层角色
 - 不因为补回常见底座能力，就把首页工作台退化成普通菜单落地页
 
+检查后确认的剩余缺口：
+
+- `rail -> drawer / flyout` 目前只有状态字段，壳层 UI 尚未接线
+- navigation meta 仍是集中 registry，尚未切到“各业务域导出、壳层聚合”
+- 还没有看到导航状态机专项 E2E 覆盖
+
 后续动作：
 
-- 在 `AppLayout` capability 体系里补 sidebar / nav-rail 开关
-- 明确哪些页面或业务域可启用 `rail / full`
-- 明确侧边导航与顶部轻导航、Sidecar 的共存规则
-- 补一张左栏 / `main` / Sidecar 的空间分配表，明确谁先让位、何时折叠
-- 明确 `none / rail / full` 的宽度基线与视觉密度
-- 明确 `hydrating` 时正式菜单只显示结构兼容的中性骨架或空态，不先闪错误身份菜单
-- 明确 `rail -> drawer / flyout -> pin -> full` 的状态流转
-- 第一版 slot 菜单默认一级平铺，不嵌到别人的父节点下，不先做 context switcher
-- 明确壳层不补 Breadcrumb；需要回退路径时由页面 Header 提供返回动作
-- 明确菜单只承载稳定导航，不承载页面级操作
-- Command 入口补持续但克制的快捷键暗示
+- 收口 `admin` 域页面 `none / rail / full` 精确启用原则
+- 按业务域拆出 navigation meta，并接入壳层聚合
+- 补 `rail -> drawer / flyout -> pin -> full` 的真实交互
+- 补菜单尺寸基线、active indicator 与 hydrating 骨架的视觉基线
+- 为导航 capability 增加专项 E2E 覆盖
 
 当前不进入第一版基线的后续方向：
 
@@ -203,9 +202,9 @@
 
 ## 当前推荐顺序
 
-1. 在 `AppLayout` capability 体系里补 sidebar / nav-rail 能力
-2. 在 `AppLayout` 内继续补 capability 开关，而不是拆第二套 authenticated shell
-3. 为第三工作区正式态设计独立 view state
-4. 以轻命令入口推进 Omni 的最小交互
-5. 进入高确定性的轻量 chunk 治理
-6. 最后进入 P3 探索实现
+1. 按业务域拆出 navigation meta，并替换当前集中 registry
+2. 收口 `admin` 域页面 `none / rail / full` 启用原则与一级骨架
+3. 在 `AppLayout` 内继续补 capability 开关，而不是拆第二套 authenticated shell
+4. 为第三工作区正式态设计独立 view state
+5. 以轻命令入口推进 Omni 的最小交互
+6. 进入高确定性的轻量 chunk 治理，再进入 P3 探索实现

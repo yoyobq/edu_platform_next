@@ -32,13 +32,15 @@ export function NavCapabilityProvider({ children }: { children: ReactNode }) {
       prefersPinnedFull,
       manualFullOverride,
       isDrawerOpen,
-      setMode: (newMode) => {
+      setMode: (newMode, options) => {
         setModeRaw(newMode);
         if (newMode === 'full') {
           setPrefersPinnedFull(true);
           setManualFullOverride(false);
         } else if (newMode === 'rail') {
-          setPrefersPinnedFull(false);
+          if (!options?.preservePinnedPreference) {
+            setPrefersPinnedFull(false);
+          }
           setManualFullOverride(false);
         } else {
           setManualFullOverride(false);

@@ -34,7 +34,7 @@ export type NavCapabilityState = {
   manualFullOverride: boolean;
   /** Drawer flyout is temporarily expanded within rail mode. */
   isDrawerOpen: boolean;
-  setMode: (mode: NavMode) => void;
+  setMode: (mode: NavMode, options?: { preservePinnedPreference?: boolean }) => void;
   autoFoldToRail: () => void;
   clearManualFullOverride: () => void;
   openDrawer: () => void;
