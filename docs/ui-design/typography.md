@@ -158,6 +158,8 @@
 - `Typography.Title level={3}` 会渲染 `<h3>`，无法满足 `<h1>` 语义
 - 通过原生 `<h1>` + antd CSS 变量，可以同时满足语义正确和视觉统一
 
+> **⚠ 注意**：此处原生 `<h1>` + 内联 `style` 消费 CSS 变量是项目内唯一的内联样式特例。其他任何场景严禁模仿此写法通过内联 style 修改 antd 组件样式——应回到 ConfigProvider token 或 className 方案。
+
 ## 文本角色
 
 通用文本角色表（适用于所有页面上下文）：

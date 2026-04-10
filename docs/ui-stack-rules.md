@@ -47,6 +47,16 @@
 
 即使某些 `antd` 组件看起来像容器，只要它已经承载了自身的间距与结构语义，向其注入 Tailwind 仍视为侵入组件本体。
 
+**特别注意：Tailwind 文本类与 `Typography` 组件**
+
+`Typography.Text`、`Typography.Title`、`Typography.Paragraph` 已自带完整的文本语义（字号、字重、颜色、行高）。以下做法视为侵入组件本体，**禁止**：
+
+- `<Typography.Text className="text-xs">` — 用 Tailwind 覆盖 Typography 的字号
+- `<Typography.Title className="font-semibold">` — 用 Tailwind 覆盖 Typography 的字重
+- `<Typography.Text type="secondary" className="text-sm text-gray-500">` — Tailwind 与 Typography 双重控制
+
+**正确做法**：如果需要紧凑标签文字（如指标卡的标签），直接用原生 `<span className="text-xs text-text-secondary">` 代替 `Typography.Text` + Tailwind 的混合写法。Typography 用于正式文本角色，原生 `<span>` + Tailwind 用于紧凑元信息——两条路径不要混用。
+
 任何需要调整间距、宽度、对齐、响应式的诉求，应优先通过显式包装层解决。
 
 任何需要调整视觉语义的诉求，应优先回到：
@@ -126,6 +136,9 @@
 - 页面和区块的宽度、高度、padding、margin、gap
 - Flex / Grid 布局
 - 响应式断点与容器级适配
+
+> **响应式冻结**：项目未提供移动端设计稿，禁止使用 Tailwind 断点前缀（`sm:`、`md:`、`lg:`、`xl:`）。需要响应式适配时，通过 JS 感知容器宽度后**条件渲染**不同组件或布局（参见 `app-layout.tsx` 的 `mainWidthBand` 方案）。
+
 - 一次性包装层、状态壳层、局部背景和边框
 
 适用场景：

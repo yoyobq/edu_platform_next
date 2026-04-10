@@ -67,7 +67,7 @@ import { theme as antTheme } from 'antd'
 **`--color-ai-accent` 禁止用于正文文字**，只允许：
 
 - 图标颜色
-- 边框、装饰线
+- 边框、装饰线（`--color-ai-accent-border`：Sky Cyan 25% 混入 `--ant-color-border`，用于 AI 区域轻色调边框）
 - 背景填充（`--color-ai-accent-bg`）
 - 大号标题或标签文字（≥ 18px，且不是唯一信息载体）
 

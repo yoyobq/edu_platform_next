@@ -88,3 +88,11 @@ useEffect(() => {
 ## 迁移路径
 
 已有代码中 `colorBgLayout`/`colorBgContainer` 写死的，改为条件展开写法，其余不动。
+
+---
+
+## Tailwind `dark:` 前缀使用规则
+
+`dark:` 前缀**仅限** `index.css` 全局层级使用（如 `shadow-card-hover` 深色变体的 `.dark {}` 覆盖）。
+
+**组件代码中禁止出现 `dark:` 前缀类**。暗色模式下的颜色适配 100% 依赖 antd Token 自动翻转（`colorBgLayout`、`colorBgContainer`、`colorText` 等全部走 `darkAlgorithm`）。如果某个颜色在深色下效果不对，说明该 token 的浅色声明需要调整，而不是在组件层加 `dark:` 补丁。

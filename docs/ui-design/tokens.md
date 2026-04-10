@@ -72,6 +72,20 @@
 
 ---
 
+## AI 区域边框
+
+| Token                      | 值                                                         | Tailwind 类               | 场景            |
+| -------------------------- | ---------------------------------------------------------- | ------------------------- | --------------- |
+| `--color-ai-accent-border` | `color-mix(in srgb, #29b8f0 25%, var(--ant-color-border))` | `border-ai-accent-border` | AI 区域装饰边框 |
+
+此 token 用于 Sidecar 外壳、AI 生成区块等需要轻微 Sky Cyan 色调边框的场景。深色模式下 `--ant-color-border` 自动跟随 `darkAlgorithm`，混合结果自动适配。
+
+补充说明：此 token 尚未在 `index.css` 中定义，需追加到 `@theme inline` 块。参见 [index-css.md](./index-css.md)。
+
+**Token 封口规则**：不因局部页面临时新增视觉 token。若某个模式无法由现有 token 支撑，应先回到既有 token 体系中重组，而非发明新变量。已识别待补的 token 仅 `--color-ai-accent-border` 一条。
+
+---
+
 ## 过渡动画
 
 两档，仅用于 Tailwind wrapper 层（antd 组件有内置动画，不叠加）：
@@ -87,13 +101,25 @@
 
 ## 状态一致性
 
-| 状态       | 做法                          | 禁止                          |
-| ---------- | ----------------------------- | ----------------------------- |
-| hover 背景 | `bg-fill-hover`               | 自定义颜色、`opacity-*`       |
-| disabled   | 组件 `disabled` prop          | `opacity-50`、`text-gray-400` |
-| 空状态     | antd `<Empty>`                | 每页各写灰字说明              |
-| 骨架       | antd `<Skeleton>`             | Spinner 和 Skeleton 混用      |
-| 操作加载   | `<Button loading>` / `<Spin>` | 手工切换文字                  |
+| 状态       | 做法                 | 禁止                          |
+| ---------- | -------------------- | ----------------------------- |
+| hover 背景 | `bg-fill-hover`      | 自定义颜色、`opacity-*`       |
+| disabled   | 组件 `disabled` prop | `opacity-50`、`text-gray-400` |
+| 空状态     | antd `<Empty>`       | 每页各写灰字说明              |
+| 骨架       | antd `<Skeleton>`    | Spinner 和 Skeleton 混用      |
+
+骨架防跳动：`Skeleton` 的 `width` / `rows` 应尽量匹配预期内容区域的大致比例（如卡片骨架 `title={{ width: '40%' }} paragraph={{ rows: 3 }}`），避免骨架消失后布局跳动。同一列表的多个骨架行应有轻微长度差异（`60%` / `70%` / `50%`）而非统一占比。
+| 操作加载 | `<Button loading>` / `<Spin>` | 手工切换文字 |
+
+### 可交互卡片 hover 默认实践
+
+所有作为导航入口或可点击行为的卡片都应有 hover 反馈：
+
+- antd `<Card>` 组件：使用 `hoverable` prop（hover 阴影由 antd token `boxShadowCard` 控制，符合 ui-stack-rules "组件视觉走组件 API"原则）
+- 自定义 wrapper：`shadow-card cursor-pointer transition-all duration-200 hover:shadow-card-hover`
+- 列表行、图标按钮等非卡片可交互区域：`transition-colors duration-150 hover:bg-fill-hover`
+
+无 hover 反馈的可交互元素是质感缺失的第一大来源。完整反馈规则见 [interaction-feedback.md](./interaction-feedback.md)，落地代码片段见 [inspirations/README.md](./inspirations/README.md) A2、B1、C2。
 
 ---
 

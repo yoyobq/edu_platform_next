@@ -44,6 +44,7 @@
   --color-ai-accent-hover: #1fa8e0;
   --color-ai-accent-bg: color-mix(in srgb, #29b8f0 12%, var(--ant-color-bg-container, white));
   --color-ai-accent-bg-hover: color-mix(in srgb, #29b8f0 18%, var(--ant-color-bg-container, white));
+  --color-ai-accent-border: color-mix(in srgb, #29b8f0 25%, var(--ant-color-border));
 
   /* 语义圆角（wrapper 层） */
   --radius-block: 10px;
