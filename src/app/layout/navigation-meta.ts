@@ -50,6 +50,15 @@ const registry: NavigationMetaItem[] = [
     slotGroup: null,
   },
   {
+    iconKey: 'TeamOutlined',
+    key: '/admin/users',
+    label: '用户管理',
+    navMode: 'rail',
+    path: '/admin/users',
+    primaryAccessGroup: 'ADMIN',
+    slotGroup: null,
+  },
+  {
     children: [
       {
         iconKey: 'LockOutlined',

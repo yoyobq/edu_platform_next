@@ -1,5 +1,8 @@
 // src/features/auth/index.ts
 
+export type { AuthAccessGroup } from '@/shared/auth-access';
+export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/shared/auth-access';
+
 import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
@@ -21,7 +24,6 @@ export {
   useAuthSessionState,
 } from './application/session-store';
 export type {
-  AuthAccessGroup,
   AuthLoginInput,
   AuthPendingSession,
   AuthSessionIdentity,

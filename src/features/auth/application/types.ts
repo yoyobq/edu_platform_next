@@ -1,8 +1,10 @@
 // src/features/auth/application/types.ts
 
-export const AUTH_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'REGISTRANT', 'STAFF', 'STUDENT'] as const;
+import type { AuthAccessGroup } from '@/shared/auth-access';
 
-export type AuthAccessGroup = (typeof AUTH_ACCESS_GROUPS)[number];
+export type { AuthAccessGroup } from '@/shared/auth-access';
+export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/shared/auth-access';
+
 export type AuthSlotGroup = string;
 
 export type AuthSessionIdentity =
@@ -86,10 +88,6 @@ export type AuthLoginInput = {
   loginPassword: string;
   type: 'PASSWORD';
 };
-
-export function isAuthAccessGroup(value: unknown): value is AuthAccessGroup {
-  return typeof value === 'string' && (AUTH_ACCESS_GROUPS as readonly string[]).includes(value);
-}
 
 export function isAuthPendingSession(
   value: AuthStoredSession | AuthPendingSession | null | undefined,

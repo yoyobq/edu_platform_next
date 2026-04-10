@@ -9,6 +9,7 @@ import {
   LockOutlined,
   RightOutlined,
   SendOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 import { Menu, Tooltip } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
@@ -24,6 +25,7 @@ const ICON_MAP: Record<string, React.ComponentType> = {
   HomeOutlined,
   LockOutlined,
   SendOutlined,
+  TeamOutlined,
 };
 
 function resolveIcon(iconKey: string): React.ReactNode {

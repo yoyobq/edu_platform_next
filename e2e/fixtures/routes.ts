@@ -1,4 +1,5 @@
 export const routes = {
+  adminUsers: '/admin/users',
   forgotPassword: '/forgot-password',
   home: '/',
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>

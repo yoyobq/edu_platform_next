@@ -29,6 +29,7 @@ This directory contains project documentation.
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想统一表单值、URL search params、筛选条件的空值与 normalize 语义时，先看 [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
 - 想统一业务入口 path、`redirect`、筛选 query 等 URL 语义时，先看 [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
+- 想确认 `admin` 用户列表当前的路由、分层、列表字段和展示边界时，先看 [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - 想确认当前身份、授权摘要、会话恢复以及 protected route 前置续期边界时，先看 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - 想确认 `shared/graphql` 与 `auth` 的运行时边界、主动/兜底续期、请求鉴权语义与会话失效跳转时，先看 [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
@@ -69,6 +70,7 @@ This directory contains project documentation.
 
 - [../plans/graphql-ingress-followup.md](../plans/graphql-ingress-followup.md)
 - [../plans/graphql-error-model-followup.md](../plans/graphql-error-model-followup.md)
+- [../plans/admin-user-list-followup.md](../plans/admin-user-list-followup.md)
 - [../plans/layout-plan.md](../plans/layout-plan.md) - 当前 layout 计划与壳层能力演进
 - [../plans/identity-access-model-followup.md](../plans/identity-access-model-followup.md)
 - [../plans/public-auth-flows-explain.md](../plans/public-auth-flows-explain.md)
@@ -79,6 +81,7 @@ This directory contains project documentation.
 
 ## Project Convention Docs
 
+- [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
 - [project-convention/graphql-error-model.md](./project-convention/graphql-error-model.md)
 - [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
@@ -127,6 +130,7 @@ docs/
   sandbox-rules.md
   testing.md
   project-convention/
+    admin-user-list.md
     e2e-test-groups.md
     form-input-normalization.md
     graphql-error-model.md

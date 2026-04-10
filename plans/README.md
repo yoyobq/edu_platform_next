@@ -82,6 +82,7 @@ plan 不负责定义稳定规则。
 
 ## 当前计划
 
+- [admin-user-list-followup.md](./admin-user-list-followup.md)
 - [graphql-ingress-followup.md](./graphql-ingress-followup.md)
 - [graphql-error-model-followup.md](./graphql-error-model-followup.md)
 - [layout-plan.md](./layout-plan.md) - 当前 layout 计划与壳层能力演进

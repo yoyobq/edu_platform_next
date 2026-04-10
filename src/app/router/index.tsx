@@ -13,6 +13,7 @@ import {
 
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
+import { AdminUsersPage } from '@/pages/admin-users';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
@@ -199,6 +200,24 @@ async function protectedWorkbenchLoader({ request }: LoaderFunctionArgs) {
   await ensureAuthenticatedSession(request);
 
   return null;
+}
+
+async function adminUsersLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  if (!hasAdminAccess(snapshot)) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    isForbidden: false,
+  };
 }
 
 async function welcomeLoader({ request }: LoaderFunctionArgs) {
@@ -468,6 +487,11 @@ const router = createBrowserRouter([
         path: '/welcome',
         loader: welcomeLoader,
         Component: WelcomePage,
+      },
+      {
+        path: '/admin/users',
+        loader: adminUsersLoader,
+        Component: AdminUsersPage,
       },
       {
         path: '/labs',
