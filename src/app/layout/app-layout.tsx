@@ -42,7 +42,6 @@ import { EntrySidecar } from './entry-sidecar';
 import { NavSidebar } from './nav-sidebar';
 import {
   getNavigationItems,
-  hasAdminNavigationAccess,
   hasPayloadCryptoNavigationAccess,
   resolveNavMode,
 } from './navigation-meta';
@@ -99,7 +98,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     setMode: setNavMode,
   } = useNavCapability();
 
-  // Activate nav mode based on effective admin access when session becomes authenticated.
+  // Activate nav mode based on effective navigation access when session becomes authenticated.
   useEffect(() => {
     if (authSession.status === 'authenticated' && activeSnapshot) {
       const baseMode = resolveNavMode({
@@ -110,9 +109,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           ? 'full'
           : baseMode;
       if (navMode === 'none' && targetMode !== 'none') {
-        setNavMode(targetMode, {
-          preservePinnedPreference: targetMode === 'rail' && prefersPinnedFull,
-        });
+        setNavMode(targetMode);
       }
     }
 
@@ -287,14 +284,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const currentIdentity = isSessionResolving
     ? '同步中'
     : activeSnapshot?.primaryAccessGroup.toLowerCase() || 'guest';
-  const hasAdminAccess = hasAdminNavigationAccess({
-    accessGroup: activeSnapshot?.userInfo.accessGroup,
-  });
   const hasSidebar =
-    authSession.status === 'authenticated' &&
-    hasAdminAccess &&
-    navMode !== 'none' &&
-    navItems.length > 0;
+    authSession.status === 'authenticated' && navMode !== 'none' && navItems.length > 0;
 
   // Top bar menu items — only built when sidebar is not active.
   const menuItems: ItemType[] = hasSidebar
