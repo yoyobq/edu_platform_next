@@ -25,6 +25,7 @@ This directory contains project documentation.
 - 想确认颜色、圆角、间距、排版的视觉基准与 token 约定时，先看 [ui-design/README.md](./ui-design/README.md)
 - 想明确间距档位在各结构层级的具体用法与节奏规则时，先看 [ui-design/spacing.md](./ui-design/spacing.md)
 - 想快速判断什么时候该用页面、抽屉、弹窗、Popover、Popconfirm、Tooltip 等交互容器，或判断确认边界与反馈形式时，先看 [ui-design/ux-guidelines.md](./ui-design/ux-guidelines.md)
+- 想参考外部 UI 风格、判断哪些风格能被局部吸收以及适用边界时，再看 [ui-design/inspirations/README.md](./ui-design/inspirations/README.md)
 - 想新增或修改 `labs` 功能时，先看 [labs-rules.md](./labs-rules.md)
 - 想新增或修改 `sandbox` 原型时，先看 [sandbox-rules.md](./sandbox-rules.md)
 - 想统一表单值、URL search params、筛选条件的空值与 normalize 语义时，先看 [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
@@ -64,6 +65,7 @@ This directory contains project documentation.
 ## Reference Docs
 
 - [layout-ideas.md](./layout-ideas.md)
+- [ui-design/inspirations/README.md](./ui-design/inspirations/README.md)
 - [backend/README.md](./backend/README.md)
 
 ## Plans
@@ -123,6 +125,16 @@ docs/
     decisions.md
     templates.md
   ui-stack-rules.md
+  ui-design/
+    README.md
+    inspirations/
+      README.md
+      IBM.md
+      claude.md
+      framer.md
+      linear.md
+      notion.md
+      stripe.md
   labs-rules.md
   layer-model.md
   open-decisions.md
