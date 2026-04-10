@@ -5,7 +5,7 @@ test('宽屏下打开入口面板后，主内容区应收缩避让', async ({ pa
   await page.setViewportSize({ width: 1440, height: 960 });
   await openHome(page);
 
-  const contentColumn = page.locator('[data-main-width-band] > .mx-auto.max-w-7xl.pt-6').first();
+  const contentColumn = page.locator('[data-layout-slot="main-content-column"]').first();
   const beforeColumnBox = await contentColumn.boundingBox();
 
   await openEntrySidecar(page);
@@ -22,7 +22,7 @@ test('窄屏下打开入口面板后，主内容区不应被挤压', async ({ pa
   await page.setViewportSize({ width: 680, height: 900 });
   await openHome(page);
 
-  const contentColumn = page.locator('[data-main-width-band] > .mx-auto.max-w-7xl.pt-6').first();
+  const contentColumn = page.locator('[data-layout-slot="main-content-column"]').first();
   const beforeColumnBox = await contentColumn.boundingBox();
 
   await openEntrySidecar(page);

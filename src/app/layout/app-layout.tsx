@@ -463,12 +463,13 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 <NavSidebar items={navItems} />
               </Layout.Sider>
             )}
-            <Layout.Content style={{ padding: '0 24px 32px' }}>
+            <Layout.Content style={{ padding: '16px 24px 32px' }}>
               <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                 <Flex
                   vertical
                   gap={mainWidthBand === 'compact' ? 16 : 24}
-                  className="mx-auto max-w-7xl pt-6 transition-[gap]"
+                  data-layout-slot="main-content-column"
+                  className="mx-auto max-w-7xl transition-[gap]"
                 >
                   {isLabsRoute ? (
                     <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
