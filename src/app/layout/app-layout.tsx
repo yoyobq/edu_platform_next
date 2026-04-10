@@ -351,7 +351,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           <Layout.Header
             style={{
               background: 'var(--color-bg-container)',
-              borderBottom: '1px solid rgba(15, 23, 42, 0.08)',
+              borderBottom: '1px solid var(--ant-color-border-secondary)',
               paddingInline: 0,
               height: 'auto',
               lineHeight: 'normal',
@@ -455,7 +455,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
                 style={{
                   background: 'var(--color-bg-container)',
-                  borderRight: '1px solid rgba(15, 23, 42, 0.08)',
+                  borderRight: '1px solid var(--ant-color-border-secondary)',
                   overflow: 'visible',
                   position: 'relative',
                 }}

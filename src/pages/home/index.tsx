@@ -132,7 +132,10 @@ function HomeModuleCard({
   }
 
   return (
-    <Card styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16, height: '100%' } }}>
+    <Card
+      hoverable
+      styles={{ body: { display: 'flex', flexDirection: 'column', gap: 16, height: '100%' } }}
+    >
       <div className="flex flex-col gap-3">
         <Flex align="center" justify="space-between" gap={12} wrap>
           <Typography.Title level={5} style={{ marginBottom: 0 }}>

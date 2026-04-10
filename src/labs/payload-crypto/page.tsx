@@ -323,7 +323,7 @@ export function PayloadCryptoLabPage() {
                 style={{ fontFamily: 'monospace' }}
               />
               {showPasteOverlay ? (
-                <div className="absolute inset-0 flex items-center justify-center rounded-lg border border-dashed border-black/10 bg-white/72 p-4 backdrop-blur-[1px]">
+                <div className="absolute inset-0 flex items-center justify-center rounded-card border border-dashed border-border bg-bg-container/72 p-4 backdrop-blur-[1px]">
                   <div className="flex flex-col items-center gap-2 text-center">
                     <button
                       aria-label="点击粘贴载荷"

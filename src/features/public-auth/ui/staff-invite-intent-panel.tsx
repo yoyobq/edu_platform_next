@@ -99,7 +99,7 @@ function InviteStepBar({ activeIndex }: { activeIndex: number }) {
                       ? '2px solid var(--ant-color-primary)'
                       : '1.5px solid var(--ant-color-border)',
                   color: isDone
-                    ? '#fff'
+                    ? 'var(--ant-color-white)'
                     : isActive
                       ? 'var(--ant-color-primary)'
                       : 'var(--ant-color-text-quaternary)',
