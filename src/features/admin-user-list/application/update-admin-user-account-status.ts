@@ -1,7 +1,7 @@
 import type { AdminUserAccountStatus } from './get-admin-users';
 
 export type UpdateAdminUserAccountStatusInput = {
-  accountId: number;
+  accountIds: readonly number[];
   status: AdminUserAccountStatus;
 };
 

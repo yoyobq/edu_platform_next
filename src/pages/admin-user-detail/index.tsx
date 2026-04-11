@@ -1,12 +1,12 @@
 import { Typography } from 'antd';
 import { useLoaderData, useParams } from 'react-router';
 
-import { AdminUserDetailPageContent } from '@/features/admin-user-detail';
+import { AdminUserDetailPageContent, requestAdminUserDetail } from '@/features/admin-user-detail';
 
 export function AdminUserDetailPage() {
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
   const { id = '' } = useParams();
-  const accountId = Number.parseInt(id, 10);
+  const accountId = /^\d+$/.test(id) ? Number(id) : Number.NaN;
 
   if (loaderData?.isForbidden) {
     return (
@@ -30,5 +30,5 @@ export function AdminUserDetailPage() {
     );
   }
 
-  return <AdminUserDetailPageContent accountId={accountId} />;
+  return <AdminUserDetailPageContent accountId={accountId} loadDetail={requestAdminUserDetail} />;
 }

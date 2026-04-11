@@ -52,15 +52,18 @@ src/features/admin-user-list/
 - 默认排序固定为：
   - `sortBy = id`
   - `sortOrder = DESC`
+- 默认筛选固定为：
+  - `hasStaff = true`
 - 前端只允许以下排序字段：
   - `id`
   - `createdAt`
   - `loginName`
-- `hasStaff` 采用三态语义：
-  - 未设置
-  - `true`
-  - `false`
+- 当前筛选控件只暴露以下两档：
+  - `true`：仅看 `staff`
+  - `false`：仅看无 `staff`
 - 搜索、筛选变化时，列表重置到第一页
+- 已应用的搜索、筛选、分页、排序同步到 URL search params
+- 从列表进入详情页、再返回列表时，应保留当前 search params 上下文
 
 ## 当前列表字段
 
@@ -71,16 +74,20 @@ src/features/admin-user-list/
 3. 姓名
 4. 访问组
 5. 账户状态
-6. 创建时间
+6. 在职状态
+7. 创建时间
 
 补充约定：
 
 - `账户 ID` 支持排序，并作为当前默认排序列
 - `工号` 对应 `staff.id`
 - `姓名` 对应 `staff.name`
+- `在职状态` 对应 `staff.employmentStatus`
 - `staff = null` 时，`工号` 与 `姓名` 显示为 `—`
+- `staff = null` 时，`在职状态` 显示为 `—`
 - `访问组` 与状态类字段使用 `Tag`
 - `创建时间` 不直接输出原始时间串，列表中按本地时间显示到“分”
+- `账户状态` 与 `在职状态` 当前都支持单条快捷修改与多选批量修改
 
 以下字段当前不放在列表内，应留给后续详情页承接：
 
@@ -91,7 +98,6 @@ src/features/admin-user-list/
 - 职务
 - staff 部门 ID
 - user state
-- staff 在职状态
 - 其他补充字段
 
 ## 详情页衔接

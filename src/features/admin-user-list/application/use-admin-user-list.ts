@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { requestAdminUsers } from '../infrastructure/admin-user-list-api';
-
 import type {
   AdminUserAccountStatus,
+  AdminUserEmploymentStatus,
   AdminUserListQuery,
   AdminUserListResult,
 } from './get-admin-users';
+
+export type AdminUserListLoader = (criteria: AdminUserListQuery) => Promise<AdminUserListResult>;
 
 type AdminUserListState = {
   errorMessage: string | null;
@@ -22,8 +23,15 @@ const INITIAL_STATE: AdminUserListState = {
   result: null,
 };
 
-export function useAdminUserList(criteria: AdminUserListQuery): {
-  applyAccountStatusUpdate: (accountId: number, status: AdminUserAccountStatus) => void;
+export function useAdminUserList(
+  criteria: AdminUserListQuery,
+  loadUsers: AdminUserListLoader,
+): {
+  applyAccountStatusUpdate: (accountIds: readonly number[], status: AdminUserAccountStatus) => void;
+  applyStaffEmploymentStatusUpdate: (
+    accountIds: readonly number[],
+    employmentStatus: AdminUserEmploymentStatus,
+  ) => void;
   errorMessage: string | null;
   hasLoaded: boolean;
   isLoading: boolean;
@@ -44,7 +52,7 @@ export function useAdminUserList(criteria: AdminUserListQuery): {
       }));
 
       try {
-        const result = await requestAdminUsers(criteria);
+        const result = await loadUsers(criteria);
 
         if (!isActive) {
           return;
@@ -76,14 +84,16 @@ export function useAdminUserList(criteria: AdminUserListQuery): {
     return () => {
       isActive = false;
     };
-  }, [criteria, refreshKey]);
+  }, [criteria, loadUsers, refreshKey]);
 
   const retry = useCallback(() => {
     setRefreshKey((currentValue) => currentValue + 1);
   }, []);
 
   const applyAccountStatusUpdate = useCallback(
-    (accountId: number, status: AdminUserAccountStatus) => {
+    (accountIds: readonly number[], status: AdminUserAccountStatus) => {
+      const targetIds = new Set(accountIds);
+
       setState((currentState) => {
         if (!currentState.result) {
           return currentState;
@@ -94,7 +104,7 @@ export function useAdminUserList(criteria: AdminUserListQuery): {
           result: {
             ...currentState.result,
             list: currentState.result.list.map((item) =>
-              item.account.id === accountId
+              targetIds.has(item.account.id)
                 ? {
                     ...item,
                     account: {
@@ -111,8 +121,40 @@ export function useAdminUserList(criteria: AdminUserListQuery): {
     [],
   );
 
+  const applyStaffEmploymentStatusUpdate = useCallback(
+    (accountIds: readonly number[], employmentStatus: AdminUserEmploymentStatus) => {
+      const targetIds = new Set(accountIds);
+
+      setState((currentState) => {
+        if (!currentState.result) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          result: {
+            ...currentState.result,
+            list: currentState.result.list.map((item) =>
+              targetIds.has(item.account.id) && item.staff
+                ? {
+                    ...item,
+                    staff: {
+                      ...item.staff,
+                      employmentStatus,
+                    },
+                  }
+                : item,
+            ),
+          },
+        };
+      });
+    },
+    [],
+  );
+
   return {
     applyAccountStatusUpdate,
+    applyStaffEmploymentStatusUpdate,
     errorMessage: state.errorMessage,
     hasLoaded: state.hasLoaded,
     isLoading: state.isLoading,

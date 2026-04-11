@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { type Key, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -7,6 +7,7 @@ import {
   Flex,
   Input,
   message,
+  Popover,
   Select,
   Skeleton,
   Table,
@@ -14,27 +15,51 @@ import {
   Typography,
 } from 'antd';
 import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
-import { Link } from 'react-router';
+import { Link, useLocation, useSearchParams } from 'react-router';
 
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
 import {
   ADMIN_USER_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_ACCOUNT_STATUSES,
+  ADMIN_USER_EMPLOYMENT_STATUS_LABELS,
+  ADMIN_USER_EMPLOYMENT_STATUSES,
   ADMIN_USER_SORT_FIELDS,
   type AdminUserAccountStatus,
+  type AdminUserEmploymentStatus,
   type AdminUserListItem,
   type AdminUserListQuery,
   type AdminUserSortField,
   type AdminUserSortOrder,
   DEFAULT_ADMIN_USER_LIST_QUERY,
+  normalizeAdminUserListQuery,
 } from '../application/get-admin-users';
-import { useAdminUserList } from '../application/use-admin-user-list';
-import { requestAdminUserAccountStatusUpdate } from '../infrastructure/admin-user-list-api';
+import type {
+  UpdateAdminUserAccountStatusInput,
+  UpdateAdminUserAccountStatusResult,
+} from '../application/update-admin-user-account-status';
+import type {
+  UpdateAdminUserStaffEmploymentStatusInput,
+  UpdateAdminUserStaffEmploymentStatusResult,
+} from '../application/update-admin-user-staff-employment-status';
+import { type AdminUserListLoader, useAdminUserList } from '../application/use-admin-user-list';
 
 import { AccountStatusQuickSwitch } from './account-status-quick-switch';
+import { StaffEmploymentStatusQuickSwitch } from './staff-employment-status-quick-switch';
 
-type HasStaffFilterValue = 'all' | 'true' | 'false';
+type HasStaffFilterValue = 'true' | 'false';
+type AdminUserAccountStatusUpdater = (
+  input: UpdateAdminUserAccountStatusInput,
+) => Promise<UpdateAdminUserAccountStatusResult>;
+type AdminUserStaffEmploymentStatusUpdater = (
+  input: UpdateAdminUserStaffEmploymentStatusInput,
+) => Promise<UpdateAdminUserStaffEmploymentStatusResult>;
+
+type AdminUserListPageContentProps = {
+  loadUsers: AdminUserListLoader;
+  updateAccountStatus: AdminUserAccountStatusUpdater;
+  updateStaffEmploymentStatus: AdminUserStaffEmploymentStatusUpdater;
+};
 
 const DEFAULT_QUERY = DEFAULT_ADMIN_USER_LIST_QUERY;
 
@@ -46,6 +71,11 @@ const ACCOUNT_STATUS_OPTIONS = ADMIN_USER_ACCOUNT_STATUSES.map((status) => ({
 const ACCESS_GROUP_OPTIONS = AUTH_ACCESS_GROUPS.map((accessGroup) => ({
   label: accessGroup,
   value: accessGroup,
+}));
+
+const ACCOUNT_STATUS_BULK_OPTIONS = ADMIN_USER_ACCOUNT_STATUSES.map((status) => ({
+  label: ADMIN_USER_ACCOUNT_STATUS_LABELS[status],
+  value: status,
 }));
 
 function formatDateTimeToMinute(value: string) {
@@ -73,16 +103,8 @@ function fromSorterOrder(value: 'ascend' | 'descend' | null | undefined): AdminU
   return value === 'ascend' ? 'ASC' : 'DESC';
 }
 
-function normalizeHasStaff(value: HasStaffFilterValue): boolean | undefined {
-  if (value === 'true') {
-    return true;
-  }
-
-  if (value === 'false') {
-    return false;
-  }
-
-  return undefined;
+function normalizeHasStaff(value: HasStaffFilterValue): boolean {
+  return value === 'true';
 }
 
 function resolveFilterSummary(criteria: AdminUserListQuery) {
@@ -113,22 +135,260 @@ function isSortField(value: unknown): value is AdminUserSortField {
   return ADMIN_USER_SORT_FIELDS.includes(value as AdminUserSortField);
 }
 
-export function AdminUserListPageContent() {
+function parseHasStaffSearchParam(value: string | null): boolean | undefined {
+  if (value === 'true') {
+    return true;
+  }
+
+  if (value === 'false') {
+    return false;
+  }
+
+  return undefined;
+}
+
+function parseAccessGroupsSearchParams(searchParams: URLSearchParams): readonly AuthAccessGroup[] {
+  return searchParams
+    .getAll('accessGroup')
+    .filter((value): value is AuthAccessGroup =>
+      AUTH_ACCESS_GROUPS.includes(value as AuthAccessGroup),
+    );
+}
+
+function buildAdminUserListSearchParams(criteria: AdminUserListQuery) {
+  const normalizedCriteria = normalizeAdminUserListQuery({
+    ...DEFAULT_QUERY,
+    ...criteria,
+  });
+  const nextSearchParams = new URLSearchParams();
+
+  if (normalizedCriteria.query) {
+    nextSearchParams.set('query', normalizedCriteria.query);
+  }
+
+  if (normalizedCriteria.status) {
+    nextSearchParams.set('status', normalizedCriteria.status);
+  }
+
+  for (const accessGroup of normalizedCriteria.accessGroups ?? []) {
+    nextSearchParams.append('accessGroup', accessGroup);
+  }
+
+  nextSearchParams.set('hasStaff', normalizedCriteria.hasStaff === false ? 'false' : 'true');
+  nextSearchParams.set('limit', String(normalizedCriteria.limit ?? DEFAULT_QUERY.limit));
+  nextSearchParams.set('page', String(normalizedCriteria.page ?? DEFAULT_QUERY.page));
+  nextSearchParams.set('sortBy', normalizedCriteria.sortBy ?? DEFAULT_QUERY.sortBy);
+  nextSearchParams.set('sortOrder', normalizedCriteria.sortOrder ?? DEFAULT_QUERY.sortOrder);
+
+  return nextSearchParams;
+}
+
+function parseAdminUserListQuery(searchParams: URLSearchParams): AdminUserListQuery {
+  return normalizeAdminUserListQuery({
+    ...DEFAULT_QUERY,
+    accessGroups: parseAccessGroupsSearchParams(searchParams),
+    hasStaff: parseHasStaffSearchParam(searchParams.get('hasStaff')) ?? DEFAULT_QUERY.hasStaff,
+    limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : DEFAULT_QUERY.limit,
+    page: searchParams.get('page') ? Number(searchParams.get('page')) : DEFAULT_QUERY.page,
+    query: searchParams.get('query') ?? undefined,
+    sortBy: (searchParams.get('sortBy') as AdminUserSortField | null) ?? DEFAULT_QUERY.sortBy,
+    sortOrder:
+      (searchParams.get('sortOrder') as AdminUserSortOrder | null) ?? DEFAULT_QUERY.sortOrder,
+    status: searchParams.get('status') as AdminUserAccountStatus | undefined,
+  });
+}
+
+function BulkActionPopover<T extends string>({
+  actionLabel,
+  count,
+  disabled = false,
+  loading = false,
+  onSelect,
+  options,
+  summary,
+}: {
+  actionLabel: string;
+  count: number;
+  disabled?: boolean;
+  loading?: boolean;
+  onSelect: (value: T) => void;
+  options: readonly { label: string; value: T }[];
+  summary: string;
+}) {
+  const content = (
+    <div className="flex max-w-72 flex-col gap-3">
+      <Typography.Text strong>{actionLabel}</Typography.Text>
+      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+        {summary}
+      </Typography.Text>
+      <div className="flex flex-wrap gap-2">
+        {options.map((option) => (
+          <Button
+            key={option.value}
+            size="small"
+            disabled={loading}
+            onClick={() => onSelect(option.value)}
+          >
+            {option.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <Popover trigger="click" placement="bottomLeft" content={content}>
+      <Button disabled={disabled} loading={loading}>
+        {actionLabel}
+        {count > 0 ? ` (${count})` : ''}
+      </Button>
+    </Popover>
+  );
+}
+
+export function AdminUserListPageContent({
+  loadUsers,
+  updateAccountStatus,
+  updateStaffEmploymentStatus,
+}: AdminUserListPageContentProps) {
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const criteria = useMemo(() => parseAdminUserListQuery(searchParams), [searchParams]);
   const [messageApi, messageContextHolder] = message.useMessage();
   const [draftQuery, setDraftQuery] = useState('');
   const [draftStatus, setDraftStatus] = useState<AdminUserAccountStatus | undefined>(undefined);
   const [draftAccessGroups, setDraftAccessGroups] = useState<readonly AuthAccessGroup[]>([]);
-  const [draftHasStaff, setDraftHasStaff] = useState<HasStaffFilterValue>('all');
-  const [criteria, setCriteria] = useState<AdminUserListQuery>(DEFAULT_QUERY);
-  const [statusUpdateErrorMessage, setStatusUpdateErrorMessage] = useState<string | null>(null);
-  const [updatingAccountId, setUpdatingAccountId] = useState<number | null>(null);
-  const { applyAccountStatusUpdate, errorMessage, hasLoaded, isLoading, result, retry } =
-    useAdminUserList(criteria);
+  const [draftHasStaff, setDraftHasStaff] = useState<HasStaffFilterValue>('true');
+  const [accountStatusUpdateErrorMessage, setAccountStatusUpdateErrorMessage] = useState<
+    string | null
+  >(null);
+  const [staffEmploymentStatusUpdateErrorMessage, setStaffEmploymentStatusUpdateErrorMessage] =
+    useState<string | null>(null);
+  const [selectedAccountIds, setSelectedAccountIds] = useState<readonly number[]>([]);
+  const [updatingAccountStatusIds, setUpdatingAccountStatusIds] = useState<readonly number[]>([]);
+  const [updatingStaffEmploymentStatusIds, setUpdatingStaffEmploymentStatusIds] = useState<
+    readonly number[]
+  >([]);
+  const {
+    applyAccountStatusUpdate,
+    applyStaffEmploymentStatusUpdate,
+    errorMessage,
+    hasLoaded,
+    isLoading,
+    result,
+    retry,
+  } = useAdminUserList(criteria, loadUsers);
 
   const filterSummary = useMemo(() => resolveFilterSummary(criteria), [criteria]);
   const totalCount = result?.total ?? 0;
   const currentPage = result?.current ?? criteria.page ?? DEFAULT_QUERY.page;
   const pageSize = result?.pageSize ?? criteria.limit ?? DEFAULT_QUERY.limit;
+  const currentList = useMemo(() => result?.list ?? [], [result]);
+  const selectedAccountIdSet = useMemo(() => new Set(selectedAccountIds), [selectedAccountIds]);
+  const selectedRecords = useMemo(
+    () => currentList.filter((item) => selectedAccountIdSet.has(item.account.id)),
+    [currentList, selectedAccountIdSet],
+  );
+  const selectedCount = selectedRecords.length;
+  const canBulkUpdateStaff =
+    selectedCount > 0 && selectedRecords.every((record) => record.staff !== null);
+  const isAnyStatusUpdateRunning =
+    updatingAccountStatusIds.length > 0 || updatingStaffEmploymentStatusIds.length > 0;
+
+  useEffect(() => {
+    const availableIds = new Set(currentList.map((item) => item.account.id));
+    setSelectedAccountIds((currentSelectedAccountIds) =>
+      currentSelectedAccountIds.filter((accountId) => availableIds.has(accountId)),
+    );
+  }, [currentList]);
+
+  useEffect(() => {
+    setDraftQuery(criteria.query ?? '');
+    setDraftStatus(criteria.status);
+    setDraftAccessGroups(criteria.accessGroups ?? []);
+    setDraftHasStaff(criteria.hasStaff === false ? 'false' : 'true');
+  }, [criteria]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedAccountIds([]);
+  }, []);
+
+  const commitAccountStatusChange = useCallback(
+    async (accountIds: readonly number[], nextStatus: AdminUserAccountStatus) => {
+      if (accountIds.length === 0) {
+        return false;
+      }
+
+      setAccountStatusUpdateErrorMessage(null);
+      setUpdatingAccountStatusIds(accountIds);
+
+      try {
+        const mutationResult = await updateAccountStatus({
+          accountIds,
+          status: nextStatus,
+        });
+        applyAccountStatusUpdate(accountIds, mutationResult.accounts[0]?.status ?? nextStatus);
+        void messageApi.success({
+          content:
+            accountIds.length === 1
+              ? `已将账户 ${accountIds[0]} 更新为${ADMIN_USER_ACCOUNT_STATUS_LABELS[nextStatus]}`
+              : `已将 ${accountIds.length} 个账户更新为${ADMIN_USER_ACCOUNT_STATUS_LABELS[nextStatus]}`,
+          duration: 2,
+        });
+        return true;
+      } catch (error) {
+        setAccountStatusUpdateErrorMessage(
+          error instanceof Error ? error.message : '账户状态更新失败。',
+        );
+        return false;
+      } finally {
+        setUpdatingAccountStatusIds([]);
+      }
+    },
+    [applyAccountStatusUpdate, messageApi, updateAccountStatus],
+  );
+
+  const commitStaffEmploymentStatusChange = useCallback(
+    async (records: readonly AdminUserListItem[], nextStatus: AdminUserEmploymentStatus) => {
+      const staffRecords = records.filter((record) => record.staff);
+
+      if (staffRecords.length === 0) {
+        return false;
+      }
+
+      const accountIds = staffRecords.map((record) => record.account.id);
+
+      setStaffEmploymentStatusUpdateErrorMessage(null);
+      setUpdatingStaffEmploymentStatusIds(accountIds);
+
+      try {
+        const mutationResult = await updateStaffEmploymentStatus({
+          accountIds,
+          employmentStatus: nextStatus,
+        });
+        applyStaffEmploymentStatusUpdate(
+          accountIds,
+          mutationResult.staffs[0]?.employmentStatus ?? nextStatus,
+        );
+        void messageApi.success({
+          content:
+            staffRecords.length === 1
+              ? `已将 staff ${staffRecords[0].staff?.id} 更新为${ADMIN_USER_EMPLOYMENT_STATUS_LABELS[nextStatus]}`
+              : `已将 ${staffRecords.length} 个 staff 更新为${ADMIN_USER_EMPLOYMENT_STATUS_LABELS[nextStatus]}`,
+          duration: 2,
+        });
+        return true;
+      } catch (error) {
+        setStaffEmploymentStatusUpdateErrorMessage(
+          error instanceof Error ? error.message : '在职状态更新失败。',
+        );
+        return false;
+      } finally {
+        setUpdatingStaffEmploymentStatusIds([]);
+      }
+    },
+    [applyStaffEmploymentStatusUpdate, messageApi, updateStaffEmploymentStatus],
+  );
 
   const handleStatusChange = useCallback(
     async (record: AdminUserListItem, nextStatus: AdminUserAccountStatus) => {
@@ -136,29 +396,42 @@ export function AdminUserListPageContent() {
         return;
       }
 
-      setStatusUpdateErrorMessage(null);
-      setUpdatingAccountId(record.account.id);
+      await commitAccountStatusChange([record.account.id], nextStatus);
+    },
+    [commitAccountStatusChange],
+  );
 
-      try {
-        const mutationResult = await requestAdminUserAccountStatusUpdate({
-          accountId: record.account.id,
-          status: nextStatus,
-        });
-        applyAccountStatusUpdate(
-          record.account.id,
-          mutationResult.accounts[0]?.status ?? nextStatus,
-        );
-        void messageApi.success({
-          content: `已将账户 ${record.account.id} 更新为${ADMIN_USER_ACCOUNT_STATUS_LABELS[nextStatus]}`,
-          duration: 2,
-        });
-      } catch (error) {
-        setStatusUpdateErrorMessage(error instanceof Error ? error.message : '账户状态更新失败。');
-      } finally {
-        setUpdatingAccountId(null);
+  const handleStaffEmploymentStatusChange = useCallback(
+    async (record: AdminUserListItem, nextStatus: AdminUserEmploymentStatus) => {
+      if (!record.staff || record.staff.employmentStatus === nextStatus) {
+        return;
+      }
+
+      await commitStaffEmploymentStatusChange([record], nextStatus);
+    },
+    [commitStaffEmploymentStatusChange],
+  );
+
+  const handleBatchAccountStatusChange = useCallback(
+    async (nextStatus: AdminUserAccountStatus) => {
+      const isUpdated = await commitAccountStatusChange(selectedAccountIds, nextStatus);
+
+      if (isUpdated) {
+        clearSelection();
       }
     },
-    [applyAccountStatusUpdate, messageApi],
+    [clearSelection, commitAccountStatusChange, selectedAccountIds],
+  );
+
+  const handleBatchStaffEmploymentStatusChange = useCallback(
+    async (nextStatus: AdminUserEmploymentStatus) => {
+      const isUpdated = await commitStaffEmploymentStatusChange(selectedRecords, nextStatus);
+
+      if (isUpdated) {
+        clearSelection();
+      }
+    },
+    [clearSelection, commitStaffEmploymentStatusChange, selectedRecords],
   );
 
   const columns = useMemo(
@@ -167,7 +440,10 @@ export function AdminUserListPageContent() {
         dataIndex: ['account', 'id'],
         key: 'id',
         render: (value: number) => (
-          <Link className="font-medium" to={`/admin/users/${value}`}>
+          <Link
+            className="font-medium"
+            to={{ pathname: `/admin/users/${value}`, search: location.search }}
+          >
             {value}
           </Link>
         ),
@@ -214,11 +490,34 @@ export function AdminUserListPageContent() {
           <AccountStatusQuickSwitch
             accountId={record.account.id}
             value={value}
-            updating={updatingAccountId === record.account.id}
-            disabled={updatingAccountId !== null && updatingAccountId !== record.account.id}
+            updating={updatingAccountStatusIds.includes(record.account.id)}
+            disabled={
+              isAnyStatusUpdateRunning && !updatingAccountStatusIds.includes(record.account.id)
+            }
             onChange={(nextStatus) => handleStatusChange(record, nextStatus)}
           />
         ),
+      },
+      {
+        dataIndex: ['staff', 'employmentStatus'],
+        key: 'staffEmploymentStatus',
+        title: '在职状态',
+        width: 172,
+        render: (_value: AdminUserEmploymentStatus | null, record: AdminUserListItem) =>
+          record.staff ? (
+            <StaffEmploymentStatusQuickSwitch
+              accountId={record.account.id}
+              value={record.staff.employmentStatus}
+              updating={updatingStaffEmploymentStatusIds.includes(record.account.id)}
+              disabled={
+                isAnyStatusUpdateRunning &&
+                !updatingStaffEmploymentStatusIds.includes(record.account.id)
+              }
+              onChange={(nextStatus) => handleStaffEmploymentStatusChange(record, nextStatus)}
+            />
+          ) : (
+            '—'
+          ),
       },
       {
         dataIndex: ['account', 'createdAt'],
@@ -228,26 +527,49 @@ export function AdminUserListPageContent() {
         render: (value: string) => formatDateTimeToMinute(value),
       },
     ],
-    [criteria.sortBy, criteria.sortOrder, handleStatusChange, updatingAccountId],
+    [
+      criteria.sortBy,
+      criteria.sortOrder,
+      handleStaffEmploymentStatusChange,
+      handleStatusChange,
+      isAnyStatusUpdateRunning,
+      location.search,
+      updatingAccountStatusIds,
+      updatingStaffEmploymentStatusIds,
+    ],
+  );
+
+  const rowSelection = useMemo(
+    () => ({
+      selectedRowKeys: [...selectedAccountIds],
+      onChange: (nextSelectedRowKeys: Key[]) => {
+        setSelectedAccountIds(nextSelectedRowKeys.map((key) => Number(key)));
+      },
+    }),
+    [selectedAccountIds],
   );
 
   function applyFilters() {
-    setCriteria((currentCriteria) => ({
-      ...currentCriteria,
-      accessGroups: draftAccessGroups.length > 0 ? draftAccessGroups : undefined,
-      hasStaff: normalizeHasStaff(draftHasStaff),
-      page: 1,
-      query: draftQuery.trim() || undefined,
-      status: draftStatus,
-    }));
+    clearSelection();
+    setSearchParams(
+      buildAdminUserListSearchParams({
+        ...criteria,
+        accessGroups: draftAccessGroups.length > 0 ? draftAccessGroups : undefined,
+        hasStaff: normalizeHasStaff(draftHasStaff),
+        page: 1,
+        query: draftQuery.trim() || undefined,
+        status: draftStatus,
+      }),
+    );
   }
 
   function resetFilters() {
+    clearSelection();
     setDraftQuery('');
     setDraftStatus(undefined);
     setDraftAccessGroups([]);
-    setDraftHasStaff('all');
-    setCriteria(DEFAULT_QUERY);
+    setDraftHasStaff('true');
+    setSearchParams(buildAdminUserListSearchParams(DEFAULT_QUERY));
   }
 
   function handleTableChange(
@@ -266,13 +588,16 @@ export function AdminUserListPageContent() {
       ? fromSorterOrder(normalizedSorter.order)
       : (criteria.sortOrder ?? DEFAULT_QUERY.sortOrder);
 
-    setCriteria((currentCriteria) => ({
-      ...currentCriteria,
-      limit: pagination.pageSize ?? currentCriteria.limit ?? DEFAULT_QUERY.limit,
-      page: pagination.current ?? currentCriteria.page ?? DEFAULT_QUERY.page,
-      sortBy: nextSortBy,
-      sortOrder: nextSortOrder,
-    }));
+    clearSelection();
+    setSearchParams(
+      buildAdminUserListSearchParams({
+        ...criteria,
+        limit: pagination.pageSize ?? criteria.limit ?? DEFAULT_QUERY.limit,
+        page: pagination.current ?? criteria.page ?? DEFAULT_QUERY.page,
+        sortBy: nextSortBy,
+        sortOrder: nextSortOrder,
+      }),
+    );
   }
 
   return (
@@ -328,7 +653,6 @@ export function AdminUserListPageContent() {
             />
             <Select<HasStaffFilterValue>
               options={[
-                { label: '全部用户', value: 'all' },
                 { label: '仅看 staff', value: 'true' },
                 { label: '仅看无 staff', value: 'false' },
               ]}
@@ -354,17 +678,71 @@ export function AdminUserListPageContent() {
           </Typography.Text>
         }
       >
-        {statusUpdateErrorMessage ? (
+        {accountStatusUpdateErrorMessage ? (
           <Alert
             type="error"
             showIcon
             closable
             message="账户状态更新失败"
-            description={statusUpdateErrorMessage}
+            description={accountStatusUpdateErrorMessage}
             style={{ marginBottom: 16 }}
-            onClose={() => setStatusUpdateErrorMessage(null)}
+            onClose={() => setAccountStatusUpdateErrorMessage(null)}
           />
         ) : null}
+        {staffEmploymentStatusUpdateErrorMessage ? (
+          <Alert
+            type="error"
+            showIcon
+            closable
+            message="在职状态更新失败"
+            description={staffEmploymentStatusUpdateErrorMessage}
+            style={{ marginBottom: 16 }}
+            onClose={() => setStaffEmploymentStatusUpdateErrorMessage(null)}
+          />
+        ) : null}
+        <div className="mb-4 rounded-block border border-border bg-bg-layout px-4 py-3">
+          <Flex align="center" justify="space-between" gap={16} wrap>
+            <Flex vertical gap={2}>
+              <Typography.Text strong>批量操作</Typography.Text>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                当前页已选 {selectedCount} 项，可直接批量修改账户状态或在职状态。
+              </Typography.Text>
+            </Flex>
+            <Flex gap={8} wrap>
+              <BulkActionPopover
+                actionLabel="批量改账户状态"
+                count={selectedCount}
+                disabled={selectedCount === 0 || isAnyStatusUpdateRunning}
+                loading={updatingAccountStatusIds.length > 0}
+                options={ACCOUNT_STATUS_BULK_OPTIONS}
+                summary={`将对当前页选中的 ${selectedCount} 个用户生效。`}
+                onSelect={handleBatchAccountStatusChange}
+              />
+              <BulkActionPopover
+                actionLabel="批量改在职状态"
+                count={selectedCount}
+                disabled={!canBulkUpdateStaff || isAnyStatusUpdateRunning}
+                loading={updatingStaffEmploymentStatusIds.length > 0}
+                options={ADMIN_USER_EMPLOYMENT_STATUSES.map((status) => ({
+                  label: ADMIN_USER_EMPLOYMENT_STATUS_LABELS[status],
+                  value: status,
+                }))}
+                summary={
+                  canBulkUpdateStaff
+                    ? `将对当前页选中的 ${selectedCount} 个 staff 生效。`
+                    : '仅当当前选择全部为 staff 时可批量修改在职状态。'
+                }
+                onSelect={handleBatchStaffEmploymentStatusChange}
+              />
+              <Button
+                onClick={clearSelection}
+                disabled={selectedCount === 0 || isAnyStatusUpdateRunning}
+              >
+                清空选择
+              </Button>
+            </Flex>
+          </Flex>
+        </div>
         {errorMessage ? (
           <Alert
             type="error"
@@ -386,6 +764,7 @@ export function AdminUserListPageContent() {
             dataSource={result?.list ? [...result.list] : []}
             loading={isLoading}
             onChange={handleTableChange}
+            rowSelection={rowSelection}
             pagination={{
               current: currentPage,
               pageSize,

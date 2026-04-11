@@ -1,6 +1,6 @@
 import { type CSSProperties, type ReactNode, useMemo } from 'react';
 import { Alert, Avatar, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
-import { useNavigate } from 'react-router';
+import { useLocation, useNavigate } from 'react-router';
 
 import type {
   AdminUserDetail,
@@ -11,7 +11,10 @@ import {
   ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_DETAIL_USER_STATE_LABELS,
 } from '../application/get-admin-user-detail';
-import { useAdminUserDetail } from '../application/use-admin-user-detail';
+import {
+  type AdminUserDetailLoader,
+  useAdminUserDetail,
+} from '../application/use-admin-user-detail';
 
 type DetailItem = {
   key: string;
@@ -428,9 +431,19 @@ function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[
   ];
 }
 
-export function AdminUserDetailPageContent({ accountId }: { accountId: number }) {
+export function AdminUserDetailPageContent({
+  accountId,
+  loadDetail,
+}: {
+  accountId: number;
+  loadDetail: AdminUserDetailLoader;
+}) {
+  const location = useLocation();
   const navigate = useNavigate();
-  const { errorMessage, hasLoaded, isLoading, result, retry } = useAdminUserDetail(accountId);
+  const { errorMessage, hasLoaded, isLoading, result, retry } = useAdminUserDetail(
+    accountId,
+    loadDetail,
+  );
 
   const accountSections = useMemo(() => (result ? buildAccountSections(result) : []), [result]);
   const userInfoSections = useMemo(() => (result ? buildUserInfoSections(result) : []), [result]);
@@ -460,7 +473,9 @@ export function AdminUserDetailPageContent({ accountId }: { accountId: number })
               区域预留出来，后续再接完整 identity 详情。
             </Typography.Paragraph>
           </div>
-          <Button onClick={() => navigate('/admin/users')}>返回列表</Button>
+          <Button onClick={() => navigate({ pathname: '/admin/users', search: location.search })}>
+            返回列表
+          </Button>
         </Flex>
       </div>
 

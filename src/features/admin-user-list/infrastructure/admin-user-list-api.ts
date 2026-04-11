@@ -19,6 +19,12 @@ import {
   type UpdateAdminUserAccountStatusPort,
   type UpdateAdminUserAccountStatusResult,
 } from '../application/update-admin-user-account-status';
+import {
+  updateAdminUserStaffEmploymentStatus,
+  type UpdateAdminUserStaffEmploymentStatusInput,
+  type UpdateAdminUserStaffEmploymentStatusPort,
+  type UpdateAdminUserStaffEmploymentStatusResult,
+} from '../application/update-admin-user-staff-employment-status';
 
 type AdminUsersQueryResponse = {
   adminUsers: {
@@ -71,8 +77,19 @@ type BatchUpdateAccountStatusResponse = {
 
 type BatchUpdateAccountStatusVariables = {
   input: {
-    accountIds: [number];
+    accountIds: number[];
     status: AdminUserAccountStatus;
+  };
+};
+
+type BatchUpdateStaffEmploymentStatusResponse = {
+  batchUpdateStaffEmploymentStatus: UpdateAdminUserStaffEmploymentStatusResult;
+};
+
+type BatchUpdateStaffEmploymentStatusVariables = {
+  input: {
+    accountIds: number[];
+    employmentStatus: AdminUserEmploymentStatus;
   };
 };
 
@@ -155,11 +172,36 @@ const BATCH_UPDATE_ACCOUNT_STATUS_MUTATION = `
   }
 `;
 
+const BATCH_UPDATE_STAFF_EMPLOYMENT_STATUS_MUTATION = `
+  mutation BatchUpdateStaffEmploymentStatus($input: BatchUpdateStaffEmploymentStatusInput!) {
+    batchUpdateStaffEmploymentStatus(input: $input) {
+      requestedCount
+      updatedCount
+      isUpdated
+      staffs {
+        accountId
+        createdAt
+        departmentId
+        employmentStatus
+        id
+        jobTitle
+        name
+        updatedAt
+      }
+    }
+  }
+`;
+
 function toBatchUpdateAccountStatusVariables(
   input: UpdateAdminUserAccountStatusInput,
 ): BatchUpdateAccountStatusVariables {
-  if (!Number.isInteger(input.accountId) || input.accountId <= 0) {
-    throw new Error('无效的账户 ID。');
+  const accountIds = Array.from(new Set(input.accountIds));
+
+  if (
+    accountIds.length === 0 ||
+    accountIds.some((accountId) => !Number.isInteger(accountId) || accountId <= 0)
+  ) {
+    throw new Error('无效的账户 ID 列表。');
   }
 
   if (!ADMIN_USER_ACCOUNT_STATUSES.includes(input.status)) {
@@ -168,8 +210,28 @@ function toBatchUpdateAccountStatusVariables(
 
   return {
     input: {
-      accountIds: [input.accountId],
+      accountIds,
       status: input.status,
+    },
+  };
+}
+
+function toBatchUpdateStaffEmploymentStatusVariables(
+  input: UpdateAdminUserStaffEmploymentStatusInput,
+): BatchUpdateStaffEmploymentStatusVariables {
+  const accountIds = Array.from(new Set(input.accountIds));
+
+  if (
+    accountIds.length === 0 ||
+    accountIds.some((accountId) => !Number.isInteger(accountId) || accountId <= 0)
+  ) {
+    throw new Error('无效的账户 ID 列表。');
+  }
+
+  return {
+    input: {
+      accountIds,
+      employmentStatus: input.employmentStatus,
     },
   };
 }
@@ -212,10 +274,32 @@ const updateAdminUserAccountStatusPort: UpdateAdminUserAccountStatusPort = {
   },
 };
 
+const updateAdminUserStaffEmploymentStatusPort: UpdateAdminUserStaffEmploymentStatusPort = {
+  async batchUpdateStaffEmploymentStatus(
+    input: UpdateAdminUserStaffEmploymentStatusInput,
+  ): Promise<UpdateAdminUserStaffEmploymentStatusResult> {
+    const response = await executeGraphQL<
+      BatchUpdateStaffEmploymentStatusResponse,
+      BatchUpdateStaffEmploymentStatusVariables
+    >(
+      BATCH_UPDATE_STAFF_EMPLOYMENT_STATUS_MUTATION,
+      toBatchUpdateStaffEmploymentStatusVariables(input),
+    );
+
+    return response.batchUpdateStaffEmploymentStatus;
+  },
+};
+
 export function requestAdminUsers(input: AdminUserListQuery) {
   return getAdminUsers(adminUserListPort, input);
 }
 
 export function requestAdminUserAccountStatusUpdate(input: UpdateAdminUserAccountStatusInput) {
   return updateAdminUserAccountStatus(updateAdminUserAccountStatusPort, input);
+}
+
+export function requestAdminUserStaffEmploymentStatusUpdate(
+  input: UpdateAdminUserStaffEmploymentStatusInput,
+) {
+  return updateAdminUserStaffEmploymentStatus(updateAdminUserStaffEmploymentStatusPort, input);
 }

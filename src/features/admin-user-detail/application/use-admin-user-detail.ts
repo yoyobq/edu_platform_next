@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { requestAdminUserDetail } from '../infrastructure/admin-user-detail-api';
-
 import type { AdminUserDetail } from './get-admin-user-detail';
+
+export type AdminUserDetailLoader = (accountId: number) => Promise<AdminUserDetail>;
 
 type AdminUserDetailState = {
   errorMessage: string | null;
@@ -18,14 +18,14 @@ const INITIAL_STATE: AdminUserDetailState = {
   result: null,
 };
 
-export function useAdminUserDetail(accountId: number) {
+export function useAdminUserDetail(accountId: number, loadDetail: AdminUserDetailLoader) {
   const [state, setState] = useState(INITIAL_STATE);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let isActive = true;
 
-    async function loadDetail() {
+    async function loadDetailData() {
       setState((currentState) => ({
         ...currentState,
         errorMessage: null,
@@ -33,7 +33,7 @@ export function useAdminUserDetail(accountId: number) {
       }));
 
       try {
-        const result = await requestAdminUserDetail(accountId);
+        const result = await loadDetail(accountId);
 
         if (!isActive) {
           return;
@@ -59,12 +59,12 @@ export function useAdminUserDetail(accountId: number) {
       }
     }
 
-    void loadDetail();
+    void loadDetailData();
 
     return () => {
       isActive = false;
     };
-  }, [accountId, refreshKey]);
+  }, [accountId, loadDetail, refreshKey]);
 
   const retry = useCallback(() => {
     setRefreshKey((currentValue) => currentValue + 1);

@@ -1,7 +1,12 @@
 import { Typography } from 'antd';
 import { useLoaderData } from 'react-router';
 
-import { AdminUserListPageContent } from '@/features/admin-user-list';
+import {
+  AdminUserListPageContent,
+  requestAdminUserAccountStatusUpdate,
+  requestAdminUsers,
+  requestAdminUserStaffEmploymentStatusUpdate,
+} from '@/features/admin-user-list';
 
 export function AdminUsersPage() {
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
@@ -17,5 +22,11 @@ export function AdminUsersPage() {
     );
   }
 
-  return <AdminUserListPageContent />;
+  return (
+    <AdminUserListPageContent
+      loadUsers={requestAdminUsers}
+      updateAccountStatus={requestAdminUserAccountStatusUpdate}
+      updateStaffEmploymentStatus={requestAdminUserStaffEmploymentStatusUpdate}
+    />
+  );
 }

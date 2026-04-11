@@ -27,6 +27,11 @@ export const ADMIN_USER_ACCOUNT_STATUS_LABELS: Record<AdminUserAccountStatus, st
   PENDING: '待激活',
   SUSPENDED: '已暂停',
 };
+export const ADMIN_USER_EMPLOYMENT_STATUS_LABELS: Record<AdminUserEmploymentStatus, string> = {
+  ACTIVE: '在职',
+  LEFT: '已离职',
+  SUSPENDED: '已停用',
+};
 
 export type AdminUserListItem = {
   account: {
@@ -76,8 +81,9 @@ export type AdminUserListPort = {
 };
 
 export const DEFAULT_ADMIN_USER_LIST_QUERY: Required<
-  Pick<AdminUserListQuery, 'limit' | 'page' | 'sortBy' | 'sortOrder'>
+  Pick<AdminUserListQuery, 'hasStaff' | 'limit' | 'page' | 'sortBy' | 'sortOrder'>
 > = {
+  hasStaff: true,
   limit: 10,
   page: 1,
   sortBy: 'id',
