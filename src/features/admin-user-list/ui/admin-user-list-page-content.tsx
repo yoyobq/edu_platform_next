@@ -14,6 +14,7 @@ import {
   Typography,
 } from 'antd';
 import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
+import { Link } from 'react-router';
 
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
@@ -165,6 +166,11 @@ export function AdminUserListPageContent() {
       {
         dataIndex: ['account', 'id'],
         key: 'id',
+        render: (value: number) => (
+          <Link className="font-medium" to={`/admin/users/${value}`}>
+            {value}
+          </Link>
+        ),
         sortOrder: criteria.sortBy === 'id' ? toSorterOrder(criteria.sortOrder ?? 'DESC') : null,
         sorter: true,
         title: '账户 ID',

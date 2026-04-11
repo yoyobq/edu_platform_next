@@ -4,7 +4,7 @@
 
 本文件定义当前 `admin` 用户列表的稳定前端约定。
 
-后端字段、筛选参数和返回结构，以 [../backend/admin-user-list-current.md](../backend/admin-user-list-current.md) 与 `schema.graphql` 为准；本文件只收口前端已经落地的页面、分层和展示规则。
+后端字段、筛选参数和返回结构，以 [../backend/admin-user-list-current.md](../backend/admin-user-list-current.md) 与 [../backend/schema.graphql](../backend/schema.graphql) 为准；本文件只收口前端已经落地的页面、分层和展示规则。
 
 ## 路由与权限
 
@@ -93,6 +93,13 @@ src/features/admin-user-list/
 - user state
 - staff 在职状态
 - 其他补充字段
+
+## 详情页衔接
+
+- 后续详情页正式路由固定为 `/admin/users/:id`
+- 列表进入详情页的主入口固定为 `账户 ID` 单元格
+- 不新增独立“详情”列
+- 不采用整行点击进入详情，避免与状态快捷切换等行内操作冲突
 
 ## 页面结构与反馈
 

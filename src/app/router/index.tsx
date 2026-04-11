@@ -13,6 +13,7 @@ import {
 
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
+import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
@@ -492,6 +493,11 @@ const router = createBrowserRouter([
         path: '/admin/users',
         loader: adminUsersLoader,
         Component: AdminUsersPage,
+      },
+      {
+        path: '/admin/users/:id',
+        loader: adminUsersLoader,
+        Component: AdminUserDetailPage,
       },
       {
         path: '/labs',
