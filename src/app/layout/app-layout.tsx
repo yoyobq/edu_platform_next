@@ -38,6 +38,7 @@ import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 import { BrandLockup } from '@/shared/ui/brand';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
+import { EntryAccentGlyph } from './entry-accent-glyph';
 import { EntrySidecar } from './entry-sidecar';
 import { NavSidebar } from './nav-sidebar';
 import {
@@ -513,7 +514,10 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           <div data-overlay-mount="cross-region-visual" />
         </div>
 
-        <div className="fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface">
+        <div
+          className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
+          data-entry-open={isOpen ? 'true' : 'false'}
+        >
           <Button
             ref={triggerRef}
             type={isOpen ? 'default' : 'primary'}
@@ -529,10 +533,10 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             }}
           >
             <div className="flex items-center gap-2">
-              <span className="text-lg">✨</span>
+              <EntryAccentGlyph inverse={!isOpen} />
               <span>开始</span>
               {showShortcutHint ? (
-                <span className="rounded-full border border-current/15 px-2 py-0.5 text-xs text-current/75">
+                <span className="entry-trigger-shortcut rounded-full px-2 py-0.5 text-xs">
                   Alt+K
                 </span>
               ) : null}

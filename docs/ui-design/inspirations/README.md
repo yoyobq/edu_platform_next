@@ -67,7 +67,7 @@
 
 - 状态色同屏密度过高
 - Deep Blue 被大面积平铺做背景
-- Sky Cyan 出现在与 AI 无关的区域
+- Sky Cyan / Claude Coral 出现在与 AI 无关的区域
 
 → 落地模式 B3、F2
 
@@ -453,10 +453,10 @@ AI 响应、文档详情、Markdown 渲染区：
 AI 交互区域必须在视觉上与主业务区分离。当前方案：
 
 - Sidecar 外壳使用 `rounded-surface`（16px）+ `shadow-surface`，圆角和阴影层级均高于主区卡片
-- AI 区的背景可用 `bg-ai-accent-bg`（12% Sky Cyan 混入 `--ant-color-bg-container`），在主容器白底上形成轻微色差
-- AI 相关图标或装饰可用 `text-ai-accent`（即 `#29B8F0`），但禁止用于正文文字（对比度不足 4.5:1）
+- AI 区的背景可用 `bg-ai-accent-bg`（12% Claude Coral 混入 `--ant-color-bg-container`），在主容器白底上形成轻微色差
+- AI 相关图标或装饰可用 `text-ai-accent`（即 `#CC6B46`），禁止用于正文文字（对比度不足 4.5:1）
 
-**Sky Cyan 使用边界**：
+**Claude Coral 使用边界**：
 
 - 允许：图标色、边框装饰线、背景填充（`bg-ai-accent-bg`）、大号标签（≥ 18px 且非唯一信息载体）
 - 禁止：正文文字、与 AI 无关的区域、大面积平铺
@@ -476,7 +476,7 @@ AI 交互区域必须在视觉上与主业务区分离。当前方案：
 | Welcome / 注册完成页     | 轻量背景渐变（Deep Blue 色温方向）+ 一个主记忆点 | 不叠第二个记忆点，不堆图标 |
 | 首页数据大盘（关键指标） | 关键数字大号展示 + 微妙配色背景                  | 仍走 Deep Blue 色温        |
 | 操作成功确认（重大节点） | Checkmark 轻微 scale-up 动效                     | 动效不超过 300ms           |
-| AI 区空状态              | Sky Cyan 色调说明图形 + 主动引导文案             | 只在 Sidecar/AI 区内       |
+| AI 区空状态              | Claude Coral 色调说明图形 + 主动引导文案         | 只在 Sidecar/AI 区内       |
 
 关键数字展示组合（来源：Stripe 指标展示）：
 
@@ -551,8 +551,8 @@ AI 交互区域必须在视觉上与主业务区分离。当前方案：
 以下是落地模式中发现的、当前 `index.css` 尚未覆盖但值得补充的 token。追加到 `@theme inline` 块即可：
 
 ```css
-/* AI 区域边框色（Sky Cyan 20% 混合） */
---color-ai-accent-border: color-mix(in srgb, #29b8f0 25%, var(--ant-color-border));
+/* AI 区域边框色（Claude Coral 25% 混合） */
+--color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 ```
 
 仅此一条。其他所有模式均可用现有 token 实现。
@@ -594,7 +594,7 @@ AI 交互区域必须在视觉上与主业务区分离。当前方案：
 
 **AI 区专项**
 
-- [ ] Sky Cyan 只出现在 AI 交互区（图标、装饰边框、浅背景），不出现在普通业务组件
+- [ ] Claude Coral 只出现在 AI 交互区（图标、装饰边框、浅背景），不出现在普通业务组件
 - [ ] AI 区域用 `rounded-surface` + `shadow-surface`，层级高于主区卡片
 - [ ] `--color-ai-accent` 未用于正文文字
 
@@ -630,7 +630,7 @@ AI 交互区域必须在视觉上与主业务区分离。当前方案：
 - 圆角：`rounded-block` / `rounded-card` / `rounded-surface` / `rounded-badge`，不写 `rounded-lg`
 - 颜色：消费 CSS 变量语义类（`text-text-secondary`、`bg-fill-hover`、`bg-ai-accent-bg`），不写 hex
 - 间距：`p-3/4/6`、`gap-1/2/4/6`，微元素例外见"微调既有规则"
-- `--color-ai-accent`：禁止用于正文文字
+- `--color-ai-accent`（Claude Coral）：禁止用于正文文字，保持颜色声量克制
 - hover 背景统一 `bg-fill-hover`，不用 `bg-gray-*` 或 `opacity-*`
 - 动画只用两档：hover `transition-colors duration-150`，面板 `transition-all duration-200`
 - 响应式断点：不使用 `sm:`、`md:`、`lg:`、`xl:` 等 Tailwind 断点前缀——项目未提供移动端设计稿，所有断点类无据可依。需要响应式时，通过 JS 感知宽度后条件渲染不同组件或布局

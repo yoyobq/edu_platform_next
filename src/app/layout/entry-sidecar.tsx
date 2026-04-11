@@ -14,6 +14,7 @@ import {
   useSidecarState,
 } from '@/app/providers';
 
+import { EntryAccentGlyph } from './entry-accent-glyph';
 import { useWidthBand } from './use-width-band';
 
 function readZIndexToken(tokenName: string, fallbackValue: number): number {
@@ -65,6 +66,12 @@ function getSidecarSurfaceStyle(sidecarWidth: number): CSSProperties {
   return {
     '--layout-sidecar-width': `${Math.round(sidecarWidth)}px`,
   } as CSSProperties;
+}
+
+function getBubbleContentClassName(message: SessionMessage) {
+  return message.role === 'user'
+    ? 'entry-sidecar-bubble-content-user'
+    : 'entry-sidecar-bubble-content-system';
 }
 
 export function EntrySidecar() {
@@ -130,10 +137,11 @@ export function EntrySidecar() {
       open={isOpen}
       title={
         <div className="flex items-center gap-2">
-          <span className="text-lg">✨</span>
+          <EntryAccentGlyph />
           <span>从这里开始</span>
         </div>
       }
+      rootClassName="entry-sidecar-drawer"
       placement="right"
       mask={false}
       onClose={close}
@@ -150,8 +158,12 @@ export function EntrySidecar() {
       destroyOnHidden={false}
       zIndex={sidecarZIndex}
       styles={{
+        header: { borderBottom: '1px solid var(--color-ai-accent-border)' },
         wrapper: { pointerEvents: 'none', width: 'clamp(360px, 36vw, 560px)', maxWidth: '100vw' },
-        section: { pointerEvents: 'auto' },
+        section: {
+          pointerEvents: 'auto',
+          borderInlineStart: '1px solid var(--color-ai-accent-border)',
+        },
         body: { paddingTop: 16, display: 'flex', flexDirection: 'column' },
       }}
     >
@@ -191,6 +203,7 @@ export function EntrySidecar() {
                 >
                   <Bubble
                     placement={message.role === 'user' ? 'end' : 'start'}
+                    classNames={{ content: getBubbleContentClassName(message) }}
                     content={message.content}
                   />
 

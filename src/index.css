@@ -37,11 +37,13 @@
   --color-link-active: var(--ant-color-link-active, #0d3285);
 
   /* AI 强调色（独立变量，不走 antd token） */
+  /* Claude Coral — 色相 22°，与 Deep Blue（215°）相差 193°，肉眼可即时区分；来源：Claude logo 品牌色调 */
   /* color-mix 基线：Chrome 111+ / Firefox 113+ / Safari 16.2+，与 Tailwind v4 一致；white 为注入前回退 */
-  --color-ai-accent: #29b8f0;
-  --color-ai-accent-hover: #1fa8e0;
-  --color-ai-accent-bg: color-mix(in srgb, #29b8f0 12%, var(--ant-color-bg-container, white));
-  --color-ai-accent-bg-hover: color-mix(in srgb, #29b8f0 18%, var(--ant-color-bg-container, white));
+  --color-ai-accent: #cc6b46;
+  --color-ai-accent-hover: #b35a37;
+  --color-ai-accent-bg: color-mix(in srgb, #cc6b46 12%, var(--ant-color-bg-container, white));
+  --color-ai-accent-bg-hover: color-mix(in srgb, #cc6b46 18%, var(--ant-color-bg-container, white));
+  --color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 
   /* 语义圆角（wrapper 层） */
   --radius-block: 10px;
@@ -108,6 +110,113 @@
 
 [data-layout-surface='sidecar'] .sidecar-entry-card .ant-card-body {
   padding: var(--sidecar-card-padding-block) var(--sidecar-card-padding-inline);
+}
+
+.entry-accent-glyph {
+  color: var(--ant-color-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.entry-accent-glyph-inverse {
+  color: var(--ant-color-text-light-solid);
+}
+
+.entry-trigger-shell .ant-btn {
+  border-color: var(--color-ai-accent-border);
+  box-shadow: var(--shadow-surface);
+}
+
+.entry-trigger-shell .entry-trigger-shortcut {
+  border: 1px solid var(--color-ai-accent-border);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.entry-trigger-shell[data-entry-open='false'] .ant-btn {
+  background: var(--ant-color-primary);
+  border-color: var(--ant-color-primary);
+  color: var(--ant-color-text-light-solid);
+}
+
+.entry-trigger-shell[data-entry-open='false'] .ant-btn:hover,
+.entry-trigger-shell[data-entry-open='false'] .ant-btn:focus-visible {
+  background: var(--ant-color-link-hover);
+  border-color: var(--ant-color-link-hover);
+  color: var(--ant-color-text-light-solid);
+}
+
+.entry-trigger-shell[data-entry-open='false'] .entry-trigger-shortcut {
+  background: color-mix(in srgb, var(--ant-color-text-light-solid) 10%, transparent);
+  border-color: color-mix(in srgb, var(--ant-color-text-light-solid) 22%, transparent);
+  color: color-mix(in srgb, var(--ant-color-text-light-solid) 76%, transparent);
+}
+
+.entry-trigger-shell[data-entry-open='true'] .ant-btn {
+  background: color-mix(in srgb, var(--ant-color-primary) 10%, var(--ant-color-bg-container));
+  border-color: color-mix(in srgb, var(--ant-color-primary) 22%, var(--ant-color-border));
+  color: var(--ant-color-text);
+}
+
+.entry-trigger-shell[data-entry-open='true'] .ant-btn:hover,
+.entry-trigger-shell[data-entry-open='true'] .ant-btn:focus-visible {
+  background: color-mix(in srgb, var(--ant-color-primary) 16%, var(--ant-color-bg-container));
+  border-color: color-mix(in srgb, var(--ant-color-primary) 36%, var(--ant-color-border));
+  color: var(--ant-color-text);
+}
+
+.entry-trigger-shell[data-entry-open='true'] .entry-trigger-shortcut {
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text-secondary);
+}
+
+.entry-sidecar-drawer .ant-drawer-header {
+  background: color-mix(in srgb, var(--color-ai-accent-bg) 60%, var(--ant-color-bg-container));
+}
+
+.entry-sidecar-drawer .ant-divider-horizontal {
+  border-color: var(--color-ai-accent-border);
+}
+
+.entry-sidecar-drawer .entry-sidecar-bubble-content-system {
+  background: var(--color-ai-accent-bg);
+  border: 1px solid var(--color-ai-accent-border);
+}
+
+.entry-sidecar-drawer .entry-sidecar-bubble-content-user {
+  background: var(--ant-color-fill-secondary);
+  border: 1px solid var(--ant-color-border-secondary);
+}
+
+.entry-sidecar-drawer .sidecar-entry-card > .ant-card {
+  background: color-mix(in srgb, var(--color-ai-accent-bg) 55%, var(--ant-color-bg-container));
+  border-color: var(--color-ai-accent-border);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.entry-sidecar-drawer .sidecar-entry-card > .ant-card:hover {
+  background: var(--color-ai-accent-bg-hover);
+  border-color: var(--color-ai-accent);
+}
+
+.entry-sidecar-drawer [data-layout-surface='sidecar'] .sidecar-input-shell {
+  background: color-mix(in srgb, var(--color-ai-accent-bg) 70%, var(--ant-color-bg-container));
+  border-color: var(--color-ai-accent-border);
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.entry-sidecar-drawer [data-layout-surface='sidecar'] .sidecar-input-shell:focus-within {
+  background: var(--color-ai-accent-bg-hover);
+  border-color: var(--color-ai-accent);
 }
 
 [data-layout-layer='global-overlay-root'] {

@@ -6,7 +6,7 @@
 
 - 不写魔法值，消费 CSS 变量或 Tailwind 语义类（`text-text-secondary`、`text-link`、`bg-ai-accent-bg`、`bg-fill-hover` 等）
 - AI 元素 hover 态用 `--color-ai-accent-hover` / `--color-ai-accent-bg-hover`，不自己加深颜色
-- `--color-ai-accent` 禁止用于正文文字（对比度不足），只允许用于图标、边框、背景填充、大号标签
+- `--color-ai-accent`（Claude Coral `#CC6B46`）对比度约 3.9:1，禁止用于正文文字，只允许用于图标、边框、背景填充、大号标签
 - hover 背景统一 `bg-fill-hover`，不用 `bg-gray-*`
 - **禁止** Tailwind `dark:` 前缀类——暗色模式 100% 依赖 antd Token 自动翻转。`dark:` 只在 `index.css` 全局层级（如 `shadow-card-hover` 深色变体）使用，组件代码中不得出现
 

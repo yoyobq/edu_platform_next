@@ -76,9 +76,9 @@
 
 | Token                      | 值                                                         | Tailwind 类               | 场景            |
 | -------------------------- | ---------------------------------------------------------- | ------------------------- | --------------- |
-| `--color-ai-accent-border` | `color-mix(in srgb, #29b8f0 25%, var(--ant-color-border))` | `border-ai-accent-border` | AI 区域装饰边框 |
+| `--color-ai-accent-border` | `color-mix(in srgb, #cc6b46 25%, var(--ant-color-border))` | `border-ai-accent-border` | AI 区域装饰边框 |
 
-此 token 用于 Sidecar 外壳、AI 生成区块等需要轻微 Sky Cyan 色调边框的场景。深色模式下 `--ant-color-border` 自动跟随 `darkAlgorithm`，混合结果自动适配。
+此 token 用于 Sidecar 外壳、AI 生成区块等需要轻微 Claude Coral 色调边框的场景。深色模式下 `--ant-color-border` 自动跟随 `darkAlgorithm`，混合结果自动适配。
 
 补充说明：此 token 尚未在 `index.css` 中定义，需追加到 `@theme inline` 块。参见 [index-css.md](./index-css.md)。
 
