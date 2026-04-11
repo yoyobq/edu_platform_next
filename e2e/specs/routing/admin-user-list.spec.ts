@@ -85,3 +85,30 @@ test('admin 用户列表应支持筛选、分页，并显示正式导航入口',
   await expect(page.getByText('Alpha Chen')).toBeVisible();
   await expect(page.getByText('Lambda Xu')).not.toBeVisible();
 });
+
+test('admin 用户列表应允许在状态单元格中修改单个账户状态', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto(routes.adminUsers);
+
+  const lambdaRow = page.locator('tbody tr').filter({
+    has: page.getByText('Lambda Xu'),
+  });
+  const statusTrigger = page.getByTestId('account-status-trigger-1011');
+
+  await expect(lambdaRow).toContainText('正常');
+
+  await statusTrigger.click();
+  await page.getByTestId('account-status-option-1011-SUSPENDED').click();
+
+  await expect(lambdaRow).toContainText('已暂停');
+  await expect(page.getByText('已将账户 1011 更新为已暂停')).toBeVisible();
+});

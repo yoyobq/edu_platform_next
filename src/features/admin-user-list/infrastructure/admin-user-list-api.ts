@@ -1,6 +1,7 @@
 import { executeGraphQL } from '@/shared/graphql';
 
 import {
+  ADMIN_USER_ACCOUNT_STATUSES,
   type AdminUserAccountStatus,
   type AdminUserEmploymentStatus,
   type AdminUserListItem,
@@ -12,6 +13,12 @@ import {
   type AdminUserState,
   getAdminUsers,
 } from '../application/get-admin-users';
+import {
+  updateAdminUserAccountStatus,
+  type UpdateAdminUserAccountStatusInput,
+  type UpdateAdminUserAccountStatusPort,
+  type UpdateAdminUserAccountStatusResult,
+} from '../application/update-admin-user-account-status';
 
 type AdminUsersQueryResponse = {
   adminUsers: {
@@ -56,6 +63,17 @@ type AdminUsersQueryVariables = {
   sortBy: AdminUserSortField;
   sortOrder: AdminUserSortOrder;
   status?: AdminUserAccountStatus;
+};
+
+type BatchUpdateAccountStatusResponse = {
+  batchUpdateAccountStatus: UpdateAdminUserAccountStatusResult;
+};
+
+type BatchUpdateAccountStatusVariables = {
+  input: {
+    accountIds: [number];
+    status: AdminUserAccountStatus;
+  };
 };
 
 const ADMIN_USERS_QUERY = `
@@ -118,6 +136,44 @@ function mapAdminUserListItem(dto: AdminUserListItemDTO): AdminUserListItem {
   };
 }
 
+const BATCH_UPDATE_ACCOUNT_STATUS_MUTATION = `
+  mutation BatchUpdateAccountStatus($input: BatchUpdateAccountStatusInput!) {
+    batchUpdateAccountStatus(input: $input) {
+      requestedCount
+      updatedCount
+      isUpdated
+      accounts {
+        id
+        loginName
+        loginEmail
+        status
+        identityHint
+        createdAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+function toBatchUpdateAccountStatusVariables(
+  input: UpdateAdminUserAccountStatusInput,
+): BatchUpdateAccountStatusVariables {
+  if (!Number.isInteger(input.accountId) || input.accountId <= 0) {
+    throw new Error('无效的账户 ID。');
+  }
+
+  if (!ADMIN_USER_ACCOUNT_STATUSES.includes(input.status)) {
+    throw new Error('无效的账户状态。');
+  }
+
+  return {
+    input: {
+      accountIds: [input.accountId],
+      status: input.status,
+    },
+  };
+}
+
 const adminUserListPort: AdminUserListPort = {
   async listAdminUsers(input: AdminUserListQuery): Promise<AdminUserListResult> {
     const response = await executeGraphQL<AdminUsersQueryResponse, AdminUsersQueryVariables>(
@@ -143,6 +199,23 @@ const adminUserListPort: AdminUserListPort = {
   },
 };
 
+const updateAdminUserAccountStatusPort: UpdateAdminUserAccountStatusPort = {
+  async batchUpdateAccountStatus(
+    input: UpdateAdminUserAccountStatusInput,
+  ): Promise<UpdateAdminUserAccountStatusResult> {
+    const response = await executeGraphQL<
+      BatchUpdateAccountStatusResponse,
+      BatchUpdateAccountStatusVariables
+    >(BATCH_UPDATE_ACCOUNT_STATUS_MUTATION, toBatchUpdateAccountStatusVariables(input));
+
+    return response.batchUpdateAccountStatus;
+  },
+};
+
 export function requestAdminUsers(input: AdminUserListQuery) {
   return getAdminUsers(adminUserListPort, input);
+}
+
+export function requestAdminUserAccountStatusUpdate(input: UpdateAdminUserAccountStatusInput) {
+  return updateAdminUserAccountStatus(updateAdminUserAccountStatusPort, input);
 }

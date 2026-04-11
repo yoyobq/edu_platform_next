@@ -19,6 +19,15 @@ export type AdminUserSortField = (typeof ADMIN_USER_SORT_FIELDS)[number];
 export type AdminUserSortOrder = (typeof ADMIN_USER_SORT_ORDERS)[number];
 export type AdminUserState = (typeof ADMIN_USER_STATES)[number];
 
+export const ADMIN_USER_ACCOUNT_STATUS_LABELS: Record<AdminUserAccountStatus, string> = {
+  ACTIVE: '正常',
+  BANNED: '已封禁',
+  DELETED: '已删除',
+  INACTIVE: '已停用',
+  PENDING: '待激活',
+  SUSPENDED: '已暂停',
+};
+
 export type AdminUserListItem = {
   account: {
     createdAt: string;

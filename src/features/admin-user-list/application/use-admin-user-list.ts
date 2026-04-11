@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { requestAdminUsers } from '../infrastructure/admin-user-list-api';
 
-import type { AdminUserListQuery, AdminUserListResult } from './get-admin-users';
+import type {
+  AdminUserAccountStatus,
+  AdminUserListQuery,
+  AdminUserListResult,
+} from './get-admin-users';
 
 type AdminUserListState = {
   errorMessage: string | null;
@@ -19,6 +23,7 @@ const INITIAL_STATE: AdminUserListState = {
 };
 
 export function useAdminUserList(criteria: AdminUserListQuery): {
+  applyAccountStatusUpdate: (accountId: number, status: AdminUserAccountStatus) => void;
   errorMessage: string | null;
   hasLoaded: boolean;
   isLoading: boolean;
@@ -77,7 +82,37 @@ export function useAdminUserList(criteria: AdminUserListQuery): {
     setRefreshKey((currentValue) => currentValue + 1);
   }, []);
 
+  const applyAccountStatusUpdate = useCallback(
+    (accountId: number, status: AdminUserAccountStatus) => {
+      setState((currentState) => {
+        if (!currentState.result) {
+          return currentState;
+        }
+
+        return {
+          ...currentState,
+          result: {
+            ...currentState.result,
+            list: currentState.result.list.map((item) =>
+              item.account.id === accountId
+                ? {
+                    ...item,
+                    account: {
+                      ...item.account,
+                      status,
+                    },
+                  }
+                : item,
+            ),
+          },
+        };
+      });
+    },
+    [],
+  );
+
   return {
+    applyAccountStatusUpdate,
     errorMessage: state.errorMessage,
     hasLoaded: state.hasLoaded,
     isLoading: state.isLoading,

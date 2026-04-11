@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   Button,
@@ -6,6 +6,7 @@ import {
   Empty,
   Flex,
   Input,
+  message,
   Select,
   Skeleton,
   Table,
@@ -17,6 +18,7 @@ import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/t
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
 import {
+  ADMIN_USER_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_ACCOUNT_STATUSES,
   ADMIN_USER_SORT_FIELDS,
   type AdminUserAccountStatus,
@@ -27,13 +29,16 @@ import {
   DEFAULT_ADMIN_USER_LIST_QUERY,
 } from '../application/get-admin-users';
 import { useAdminUserList } from '../application/use-admin-user-list';
+import { requestAdminUserAccountStatusUpdate } from '../infrastructure/admin-user-list-api';
+
+import { AccountStatusQuickSwitch } from './account-status-quick-switch';
 
 type HasStaffFilterValue = 'all' | 'true' | 'false';
 
 const DEFAULT_QUERY = DEFAULT_ADMIN_USER_LIST_QUERY;
 
 const ACCOUNT_STATUS_OPTIONS = ADMIN_USER_ACCOUNT_STATUSES.map((status) => ({
-  label: status,
+  label: ADMIN_USER_ACCOUNT_STATUS_LABELS[status],
   value: status,
 }));
 
@@ -57,24 +62,6 @@ function formatDateTimeToMinute(value: string) {
     month: '2-digit',
     year: 'numeric',
   }).format(date);
-}
-
-function toStatusColor(status: string) {
-  switch (status) {
-    case 'ACTIVE':
-      return 'success';
-    case 'PENDING':
-      return 'processing';
-    case 'INACTIVE':
-      return 'default';
-    case 'SUSPENDED':
-      return 'warning';
-    case 'BANNED':
-    case 'DELETED':
-      return 'error';
-    default:
-      return 'default';
-  }
 }
 
 function toSorterOrder(sortOrder: AdminUserSortOrder): 'ascend' | 'descend' {
@@ -105,7 +92,7 @@ function resolveFilterSummary(criteria: AdminUserListQuery) {
   }
 
   if (criteria.status) {
-    parts.push(`状态 ${criteria.status}`);
+    parts.push(`状态 ${ADMIN_USER_ACCOUNT_STATUS_LABELS[criteria.status]}`);
   }
 
   if (criteria.accessGroups && criteria.accessGroups.length > 0) {
@@ -126,17 +113,52 @@ function isSortField(value: unknown): value is AdminUserSortField {
 }
 
 export function AdminUserListPageContent() {
+  const [messageApi, messageContextHolder] = message.useMessage();
   const [draftQuery, setDraftQuery] = useState('');
   const [draftStatus, setDraftStatus] = useState<AdminUserAccountStatus | undefined>(undefined);
   const [draftAccessGroups, setDraftAccessGroups] = useState<readonly AuthAccessGroup[]>([]);
   const [draftHasStaff, setDraftHasStaff] = useState<HasStaffFilterValue>('all');
   const [criteria, setCriteria] = useState<AdminUserListQuery>(DEFAULT_QUERY);
-  const { errorMessage, hasLoaded, isLoading, result, retry } = useAdminUserList(criteria);
+  const [statusUpdateErrorMessage, setStatusUpdateErrorMessage] = useState<string | null>(null);
+  const [updatingAccountId, setUpdatingAccountId] = useState<number | null>(null);
+  const { applyAccountStatusUpdate, errorMessage, hasLoaded, isLoading, result, retry } =
+    useAdminUserList(criteria);
 
   const filterSummary = useMemo(() => resolveFilterSummary(criteria), [criteria]);
   const totalCount = result?.total ?? 0;
   const currentPage = result?.current ?? criteria.page ?? DEFAULT_QUERY.page;
   const pageSize = result?.pageSize ?? criteria.limit ?? DEFAULT_QUERY.limit;
+
+  const handleStatusChange = useCallback(
+    async (record: AdminUserListItem, nextStatus: AdminUserAccountStatus) => {
+      if (record.account.status === nextStatus) {
+        return;
+      }
+
+      setStatusUpdateErrorMessage(null);
+      setUpdatingAccountId(record.account.id);
+
+      try {
+        const mutationResult = await requestAdminUserAccountStatusUpdate({
+          accountId: record.account.id,
+          status: nextStatus,
+        });
+        applyAccountStatusUpdate(
+          record.account.id,
+          mutationResult.accounts[0]?.status ?? nextStatus,
+        );
+        void messageApi.success({
+          content: `已将账户 ${record.account.id} 更新为${ADMIN_USER_ACCOUNT_STATUS_LABELS[nextStatus]}`,
+          duration: 2,
+        });
+      } catch (error) {
+        setStatusUpdateErrorMessage(error instanceof Error ? error.message : '账户状态更新失败。');
+      } finally {
+        setUpdatingAccountId(null);
+      }
+    },
+    [applyAccountStatusUpdate, messageApi],
+  );
 
   const columns = useMemo(
     () => [
@@ -181,8 +203,16 @@ export function AdminUserListPageContent() {
         dataIndex: ['account', 'status'],
         key: 'status',
         title: '账户状态',
-        width: 120,
-        render: (value: string) => <Tag color={toStatusColor(value)}>{value}</Tag>,
+        width: 196,
+        render: (value: AdminUserAccountStatus, record: AdminUserListItem) => (
+          <AccountStatusQuickSwitch
+            accountId={record.account.id}
+            value={value}
+            updating={updatingAccountId === record.account.id}
+            disabled={updatingAccountId !== null && updatingAccountId !== record.account.id}
+            onChange={(nextStatus) => handleStatusChange(record, nextStatus)}
+          />
+        ),
       },
       {
         dataIndex: ['account', 'createdAt'],
@@ -192,7 +222,7 @@ export function AdminUserListPageContent() {
         render: (value: string) => formatDateTimeToMinute(value),
       },
     ],
-    [criteria.sortBy, criteria.sortOrder],
+    [criteria.sortBy, criteria.sortOrder, handleStatusChange, updatingAccountId],
   );
 
   function applyFilters() {
@@ -241,6 +271,7 @@ export function AdminUserListPageContent() {
 
   return (
     <Flex vertical gap={24}>
+      {messageContextHolder}
       <div className="flex flex-col gap-3">
         <Flex align="center" justify="space-between" gap={16} wrap>
           <Typography.Title level={2} style={{ marginBottom: 0 }}>
@@ -317,6 +348,17 @@ export function AdminUserListPageContent() {
           </Typography.Text>
         }
       >
+        {statusUpdateErrorMessage ? (
+          <Alert
+            type="error"
+            showIcon
+            closable
+            message="账户状态更新失败"
+            description={statusUpdateErrorMessage}
+            style={{ marginBottom: 16 }}
+            onClose={() => setStatusUpdateErrorMessage(null)}
+          />
+        ) : null}
         {errorMessage ? (
           <Alert
             type="error"

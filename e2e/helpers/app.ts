@@ -50,6 +50,7 @@ type SessionProfile = {
 };
 
 type MockAuthGraphQLOptions = {
+  batchUpdateAccountStatusErrorMessage?: string;
   adminUsersErrorMessage?: string;
   adminUsersItems?: readonly AdminUserListSeed[];
   completeProfileErrorMessage?: string;
@@ -73,7 +74,7 @@ type AdminUserListSeed = {
     identityHint: AuthAccessGroup | null;
     loginEmail: string | null;
     loginName: string | null;
-    status: 'ACTIVE' | 'BANNED' | 'DELETED' | 'INACTIVE' | 'PENDING' | 'SUSPENDED';
+    status: AdminUserAccountStatusSeed;
   };
   staff: {
     departmentId: string | null;
@@ -90,6 +91,14 @@ type AdminUserListSeed = {
     userState: 'ACTIVE' | 'INACTIVE' | 'PENDING' | 'SUSPENDED';
   };
 };
+
+type AdminUserAccountStatusSeed =
+  | 'ACTIVE'
+  | 'BANNED'
+  | 'DELETED'
+  | 'INACTIVE'
+  | 'PENDING'
+  | 'SUSPENDED';
 
 function resolvePrimaryAccessGroup(options: SeedAuthSessionOptions): SessionIdentityKind {
   if (options.primaryAccessGroup) {
@@ -300,6 +309,28 @@ async function fulfillGraphQLError(route: Route, message: string) {
     contentType: 'application/json',
     status: 200,
   });
+}
+
+function cloneAdminUserListSeed(item: AdminUserListSeed): AdminUserListSeed {
+  return {
+    account: { ...item.account },
+    staff: item.staff ? { ...item.staff } : null,
+    userInfo: {
+      ...item.userInfo,
+      accessGroup: [...item.userInfo.accessGroup],
+    },
+  };
+}
+
+function isAdminUserAccountStatusSeed(value: string): value is AdminUserAccountStatusSeed {
+  return (
+    value === 'ACTIVE' ||
+    value === 'BANNED' ||
+    value === 'DELETED' ||
+    value === 'INACTIVE' ||
+    value === 'PENDING' ||
+    value === 'SUSPENDED'
+  );
 }
 
 function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
@@ -689,6 +720,9 @@ export async function mockAuthGraphQL(
 ): Promise<void> {
   let currentProfile = buildSessionProfile(options.currentSession ?? options.loginSession);
   const meErrorSequence = [...(options.meErrorSequence ?? [])];
+  const adminUsersItems = (options.adminUsersItems ?? buildDefaultAdminUserListSeeds()).map(
+    cloneAdminUserListSeed,
+  );
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
@@ -792,10 +826,68 @@ export async function mockAuthGraphQL(
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            adminUsers: buildAdminUsersPayload(
-              options.adminUsersItems ?? buildDefaultAdminUserListSeeds(),
-              variables,
-            ),
+            adminUsers: buildAdminUsersPayload(adminUsersItems, variables),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation BatchUpdateAccountStatus')) {
+      if (options.batchUpdateAccountStatusErrorMessage) {
+        await fulfillGraphQLError(route, options.batchUpdateAccountStatusErrorMessage);
+        return;
+      }
+
+      const accountIds = Array.isArray(
+        (variables as { input?: { accountIds?: unknown[] } }).input?.accountIds,
+      )
+        ? (variables as { input: { accountIds: unknown[] } }).input.accountIds.filter(
+            (value): value is number => typeof value === 'number' && Number.isInteger(value),
+          )
+        : [];
+      const nextStatus =
+        typeof (variables as { input?: { status?: unknown } }).input?.status === 'string' &&
+        isAdminUserAccountStatusSeed((variables as { input: { status: string } }).input.status)
+          ? (variables as { input: { status: AdminUserAccountStatusSeed } }).input.status
+          : null;
+      const updatedAt = '2026-04-13T08:00:00.000Z';
+
+      let updatedCount = 0;
+
+      const accounts = accountIds
+        .map((accountId) => adminUsersItems.find((item) => item.account.id === accountId))
+        .filter((item): item is AdminUserListSeed => Boolean(item))
+        .map((item) => {
+          const isUpdated = nextStatus !== null && item.account.status !== nextStatus;
+
+          if (isUpdated) {
+            item.account.status = nextStatus;
+            updatedCount += 1;
+          }
+
+          return {
+            createdAt: item.account.createdAt,
+            id: item.account.id,
+            identityHint: item.account.identityHint,
+            loginEmail: item.account.loginEmail,
+            loginName: item.account.loginName,
+            status: item.account.status,
+            updatedAt,
+          };
+        });
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            batchUpdateAccountStatus: {
+              requestedCount: accountIds.length,
+              updatedCount,
+              isUpdated: nextStatus !== null && updatedCount > 0,
+              accounts,
+            },
           },
         }),
         contentType: 'application/json',
