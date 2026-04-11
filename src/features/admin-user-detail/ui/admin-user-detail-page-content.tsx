@@ -5,10 +5,12 @@ import { useLocation, useNavigate } from 'react-router';
 import type {
   AdminUserDetail,
   AdminUserDetailAccountStatus,
+  AdminUserDetailStaffEmploymentStatus,
   AdminUserDetailUserState,
 } from '../application/get-admin-user-detail';
 import {
   ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS,
+  ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS,
   ADMIN_USER_DETAIL_USER_STATE_LABELS,
 } from '../application/get-admin-user-detail';
 import {
@@ -52,17 +54,24 @@ function formatCount(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function getStatusTagColor(status: AdminUserDetailAccountStatus | AdminUserDetailUserState) {
+function getStatusTagColor(
+  status:
+    | AdminUserDetailAccountStatus
+    | AdminUserDetailStaffEmploymentStatus
+    | AdminUserDetailUserState,
+) {
   switch (status) {
     case 'ACTIVE':
       return 'success';
     case 'PENDING':
       return 'processing';
     case 'INACTIVE':
+    case 'LEFT':
       return 'default';
+    case 'SUSPENDED':
+      return 'warning';
     case 'BANNED':
     case 'DELETED':
-    case 'SUSPENDED':
       return 'error';
     default:
       return 'default';
@@ -431,6 +440,78 @@ function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[
   ];
 }
 
+function buildStaffSections(detail: AdminUserDetail): readonly DetailSection[] {
+  return [
+    {
+      items: [
+        {
+          key: 'staffId',
+          label: <BilingualLabel title="工号" subtitle="Staff ID" />,
+          value: <ReadonlyValue>{detail.staff.id}</ReadonlyValue>,
+        },
+        {
+          key: 'staffAccountId',
+          label: <BilingualLabel title="关联账户 ID" subtitle="Account ID" />,
+          value: <ReadonlyValue>{String(detail.staff.accountId)}</ReadonlyValue>,
+        },
+      ],
+      key: 'staffIdentity',
+      tone: 'fixed',
+    },
+    {
+      items: [
+        {
+          key: 'staffEmploymentStatus',
+          label: <BilingualLabel title="在职状态" subtitle="Employment Status" />,
+          value: (
+            <Tag color={getStatusTagColor(detail.staff.employmentStatus)}>
+              {ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS[detail.staff.employmentStatus]}
+            </Tag>
+          ),
+        },
+        {
+          key: 'staffName',
+          label: <BilingualLabel title="姓名" subtitle="Name" />,
+          value: formatOptionalValue(detail.staff.name),
+        },
+        {
+          key: 'staffDepartmentId',
+          label: <BilingualLabel title="部门 ID" subtitle="Department ID" />,
+          value: formatOptionalValue(detail.staff.departmentId),
+        },
+        {
+          key: 'staffJobTitle',
+          label: <BilingualLabel title="职务/职称" subtitle="Job Title" />,
+          value: formatOptionalValue(detail.staff.jobTitle),
+        },
+        {
+          key: 'staffRemark',
+          label: <BilingualLabel title="备注" subtitle="Remark" />,
+          value: formatOptionalValue(detail.staff.remark),
+        },
+      ],
+      key: 'staffProfile',
+      tone: 'editable',
+    },
+    {
+      items: [
+        {
+          key: 'staffCreatedAt',
+          label: <BilingualLabel compact title="创建时间" subtitle="Created At" />,
+          value: formatDateTime(detail.staff.createdAt),
+        },
+        {
+          key: 'staffUpdatedAt',
+          label: <BilingualLabel compact title="更新时间" subtitle="Updated At" />,
+          value: formatDateTime(detail.staff.updatedAt),
+        },
+      ],
+      key: 'staffMetadata',
+      tone: 'reference',
+    },
+  ];
+}
+
 export function AdminUserDetailPageContent({
   accountId,
   loadDetail,
@@ -447,6 +528,7 @@ export function AdminUserDetailPageContent({
 
   const accountSections = useMemo(() => (result ? buildAccountSections(result) : []), [result]);
   const userInfoSections = useMemo(() => (result ? buildUserInfoSections(result) : []), [result]);
+  const staffSections = useMemo(() => (result ? buildStaffSections(result) : []), [result]);
 
   return (
     <Flex vertical gap={24}>
@@ -469,8 +551,8 @@ export function AdminUserDetailPageContent({
               <Tag color="processing">示例页面</Tag>
             </Flex>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 880 }}>
-              当前先接好 `account(id)` 与 `userInfo(accountId)` 两块正式数据，把 staff
-              区域预留出来，后续再接完整 identity 详情。
+              当前已接好 `account(id)`、`userInfo(accountId)` 与 `staff(accountId)` 三块正式数据，
+              后续再在此基础上补写入动作与更完整的 identity 细节。
             </Typography.Paragraph>
           </div>
           <Button onClick={() => navigate({ pathname: '/admin/users', search: location.search })}>
@@ -535,12 +617,7 @@ export function AdminUserDetailPageContent({
           </Card>
 
           <Card title={<BilingualLabel title="Staff 信息" subtitle="Staff" />}>
-            <Alert
-              type="info"
-              showIcon
-              message="该区域已预留"
-              description="当前示例页先不接 staff 详情查询；后续后端补齐 identity / staff 读取能力后，再把工号、姓名、职务、部门、在职状态接进来。"
-            />
+            <DetailSectionList sections={staffSections} />
           </Card>
 
           <Card title={<BilingualLabel title="最近登录" subtitle="Recent Login" />}>

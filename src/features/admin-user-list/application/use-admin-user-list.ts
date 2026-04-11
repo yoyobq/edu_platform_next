@@ -44,7 +44,7 @@ export function useAdminUserList(
   useEffect(() => {
     let isActive = true;
 
-    async function loadUsers() {
+    async function loadUsersData() {
       setState((currentState) => ({
         ...currentState,
         errorMessage: null,
@@ -79,7 +79,7 @@ export function useAdminUserList(
       }
     }
 
-    void loadUsers();
+    void loadUsersData();
 
     return () => {
       isActive = false;

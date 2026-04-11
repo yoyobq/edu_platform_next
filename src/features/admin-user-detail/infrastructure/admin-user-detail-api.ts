@@ -4,6 +4,7 @@ import {
   type AdminUserDetail,
   type AdminUserDetailAccountStatus,
   type AdminUserDetailPort,
+  type AdminUserDetailStaffEmploymentStatus,
   type AdminUserDetailUserState,
   getAdminUserDetail,
 } from '../application/get-admin-user-detail';
@@ -43,6 +44,20 @@ type AdminUserDetailResponse = {
     unreadCount: number;
     updatedAt: string;
     userState: AdminUserDetailUserState;
+  };
+};
+
+type AdminUserDetailStaffResponse = {
+  staff: {
+    accountId: number;
+    createdAt: string;
+    departmentId: string | null;
+    employmentStatus: AdminUserDetailStaffEmploymentStatus;
+    id: string;
+    jobTitle: string | null;
+    name: string;
+    remark: string | null;
+    updatedAt: string;
   };
 };
 
@@ -88,21 +103,43 @@ const ADMIN_USER_DETAIL_QUERY = `
   }
 `;
 
+const ADMIN_USER_DETAIL_STAFF_QUERY = `
+  query AdminUserDetailStaff($accountId: Int!) {
+    staff(accountId: $accountId) {
+      accountId
+      createdAt
+      departmentId
+      employmentStatus
+      id
+      jobTitle
+      name
+      remark
+      updatedAt
+    }
+  }
+`;
+
 const adminUserDetailPort: AdminUserDetailPort = {
   async getAdminUserDetail(accountId: number): Promise<AdminUserDetail> {
-    const response = await executeGraphQL<AdminUserDetailResponse, AdminUserDetailVariables>(
-      ADMIN_USER_DETAIL_QUERY,
-      { accountId },
-    );
+    const [detailResponse, staffResponse] = await Promise.all([
+      executeGraphQL<AdminUserDetailResponse, AdminUserDetailVariables>(ADMIN_USER_DETAIL_QUERY, {
+        accountId,
+      }),
+      executeGraphQL<AdminUserDetailStaffResponse, AdminUserDetailVariables>(
+        ADMIN_USER_DETAIL_STAFF_QUERY,
+        { accountId },
+      ),
+    ]);
 
     return {
       account: {
-        ...response.account,
-        recentLoginHistory: response.account.recentLoginHistory ?? [],
+        ...detailResponse.account,
+        recentLoginHistory: detailResponse.account.recentLoginHistory ?? [],
       },
+      staff: staffResponse.staff,
       userInfo: {
-        ...response.userInfo,
-        tags: response.userInfo.tags ?? null,
+        ...detailResponse.userInfo,
+        tags: detailResponse.userInfo.tags ?? null,
       },
     };
   },

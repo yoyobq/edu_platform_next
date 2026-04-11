@@ -14,9 +14,12 @@ export const ADMIN_USER_DETAIL_USER_STATES = [
   'PENDING',
   'SUSPENDED',
 ] as const;
+export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES = ['ACTIVE', 'LEFT', 'SUSPENDED'] as const;
 
 export type AdminUserDetailAccountStatus = (typeof ADMIN_USER_DETAIL_ACCOUNT_STATUSES)[number];
 export type AdminUserDetailUserState = (typeof ADMIN_USER_DETAIL_USER_STATES)[number];
+export type AdminUserDetailStaffEmploymentStatus =
+  (typeof ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES)[number];
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS: Record<AdminUserDetailAccountStatus, string> =
   {
@@ -35,6 +38,15 @@ export const ADMIN_USER_DETAIL_USER_STATE_LABELS: Record<AdminUserDetailUserStat
   SUSPENDED: '已暂停',
 };
 
+export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS: Record<
+  AdminUserDetailStaffEmploymentStatus,
+  string
+> = {
+  ACTIVE: '在职',
+  LEFT: '已离职',
+  SUSPENDED: '已停用',
+};
+
 export type AdminUserDetail = {
   account: {
     createdAt: string;
@@ -48,6 +60,17 @@ export type AdminUserDetail = {
       timestamp: string;
     }[];
     status: AdminUserDetailAccountStatus;
+    updatedAt: string;
+  };
+  staff: {
+    accountId: number;
+    createdAt: string;
+    departmentId: string | null;
+    employmentStatus: AdminUserDetailStaffEmploymentStatus;
+    id: string;
+    jobTitle: string | null;
+    name: string;
+    remark: string | null;
     updatedAt: string;
   };
   userInfo: {
