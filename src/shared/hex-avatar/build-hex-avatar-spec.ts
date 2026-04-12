@@ -10,8 +10,8 @@ const COLOR_FAMILIES: ColorFamily[] = [
 ];
 
 const HUE_OFFSETS = [-8, 0, 8] as const;
-const RING_1_MIN_ENABLED = 3;
-const RING_2_MIN_ENABLED = 4;
+const RING_1_EXACT_ENABLED = 2;
+const RING_2_MIN_ENABLED = 5;
 
 function cellKey(q: number, r: number) {
   return `${q},${r}`;
@@ -193,6 +193,43 @@ function enableMinimumGroups(groups: CellGroup[], minimumEnabledCells: number) {
   }
 }
 
+function enforceExactEnabledCells(
+  groups: CellGroup[],
+  exactEnabledCells: number,
+  preferredOffsetSeed: number,
+) {
+  if (groups.length === 0) {
+    return;
+  }
+
+  const groupCellCount = groups[0].cells.length;
+
+  if (groupCellCount === 0) {
+    return;
+  }
+
+  const targetGroupCount = Math.floor(exactEnabledCells / groupCellCount);
+  const offset = preferredOffsetSeed % groups.length;
+  const orderedGroups = groups.map((_, index) => groups[(index + offset) % groups.length]);
+  const enabledGroups = orderedGroups.filter((group) => group.cells.some((cell) => cell.enabled));
+  const disabledGroups = orderedGroups.filter((group) =>
+    group.cells.every((cell) => !cell.enabled),
+  );
+  const selectedGroups = [
+    ...enabledGroups.slice(0, targetGroupCount),
+    ...disabledGroups.slice(0, Math.max(0, targetGroupCount - enabledGroups.length)),
+  ].slice(0, targetGroupCount);
+  const selectedKeys = new Set(selectedGroups.map((group) => group.key));
+
+  for (const group of groups) {
+    const nextEnabled = selectedKeys.has(group.key);
+
+    for (const cell of group.cells) {
+      cell.enabled = nextEnabled;
+    }
+  }
+}
+
 function capFg2Usage(groups: CellGroup[]) {
   const enabledGroups = groups.filter((group) => group.cells.some((cell) => cell.enabled));
   const enabledCells = enabledGroups.flatMap((group) => group.cells);
@@ -244,7 +281,7 @@ function capFg2Usage(groups: CellGroup[]) {
 }
 
 export function buildHexAvatarSpecV1(hashBytes: Uint8Array): HexAvatarSpec {
-  const axis: HexAvatarSymmetryAxis = (hashBytes[14] & 1) === 1 ? 'vertical' : 'horizontal';
+  const axis: HexAvatarSymmetryAxis = 'vertical';
   const familyIndex = hashBytes[0] % COLOR_FAMILIES.length;
   const family = COLOR_FAMILIES[familyIndex];
 
@@ -263,7 +300,7 @@ export function buildHexAvatarSpecV1(hashBytes: Uint8Array): HexAvatarSpec {
   applyGroupActivation(ring1Groups, hashBytes, 0, 18);
   applyGroupActivation(ring2Groups, hashBytes, 6, 24);
 
-  enableMinimumGroups(ring1Groups, RING_1_MIN_ENABLED);
+  enforceExactEnabledCells(ring1Groups, RING_1_EXACT_ENABLED, hashBytes[15]);
   enableMinimumGroups(ring2Groups, RING_2_MIN_ENABLED);
 
   const outerCells = [...ring1Cells, ...ring2Cells];

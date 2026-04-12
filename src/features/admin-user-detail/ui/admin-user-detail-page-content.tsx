@@ -35,6 +35,7 @@ import {
   areStringArraysEqual,
   formatDateTime,
   formatOptionalValue,
+  getDepartmentDisplayName,
   normalizeBirthDateValue,
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
@@ -76,6 +77,28 @@ type AdminUserDetailPageContentProps = {
     input: UpdateAdminUserDetailUserInfoSectionInput,
   ) => Promise<UpdateAdminUserDetailUserInfoSectionResult>;
 };
+
+function getHeaderUserTagColor() {
+  return 'cyan';
+}
+
+function getHeaderAccessGroupTagColor(
+  accessGroup: AdminUserDetail['userInfo']['accessGroup'][number],
+) {
+  switch (accessGroup) {
+    case 'ADMIN':
+      return 'volcano';
+    case 'REGISTRANT':
+      return 'gold';
+    case 'STAFF':
+      return 'blue';
+    case 'STUDENT':
+      return 'purple';
+    case 'GUEST':
+    default:
+      return 'green';
+  }
+}
 
 function RecentLoginList({ items }: { items: AdminUserDetail['account']['recentLoginHistory'] }) {
   if (items.length === 0) {
@@ -228,22 +251,21 @@ function AdminUserDetailLoadingSkeleton() {
     <>
       <div
         className="rounded-block border border-border bg-bg-container p-6 shadow-card"
-        style={{ minHeight: 164 }}
+        style={{ minHeight: 180 }}
       >
-        <Flex align="start" gap={24}>
-          <Skeleton.Avatar active shape="circle" size={72} />
-          <div className="flex min-w-0 flex-1 flex-col gap-4">
-            <Flex align="center" gap={8} wrap>
+        <Flex align="center" gap={24}>
+          <Skeleton.Avatar active shape="circle" size={88} />
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-4">
+            <Flex align="center" gap={12} wrap>
               <SkeletonBar height={28} width={180} />
-              <SkeletonBar height={24} width={72} />
-              <SkeletonBar height={24} width={92} />
+              <SkeletonBar height={16} width={220} />
             </Flex>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-3 xl:grid-cols-4">
-              <DetailFieldSkeleton labelWidth={56} valueWidth={84} />
+              <DetailFieldSkeleton labelWidth={40} valueWidth={120} />
               <DetailFieldSkeleton labelWidth={40} valueWidth={96} />
               <DetailFieldSkeleton labelWidth={48} valueWidth={132} />
-              <DetailFieldSkeleton labelWidth={56} valueWidth={88} />
+              <DetailFieldSkeleton labelWidth={56} valueWidth={108} />
             </div>
 
             <Flex gap={6} wrap>
@@ -616,73 +638,80 @@ export function AdminUserDetailPageContent({
 
       {result ? (
         <div className="rounded-block border border-border bg-bg-container p-6 shadow-card">
-          <Flex gap={24} align="start">
+          <Flex gap={24} align="center">
             <div className="relative shrink-0">
               <HexAvatar
                 accountId={result.account.id}
                 avatarUrl={result.userInfo.avatarUrl}
-                size={72}
+                size={88}
                 style={{
-                  border: '3px solid var(--ant-color-bg-container)',
+                  border: '4px solid var(--ant-color-bg-container)',
                   boxShadow: 'var(--shadow-card)',
                 }}
               />
               <div
-                className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full ${
+                className={`absolute -bottom-1 -right-1 h-5 w-5 rounded-full ${
                   result.account.status === 'ACTIVE' ? 'bg-success' : 'bg-fill-secondary'
                 }`}
-                style={{ border: '3px solid var(--ant-color-bg-container)' }}
+                style={{ border: '4px solid var(--ant-color-bg-container)' }}
                 title={result.account.status}
               />
             </div>
 
-            <div className="flex min-w-0 flex-1 flex-col gap-4">
-              <Flex align="center" gap={8} wrap>
+            <div className="flex min-w-0 flex-1 flex-col justify-center gap-4">
+              <Flex align="center" gap={12} wrap>
                 <Typography.Title level={3} style={{ margin: 0 }}>
                   {formatOptionalValue(result.userInfo.nickname)}
                 </Typography.Title>
-                <Tag color={getStatusTagColor(result.account.status)}>
-                  {ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS[result.account.status]}
-                </Tag>
-                {result.staff?.id && (
-                  <Tag color={getStatusTagColor(result.staff.employmentStatus)}>
-                    {
-                      ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS[
-                        result.staff.employmentStatus
-                      ]
-                    }
-                  </Tag>
-                )}
+                <Typography.Text
+                  ellipsis={
+                    result.userInfo.signature ? { tooltip: result.userInfo.signature } : false
+                  }
+                  style={{
+                    color: 'var(--ant-color-text-secondary)',
+                    flex: '1 1 240px',
+                    minWidth: 0,
+                  }}
+                >
+                  {formatOptionalValue(result.userInfo.signature)}
+                </Typography.Text>
               </Flex>
 
               <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-4">
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-text-secondary">账户 ID</span>
-                  <span className="font-mono text-sm">{result.account.id}</span>
+                  <span className="text-xs text-text-secondary">部门</span>
+                  <span className="text-sm">
+                    {getDepartmentDisplayName(result.staff.departmentId, departmentMap)}
+                  </span>
                 </div>
-                {result.staff?.id && (
-                  <div className="flex flex-col gap-0.5">
-                    <span className="text-xs text-text-secondary">工号</span>
-                    <span className="font-mono text-sm">{result.staff.id}</span>
-                  </div>
-                )}
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs text-text-secondary">工号</span>
+                  <span className="font-mono text-sm">{result.staff.id}</span>
+                </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-text-secondary">登录名</span>
                   <span className="text-sm">{formatOptionalValue(result.account.loginName)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-xs text-text-secondary">身份提示</span>
-                  <span className="text-sm">
-                    {formatOptionalValue(result.account.identityHint)}
-                  </span>
+                  <span className="text-xs text-text-secondary">真实姓名</span>
+                  <span className="text-sm">{formatOptionalValue(result.staff.name)}</span>
                 </div>
               </div>
 
               <Flex gap={4} wrap>
+                {(result.userInfo.tags ?? []).map((tag) => (
+                  <Tag
+                    key={`user-tag-${tag}`}
+                    color={getHeaderUserTagColor()}
+                    style={{ margin: 0 }}
+                  >
+                    {tag}
+                  </Tag>
+                ))}
                 {result.userInfo.accessGroup.map((group) => (
                   <Tag
-                    key={group}
-                    color={group === 'REGISTRANT' ? 'gold' : 'blue'}
+                    key={`access-group-${group}`}
+                    color={getHeaderAccessGroupTagColor(group)}
                     style={{ margin: 0 }}
                   >
                     {group}

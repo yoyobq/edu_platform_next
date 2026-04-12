@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildHexAvatarSpecV1 } from '../build-hex-avatar-spec';
 import { renderHexAvatarSvgV1 } from '../render-hex-avatar-svg';
-import type { HexAvatarSymmetryAxis, HexCell } from '../types';
+import type { HexCell } from '../types';
 
 function makeHashBytes(overrides: Record<number, number> = {}) {
   const bytes = new Uint8Array(32);
@@ -16,13 +16,11 @@ function makeHashBytes(overrides: Record<number, number> = {}) {
 
 function makeHashFromBits({
   activationBits = [],
-  axisByte = 0,
   colorBits = [],
   hueByte = 1,
   familyByte = 0,
 }: {
   activationBits?: number[];
-  axisByte?: number;
   colorBits?: number[];
   familyByte?: number;
   hueByte?: number;
@@ -30,7 +28,6 @@ function makeHashFromBits({
   const bytes = new Uint8Array(32);
   bytes[0] = familyByte;
   bytes[13] = hueByte;
-  bytes[14] = axisByte;
 
   for (const bitIndex of activationBits) {
     const byteIndex = Math.floor(bitIndex / 8);
@@ -56,17 +53,10 @@ function findCell(hashBytes: Uint8Array, q: number, r: number) {
   return buildHexAvatarSpecV1(hashBytes).cells.find((cell) => cell.q === q && cell.r === r);
 }
 
-function reflectCell(cell: Pick<HexCell, 'q' | 'r'>, axis: HexAvatarSymmetryAxis) {
-  if (axis === 'vertical') {
-    return {
-      q: -cell.q - cell.r,
-      r: cell.r,
-    };
-  }
-
+function reflectCell(cell: Pick<HexCell, 'q' | 'r'>) {
   return {
-    q: cell.q + cell.r,
-    r: -cell.r,
+    q: -cell.q - cell.r,
+    r: cell.r,
   };
 }
 
@@ -127,17 +117,17 @@ describe('buildHexAvatarSpecV1', () => {
     expect(center?.enabled).toBe(true);
   });
 
-  it('一环至少启用 3 个，二环至少启用 4 个', () => {
+  it('一环固定启用 2 个，二环至少启用 5 个', () => {
     const enabledCells = getEnabledCells(makeHashBytes({ 0: 0, 13: 1 }));
-    expect(enabledCells.filter((cell) => cell.ring === 1).length).toBeGreaterThanOrEqual(3);
-    expect(enabledCells.filter((cell) => cell.ring === 2).length).toBeGreaterThanOrEqual(4);
+    expect(enabledCells.filter((cell) => cell.ring === 1).length).toBe(2);
+    expect(enabledCells.filter((cell) => cell.ring === 2).length).toBeGreaterThanOrEqual(5);
   });
 
-  it('根据 byte14 选择水平或垂直对称轴', () => {
-    const horizontalSpec = buildHexAvatarSpecV1(makeHashFromBits({ axisByte: 0 }));
-    const verticalSpec = buildHexAvatarSpecV1(makeHashFromBits({ axisByte: 1 }));
-    expect(horizontalSpec.axis).toBe('horizontal');
-    expect(verticalSpec.axis).toBe('vertical');
+  it('固定使用左右对称的垂直轴', () => {
+    const specA = buildHexAvatarSpecV1(makeHashFromBits());
+    const specB = buildHexAvatarSpecV1(makeHashBytes({ 14: 255 }));
+    expect(specA.axis).toBe('vertical');
+    expect(specB.axis).toBe('vertical');
   });
 
   it('fg2 数量不超过已启用外围单元的一半', () => {
@@ -155,12 +145,10 @@ describe('buildHexAvatarSpecV1', () => {
     const hashes = [
       makeHashFromBits({
         activationBits: [0, 2, 4, 6, 8, 10, 12],
-        axisByte: 0,
         colorBits: [1, 3, 5, 7, 9],
       }),
       makeHashFromBits({
         activationBits: [1, 3, 5, 7, 9, 11, 13],
-        axisByte: 1,
         colorBits: [0, 2, 4, 6, 8],
       }),
     ];
@@ -170,7 +158,7 @@ describe('buildHexAvatarSpecV1', () => {
       const enabledCells = spec.cells.filter((cell) => cell.enabled && cell.ring > 0);
 
       for (const cell of enabledCells) {
-        const reflectedPoint = reflectCell(cell, spec.axis);
+        const reflectedPoint = reflectCell(cell);
         const reflectedCell = spec.cells.find(
           (candidate) => candidate.q === reflectedPoint.q && candidate.r === reflectedPoint.r,
         );
