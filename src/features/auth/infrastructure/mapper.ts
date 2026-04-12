@@ -47,7 +47,6 @@ type AuthSessionResultDTO = {
         id: string;
         name: string;
         remarks: string | null;
-        studentDepartmentId: string;
         studentStatus: string;
         updatedAt: string;
       }
@@ -169,7 +168,6 @@ function normalizeIdentity(value: AuthSessionResultDTO['identity']): AuthSession
     accountId: value.accountId,
     classId: value.classId,
     createdAt: value.createdAt,
-    departmentId: value.studentDepartmentId,
     id: value.id,
     name: value.name,
     remarks: value.remarks,

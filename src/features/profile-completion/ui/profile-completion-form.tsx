@@ -33,8 +33,12 @@ export function ProfileCompletionForm({
   submitting,
   submittingLabel = '提交并继续',
 }: ProfileCompletionFormProps) {
+  const [form] = Form.useForm<ProfileCompletionFormValues>();
+  const targetIdentity = Form.useWatch('targetIdentity', form);
+
   return (
     <Form<ProfileCompletionFormValues>
+      form={form}
       layout="vertical"
       requiredMark={false}
       onFinish={onSubmit}
@@ -68,9 +72,11 @@ export function ProfileCompletionForm({
         <Input placeholder="可选，用于后续联系" autoComplete="tel" maxLength={32} />
       </Form.Item>
 
-      <Form.Item label="归属部门 ID" name="departmentId">
-        <Input placeholder="可选，按后端当前 contract 传递" maxLength={64} />
-      </Form.Item>
+      {targetIdentity === 'STAFF' ? (
+        <Form.Item label="归属部门 ID" name="departmentId" preserve={false}>
+          <Input placeholder="可选，仅 STAFF 补全时使用" maxLength={64} />
+        </Form.Item>
+      ) : null}
 
       <Form.Item style={{ marginBottom: 0 }}>
         <Button type="primary" htmlType="submit" block loading={submitting}>

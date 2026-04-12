@@ -45,7 +45,6 @@ type SessionQueryDTO = {
         id: string;
         name: string;
         remarks: string | null;
-        studentDepartmentId: string;
         studentStatus: string;
         updatedAt: string;
       }
@@ -123,7 +122,6 @@ const ME_QUERY = `
           accountId
           classId
           createdAt
-          studentDepartmentId: departmentId
           id
           name
           remarks

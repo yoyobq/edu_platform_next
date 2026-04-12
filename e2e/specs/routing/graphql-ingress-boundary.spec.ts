@@ -20,7 +20,6 @@ type SessionSeed = {
         name?: string;
       }
     | {
-        departmentId?: string;
         id?: string;
         kind: 'STUDENT';
         name?: string;
@@ -63,7 +62,6 @@ function buildPersistedSession(seed: SessionSeed) {
               accountId: seed.accountId ?? 9527,
               classId: null,
               createdAt: DEFAULT_TIMESTAMP,
-              departmentId: seed.identity.departmentId ?? 'student-department',
               id: seed.identity.id ?? `student-${seed.accountId ?? 9527}`,
               kind: 'STUDENT',
               name: seed.identity.name ?? seed.displayName,

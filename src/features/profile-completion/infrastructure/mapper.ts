@@ -6,7 +6,8 @@ function normalizeOptionalString(value: string | null | undefined) {
 
 export function mapProfileCompletionInputToDTO(input: ProfileCompletionInput) {
   return {
-    departmentId: normalizeOptionalString(input.departmentId),
+    departmentId:
+      input.targetIdentity === 'STAFF' ? normalizeOptionalString(input.departmentId) : null,
     name: input.name.trim(),
     nickname: normalizeOptionalString(input.nickname),
     phone: normalizeOptionalString(input.phone),

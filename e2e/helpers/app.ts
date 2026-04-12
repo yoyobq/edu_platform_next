@@ -17,7 +17,6 @@ type StaffIdentitySeed = {
 
 type StudentIdentitySeed = {
   classId?: number | null;
-  departmentId?: string;
   id?: string;
   kind: 'STUDENT';
   name?: string;
@@ -230,7 +229,6 @@ function buildPersistedSession(profile: SessionProfile) {
               accountId: profile.accountId,
               classId: profile.identity.classId ?? null,
               createdAt: DEFAULT_TIMESTAMP,
-              departmentId: profile.identity.departmentId ?? 'student-department',
               id: profile.identity.id ?? `student-${profile.accountId}`,
               kind: 'STUDENT',
               name: profile.identity.name ?? profile.displayName,
@@ -286,7 +284,6 @@ function buildMePayload(profile: SessionProfile) {
               id: profile.identity.id ?? `student-${profile.accountId}`,
               name: profile.identity.name ?? profile.displayName,
               remarks: profile.identity.remarks ?? null,
-              studentDepartmentId: profile.identity.departmentId ?? 'student-department',
               studentStatus: profile.identity.studentStatus ?? 'ENROLLED',
               updatedAt: DEFAULT_TIMESTAMP,
             }

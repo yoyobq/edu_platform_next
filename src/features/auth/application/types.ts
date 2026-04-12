@@ -25,7 +25,6 @@ export type AuthSessionIdentity =
       accountId: number;
       classId: number | null;
       createdAt: string;
-      departmentId: string;
       id: string;
       name: string;
       remarks: string | null;

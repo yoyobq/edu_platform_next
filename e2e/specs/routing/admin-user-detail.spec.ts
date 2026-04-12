@@ -325,6 +325,140 @@ test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
   await expect(page.getByText('ADMIN', { exact: true }).first()).toBeVisible();
 });
 
+test('tags 应支持按数组项增删并以数组提交', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+  let submittedTags: string[] | null = null;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateUserInfo')) {
+      const payload = route.request().postDataJSON() as
+        | {
+            variables?: {
+              input?: {
+                tags?: unknown;
+              };
+            };
+          }
+        | undefined;
+
+      submittedTags = Array.isArray(payload?.variables?.input?.tags)
+        ? payload.variables.input.tags.filter((tag): tag is string => typeof tag === 'string')
+        : null;
+      detailPayload.userInfo.tags = submittedTags;
+      detailPayload.userInfo.updatedAt = '2026-04-14T09:00:00.000Z';
+
+      await fulfillGraphQL(route, {
+        data: {
+          updateUserInfo: {
+            isUpdated: true,
+            userInfo: detailPayload.userInfo,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+  await page.getByLabel('删除标签 formal').click();
+  await page.getByRole('button', { name: '新增标签' }).click();
+  await page.getByLabel('标签输入').fill('好人，热情');
+  await page.getByRole('button', { name: '保存用户常用字段' }).click();
+
+  await expect(page.getByText('好人', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('热情', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('formal', { exact: true })).toHaveCount(0);
+  expect(submittedTags).toEqual(['好人', '热情']);
+});
+
+test('无标签时新增标签按钮不应禁用', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+  detailPayload.userInfo.tags = [];
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+  await expect(page.getByRole('button', { name: '新增标签' })).toBeEnabled();
+  await page.getByRole('button', { name: '新增标签' }).click();
+  await expect(page.getByLabel('标签输入')).toBeVisible();
+});
+
 test('userInfo 保存失败时应在分区内显示错误并保留编辑态', async ({ page }) => {
   const accountId = 1011;
 
