@@ -1,4 +1,4 @@
-import { type AuthAccessGroup, isAuthAccessGroup } from '@/shared/auth-access';
+import { type AuthAccessGroup } from '@/shared/auth-access';
 import { executeGraphQL } from '@/shared/graphql';
 
 import type { AdminDepartmentOption } from '../application/get-admin-department-options';
@@ -6,6 +6,7 @@ import {
   type AdminUserDetail,
   type AdminUserDetailAccountStatus,
   type AdminUserDetailGender,
+  type AdminUserDetailIdentityHint,
   type AdminUserDetailPort,
   type AdminUserDetailStaffEmploymentStatus,
   type AdminUserDetailUserState,
@@ -107,7 +108,7 @@ type BatchUpdateAccountStatusVariables = {
 type UpdateIdentityHintResponse = {
   updateIdentityHint: {
     accountId: number;
-    identityHint: AuthAccessGroup;
+    identityHint: AdminUserDetailIdentityHint;
     isUpdated: boolean;
   };
 };
@@ -115,7 +116,7 @@ type UpdateIdentityHintResponse = {
 type UpdateIdentityHintVariables = {
   input: {
     accountId: number;
-    identityHint: AuthAccessGroup;
+    identityHint: AdminUserDetailIdentityHint;
   };
 };
 
@@ -149,7 +150,7 @@ type UpdateAccessGroupResponse = {
   updateAccessGroup: {
     accessGroup: AuthAccessGroup[];
     accountId: number;
-    identityHint?: string | null;
+    identityHint?: AdminUserDetailIdentityHint | string | null;
     isUpdated: boolean;
   };
 };
@@ -378,8 +379,10 @@ const ADMIN_DEPARTMENTS_QUERY = `
   }
 `;
 
-function normalizeIdentityHint(value: string | null | undefined): AuthAccessGroup | null {
-  return isAuthAccessGroup(value) ? value : null;
+function normalizeIdentityHint(
+  value: string | null | undefined,
+): AdminUserDetailIdentityHint | null {
+  return value === 'ADMIN' || value === 'STAFF' || value === 'STUDENT' ? value : null;
 }
 
 function normalizeGender(value: string): AdminUserDetailGender {

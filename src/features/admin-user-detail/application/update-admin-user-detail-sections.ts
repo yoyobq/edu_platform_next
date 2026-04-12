@@ -4,13 +4,14 @@ import type {
   AdminUserDetail,
   AdminUserDetailAccountStatus,
   AdminUserDetailGender,
+  AdminUserDetailIdentityHint,
   AdminUserDetailStaffEmploymentStatus,
   AdminUserDetailUserState,
 } from './get-admin-user-detail';
 
 export type UpdateAdminUserDetailAccountSectionInput = {
   accountId: number;
-  identityHint: AuthAccessGroup;
+  identityHint: AdminUserDetailIdentityHint;
   status: AdminUserDetailAccountStatus;
 };
 

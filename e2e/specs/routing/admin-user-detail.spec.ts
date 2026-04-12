@@ -293,13 +293,13 @@ test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
     }
 
     if (query.includes('mutation UpdateIdentityHint')) {
-      detailPayload.account.identityHint = 'ADMIN';
+      detailPayload.account.identityHint = 'STUDENT';
 
       await fulfillGraphQL(route, {
         data: {
           updateIdentityHint: {
             accountId,
-            identityHint: 'ADMIN',
+            identityHint: 'STUDENT',
             isUpdated: true,
           },
         },
@@ -317,12 +317,15 @@ test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
 
   await expect(page.getByText('当前暂不支持修改。')).toBeVisible();
   await page.locator('#account-section-form').getByText('已暂停').click();
-  await page.locator('#account-section-form').getByText('ADMIN').click();
+  await expect(
+    page.locator('#account-section-form').getByRole('radio', { name: 'ADMIN' }),
+  ).toBeDisabled();
+  await page.locator('#account-section-form').getByText('STUDENT').click();
   await page.getByRole('button', { name: '保存账户常用字段' }).click();
 
   await expect(page.getByRole('button', { name: '编辑账户常用字段' })).toBeVisible();
   await expect(page.getByText('已暂停', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('ADMIN', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('STUDENT', { exact: true }).first()).toBeVisible();
 });
 
 test('tags 应支持按数组项增删并以数组提交', async ({ page }) => {

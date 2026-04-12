@@ -27,6 +27,7 @@ import type {
   AdminUserDetail,
   AdminUserDetailAccountStatus,
   AdminUserDetailGender,
+  AdminUserDetailIdentityHint,
   AdminUserDetailStaffEmploymentStatus,
   AdminUserDetailUserState,
 } from '../application/get-admin-user-detail';
@@ -104,7 +105,7 @@ type AdminUserDetailPageContentProps = {
 };
 
 type AccountSectionFormValues = {
-  identityHint?: AuthAccessGroup;
+  identityHint?: AdminUserDetailIdentityHint;
   status: AdminUserDetailAccountStatus;
 };
 
@@ -320,6 +321,16 @@ function toggleEditableAccessGroup(
   nextValueSet.add(targetValue);
 
   return normalizeAccessGroupValue(Array.from(nextValueSet));
+}
+
+function buildIdentityHintOptions(accessGroup: readonly AuthAccessGroup[]) {
+  const hasAdminAccessGroup = accessGroup.includes('ADMIN');
+
+  return ADMIN_USER_DETAIL_IDENTITY_HINTS.map((identityHint) => ({
+    disabled: identityHint === 'ADMIN' && !hasAdminAccessGroup,
+    label: identityHint,
+    value: identityHint,
+  }));
 }
 
 function getAccessGroupTagTone(
@@ -1086,6 +1097,10 @@ function AccountSectionEditor({
   saving: boolean;
 }) {
   const [form] = Form.useForm<AccountSectionFormValues>();
+  const identityHintOptions = useMemo(
+    () => buildIdentityHintOptions(detail.userInfo.accessGroup),
+    [detail.userInfo.accessGroup],
+  );
   const initialValues = useMemo<AccountSectionFormValues>(
     () => ({
       identityHint: detail.account.identityHint ?? undefined,
@@ -1144,10 +1159,7 @@ function AccountSectionEditor({
                 <Radio.Group
                   optionType="button"
                   buttonStyle="solid"
-                  options={ADMIN_USER_DETAIL_IDENTITY_HINTS.map((identityHint) => ({
-                    label: identityHint,
-                    value: identityHint,
-                  }))}
+                  options={identityHintOptions}
                 />
               </Form.Item>
             </EditableFormCard>
@@ -1648,6 +1660,14 @@ export function AdminUserDetailPageContent({
 
   async function handleAccountSectionSubmit(values: AccountSectionFormValues) {
     if (!result || !values.identityHint) {
+      return;
+    }
+
+    if (values.identityHint === 'ADMIN' && !result.userInfo.accessGroup.includes('ADMIN')) {
+      setSectionErrors((currentErrors) => ({
+        ...currentErrors,
+        account: '当前访问组不含 ADMIN，身份提示不能设为 ADMIN。',
+      }));
       return;
     }
 

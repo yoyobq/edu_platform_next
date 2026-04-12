@@ -1,4 +1,4 @@
-import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
+import { type AuthAccessGroup } from '@/shared/auth-access';
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUSES = [
   'ACTIVE',
@@ -16,13 +16,14 @@ export const ADMIN_USER_DETAIL_USER_STATES = [
 ] as const;
 export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES = ['ACTIVE', 'LEFT', 'SUSPENDED'] as const;
 export const ADMIN_USER_DETAIL_GENDERS = ['FEMALE', 'MALE', 'SECRET'] as const;
-export const ADMIN_USER_DETAIL_IDENTITY_HINTS = AUTH_ACCESS_GROUPS;
+export const ADMIN_USER_DETAIL_IDENTITY_HINTS = ['ADMIN', 'STAFF', 'STUDENT'] as const;
 
 export type AdminUserDetailAccountStatus = (typeof ADMIN_USER_DETAIL_ACCOUNT_STATUSES)[number];
 export type AdminUserDetailUserState = (typeof ADMIN_USER_DETAIL_USER_STATES)[number];
 export type AdminUserDetailStaffEmploymentStatus =
   (typeof ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES)[number];
 export type AdminUserDetailGender = (typeof ADMIN_USER_DETAIL_GENDERS)[number];
+export type AdminUserDetailIdentityHint = (typeof ADMIN_USER_DETAIL_IDENTITY_HINTS)[number];
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS: Record<AdminUserDetailAccountStatus, string> =
   {
@@ -60,7 +61,7 @@ export type AdminUserDetail = {
   account: {
     createdAt: string;
     id: number;
-    identityHint: AuthAccessGroup | null;
+    identityHint: AdminUserDetailIdentityHint | null;
     loginEmail: string | null;
     loginName: string | null;
     recentLoginHistory: readonly {
