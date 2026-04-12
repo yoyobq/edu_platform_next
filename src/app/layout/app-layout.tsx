@@ -1,15 +1,17 @@
 // src/app/layout/app-layout.tsx
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
+import { LogoutOutlined, MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
   ConfigProvider,
+  Divider,
+  Dropdown,
   Flex,
   Layout,
   Menu,
-  Popconfirm,
+  Modal,
   Segmented,
   Skeleton,
   theme as antdTheme,
@@ -36,6 +38,7 @@ import {
 
 import { logout, useAuthSessionState } from '@/features/auth';
 
+import { HexAvatar } from '@/shared/hex-avatar';
 import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 import { BrandLockup } from '@/shared/ui/brand';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
@@ -492,30 +495,72 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
                   {currentAppEnv}
                 </div>
-                <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
-                  {currentIdentity}
-                </div>
                 {authSession.status === 'authenticated' && activeSnapshot ? (
-                  <>
-                    <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
-                      {activeSnapshot.displayName}
-                    </div>
-                    <Popconfirm
-                      cancelText="不累"
-                      description="且将公事付清风，他日相逢再续行"
-                      okText="江湖再见"
-                      placement="bottomRight"
-                      title="结束会话"
-                      onConfirm={() => {
-                        logout();
-                        navigate('/login', { replace: true });
-                      }}
+                  <Dropdown
+                    placement="bottomRight"
+                    trigger={['click']}
+                    dropdownRender={() => (
+                      <div
+                        style={{
+                          background: 'var(--ant-color-bg-elevated)',
+                          borderRadius: 'var(--ant-border-radius-lg)',
+                          boxShadow: 'var(--ant-box-shadow-secondary)',
+                          overflow: 'hidden',
+                          minWidth: 220,
+                        }}
+                      >
+                        <div className="flex items-center gap-3 px-4 py-3">
+                          <HexAvatar
+                            accountId={activeSnapshot.accountId}
+                            avatarUrl={activeSnapshot.userInfo.avatarUrl}
+                            size={44}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-sm font-semibold">
+                              {activeSnapshot.displayName}
+                            </div>
+                            <div className="truncate text-xs text-text-secondary">
+                              {currentIdentity}
+                            </div>
+                          </div>
+                        </div>
+                        <Divider style={{ margin: 0 }} />
+                        <div className="px-1 py-1">
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"
+                            onClick={() => {
+                              Modal.confirm({
+                                title: '结束会话',
+                                content: '且将公事付清风，他日相逢再续行',
+                                okText: '江湖再见',
+                                cancelText: '不累',
+                                onOk: () => {
+                                  logout();
+                                  navigate('/login', { replace: true });
+                                },
+                              });
+                            }}
+                          >
+                            <LogoutOutlined />
+                            退出账户
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  >
+                    <button
+                      type="button"
+                      className="flex cursor-pointer items-center rounded-full border-2 border-transparent p-0.5 transition-all hover:border-border-secondary"
+                      aria-label="用户菜单"
                     >
-                      <Button type="text" size="small">
-                        退出
-                      </Button>
-                    </Popconfirm>
-                  </>
+                      <HexAvatar
+                        accountId={activeSnapshot.accountId}
+                        avatarUrl={activeSnapshot.userInfo.avatarUrl}
+                        size={32}
+                      />
+                    </button>
+                  </Dropdown>
                 ) : isSessionResolving ? (
                   <>
                     <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
