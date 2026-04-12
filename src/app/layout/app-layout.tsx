@@ -22,6 +22,11 @@ import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-router';
 
 import {
+  getNavigationItems,
+  hasPayloadCryptoNavigationAccess,
+  resolveNavMode,
+} from '@/app/navigation';
+import {
   AuthRefreshFeedbackBridge,
   CollaborationSessionProvider,
   FONT_SCALE_CONFIG,
@@ -50,11 +55,6 @@ import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 import { EntryAccentGlyph } from './entry-accent-glyph';
 import { EntrySidecar } from './entry-sidecar';
 import { NavSidebar } from './nav-sidebar';
-import {
-  getNavigationItems,
-  hasPayloadCryptoNavigationAccess,
-  resolveNavMode,
-} from './navigation-meta';
 import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
@@ -110,17 +110,25 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     prefersPinnedFull,
     setMode: setNavMode,
   } = useNavCapability();
+  const navigationFilter = useMemo(
+    () =>
+      activeSnapshot
+        ? {
+            accountId: activeSnapshot.accountId,
+            primaryAccessGroup: activeSnapshot.primaryAccessGroup,
+            accessGroup: activeSnapshot.userInfo.accessGroup,
+            slotGroup: activeSnapshot.slotGroup,
+            appEnv: currentAppEnv,
+          }
+        : null,
+    [activeSnapshot, currentAppEnv],
+  );
 
   // Activate nav mode based on effective navigation access when session becomes authenticated.
   useEffect(() => {
-    if (authSession.status === 'authenticated' && activeSnapshot) {
-      const baseMode = resolveNavMode({
-        accessGroup: activeSnapshot.userInfo.accessGroup,
-      });
-      const targetMode =
-        baseMode === 'rail' && prefersPinnedFull && mainWidth >= NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL
-          ? 'full'
-          : baseMode;
+    if (authSession.status === 'authenticated' && navigationFilter) {
+      const baseMode = resolveNavMode(navigationFilter);
+      const targetMode = baseMode === 'rail' && prefersPinnedFull ? 'full' : baseMode;
       if (navMode === 'none' && targetMode !== 'none') {
         setNavMode(targetMode);
       }
@@ -129,20 +137,11 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     if (authSession.status === 'unauthenticated' && navMode !== 'none') {
       setNavMode('none');
     }
-  }, [activeSnapshot, authSession.status, mainWidth, navMode, prefersPinnedFull, setNavMode]);
+  }, [authSession.status, mainWidth, navMode, navigationFilter, prefersPinnedFull, setNavMode]);
 
   const navItems = useMemo(
-    () =>
-      activeSnapshot
-        ? getNavigationItems({
-            accountId: activeSnapshot.accountId,
-            primaryAccessGroup: activeSnapshot.primaryAccessGroup,
-            accessGroup: activeSnapshot.userInfo.accessGroup,
-            slotGroup: activeSnapshot.slotGroup,
-            appEnv: currentAppEnv,
-          })
-        : [],
-    [activeSnapshot, currentAppEnv],
+    () => (navigationFilter ? getNavigationItems(navigationFilter) : []),
+    [navigationFilter],
   );
 
   useEffect(() => {

@@ -1,19 +1,16 @@
 // src/app/lib/local-entry-catalog.ts
 
+import { getNavigationLeafItems, type NavigationFilter } from '@/app/navigation';
+
 import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 
 import type { EntryCard } from './entry-card';
-
-type AppEnv = 'dev' | 'test' | 'prod';
-type AppAccessLevel = 'guest' | 'admin';
 
 type LocalEntryCatalogItem = EntryCard & {
   keywords: string[];
 };
 
-type LocalEntryContext = {
-  accessLevel: AppAccessLevel;
-  appEnv: AppEnv;
+type LocalEntryContext = NavigationFilter & {
   search: string;
 };
 
@@ -59,29 +56,16 @@ function scoreEntry(query: string, entry: LocalEntryCatalogItem): number {
 }
 
 export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEntryCatalogItem[] {
-  const cards: LocalEntryCatalogItem[] = [
-    {
-      id: 'route-home',
-      title: '首页',
-      description: '返回当前默认工作台首页，查看状态概览、主动作入口与最近上下文。',
-      to: withSearch('/', context.search),
-      kind: 'route',
-      keywords: ['home', 'index', '默认工作台', '状态概览', '首页'],
-    },
-  ];
-
-  if (context.appEnv === 'dev' || context.appEnv === 'test') {
-    cards.push({
-      id: 'route-sandbox-playground',
-      title: 'Sandbox 演练场',
-      description: '进入自由原型试验区，适合快速试错和页面试玩。',
-      to: withSearch('/sandbox/playground', context.search),
-      kind: 'route',
-      keywords: ['sandbox', '演练场', '原型', '试玩', '试验区', '沙盒'],
-    });
-  }
-
-  return cards;
+  return getNavigationLeafItems(context)
+    .filter((item) => item.localEntry)
+    .map((item) => ({
+      id: `route-${item.key.replaceAll('/', '-').replace(/^-+/, '')}`,
+      title: item.label,
+      description: item.localEntry?.description,
+      to: withSearch(item.path, context.search),
+      kind: 'route' as const,
+      keywords: [...(item.localEntry?.keywords ?? [])],
+    }));
 }
 
 export function matchLocalEntryCards(query: string, cards: LocalEntryCatalogItem[]): EntryCard[] {

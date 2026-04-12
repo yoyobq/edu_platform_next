@@ -6,6 +6,14 @@ import { NavCapabilityContext, type NavCapabilityState, type NavMode } from './n
 
 const NAV_PINNED_FULL_STORAGE_KEY = 'app.nav.prefersPinnedFull';
 
+function persistPinnedFullPreference(value: boolean) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  window.localStorage.setItem(NAV_PINNED_FULL_STORAGE_KEY, value ? '1' : '0');
+}
+
 export function NavCapabilityProvider({ children }: { children: ReactNode }) {
   const [mode, setModeRaw] = useState<NavMode>('none');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -19,11 +27,7 @@ export function NavCapabilityProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    window.localStorage.setItem(NAV_PINNED_FULL_STORAGE_KEY, prefersPinnedFull ? '1' : '0');
+    persistPinnedFullPreference(prefersPinnedFull);
   }, [prefersPinnedFull]);
 
   const value = useMemo<NavCapabilityState>(
@@ -36,10 +40,12 @@ export function NavCapabilityProvider({ children }: { children: ReactNode }) {
         setModeRaw(newMode);
         if (newMode === 'full') {
           setPrefersPinnedFull(true);
+          persistPinnedFullPreference(true);
           setManualFullOverride(false);
         } else if (newMode === 'rail') {
           if (!options?.preservePinnedPreference) {
             setPrefersPinnedFull(false);
+            persistPinnedFullPreference(false);
           }
           setManualFullOverride(false);
         } else {
@@ -64,6 +70,7 @@ export function NavCapabilityProvider({ children }: { children: ReactNode }) {
       pinToFull: () => {
         setModeRaw('full');
         setPrefersPinnedFull(true);
+        persistPinnedFullPreference(true);
         setManualFullOverride(true);
         setIsDrawerOpen(false);
       },

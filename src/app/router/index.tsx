@@ -13,6 +13,7 @@ import {
 } from 'react-router';
 
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
+import { canAccessNavigationPath } from '@/app/navigation';
 
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
@@ -223,6 +224,36 @@ async function adminUsersLoader({ request }: LoaderFunctionArgs) {
   return {
     isForbidden: false,
   };
+}
+
+async function navigationPageLoader({ request }: LoaderFunctionArgs, path: string) {
+  const snapshot = await ensureAuthenticatedSession(request);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  if (
+    !canAccessNavigationPath(path, {
+      accountId: snapshot.accountId,
+      primaryAccessGroup: snapshot.primaryAccessGroup,
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+      appEnv: currentAppEnv,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    isForbidden: false,
+  };
+}
+
+async function errorPreviewLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/admin/error-preview');
 }
 
 async function welcomeLoader({ request }: LoaderFunctionArgs) {
@@ -490,7 +521,7 @@ const router = createBrowserRouter([
       },
       {
         path: '/admin/error-preview',
-        loader: adminUsersLoader,
+        loader: errorPreviewLoader,
         Component: ErrorPreviewPage,
       },
       {

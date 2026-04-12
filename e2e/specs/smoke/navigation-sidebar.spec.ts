@@ -23,6 +23,25 @@ test('无 ADMIN 权限时，不应显示 admin 导航', async ({ page }) => {
   await expect(page.getByRole('button', { name: '收起导航菜单' })).toHaveCount(0);
 });
 
+test('guest 用户组可见 sidebar，并可进入首页与异常预览页', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  await openHomeAs(page, {
+    accessGroup: ['GUEST'],
+    primaryAccessGroup: 'GUEST',
+  });
+
+  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+
+  await page.getByRole('button', { name: '展开导航菜单' }).click();
+
+  await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '异常页' })).toBeVisible();
+
+  await page.getByRole('menuitem', { name: '异常页' }).click();
+
+  await expect(page.getByRole('heading', { name: '异常页预览' })).toBeVisible();
+});
+
 test('管理员可在 rail 与 full 间切换，并在刷新后恢复 pinned full', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await openHome(page);
