@@ -410,7 +410,7 @@ export function PayloadCryptoLabPage() {
                 {result}
               </CodeHighlighter>
             ) : (
-              <div className="flex h-full min-h-[300px] items-center justify-center">
+              <div className="flex h-full min-h-75 items-center justify-center">
                 <Typography.Text type="secondary">暂无结果，请先执行加解密操作</Typography.Text>
               </div>
             )}

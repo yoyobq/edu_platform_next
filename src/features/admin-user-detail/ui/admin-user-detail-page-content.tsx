@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
-import { Alert, Avatar, Button, Card, Flex, message, Skeleton, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Flex, message, Skeleton, Tag, Typography } from 'antd';
 import { useLocation, useNavigate } from 'react-router';
+
+import { HexAvatar } from '@/shared/hex-avatar';
 
 import type { AdminUserDetail } from '../application/get-admin-user-detail';
 import {
@@ -616,17 +618,15 @@ export function AdminUserDetailPageContent({
         <div className="rounded-block border border-border bg-bg-container p-6 shadow-card">
           <Flex gap={24} align="start">
             <div className="relative shrink-0">
-              <Avatar
+              <HexAvatar
+                accountId={result.account.id}
+                avatarUrl={result.userInfo.avatarUrl}
                 size={72}
-                src={result.userInfo.avatarUrl || undefined}
                 style={{
                   border: '3px solid var(--ant-color-bg-container)',
                   boxShadow: 'var(--shadow-card)',
                 }}
-              >
-                {result.userInfo.nickname?.trim()?.slice(0, 1) ||
-                  String(result.account.id).slice(-2)}
-              </Avatar>
+              />
               <div
                 className={`absolute -bottom-0.5 -right-0.5 h-4 w-4 rounded-full ${
                   result.account.status === 'ACTIVE' ? 'bg-success' : 'bg-fill-secondary'
