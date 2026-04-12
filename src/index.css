@@ -24,9 +24,17 @@
   --color-info-border: var(--ant-color-info-border);
   --color-fill-secondary: var(--ant-color-fill-secondary);
   --color-fill-tertiary: var(--ant-color-fill-tertiary);
-  --color-sidebar-affordance: #e7ebf1;
-  --color-sidebar-affordance-hover: #dde3ec;
-  --color-sidebar-affordance-ink: #5b6576;
+  --color-sidebar-affordance: color-mix(
+    in srgb,
+    var(--ant-color-bg-layout) 88%,
+    var(--ant-color-border)
+  );
+  --color-sidebar-affordance-hover: color-mix(
+    in srgb,
+    var(--ant-color-bg-layout) 72%,
+    var(--ant-color-border)
+  );
+  --color-sidebar-affordance-ink: var(--ant-color-text-tertiary);
   --color-bg-mask: var(--ant-color-bg-mask);
   --radius-lg: var(--ant-border-radius-lg);
   --shadow-popover: var(--ant-box-shadow-secondary);
@@ -305,9 +313,6 @@ html.disable-motion *::after {
 .dark {
   color-scheme: dark;
   --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --color-sidebar-affordance: #2a2d33;
-  --color-sidebar-affordance-hover: #353840;
-  --color-sidebar-affordance-ink: #a0a7b4;
 }
 
 .app-nav-menu-shell > .ant-menu.ant-menu-inline {
