@@ -149,7 +149,7 @@ type UpdateAccessGroupResponse = {
   updateAccessGroup: {
     accessGroup: AuthAccessGroup[];
     accountId: number;
-    identityHint: AuthAccessGroup;
+    identityHint?: string | null;
     isUpdated: boolean;
   };
 };
@@ -536,9 +536,13 @@ export async function requestAdminUserDetailUserInfoSectionUpdate(
     : null;
 
   return {
-    account: {
-      identityHint: accessGroupResponse?.updateAccessGroup.identityHint,
-    },
+    account:
+      accessGroupResponse &&
+      normalizeIdentityHint(accessGroupResponse.updateAccessGroup.identityHint) !== null
+        ? {
+            identityHint: normalizeIdentityHint(accessGroupResponse.updateAccessGroup.identityHint),
+          }
+        : {},
     isUpdated:
       userInfoResponse.updateUserInfo.isUpdated ||
       Boolean(accessGroupResponse?.updateAccessGroup.isUpdated),

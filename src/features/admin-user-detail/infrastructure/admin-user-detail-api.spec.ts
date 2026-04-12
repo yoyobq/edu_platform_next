@@ -422,9 +422,7 @@ describe('requestAdminUserDetail', () => {
         userState: 'PENDING',
       }),
     ).resolves.toEqual({
-      account: {
-        identityHint: undefined,
-      },
+      account: {},
       isUpdated: true,
       userInfo: {
         accessGroup: ['REGISTRANT'],
@@ -452,5 +450,79 @@ describe('requestAdminUserDetail', () => {
       expect.stringContaining('mutation UpdateUserInfo'),
       expect.any(Object),
     );
+  });
+
+  it('does not emit identityHint patch when updateAccessGroup response misses it', async () => {
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        updateUserInfo: {
+          isUpdated: true,
+          userInfo: {
+            accessGroup: ['STAFF'],
+            address: null,
+            avatarUrl: null,
+            birthDate: null,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            email: 'alpha@example.com',
+            gender: 'SECRET',
+            geographic: null,
+            id: 'user-info-1003',
+            nickname: 'Alpha',
+            notifyCount: 0,
+            phone: null,
+            signature: null,
+            tags: null,
+            unreadCount: 0,
+            updatedAt: '2026-04-06T00:00:00.000Z',
+            userState: 'ACTIVE',
+          },
+        },
+      })
+      .mockResolvedValueOnce({
+        updateAccessGroup: {
+          accessGroup: ['ADMIN', 'STAFF'],
+          accountId: 1003,
+          isUpdated: true,
+        },
+      });
+
+    await expect(
+      requestAdminUserDetailUserInfoSectionUpdate({
+        accessGroup: ['ADMIN', 'STAFF'],
+        accountId: 1003,
+        address: null,
+        birthDate: null,
+        email: 'alpha@example.com',
+        gender: 'SECRET',
+        geographic: null,
+        nickname: 'Alpha',
+        phone: null,
+        signature: null,
+        tags: [],
+        userState: 'ACTIVE',
+      }),
+    ).resolves.toEqual({
+      account: {},
+      isUpdated: true,
+      userInfo: {
+        accessGroup: ['ADMIN', 'STAFF'],
+        address: null,
+        avatarUrl: null,
+        birthDate: null,
+        createdAt: '2026-04-01T00:00:00.000Z',
+        email: 'alpha@example.com',
+        gender: 'SECRET',
+        geographic: null,
+        id: 'user-info-1003',
+        nickname: 'Alpha',
+        notifyCount: 0,
+        phone: null,
+        signature: null,
+        tags: null,
+        unreadCount: 0,
+        updatedAt: '2026-04-06T00:00:00.000Z',
+        userState: 'ACTIVE',
+      },
+    });
   });
 });

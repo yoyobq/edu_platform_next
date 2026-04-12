@@ -606,6 +606,88 @@ test('accessGroup 标签应满足 admin staff 可并存且 guest 互斥', async 
   await expect(staffTag).toHaveAttribute('aria-pressed', 'false');
 });
 
+test('修改访问组但后端未返回 identityHint 时，不应清空现有身份提示', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateUserInfo')) {
+      await fulfillGraphQL(route, {
+        data: {
+          updateUserInfo: {
+            isUpdated: true,
+            userInfo: detailPayload.userInfo,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateAccessGroup')) {
+      detailPayload.userInfo.accessGroup = ['ADMIN', 'STAFF'];
+
+      await fulfillGraphQL(route, {
+        data: {
+          updateAccessGroup: {
+            accessGroup: ['ADMIN', 'STAFF'],
+            accountId,
+            isUpdated: true,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await expect(page.getByText('STAFF', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+  await page.getByTestId('access-group-tag-ADMIN').click();
+  await page.getByRole('button', { name: '保存用户常用字段' }).click();
+
+  await expect(page.getByRole('button', { name: '编辑账户常用字段' })).toBeVisible();
+  await page.getByRole('button', { name: '编辑账户常用字段' }).click();
+  await expect(
+    page.locator('#account-section-form').getByRole('radio', { name: 'STAFF' }),
+  ).toBeChecked();
+});
+
 test('registrant 访问组应只读展示且不允许前端修改', async ({ page }) => {
   const accountId = 1011;
   const detailPayload = buildAdminUserDetailPayload(accountId);

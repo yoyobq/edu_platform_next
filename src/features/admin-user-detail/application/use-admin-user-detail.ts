@@ -18,6 +18,12 @@ const INITIAL_STATE: AdminUserDetailState = {
   result: null,
 };
 
+function omitUndefinedFields<T extends Record<string, unknown>>(value: T) {
+  return Object.fromEntries(
+    Object.entries(value).filter(([, fieldValue]) => fieldValue !== undefined),
+  ) as Partial<T>;
+}
+
 export function useAdminUserDetail(accountId: number, loadDetail: AdminUserDetailLoader) {
   const [state, setState] = useState(INITIAL_STATE);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -76,13 +82,15 @@ export function useAdminUserDetail(accountId: number, loadDetail: AdminUserDetai
         return currentState;
       }
 
+      const nextAccountPatch = omitUndefinedFields(account);
+
       return {
         ...currentState,
         result: {
           ...currentState.result,
           account: {
             ...currentState.result.account,
-            ...account,
+            ...nextAccountPatch,
           },
         },
       };
