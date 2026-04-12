@@ -440,6 +440,12 @@ function normalizeAccessGroupValue(accessGroup: readonly AuthAccessGroup[]) {
   return Array.from(new Set(accessGroup));
 }
 
+function hasOwnIdentityHintField(
+  value: UpdateAccessGroupResponse['updateAccessGroup'],
+): value is UpdateAccessGroupResponse['updateAccessGroup'] & { identityHint: string | null } {
+  return Object.prototype.hasOwnProperty.call(value, 'identityHint');
+}
+
 const adminUserDetailPort: AdminUserDetailPort = {
   async getAdminUserDetail(accountId: number): Promise<AdminUserDetail> {
     const [detailResponse, staffResponse] = await Promise.all([
@@ -537,15 +543,15 @@ export async function requestAdminUserDetailUserInfoSectionUpdate(
         },
       )
     : null;
+  const normalizedNextIdentityHint = accessGroupResponse
+    ? hasOwnIdentityHintField(accessGroupResponse.updateAccessGroup)
+      ? normalizeIdentityHint(accessGroupResponse.updateAccessGroup.identityHint)
+      : undefined
+    : undefined;
 
   return {
     account:
-      accessGroupResponse &&
-      normalizeIdentityHint(accessGroupResponse.updateAccessGroup.identityHint) !== null
-        ? {
-            identityHint: normalizeIdentityHint(accessGroupResponse.updateAccessGroup.identityHint),
-          }
-        : {},
+      normalizedNextIdentityHint === undefined ? {} : { identityHint: normalizedNextIdentityHint },
     isUpdated:
       userInfoResponse.updateUserInfo.isUpdated ||
       Boolean(accessGroupResponse?.updateAccessGroup.isUpdated),

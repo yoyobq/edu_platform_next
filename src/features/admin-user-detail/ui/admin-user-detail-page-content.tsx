@@ -43,12 +43,16 @@ import {
   ADMIN_USER_DETAIL_USER_STATES,
 } from '../application/get-admin-user-detail';
 import type {
-  UpdateAdminUserDetailAccountSectionInput,
+  UpdateAdminUserDetailAccountSectionCommand,
   UpdateAdminUserDetailAccountSectionResult,
   UpdateAdminUserDetailStaffSectionInput,
   UpdateAdminUserDetailStaffSectionResult,
   UpdateAdminUserDetailUserInfoSectionInput,
   UpdateAdminUserDetailUserInfoSectionResult,
+} from '../application/update-admin-user-detail-sections';
+import {
+  assertAdminUserDetailIdentityHintAllowed,
+  isAdminUserDetailIdentityHintAllowed,
 } from '../application/update-admin-user-detail-sections';
 import {
   type AdminDepartmentOptionsLoader,
@@ -94,7 +98,7 @@ type AdminUserDetailPageContentProps = {
   loadDepartmentOptions: AdminDepartmentOptionsLoader;
   loadDetail: AdminUserDetailLoader;
   updateAccountSection: (
-    input: UpdateAdminUserDetailAccountSectionInput,
+    input: UpdateAdminUserDetailAccountSectionCommand,
   ) => Promise<UpdateAdminUserDetailAccountSectionResult>;
   updateStaffSection: (
     input: UpdateAdminUserDetailStaffSectionInput,
@@ -324,10 +328,8 @@ function toggleEditableAccessGroup(
 }
 
 function buildIdentityHintOptions(accessGroup: readonly AuthAccessGroup[]) {
-  const hasAdminAccessGroup = accessGroup.includes('ADMIN');
-
   return ADMIN_USER_DETAIL_IDENTITY_HINTS.map((identityHint) => ({
-    disabled: identityHint === 'ADMIN' && !hasAdminAccessGroup,
+    disabled: !isAdminUserDetailIdentityHintAllowed(accessGroup, identityHint),
     label: identityHint,
     value: identityHint,
   }));
@@ -1663,10 +1665,12 @@ export function AdminUserDetailPageContent({
       return;
     }
 
-    if (values.identityHint === 'ADMIN' && !result.userInfo.accessGroup.includes('ADMIN')) {
+    try {
+      assertAdminUserDetailIdentityHintAllowed(result.userInfo.accessGroup, values.identityHint);
+    } catch (error) {
       setSectionErrors((currentErrors) => ({
         ...currentErrors,
-        account: '当前访问组不含 ADMIN，身份提示不能设为 ADMIN。',
+        account: error instanceof Error ? error.message : '身份提示校验失败。',
       }));
       return;
     }
@@ -1686,6 +1690,7 @@ export function AdminUserDetailPageContent({
 
     try {
       const mutationResult = await updateAccountSection({
+        accessGroup: result.userInfo.accessGroup,
         accountId: result.account.id,
         identityHint: values.identityHint,
         status: values.status,
