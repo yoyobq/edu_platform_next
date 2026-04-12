@@ -24,6 +24,9 @@ import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-ro
 import {
   AuthRefreshFeedbackBridge,
   CollaborationSessionProvider,
+  FONT_SCALE_CONFIG,
+  FONT_SCALE_OPTIONS,
+  type FontScale,
   KeyboardShortcutStackProvider,
   NAV_FULL_WIDTH,
   NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL,
@@ -34,6 +37,7 @@ import {
   useNavCapability,
   useRegisterKeyboardShortcut,
   useSidecarState,
+  useTheme,
 } from '@/app/providers';
 
 import { logout, useAuthSessionState } from '@/features/auth';
@@ -59,25 +63,6 @@ type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
 };
 
-type FontScale = 'compact' | 'standard' | 'comfortable' | 'xlarge';
-
-const FONT_SCALE_CONFIG: Record<
-  FontScale,
-  { antdFontSize: number; htmlFontSize: string; label: string }
-> = {
-  compact: { antdFontSize: 13, htmlFontSize: '15px', label: '小' },
-  standard: { antdFontSize: 14, htmlFontSize: '16px', label: '标' },
-  comfortable: { antdFontSize: 16, htmlFontSize: '18px', label: '大' },
-  xlarge: { antdFontSize: 18, htmlFontSize: '20px', label: '特大' },
-};
-
-const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
-  { label: '小', value: 'compact' },
-  { label: '标', value: 'standard' },
-  { label: '大', value: 'comfortable' },
-  { label: '特大', value: 'xlarge' },
-];
-
 type MainFrameStyle = CSSProperties & {
   '--layout-main-width': string;
 };
@@ -101,53 +86,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
-  const [isDark, setIsDark] = useState(() => {
-    try {
-      return localStorage.getItem('color-scheme') === 'dark';
-    } catch {
-      return false;
-    }
-  });
-  const [fontScale, setFontScale] = useState<FontScale>(() => {
-    try {
-      const saved = localStorage.getItem('font-scale');
-      if (
-        saved === 'compact' ||
-        saved === 'standard' ||
-        saved === 'comfortable' ||
-        saved === 'xlarge'
-      )
-        return saved;
-    } catch {
-      // noop
-    }
-    return 'standard';
-  });
-
-  useEffect(() => {
-    document.documentElement.style.fontSize = FONT_SCALE_CONFIG[fontScale].htmlFontSize;
-    try {
-      localStorage.setItem('font-scale', fontScale);
-    } catch {
-      // noop
-    }
-  }, [fontScale]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    if (isDark) {
-      root.classList.add('dark');
-      root.style.colorScheme = 'dark';
-    } else {
-      root.classList.remove('dark');
-      root.style.colorScheme = 'light';
-    }
-    try {
-      localStorage.setItem('color-scheme', isDark ? 'dark' : 'light');
-    } catch {
-      // noop
-    }
-  }, [isDark]);
+  const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
+  const [logoutModal, logoutModalContextHolder] = Modal.useModal();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
@@ -425,6 +365,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       }}
     >
       <AuthRefreshFeedbackBridge />
+      {logoutModalContextHolder}
       <div className="h-screen overflow-hidden bg-bg-layout text-text">
         <Layout style={{ height: '100%', background: 'transparent' }}>
           <Layout.Header
@@ -530,7 +471,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                             type="button"
                             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"
                             onClick={() => {
-                              Modal.confirm({
+                              logoutModal.confirm({
                                 title: '结束会话',
                                 content: '且将公事付清风，他日相逢再续行',
                                 okText: '江湖再见',

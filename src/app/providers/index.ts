@@ -33,3 +33,6 @@ export {
 export { NavCapabilityProvider } from './nav-capability-provider';
 export { useSidecarState } from './sidecar-state';
 export { SidecarStateProvider } from './sidecar-state-provider';
+export { FONT_SCALE_CONFIG, FONT_SCALE_OPTIONS, type FontScale } from './theme-constants';
+export { ThemeProvider } from './theme-provider';
+export { useTheme } from './use-theme';
