@@ -176,39 +176,55 @@ describe('requestAdminUserDetail', () => {
   });
 
   it('normalizes user info payload before mutation', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
-      updateUserInfo: {
-        isUpdated: true,
-        userInfo: {
-          accessGroup: ['STAFF'],
-          address: null,
-          avatarUrl: null,
-          birthDate: '2026-04-10',
-          createdAt: '2026-04-01T00:00:00.000Z',
-          email: 'alpha@example.com',
-          gender: 'FEMALE',
-          geographic: 'Shanghai',
-          id: 'user-info-1001',
-          nickname: 'Alpha',
-          notifyCount: 2,
-          phone: null,
-          signature: null,
-          tags: ['ops'],
-          unreadCount: 1,
-          updatedAt: '2026-04-05T00:00:00.000Z',
-          userState: 'ACTIVE',
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        updateUserInfo: {
+          isUpdated: true,
+          userInfo: {
+            accessGroup: ['STAFF'],
+            address: null,
+            avatarUrl: null,
+            birthDate: '2026-04-10',
+            createdAt: '2026-04-01T00:00:00.000Z',
+            email: 'alpha@example.com',
+            gender: 'FEMALE',
+            geographic: {
+              city: 'Los Angeles',
+              province: 'California',
+            },
+            id: 'user-info-1001',
+            nickname: 'Alpha',
+            notifyCount: 2,
+            phone: null,
+            signature: null,
+            tags: ['ops'],
+            unreadCount: 1,
+            updatedAt: '2026-04-05T00:00:00.000Z',
+            userState: 'ACTIVE',
+          },
         },
-      },
-    });
+      })
+      .mockResolvedValueOnce({
+        updateAccessGroup: {
+          accessGroup: ['ADMIN', 'STAFF'],
+          accountId: 1001,
+          identityHint: 'ADMIN',
+          isUpdated: true,
+        },
+      });
 
     await expect(
       requestAdminUserDetailUserInfoSectionUpdate({
+        accessGroup: ['STAFF', 'ADMIN'],
         accountId: 1001,
         address: '   ',
         birthDate: '2026-04-10',
         email: ' alpha@example.com ',
         gender: 'FEMALE',
-        geographic: ' Shanghai ',
+        geographic: {
+          city: 'Los Angeles',
+          province: 'California',
+        },
         nickname: ' Alpha ',
         phone: '',
         signature: null,
@@ -216,16 +232,22 @@ describe('requestAdminUserDetail', () => {
         userState: 'ACTIVE',
       }),
     ).resolves.toEqual({
+      account: {
+        identityHint: 'ADMIN',
+      },
       isUpdated: true,
       userInfo: {
-        accessGroup: ['STAFF'],
+        accessGroup: ['ADMIN', 'STAFF'],
         address: null,
         avatarUrl: null,
         birthDate: '2026-04-10',
         createdAt: '2026-04-01T00:00:00.000Z',
         email: 'alpha@example.com',
         gender: 'FEMALE',
-        geographic: 'Shanghai',
+        geographic: {
+          city: 'Los Angeles',
+          province: 'California',
+        },
         id: 'user-info-1001',
         nickname: 'Alpha',
         notifyCount: 2,
@@ -247,12 +269,24 @@ describe('requestAdminUserDetail', () => {
           birthDate: '2026-04-10',
           email: 'alpha@example.com',
           gender: 'FEMALE',
-          geographic: 'Shanghai',
+          geographic: {
+            city: 'Los Angeles',
+            province: 'California',
+          },
           nickname: 'Alpha',
           phone: null,
           signature: null,
           tags: ['ops'],
           userState: 'ACTIVE',
+        },
+      },
+    );
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation UpdateAccessGroup'),
+      {
+        input: {
+          accessGroup: ['STAFF', 'ADMIN'],
+          accountId: 1001,
         },
       },
     );
@@ -344,6 +378,79 @@ describe('requestAdminUserDetail', () => {
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('query AdminDepartments'),
       { limit: 500 },
+    );
+  });
+
+  it('skips updateAccessGroup when accessGroup is omitted', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      updateUserInfo: {
+        isUpdated: true,
+        userInfo: {
+          accessGroup: ['REGISTRANT'],
+          address: null,
+          avatarUrl: null,
+          birthDate: null,
+          createdAt: '2026-04-01T00:00:00.000Z',
+          email: 'registrant@example.com',
+          gender: 'SECRET',
+          geographic: null,
+          id: 'user-info-1002',
+          nickname: 'Registrant',
+          notifyCount: 0,
+          phone: null,
+          signature: null,
+          tags: null,
+          unreadCount: 0,
+          updatedAt: '2026-04-06T00:00:00.000Z',
+          userState: 'PENDING',
+        },
+      },
+    });
+
+    await expect(
+      requestAdminUserDetailUserInfoSectionUpdate({
+        accountId: 1002,
+        address: null,
+        birthDate: null,
+        email: 'registrant@example.com',
+        gender: 'SECRET',
+        geographic: null,
+        nickname: 'Registrant',
+        phone: null,
+        signature: null,
+        tags: [],
+        userState: 'PENDING',
+      }),
+    ).resolves.toEqual({
+      account: {
+        identityHint: undefined,
+      },
+      isUpdated: true,
+      userInfo: {
+        accessGroup: ['REGISTRANT'],
+        address: null,
+        avatarUrl: null,
+        birthDate: null,
+        createdAt: '2026-04-01T00:00:00.000Z',
+        email: 'registrant@example.com',
+        gender: 'SECRET',
+        geographic: null,
+        id: 'user-info-1002',
+        nickname: 'Registrant',
+        notifyCount: 0,
+        phone: null,
+        signature: null,
+        tags: null,
+        unreadCount: 0,
+        updatedAt: '2026-04-06T00:00:00.000Z',
+        userState: 'PENDING',
+      },
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledTimes(1);
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation UpdateUserInfo'),
+      expect.any(Object),
     );
   });
 });

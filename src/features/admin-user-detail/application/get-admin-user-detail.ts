@@ -90,7 +90,10 @@ export type AdminUserDetail = {
     createdAt: string;
     email: string | null;
     gender: AdminUserDetailGender;
-    geographic: string | null;
+    geographic: {
+      city: string | null;
+      province: string | null;
+    } | null;
     id: string;
     nickname: string;
     notifyCount: number;

@@ -56,7 +56,10 @@ type UserInfoDTO = {
   createdAt: string;
   email: string | null;
   gender: string;
-  geographic: string | null;
+  geographic: {
+    city: string | null;
+    province: string | null;
+  } | null;
   id: string;
   nickname: string;
   notifyCount: number;
@@ -130,12 +133,31 @@ type UpdateUserInfoVariables = {
     birthDate: string | null;
     email: string | null;
     gender: AdminUserDetailGender;
-    geographic: string | null;
+    geographic: {
+      city?: string;
+      province?: string;
+    } | null;
     nickname: string;
     phone: string | null;
     signature: string | null;
     tags: string[];
     userState: AdminUserDetailUserState;
+  };
+};
+
+type UpdateAccessGroupResponse = {
+  updateAccessGroup: {
+    accessGroup: AuthAccessGroup[];
+    accountId: number;
+    identityHint: AuthAccessGroup;
+    isUpdated: boolean;
+  };
+};
+
+type UpdateAccessGroupVariables = {
+  input: {
+    accessGroup: AuthAccessGroup[];
+    accountId: number;
   };
 };
 
@@ -207,7 +229,10 @@ const ADMIN_USER_DETAIL_QUERY = `
       createdAt
       email
       gender
-      geographic
+      geographic {
+        city
+        province
+      }
       id
       nickname
       notifyCount
@@ -275,7 +300,10 @@ const UPDATE_USER_INFO_MUTATION = `
         createdAt
         email
         gender
-        geographic
+        geographic {
+          city
+          province
+        }
         id
         nickname
         notifyCount
@@ -286,6 +314,17 @@ const UPDATE_USER_INFO_MUTATION = `
         updatedAt
         userState
       }
+    }
+  }
+`;
+
+const UPDATE_ACCESS_GROUP_MUTATION = `
+  mutation UpdateAccessGroup($input: UpdateAccessGroupInput!) {
+    updateAccessGroup(input: $input) {
+      accessGroup
+      accountId
+      identityHint
+      isUpdated
     }
   }
 `;
@@ -362,6 +401,12 @@ function mapUserInfo(dto: UserInfoDTO): AdminUserDetail['userInfo'] {
   return {
     ...dto,
     gender: normalizeGender(dto.gender),
+    geographic: dto.geographic
+      ? {
+          city: dto.geographic.city ?? null,
+          province: dto.geographic.province ?? null,
+        }
+      : null,
     tags: dto.tags ?? null,
   };
 }
@@ -386,6 +431,10 @@ function normalizeRequiredTextValue(value: string) {
 
 function normalizeTagsValue(tags: readonly string[]) {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
+}
+
+function normalizeAccessGroupValue(accessGroup: readonly AuthAccessGroup[]) {
+  return Array.from(new Set(accessGroup));
 }
 
 const adminUserDetailPort: AdminUserDetailPort = {
@@ -455,7 +504,7 @@ export async function requestAdminUserDetailAccountSectionUpdate(
 export async function requestAdminUserDetailUserInfoSectionUpdate(
   input: UpdateAdminUserDetailUserInfoSectionInput,
 ): Promise<UpdateAdminUserDetailUserInfoSectionResult> {
-  const response = await executeGraphQL<UpdateUserInfoResponse, UpdateUserInfoVariables>(
+  const userInfoResponse = await executeGraphQL<UpdateUserInfoResponse, UpdateUserInfoVariables>(
     UPDATE_USER_INFO_MUTATION,
     {
       input: {
@@ -464,7 +513,7 @@ export async function requestAdminUserDetailUserInfoSectionUpdate(
         birthDate: normalizeOptionalTextValue(input.birthDate),
         email: normalizeOptionalTextValue(input.email),
         gender: input.gender,
-        geographic: normalizeOptionalTextValue(input.geographic),
+        geographic: input.geographic,
         nickname: normalizeRequiredTextValue(input.nickname),
         phone: normalizeOptionalTextValue(input.phone),
         signature: normalizeOptionalTextValue(input.signature),
@@ -473,10 +522,32 @@ export async function requestAdminUserDetailUserInfoSectionUpdate(
       },
     },
   );
+  const nextAccessGroup = input.accessGroup ? normalizeAccessGroupValue(input.accessGroup) : null;
+  const accessGroupResponse = nextAccessGroup
+    ? await executeGraphQL<UpdateAccessGroupResponse, UpdateAccessGroupVariables>(
+        UPDATE_ACCESS_GROUP_MUTATION,
+        {
+          input: {
+            accessGroup: nextAccessGroup,
+            accountId: input.accountId,
+          },
+        },
+      )
+    : null;
 
   return {
-    isUpdated: response.updateUserInfo.isUpdated,
-    userInfo: mapUserInfo(response.updateUserInfo.userInfo),
+    account: {
+      identityHint: accessGroupResponse?.updateAccessGroup.identityHint,
+    },
+    isUpdated:
+      userInfoResponse.updateUserInfo.isUpdated ||
+      Boolean(accessGroupResponse?.updateAccessGroup.isUpdated),
+    userInfo: {
+      ...mapUserInfo(userInfoResponse.updateUserInfo.userInfo),
+      accessGroup:
+        accessGroupResponse?.updateAccessGroup.accessGroup ??
+        userInfoResponse.updateUserInfo.userInfo.accessGroup,
+    },
   };
 }
 

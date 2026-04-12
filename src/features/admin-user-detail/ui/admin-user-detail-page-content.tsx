@@ -59,6 +59,11 @@ import {
 
 const { TextArea } = Input;
 const DEFAULT_BIRTH_DATE_PICKER_VALUE = dayjs('1984-01-01');
+const EDITABLE_ACCESS_GROUPS = [
+  'ADMIN',
+  'STAFF',
+  'GUEST',
+] as const satisfies readonly AuthAccessGroup[];
 
 type EditableSectionKey = 'account' | 'staff' | 'userInfo';
 
@@ -103,11 +108,13 @@ type AccountSectionFormValues = {
 };
 
 type UserInfoSectionFormValues = {
+  accessGroup: AuthAccessGroup[];
   address?: string;
   birthDate?: Dayjs | null;
   email?: string;
   gender: AdminUserDetailGender;
-  geographic?: string;
+  geographicCity?: string;
+  geographicProvince?: string;
   nickname: string;
   phone?: string;
   signature?: string;
@@ -128,6 +135,10 @@ const INITIAL_SECTION_ERROR_STATE: SectionErrorState = {
   staff: null,
   userInfo: null,
 };
+
+function hasLockedAccessGroup(accessGroup: readonly AuthAccessGroup[]) {
+  return accessGroup.includes('REGISTRANT');
+}
 
 function getDepartmentDisplayName(
   departmentId: string | null | undefined,
@@ -204,6 +215,209 @@ function toBirthDatePickerValue(value: string | null | undefined) {
 
 function normalizeTagsValue(tags: readonly string[]) {
   return Array.from(new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
+}
+
+function parseGeographicValue(
+  value:
+    | {
+        city: string | null;
+        province: string | null;
+      }
+    | string
+    | null
+    | undefined,
+) {
+  if (!value) {
+    return {
+      city: null,
+      province: null,
+    };
+  }
+
+  if (typeof value === 'object') {
+    return {
+      city: typeof value.city === 'string' && value.city.trim() ? value.city.trim() : null,
+      province:
+        typeof value.province === 'string' && value.province.trim() ? value.province.trim() : null,
+    };
+  }
+
+  try {
+    const parsedValue = JSON.parse(value) as { city?: unknown; province?: unknown };
+
+    return {
+      city:
+        typeof parsedValue.city === 'string' && parsedValue.city.trim()
+          ? parsedValue.city.trim()
+          : null,
+      province:
+        typeof parsedValue.province === 'string' && parsedValue.province.trim()
+          ? parsedValue.province.trim()
+          : null,
+    };
+  } catch {
+    return {
+      city: null,
+      province: value.trim() || null,
+    };
+  }
+}
+
+function buildGeographicInput(value: { city?: string | null; province?: string | null }) {
+  const city = normalizeOptionalTextValue(value.city);
+  const province = normalizeOptionalTextValue(value.province);
+
+  if (!city && !province) {
+    return null;
+  }
+
+  return {
+    ...(province ? { province } : {}),
+    ...(city ? { city } : {}),
+  };
+}
+
+function formatGeographicValue(
+  value:
+    | {
+        city: string | null;
+        province: string | null;
+      }
+    | string
+    | null
+    | undefined,
+) {
+  const parsedValue = parseGeographicValue(value);
+
+  return [parsedValue.province, parsedValue.city].filter(Boolean).join(' / ') || '—';
+}
+
+function normalizeAccessGroupValue(accessGroup: readonly AuthAccessGroup[]) {
+  return Array.from(new Set(accessGroup));
+}
+
+function toggleEditableAccessGroup(
+  currentValue: readonly AuthAccessGroup[],
+  targetValue: (typeof EDITABLE_ACCESS_GROUPS)[number],
+) {
+  const nextValueSet = new Set(currentValue);
+  const hasTargetValue = nextValueSet.has(targetValue);
+
+  if (hasTargetValue) {
+    nextValueSet.delete(targetValue);
+    return normalizeAccessGroupValue(Array.from(nextValueSet));
+  }
+
+  if (targetValue === 'GUEST') {
+    nextValueSet.delete('ADMIN');
+    nextValueSet.delete('STAFF');
+    nextValueSet.add('GUEST');
+    return normalizeAccessGroupValue(Array.from(nextValueSet));
+  }
+
+  nextValueSet.delete('GUEST');
+  nextValueSet.add(targetValue);
+
+  return normalizeAccessGroupValue(Array.from(nextValueSet));
+}
+
+function getAccessGroupTagTone(
+  accessGroup: (typeof EDITABLE_ACCESS_GROUPS)[number],
+  checked: boolean,
+) {
+  if (!checked) {
+    return {
+      backgroundColor: '#f5f5f5',
+      borderColor: '#d9d9d9',
+      color: '#8c8c8c',
+    } satisfies CSSProperties;
+  }
+
+  switch (accessGroup) {
+    case 'ADMIN':
+      return {
+        backgroundColor: '#fff1f0',
+        borderColor: '#ffb3b3',
+        color: '#b42318',
+      } satisfies CSSProperties;
+    case 'STAFF':
+      return {
+        backgroundColor: '#e6f4ff',
+        borderColor: '#91caff',
+        color: '#0958d9',
+      } satisfies CSSProperties;
+    case 'GUEST':
+    default:
+      return {
+        backgroundColor: '#f6ffed',
+        borderColor: '#b7eb8f',
+        color: '#389e0d',
+      } satisfies CSSProperties;
+  }
+}
+
+function AccessGroupTagGroup({
+  disabled = false,
+  onToggle,
+  value,
+}: {
+  disabled?: boolean;
+  onToggle?: (nextValue: AuthAccessGroup[]) => void;
+  value: readonly AuthAccessGroup[];
+}) {
+  const normalizedValue = normalizeAccessGroupValue(value);
+
+  return (
+    <Flex gap={8} wrap>
+      {EDITABLE_ACCESS_GROUPS.map((accessGroup) => {
+        const checked = normalizedValue.includes(accessGroup);
+        const toneStyle = getAccessGroupTagTone(accessGroup, checked);
+
+        return (
+          <Tag.CheckableTag
+            key={accessGroup}
+            aria-pressed={checked}
+            checked={checked}
+            data-testid={`access-group-tag-${accessGroup}`}
+            onChange={() => {
+              if (disabled) {
+                return;
+              }
+
+              onToggle?.(toggleEditableAccessGroup(normalizedValue, accessGroup));
+            }}
+            style={{
+              ...toneStyle,
+              borderWidth: 1,
+              borderStyle: 'solid',
+              cursor: onToggle && !disabled ? 'pointer' : 'default',
+              opacity: disabled ? 0.72 : 1,
+              marginInlineEnd: 0,
+              userSelect: 'none',
+            }}
+          >
+            {accessGroup}
+          </Tag.CheckableTag>
+        );
+      })}
+    </Flex>
+  );
+}
+
+function AccessGroupDisplayTags({ value }: { value: readonly AuthAccessGroup[] }) {
+  if (value.length === 0) {
+    return '—';
+  }
+
+  return (
+    <Flex gap={4} wrap>
+      {value.map((accessGroup) => (
+        <Tag key={accessGroup} color={accessGroup === 'REGISTRANT' ? 'gold' : 'blue'}>
+          {accessGroup}
+        </Tag>
+      ))}
+    </Flex>
+  );
 }
 
 function areStringArraysEqual(left: readonly string[], right: readonly string[]) {
@@ -523,18 +737,7 @@ function buildUserInfoSectionGroup(detail: AdminUserDetail): DetailSectionGroup 
         {
           key: 'accessGroup',
           label: <BilingualLabel title="访问组" subtitle="Access Group" />,
-          value:
-            detail.userInfo.accessGroup.length > 0 ? (
-              <Flex gap={4} wrap>
-                {detail.userInfo.accessGroup.map((accessGroup) => (
-                  <Tag key={accessGroup} color="blue">
-                    {accessGroup}
-                  </Tag>
-                ))}
-              </Flex>
-            ) : (
-              '—'
-            ),
+          value: <AccessGroupDisplayTags value={detail.userInfo.accessGroup} />,
         },
         {
           key: 'email',
@@ -564,7 +767,7 @@ function buildUserInfoSectionGroup(detail: AdminUserDetail): DetailSectionGroup 
         {
           key: 'geographic',
           label: <BilingualLabel title="地理位置" subtitle="Geographic" />,
-          value: formatOptionalValue(detail.userInfo.geographic),
+          value: formatGeographicValue(detail.userInfo.geographic),
         },
         {
           key: 'signature',
@@ -857,20 +1060,30 @@ function UserInfoSectionEditor({
   saving: boolean;
 }) {
   const [form] = Form.useForm<UserInfoSectionFormValues>();
+  const isAccessGroupLocked = hasLockedAccessGroup(detail.userInfo.accessGroup);
+  const [accessGroupValue, setAccessGroupValue] = useState<AuthAccessGroup[]>([
+    ...detail.userInfo.accessGroup,
+  ]);
+  const geographicValue = useMemo(
+    () => parseGeographicValue(detail.userInfo.geographic),
+    [detail.userInfo.geographic],
+  );
   const initialValues = useMemo<UserInfoSectionFormValues>(
     () => ({
+      accessGroup: [...detail.userInfo.accessGroup],
       address: detail.userInfo.address ?? undefined,
       birthDate: toBirthDatePickerValue(detail.userInfo.birthDate),
       email: detail.userInfo.email ?? undefined,
       gender: detail.userInfo.gender,
-      geographic: detail.userInfo.geographic ?? undefined,
+      geographicCity: geographicValue.city ?? undefined,
+      geographicProvince: geographicValue.province ?? undefined,
       nickname: detail.userInfo.nickname,
       phone: detail.userInfo.phone ?? undefined,
       signature: detail.userInfo.signature ?? undefined,
       tags: detail.userInfo.tags ? [...detail.userInfo.tags] : [],
       userState: detail.userInfo.userState,
     }),
-    [detail.userInfo],
+    [detail.userInfo, geographicValue.city, geographicValue.province],
   );
 
   return (
@@ -891,7 +1104,7 @@ function UserInfoSectionEditor({
           layout="vertical"
           requiredMark={false}
           initialValues={initialValues}
-          onFinish={onSubmit}
+          onFinish={(values) => onSubmit({ ...values, accessGroup: accessGroupValue })}
           disabled={saving}
           key={`${detail.userInfo.id}-${detail.userInfo.updatedAt}-user-info`}
         >
@@ -931,18 +1144,21 @@ function UserInfoSectionEditor({
               </Form.Item>
             </EditableFormCard>
             <EditableFormCard>
-              <Flex vertical gap={10}>
-                <BilingualLabel title="访问组" subtitle="Access Group" />
-                <Flex gap={4} wrap>
-                  {detail.userInfo.accessGroup.length > 0
-                    ? detail.userInfo.accessGroup.map((accessGroup) => (
-                        <Tag key={accessGroup} color="blue">
-                          {accessGroup}
-                        </Tag>
-                      ))
-                    : '—'}
-                </Flex>
-              </Flex>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="访问组" subtitle="Access Group" />}
+                style={{ marginBottom: 0 }}
+              >
+                {isAccessGroupLocked ? (
+                  <Flex vertical gap={8}>
+                    <AccessGroupDisplayTags value={accessGroupValue} />
+                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                      当前含 REGISTRANT，前端不支持修改访问组。
+                    </Typography.Text>
+                  </Flex>
+                ) : (
+                  <AccessGroupTagGroup value={accessGroupValue} onToggle={setAccessGroupValue} />
+                )}
+              </Form.Item>
             </EditableFormCard>
             <EditableFormCard>
               <Form.Item<UserInfoSectionFormValues>
@@ -1020,8 +1236,17 @@ function UserInfoSectionEditor({
             </EditableFormCard>
             <EditableFormCard>
               <Form.Item<UserInfoSectionFormValues>
-                label={<BilingualLabel title="地理位置" subtitle="Geographic" />}
-                name="geographic"
+                label={<BilingualLabel title="省/州" subtitle="Province" />}
+                name="geographicProvince"
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={128} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="城市" subtitle="City" />}
+                name="geographicCity"
                 style={{ marginBottom: 0 }}
               >
                 <Input maxLength={128} />
@@ -1325,24 +1550,36 @@ export function AdminUserDetailPageContent({
       return;
     }
 
+    const isAccessGroupLocked = hasLockedAccessGroup(result.userInfo.accessGroup);
+    const normalizedCurrentAccessGroup = normalizeAccessGroupValue(result.userInfo.accessGroup);
+    const normalizedNextAccessGroup = normalizeAccessGroupValue(values.accessGroup);
+    const shouldUpdateAccessGroup =
+      !isAccessGroupLocked &&
+      !areStringArraysEqual(normalizedNextAccessGroup, normalizedCurrentAccessGroup);
     const normalizedNextValues = {
+      accessGroup: shouldUpdateAccessGroup ? normalizedNextAccessGroup : undefined,
       address: normalizeOptionalTextValue(values.address),
       birthDate: normalizeBirthDateValue(values.birthDate),
       email: normalizeOptionalTextValue(values.email),
       gender: values.gender,
-      geographic: normalizeOptionalTextValue(values.geographic),
+      geographic: buildGeographicInput({
+        city: values.geographicCity,
+        province: values.geographicProvince,
+      }),
       nickname: normalizeRequiredTextValue(values.nickname),
       phone: normalizeOptionalTextValue(values.phone),
       signature: normalizeOptionalTextValue(values.signature),
       tags: normalizeTagsValue(values.tags),
       userState: values.userState,
     };
+    const normalizedCurrentGeographic = buildGeographicInput(
+      parseGeographicValue(result.userInfo.geographic),
+    );
     const normalizedCurrentValues = {
       address: normalizeOptionalTextValue(result.userInfo.address),
       birthDate: normalizeOptionalTextValue(result.userInfo.birthDate),
       email: normalizeOptionalTextValue(result.userInfo.email),
       gender: result.userInfo.gender,
-      geographic: normalizeOptionalTextValue(result.userInfo.geographic),
       nickname: normalizeRequiredTextValue(result.userInfo.nickname),
       phone: normalizeOptionalTextValue(result.userInfo.phone),
       signature: normalizeOptionalTextValue(result.userInfo.signature),
@@ -1351,11 +1588,13 @@ export function AdminUserDetailPageContent({
     };
 
     const hasChanged =
+      shouldUpdateAccessGroup ||
       normalizedNextValues.address !== normalizedCurrentValues.address ||
       normalizedNextValues.birthDate !== normalizedCurrentValues.birthDate ||
       normalizedNextValues.email !== normalizedCurrentValues.email ||
       normalizedNextValues.gender !== normalizedCurrentValues.gender ||
-      normalizedNextValues.geographic !== normalizedCurrentValues.geographic ||
+      JSON.stringify(normalizedNextValues.geographic) !==
+        JSON.stringify(normalizedCurrentGeographic) ||
       normalizedNextValues.nickname !== normalizedCurrentValues.nickname ||
       normalizedNextValues.phone !== normalizedCurrentValues.phone ||
       normalizedNextValues.signature !== normalizedCurrentValues.signature ||
@@ -1377,6 +1616,7 @@ export function AdminUserDetailPageContent({
         ...normalizedNextValues,
       });
 
+      applyAccountUpdate(mutationResult.account);
       applyUserInfoUpdate(mutationResult.userInfo);
       setEditingSection(null);
       void messageApi.success({

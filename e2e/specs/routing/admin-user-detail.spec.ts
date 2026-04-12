@@ -379,3 +379,149 @@ test('userInfo 保存失败时应在分区内显示错误并保留编辑态', as
   await expect(page.getByText('USER_STATE_FORBIDDEN')).toBeVisible();
   await expect(page.getByRole('button', { name: '保存用户常用字段' })).toBeVisible();
 });
+
+test('accessGroup 标签应满足 admin staff 可并存且 guest 互斥', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateUserInfo')) {
+      await fulfillGraphQL(route, {
+        data: {
+          updateUserInfo: {
+            isUpdated: true,
+            userInfo: detailPayload.userInfo,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateAccessGroup')) {
+      detailPayload.account.identityHint = 'GUEST';
+      detailPayload.userInfo.accessGroup = ['GUEST'];
+
+      await fulfillGraphQL(route, {
+        data: {
+          updateAccessGroup: {
+            accessGroup: ['GUEST'],
+            accountId,
+            identityHint: 'GUEST',
+            isUpdated: true,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+
+  const adminTag = page.getByTestId('access-group-tag-ADMIN');
+  const staffTag = page.getByTestId('access-group-tag-STAFF');
+  const guestTag = page.getByTestId('access-group-tag-GUEST');
+
+  await expect(staffTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(adminTag).toHaveAttribute('aria-pressed', 'false');
+  await expect(guestTag).toHaveAttribute('aria-pressed', 'false');
+
+  await adminTag.click();
+  await expect(adminTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(staffTag).toHaveAttribute('aria-pressed', 'true');
+
+  await guestTag.click();
+  await expect(guestTag).toHaveAttribute('aria-pressed', 'true');
+  await expect(adminTag).toHaveAttribute('aria-pressed', 'false');
+  await expect(staffTag).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('registrant 访问组应只读展示且不允许前端修改', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+  detailPayload.userInfo.accessGroup = ['REGISTRANT'];
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateAccessGroup')) {
+      throw new Error('REGISTRANT 不应触发 updateAccessGroup');
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await expect(page.getByText('REGISTRANT', { exact: true }).first()).toBeVisible();
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+  await expect(page.getByText('当前含 REGISTRANT，前端不支持修改访问组。')).toBeVisible();
+  await expect(page.getByTestId('access-group-tag-ADMIN')).toHaveCount(0);
+});

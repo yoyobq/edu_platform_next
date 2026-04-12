@@ -20,12 +20,16 @@ export type UpdateAdminUserDetailAccountSectionResult = {
 };
 
 export type UpdateAdminUserDetailUserInfoSectionInput = {
+  accessGroup?: readonly AuthAccessGroup[];
   accountId: number;
   address: string | null;
   birthDate: string | null;
   email: string | null;
   gender: AdminUserDetailGender;
-  geographic: string | null;
+  geographic: {
+    city?: string;
+    province?: string;
+  } | null;
   nickname: string;
   phone: string | null;
   signature: string | null;
@@ -34,6 +38,7 @@ export type UpdateAdminUserDetailUserInfoSectionInput = {
 };
 
 export type UpdateAdminUserDetailUserInfoSectionResult = {
+  account: Partial<Pick<AdminUserDetail['account'], 'identityHint'>>;
   isUpdated: boolean;
   userInfo: AdminUserDetail['userInfo'];
 };
