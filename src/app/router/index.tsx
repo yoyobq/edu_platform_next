@@ -1,13 +1,14 @@
 // src/app/router/index.tsx
 
 import { type ReactNode, useEffect, useRef } from 'react';
-import { Spin, Typography } from 'antd';
+import { Spin } from 'antd';
 import {
   createBrowserRouter,
   isRouteErrorResponse,
   type LoaderFunctionArgs,
   redirect,
   RouterProvider,
+  useNavigate,
   useRouteError,
 } from 'react-router';
 
@@ -15,6 +16,7 @@ import { AppLayout, PublicEntryLayout } from '@/app/layout';
 
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
+import { ErrorPreviewPage } from '@/pages/error-preview';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
@@ -31,6 +33,7 @@ import {
   getAuthSessionState,
   hasAdminAccess,
   isAuthPendingSession,
+  logout,
   readStoredAuthSession,
   resolveAuthenticatedRedirectTarget,
   resolveLoginRedirectTarget,
@@ -38,6 +41,7 @@ import {
   restoreSession,
   useAuthSessionState,
 } from '@/features/auth';
+import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
@@ -361,39 +365,24 @@ async function sandboxLoader({ request }: LoaderFunctionArgs) {
 
 function RouteErrorPage() {
   const error = useRouteError();
+  const navigate = useNavigate();
+
+  const handleRelogin = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
 
   if (isRouteErrorResponse(error)) {
     if (error.status === 403) {
-      return (
-        <div className="rounded-block border border-warning-border bg-warning-bg p-6">
-          <Typography.Title level={3}>访问被拒绝</Typography.Title>
-          <Typography.Paragraph style={{ marginBottom: 0 }}>
-            当前路由已被访问控制规则拦截。
-          </Typography.Paragraph>
-        </div>
-      );
+      return <Error403 onRelogin={handleRelogin} />;
     }
 
     if (error.status === 404) {
-      return (
-        <div className="rounded-block border border-border bg-bg-layout p-6">
-          <Typography.Title level={3}>路由不存在</Typography.Title>
-          <Typography.Paragraph style={{ marginBottom: 0 }}>
-            当前环境下未暴露此路由。
-          </Typography.Paragraph>
-        </div>
-      );
+      return <Error404 />;
     }
   }
 
-  return (
-    <div className="rounded-block border border-error-border bg-error-bg p-6">
-      <Typography.Title level={3}>路由出现异常</Typography.Title>
-      <Typography.Paragraph style={{ marginBottom: 0 }}>
-        路由在渲染前发生错误。
-      </Typography.Paragraph>
-    </div>
-  );
+  return <ErrorRouteCrash />;
 }
 
 function RouteHydrateFallback() {
@@ -498,6 +487,11 @@ const router = createBrowserRouter([
         path: '/admin/users/:id',
         loader: adminUsersLoader,
         Component: AdminUserDetailPage,
+      },
+      {
+        path: '/admin/error-preview',
+        loader: adminUsersLoader,
+        Component: ErrorPreviewPage,
       },
       {
         path: '/labs',

@@ -59,6 +59,15 @@ const registry: NavigationMetaItem[] = [
     slotGroup: null,
   },
   {
+    iconKey: 'WarningOutlined',
+    key: '/admin/error-preview',
+    label: '异常页',
+    navMode: 'rail',
+    path: '/admin/error-preview',
+    primaryAccessGroup: 'ADMIN',
+    slotGroup: null,
+  },
+  {
     children: [
       {
         iconKey: 'LockOutlined',
