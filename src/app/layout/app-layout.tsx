@@ -347,8 +347,8 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       }}
     >
       <AuthRefreshFeedbackBridge />
-      <div className="min-h-screen bg-bg-layout text-text">
-        <Layout style={{ minHeight: '100%', background: 'transparent' }}>
+      <div className="h-screen overflow-hidden bg-bg-layout text-text">
+        <Layout style={{ height: '100%', background: 'transparent' }}>
           <Layout.Header
             style={{
               background: 'var(--color-bg-container)',
@@ -356,6 +356,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               paddingInline: 0,
               height: 'auto',
               lineHeight: 'normal',
+              flexShrink: 0,
             }}
           >
             <div className="flex items-center justify-between gap-4 py-3" style={frameShiftStyle}>
@@ -450,7 +451,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
             </div>
           </Layout.Header>
 
-          <Layout style={{ background: 'transparent' }}>
+          <Layout style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {hasSidebar && (
               <Layout.Sider
                 width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
@@ -464,7 +465,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                 <NavSidebar items={navItems} />
               </Layout.Sider>
             )}
-            <Layout.Content style={{ padding: '16px 24px 32px' }}>
+            <Layout.Content style={{ padding: '16px 24px 32px', overflowY: 'auto' }}>
               <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                 <Flex
                   vertical
