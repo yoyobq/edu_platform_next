@@ -1,9 +1,14 @@
 import { ConfigProvider, theme as antdTheme } from 'antd';
+import type { ReactNode } from 'react';
 import { Outlet } from 'react-router';
 
 import { AuthRefreshFeedbackBridge, FONT_SCALE_CONFIG, useTheme } from '@/app/providers';
 
-export function PublicEntryLayout() {
+type PublicEntryLayoutProps = {
+  children?: ReactNode;
+};
+
+export function PublicEntryLayout({ children }: PublicEntryLayoutProps) {
   const { isDark, fontScale } = useTheme();
 
   return (
@@ -29,7 +34,7 @@ export function PublicEntryLayout() {
       }}
     >
       <AuthRefreshFeedbackBridge />
-      <Outlet />
+      {children ?? <Outlet />}
     </ConfigProvider>
   );
 }

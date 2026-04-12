@@ -49,7 +49,7 @@ test('guest 用户组可通过本地入口卡片进入异常预览页', async ({
   await input.fill('异常');
   await input.press('Enter');
 
-  await page.getByRole('button', { name: '进入异常页' }).click();
+  await page.getByRole('button', { name: '进入异常预览' }).click();
 
   await expect(page.getByRole('heading', { name: '异常页预览' })).toBeVisible();
 });

@@ -1,6 +1,14 @@
 // src/app/layout/app-layout.tsx
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { LogoutOutlined, MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
 import {
   Button,
@@ -61,6 +69,7 @@ import { useWidthBand } from './use-width-band';
 
 type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
+  children?: ReactNode;
 };
 
 type MainFrameStyle = CSSProperties & {
@@ -71,7 +80,7 @@ function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
 }
 
-function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
+function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const location = useLocation();
   const navigate = useNavigate();
   const authSession = useAuthSessionState();
@@ -92,6 +101,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
+  const hasExplicitChildren = typeof children !== 'undefined';
   const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
   const revalidator = useRevalidator();
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
@@ -555,7 +565,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                       </Typography.Paragraph>
                     </div>
                   ) : null}
-                  {isHydrating ? (
+                  {isHydrating && !hasExplicitChildren ? (
                     <Card>
                       <Flex vertical gap={20}>
                         <div className="flex flex-col gap-2">
@@ -570,7 +580,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
                       </Flex>
                     </Card>
                   ) : (
-                    <Outlet />
+                    (children ?? <Outlet />)
                   )}
                 </Flex>
               </div>
@@ -624,13 +634,13 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
   );
 }
 
-export function AppLayout({ currentAppEnv }: AppLayoutProps) {
+export function AppLayout({ currentAppEnv, children }: AppLayoutProps) {
   return (
     <KeyboardShortcutStackProvider>
       <NavCapabilityProvider>
         <SidecarStateProvider>
           <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
-            <AppLayoutFrame currentAppEnv={currentAppEnv} />
+            <AppLayoutFrame currentAppEnv={currentAppEnv}>{children}</AppLayoutFrame>
           </CollaborationSessionProvider>
         </SidecarStateProvider>
       </NavCapabilityProvider>

@@ -10,7 +10,7 @@ export function Error404() {
       statusCode={404}
       tone="neutral"
       icon={<CompassOutlined />}
-      title="页面不存在"
+      title="路由不存在"
       description={'你访问的页面已被移除、重命名，\n或在当前环境中不可用。'}
       actions={[{ label: '返回首页', to: '/' }]}
     />

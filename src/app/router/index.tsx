@@ -253,7 +253,7 @@ async function navigationPageLoader({ request }: LoaderFunctionArgs, path: strin
 }
 
 async function errorPreviewLoader(args: LoaderFunctionArgs) {
-  return navigationPageLoader(args, '/admin/error-preview');
+  return navigationPageLoader(args, '/errors/preview');
 }
 
 async function welcomeLoader({ request }: LoaderFunctionArgs) {
@@ -342,7 +342,7 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
     (snapshot.accountId === 1 || snapshot.accountId === 2) && hasAdminAccess(snapshot);
 
   if (!hasSpecificAccess) {
-    throw new Response('Not Found', { status: 404 });
+    throw new Response('Forbidden', { status: 403 });
   }
 
   return null;
@@ -416,6 +416,22 @@ function RouteErrorPage() {
   return <ErrorRouteCrash />;
 }
 
+function PublicRouteErrorPage() {
+  return (
+    <PublicEntryLayout>
+      <RouteErrorPage />
+    </PublicEntryLayout>
+  );
+}
+
+function AppRouteErrorPage() {
+  return (
+    <AppLayout currentAppEnv={currentAppEnv}>
+      <RouteErrorPage />
+    </AppLayout>
+  );
+}
+
 function RouteHydrateFallback() {
   return null;
 }
@@ -425,6 +441,12 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
   const prevStatusRef = useRef(authSession.status);
   const isCurrentPathPublic =
     typeof window !== 'undefined' ? isPublicPath(window.location.pathname) : false;
+
+  useEffect(() => {
+    if (authSession.status === 'restoring' && !isCurrentPathPublic) {
+      void restoreSession({ background: true });
+    }
+  }, [authSession.status, isCurrentPathPublic]);
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current;
@@ -455,7 +477,7 @@ function AuthBootstrapGate({ children }: { children: ReactNode }) {
 const router = createBrowserRouter([
   {
     Component: PublicEntryLayout,
-    ErrorBoundary: RouteErrorPage,
+    ErrorBoundary: PublicRouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
     children: [
       {
@@ -491,7 +513,7 @@ const router = createBrowserRouter([
   },
   {
     Component: () => <AppLayout currentAppEnv={currentAppEnv} />,
-    ErrorBoundary: RouteErrorPage,
+    ErrorBoundary: AppRouteErrorPage,
     HydrateFallback: RouteHydrateFallback,
     children: [
       {
@@ -520,9 +542,13 @@ const router = createBrowserRouter([
         Component: AdminUserDetailPage,
       },
       {
-        path: '/admin/error-preview',
+        path: '/errors/preview',
         loader: errorPreviewLoader,
         Component: ErrorPreviewPage,
+      },
+      {
+        path: '/admin/error-preview',
+        loader: () => redirect('/errors/preview'),
       },
       {
         path: '/labs',
@@ -553,6 +579,10 @@ const router = createBrowserRouter([
             lazy: loadSandboxPlaygroundRouteModule,
           },
         ],
+      },
+      {
+        path: '*',
+        Component: Error404,
       },
     ],
   },

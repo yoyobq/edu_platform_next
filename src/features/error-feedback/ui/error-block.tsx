@@ -28,15 +28,12 @@ type ErrorBlockProps = {
 const TONE_STYLES = {
   warning: {
     codeColor: 'var(--ant-color-warning)',
-    borderColor: 'var(--ant-color-warning-border)',
   },
   error: {
     codeColor: 'var(--ant-color-error)',
-    borderColor: 'var(--ant-color-error-border)',
   },
   neutral: {
     codeColor: 'var(--ant-color-text-quaternary)',
-    borderColor: 'var(--ant-color-border)',
   },
 };
 
@@ -52,35 +49,47 @@ export function ErrorBlock({
   const toneStyle = TONE_STYLES[tone];
 
   return (
-    <div className="flex min-h-[60vh] items-center justify-center overflow-hidden">
-      <div className="flex w-full max-w-xl flex-col items-center gap-6 px-6 py-10 text-center">
-        <div className="relative flex min-h-[220px] w-full items-center justify-center">
+    <div className="error-block-root flex items-center justify-center overflow-hidden">
+      <div className="error-block-shell flex w-full flex-col items-center text-center">
+        <div className="error-block-visual relative flex w-full items-center justify-center">
           <div
-            className="pointer-events-none absolute inset-0 flex items-center justify-center"
-            style={{ color: toneStyle.codeColor, opacity: 0.08, fontSize: 180 }}
+            className="error-block-icon pointer-events-none absolute inset-0 flex items-center justify-center"
+            style={{ color: toneStyle.codeColor }}
             aria-hidden
           >
             {icon}
           </div>
-          <Flex vertical gap={6} align="center" className="relative z-10">
+          <Flex vertical gap={6} align="center" className="error-block-content relative">
             <span
-              className="select-none text-[96px] font-black leading-none tracking-[-0.06em] sm:text-[128px]"
+              className="error-block-status-code select-none"
               style={{ color: toneStyle.codeColor }}
             >
               {statusCode}
             </span>
-            <div className="text-base font-semibold uppercase tracking-[0.4em]">
-              <Typography.Text strong style={{ color: toneStyle.codeColor }}>
-                {title}
-              </Typography.Text>
-            </div>
+            <Typography.Title
+              level={4}
+              style={{
+                color: toneStyle.codeColor,
+                fontSize: 'var(--error-block-title-font-size)',
+                fontWeight: 'var(--error-block-title-font-weight)',
+                letterSpacing: 'var(--error-block-title-letter-spacing)',
+                marginBottom: 0,
+                textTransform: 'uppercase',
+              }}
+            >
+              {title}
+            </Typography.Title>
           </Flex>
         </div>
 
         <Flex vertical gap={8} align="center">
           <Typography.Paragraph
             type="secondary"
-            style={{ marginBottom: 0, maxWidth: 420, whiteSpace: 'pre-line' }}
+            style={{
+              marginBottom: 0,
+              maxWidth: 'var(--error-block-description-max-width)',
+              whiteSpace: 'pre-line',
+            }}
           >
             {description}
           </Typography.Paragraph>

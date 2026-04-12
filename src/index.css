@@ -78,6 +78,22 @@
   --z-index-sidecar-overlay: 1150;
   --z-index-sidebar-affordance: 10;
   --z-index-cross-layer-prompt: 2000;
+
+  /* Error Block Tokens */
+  --error-block-min-height: 60vh;
+  --error-block-shell-max-width: 36rem;
+  --error-block-shell-gap: 24px;
+  --error-block-shell-padding-inline: 24px;
+  --error-block-shell-padding-block: 40px;
+  --error-block-visual-min-height: 220px;
+  --error-block-icon-size: 11.25rem;
+  --error-block-icon-opacity: 0.08;
+  --error-block-status-font-size: clamp(6rem, 8vw, 8rem);
+  --error-block-status-letter-spacing: -0.06em;
+  --error-block-title-font-size: 1rem;
+  --error-block-title-font-weight: 700;
+  --error-block-title-letter-spacing: 0.4em;
+  --error-block-description-max-width: 26.25rem;
 }
 
 [data-layout-surface='sidecar'] {
@@ -375,4 +391,34 @@ html.disable-motion *::after {
 
 .app-nav-sidebar-toggle {
   z-index: var(--z-index-sidebar-affordance);
+}
+
+.error-block-root {
+  min-height: var(--error-block-min-height);
+}
+
+.error-block-shell {
+  gap: var(--error-block-shell-gap);
+  max-width: var(--error-block-shell-max-width);
+  padding: var(--error-block-shell-padding-block) var(--error-block-shell-padding-inline);
+}
+
+.error-block-visual {
+  min-height: var(--error-block-visual-min-height);
+}
+
+.error-block-icon {
+  font-size: var(--error-block-icon-size);
+  opacity: var(--error-block-icon-opacity);
+}
+
+.error-block-content {
+  z-index: var(--z-index-main-base);
+}
+
+.error-block-status-code {
+  font-size: var(--error-block-status-font-size);
+  font-weight: 900;
+  letter-spacing: var(--error-block-status-letter-spacing);
+  line-height: 1;
 }

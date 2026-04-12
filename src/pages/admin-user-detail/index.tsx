@@ -9,6 +9,7 @@ import {
   requestAdminUserDetailStaffSectionUpdate,
   requestAdminUserDetailUserInfoSectionUpdate,
 } from '@/features/admin-user-detail';
+import { Error403 } from '@/features/error-feedback';
 
 export function AdminUserDetailPage() {
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
@@ -16,14 +17,7 @@ export function AdminUserDetailPage() {
   const accountId = /^\d+$/.test(id) ? Number(id) : Number.NaN;
 
   if (loaderData?.isForbidden) {
-    return (
-      <div className="rounded-block border border-warning-border bg-warning-bg p-6">
-        <Typography.Title level={3}>访问被拒绝</Typography.Title>
-        <Typography.Paragraph style={{ marginBottom: 0 }}>
-          当前路由已被访问控制规则拦截。
-        </Typography.Paragraph>
-      </div>
-    );
+    return <Error403 />;
   }
 
   if (!Number.isInteger(accountId) || accountId <= 0) {
