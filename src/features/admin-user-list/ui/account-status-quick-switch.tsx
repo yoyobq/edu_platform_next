@@ -1,5 +1,5 @@
-import { type CSSProperties, useMemo, useState } from 'react';
-import { EditOutlined } from '@ant-design/icons';
+import { useMemo, useState } from 'react';
+import { CaretDownOutlined } from '@ant-design/icons';
 import { Button, Popover, Tag, Typography } from 'antd';
 
 import {
@@ -16,141 +16,119 @@ type AccountStatusQuickSwitchProps = {
   onChange: (nextStatus: AdminUserAccountStatus) => Promise<void> | void;
 };
 
-type StatusTone = {
-  activeButtonStyle: CSSProperties;
-  tagColor: string;
-};
-
-const STATUS_TONES: Record<AdminUserAccountStatus, StatusTone> = {
-  ACTIVE: {
-    activeButtonStyle: {
-      backgroundColor: '#f0f9eb',
-      borderColor: '#a9d18e',
-      color: '#1f6f43',
-    },
-    tagColor: 'success',
-  },
-  BANNED: {
-    activeButtonStyle: {
-      backgroundColor: '#fff1f0',
-      borderColor: '#ffb3b3',
-      color: '#b42318',
-    },
-    tagColor: 'error',
-  },
-  DELETED: {
-    activeButtonStyle: {
-      backgroundColor: '#fff1f0',
-      borderColor: '#ffb3b3',
-      color: '#b42318',
-    },
-    tagColor: 'error',
-  },
-  INACTIVE: {
-    activeButtonStyle: {
-      backgroundColor: '#f5f5f5',
-      borderColor: '#d9d9d9',
-      color: '#595959',
-    },
-    tagColor: 'default',
-  },
-  PENDING: {
-    activeButtonStyle: {
-      backgroundColor: '#e6f4ff',
-      borderColor: '#91caff',
-      color: '#0958d9',
-    },
-    tagColor: 'processing',
-  },
-  SUSPENDED: {
-    activeButtonStyle: {
-      backgroundColor: '#fff7e6',
-      borderColor: '#ffd591',
-      color: '#ad6800',
-    },
-    tagColor: 'warning',
-  },
-};
-
-const IDLE_OPTION_BUTTON_STYLE: CSSProperties = {
-  backgroundColor: '#fafafa',
-  borderColor: '#d9d9d9',
-  color: '#595959',
+const STATUS_COLORS: Record<AdminUserAccountStatus, string> = {
+  ACTIVE: 'success',
+  BANNED: 'error',
+  DELETED: 'default',
+  INACTIVE: 'default',
+  PENDING: 'processing',
+  SUSPENDED: 'warning',
 };
 
 export function AccountStatusQuickSwitch({
-  accountId,
   disabled = false,
   updating = false,
   value,
   onChange,
 }: AccountStatusQuickSwitchProps) {
   const [open, setOpen] = useState(false);
-  const activeTone = STATUS_TONES[value];
 
   const popoverContent = useMemo(
     () => (
-      <div className="flex max-w-64 flex-col gap-3">
-        <Typography.Text strong>切换账户状态</Typography.Text>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex w-48 flex-col gap-2 p-1">
+        <Typography.Text
+          type="secondary"
+          style={{
+            paddingInline: 8,
+            paddingBlock: 4,
+            fontSize: 12,
+            fontWeight: 500,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+          }}
+        >
+          切换账户状态
+        </Typography.Text>
+        <div className="flex flex-col gap-1">
           {ADMIN_USER_ACCOUNT_STATUSES.map((status) => {
             const isActive = status === value;
 
             return (
-              <Button
+              <div
                 key={status}
-                size="small"
-                data-testid={`account-status-option-${accountId}-${status}`}
-                aria-pressed={isActive}
-                style={isActive ? STATUS_TONES[status].activeButtonStyle : IDLE_OPTION_BUTTON_STYLE}
-                onClick={() => {
-                  if (isActive || updating) {
-                    return;
-                  }
-
-                  setOpen(false);
-                  void onChange(status);
-                }}
+                className={`rounded-md px-2 transition-colors duration-150 ${
+                  isActive ? 'bg-fill-hover font-medium' : 'hover:bg-fill-hover'
+                }`}
               >
-                {ADMIN_USER_ACCOUNT_STATUS_LABELS[status]}
-              </Button>
+                <Button
+                  type="text"
+                  block
+                  style={{ height: 'auto', padding: 0, textAlign: 'left' }}
+                  onClick={() => {
+                    if (isActive || updating) {
+                      return;
+                    }
+
+                    setOpen(false);
+                    void onChange(status);
+                  }}
+                >
+                  <div className="flex items-center justify-between py-1">
+                    <div className="flex items-center gap-2">
+                      <Tag
+                        color={STATUS_COLORS[status]}
+                        style={{
+                          margin: 0,
+                          border: 'none',
+                          paddingInline: 6,
+                          transform: 'scale(0.9)',
+                        }}
+                      >
+                        {ADMIN_USER_ACCOUNT_STATUS_LABELS[status]}
+                      </Tag>
+                    </div>
+                    {isActive && (
+                      <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_4px_rgba(24,144,255,0.5)]" />
+                    )}
+                  </div>
+                </Button>
+              </div>
             );
           })}
         </div>
       </div>
     ),
-    [accountId, onChange, updating, value],
+    [onChange, updating, value],
   );
 
   return (
-    <div className="flex items-center gap-2">
-      <Tag color={activeTone.tagColor} style={{ marginInlineEnd: 0 }}>
-        {ADMIN_USER_ACCOUNT_STATUS_LABELS[value]}
-      </Tag>
-      <Popover
-        trigger="click"
-        open={open}
-        placement="bottomLeft"
-        content={popoverContent}
-        onOpenChange={(nextOpen) => {
-          if (updating) {
-            return;
-          }
+    <Popover
+      trigger="click"
+      open={open}
+      placement="bottomLeft"
+      content={popoverContent}
+      overlayClassName="p-0"
+      onOpenChange={(nextOpen) => {
+        if (updating || disabled) {
+          return;
+        }
 
-          setOpen(nextOpen);
-        }}
+        setOpen(nextOpen);
+      }}
+    >
+      <div
+        className={`group flex w-fit cursor-pointer items-center gap-1.5 rounded-badge border border-transparent px-1.5 py-0.5 transition-all duration-200 hover:border-border hover:bg-fill-hover ${
+          updating ? 'opacity-70 grayscale pointer-events-none' : ''
+        } ${disabled ? 'cursor-not-allowed opacity-50 grayscale pointer-events-none' : ''}`}
       >
-        <Button
-          type="text"
-          shape="circle"
-          size="small"
-          loading={updating}
-          disabled={disabled}
-          icon={<EditOutlined />}
-          aria-label={`修改账户 ${accountId} 状态`}
-          data-testid={`account-status-trigger-${accountId}`}
-        />
-      </Popover>
-    </div>
+        <Tag
+          color={STATUS_COLORS[value]}
+          style={{ margin: 0, border: 'none', paddingInline: 8, fontWeight: 500 }}
+        >
+          {ADMIN_USER_ACCOUNT_STATUS_LABELS[value]}
+        </Tag>
+        <CaretDownOutlined className="text-[10px] text-text-secondary opacity-40 transition-opacity duration-200 group-hover:opacity-100" />
+      </div>
+    </Popover>
   );
 }

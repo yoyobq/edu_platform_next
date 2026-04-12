@@ -198,6 +198,120 @@ function parseAdminUserListQuery(searchParams: URLSearchParams): AdminUserListQu
   });
 }
 
+function AdminUserListTableSkeleton() {
+  const gridTemplate = '44px 110px 140px 160px 220px 160px 160px 168px';
+  const rows = [
+    { idW: 68, staffIdW: 88, nameW: 96, tagsCount: 2 as const, hasStaff: true },
+    { idW: 52, staffIdW: 56, nameW: 72, tagsCount: 1 as const, hasStaff: false },
+    { idW: 76, staffIdW: 104, nameW: 80, tagsCount: 2 as const, hasStaff: true },
+    { idW: 60, staffIdW: 64, nameW: 64, tagsCount: 1 as const, hasStaff: false },
+    { idW: 84, staffIdW: 72, nameW: 88, tagsCount: 1 as const, hasStaff: false },
+    { idW: 56, staffIdW: 80, nameW: 76, tagsCount: 2 as const, hasStaff: true },
+    { idW: 72, staffIdW: 96, nameW: 84, tagsCount: 1 as const, hasStaff: true },
+  ];
+
+  return (
+    <div style={{ overflowX: 'auto' }}>
+      <div style={{ minWidth: 1100 }}>
+        {/* 列头行 */}
+        <div
+          className="grid items-center border-b border-border px-4 py-3"
+          style={{
+            background: 'var(--ant-color-fill-quaternary)',
+            gridTemplateColumns: gridTemplate,
+          }}
+        >
+          <div />
+          {['账户 ID', '工号', '姓名', '访问组', '账户状态', '在职状态', '创建时间'].map(
+            (label) => (
+              <span
+                key={label}
+                style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13, fontWeight: 600 }}
+              >
+                {label}
+              </span>
+            ),
+          )}
+        </div>
+
+        {/* 数据行 */}
+        {rows.map((row, i) => (
+          <div
+            key={i}
+            className="grid items-center border-b border-border px-4 py-3 last:border-b-0"
+            style={{ gridTemplateColumns: gridTemplate }}
+          >
+            {/* 勾选框占位 */}
+            <div>
+              <div
+                style={{
+                  background: 'var(--ant-color-fill-secondary)',
+                  borderRadius: 2,
+                  height: 16,
+                  width: 16,
+                }}
+              />
+            </div>
+            {/* 账户 ID */}
+            <div>
+              <Skeleton.Button active size="small" style={{ width: row.idW, height: 18 }} />
+            </div>
+            {/* 工号 */}
+            <div>
+              {row.hasStaff ? (
+                <Skeleton.Button active size="small" style={{ width: row.staffIdW, height: 18 }} />
+              ) : (
+                <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
+              )}
+            </div>
+            {/* 姓名 */}
+            <div>
+              {row.hasStaff ? (
+                <Skeleton.Button active size="small" style={{ width: row.nameW, height: 18 }} />
+              ) : (
+                <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
+              )}
+            </div>
+            {/* 访问组 */}
+            <div className="flex gap-1">
+              {Array.from({ length: row.tagsCount }).map((_, ti) => (
+                <Skeleton.Button
+                  key={ti}
+                  active
+                  size="small"
+                  shape="round"
+                  style={{ width: 44, height: 22 }}
+                />
+              ))}
+            </div>
+            {/* 账户状态 */}
+            <div>
+              <Skeleton.Button active size="small" style={{ width: 100, height: 26 }} />
+            </div>
+            {/* 在职状态 */}
+            <div>
+              {row.hasStaff ? (
+                <Skeleton.Button active size="small" style={{ width: 100, height: 26 }} />
+              ) : (
+                <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
+              )}
+            </div>
+            {/* 创建时间 */}
+            <div>
+              <Skeleton.Button active size="small" style={{ width: 120, height: 18 }} />
+            </div>
+          </div>
+        ))}
+
+        {/* 分页行占位 */}
+        <div className="flex items-center justify-end border-t border-border px-4 py-2">
+          <Skeleton.Button active size="small" style={{ width: 200, height: 24 }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function BulkActionPopover<T extends string>({
   actionLabel,
   count,
@@ -441,30 +555,36 @@ export function AdminUserListPageContent({
         key: 'id',
         render: (value: number) => (
           <Link
-            className="font-medium"
+            className="font-mono text-[13px] font-medium text-link hover:underline"
             to={{ pathname: `/admin/users/${value}`, search: location.search }}
           >
-            {value}
+            #{value}
           </Link>
         ),
         sortOrder: criteria.sortBy === 'id' ? toSorterOrder(criteria.sortOrder ?? 'DESC') : null,
         sorter: true,
         title: '账户 ID',
-        width: 104,
+        width: 110,
       },
       {
         dataIndex: ['staff', 'id'],
         key: 'staffId',
         title: '工号',
         width: 140,
-        render: (_value: string | null, record: AdminUserListItem) => record.staff?.id || '—',
+        render: (_value: string | null, record: AdminUserListItem) => (
+          <span className="font-mono text-[13px] text-text-secondary">
+            {record.staff?.id || '—'}
+          </span>
+        ),
       },
       {
         dataIndex: ['staff', 'name'],
         key: 'staffName',
         title: '姓名',
         width: 160,
-        render: (_value: string | null, record: AdminUserListItem) => record.staff?.name || '—',
+        render: (_value: string | null, record: AdminUserListItem) => (
+          <span className="font-medium">{record.staff?.name || '—'}</span>
+        ),
       },
       {
         dataIndex: ['userInfo', 'accessGroup'],
@@ -474,7 +594,16 @@ export function AdminUserListPageContent({
         render: (value: readonly AuthAccessGroup[]) => (
           <Flex gap={4} wrap>
             {value.map((accessGroup) => (
-              <Tag key={accessGroup} color="blue">
+              <Tag
+                key={accessGroup}
+                style={{
+                  margin: 0,
+                  border: 'none',
+                  background: 'var(--ant-color-primary-bg)',
+                  padding: '0 8px',
+                  color: 'var(--ant-color-primary)',
+                }}
+              >
                 {accessGroup}
               </Tag>
             ))}
@@ -485,7 +614,7 @@ export function AdminUserListPageContent({
         dataIndex: ['account', 'status'],
         key: 'status',
         title: '账户状态',
-        width: 196,
+        width: 160,
         render: (value: AdminUserAccountStatus, record: AdminUserListItem) => (
           <AccountStatusQuickSwitch
             accountId={record.account.id}
@@ -502,7 +631,7 @@ export function AdminUserListPageContent({
         dataIndex: ['staff', 'employmentStatus'],
         key: 'staffEmploymentStatus',
         title: '在职状态',
-        width: 172,
+        width: 160,
         render: (_value: AdminUserEmploymentStatus | null, record: AdminUserListItem) =>
           record.staff ? (
             <StaffEmploymentStatusQuickSwitch
@@ -516,7 +645,7 @@ export function AdminUserListPageContent({
               onChange={(nextStatus) => handleStaffEmploymentStatusChange(record, nextStatus)}
             />
           ) : (
-            '—'
+            <span className="text-text-quaternary">—</span>
           ),
       },
       {
@@ -524,7 +653,9 @@ export function AdminUserListPageContent({
         key: 'createdAt',
         title: '创建时间',
         width: 168,
-        render: (value: string) => formatDateTimeToMinute(value),
+        render: (value: string) => (
+          <span className="text-xs text-text-secondary">{formatDateTimeToMinute(value)}</span>
+        ),
       },
     ],
     [
@@ -601,182 +732,264 @@ export function AdminUserListPageContent({
   }
 
   return (
-    <Flex vertical gap={24}>
+    <div className="relative flex flex-col gap-6 min-h-[calc(100vh-120px)]">
       {messageContextHolder}
-      <div className="flex flex-col gap-3">
-        <Flex align="center" justify="space-between" gap={16} wrap>
+
+      {/* Header Section */}
+      <div className="flex flex-col gap-1">
+        <Flex align="center" gap={12}>
           <Typography.Title level={2} style={{ marginBottom: 0 }}>
             用户管理
           </Typography.Title>
-          <Tag color="processing">正式 admin 页面</Tag>
+          <Tag
+            style={{
+              margin: 0,
+              border: 'none',
+              background: 'var(--ant-color-fill-secondary)',
+              padding: '0 8px',
+              fontSize: 12,
+              fontWeight: 500,
+              color: 'var(--ant-color-text-secondary)',
+            }}
+          >
+            User Management
+          </Tag>
         </Flex>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 840 }}>
-          当前列表直接消费后端 `adminUsers(...)` 聚合查询，先保留最适合扫读与筛选的字段，把
-          细节型信息留给后续详情页。
+        <Typography.Paragraph
+          type="secondary"
+          style={{ marginBottom: 0, maxWidth: '42rem', fontSize: 13 }}
+        >
+          管理系统内的所有账户及其关联的 Staff 身份信息。
         </Typography.Paragraph>
       </div>
 
-      <Card>
-        <Flex vertical gap={16}>
-          <Flex align="center" justify="space-between" gap={16} wrap>
-            <Flex vertical gap={4}>
-              <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                筛选条件
-              </Typography.Title>
-              <Typography.Text type="secondary">{filterSummary}</Typography.Text>
-            </Flex>
-            <Tag color="blue">共 {totalCount} 人</Tag>
-          </Flex>
+      {/* Filters Area */}
+      <div className="rounded-card shadow-card transition-shadow duration-200 hover:shadow-card-hover">
+        <Card>
+          <Flex vertical gap={16}>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+              <div className="xl:col-span-2">
+                <Input.Search
+                  allowClear
+                  placeholder="搜索登录名、邮箱、昵称或工号..."
+                  value={draftQuery}
+                  onChange={(event) => setDraftQuery(event.target.value)}
+                  onSearch={applyFilters}
+                />
+              </div>
+              <Select<AdminUserAccountStatus | undefined>
+                allowClear
+                placeholder="账户状态"
+                options={ACCOUNT_STATUS_OPTIONS}
+                value={draftStatus}
+                style={{ width: '100%' }}
+                onChange={(value) => setDraftStatus(value)}
+              />
+              <Select<AuthAccessGroup[]>
+                allowClear
+                mode="multiple"
+                maxTagCount="responsive"
+                placeholder="访问组"
+                options={ACCESS_GROUP_OPTIONS}
+                value={[...draftAccessGroups]}
+                style={{ width: '100%' }}
+                onChange={(value) => setDraftAccessGroups(value)}
+              />
+              <Select<HasStaffFilterValue>
+                options={[
+                  { label: '全部用户类型', value: 'true' }, // Placeholder adjustment if logic allows
+                  { label: '仅看 Staff', value: 'true' },
+                  { label: '非 Staff 用户', value: 'false' },
+                ]}
+                value={draftHasStaff}
+                style={{ width: '100%' }}
+                onChange={(value) => setDraftHasStaff(value)}
+              />
+            </div>
 
-          <div className="grid gap-4 xl:grid-cols-4">
-            <Input.Search
-              allowClear
-              placeholder="搜索登录名、邮箱、昵称或 staff 姓名"
-              value={draftQuery}
-              onChange={(event) => setDraftQuery(event.target.value)}
-              onSearch={applyFilters}
-            />
-            <Select<AdminUserAccountStatus | undefined>
-              allowClear
-              placeholder="账户状态"
-              options={ACCOUNT_STATUS_OPTIONS}
-              value={draftStatus}
-              onChange={(value) => setDraftStatus(value)}
-            />
-            <Select<AuthAccessGroup[]>
-              allowClear
-              mode="multiple"
-              placeholder="访问组"
-              options={ACCESS_GROUP_OPTIONS}
-              value={[...draftAccessGroups]}
-              onChange={(value) => setDraftAccessGroups(value)}
-            />
-            <Select<HasStaffFilterValue>
-              options={[
-                { label: '仅看 staff', value: 'true' },
-                { label: '仅看无 staff', value: 'false' },
-              ]}
-              value={draftHasStaff}
-              onChange={(value) => setDraftHasStaff(value)}
-            />
+            <Flex align="center" justify="space-between">
+              <Typography.Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>
+                {filterSummary}
+              </Typography.Text>
+              <Flex gap={8}>
+                <Button
+                  onClick={resetFilters}
+                  size="small"
+                  type="text"
+                  style={{ color: 'var(--ant-color-text-secondary)' }}
+                >
+                  重置
+                </Button>
+                <Button
+                  type="primary"
+                  onClick={applyFilters}
+                  size="small"
+                  style={{ paddingInline: 16 }}
+                >
+                  执行筛选
+                </Button>
+              </Flex>
+            </Flex>
+          </Flex>
+        </Card>
+      </div>
+
+      {/* Table Area */}
+      <div className="rounded-card shadow-card">
+        <Card
+          styles={{ body: { padding: 0 } }}
+          title={
+            <Flex align="center" gap={8}>
+              <span className="text-sm font-semibold">用户列表</span>
+              <Tag
+                style={{
+                  margin: 0,
+                  border: 'none',
+                  background: 'var(--ant-color-primary-bg)',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: 'var(--ant-color-primary)',
+                  padding: '0 8px',
+                }}
+              >
+                {totalCount}
+              </Tag>
+            </Flex>
+          }
+        >
+          {accountStatusUpdateErrorMessage && (
+            <div className="px-4 pt-4">
+              <Alert
+                type="error"
+                showIcon
+                closable
+                message={accountStatusUpdateErrorMessage}
+                onClose={() => setAccountStatusUpdateErrorMessage(null)}
+              />
+            </div>
+          )}
+          {staffEmploymentStatusUpdateErrorMessage && (
+            <div className="px-4 pt-4">
+              <Alert
+                type="error"
+                showIcon
+                closable
+                message={staffEmploymentStatusUpdateErrorMessage}
+                onClose={() => setStaffEmploymentStatusUpdateErrorMessage(null)}
+              />
+            </div>
+          )}
+
+          <div>
+            {errorMessage ? (
+              <div className="p-6 text-center">
+                <Alert
+                  type="error"
+                  showIcon
+                  message="用户列表加载失败"
+                  description={errorMessage}
+                  action={
+                    <Button size="small" type="primary" onClick={retry}>
+                      重试
+                    </Button>
+                  }
+                />
+              </div>
+            ) : !hasLoaded ? (
+              <AdminUserListTableSkeleton />
+            ) : (
+              <div className="admin-user-table">
+                <Table<AdminUserListItem>
+                  rowKey={(record) => record.account.id}
+                  columns={columns}
+                  dataSource={result?.list ? [...result.list] : []}
+                  loading={isLoading}
+                  onChange={handleTableChange}
+                  rowSelection={rowSelection}
+                  pagination={{
+                    current: currentPage,
+                    pageSize,
+                    showSizeChanger: true,
+                    total: totalCount,
+                    size: 'small',
+                    className: 'px-4 py-3 m-0',
+                  }}
+                  locale={{
+                    emptyText: (
+                      <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未找到匹配的用户" />
+                    ),
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
+
+      {/* Floating Action Bar */}
+      <div
+        className={`fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-300 ease-in-out ${
+          selectedCount > 0
+            ? 'translate-y-0 opacity-100'
+            : 'translate-y-20 opacity-0 pointer-events-none'
+        }`}
+      >
+        <div className="flex items-center gap-4 rounded-full border border-white/10 bg-gray-900/90 p-2 pl-4 shadow-surface backdrop-blur-md">
+          <div className="flex items-center gap-2 pr-2 border-r border-white/10">
+            <span className="text-xs font-bold text-white">已选择</span>
+            <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">
+              {selectedCount}
+            </div>
           </div>
 
-          <Flex gap={12} wrap>
-            <Button type="primary" onClick={applyFilters}>
-              应用筛选
+          <div className="flex items-center gap-2 py-1">
+            <BulkActionPopover
+              actionLabel="修改账户状态"
+              count={selectedCount}
+              disabled={isAnyStatusUpdateRunning}
+              loading={updatingAccountStatusIds.length > 0}
+              options={ACCOUNT_STATUS_BULK_OPTIONS}
+              summary={`将对选中的 ${selectedCount} 个账户进行状态更新`}
+              onSelect={handleBatchAccountStatusChange}
+            />
+            <BulkActionPopover
+              actionLabel="修改在职状态"
+              count={selectedCount}
+              disabled={!canBulkUpdateStaff || isAnyStatusUpdateRunning}
+              loading={updatingStaffEmploymentStatusIds.length > 0}
+              options={ADMIN_USER_EMPLOYMENT_STATUSES.map((status) => ({
+                label: ADMIN_USER_EMPLOYMENT_STATUS_LABELS[status],
+                value: status,
+              }))}
+              summary={
+                canBulkUpdateStaff
+                  ? `将对选中的 ${selectedCount} 个 staff 进行状态更新`
+                  : '仅当选择均为 staff 时可用'
+              }
+              onSelect={handleBatchStaffEmploymentStatusChange}
+            />
+            <Button type="text" onClick={clearSelection}>
+              取消选择
             </Button>
-            <Button onClick={resetFilters}>重置条件</Button>
-          </Flex>
-        </Flex>
-      </Card>
-
-      <Card
-        title="用户列表"
-        extra={
-          <Typography.Text type="secondary">
-            第 {currentPage} 页 / 每页 {pageSize} 条
-          </Typography.Text>
-        }
-      >
-        {accountStatusUpdateErrorMessage ? (
-          <Alert
-            type="error"
-            showIcon
-            closable
-            message="账户状态更新失败"
-            description={accountStatusUpdateErrorMessage}
-            style={{ marginBottom: 16 }}
-            onClose={() => setAccountStatusUpdateErrorMessage(null)}
-          />
-        ) : null}
-        {staffEmploymentStatusUpdateErrorMessage ? (
-          <Alert
-            type="error"
-            showIcon
-            closable
-            message="在职状态更新失败"
-            description={staffEmploymentStatusUpdateErrorMessage}
-            style={{ marginBottom: 16 }}
-            onClose={() => setStaffEmploymentStatusUpdateErrorMessage(null)}
-          />
-        ) : null}
-        <div className="mb-4 rounded-block border border-border bg-bg-layout px-4 py-3">
-          <Flex align="center" justify="space-between" gap={16} wrap>
-            <Flex vertical gap={2}>
-              <Typography.Text strong>批量操作</Typography.Text>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                当前页已选 {selectedCount} 项，可直接批量修改账户状态或在职状态。
-              </Typography.Text>
-            </Flex>
-            <Flex gap={8} wrap>
-              <BulkActionPopover
-                actionLabel="批量改账户状态"
-                count={selectedCount}
-                disabled={selectedCount === 0 || isAnyStatusUpdateRunning}
-                loading={updatingAccountStatusIds.length > 0}
-                options={ACCOUNT_STATUS_BULK_OPTIONS}
-                summary={`将对当前页选中的 ${selectedCount} 个用户生效。`}
-                onSelect={handleBatchAccountStatusChange}
-              />
-              <BulkActionPopover
-                actionLabel="批量改在职状态"
-                count={selectedCount}
-                disabled={!canBulkUpdateStaff || isAnyStatusUpdateRunning}
-                loading={updatingStaffEmploymentStatusIds.length > 0}
-                options={ADMIN_USER_EMPLOYMENT_STATUSES.map((status) => ({
-                  label: ADMIN_USER_EMPLOYMENT_STATUS_LABELS[status],
-                  value: status,
-                }))}
-                summary={
-                  canBulkUpdateStaff
-                    ? `将对当前页选中的 ${selectedCount} 个 staff 生效。`
-                    : '仅当当前选择全部为 staff 时可批量修改在职状态。'
-                }
-                onSelect={handleBatchStaffEmploymentStatusChange}
-              />
-              <Button
-                onClick={clearSelection}
-                disabled={selectedCount === 0 || isAnyStatusUpdateRunning}
-              >
-                清空选择
-              </Button>
-            </Flex>
-          </Flex>
+          </div>
         </div>
-        {errorMessage ? (
-          <Alert
-            type="error"
-            showIcon
-            title="用户列表加载失败"
-            description={errorMessage}
-            action={
-              <Button size="small" type="link" onClick={retry}>
-                重试
-              </Button>
-            }
-          />
-        ) : !hasLoaded ? (
-          <Skeleton active paragraph={{ rows: 6 }} />
-        ) : (
-          <Table<AdminUserListItem>
-            rowKey={(record) => record.account.id}
-            columns={columns}
-            dataSource={result?.list ? [...result.list] : []}
-            loading={isLoading}
-            onChange={handleTableChange}
-            rowSelection={rowSelection}
-            pagination={{
-              current: currentPage,
-              pageSize,
-              showSizeChanger: true,
-              total: totalCount,
-            }}
-            locale={{
-              emptyText: <Empty description="当前筛选条件下没有匹配用户。" />,
-            }}
-          />
-        )}
-      </Card>
-    </Flex>
+      </div>
+
+      <style>{`
+        .admin-user-table .ant-table-thead > tr > th {
+          background: transparent;
+          font-size: 12px;
+          color: var(--ant-color-text-secondary);
+          font-weight: 600;
+          padding: 12px 16px;
+        }
+        .admin-user-table .ant-table-tbody > tr > td {
+          padding: 12px 16px;
+        }
+        .admin-user-table .ant-table-row:hover > td {
+          background-color: var(--ant-color-fill-tertiary) !important;
+        }
+      `}</style>
+    </div>
   );
 }
