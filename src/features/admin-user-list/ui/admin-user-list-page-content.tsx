@@ -15,7 +15,7 @@ import {
   Typography,
 } from 'antd';
 import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
-import { Link, useLocation, useSearchParams } from 'react-router';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
@@ -304,7 +304,7 @@ function AdminUserListTableSkeleton() {
         ))}
 
         {/* 分页行占位 */}
-        <div className="flex items-center justify-end border-t border-border px-4 py-2">
+        <div className="flex items-center justify-center border-t border-border px-4 py-2">
           <Skeleton.Button active size="small" style={{ width: 200, height: 24 }} />
         </div>
       </div>
@@ -366,6 +366,7 @@ export function AdminUserListPageContent({
   updateStaffEmploymentStatus,
 }: AdminUserListPageContentProps) {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const criteria = useMemo(() => parseAdminUserListQuery(searchParams), [searchParams]);
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -557,6 +558,7 @@ export function AdminUserListPageContent({
           <Link
             className="font-mono text-[13px] font-medium text-link hover:underline"
             to={{ pathname: `/admin/users/${value}`, search: location.search }}
+            onClick={(e) => e.stopPropagation()}
           >
             #{value}
           </Link>
@@ -616,15 +618,17 @@ export function AdminUserListPageContent({
         title: '账户状态',
         width: 160,
         render: (value: AdminUserAccountStatus, record: AdminUserListItem) => (
-          <AccountStatusQuickSwitch
-            accountId={record.account.id}
-            value={value}
-            updating={updatingAccountStatusIds.includes(record.account.id)}
-            disabled={
-              isAnyStatusUpdateRunning && !updatingAccountStatusIds.includes(record.account.id)
-            }
-            onChange={(nextStatus) => handleStatusChange(record, nextStatus)}
-          />
+          <div onClick={(e) => e.stopPropagation()} className="inline-block">
+            <AccountStatusQuickSwitch
+              accountId={record.account.id}
+              value={value}
+              updating={updatingAccountStatusIds.includes(record.account.id)}
+              disabled={
+                isAnyStatusUpdateRunning && !updatingAccountStatusIds.includes(record.account.id)
+              }
+              onChange={(nextStatus) => handleStatusChange(record, nextStatus)}
+            />
+          </div>
         ),
       },
       {
@@ -634,16 +638,18 @@ export function AdminUserListPageContent({
         width: 160,
         render: (_value: AdminUserEmploymentStatus | null, record: AdminUserListItem) =>
           record.staff ? (
-            <StaffEmploymentStatusQuickSwitch
-              accountId={record.account.id}
-              value={record.staff.employmentStatus}
-              updating={updatingStaffEmploymentStatusIds.includes(record.account.id)}
-              disabled={
-                isAnyStatusUpdateRunning &&
-                !updatingStaffEmploymentStatusIds.includes(record.account.id)
-              }
-              onChange={(nextStatus) => handleStaffEmploymentStatusChange(record, nextStatus)}
-            />
+            <div onClick={(e) => e.stopPropagation()} className="inline-block">
+              <StaffEmploymentStatusQuickSwitch
+                accountId={record.account.id}
+                value={record.staff.employmentStatus}
+                updating={updatingStaffEmploymentStatusIds.includes(record.account.id)}
+                disabled={
+                  isAnyStatusUpdateRunning &&
+                  !updatingStaffEmploymentStatusIds.includes(record.account.id)
+                }
+                onChange={(nextStatus) => handleStaffEmploymentStatusChange(record, nextStatus)}
+              />
+            </div>
           ) : (
             <span className="text-text-quaternary">—</span>
           ),
@@ -906,6 +912,15 @@ export function AdminUserListPageContent({
                   loading={isLoading}
                   onChange={handleTableChange}
                   rowSelection={rowSelection}
+                  onRow={(record) => ({
+                    onClick: () => {
+                      navigate({
+                        pathname: `/admin/users/${record.account.id}`,
+                        search: location.search,
+                      });
+                    },
+                    style: { cursor: 'pointer' },
+                  })}
                   pagination={{
                     current: currentPage,
                     pageSize,
@@ -913,6 +928,7 @@ export function AdminUserListPageContent({
                     total: totalCount,
                     size: 'small',
                     className: 'px-4 py-3 m-0',
+                    position: ['bottomCenter'],
                   }}
                   locale={{
                     emptyText: (
