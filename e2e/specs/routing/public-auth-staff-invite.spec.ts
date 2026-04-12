@@ -104,7 +104,9 @@ async function mockStaffInviteFlow(
       message: string;
     };
     consumeSuccess?: boolean;
+    departmentName?: string | null;
     identityMessage?: string;
+    identityOrgId?: string | null;
     identityTransportFailure?: boolean;
     invitedEmail?: string;
     loginMessage?: string;
@@ -186,10 +188,10 @@ async function mockStaffInviteFlow(
       await fulfillGraphQL(route, {
         data: {
           fetchVerifiedStaffIdentity: {
-            departmentName: '数学系',
+            departmentName: options?.departmentName ?? '数学系',
             expiresAt: '2026-04-09T03:15:00.000Z',
             identityKind: 'STAFF',
-            orgId: 'staff-department-001',
+            orgId: options?.identityOrgId ?? 'staff-department-001',
             personId: 'staff-001',
             personName: 'Alice Teacher',
             upstreamLoginId: 'teacher.alice',
@@ -538,6 +540,25 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
   await expect(page).toHaveURL(routes.home);
   await expect(page.getByRole('banner').getByText('Alice')).toBeVisible();
   await expect(page.getByRole('banner').getByText('身份：staff')).toBeVisible();
+});
+
+test('当 departmentName 为空时，应展示白宫', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockStaffInviteFlow(page, {
+    departmentName: null,
+    identityOrgId: null,
+  });
+
+  await page.goto(routes.invite('staff', 'staff-invite-org-name-001'));
+
+  await page.getByRole('button', { name: '下一步：身份核对' }).click();
+  await page.getByLabel('校园网工号').fill('teacher.alice');
+  await page.getByLabel('上游系统密码').fill('Password!123');
+  await page.getByRole('button', { name: '核对身份并继续' }).click();
+
+  await expect(page.getByText('部门', { exact: true })).toBeVisible();
+  await expect(page.getByText('白宫', { exact: true })).toBeVisible();
+  await expect(page.getByText('staff-department-001', { exact: true })).toHaveCount(0);
 });
 
 for (const inviteCase of [

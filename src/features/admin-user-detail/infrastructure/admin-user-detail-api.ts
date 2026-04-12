@@ -1,4 +1,9 @@
 import { type AuthAccessGroup } from '@/shared/auth-access';
+import {
+  normalizeDepartmentName,
+  WHITE_HOUSE_DEPARTMENT_NAME,
+  WHITE_HOUSE_DEPARTMENT_OPTION_ID,
+} from '@/shared/department';
 import { executeGraphQL } from '@/shared/graphql';
 
 import type { AdminDepartmentOption } from '../application/get-admin-department-options';
@@ -610,10 +615,18 @@ export async function requestAdminDepartmentOptions(): Promise<readonly AdminDep
     { limit: 500 },
   );
 
-  return response.departments.map((department) => ({
-    departmentName: department.departmentName,
-    id: department.id,
-    isEnabled: department.isEnabled,
-    shortName: department.shortName,
-  }));
+  return [
+    {
+      departmentName: WHITE_HOUSE_DEPARTMENT_NAME,
+      id: WHITE_HOUSE_DEPARTMENT_OPTION_ID,
+      isEnabled: true,
+      shortName: null,
+    },
+    ...response.departments.map((department) => ({
+      departmentName: normalizeDepartmentName(department.departmentName),
+      id: department.id,
+      isEnabled: department.isEnabled,
+      shortName: department.shortName,
+    })),
+  ];
 }

@@ -64,10 +64,10 @@
 - 上游身份摘要当前只展示：
   - staff name
   - invited email
-  - department，优先 `departmentName`，缺失时回退 `orgId`
+  - department，优先展示 `departmentName`；若后端返回为空，前端固定显示“白宫”
   - personId
 - 不展示上游账号
-- 不额外展示部门 ID；只有 `departmentName` 缺失时才回退显示 `orgId`
+- 不额外展示部门 ID；当前不再因 `departmentName` 缺失回退显示 `orgId`
 
 ## 成功态
 

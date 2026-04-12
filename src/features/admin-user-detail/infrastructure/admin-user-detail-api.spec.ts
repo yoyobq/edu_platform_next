@@ -358,6 +358,12 @@ describe('requestAdminUserDetail', () => {
     executeGraphQLMock.mockResolvedValueOnce({
       departments: [
         {
+          departmentName: '',
+          id: 'd-whitehouse-backend',
+          isEnabled: true,
+          shortName: null,
+        },
+        {
           departmentName: '人工智能系',
           id: 'd-ai',
           isEnabled: true,
@@ -367,6 +373,18 @@ describe('requestAdminUserDetail', () => {
     });
 
     await expect(requestAdminDepartmentOptions()).resolves.toEqual([
+      {
+        departmentName: '白宫',
+        id: '',
+        isEnabled: true,
+        shortName: null,
+      },
+      {
+        departmentName: '白宫',
+        id: 'd-whitehouse-backend',
+        isEnabled: true,
+        shortName: null,
+      },
       {
         departmentName: '人工智能系',
         id: 'd-ai',
@@ -378,6 +396,55 @@ describe('requestAdminUserDetail', () => {
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('query AdminDepartments'),
       { limit: 500 },
+    );
+  });
+
+  it('maps empty department selection to null when updating staff section', async () => {
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        batchUpdateStaffEmploymentStatus: {
+          isUpdated: false,
+          staffs: [],
+        },
+      })
+      .mockResolvedValueOnce({
+        updateStaff: {
+          isUpdated: true,
+          staff: {
+            accountId: 1001,
+            createdAt: '2026-04-01T00:00:00.000Z',
+            departmentId: null,
+            employmentStatus: 'ACTIVE',
+            id: 'staff-1001',
+            jobTitle: '主任',
+            name: 'Beta Chen',
+            remark: null,
+            updatedAt: '2026-04-06T00:00:00.000Z',
+          },
+        },
+      });
+
+    await requestAdminUserDetailStaffSectionUpdate({
+      accountId: 1001,
+      departmentId: '',
+      employmentStatus: 'ACTIVE',
+      jobTitle: '主任',
+      name: 'Beta Chen',
+      remark: null,
+    });
+
+    expect(executeGraphQLMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('mutation UpdateStaff'),
+      {
+        input: {
+          accountId: 1001,
+          departmentId: null,
+          jobTitle: '主任',
+          name: 'Beta Chen',
+          remark: null,
+        },
+      },
     );
   });
 

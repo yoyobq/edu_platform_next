@@ -3,6 +3,8 @@
 import { useMemo } from 'react';
 import { Form, Input, Radio, Select, Tag, Typography } from 'antd';
 
+import { WHITE_HOUSE_DEPARTMENT_OPTION_ID } from '@/shared/department';
+
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
 import type { AdminUserDetail } from '../../application/get-admin-user-detail';
 import {
@@ -131,7 +133,7 @@ export function StaffSectionEditor({
   const [form] = Form.useForm<StaffSectionFormValues>();
   const initialValues = useMemo<StaffSectionFormValues>(
     () => ({
-      departmentId: detail.staff.departmentId ?? undefined,
+      departmentId: detail.staff.departmentId ?? WHITE_HOUSE_DEPARTMENT_OPTION_ID,
       employmentStatus: detail.staff.employmentStatus,
       jobTitle: detail.staff.jobTitle ?? undefined,
       name: detail.staff.name,

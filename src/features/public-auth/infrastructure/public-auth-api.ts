@@ -1,5 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
+import { normalizeDepartmentName } from '@/shared/department';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
@@ -472,7 +473,7 @@ async function fetchVerifiedStaffIdentity(input: {
     }
 
     return {
-      departmentName: identity.departmentName || null,
+      departmentName: normalizeDepartmentName(identity.departmentName),
       expiresAt: identity.expiresAt,
       orgId: identity.orgId || null,
       personId: identity.personId,

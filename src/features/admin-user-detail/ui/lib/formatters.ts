@@ -1,5 +1,7 @@
 import dayjs, { type Dayjs } from 'dayjs';
 
+import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
 
 export function getDepartmentDisplayName(
@@ -7,7 +9,7 @@ export function getDepartmentDisplayName(
   departmentMap: ReadonlyMap<string, AdminDepartmentOption>,
 ) {
   if (!departmentId) {
-    return '—';
+    return WHITE_HOUSE_DEPARTMENT_NAME;
   }
 
   const department = departmentMap.get(departmentId);
@@ -16,7 +18,7 @@ export function getDepartmentDisplayName(
     return departmentId;
   }
 
-  return department.departmentName || department.id;
+  return normalizeDepartmentName(department.departmentName) || department.id;
 }
 
 export function formatDateTime(value: string | null | undefined) {
