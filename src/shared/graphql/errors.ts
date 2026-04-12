@@ -64,7 +64,10 @@ function resolveIsRetryable(type: GraphQLIngressErrorType, statusCode?: number):
 
 function hasUnauthenticatedCode(errors: readonly GraphQLFormattedError[]): boolean {
   return errors.some(
-    (e) => (e.extensions as Record<string, unknown> | undefined)?.code === 'UNAUTHENTICATED',
+    (e) =>
+      (e.extensions as Record<string, unknown> | undefined)?.code === 'UNAUTHENTICATED' ||
+      e.message === 'TOKEN_INVALID' ||
+      e.message === 'TOKEN_INVALID_AFTER_REFRESH',
   );
 }
 
