@@ -10,6 +10,7 @@ import {
   Layout,
   Menu,
   Popconfirm,
+  Segmented,
   Skeleton,
   theme as antdTheme,
   Tooltip,
@@ -55,6 +56,25 @@ type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
 };
 
+type FontScale = 'compact' | 'standard' | 'comfortable' | 'xlarge';
+
+const FONT_SCALE_CONFIG: Record<
+  FontScale,
+  { antdFontSize: number; htmlFontSize: string; label: string }
+> = {
+  compact: { antdFontSize: 13, htmlFontSize: '15px', label: '小' },
+  standard: { antdFontSize: 14, htmlFontSize: '16px', label: '标' },
+  comfortable: { antdFontSize: 16, htmlFontSize: '18px', label: '大' },
+  xlarge: { antdFontSize: 18, htmlFontSize: '20px', label: '特大' },
+};
+
+const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
+  { label: '小', value: 'compact' },
+  { label: '标', value: 'standard' },
+  { label: '大', value: 'comfortable' },
+  { label: '特大', value: 'xlarge' },
+];
+
 type MainFrameStyle = CSSProperties & {
   '--layout-main-width': string;
 };
@@ -85,6 +105,30 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
       return false;
     }
   });
+  const [fontScale, setFontScale] = useState<FontScale>(() => {
+    try {
+      const saved = localStorage.getItem('font-scale');
+      if (
+        saved === 'compact' ||
+        saved === 'standard' ||
+        saved === 'comfortable' ||
+        saved === 'xlarge'
+      )
+        return saved;
+    } catch {
+      // noop
+    }
+    return 'standard';
+  });
+
+  useEffect(() => {
+    document.documentElement.style.fontSize = FONT_SCALE_CONFIG[fontScale].htmlFontSize;
+    try {
+      localStorage.setItem('font-scale', fontScale);
+    } catch {
+      // noop
+    }
+  }, [fontScale]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -364,6 +408,7 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
           colorPrimary: '#1255CC',
           colorError: '#D93025',
           colorLink: '#1255CC',
+          fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
           ...(isDark
             ? {}
             : {
@@ -420,6 +465,12 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               )}
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
+                <Segmented
+                  size="small"
+                  value={fontScale}
+                  options={FONT_SCALE_OPTIONS}
+                  onChange={(v) => setFontScale(v as FontScale)}
+                />
                 <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
                   <Button
                     type="text"

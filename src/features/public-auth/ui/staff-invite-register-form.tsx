@@ -47,12 +47,14 @@ function IdentityBlock({
     <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
       <Flex vertical gap={12}>
         <Flex gap={8} align="center">
-          <UserOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 16 }} />
+          <UserOutlined
+            style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
+          />
           <Typography.Text strong>{identity.personName}</Typography.Text>
         </Flex>
         <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
           <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
               邀请邮箱
             </Typography.Text>
             <div style={{ marginTop: 2 }}>
@@ -61,7 +63,7 @@ function IdentityBlock({
           </div>
           {departmentDisplayName && (
             <div>
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
                 部门
               </Typography.Text>
               <div style={{ marginTop: 2 }}>
@@ -70,7 +72,7 @@ function IdentityBlock({
             </div>
           )}
           <div>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
               工号
             </Typography.Text>
             <div style={{ marginTop: 2 }}>

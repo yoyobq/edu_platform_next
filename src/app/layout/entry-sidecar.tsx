@@ -227,13 +227,16 @@ export function EntrySidecar() {
                           >
                             <div className="flex items-center justify-between gap-3">
                               <div className="min-w-0">
-                                <Typography.Text strong style={{ fontSize: 13 }}>
+                                <Typography.Text
+                                  strong
+                                  style={{ fontSize: 'var(--ant-font-size)' }}
+                                >
                                   {card.title}
                                 </Typography.Text>
                                 {card.description ? (
                                   <Typography.Paragraph
                                     type="secondary"
-                                    style={{ margin: 0, fontSize: 12 }}
+                                    style={{ margin: 0, fontSize: 'var(--ant-font-size-sm)' }}
                                     ellipsis={{ rows: 1 }}
                                   >
                                     {card.description}
@@ -245,7 +248,7 @@ export function EntrySidecar() {
                                 aria-label={`进入${card.title}`}
                                 size="small"
                                 type="text"
-                                style={{ padding: '0 4px', fontSize: 12 }}
+                                style={{ padding: '0 4px', fontSize: 'var(--ant-font-size-sm)' }}
                                 onClick={(event) => {
                                   event.stopPropagation();
                                   navigate(card.to);

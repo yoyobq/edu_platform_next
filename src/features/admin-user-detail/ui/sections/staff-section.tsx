@@ -219,7 +219,7 @@ export function StaffSectionEditor({
               />
             </Form.Item>
             {departmentLoadErrorMessage ? (
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
                 {departmentLoadErrorMessage}
               </Typography.Text>
             ) : null}

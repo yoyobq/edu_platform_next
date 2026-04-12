@@ -13,7 +13,9 @@ export function BilingualLabel({
     <Flex align="center" gap={8} wrap="wrap">
       <Typography.Text
         type="secondary"
-        style={compact ? { fontSize: 12, lineHeight: 1.2 } : { fontWeight: 500 }}
+        style={
+          compact ? { fontSize: 'var(--ant-font-size-sm)', lineHeight: 1.2 } : { fontWeight: 500 }
+        }
       >
         {title}
       </Typography.Text>

@@ -179,7 +179,7 @@ export function AccountSectionEditor({
             <Flex vertical gap={8}>
               <BilingualLabel title="登录名" subtitle="Login Name" />
               <Input value={detail.account.loginName ?? ''} disabled />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
                 当前暂不支持修改。
               </Typography.Text>
             </Flex>

@@ -41,7 +41,7 @@ export function AccountStatusQuickSwitch({
           style={{
             paddingInline: 8,
             paddingBlock: 4,
-            fontSize: 12,
+            fontSize: 'var(--ant-font-size-sm)',
             fontWeight: 500,
             letterSpacing: '0.08em',
             textTransform: 'uppercase',

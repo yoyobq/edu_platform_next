@@ -87,7 +87,7 @@ function InviteStepBar({ activeIndex }: { activeIndex: number }) {
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  fontSize: 16,
+                  fontSize: 'var(--ant-font-size-lg)',
                   background: isDone
                     ? 'var(--ant-color-primary)'
                     : isActive
@@ -110,7 +110,7 @@ function InviteStepBar({ activeIndex }: { activeIndex: number }) {
               </div>
               <Typography.Text
                 style={{
-                  fontSize: 12,
+                  fontSize: 'var(--ant-font-size-sm)',
                   fontWeight: isActive ? 600 : 400,
                   color: isDone
                     ? 'var(--ant-color-text-secondary)'
@@ -373,24 +373,28 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
           >
             <Flex vertical gap={12}>
               <Flex gap={8} align="center">
-                <MailOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 16 }} />
+                <MailOutlined
+                  style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
+                />
                 <Typography.Text strong>{invite.invitedEmail}</Typography.Text>
               </Flex>
               <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
                 {invite.issuer && (
                   <div>
-                    <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                      签发人
-                    </Typography.Text>
+                    <Typography.Text
+                      type="secondary"
+                      style={{ fontSize: 'var(--ant-font-size-sm)' }}
+                    ></Typography.Text>
                     <div style={{ marginTop: 2 }}>
                       <Typography.Text>{invite.issuer}</Typography.Text>
                     </div>
                   </div>
                 )}
                 <div>
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                    有效期至
-                  </Typography.Text>
+                  <Typography.Text
+                    type="secondary"
+                    style={{ fontSize: 'var(--ant-font-size-sm)' }}
+                  ></Typography.Text>
                   <div style={{ marginTop: 2 }}>
                     <Typography.Text>{formatDateTime(invite.expiresAt)}</Typography.Text>
                   </div>
@@ -593,7 +597,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
         <Flex vertical align="center" gap={16} style={{ padding: '16px 0 8px' }}>
           <CheckCircleFilled style={{ fontSize: 48, color: 'var(--ant-color-success)' }} />
           <Flex vertical align="center" gap={4}>
-            <Typography.Text strong style={{ fontSize: 16 }}>
+            <Typography.Text strong style={{ fontSize: 'var(--ant-font-size-lg)' }}>
               账号已准备就绪
             </Typography.Text>
             <Typography.Text type="secondary" style={{ textAlign: 'center', maxWidth: 360 }}>

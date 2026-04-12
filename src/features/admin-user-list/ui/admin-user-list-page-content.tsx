@@ -226,7 +226,11 @@ function AdminUserListTableSkeleton() {
             (label) => (
               <span
                 key={label}
-                style={{ color: 'var(--ant-color-text-secondary)', fontSize: 13, fontWeight: 600 }}
+                style={{
+                  color: 'var(--ant-color-text-secondary)',
+                  fontSize: 'var(--ant-font-size)',
+                  fontWeight: 600,
+                }}
               >
                 {label}
               </span>
@@ -332,7 +336,7 @@ function BulkActionPopover<T extends string>({
   const content = (
     <div className="flex max-w-72 flex-col gap-3">
       <Typography.Text strong>{actionLabel}</Typography.Text>
-      <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+      <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
         {summary}
       </Typography.Text>
       <div className="flex flex-wrap gap-2">
@@ -556,7 +560,7 @@ export function AdminUserListPageContent({
         key: 'id',
         render: (value: number) => (
           <Link
-            className="font-mono text-[13px] font-medium text-link hover:underline"
+            className="font-mono text-sm font-medium text-link hover:underline"
             to={{ pathname: `/admin/users/${value}`, search: location.search }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -574,9 +578,7 @@ export function AdminUserListPageContent({
         title: '工号',
         width: 140,
         render: (_value: string | null, record: AdminUserListItem) => (
-          <span className="font-mono text-[13px] text-text-secondary">
-            {record.staff?.id || '—'}
-          </span>
+          <span className="font-mono text-sm text-text-secondary">{record.staff?.id || '—'}</span>
         ),
       },
       {
@@ -753,7 +755,7 @@ export function AdminUserListPageContent({
               border: 'none',
               background: 'var(--ant-color-fill-secondary)',
               padding: '0 8px',
-              fontSize: 12,
+              fontSize: 'var(--ant-font-size-sm)',
               fontWeight: 500,
               color: 'var(--ant-color-text-secondary)',
             }}
@@ -763,7 +765,7 @@ export function AdminUserListPageContent({
         </Flex>
         <Typography.Paragraph
           type="secondary"
-          style={{ marginBottom: 0, maxWidth: '42rem', fontSize: 13 }}
+          style={{ marginBottom: 0, maxWidth: '42rem', fontSize: 'var(--ant-font-size)' }}
         >
           管理系统内的所有账户及其关联的 Staff 身份信息。
         </Typography.Paragraph>
@@ -814,7 +816,10 @@ export function AdminUserListPageContent({
             </div>
 
             <Flex align="center" justify="space-between">
-              <Typography.Text type="secondary" style={{ fontSize: 12, fontStyle: 'italic' }}>
+              <Typography.Text
+                type="secondary"
+                style={{ fontSize: 'var(--ant-font-size-sm)', fontStyle: 'italic' }}
+              >
                 {filterSummary}
               </Typography.Text>
               <Flex gap={8}>
@@ -994,7 +999,7 @@ export function AdminUserListPageContent({
       <style>{`
         .admin-user-table .ant-table-thead > tr > th {
           background: transparent;
-          font-size: 12px;
+          font-size: var(--ant-font-size-sm);
           color: var(--ant-color-text-secondary);
           font-weight: 600;
           padding: 12px 16px;

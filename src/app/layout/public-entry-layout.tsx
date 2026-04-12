@@ -12,8 +12,20 @@ function useIsDark() {
   }
 }
 
+function useFontScale(): number {
+  try {
+    const saved = localStorage.getItem('font-scale');
+    if (saved === 'compact') return 13;
+    if (saved === 'comfortable') return 16;
+  } catch {
+    // noop
+  }
+  return 14;
+}
+
 export function PublicEntryLayout() {
   const isDark = useIsDark();
+  const antdFontSize = useFontScale();
   return (
     <ConfigProvider
       theme={{
@@ -23,6 +35,7 @@ export function PublicEntryLayout() {
           colorPrimary: '#1255CC',
           colorError: '#D93025',
           colorLink: '#1255CC',
+          fontSize: antdFontSize,
           ...(isDark
             ? {}
             : {

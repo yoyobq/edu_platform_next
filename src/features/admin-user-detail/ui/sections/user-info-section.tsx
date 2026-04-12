@@ -266,7 +266,7 @@ export function UserInfoSectionEditor({
               {isAccessGroupLocked ? (
                 <Flex vertical gap={8}>
                   <AccessGroupDisplayTags value={accessGroupValue} />
-                  <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
                     当前含 REGISTRANT，前端不支持修改访问组。
                   </Typography.Text>
                 </Flex>
