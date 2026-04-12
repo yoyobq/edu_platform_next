@@ -950,9 +950,9 @@ export function AdminUserListPageContent({
             : 'translate-y-20 opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-4 rounded-full border border-white/10 bg-gray-900/90 p-2 pl-4 shadow-surface backdrop-blur-md">
-          <div className="flex items-center gap-2 pr-2 border-r border-white/10">
-            <span className="text-xs font-bold text-white">已选择</span>
+        <div className="flex items-center gap-4 rounded-full border border-border bg-bg-container/90 p-2 pl-4 shadow-surface backdrop-blur-md dark:border-white/10 dark:bg-gray-900/90">
+          <div className="flex items-center gap-2 pr-2 border-r border-border dark:border-white/10">
+            <span className="text-xs font-bold text-text">已选择</span>
             <div className="flex h-5 w-5 items-center justify-center rounded-full bg-primary text-[10px] font-black text-white">
               {selectedCount}
             </div>

@@ -15,31 +15,31 @@ function getAccessGroupTagTone(
 ) {
   if (!checked) {
     return {
-      backgroundColor: '#f5f5f5',
-      borderColor: '#d9d9d9',
-      color: '#8c8c8c',
+      backgroundColor: 'var(--ant-color-fill-quaternary)',
+      borderColor: 'var(--ant-color-border)',
+      color: 'var(--ant-color-text-quaternary)',
     } satisfies CSSProperties;
   }
 
   switch (accessGroup) {
     case 'ADMIN':
       return {
-        backgroundColor: '#fff1f0',
-        borderColor: '#ffb3b3',
-        color: '#b42318',
+        backgroundColor: 'var(--ant-color-error-bg)',
+        borderColor: 'var(--ant-color-error-border)',
+        color: 'var(--ant-color-error-text)',
       } satisfies CSSProperties;
     case 'STAFF':
       return {
-        backgroundColor: '#e6f4ff',
-        borderColor: '#91caff',
-        color: '#0958d9',
+        backgroundColor: 'var(--ant-color-info-bg)',
+        borderColor: 'var(--ant-color-info-border)',
+        color: 'var(--ant-color-info-text)',
       } satisfies CSSProperties;
     case 'GUEST':
     default:
       return {
-        backgroundColor: '#f6ffed',
-        borderColor: '#b7eb8f',
-        color: '#389e0d',
+        backgroundColor: 'var(--ant-color-success-bg)',
+        borderColor: 'var(--ant-color-success-border)',
+        color: 'var(--ant-color-success-text)',
       } satisfies CSSProperties;
   }
 }

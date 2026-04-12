@@ -1,7 +1,7 @@
 // src/app/layout/app-layout.tsx
 
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { SearchOutlined } from '@ant-design/icons';
+import { MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -11,6 +11,7 @@ import {
   Menu,
   Popconfirm,
   Skeleton,
+  theme as antdTheme,
   Tooltip,
   Typography,
 } from 'antd';
@@ -77,6 +78,30 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
+  const [isDark, setIsDark] = useState(() => {
+    try {
+      return localStorage.getItem('color-scheme') === 'dark';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (isDark) {
+      root.classList.add('dark');
+      root.style.colorScheme = 'dark';
+    } else {
+      root.classList.remove('dark');
+      root.style.colorScheme = 'light';
+    }
+    try {
+      localStorage.setItem('color-scheme', isDark ? 'dark' : 'light');
+    } catch {
+      // noop
+    }
+  }, [isDark]);
+
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
@@ -334,12 +359,17 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
     <ConfigProvider
       theme={{
         cssVar: {},
+        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
         token: {
           colorPrimary: '#1255CC',
           colorError: '#D93025',
           colorLink: '#1255CC',
-          colorBgLayout: '#F4F6FA',
-          colorBgContainer: '#FFFFFF',
+          ...(isDark
+            ? {}
+            : {
+                colorBgLayout: '#F4F6FA',
+                colorBgContainer: '#FFFFFF',
+              }),
           borderRadius: 8,
           borderRadiusLG: 12,
           borderRadiusSM: 4,
@@ -390,6 +420,15 @@ function AppLayoutFrame({ currentAppEnv }: AppLayoutProps) {
               )}
 
               <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
+                <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
+                  <Button
+                    type="text"
+                    shape="circle"
+                    icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+                    aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
+                    onClick={() => setIsDark((v) => !v)}
+                  />
+                </Tooltip>
                 <Tooltip title="全局搜索与命令 (预留)">
                   <Button
                     type="text"
