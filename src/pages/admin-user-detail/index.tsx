@@ -1,7 +1,14 @@
 import { Typography } from 'antd';
 import { useLoaderData, useParams } from 'react-router';
 
-import { AdminUserDetailPageContent, requestAdminUserDetail } from '@/features/admin-user-detail';
+import {
+  AdminUserDetailPageContent,
+  requestAdminDepartmentOptions,
+  requestAdminUserDetail,
+  requestAdminUserDetailAccountSectionUpdate,
+  requestAdminUserDetailStaffSectionUpdate,
+  requestAdminUserDetailUserInfoSectionUpdate,
+} from '@/features/admin-user-detail';
 
 export function AdminUserDetailPage() {
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
@@ -30,5 +37,14 @@ export function AdminUserDetailPage() {
     );
   }
 
-  return <AdminUserDetailPageContent accountId={accountId} loadDetail={requestAdminUserDetail} />;
+  return (
+    <AdminUserDetailPageContent
+      accountId={accountId}
+      loadDepartmentOptions={requestAdminDepartmentOptions}
+      loadDetail={requestAdminUserDetail}
+      updateAccountSection={requestAdminUserDetailAccountSectionUpdate}
+      updateStaffSection={requestAdminUserDetailStaffSectionUpdate}
+      updateUserInfoSection={requestAdminUserDetailUserInfoSectionUpdate}
+    />
+  );
 }

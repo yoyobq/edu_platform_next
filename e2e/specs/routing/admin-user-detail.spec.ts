@@ -71,7 +71,7 @@ function buildAdminUserDetailPayload(accountId: number) {
       birthDate: null,
       createdAt: '2026-04-01T08:00:00.000Z',
       email: 'staff.lambda@example.com',
-      gender: '保密',
+      gender: 'SECRET',
       geographic: null,
       id: `user-info-${accountId}`,
       nickname: 'Lambda',
@@ -102,6 +102,25 @@ function buildAdminUserStaffPayload(accountId: number) {
   };
 }
 
+function buildDepartmentsPayload() {
+  return {
+    departments: [
+      {
+        departmentName: '人工智能系',
+        id: 'd-lambda',
+        isEnabled: true,
+        shortName: 'AI',
+      },
+      {
+        departmentName: '数学系',
+        id: 'd-math',
+        isEnabled: true,
+        shortName: 'Math',
+      },
+    ],
+  };
+}
+
 test('admin 用户详情页应渲染 staff 字段', async ({ page }) => {
   const accountId = 1011;
 
@@ -128,6 +147,13 @@ test('admin 用户详情页应渲染 staff 字段', async ({ page }) => {
     if (query.includes('query AdminUserDetailStaff(')) {
       await fulfillGraphQL(route, {
         data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
       });
       return;
     }
@@ -181,6 +207,13 @@ test('staff resolver 报错时应显示失败态并允许重试', async ({ page 
       return;
     }
 
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
     await route.fallback();
   });
 
@@ -194,4 +227,155 @@ test('staff resolver 报错时应显示失败态并允许重试', async ({ page 
 
   await expect(page.getByText('用户详情加载失败')).toHaveCount(0);
   await expect(page.getByText('Lambda Xu')).toBeVisible();
+});
+
+test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+  const staffPayload = buildAdminUserStaffPayload(accountId);
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: staffPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation BatchUpdateAccountStatus')) {
+      detailPayload.account.status = 'SUSPENDED';
+      detailPayload.account.updatedAt = '2026-04-14T08:00:00.000Z';
+
+      await fulfillGraphQL(route, {
+        data: {
+          batchUpdateAccountStatus: {
+            accounts: [
+              {
+                id: accountId,
+                identityHint: detailPayload.account.identityHint,
+                loginEmail: detailPayload.account.loginEmail,
+                loginName: detailPayload.account.loginName,
+                status: detailPayload.account.status,
+                updatedAt: detailPayload.account.updatedAt,
+              },
+            ],
+            isUpdated: true,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateIdentityHint')) {
+      detailPayload.account.identityHint = 'ADMIN';
+
+      await fulfillGraphQL(route, {
+        data: {
+          updateIdentityHint: {
+            accountId,
+            identityHint: 'ADMIN',
+            isUpdated: true,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await expect(page.getByText('人工智能系')).toBeVisible();
+  await page.getByRole('button', { name: '编辑账户常用字段' }).click();
+
+  await expect(page.getByText('当前暂不支持修改。')).toBeVisible();
+  await page.locator('#account-section-form').getByText('已暂停').click();
+  await page.locator('#account-section-form').getByText('ADMIN').click();
+  await page.getByRole('button', { name: '保存账户常用字段' }).click();
+
+  await expect(page.getByRole('button', { name: '编辑账户常用字段' })).toBeVisible();
+  await expect(page.getByText('已暂停', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('ADMIN', { exact: true }).first()).toBeVisible();
+});
+
+test('userInfo 保存失败时应在分区内显示错误并保留编辑态', async ({ page }) => {
+  const accountId = 1011;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserDetailPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateUserInfo')) {
+      await fulfillGraphQLError(route, 'USER_STATE_FORBIDDEN');
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByRole('button', { name: '编辑用户常用字段' }).click();
+  await page.getByText('已暂停').click();
+  await page.getByRole('button', { name: '保存用户常用字段' }).click();
+
+  await expect(page.getByText('USER_STATE_FORBIDDEN')).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存用户常用字段' })).toBeVisible();
 });

@@ -70,7 +70,61 @@ export function useAdminUserDetail(accountId: number, loadDetail: AdminUserDetai
     setRefreshKey((currentValue) => currentValue + 1);
   }, []);
 
+  const applyAccountUpdate = useCallback((account: Partial<AdminUserDetail['account']>) => {
+    setState((currentState) => {
+      if (!currentState.result) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        result: {
+          ...currentState.result,
+          account: {
+            ...currentState.result.account,
+            ...account,
+          },
+        },
+      };
+    });
+  }, []);
+
+  const applyUserInfoUpdate = useCallback((userInfo: AdminUserDetail['userInfo']) => {
+    setState((currentState) => {
+      if (!currentState.result) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        result: {
+          ...currentState.result,
+          userInfo,
+        },
+      };
+    });
+  }, []);
+
+  const applyStaffUpdate = useCallback((staff: AdminUserDetail['staff']) => {
+    setState((currentState) => {
+      if (!currentState.result) {
+        return currentState;
+      }
+
+      return {
+        ...currentState,
+        result: {
+          ...currentState.result,
+          staff,
+        },
+      };
+    });
+  }, []);
+
   return {
+    applyAccountUpdate,
+    applyStaffUpdate,
+    applyUserInfoUpdate,
     errorMessage: state.errorMessage,
     hasLoaded: state.hasLoaded,
     isLoading: state.isLoading,

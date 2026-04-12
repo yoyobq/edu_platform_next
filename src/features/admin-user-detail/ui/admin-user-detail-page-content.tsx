@@ -1,22 +1,66 @@
-import { type CSSProperties, type ReactNode, useMemo } from 'react';
-import { Alert, Avatar, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
+import { type CSSProperties, type ReactNode, useMemo, useState } from 'react';
+import { EditOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  Avatar,
+  Button,
+  Card,
+  DatePicker,
+  Flex,
+  Form,
+  Input,
+  message,
+  Radio,
+  Select,
+  Skeleton,
+  Tag,
+  Typography,
+} from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useLocation, useNavigate } from 'react-router';
 
+import type { AuthAccessGroup } from '@/shared/auth-access';
+
+import type { AdminDepartmentOption } from '../application/get-admin-department-options';
 import type {
   AdminUserDetail,
   AdminUserDetailAccountStatus,
+  AdminUserDetailGender,
   AdminUserDetailStaffEmploymentStatus,
   AdminUserDetailUserState,
 } from '../application/get-admin-user-detail';
 import {
   ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS,
+  ADMIN_USER_DETAIL_ACCOUNT_STATUSES,
+  ADMIN_USER_DETAIL_GENDER_LABELS,
+  ADMIN_USER_DETAIL_GENDERS,
+  ADMIN_USER_DETAIL_IDENTITY_HINTS,
   ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS,
+  ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES,
   ADMIN_USER_DETAIL_USER_STATE_LABELS,
+  ADMIN_USER_DETAIL_USER_STATES,
 } from '../application/get-admin-user-detail';
+import type {
+  UpdateAdminUserDetailAccountSectionInput,
+  UpdateAdminUserDetailAccountSectionResult,
+  UpdateAdminUserDetailStaffSectionInput,
+  UpdateAdminUserDetailStaffSectionResult,
+  UpdateAdminUserDetailUserInfoSectionInput,
+  UpdateAdminUserDetailUserInfoSectionResult,
+} from '../application/update-admin-user-detail-sections';
+import {
+  type AdminDepartmentOptionsLoader,
+  useAdminDepartmentOptions,
+} from '../application/use-admin-department-options';
 import {
   type AdminUserDetailLoader,
   useAdminUserDetail,
 } from '../application/use-admin-user-detail';
+
+const { TextArea } = Input;
+const DEFAULT_BIRTH_DATE_PICKER_VALUE = dayjs('1984-01-01');
+
+type EditableSectionKey = 'account' | 'staff' | 'userInfo';
 
 type DetailItem = {
   key: string;
@@ -29,6 +73,78 @@ type DetailSection = {
   key: string;
   tone: 'editable' | 'fixed' | 'reference';
 };
+
+type DetailSectionGroup = {
+  editable: DetailSection;
+  fixed: DetailSection;
+  reference: DetailSection;
+};
+
+type SectionErrorState = Record<EditableSectionKey, string | null>;
+
+type AdminUserDetailPageContentProps = {
+  accountId: number;
+  loadDepartmentOptions: AdminDepartmentOptionsLoader;
+  loadDetail: AdminUserDetailLoader;
+  updateAccountSection: (
+    input: UpdateAdminUserDetailAccountSectionInput,
+  ) => Promise<UpdateAdminUserDetailAccountSectionResult>;
+  updateStaffSection: (
+    input: UpdateAdminUserDetailStaffSectionInput,
+  ) => Promise<UpdateAdminUserDetailStaffSectionResult>;
+  updateUserInfoSection: (
+    input: UpdateAdminUserDetailUserInfoSectionInput,
+  ) => Promise<UpdateAdminUserDetailUserInfoSectionResult>;
+};
+
+type AccountSectionFormValues = {
+  identityHint?: AuthAccessGroup;
+  status: AdminUserDetailAccountStatus;
+};
+
+type UserInfoSectionFormValues = {
+  address?: string;
+  birthDate?: Dayjs | null;
+  email?: string;
+  gender: AdminUserDetailGender;
+  geographic?: string;
+  nickname: string;
+  phone?: string;
+  signature?: string;
+  tags: string[];
+  userState: AdminUserDetailUserState;
+};
+
+type StaffSectionFormValues = {
+  departmentId?: string;
+  employmentStatus: AdminUserDetailStaffEmploymentStatus;
+  jobTitle?: string;
+  name: string;
+  remark?: string;
+};
+
+const INITIAL_SECTION_ERROR_STATE: SectionErrorState = {
+  account: null,
+  staff: null,
+  userInfo: null,
+};
+
+function getDepartmentDisplayName(
+  departmentId: string | null | undefined,
+  departmentMap: ReadonlyMap<string, AdminDepartmentOption>,
+) {
+  if (!departmentId) {
+    return '—';
+  }
+
+  const department = departmentMap.get(departmentId);
+
+  if (!department) {
+    return departmentId;
+  }
+
+  return department.departmentName || department.id;
+}
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -52,6 +168,50 @@ function formatOptionalValue(value: string | null | undefined) {
 
 function formatCount(value: number) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
+}
+
+function normalizeOptionalTextValue(value: string | null | undefined) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  const nextValue = value.trim();
+
+  return nextValue ? nextValue : null;
+}
+
+function normalizeRequiredTextValue(value: string) {
+  return value.trim();
+}
+
+function normalizeBirthDateValue(value: Dayjs | null | undefined) {
+  if (!value || !value.isValid()) {
+    return null;
+  }
+
+  return value.format('YYYY-MM-DD');
+}
+
+function toBirthDatePickerValue(value: string | null | undefined) {
+  if (!value) {
+    return undefined;
+  }
+
+  const dateValue = dayjs(value);
+
+  return dateValue.isValid() ? dateValue : undefined;
+}
+
+function normalizeTagsValue(tags: readonly string[]) {
+  return Array.from(new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
+}
+
+function areStringArraysEqual(left: readonly string[], right: readonly string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
 }
 
 function getStatusTagColor(
@@ -181,9 +341,9 @@ function DetailFieldGrid({
   gridClassName: string;
   items: readonly DetailItem[];
   itemClassName: string;
-  itemStyle?: React.CSSProperties;
+  itemStyle?: CSSProperties;
   valueClassName: string;
-  valueStyle?: React.CSSProperties;
+  valueStyle?: CSSProperties;
 }) {
   return (
     <div className={gridClassName}>
@@ -220,62 +380,69 @@ function DetailSectionBlock({ section }: { section: DetailSection }) {
   );
 }
 
-function DetailSectionList({ sections }: { sections: readonly DetailSection[] }) {
-  return (
-    <Flex vertical gap={20}>
-      {sections.map((section) => (
-        <div key={section.key}>
-          <DetailSectionBlock section={section} />
-        </div>
-      ))}
-    </Flex>
-  );
-}
-
-function RecentLoginList({ items }: { items: AdminUserDetail['account']['recentLoginHistory'] }) {
-  if (items.length === 0) {
-    return <Alert type="info" showIcon message="后端当前未返回最近登录记录。" />;
-  }
-
+function EditableSectionShell({
+  children,
+  editLabel,
+  editing,
+  errorMessage,
+  formId,
+  onCancel,
+  onEdit,
+  saveLabel,
+  saving,
+}: {
+  children: ReactNode;
+  editLabel: string;
+  editing: boolean;
+  errorMessage: string | null;
+  formId: string;
+  onCancel: () => void;
+  onEdit: () => void;
+  saveLabel: string;
+  saving: boolean;
+}) {
   return (
     <Flex vertical gap={12}>
-      {items.map((item, index) => (
-        <div
-          key={`${item.timestamp}-${item.ip}-${index}`}
-          className="rounded-block border border-border bg-bg-layout px-4 py-3"
-        >
-          <Flex align="center" justify="space-between" gap={16} wrap>
-            <Typography.Text strong>{formatDateTime(item.timestamp)}</Typography.Text>
-            <Tag>{item.audience || '未知客户端'}</Tag>
+      <Flex align="center" gap={12} justify="space-between" wrap>
+        <BilingualLabel title="常用字段" subtitle="Editable Fields" />
+        {editing ? (
+          <Flex gap={8} wrap>
+            <Button onClick={onCancel}>取消</Button>
+            <Button type="primary" htmlType="submit" form={formId} loading={saving}>
+              {saveLabel}
+            </Button>
           </Flex>
-          <Typography.Paragraph style={{ marginBottom: 0, marginTop: 8 }}>
-            登录 IP：{item.ip}
-          </Typography.Paragraph>
-        </div>
-      ))}
+        ) : (
+          <Button icon={<EditOutlined />} onClick={onEdit} aria-label={editLabel}>
+            编辑
+          </Button>
+        )}
+      </Flex>
+      {errorMessage ? <Alert type="error" showIcon title={errorMessage} /> : null}
+      {children}
     </Flex>
   );
 }
 
-function buildAccountSections(detail: AdminUserDetail): readonly DetailSection[] {
-  return [
-    {
-      items: [
-        {
-          key: 'accountId',
-          label: <BilingualLabel title="账户 ID" subtitle="Account ID" />,
-          value: <ReadonlyValue>{String(detail.account.id)}</ReadonlyValue>,
-        },
-        {
-          key: 'loginEmail',
-          label: <BilingualLabel title="登录邮箱" subtitle="Login Email" />,
-          value: <ReadonlyValue>{formatOptionalValue(detail.account.loginEmail)}</ReadonlyValue>,
-        },
-      ],
-      key: 'accountFixed',
-      tone: 'fixed',
-    },
-    {
+function EditableFormCard({
+  children,
+  spanClassName,
+}: {
+  children: ReactNode;
+  spanClassName?: string;
+}) {
+  return (
+    <div className={spanClassName}>
+      <div className="rounded-block border border-info-border bg-bg-container px-4 py-3">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function buildAccountSectionGroup(detail: AdminUserDetail): DetailSectionGroup {
+  return {
+    editable: {
       items: [
         {
           key: 'accountStatus',
@@ -300,7 +467,23 @@ function buildAccountSections(detail: AdminUserDetail): readonly DetailSection[]
       key: 'accountEditable',
       tone: 'editable',
     },
-    {
+    fixed: {
+      items: [
+        {
+          key: 'accountId',
+          label: <BilingualLabel title="账户 ID" subtitle="Account ID" />,
+          value: <ReadonlyValue>{String(detail.account.id)}</ReadonlyValue>,
+        },
+        {
+          key: 'loginEmail',
+          label: <BilingualLabel title="登录邮箱" subtitle="Login Email" />,
+          value: <ReadonlyValue>{formatOptionalValue(detail.account.loginEmail)}</ReadonlyValue>,
+        },
+      ],
+      key: 'accountFixed',
+      tone: 'fixed',
+    },
+    reference: {
       items: [
         {
           key: 'accountCreatedAt',
@@ -316,23 +499,12 @@ function buildAccountSections(detail: AdminUserDetail): readonly DetailSection[]
       key: 'accountMetadata',
       tone: 'reference',
     },
-  ];
+  };
 }
 
-function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[] {
-  return [
-    {
-      items: [
-        {
-          key: 'userInfoId',
-          label: <BilingualLabel title="用户信息 ID" subtitle="User Info ID" />,
-          value: <ReadonlyValue>{detail.userInfo.id}</ReadonlyValue>,
-        },
-      ],
-      key: 'userIdentity',
-      tone: 'fixed',
-    },
-    {
+function buildUserInfoSectionGroup(detail: AdminUserDetail): DetailSectionGroup {
+  return {
+    editable: {
       items: [
         {
           key: 'nickname',
@@ -377,7 +549,7 @@ function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[
         {
           key: 'gender',
           label: <BilingualLabel title="性别" subtitle="Gender" />,
-          value: detail.userInfo.gender,
+          value: ADMIN_USER_DETAIL_GENDER_LABELS[detail.userInfo.gender],
         },
         {
           key: 'birthDate',
@@ -411,7 +583,18 @@ function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[
       key: 'userProfile',
       tone: 'editable',
     },
-    {
+    fixed: {
+      items: [
+        {
+          key: 'userInfoId',
+          label: <BilingualLabel title="用户信息 ID" subtitle="User Info ID" />,
+          value: <ReadonlyValue>{detail.userInfo.id}</ReadonlyValue>,
+        },
+      ],
+      key: 'userIdentity',
+      tone: 'fixed',
+    },
+    reference: {
       items: [
         {
           key: 'notifyCount',
@@ -437,28 +620,15 @@ function buildUserInfoSections(detail: AdminUserDetail): readonly DetailSection[
       key: 'userMetadata',
       tone: 'reference',
     },
-  ];
+  };
 }
 
-function buildStaffSections(detail: AdminUserDetail): readonly DetailSection[] {
-  return [
-    {
-      items: [
-        {
-          key: 'staffId',
-          label: <BilingualLabel title="工号" subtitle="Staff ID" />,
-          value: <ReadonlyValue>{detail.staff.id}</ReadonlyValue>,
-        },
-        {
-          key: 'staffAccountId',
-          label: <BilingualLabel title="关联账户 ID" subtitle="Account ID" />,
-          value: <ReadonlyValue>{String(detail.staff.accountId)}</ReadonlyValue>,
-        },
-      ],
-      key: 'staffIdentity',
-      tone: 'fixed',
-    },
-    {
+function buildStaffSectionGroup(
+  detail: AdminUserDetail,
+  departmentMap: ReadonlyMap<string, AdminDepartmentOption>,
+): DetailSectionGroup {
+  return {
+    editable: {
       items: [
         {
           key: 'staffEmploymentStatus',
@@ -476,8 +646,8 @@ function buildStaffSections(detail: AdminUserDetail): readonly DetailSection[] {
         },
         {
           key: 'staffDepartmentId',
-          label: <BilingualLabel title="部门 ID" subtitle="Department ID" />,
-          value: formatOptionalValue(detail.staff.departmentId),
+          label: <BilingualLabel title="部门" subtitle="Department" />,
+          value: getDepartmentDisplayName(detail.staff.departmentId, departmentMap),
         },
         {
           key: 'staffJobTitle',
@@ -493,7 +663,23 @@ function buildStaffSections(detail: AdminUserDetail): readonly DetailSection[] {
       key: 'staffProfile',
       tone: 'editable',
     },
-    {
+    fixed: {
+      items: [
+        {
+          key: 'staffId',
+          label: <BilingualLabel title="工号" subtitle="Staff ID" />,
+          value: <ReadonlyValue>{detail.staff.id}</ReadonlyValue>,
+        },
+        {
+          key: 'staffAccountId',
+          label: <BilingualLabel title="关联账户 ID" subtitle="Account ID" />,
+          value: <ReadonlyValue>{String(detail.staff.accountId)}</ReadonlyValue>,
+        },
+      ],
+      key: 'staffIdentity',
+      tone: 'fixed',
+    },
+    reference: {
       items: [
         {
           key: 'staffCreatedAt',
@@ -509,29 +695,784 @@ function buildStaffSections(detail: AdminUserDetail): readonly DetailSection[] {
       key: 'staffMetadata',
       tone: 'reference',
     },
-  ];
+  };
+}
+
+function RecentLoginList({ items }: { items: AdminUserDetail['account']['recentLoginHistory'] }) {
+  if (items.length === 0) {
+    return <Alert type="info" showIcon title="后端当前未返回最近登录记录。" />;
+  }
+
+  return (
+    <Flex vertical gap={12}>
+      {items.map((item, index) => (
+        <div
+          key={`${item.timestamp}-${item.ip}-${index}`}
+          className="rounded-block border border-border bg-bg-layout px-4 py-3"
+        >
+          <Flex align="center" justify="space-between" gap={16} wrap>
+            <Typography.Text strong>{formatDateTime(item.timestamp)}</Typography.Text>
+            <Tag>{item.audience || '未知客户端'}</Tag>
+          </Flex>
+          <Typography.Paragraph style={{ marginBottom: 0, marginTop: 8 }}>
+            登录 IP：{item.ip}
+          </Typography.Paragraph>
+        </div>
+      ))}
+    </Flex>
+  );
+}
+
+function AccountSectionEditor({
+  detail,
+  errorMessage,
+  formId,
+  onCancel,
+  onEdit,
+  onSubmit,
+  saving,
+}: {
+  detail: AdminUserDetail;
+  errorMessage: string | null;
+  formId: string;
+  onCancel: () => void;
+  onEdit: () => void;
+  onSubmit: (values: AccountSectionFormValues) => Promise<void>;
+  saving: boolean;
+}) {
+  const [form] = Form.useForm<AccountSectionFormValues>();
+  const initialValues = useMemo<AccountSectionFormValues>(
+    () => ({
+      identityHint: detail.account.identityHint ?? undefined,
+      status: detail.account.status,
+    }),
+    [detail.account.identityHint, detail.account.status],
+  );
+
+  return (
+    <EditableSectionShell
+      editLabel="编辑账户常用字段"
+      editing
+      errorMessage={errorMessage}
+      formId={formId}
+      onCancel={onCancel}
+      onEdit={onEdit}
+      saveLabel="保存账户常用字段"
+      saving={saving}
+    >
+      <div className="rounded-card border border-info-border bg-info-bg p-4">
+        <Form<AccountSectionFormValues>
+          id={formId}
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          initialValues={initialValues}
+          onFinish={onSubmit}
+          disabled={saving}
+          key={`${detail.account.id}-${detail.account.updatedAt}-account`}
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <EditableFormCard>
+              <Form.Item<AccountSectionFormValues>
+                label={<BilingualLabel title="账户状态" subtitle="Account Status" />}
+                name="status"
+                rules={[{ required: true, message: '请选择账户状态。' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={ADMIN_USER_DETAIL_ACCOUNT_STATUSES.map((status) => ({
+                    label: ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS[status],
+                    value: status,
+                  }))}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<AccountSectionFormValues>
+                label={<BilingualLabel title="身份提示" subtitle="Identity Hint" />}
+                name="identityHint"
+                rules={[{ required: true, message: '请选择身份提示。' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={ADMIN_USER_DETAIL_IDENTITY_HINTS.map((identityHint) => ({
+                    label: identityHint,
+                    value: identityHint,
+                  }))}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Flex vertical gap={10}>
+                <BilingualLabel title="登录名" subtitle="Login Name" />
+                <Input value={detail.account.loginName ?? ''} disabled />
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  当前暂不支持修改。
+                </Typography.Text>
+              </Flex>
+            </EditableFormCard>
+          </div>
+        </Form>
+      </div>
+    </EditableSectionShell>
+  );
+}
+
+function AccountSectionViewer({ section, onEdit }: { section: DetailSection; onEdit: () => void }) {
+  return (
+    <EditableSectionShell
+      editLabel="编辑账户常用字段"
+      editing={false}
+      errorMessage={null}
+      formId="account-section-form"
+      onCancel={() => undefined}
+      onEdit={onEdit}
+      saveLabel=""
+      saving={false}
+    >
+      <DetailSectionBlock section={section} />
+    </EditableSectionShell>
+  );
+}
+
+function UserInfoSectionEditor({
+  detail,
+  errorMessage,
+  formId,
+  onCancel,
+  onEdit,
+  onSubmit,
+  saving,
+}: {
+  detail: AdminUserDetail;
+  errorMessage: string | null;
+  formId: string;
+  onCancel: () => void;
+  onEdit: () => void;
+  onSubmit: (values: UserInfoSectionFormValues) => Promise<void>;
+  saving: boolean;
+}) {
+  const [form] = Form.useForm<UserInfoSectionFormValues>();
+  const initialValues = useMemo<UserInfoSectionFormValues>(
+    () => ({
+      address: detail.userInfo.address ?? undefined,
+      birthDate: toBirthDatePickerValue(detail.userInfo.birthDate),
+      email: detail.userInfo.email ?? undefined,
+      gender: detail.userInfo.gender,
+      geographic: detail.userInfo.geographic ?? undefined,
+      nickname: detail.userInfo.nickname,
+      phone: detail.userInfo.phone ?? undefined,
+      signature: detail.userInfo.signature ?? undefined,
+      tags: detail.userInfo.tags ? [...detail.userInfo.tags] : [],
+      userState: detail.userInfo.userState,
+    }),
+    [detail.userInfo],
+  );
+
+  return (
+    <EditableSectionShell
+      editLabel="编辑用户常用字段"
+      editing
+      errorMessage={errorMessage}
+      formId={formId}
+      onCancel={onCancel}
+      onEdit={onEdit}
+      saveLabel="保存用户常用字段"
+      saving={saving}
+    >
+      <div className="rounded-card border border-info-border bg-info-bg p-4">
+        <Form<UserInfoSectionFormValues>
+          id={formId}
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          initialValues={initialValues}
+          onFinish={onSubmit}
+          disabled={saving}
+          key={`${detail.userInfo.id}-${detail.userInfo.updatedAt}-user-info`}
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="昵称" subtitle="Nickname" />}
+                name="nickname"
+                rules={[
+                  {
+                    validator: (_, value) =>
+                      normalizeRequiredTextValue(value ?? '')
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('请输入昵称。')),
+                  },
+                ]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={64} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="用户状态" subtitle="User State" />}
+                name="userState"
+                rules={[{ required: true, message: '请选择用户状态。' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={ADMIN_USER_DETAIL_USER_STATES.map((userState) => ({
+                    label: ADMIN_USER_DETAIL_USER_STATE_LABELS[userState],
+                    value: userState,
+                  }))}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Flex vertical gap={10}>
+                <BilingualLabel title="访问组" subtitle="Access Group" />
+                <Flex gap={4} wrap>
+                  {detail.userInfo.accessGroup.length > 0
+                    ? detail.userInfo.accessGroup.map((accessGroup) => (
+                        <Tag key={accessGroup} color="blue">
+                          {accessGroup}
+                        </Tag>
+                      ))
+                    : '—'}
+                </Flex>
+              </Flex>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="邮箱" subtitle="Email" />}
+                name="email"
+                rules={[
+                  {
+                    validator: (_, value) => {
+                      const email = normalizeOptionalTextValue(value);
+
+                      if (!email) {
+                        return Promise.resolve();
+                      }
+
+                      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('请输入有效的邮箱地址。'));
+                    },
+                  },
+                ]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={128} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="手机号" subtitle="Phone" />}
+                name="phone"
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={32} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="性别" subtitle="Gender" />}
+                name="gender"
+                rules={[{ required: true, message: '请选择性别。' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={ADMIN_USER_DETAIL_GENDERS.map((gender) => ({
+                    label: ADMIN_USER_DETAIL_GENDER_LABELS[gender],
+                    value: gender,
+                  }))}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="出生日期" subtitle="Birth Date" />}
+                name="birthDate"
+                style={{ marginBottom: 0 }}
+              >
+                <DatePicker
+                  allowClear
+                  defaultPickerValue={DEFAULT_BIRTH_DATE_PICKER_VALUE}
+                  format="YYYY-MM-DD"
+                  placeholder="请选择日期"
+                  style={{ width: '100%' }}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard spanClassName="md:col-span-2">
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="地址" subtitle="Address" />}
+                name="address"
+                style={{ marginBottom: 0 }}
+              >
+                <TextArea autoSize={{ minRows: 2, maxRows: 5 }} maxLength={255} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="地理位置" subtitle="Geographic" />}
+                name="geographic"
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={128} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard spanClassName="md:col-span-2">
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="个性签名" subtitle="Signature" />}
+                name="signature"
+                style={{ marginBottom: 0 }}
+              >
+                <TextArea autoSize={{ minRows: 2, maxRows: 4 }} maxLength={255} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard spanClassName="md:col-span-2 xl:col-span-3">
+              <Form.Item<UserInfoSectionFormValues>
+                label={<BilingualLabel title="标签" subtitle="Tags" />}
+                name="tags"
+                style={{ marginBottom: 0 }}
+              >
+                <Select mode="tags" tokenSeparators={[',', '，']} open={false} />
+              </Form.Item>
+            </EditableFormCard>
+          </div>
+        </Form>
+      </div>
+    </EditableSectionShell>
+  );
+}
+
+function UserInfoSectionViewer({
+  section,
+  onEdit,
+}: {
+  section: DetailSection;
+  onEdit: () => void;
+}) {
+  return (
+    <EditableSectionShell
+      editLabel="编辑用户常用字段"
+      editing={false}
+      errorMessage={null}
+      formId="user-info-section-form"
+      onCancel={() => undefined}
+      onEdit={onEdit}
+      saveLabel=""
+      saving={false}
+    >
+      <DetailSectionBlock section={section} />
+    </EditableSectionShell>
+  );
+}
+
+function StaffSectionEditor({
+  departmentLoadErrorMessage,
+  departmentOptions,
+  detail,
+  errorMessage,
+  formId,
+  onCancel,
+  onEdit,
+  onSubmit,
+  saving,
+}: {
+  departmentLoadErrorMessage: string | null;
+  departmentOptions: readonly AdminDepartmentOption[];
+  detail: AdminUserDetail;
+  errorMessage: string | null;
+  formId: string;
+  onCancel: () => void;
+  onEdit: () => void;
+  onSubmit: (values: StaffSectionFormValues) => Promise<void>;
+  saving: boolean;
+}) {
+  const [form] = Form.useForm<StaffSectionFormValues>();
+  const initialValues = useMemo<StaffSectionFormValues>(
+    () => ({
+      departmentId: detail.staff.departmentId ?? undefined,
+      employmentStatus: detail.staff.employmentStatus,
+      jobTitle: detail.staff.jobTitle ?? undefined,
+      name: detail.staff.name,
+      remark: detail.staff.remark ?? undefined,
+    }),
+    [detail.staff],
+  );
+
+  return (
+    <EditableSectionShell
+      editLabel="编辑 staff 常用字段"
+      editing
+      errorMessage={errorMessage}
+      formId={formId}
+      onCancel={onCancel}
+      onEdit={onEdit}
+      saveLabel="保存 staff 常用字段"
+      saving={saving}
+    >
+      <div className="rounded-card border border-info-border bg-info-bg p-4">
+        <Form<StaffSectionFormValues>
+          id={formId}
+          form={form}
+          layout="vertical"
+          requiredMark={false}
+          initialValues={initialValues}
+          onFinish={onSubmit}
+          disabled={saving}
+          key={`${detail.staff.id}-${detail.staff.updatedAt}-staff`}
+        >
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            <EditableFormCard>
+              <Form.Item<StaffSectionFormValues>
+                label={<BilingualLabel title="在职状态" subtitle="Employment Status" />}
+                name="employmentStatus"
+                rules={[{ required: true, message: '请选择在职状态。' }]}
+                style={{ marginBottom: 0 }}
+              >
+                <Radio.Group
+                  optionType="button"
+                  buttonStyle="solid"
+                  options={ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES.map((employmentStatus) => ({
+                    label: ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS[employmentStatus],
+                    value: employmentStatus,
+                  }))}
+                />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<StaffSectionFormValues>
+                label={<BilingualLabel title="姓名" subtitle="Name" />}
+                name="name"
+                rules={[
+                  {
+                    validator: (_, value) =>
+                      normalizeRequiredTextValue(value ?? '')
+                        ? Promise.resolve()
+                        : Promise.reject(new Error('请输入姓名。')),
+                  },
+                ]}
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={64} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<StaffSectionFormValues>
+                label={<BilingualLabel title="部门" subtitle="Department" />}
+                name="departmentId"
+                style={{ marginBottom: 0 }}
+              >
+                <Select
+                  allowClear
+                  showSearch
+                  optionFilterProp="label"
+                  placeholder={
+                    departmentLoadErrorMessage ? '部门列表加载失败，当前不可修改' : '请选择部门'
+                  }
+                  disabled={Boolean(departmentLoadErrorMessage)}
+                  options={departmentOptions.map((department) => ({
+                    label: department.departmentName,
+                    value: department.id,
+                  }))}
+                />
+              </Form.Item>
+              {departmentLoadErrorMessage ? (
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {departmentLoadErrorMessage}
+                </Typography.Text>
+              ) : null}
+            </EditableFormCard>
+            <EditableFormCard>
+              <Form.Item<StaffSectionFormValues>
+                label={<BilingualLabel title="职务/职称" subtitle="Job Title" />}
+                name="jobTitle"
+                style={{ marginBottom: 0 }}
+              >
+                <Input maxLength={64} />
+              </Form.Item>
+            </EditableFormCard>
+            <EditableFormCard spanClassName="md:col-span-2 xl:col-span-2">
+              <Form.Item<StaffSectionFormValues>
+                label={<BilingualLabel title="备注" subtitle="Remark" />}
+                name="remark"
+                style={{ marginBottom: 0 }}
+              >
+                <TextArea autoSize={{ minRows: 2, maxRows: 4 }} maxLength={255} />
+              </Form.Item>
+            </EditableFormCard>
+          </div>
+        </Form>
+      </div>
+    </EditableSectionShell>
+  );
+}
+
+function StaffSectionViewer({ section, onEdit }: { section: DetailSection; onEdit: () => void }) {
+  return (
+    <EditableSectionShell
+      editLabel="编辑 staff 常用字段"
+      editing={false}
+      errorMessage={null}
+      formId="staff-section-form"
+      onCancel={() => undefined}
+      onEdit={onEdit}
+      saveLabel=""
+      saving={false}
+    >
+      <DetailSectionBlock section={section} />
+    </EditableSectionShell>
+  );
 }
 
 export function AdminUserDetailPageContent({
   accountId,
+  loadDepartmentOptions,
   loadDetail,
-}: {
-  accountId: number;
-  loadDetail: AdminUserDetailLoader;
-}) {
+  updateAccountSection,
+  updateStaffSection,
+  updateUserInfoSection,
+}: AdminUserDetailPageContentProps) {
   const location = useLocation();
   const navigate = useNavigate();
-  const { errorMessage, hasLoaded, isLoading, result, retry } = useAdminUserDetail(
-    accountId,
-    loadDetail,
+  const [messageApi, messageContextHolder] = message.useMessage();
+  const [editingSection, setEditingSection] = useState<EditableSectionKey | null>(null);
+  const [savingSection, setSavingSection] = useState<EditableSectionKey | null>(null);
+  const [sectionErrors, setSectionErrors] = useState<SectionErrorState>(
+    INITIAL_SECTION_ERROR_STATE,
+  );
+  const {
+    applyAccountUpdate,
+    applyStaffUpdate,
+    applyUserInfoUpdate,
+    errorMessage,
+    hasLoaded,
+    isLoading,
+    result,
+    retry,
+  } = useAdminUserDetail(accountId, loadDetail);
+  const { errorMessage: departmentLoadErrorMessage, options: departmentOptions } =
+    useAdminDepartmentOptions(loadDepartmentOptions);
+  const departmentMap = useMemo(
+    () => new Map(departmentOptions.map((department) => [department.id, department])),
+    [departmentOptions],
   );
 
-  const accountSections = useMemo(() => (result ? buildAccountSections(result) : []), [result]);
-  const userInfoSections = useMemo(() => (result ? buildUserInfoSections(result) : []), [result]);
-  const staffSections = useMemo(() => (result ? buildStaffSections(result) : []), [result]);
+  const accountSections = useMemo(
+    () => (result ? buildAccountSectionGroup(result) : null),
+    [result],
+  );
+  const userInfoSections = useMemo(
+    () => (result ? buildUserInfoSectionGroup(result) : null),
+    [result],
+  );
+  const staffSections = useMemo(
+    () => (result ? buildStaffSectionGroup(result, departmentMap) : null),
+    [departmentMap, result],
+  );
+
+  async function handleAccountSectionSubmit(values: AccountSectionFormValues) {
+    if (!result || !values.identityHint) {
+      return;
+    }
+
+    const hasChanged =
+      values.status !== result.account.status ||
+      values.identityHint !== result.account.identityHint;
+
+    if (!hasChanged) {
+      setSectionErrors((currentErrors) => ({ ...currentErrors, account: null }));
+      setEditingSection(null);
+      return;
+    }
+
+    setSavingSection('account');
+    setSectionErrors((currentErrors) => ({ ...currentErrors, account: null }));
+
+    try {
+      const mutationResult = await updateAccountSection({
+        accountId: result.account.id,
+        identityHint: values.identityHint,
+        status: values.status,
+      });
+
+      applyAccountUpdate(mutationResult.account);
+      setEditingSection(null);
+      void messageApi.success({
+        content: `已更新账户 ${result.account.id} 的常用字段`,
+        duration: 2,
+      });
+    } catch (error) {
+      setSectionErrors((currentErrors) => ({
+        ...currentErrors,
+        account: error instanceof Error ? error.message : '账户常用字段保存失败。',
+      }));
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function handleUserInfoSectionSubmit(values: UserInfoSectionFormValues) {
+    if (!result) {
+      return;
+    }
+
+    const normalizedNextValues = {
+      address: normalizeOptionalTextValue(values.address),
+      birthDate: normalizeBirthDateValue(values.birthDate),
+      email: normalizeOptionalTextValue(values.email),
+      gender: values.gender,
+      geographic: normalizeOptionalTextValue(values.geographic),
+      nickname: normalizeRequiredTextValue(values.nickname),
+      phone: normalizeOptionalTextValue(values.phone),
+      signature: normalizeOptionalTextValue(values.signature),
+      tags: normalizeTagsValue(values.tags),
+      userState: values.userState,
+    };
+    const normalizedCurrentValues = {
+      address: normalizeOptionalTextValue(result.userInfo.address),
+      birthDate: normalizeOptionalTextValue(result.userInfo.birthDate),
+      email: normalizeOptionalTextValue(result.userInfo.email),
+      gender: result.userInfo.gender,
+      geographic: normalizeOptionalTextValue(result.userInfo.geographic),
+      nickname: normalizeRequiredTextValue(result.userInfo.nickname),
+      phone: normalizeOptionalTextValue(result.userInfo.phone),
+      signature: normalizeOptionalTextValue(result.userInfo.signature),
+      tags: normalizeTagsValue(result.userInfo.tags ?? []),
+      userState: result.userInfo.userState,
+    };
+
+    const hasChanged =
+      normalizedNextValues.address !== normalizedCurrentValues.address ||
+      normalizedNextValues.birthDate !== normalizedCurrentValues.birthDate ||
+      normalizedNextValues.email !== normalizedCurrentValues.email ||
+      normalizedNextValues.gender !== normalizedCurrentValues.gender ||
+      normalizedNextValues.geographic !== normalizedCurrentValues.geographic ||
+      normalizedNextValues.nickname !== normalizedCurrentValues.nickname ||
+      normalizedNextValues.phone !== normalizedCurrentValues.phone ||
+      normalizedNextValues.signature !== normalizedCurrentValues.signature ||
+      normalizedNextValues.userState !== normalizedCurrentValues.userState ||
+      !areStringArraysEqual(normalizedNextValues.tags, normalizedCurrentValues.tags);
+
+    if (!hasChanged) {
+      setSectionErrors((currentErrors) => ({ ...currentErrors, userInfo: null }));
+      setEditingSection(null);
+      return;
+    }
+
+    setSavingSection('userInfo');
+    setSectionErrors((currentErrors) => ({ ...currentErrors, userInfo: null }));
+
+    try {
+      const mutationResult = await updateUserInfoSection({
+        accountId: result.account.id,
+        ...normalizedNextValues,
+      });
+
+      applyUserInfoUpdate(mutationResult.userInfo);
+      setEditingSection(null);
+      void messageApi.success({
+        content: `已更新账户 ${result.account.id} 的用户信息`,
+        duration: 2,
+      });
+    } catch (error) {
+      setSectionErrors((currentErrors) => ({
+        ...currentErrors,
+        userInfo: error instanceof Error ? error.message : '用户常用字段保存失败。',
+      }));
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  async function handleStaffSectionSubmit(values: StaffSectionFormValues) {
+    if (!result) {
+      return;
+    }
+
+    const normalizedNextValues = {
+      departmentId: normalizeOptionalTextValue(values.departmentId),
+      employmentStatus: values.employmentStatus,
+      jobTitle: normalizeOptionalTextValue(values.jobTitle),
+      name: normalizeRequiredTextValue(values.name),
+      remark: normalizeOptionalTextValue(values.remark),
+    };
+    const normalizedCurrentValues = {
+      departmentId: normalizeOptionalTextValue(result.staff.departmentId),
+      employmentStatus: result.staff.employmentStatus,
+      jobTitle: normalizeOptionalTextValue(result.staff.jobTitle),
+      name: normalizeRequiredTextValue(result.staff.name),
+      remark: normalizeOptionalTextValue(result.staff.remark),
+    };
+
+    const hasChanged =
+      normalizedNextValues.departmentId !== normalizedCurrentValues.departmentId ||
+      normalizedNextValues.employmentStatus !== normalizedCurrentValues.employmentStatus ||
+      normalizedNextValues.jobTitle !== normalizedCurrentValues.jobTitle ||
+      normalizedNextValues.name !== normalizedCurrentValues.name ||
+      normalizedNextValues.remark !== normalizedCurrentValues.remark;
+
+    if (!hasChanged) {
+      setSectionErrors((currentErrors) => ({ ...currentErrors, staff: null }));
+      setEditingSection(null);
+      return;
+    }
+
+    setSavingSection('staff');
+    setSectionErrors((currentErrors) => ({ ...currentErrors, staff: null }));
+
+    try {
+      const mutationResult = await updateStaffSection({
+        accountId: result.account.id,
+        ...normalizedNextValues,
+      });
+
+      applyStaffUpdate(mutationResult.staff);
+      setEditingSection(null);
+      void messageApi.success({
+        content: `已更新 staff ${result.staff.id} 的常用字段`,
+        duration: 2,
+      });
+    } catch (error) {
+      setSectionErrors((currentErrors) => ({
+        ...currentErrors,
+        staff: error instanceof Error ? error.message : 'staff 常用字段保存失败。',
+      }));
+    } finally {
+      setSavingSection(null);
+    }
+  }
+
+  function openSectionEditor(sectionKey: EditableSectionKey) {
+    setSectionErrors((currentErrors) => ({
+      ...currentErrors,
+      [sectionKey]: null,
+    }));
+    setEditingSection(sectionKey);
+  }
+
+  function cancelSectionEditor(sectionKey: EditableSectionKey) {
+    setSectionErrors((currentErrors) => ({
+      ...currentErrors,
+      [sectionKey]: null,
+    }));
+    setEditingSection((currentEditingSection) =>
+      currentEditingSection === sectionKey ? null : currentEditingSection,
+    );
+  }
 
   return (
     <Flex vertical gap={24}>
+      {messageContextHolder}
+
       <div className="flex flex-col gap-3">
         <Flex align="center" justify="space-between" gap={16} wrap>
           <div className="flex flex-col gap-2">
@@ -548,11 +1489,10 @@ export function AdminUserDetailPageContent({
               >
                 User Detail
               </Typography.Text>
-              <Tag color="processing">示例页面</Tag>
             </Flex>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 880 }}>
               当前已接好 `account(id)`、`userInfo(accountId)` 与 `staff(accountId)` 三块正式数据，
-              后续再在此基础上补写入动作与更完整的 identity 细节。
+              常用字段支持按分区编辑与保存，关键字段和降级字段继续保持只读。
             </Typography.Paragraph>
           </div>
           <Button onClick={() => navigate({ pathname: '/admin/users', search: location.search })}>
@@ -563,11 +1503,11 @@ export function AdminUserDetailPageContent({
 
       {!hasLoaded ? (
         <Skeleton active paragraph={{ rows: 12 }} />
-      ) : errorMessage || !result ? (
+      ) : errorMessage || !result || !accountSections || !userInfoSections || !staffSections ? (
         <Alert
           type="error"
           showIcon
-          message="用户详情加载失败"
+          title="用户详情加载失败"
           description={errorMessage || '当前账户详情不可用。'}
           action={
             <Button size="small" type="link" onClick={retry}>
@@ -609,15 +1549,74 @@ export function AdminUserDetailPageContent({
           </Card>
 
           <Card title={<BilingualLabel title="账户信息" subtitle="Account" />}>
-            <DetailSectionList sections={accountSections} />
+            <Flex vertical gap={20}>
+              <DetailSectionBlock section={accountSections.fixed} />
+              {editingSection === 'account' ? (
+                <AccountSectionEditor
+                  detail={result}
+                  errorMessage={sectionErrors.account}
+                  formId="account-section-form"
+                  onCancel={() => cancelSectionEditor('account')}
+                  onEdit={() => openSectionEditor('account')}
+                  onSubmit={handleAccountSectionSubmit}
+                  saving={savingSection === 'account'}
+                />
+              ) : (
+                <AccountSectionViewer
+                  section={accountSections.editable}
+                  onEdit={() => openSectionEditor('account')}
+                />
+              )}
+              <DetailSectionBlock section={accountSections.reference} />
+            </Flex>
           </Card>
 
           <Card title={<BilingualLabel title="用户信息" subtitle="User Info" />}>
-            <DetailSectionList sections={userInfoSections} />
+            <Flex vertical gap={20}>
+              <DetailSectionBlock section={userInfoSections.fixed} />
+              {editingSection === 'userInfo' ? (
+                <UserInfoSectionEditor
+                  detail={result}
+                  errorMessage={sectionErrors.userInfo}
+                  formId="user-info-section-form"
+                  onCancel={() => cancelSectionEditor('userInfo')}
+                  onEdit={() => openSectionEditor('userInfo')}
+                  onSubmit={handleUserInfoSectionSubmit}
+                  saving={savingSection === 'userInfo'}
+                />
+              ) : (
+                <UserInfoSectionViewer
+                  section={userInfoSections.editable}
+                  onEdit={() => openSectionEditor('userInfo')}
+                />
+              )}
+              <DetailSectionBlock section={userInfoSections.reference} />
+            </Flex>
           </Card>
 
           <Card title={<BilingualLabel title="Staff 信息" subtitle="Staff" />}>
-            <DetailSectionList sections={staffSections} />
+            <Flex vertical gap={20}>
+              <DetailSectionBlock section={staffSections.fixed} />
+              {editingSection === 'staff' ? (
+                <StaffSectionEditor
+                  departmentLoadErrorMessage={departmentLoadErrorMessage}
+                  departmentOptions={departmentOptions}
+                  detail={result}
+                  errorMessage={sectionErrors.staff}
+                  formId="staff-section-form"
+                  onCancel={() => cancelSectionEditor('staff')}
+                  onEdit={() => openSectionEditor('staff')}
+                  onSubmit={handleStaffSectionSubmit}
+                  saving={savingSection === 'staff'}
+                />
+              ) : (
+                <StaffSectionViewer
+                  section={staffSections.editable}
+                  onEdit={() => openSectionEditor('staff')}
+                />
+              )}
+              <DetailSectionBlock section={staffSections.reference} />
+            </Flex>
           </Card>
 
           <Card title={<BilingualLabel title="最近登录" subtitle="Recent Login" />}>

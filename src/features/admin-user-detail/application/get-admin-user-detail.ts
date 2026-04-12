@@ -1,4 +1,4 @@
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUSES = [
   'ACTIVE',
@@ -15,11 +15,14 @@ export const ADMIN_USER_DETAIL_USER_STATES = [
   'SUSPENDED',
 ] as const;
 export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES = ['ACTIVE', 'LEFT', 'SUSPENDED'] as const;
+export const ADMIN_USER_DETAIL_GENDERS = ['FEMALE', 'MALE', 'SECRET'] as const;
+export const ADMIN_USER_DETAIL_IDENTITY_HINTS = AUTH_ACCESS_GROUPS;
 
 export type AdminUserDetailAccountStatus = (typeof ADMIN_USER_DETAIL_ACCOUNT_STATUSES)[number];
 export type AdminUserDetailUserState = (typeof ADMIN_USER_DETAIL_USER_STATES)[number];
 export type AdminUserDetailStaffEmploymentStatus =
   (typeof ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES)[number];
+export type AdminUserDetailGender = (typeof ADMIN_USER_DETAIL_GENDERS)[number];
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS: Record<AdminUserDetailAccountStatus, string> =
   {
@@ -47,11 +50,17 @@ export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS: Record<
   SUSPENDED: '已停用',
 };
 
+export const ADMIN_USER_DETAIL_GENDER_LABELS: Record<AdminUserDetailGender, string> = {
+  FEMALE: '女',
+  MALE: '男',
+  SECRET: '保密',
+};
+
 export type AdminUserDetail = {
   account: {
     createdAt: string;
     id: number;
-    identityHint: string | null;
+    identityHint: AuthAccessGroup | null;
     loginEmail: string | null;
     loginName: string | null;
     recentLoginHistory: readonly {
@@ -80,7 +89,7 @@ export type AdminUserDetail = {
     birthDate: string | null;
     createdAt: string;
     email: string | null;
-    gender: string;
+    gender: AdminUserDetailGender;
     geographic: string | null;
     id: string;
     nickname: string;
