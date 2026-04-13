@@ -52,6 +52,7 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import { loadMyProfileLabRouteModule, myProfileLabAccess } from '@/labs/my-profile';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
@@ -424,6 +425,16 @@ async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function myProfileLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(myProfileLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  await ensureAuthenticatedSession(request);
+
+  return null;
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -612,6 +623,11 @@ const router = createBrowserRouter([
             path: 'change-login-email',
             loader: changeLoginEmailLabLoader,
             lazy: loadChangeLoginEmailLabRouteModule,
+          },
+          {
+            path: 'my-profile',
+            loader: myProfileLabLoader,
+            lazy: loadMyProfileLabRouteModule,
           },
         ],
       },

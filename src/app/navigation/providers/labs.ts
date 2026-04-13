@@ -54,6 +54,15 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       primaryAccessGroup: 'ADMIN' as const,
       slotGroup: null,
     },
+    {
+      iconKey: 'UserOutlined',
+      key: '/labs/my-profile',
+      label: '我的资料',
+      navMode: 'rail' as const,
+      path: '/labs/my-profile',
+      primaryAccessGroup: 'ADMIN' as const,
+      slotGroup: null,
+    },
   ];
 
   if (children.length === 0) {

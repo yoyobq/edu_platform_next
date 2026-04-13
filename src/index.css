@@ -422,3 +422,51 @@ html.disable-motion *::after {
   letter-spacing: var(--error-block-status-letter-spacing);
   line-height: 1;
 }
+
+/* Labs Page Specific Styles */
+.app-labs-tabs > .ant-tabs-nav {
+  margin-bottom: 24px !important;
+}
+.app-labs-tabs > .ant-tabs-nav::before {
+  display: none !important;
+}
+.app-labs-tabs > .ant-tabs-nav .ant-tabs-tab {
+  border: none !important;
+  background: transparent !important;
+  transition: all 0.2s ease !important;
+}
+.app-labs-tabs > .ant-tabs-nav .ant-tabs-tab-active {
+  background: var(--ant-color-bg-container) !important;
+  border-radius: var(--radius-lg) !important;
+  box-shadow: var(--ant-box-shadow-tertiary) !important;
+}
+.app-labs-tabs > .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--ant-color-primary) !important;
+  font-weight: 600 !important;
+}
+
+.app-profile-tabs .ant-tabs-nav {
+  margin-bottom: 24px !important;
+}
+.app-profile-tabs .ant-tabs-nav::before {
+  border-bottom: 1px solid var(--ant-color-border-secondary) !important;
+}
+.app-profile-tabs .ant-tabs-nav .ant-tabs-tab {
+  padding: 10px 0 !important;
+  margin-right: 24px !important;
+  background: transparent !important;
+  border: none !important;
+}
+.app-profile-tabs .ant-tabs-nav .ant-tabs-tab-btn {
+  font-size: 14px !important;
+  color: var(--ant-color-text-secondary) !important;
+  font-weight: 400 !important;
+}
+.app-profile-tabs .ant-tabs-nav .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--ant-color-primary) !important;
+  font-weight: 600 !important;
+}
+.app-profile-tabs .ant-tabs-nav .ant-tabs-ink-bar {
+  height: 2px !important;
+  border-radius: 2px 2px 0 0 !important;
+}
