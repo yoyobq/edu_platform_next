@@ -5,6 +5,7 @@
 当前稳定口径见：
 
 - [docs/project-convention/identity-access-session.md](/var/www/platform_next/docs/project-convention/identity-access-session.md)
+- [docs/project-convention/welcome-profile-completion.md](/var/www/platform_next/docs/project-convention/welcome-profile-completion.md)
 
 ## 当前真相
 

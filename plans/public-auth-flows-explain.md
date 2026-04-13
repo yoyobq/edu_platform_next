@@ -5,6 +5,7 @@
 - [public-auth-flows-explain.md](./public-auth-flows-explain.md)：解释当前 public auth 主线的背景、分工和拆分原则
 - [public-auth-flows-now.md](./public-auth-flows-now.md)：当前还可继续推进的公开认证入口主线
 - [public-auth-flows-future.md](./public-auth-flows-future.md)：更受产品策略影响、暂不默认推进的后续项
+- [../docs/project-convention/public-auth-verification-intents.md](../docs/project-convention/public-auth-verification-intents.md)：当前已稳定的一次性入口边界与路由归属
 
 拆分原则：
 

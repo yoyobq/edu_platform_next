@@ -4,6 +4,7 @@
 已经稳定落地的链路不再在本文件重复展开实现细节，统一以下列文档为准：
 
 - [Invite Register Current Contract](/var/www/platform_next/docs/backend/invite-register-current.md)
+- [Public Auth Verification Intents](/var/www/platform_next/docs/project-convention/public-auth-verification-intents.md)
 - [Public Auth Staff Invite](/var/www/platform_next/docs/project-convention/public-auth-staff-invite.md)
 
 当前项目真相：
