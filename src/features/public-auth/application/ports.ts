@@ -1,5 +1,6 @@
 import type {
-  ChangeLoginEmailResult,
+  ChangeLoginEmailConfirmResult,
+  ChangeLoginEmailIntentResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -9,10 +10,13 @@ import type {
 
 export type PublicAuthApiPort = {
   requestPasswordReset: (input: { email: string }) => Promise<void>;
+  getChangeLoginEmailIntent: (input: {
+    verificationCode: string;
+  }) => Promise<ChangeLoginEmailIntentResult>;
   consumeChangeLoginEmail: (input: {
     accessToken?: string | null;
     verificationCode: string;
-  }) => Promise<ChangeLoginEmailResult>;
+  }) => Promise<ChangeLoginEmailConfirmResult>;
   verifyResetPasswordIntent: (input: {
     verificationCode: string;
   }) => Promise<VerificationIntentResult>;

@@ -11,11 +11,24 @@ export type ResetPasswordResult =
   | { reason: Exclude<VerificationFailureReason, 'unknown'>; status: 'failure' }
   | { message: string; status: 'error' };
 
-export type ChangeLoginEmailResult =
+export type ChangeLoginEmailIntentResult =
+  | {
+      loginEmail: string | null;
+      oldLoginEmail: string | null;
+      status: 'ready';
+    }
+  | {
+      reason: Exclude<VerificationFailureReason, 'unknown'>;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
+
+export type ChangeLoginEmailConfirmResult =
   | {
       accountId: number | null;
       loginEmail: string | null;
       message: string | null;
+      oldLoginEmail: string | null;
       status: 'success';
     }
   | {

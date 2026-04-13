@@ -1,7 +1,7 @@
 import { Card, Flex, Typography } from 'antd';
 import { useParams, useSearchParams } from 'react-router';
 
-import { readStoredAuthSession, refreshSession } from '@/features/auth';
+import { logout, readStoredAuthSession } from '@/features/auth';
 import {
   ResetPasswordIntentPanel,
   StaffInviteIntentPanel,
@@ -133,16 +133,6 @@ export function VerifyEmailIntentPage() {
   const { verificationCode = '' } = useParams();
   const storedSession = readStoredAuthSession();
   const accessToken = storedSession?.accessToken ?? null;
-  const handleSessionSync = storedSession
-    ? async () => {
-        try {
-          await refreshSession();
-          return 'synced' as const;
-        } catch {
-          return 'failed' as const;
-        }
-      }
-    : undefined;
 
   return (
     <VerificationIntentShell
@@ -151,7 +141,7 @@ export function VerifyEmailIntentPage() {
     >
       <VerifyEmailIntentPanel
         accessToken={accessToken}
-        onSessionSync={handleSessionSync}
+        onConsumeSuccess={storedSession ? async () => logout() : undefined}
         verificationCode={verificationCode}
       />
     </VerificationIntentShell>

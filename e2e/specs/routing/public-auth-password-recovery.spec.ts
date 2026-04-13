@@ -444,7 +444,7 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByText('密码已更新')).toBeVisible();
-  await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '前往登录' })).toBeVisible();
 });
 
 test('reset-password 返回登录时，不应触发 restore -> me', async ({ page }) => {
@@ -643,7 +643,7 @@ test('reset code 提交时若已过期，应切换到失败态', async ({ page }
   await page.getByLabel('确认新密码').fill('password-1234');
   await page.getByRole('button', { name: '更新密码' }).click();
 
-  await expect(page.getByText('重置链接不可用')).toBeVisible();
+  await expect(page.getByText('重置链接已过期')).toBeVisible();
   await expect(page.getByText('这个重置链接已经过期，请重新发起找回密码流程。')).toBeVisible();
 });
 
@@ -693,7 +693,7 @@ test('reset code 过期时，应显示失败态', async ({ page }) => {
 
   await page.goto(routes.resetPassword('reset-token-expired'));
 
-  await expect(page.getByText('重置链接不可用')).toBeVisible();
+  await expect(page.getByText('重置链接已过期')).toBeVisible();
   await expect(page.getByText('这个重置链接已经过期，请重新发起找回密码流程。')).toBeVisible();
 });
 
@@ -702,6 +702,6 @@ test('reset code 已使用时，应显示失败态', async ({ page }) => {
 
   await page.goto(routes.resetPassword('reset-token-used'));
 
-  await expect(page.getByText('重置链接不可用')).toBeVisible();
+  await expect(page.getByText('重置链接已使用')).toBeVisible();
   await expect(page.getByText('这个重置链接已经被使用，请重新发起找回密码流程。')).toBeVisible();
 });

@@ -2,6 +2,7 @@ export const routes = {
   adminUsers: '/admin/users',
   forgotPassword: '/forgot-password',
   home: '/',
+  labsChangeLoginEmail: '/labs/change-login-email',
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>
     `/invite/${inviteType}/${verificationCode}`,
   labsDemo: '/labs/demo',

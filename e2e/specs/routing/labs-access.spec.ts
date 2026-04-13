@@ -67,6 +67,15 @@ test('未登录访问 labs invite issuer 时，应先跳登录并保留原目标
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
+test('未登录访问 labs change login email 时，应先跳登录并保留原目标', async ({ page }) => {
+  await page.goto(routes.labsChangeLoginEmail);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsChangeLoginEmail)}$`),
+  );
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+});
+
 test('已登录但不具备 admin 权限时，应继续拦截 labs 示例页', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
@@ -122,6 +131,25 @@ test('具备 admin 权限的已登录会话，应允许进入 labs invite issuer
   await expect(page.getByRole('button', { name: '签发邀请' })).toBeVisible();
 });
 
+test('具备 admin 权限的已登录会话，应允许进入 labs change login email', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto(routes.labsChangeLoginEmail);
+
+  await expect(page.getByRole('heading', { name: '登录邮箱变更发信页' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '发送验证邮件' })).toBeVisible();
+});
+
 test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
@@ -175,6 +203,58 @@ test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({
   await expect(page.getByText('教职工邀请已签发')).toBeVisible();
   await expect(page.locator('text=staff-token-001').first()).toBeVisible();
   await expect(page.getByText('/invite/staff/staff-token-001')).toBeVisible();
+});
+
+test('labs change login email 可发起 requestChangeLoginEmail 并展示前端验证路由模板', async ({
+  page,
+}) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('mutation RequestChangeLoginEmail')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            requestChangeLoginEmail: {
+              message: '验证邮件已发送',
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsChangeLoginEmail);
+
+  await page.getByLabel('新的登录邮箱').fill('new-login@example.com');
+  await page.getByRole('button', { name: '发送验证邮件' }).click();
+
+  await expect(page.getByText('验证邮件已请求发送')).toBeVisible();
+  await expect(page.locator('text=new-login@example.com').first()).toBeVisible();
+  await expect(page.getByText('/verify/email/{verificationCode}')).toBeVisible();
 });
 
 test('具备 admin 权限但 access token 临近过期时，进入 labs 示例页不应触发前置续期', async ({

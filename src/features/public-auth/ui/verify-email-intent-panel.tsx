@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Flex, Skeleton, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
@@ -7,14 +7,17 @@ import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
 
-type SessionSyncStatus = 'skipped' | 'synced' | 'failed';
-
 type VerifyEmailIntentState =
   | { status: 'loading' }
   | {
       loginEmail: string | null;
+      oldLoginEmail: string | null;
+      status: 'ready';
+    }
+  | {
+      loginEmail: string | null;
       message: string | null;
-      sessionSyncStatus: SessionSyncStatus;
+      oldLoginEmail: string | null;
       status: 'success';
     }
   | { message: string; reason: VerificationFailureReason; status: 'failure' }
@@ -52,6 +55,10 @@ function resolveFailureDescription(reason: VerificationFailureReason, message: s
   return '暂时无法确认这个邮箱验证链接的状态，请稍后再试。';
 }
 
+function formatLoginEmailValue(value: string | null) {
+  return value || '未返回';
+}
+
 function VerifyEmailFailureState({
   message,
   reason,
@@ -72,6 +79,9 @@ function VerifyEmailFailureState({
       <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
         返回登录
       </Button>
+      <Typography.Text type="secondary">
+        如需重新发起登录邮箱变更，请在登录后前往相应设置页面操作。
+      </Typography.Text>
     </Flex>
   );
 }
@@ -79,14 +89,17 @@ function VerifyEmailFailureState({
 export function VerifyEmailIntentPanel({
   verificationCode,
   accessToken,
-  onSessionSync,
+  onConsumeSuccess,
 }: {
   accessToken?: string | null;
-  onSessionSync?: () => Promise<SessionSyncStatus>;
+  onConsumeSuccess?: () => Promise<void>;
   verificationCode: string;
 }) {
   const navigate = useNavigate();
   const [state, setState] = useState<VerifyEmailIntentState>({ status: 'loading' });
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const loadedVerificationCodeRef = useRef<string | null>(null);
 
   useEffect(() => {
     let isActive = true;
@@ -103,10 +116,15 @@ export function VerifyEmailIntentPanel({
         return;
       }
 
-      setState({ status: 'loading' });
+      if (loadedVerificationCodeRef.current === normalizedVerificationCode) {
+        return;
+      }
 
-      const result = await publicAuthApi.consumeChangeLoginEmail({
-        accessToken,
+      loadedVerificationCodeRef.current = normalizedVerificationCode;
+      setState({ status: 'loading' });
+      setSubmitError(null);
+
+      const result = await publicAuthApi.getChangeLoginEmailIntent({
         verificationCode: normalizedVerificationCode,
       });
 
@@ -114,21 +132,11 @@ export function VerifyEmailIntentPanel({
         return;
       }
 
-      if (result.status === 'success') {
-        let sessionSyncStatus: SessionSyncStatus = 'skipped';
-
-        if (onSessionSync) {
-          sessionSyncStatus = await onSessionSync();
-          if (!isActive) {
-            return;
-          }
-        }
-
+      if (result.status === 'ready') {
         setState({
           loginEmail: result.loginEmail,
-          message: result.message,
-          sessionSyncStatus,
-          status: 'success',
+          oldLoginEmail: result.oldLoginEmail,
+          status: 'ready',
         });
         return;
       }
@@ -137,7 +145,7 @@ export function VerifyEmailIntentPanel({
         setState({
           status: 'failure',
           reason: result.reason,
-          message: result.message,
+          message: resolveFailureDescription(result.reason, ''),
         });
         return;
       }
@@ -152,14 +160,98 @@ export function VerifyEmailIntentPanel({
 
     return () => {
       isActive = false;
+      loadedVerificationCodeRef.current = null;
     };
-  }, [accessToken, onSessionSync, verificationCode]);
+  }, [verificationCode]);
 
   if (state.status === 'loading') {
     return (
       <Flex vertical gap={12}>
-        <Typography.Text type="secondary">正在完成邮箱验证</Typography.Text>
+        <Typography.Text type="secondary">正在确认登录邮箱变更链接</Typography.Text>
         <Skeleton active paragraph={{ rows: 3 }} title={false} />
+      </Flex>
+    );
+  }
+
+  if (state.status === 'ready') {
+    return (
+      <Flex vertical gap={16}>
+        <div>
+          <Typography.Title level={4} style={{ marginBottom: 8 }}>
+            确认更换登录邮箱
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            确认后，系统会更新当前账户的登录邮箱，并要求你重新登录。
+          </Typography.Paragraph>
+        </div>
+
+        <Alert
+          type="info"
+          showIcon
+          title="本次将进行以下变更"
+          description={
+            <Flex vertical gap={8}>
+              <div>
+                当前登录邮箱：
+                <Typography.Text strong>
+                  {formatLoginEmailValue(state.oldLoginEmail)}
+                </Typography.Text>
+              </div>
+              <div>
+                新的登录邮箱：
+                <Typography.Text strong>{formatLoginEmailValue(state.loginEmail)}</Typography.Text>
+              </div>
+            </Flex>
+          }
+        />
+
+        {submitError ? <Alert type="error" showIcon title={submitError} /> : null}
+
+        <Flex gap={8} wrap>
+          <Button
+            type="primary"
+            loading={submitting}
+            onClick={async () => {
+              setSubmitting(true);
+              setSubmitError(null);
+
+              try {
+                const result = await publicAuthApi.consumeChangeLoginEmail({
+                  accessToken,
+                  verificationCode,
+                });
+
+                if (result.status === 'success') {
+                  await onConsumeSuccess?.();
+
+                  setState({
+                    loginEmail: result.loginEmail,
+                    message: result.message,
+                    oldLoginEmail: result.oldLoginEmail,
+                    status: 'success',
+                  });
+                  return;
+                }
+
+                if (result.status === 'failure') {
+                  setState({
+                    status: 'failure',
+                    reason: result.reason,
+                    message: result.message,
+                  });
+                  return;
+                }
+
+                setSubmitError(result.message);
+              } finally {
+                setSubmitting(false);
+              }
+            }}
+          >
+            确认更换并重新登录
+          </Button>
+          <Button onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>暂不更换</Button>
+        </Flex>
       </Flex>
     );
   }
@@ -167,49 +259,24 @@ export function VerifyEmailIntentPanel({
   if (state.status === 'success') {
     const description = state.message?.trim()
       ? state.message
-      : state.loginEmail
-        ? `登录邮箱已更新为 ${state.loginEmail}。`
-        : '登录邮箱已完成验证并更新。';
+      : state.oldLoginEmail && state.loginEmail
+        ? `登录邮箱已从 ${state.oldLoginEmail} 更新为 ${state.loginEmail}。`
+        : state.loginEmail
+          ? `登录邮箱已更新为 ${state.loginEmail}。`
+          : '登录邮箱已完成验证并更新。';
 
     return (
       <Flex vertical gap={16}>
-        <Alert type="success" showIcon title="邮箱验证已完成" description={description} />
-        {state.loginEmail ? (
-          <Typography.Paragraph style={{ marginBottom: 0 }}>
-            当前登录邮箱：
-            <Typography.Text strong>{state.loginEmail}</Typography.Text>
-          </Typography.Paragraph>
-        ) : null}
-        {state.sessionSyncStatus === 'synced' ? (
-          <Alert
-            type="info"
-            showIcon
-            title="当前浏览器会话已同步"
-            description="后续在站内看到的登录邮箱会使用最新值。"
-          />
-        ) : null}
-        {state.sessionSyncStatus === 'failed' ? (
-          <Alert
-            type="warning"
-            showIcon
-            title="当前浏览器会话尚未同步"
-            description="登录邮箱已经更新成功，但当前浏览器未能同步最新会话，请重新登录后继续。"
-          />
-        ) : null}
-        <Flex gap={8} wrap>
-          {state.sessionSyncStatus === 'synced' ? (
-            <Button type="primary" onClick={() => navigate('/')}>
-              继续进入工作台
-            </Button>
-          ) : (
-            <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
-              返回登录
-            </Button>
-          )}
-          {state.sessionSyncStatus === 'synced' ? (
-            <Button onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>返回登录</Button>
-          ) : null}
-        </Flex>
+        <Alert type="success" showIcon title="登录邮箱已更新" description={description} />
+        <Alert
+          type="info"
+          showIcon
+          title="请重新登录"
+          description="为保证账户状态一致，当前浏览器需要重新登录后再继续使用。"
+        />
+        <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
+          前往登录
+        </Button>
       </Flex>
     );
   }
@@ -221,6 +288,9 @@ export function VerifyEmailIntentPanel({
         <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
           返回登录
         </Button>
+        <Typography.Text type="secondary">
+          如需重新发起登录邮箱变更，请在登录后前往相应设置页面操作。
+        </Typography.Text>
       </Flex>
     );
   }

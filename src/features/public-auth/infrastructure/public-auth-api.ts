@@ -5,7 +5,8 @@ import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/s
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type {
-  ChangeLoginEmailResult,
+  ChangeLoginEmailConfirmResult,
+  ChangeLoginEmailIntentResult,
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
@@ -33,6 +34,7 @@ type FindVerificationRecordResponse = {
     message?: string | null;
     reason?: VerificationRecordFailureReason | null;
     record?: {
+      publicPayload?: unknown;
       notBefore?: string | null;
       status: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
     } | null;
@@ -53,6 +55,7 @@ type ConsumeChangeLoginEmailResponse = {
     accountId?: number | null;
     loginEmail?: string | null;
     message?: string | null;
+    oldLoginEmail?: string | null;
     reason?: VerificationRecordFailureReason | null;
     success: boolean;
   };
@@ -127,6 +130,21 @@ const FIND_PASSWORD_RESET_RECORD_QUERY = `
   }
 `;
 
+const FIND_CHANGE_LOGIN_EMAIL_RECORD_QUERY = `
+  query FindChangeLoginEmailVerificationRecord($input: FindVerificationRecordInput!) {
+    findVerificationRecord(input: $input) {
+      message
+      reason
+      success
+      record {
+        notBefore
+        publicPayload
+        status
+      }
+    }
+  }
+`;
+
 const RESET_PASSWORD_MUTATION = `
   mutation ResetPassword($input: ResetPasswordInput!) {
     resetPassword(input: $input) {
@@ -143,6 +161,7 @@ const CONSUME_CHANGE_LOGIN_EMAIL_MUTATION = `
       accountId
       loginEmail
       message
+      oldLoginEmail
       reason
       success
     }
@@ -288,6 +307,104 @@ async function findResetPasswordIntent(
   }
 
   throw new Error(result.message || '暂时无法确认重置链接状态。');
+}
+
+function normalizeOptionalStringValue(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function toRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function extractChangeLoginEmailPreview(publicPayload: unknown): {
+  loginEmail: string | null;
+  oldLoginEmail: string | null;
+} {
+  const payload = toRecord(publicPayload);
+
+  if (!payload) {
+    return {
+      loginEmail: null,
+      oldLoginEmail: null,
+    };
+  }
+
+  const preview = toRecord(payload.preview);
+
+  return {
+    loginEmail:
+      normalizeOptionalStringValue(preview?.toMasked) ||
+      normalizeOptionalStringValue(payload.loginEmail) ||
+      normalizeOptionalStringValue(payload.newLoginEmail) ||
+      normalizeOptionalStringValue(payload.toLoginEmail) ||
+      null,
+    oldLoginEmail:
+      normalizeOptionalStringValue(preview?.fromMasked) ||
+      normalizeOptionalStringValue(payload.oldLoginEmail) ||
+      normalizeOptionalStringValue(payload.fromLoginEmail) ||
+      null,
+  };
+}
+
+async function findChangeLoginEmailIntent(
+  verificationCode: string,
+): Promise<ChangeLoginEmailIntentResult> {
+  const response = await requestGraphQL<
+    FindVerificationRecordResponse,
+    {
+      input: {
+        expectedType: 'EMAIL_VERIFY_LINK';
+        ignoreTargetRestriction: boolean;
+        token: string;
+      };
+    }
+  >(FIND_CHANGE_LOGIN_EMAIL_RECORD_QUERY, {
+    input: {
+      expectedType: 'EMAIL_VERIFY_LINK',
+      ignoreTargetRestriction: true,
+      token: verificationCode,
+    },
+  });
+
+  const result = response.findVerificationRecord;
+
+  if (result.success && result.record) {
+    const intent = mapVerificationRecordToIntentResult(result.record);
+
+    if (intent.status === 'valid') {
+      return {
+        status: 'ready',
+        ...extractChangeLoginEmailPreview(result.record.publicPayload),
+      };
+    }
+
+    if (intent.reason === 'unknown') {
+      return {
+        status: 'error',
+        message: result.message || '暂时无法确认登录邮箱变更链接状态。',
+      };
+    }
+
+    return {
+      status: 'failure',
+      reason: intent.reason,
+    };
+  }
+
+  const reason = mapVerificationFailureReason(result.reason);
+
+  if (reason !== 'unknown') {
+    return {
+      status: 'failure',
+      reason,
+    };
+  }
+
+  return {
+    status: 'error',
+    message: result.message || '暂时无法确认登录邮箱变更链接状态。',
+  };
 }
 
 function mapInviteStatusReasonToFailureReason(
@@ -545,7 +662,17 @@ export const publicAuthApi: PublicAuthApiPort = {
   async requestPasswordReset(input) {
     await requestPasswordResetEmail(input.email);
   },
-  async consumeChangeLoginEmail(input): Promise<ChangeLoginEmailResult> {
+  async getChangeLoginEmailIntent(input): Promise<ChangeLoginEmailIntentResult> {
+    try {
+      return await findChangeLoginEmailIntent(input.verificationCode);
+    } catch (error) {
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法确认登录邮箱变更链接状态。'),
+      };
+    }
+  },
+  async consumeChangeLoginEmail(input): Promise<ChangeLoginEmailConfirmResult> {
     try {
       const accessToken = input.accessToken?.trim() || undefined;
       const response = await requestGraphQL<
@@ -578,6 +705,7 @@ export const publicAuthApi: PublicAuthApiPort = {
           accountId: result.accountId ?? null,
           loginEmail: result.loginEmail ?? null,
           message: result.message ?? null,
+          oldLoginEmail: result.oldLoginEmail ?? null,
           status: 'success',
         };
       }

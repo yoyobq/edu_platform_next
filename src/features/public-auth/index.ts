@@ -6,7 +6,8 @@ import { publicAuthApi } from './infrastructure/public-auth-api';
 
 export type { PublicAuthApiPort, PublicAuthPorts } from './application/ports';
 export type {
-  ChangeLoginEmailResult,
+  ChangeLoginEmailConfirmResult,
+  ChangeLoginEmailIntentResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,

@@ -37,6 +37,15 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
         ]
       : []),
     {
+      iconKey: 'MailOutlined',
+      key: '/labs/change-login-email',
+      label: '登录邮箱变更',
+      navMode: 'rail' as const,
+      path: '/labs/change-login-email',
+      primaryAccessGroup: 'ADMIN' as const,
+      slotGroup: null,
+    },
+    {
       iconKey: 'SendOutlined',
       key: '/labs/invite-issuer',
       label: '邀请管理',

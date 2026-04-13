@@ -14,20 +14,45 @@ import { ResetPasswordForm } from './reset-password-form';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
 
+function resolveResetFailureTitle(reason: VerificationFailureReason) {
+  if (reason === 'expired') {
+    return '重置链接已过期';
+  }
+
+  if (reason === 'used') {
+    return '重置链接已使用';
+  }
+
+  return '重置链接不可用';
+}
+
+function resolveResetFailureDescription(reason: VerificationFailureReason) {
+  if (reason === 'expired') {
+    return '这个重置链接已经过期，请重新发起找回密码流程。';
+  }
+
+  if (reason === 'used') {
+    return '这个重置链接已经被使用，请重新发起找回密码流程。';
+  }
+
+  if (reason === 'invalid') {
+    return '这个重置链接无效，请检查邮件中的链接是否完整。';
+  }
+
+  return '暂时无法确认这个重置链接的状态，请稍后再试。';
+}
+
 function ResetPasswordFailureState({ reason }: { reason: VerificationFailureReason }) {
   const navigate = useNavigate();
-  const description =
-    reason === 'expired'
-      ? '这个重置链接已经过期，请重新发起找回密码流程。'
-      : reason === 'used'
-        ? '这个重置链接已经被使用，请重新发起找回密码流程。'
-        : reason === 'invalid'
-          ? '这个重置链接无效，请检查邮件中的链接是否完整。'
-          : '暂时无法确认这个重置链接的状态，请稍后再试。';
 
   return (
     <Flex vertical gap={16}>
-      <Alert type="error" showIcon title="重置链接不可用" description={description} />
+      <Alert
+        type="error"
+        showIcon
+        title={resolveResetFailureTitle(reason)}
+        description={resolveResetFailureDescription(reason)}
+      />
       <Button type="primary" onClick={() => navigate('/forgot-password')}>
         重新发送重置邮件
       </Button>
@@ -138,7 +163,7 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
           description="你现在可以使用新密码重新登录。"
         />
         <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
-          返回登录
+          前往登录
         </Button>
       </Flex>
     );

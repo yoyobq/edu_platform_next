@@ -26,6 +26,7 @@ describe('navigation catalog', () => {
     expect(items.map((item) => item.key)).toEqual(['/', '/admin/users', '/errors/preview', 'labs']);
     expect(items.at(-1)?.children?.map((item) => item.key)).toEqual([
       '/labs/payload-crypto',
+      '/labs/change-login-email',
       '/labs/invite-issuer',
       '/sandbox/playground',
     ]);
@@ -40,6 +41,7 @@ describe('navigation catalog', () => {
     );
 
     expect(prodAdminItems.at(-1)?.children?.map((item) => item.key)).toEqual([
+      '/labs/change-login-email',
       '/labs/invite-issuer',
     ]);
   });
@@ -62,6 +64,7 @@ describe('navigation catalog', () => {
       '/admin/users',
       '/errors/preview',
       '/labs/payload-crypto',
+      '/labs/change-login-email',
       '/labs/invite-issuer',
       '/sandbox/playground',
     ]);
