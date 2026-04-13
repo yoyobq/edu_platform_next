@@ -21,6 +21,15 @@ const REQUEST_CHANGE_LOGIN_EMAIL_MUTATION = `
   }
 `;
 
+const ADMIN_REQUEST_CHANGE_LOGIN_EMAIL_MUTATION = `
+  mutation AdminRequestChangeLoginEmail($input: AdminRequestChangeLoginEmailInput!) {
+    adminRequestChangeLoginEmail(input: $input) {
+      message
+      success
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -74,5 +83,36 @@ export async function requestChangeLoginEmail(input: { newLoginEmail: string }) 
     return result;
   } catch (error) {
     throw new Error(resolveErrorMessage(error, '暂时无法发送登录邮箱变更邮件。'));
+  }
+}
+
+export async function adminRequestChangeLoginEmail(input: {
+  accountId: number;
+  newLoginEmail: string;
+}) {
+  try {
+    const response = await requestGraphQL<
+      {
+        adminRequestChangeLoginEmail: RequestChangeLoginEmailResponse;
+      },
+      {
+        input: {
+          accountId: number;
+          newLoginEmail: string;
+        };
+      }
+    >(ADMIN_REQUEST_CHANGE_LOGIN_EMAIL_MUTATION, {
+      input,
+    });
+
+    const result = normalizeResult(response.adminRequestChangeLoginEmail);
+
+    if (!result.success) {
+      throw new Error(result.message || '暂时无法为指定账号发送登录邮箱变更邮件。');
+    }
+
+    return result;
+  } catch (error) {
+    throw new Error(resolveErrorMessage(error, '暂时无法为指定账号发送登录邮箱变更邮件。'));
   }
 }

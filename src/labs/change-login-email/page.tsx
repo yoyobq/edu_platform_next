@@ -1,19 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Alert, Button, Card, Form, Input, Space, Tag, Typography } from 'antd';
 
 import { changeLoginEmailLabAccess } from './access';
-import { requestChangeLoginEmail } from './api';
+import { adminRequestChangeLoginEmail, requestChangeLoginEmail } from './api';
 import { changeLoginEmailLabMeta } from './meta';
 
 type ChangeLoginEmailFormValues = {
   newLoginEmail: string;
+  targetAccountId?: string;
 };
 
 type ChangeLoginEmailSubmitResult = {
+  accountId: string | null;
   callbackPattern: string;
   message: string | null;
   newLoginEmail: string;
+  requestMode: 'admin' | 'self';
 };
+
+type SubmitMode = 'admin' | 'self';
 
 function ResultItem({ label, value }: { label: string; value: string }) {
   return (
@@ -31,6 +36,7 @@ export function ChangeLoginEmailLabPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [result, setResult] = useState<ChangeLoginEmailSubmitResult | null>(null);
+  const submitModeRef = useRef<SubmitMode>('self');
   const origin = typeof window === 'undefined' ? '' : window.location.origin;
 
   const callbackPattern = useMemo(() => {
@@ -65,7 +71,7 @@ export function ChangeLoginEmailLabPage() {
             type="info"
             showIcon
             message="联调说明"
-            description="当前页面只负责触发 requestChangeLoginEmail。邮件中的真实验证 token 不会返回给前端，邮件跳转地址是否正确取决于后端 CHANGE_LOGIN_EMAIL_FRONTEND_URL 配置。"
+            description="当前页面支持两种签发：给当前登录账号自己发，或以 admin 身份给指定 accountId 发。邮件中的真实验证 token 不会返回给前端，邮件跳转地址是否正确取决于后端 CHANGE_LOGIN_EMAIL_FRONTEND_URL 配置。"
           />
         </div>
       </Card>
@@ -83,19 +89,56 @@ export function ChangeLoginEmailLabPage() {
 
               try {
                 const newLoginEmail = values.newLoginEmail.trim();
-                const response = await requestChangeLoginEmail({
-                  newLoginEmail,
-                });
+                const targetAccountId = values.targetAccountId?.trim() || null;
+                const submitMode = submitModeRef.current;
+                let response;
+
+                if (submitMode === 'admin') {
+                  if (!targetAccountId) {
+                    form.setFields([
+                      {
+                        name: 'targetAccountId',
+                        errors: ['请输入目标账号 ID。'],
+                      },
+                    ]);
+                    return;
+                  }
+
+                  if (!/^\d+$/.test(targetAccountId)) {
+                    form.setFields([
+                      {
+                        name: 'targetAccountId',
+                        errors: ['目标账号 ID 必须是正整数。'],
+                      },
+                    ]);
+                    return;
+                  }
+
+                  response = await adminRequestChangeLoginEmail({
+                    accountId: Number.parseInt(targetAccountId, 10),
+                    newLoginEmail,
+                  });
+                } else {
+                  response = await requestChangeLoginEmail({
+                    newLoginEmail,
+                  });
+                }
 
                 setResult({
+                  accountId: submitMode === 'admin' ? targetAccountId : null,
                   callbackPattern,
                   message: response.message,
                   newLoginEmail,
+                  requestMode: submitMode,
                 });
               } catch (error) {
                 setResult(null);
                 setSubmitError(
-                  error instanceof Error ? error.message : '暂时无法发送登录邮箱变更邮件。',
+                  error instanceof Error
+                    ? error.message
+                    : submitModeRef.current === 'admin'
+                      ? '暂时无法为指定账号发送登录邮箱变更邮件。'
+                      : '暂时无法发送登录邮箱变更邮件。',
                 );
               } finally {
                 setSubmitting(false);
@@ -119,10 +162,51 @@ export function ChangeLoginEmailLabPage() {
               <Input placeholder="请输入新的登录邮箱" autoComplete="email" />
             </Form.Item>
 
+            <Form.Item
+              label="目标账号 ID"
+              name="targetAccountId"
+              extra="仅在使用 admin 为别人签发时必填。给自己发时可以留空。"
+              rules={[
+                {
+                  validator: async (_, value) => {
+                    const normalizedValue = typeof value === 'string' ? value.trim() : '';
+
+                    if (!normalizedValue || /^\d+$/.test(normalizedValue)) {
+                      return;
+                    }
+
+                    throw new Error('目标账号 ID 必须是正整数。');
+                  },
+                },
+              ]}
+            >
+              <Input placeholder="请输入目标账号 ID" inputMode="numeric" />
+            </Form.Item>
+
             <Form.Item style={{ marginBottom: 0 }}>
-              <Button type="primary" htmlType="submit" block loading={submitting}>
-                发送验证邮件
-              </Button>
+              <Space.Compact block>
+                <Button
+                  type="primary"
+                  block
+                  loading={submitting && submitModeRef.current === 'self'}
+                  onClick={() => {
+                    submitModeRef.current = 'self';
+                    form.submit();
+                  }}
+                >
+                  给自己发送验证邮件
+                </Button>
+                <Button
+                  block
+                  loading={submitting && submitModeRef.current === 'admin'}
+                  onClick={() => {
+                    submitModeRef.current = 'admin';
+                    form.submit();
+                  }}
+                >
+                  以 admin 身份为指定账号发送
+                </Button>
+              </Space.Compact>
             </Form.Item>
           </Form>
         </Card>
@@ -133,13 +217,26 @@ export function ChangeLoginEmailLabPage() {
               <Alert
                 type="success"
                 showIcon
-                title="验证邮件已请求发送"
+                title={
+                  result.requestMode === 'admin'
+                    ? '指定账号的验证邮件已请求发送'
+                    : '验证邮件已请求发送'
+                }
                 description={
                   result.message || '后端已接受请求，请到目标邮箱中继续点击验证链接完成变更。'
                 }
               />
 
               <Space orientation="vertical" size={12} style={{ width: '100%' }}>
+                <ResultItem
+                  label="签发方式"
+                  value={
+                    result.requestMode === 'admin' ? 'admin 为指定账号签发' : '当前登录账号自己发起'
+                  }
+                />
+                {result.accountId ? (
+                  <ResultItem label="目标账号 ID" value={result.accountId} />
+                ) : null}
                 <ResultItem label="目标登录邮箱" value={result.newLoginEmail} />
                 <ResultItem label="前端验证链接格式" value={result.callbackPattern} />
               </Space>

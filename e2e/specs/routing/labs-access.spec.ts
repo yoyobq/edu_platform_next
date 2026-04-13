@@ -250,11 +250,74 @@ test('labs change login email 可发起 requestChangeLoginEmail 并展示前端�
   await page.goto(routes.labsChangeLoginEmail);
 
   await page.getByLabel('新的登录邮箱').fill('new-login@example.com');
-  await page.getByRole('button', { name: '发送验证邮件' }).click();
+  await page.getByRole('button', { name: '给自己发送验证邮件' }).click();
 
   await expect(page.getByText('验证邮件已请求发送')).toBeVisible();
   await expect(page.locator('text=new-login@example.com').first()).toBeVisible();
-  await expect(page.getByText('/verify/email/{verificationCode}')).toBeVisible();
+  await expect(page.locator('text=/verify/email/\\{verificationCode\\}/').first()).toBeVisible();
+});
+
+test('labs change login email 可通过 adminRequestChangeLoginEmail 为指定账号发起验证邮件', async ({
+  page,
+}) => {
+  let requestInput: { accountId?: number; newLoginEmail?: string } | null = null;
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: {
+            input?: { accountId?: number; newLoginEmail?: string };
+          };
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('mutation AdminRequestChangeLoginEmail')) {
+      requestInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            adminRequestChangeLoginEmail: {
+              message: '已为目标账号发送验证邮件',
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsChangeLoginEmail);
+
+  await page.getByLabel('新的登录邮箱').fill('delegated-login@example.com');
+  await page.getByLabel('目标账号 ID').fill('9527');
+  await page.getByRole('button', { name: '以 admin 身份为指定账号发送' }).click();
+
+  await expect(page.getByText('指定账号的验证邮件已请求发送')).toBeVisible();
+  await expect(page.locator('text=9527').first()).toBeVisible();
+  await expect(page.locator('text=delegated-login@example.com').first()).toBeVisible();
+  expect(requestInput).toEqual({
+    accountId: 9527,
+    newLoginEmail: 'delegated-login@example.com',
+  });
 });
 
 test('具备 admin 权限但 access token 临近过期时，进入 labs 示例页不应触发前置续期', async ({
