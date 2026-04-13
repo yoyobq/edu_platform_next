@@ -1,7 +1,12 @@
 import { Card, Flex, Typography } from 'antd';
 import { useParams, useSearchParams } from 'react-router';
 
-import { ResetPasswordIntentPanel, StaffInviteIntentPanel } from '@/features/public-auth';
+import { readStoredAuthSession, refreshSession } from '@/features/auth';
+import {
+  ResetPasswordIntentPanel,
+  StaffInviteIntentPanel,
+  VerifyEmailIntentPanel,
+} from '@/features/public-auth';
 
 import { BrandLockup } from '@/shared/ui/brand';
 
@@ -126,13 +131,29 @@ export function InviteIntentPage() {
 
 export function VerifyEmailIntentPage() {
   const { verificationCode = '' } = useParams();
+  const storedSession = readStoredAuthSession();
+  const accessToken = storedSession?.accessToken ?? null;
+  const handleSessionSync = storedSession
+    ? async () => {
+        try {
+          await refreshSession();
+          return 'synced' as const;
+        } catch {
+          return 'failed' as const;
+        }
+      }
+    : undefined;
 
   return (
     <VerificationIntentShell
-      title="邮箱验证入口"
-      description="邮箱验证入口独立于普通 redirect 回跳，便于后续接入专门的 intent 预解析与继续流程。"
+      title="确认登录邮箱"
+      description="验证成功后，系统会把当前账户的登录邮箱更新为邮件中的目标地址。"
     >
-      <VerificationIntentDetails details={[{ label: '验证代码', value: verificationCode }]} />
+      <VerifyEmailIntentPanel
+        accessToken={accessToken}
+        onSessionSync={handleSessionSync}
+        verificationCode={verificationCode}
+      />
     </VerificationIntentShell>
   );
 }

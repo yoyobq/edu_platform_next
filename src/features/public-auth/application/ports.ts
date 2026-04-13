@@ -1,4 +1,5 @@
 import type {
+  ChangeLoginEmailResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -8,6 +9,10 @@ import type {
 
 export type PublicAuthApiPort = {
   requestPasswordReset: (input: { email: string }) => Promise<void>;
+  consumeChangeLoginEmail: (input: {
+    accessToken?: string | null;
+    verificationCode: string;
+  }) => Promise<ChangeLoginEmailResult>;
   verifyResetPasswordIntent: (input: {
     verificationCode: string;
   }) => Promise<VerificationIntentResult>;

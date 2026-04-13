@@ -1,10 +1,11 @@
 import type { OperationVariables } from '@apollo/client';
 
 import { normalizeDepartmentName } from '@/shared/department';
-import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
+import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type {
+  ChangeLoginEmailResult,
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
@@ -41,6 +42,16 @@ type FindVerificationRecordResponse = {
 
 type ResetPasswordResponse = {
   resetPassword: {
+    message?: string | null;
+    reason?: VerificationRecordFailureReason | null;
+    success: boolean;
+  };
+};
+
+type ConsumeChangeLoginEmailResponse = {
+  consumeChangeLoginEmail: {
+    accountId?: number | null;
+    loginEmail?: string | null;
     message?: string | null;
     reason?: VerificationRecordFailureReason | null;
     success: boolean;
@@ -126,6 +137,18 @@ const RESET_PASSWORD_MUTATION = `
   }
 `;
 
+const CONSUME_CHANGE_LOGIN_EMAIL_MUTATION = `
+  mutation ConsumeChangeLoginEmail($input: ConsumeChangeLoginEmailInput!) {
+    consumeChangeLoginEmail(input: $input) {
+      accountId
+      loginEmail
+      message
+      reason
+      success
+    }
+  }
+`;
+
 const PUBLIC_INVITE_INFO_QUERY = `
   query PublicInviteInfo($token: String!) {
     publicInviteInfo(token: $token) {
@@ -183,9 +206,16 @@ const CONSUME_STAFF_INVITE_MUTATION = `
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    accessToken?: string;
+    allowAuthRetry?: boolean;
+    authMode?: GraphQLAuthMode;
+  },
 ): Promise<TData> {
   return executeGraphQL(query, variables, {
-    authMode: 'none',
+    accessToken: options?.accessToken,
+    allowAuthRetry: options?.allowAuthRetry,
+    authMode: options?.authMode ?? 'none',
   });
 }
 
@@ -369,6 +399,25 @@ function resolveStaffInviteIngressMessage(error: unknown, fallback: string): str
   }
 }
 
+function resolveChangeLoginEmailFailureMessage(
+  reason: Exclude<VerificationFailureReason, 'unknown'>,
+  fallback?: string | null,
+): string {
+  if (fallback) {
+    return fallback;
+  }
+
+  if (reason === 'expired') {
+    return '这个邮箱验证链接已经过期，请重新发起登录邮箱变更。';
+  }
+
+  if (reason === 'used') {
+    return '这个邮箱验证链接已经被使用，当前无需再次验证。';
+  }
+
+  return '这个邮箱验证链接无效，请确认链接是否完整。';
+}
+
 async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
   try {
     const response = await requestGraphQL<
@@ -495,6 +544,74 @@ async function fetchVerifiedStaffIdentity(input: {
 export const publicAuthApi: PublicAuthApiPort = {
   async requestPasswordReset(input) {
     await requestPasswordResetEmail(input.email);
+  },
+  async consumeChangeLoginEmail(input): Promise<ChangeLoginEmailResult> {
+    try {
+      const accessToken = input.accessToken?.trim() || undefined;
+      const response = await requestGraphQL<
+        ConsumeChangeLoginEmailResponse,
+        {
+          input: {
+            token: string;
+          };
+        }
+      >(
+        CONSUME_CHANGE_LOGIN_EMAIL_MUTATION,
+        {
+          input: {
+            token: input.verificationCode,
+          },
+        },
+        accessToken
+          ? {
+              accessToken,
+              authMode: 'required',
+            }
+          : {
+              authMode: 'none',
+            },
+      );
+      const result = response.consumeChangeLoginEmail;
+
+      if (result.success) {
+        return {
+          accountId: result.accountId ?? null,
+          loginEmail: result.loginEmail ?? null,
+          message: result.message ?? null,
+          status: 'success',
+        };
+      }
+
+      const reason = mapVerificationFailureReason(result.reason);
+
+      if (reason !== 'unknown') {
+        return {
+          message: resolveChangeLoginEmailFailureMessage(reason, result.message),
+          reason,
+          status: 'failure',
+        };
+      }
+
+      return {
+        message: result.message || '暂时无法完成邮箱验证。',
+        status: 'error',
+      };
+    } catch (error) {
+      const reason = resolveVerificationFailureReason(error);
+
+      if (reason !== 'unknown') {
+        return {
+          message: resolveChangeLoginEmailFailureMessage(reason),
+          reason,
+          status: 'failure',
+        };
+      }
+
+      return {
+        message: resolvePublicAuthErrorMessage(error, '暂时无法完成邮箱验证。'),
+        status: 'error',
+      };
+    }
   },
   async getStaffInviteInfo(input) {
     return findStaffInviteIntent(input.verificationCode);

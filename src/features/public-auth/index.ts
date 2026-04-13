@@ -6,6 +6,7 @@ import { publicAuthApi } from './infrastructure/public-auth-api';
 
 export type { PublicAuthApiPort, PublicAuthPorts } from './application/ports';
 export type {
+  ChangeLoginEmailResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -19,6 +20,7 @@ export { ForgotPasswordForm } from './ui/forgot-password-form';
 export { ResetPasswordForm } from './ui/reset-password-form';
 export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 export { StaffInviteIntentPanel } from './ui/staff-invite-intent-panel';
+export { VerifyEmailIntentPanel } from './ui/verify-email-intent-panel';
 
 const publicAuthPorts: PublicAuthPorts = {
   api: publicAuthApi,

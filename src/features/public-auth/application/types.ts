@@ -11,6 +11,20 @@ export type ResetPasswordResult =
   | { reason: Exclude<VerificationFailureReason, 'unknown'>; status: 'failure' }
   | { message: string; status: 'error' };
 
+export type ChangeLoginEmailResult =
+  | {
+      accountId: number | null;
+      loginEmail: string | null;
+      message: string | null;
+      status: 'success';
+    }
+  | {
+      message: string;
+      reason: Exclude<VerificationFailureReason, 'unknown'>;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
+
 export type StaffInviteInfo = {
   description: string | null;
   expiresAt: string;
