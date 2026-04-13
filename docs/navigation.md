@@ -20,6 +20,31 @@
 
 当前启用范围：第一批只收 `admin` 授权入口；只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用 admin 导航 capability。当前首页 `/` 也已作为首批 admin 菜单项接入。public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
 
+## 导航真相归属
+
+当前导航真相已收敛到 `src/app/navigation/`，不再由 `layout` 目录直接维护业务导航目录。
+
+固定边界如下：
+
+- `src/app/navigation/` 是当前唯一导航聚合入口
+- `layout` 只负责 capability、渲染与壳层编排，不再拥有业务目录真相
+- 各业务域以静态 provider 形式导出自己的 `navigation meta`
+- 壳层通过聚合层统一收集、过滤并输出最终菜单树
+
+当前已落地的 provider 归属为：
+
+- `home`：首页 `/`
+- `admin`：`/admin/users`
+- `errors`：`/errors/preview`
+- `labs`：`/labs/payload-crypto`、`/labs/invite-issuer`
+- `sandbox`：`/sandbox/playground`
+
+补充约束：
+
+- `admin user detail` 当前不是一级导航项，仍通过列表页进入
+- `src/app/layout/navigation-meta.ts` 当前只作为兼容 shim，不再承载真实导航数据
+- 新导航项应优先落到对应业务域 provider，而不是回填到 `layout`
+
 ## 菜单状态机
 
 代码位于 `src/app/providers/nav-capability.ts`。
@@ -104,8 +129,54 @@ type NavigationMetaItem = {
 - 叶子项必须有稳定 landing path
 - 分组项当前也可保留 `path` 字段用于结构归属，但渲染层不要求其对应真实 landing page
 - 若分组项不可点击，导航事件只应落到叶子项
+- 同一结构性分组若由多个业务域共同贡献子项，聚合层允许按相同 `key` 合并 children
+- provider 保持纯数据或纯函数，不内嵌渲染组件，不直接依赖壳层状态
 
 manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单一。
+
+## 聚合出口与过滤
+
+当前对外稳定出口统一由 `@/app/navigation` 提供，包括：
+
+- `getNavigationItems()`
+- `getNavigationLeafItems()`
+- `canAccessNavigationPath()`
+- `resolveNavMode()`
+
+调用方边界固定为：
+
+- `AppLayout` 使用 `getNavigationItems()` 与 `resolveNavMode()`
+- router navigation loader 使用 `canAccessNavigationPath()`
+- local entry catalog 使用 `getNavigationLeafItems()`
+
+当前聚合层固定负责：
+
+1. 收集各业务域 provider 导出的候选项
+2. 合并同 key 的结构性分组项
+3. 基于当前 `NavigationFilter` 递归过滤 children
+4. 输出菜单树、叶子项列表与路径访问判断
+
+当前稳定过滤输入为：
+
+- `accountId`
+- `primaryAccessGroup`
+- `accessGroup`
+- `slotGroup`
+- `appEnv`
+
+当前稳定过滤规则为：
+
+- `allowedAccessGroups` 未显式声明时，默认只允许 `primaryAccessGroup`
+- `slotGroup` 命中失败时，项或分组不进入最终树
+- 分组项若过滤后没有任何 child，应整体移除
+- route access check 与 sidebar 菜单树使用同一套聚合结果，不允许出现两套访问真相
+
+当前已确认的特殊规则包括：
+
+- `payload-crypto`：只对特定 admin 账号开放
+- `sandbox/playground`：只在 `dev / test` 暴露
+
+这些特殊规则应继续跟随业务域 provider 归属，不回流到 layout 层。
 
 ## 菜单交互基线
 

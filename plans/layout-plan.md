@@ -81,7 +81,7 @@
 
 - capability 已按 `none / rail / full` 三档接入
 - 当前 admin 导航 capability 按 `accessGroup` 中是否包含 `ADMIN` 启用；首页 `/` 已纳入首批 admin 菜单投影
-- 首批菜单投影已集中落在 `src/app/layout/navigation-meta.ts`，覆盖首页与 `Labs` 分组下的实验入口
+- 首批菜单投影已迁入 `src/app/navigation/`，由域级 providers + 聚合出口承接首页与 `Labs` 分组下的实验入口
 - `full -> rail` 自动折叠与 `rail -> full` 恢复阈值已落地（`480 / 680`）
 
 保留的提醒：

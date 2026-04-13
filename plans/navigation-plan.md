@@ -2,7 +2,35 @@
 
 # Navigation Plan
 
-> 状态：进行中（基础 capability 已落地，业务投影与交互收尾仍在推进）
+> 状态：进行中（基础 capability 已落地；当前主线切到 navigation meta 拆域聚合，drawer / flyout 暂缓）
+
+本文件只保留导航主题当前仍需推进的事项。
+
+已经稳定的现行规则，统一以下列文档为准，不再在本计划中重复改写：
+
+- [../docs/navigation.md](../docs/navigation.md)
+- [../docs/layout.md](../docs/layout.md)
+- [../docs/project-convention/identity-access-session.md](../docs/project-convention/identity-access-session.md)
+
+## 当前阶段结论
+
+当前这一轮导航计划，优先级已经明确调整：
+
+- `rail -> drawer / flyout` 不作为最近主线推进
+- 当前更值得继续推进的是“各业务域导出自己的 navigation meta，接入壳层聚合”
+
+原因：
+
+- 之前导航项集中在 `src/app/layout/navigation-meta.ts`
+- 该文件当时已经开始同时承接首页、用户管理、异常预览、Labs 等多个业务域
+- 若继续沿中央 registry 扩张，`layout` 层会逐步变成业务规则堆场
+- 这与本计划原本就写明的“各业务域导出自己的 navigation meta，壳层挂载时聚合”完全一致
+
+因此当前顺序收口为：
+
+1. 先拆 navigation meta 的归属
+2. 再收口壳层聚合出口与过滤职责
+3. drawer / flyout 保留为后续交互项，等待项目变化进一步对齐后再做
 
 ## 已锁定决策
 
@@ -97,10 +125,11 @@
 ## 当前实现检查
 
 - `AppLayout` 已接入 `NavCapabilityProvider` 与 `NavSidebar`，当前按 `accessGroup` 中是否包含 `ADMIN` 启用 admin 导航 capability
-- `ADMIN` 首批菜单投影已落在 `src/app/layout/navigation-meta.ts`，当前包含首页与 `Labs` 分组下的实验入口
+- `ADMIN` 首批菜单投影已迁入 `src/app/navigation/`，当前由域级 providers + 聚合出口承接首页与 `Labs` 分组下的实验入口
 - 空间竞争阈值已落常量：`NAV_RAIL_WIDTH = 64`、`NAV_FULL_WIDTH = 240`、`NAV_MAIN_MIN_WIDTH_WITH_FULL = 480`、`NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL = 680`
 - pin 偏好已通过 `app.nav.prefersPinnedFull` 持久化；会话恢复后会结合可用宽度决定是否回到 `full`
 - `rail -> drawer / flyout` 目前只有状态接口，当前壳层 UI 尚未接线
+- 当前项目节奏下，`drawer / flyout` 不作为最近一轮优先实现项
 - 暂未看到导航状态机的专项 E2E 覆盖
 
 ## 开放项（实现前需收口）
@@ -108,12 +137,13 @@
 - [ ] `GUEST` 第一版轻导航形态与文案
 - [ ] `slotGroup` canonical 枚举表
 - [ ] `admin` 域各页面 `none / rail / full` 精确启用原则
-- [ ] `rail -> drawer / flyout` 真实交互接线
-- [ ] 各业务域导出自己的 navigation meta，接入壳层聚合
+- [x] 各业务域导出自己的 navigation meta，接入壳层聚合
+- [x] 将当前集中 registry 收口为壳层聚合入口，不再继续承接业务细项真相
+- [ ] `rail -> drawer / flyout` 真实交互接线（当前暂缓，待未来对齐）
 - [ ] 导航专项 E2E 覆盖
 - [x] 左栏 / 主画布 / Sidecar 空间竞争的精确宽度阈值与折叠优先级表 → 已落 `NAV_MAIN_MIN_WIDTH_WITH_FULL = 480`，见 `docs/navigation.md`
 - [x] pin 偏好持久化策略 → 已落 `app.nav.prefersPinnedFull`；进入壳层后再结合 capability 与宽度恢复
-- [x] navigation manifest 最小字段名与当前承载位置 → 已落 `src/app/layout/navigation-meta.ts`，后续再拆分到各业务域
+- [x] navigation manifest 最小字段名与当前承载位置 → 当前已落 `src/app/navigation/`，并按业务域拆分 provider 后由聚合层统一输出
 
 ## 行动项
 
@@ -124,7 +154,8 @@
 
 ### P1 — 收口为实现基准
 
-- [x] `ADMIN` 一级菜单骨架首批草案 → 已落首页 + `Labs` 分组首批入口，见 `src/app/layout/navigation-meta.ts`
+- [x] `ADMIN` 一级菜单骨架首批草案 → 已落首页 + `Labs` 分组首批入口，当前见 `src/app/navigation/`
+- [x] 当前主线切换：优先处理 navigation meta 拆域聚合，暂不继续推进 drawer / flyout UI
 - [ ] `GUEST` 第一版轻导航形态（当前已决定保持 `none`，文案待页面存在时收口）
 - [ ] `CLASS_ADVISER` 插槽示例挂载位置
 - [ ] `admin` 域页面 `rail / full` 精确启用原则
@@ -133,16 +164,35 @@
 - [ ] `STAFF + CLASS_ADVISER` 合并菜单投影示例
 - [ ] 跨主身份共享入口的 manifest 归属示例
 - [ ] 菜单尺寸基线、active indicator 与 hydrating 骨架的视觉基线
-- [ ] `rail -> drawer / flyout` 交互与视觉基线
+- [ ] `rail -> drawer / flyout` 交互与视觉基线（当前暂缓）
 
 ### P2 — 实现
 
 1. [x] `AppLayout` 补 `sidebar / nav-rail` capability 开关 → `src/app/providers/nav-capability.ts`、`nav-capability-provider.tsx`，已接入 AppLayout
 2. [x] `admin` 域首批正式菜单已接入 → 当前集中 registry 已落首页、`Labs`、`invite-issuer`、`payload-crypto`、`sandbox/playground`
-3. [ ] 各业务域导出自己的 navigation meta，接入壳层聚合
-4. [ ] 将 `isDrawerOpen / openDrawer / closeDrawer` 接到真实 UI
-5. [ ] 为导航 capability 增加专项 E2E 覆盖
+3. [x] 各业务域导出自己的 navigation meta，接入壳层聚合
+4. [x] 将当前集中 registry 收口为壳层聚合入口，不再继续承接业务细项真相
+5. [ ] 将 `isDrawerOpen / openDrawer / closeDrawer` 接到真实 UI（当前暂缓）
+6. [ ] 为导航 capability 增加专项 E2E 覆盖
+
+## 当前拆域聚合的最小目标
+
+本轮不追求做成插件系统或动态注册机制，只收口最小、静态、可维护的结构：
+
+- 各业务域导出自己的 `navigation meta`
+- 壳层保留统一聚合与过滤出口
+- `layout` 只负责 capability、聚合、渲染，不继续拥有业务目录真相
+- 特殊访问规则尽量跟随业务域归属，而不是继续堆回中央 registry
+
+本轮不顺手做：
+
+- drawer / flyout 的真实 UI
+- 导航交互大改版
+- 复杂动态注册或运行时发现机制
+- 借拆域聚合顺手重写 manifest shape
 
 ## 结论
 
 以 `layout capability` 方式补回受控菜单能力：用 4 个主身份决定一级骨架，用 `slotGroup` 承接附加职责插槽，用页面上下文权限承接单对象临时能力，用完整 session snapshot 驱动正式菜单渲染。
+
+当前最近一轮的实际推进重点，不再是补 `rail -> drawer / flyout` 交互，而是先把 navigation meta 的真相归属从 `layout` 中央 registry 拆回各业务域，再由壳层统一聚合。

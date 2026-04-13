@@ -16,9 +16,8 @@ import { Menu, Tooltip } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useLocation, useNavigate } from 'react-router';
 
+import type { NavigationMetaItem } from '@/app/navigation';
 import { NAV_FULL_WIDTH, NAV_RAIL_WIDTH, useNavCapability } from '@/app/providers';
-
-import type { NavigationMetaItem } from './navigation-meta';
 
 const ICON_MAP: Record<string, React.ComponentType> = {
   CodeOutlined,

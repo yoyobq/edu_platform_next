@@ -19,6 +19,7 @@ This directory contains project documentation.
 - 想判断 API、storage、URL 参数、SDK、mock 该放哪时，先看 [infrastructure-rules.md](./infrastructure-rules.md)
 - 想跨模块引用、调整 import、判断依赖是否合法时，先看 [dependency-rules.md](./dependency-rules.md)
 - 想明确 `app/` 壳层、主内容区与 AI sidecar 的布局原则时，先看 [layout.md](./layout.md)
+- 想确认导航 capability、`src/app/navigation/` 聚合出口、域级 navigation meta 归属与过滤规则时，先看 [navigation.md](./navigation.md)
 - 想明确登录后默认首页、首页工作台模块准入与 workbench entry 边界时，先看 [workbench-entry-rules.md](./workbench-entry-rules.md)
 - 想参考更激进的 AI-native layout 想法、给生成或设计探索提供输入时，再看 [layout-ideas.md](./layout-ideas.md)
 - 想明确 `antd`、`antdX` 和 `tailwindcss` 的职责分工时，先看 [ui-stack-rules.md](./ui-stack-rules.md)
@@ -53,6 +54,7 @@ This directory contains project documentation.
 - [stable-clean/README.md](./stable-clean/README.md)
 - [infrastructure-rules.md](./infrastructure-rules.md)
 - [layout.md](./layout.md)
+- [navigation.md](./navigation.md)
 - [workbench-entry-rules.md](./workbench-entry-rules.md)
 - [chunk-strategy.md](./chunk-strategy.md)
 - [ui-stack-rules.md](./ui-stack-rules.md)
@@ -120,6 +122,7 @@ docs/
   dependency-rules.md
   infrastructure-rules.md
   layout.md
+  navigation.md
   layout-ideas.md
   workbench-entry-rules.md
   stable-clean/
