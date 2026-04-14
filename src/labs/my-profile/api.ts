@@ -185,6 +185,103 @@ export async function fetchMyProfileIdentity(): Promise<MyProfileIdentityData | 
 }
 
 // ---------------------------------------------------------------------------
+// updateMyUserInfo (self)
+// ---------------------------------------------------------------------------
+
+const UPDATE_MY_USER_INFO_MUTATION = `
+  mutation UpdateMyUserInfo($input: UpdateMyUserInfoInput!) {
+    updateMyUserInfo(input: $input) {
+      isUpdated
+      userInfo {
+        accountId
+        accessGroup
+        nickname
+        email
+        phone
+        gender
+        avatarUrl
+        address
+        birthDate
+        geographic {
+          city
+          province
+        }
+        signature
+        tags
+        userState
+      }
+    }
+  }
+`;
+
+export type UpdateMyUserInfoInput = {
+  address: string | null;
+  birthDate: string | null;
+  email: string | null;
+  gender: MyProfileUserInfo['gender'];
+  geographic: {
+    city?: string;
+    province?: string;
+  } | null;
+  nickname: string;
+  phone: string | null;
+  signature: string | null;
+  tags: string[];
+};
+
+type UpdateMyUserInfoResponse = {
+  updateMyUserInfo: {
+    isUpdated: boolean;
+    userInfo: MyProfileUserInfo;
+  };
+};
+
+type UpdateMyUserInfoVariables = {
+  input: UpdateMyUserInfoInput;
+};
+
+function normalizeRequiredTextValue(value: string): string {
+  return value.trim();
+}
+
+function normalizeOptionalTextValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+
+  return normalized ? normalized : null;
+}
+
+function normalizeTagsValue(tags: string[]): string[] {
+  return tags
+    .map((tag) => tag.trim())
+    .filter((tag, index, values) => tag.length > 0 && values.indexOf(tag) === index);
+}
+
+export async function updateMyUserInfo(input: UpdateMyUserInfoInput) {
+  try {
+    const response = await requestGraphQL<UpdateMyUserInfoResponse, UpdateMyUserInfoVariables>(
+      UPDATE_MY_USER_INFO_MUTATION,
+      {
+        input: {
+          address: normalizeOptionalTextValue(input.address),
+          birthDate: normalizeOptionalTextValue(input.birthDate),
+          email: normalizeOptionalTextValue(input.email),
+          gender: input.gender,
+          geographic: input.geographic,
+          nickname: normalizeRequiredTextValue(input.nickname),
+          phone: normalizeOptionalTextValue(input.phone),
+          signature: normalizeOptionalTextValue(input.signature),
+          tags: normalizeTagsValue(input.tags),
+        },
+      },
+    );
+
+    return response.updateMyUserInfo;
+  } catch (error) {
+    throw new Error(resolveErrorMessage(error, '暂时无法更新基本资料。'));
+  }
+}
+
+// ---------------------------------------------------------------------------
 // requestChangeLoginEmail (self)
 // ---------------------------------------------------------------------------
 

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useState } from 'react';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -15,7 +14,7 @@ import {
   Tag,
   Typography,
 } from 'antd';
-import dayjs from 'dayjs';
+import dayjs, { type Dayjs } from 'dayjs';
 
 import { HexAvatar } from '@/shared/hex-avatar';
 
@@ -25,12 +24,14 @@ import type {
   MyProfileIdentityData,
   MyProfileStaffIdentity,
   MyProfileStudentIdentity,
+  UpdateMyUserInfoInput,
 } from './api';
 import {
   fetchMyProfileBasic,
   fetchMyProfileIdentity,
   requestChangeLoginEmailSelf,
   requestPasswordResetEmail,
+  updateMyUserInfo,
 } from './api';
 import { myProfileLabMeta } from './meta';
 
@@ -119,6 +120,95 @@ function displayValue(value: string | number | null | undefined): string {
   return String(value);
 }
 
+type BasicFormValues = {
+  address: string;
+  birthDate: Dayjs | null;
+  city: string;
+  email: string;
+  gender: string;
+  nickname: string;
+  phone: string;
+  province: string;
+  signature: string;
+  tags: string[];
+};
+
+const EMPTY_BASIC_FORM_VALUES: BasicFormValues = {
+  address: '',
+  birthDate: null,
+  city: '',
+  email: '',
+  gender: 'SECRET',
+  nickname: '',
+  phone: '',
+  province: '',
+  signature: '',
+  tags: [],
+};
+
+function buildBasicFormValues(userInfo: MyProfileBasicData['userInfo']): BasicFormValues {
+  return {
+    address: userInfo.address ?? '',
+    birthDate: userInfo.birthDate ? dayjs(userInfo.birthDate) : null,
+    city: userInfo.geographic?.city ?? '',
+    email: userInfo.email ?? '',
+    gender: userInfo.gender,
+    nickname: userInfo.nickname,
+    phone: userInfo.phone ?? '',
+    province: userInfo.geographic?.province ?? '',
+    signature: userInfo.signature ?? '',
+    tags: userInfo.tags ?? [],
+  };
+}
+
+function normalizeBasicFormValues(values: BasicFormValues): UpdateMyUserInfoInput {
+  const city = values.city.trim();
+  const province = values.province.trim();
+
+  return {
+    address: values.address,
+    birthDate: values.birthDate ? values.birthDate.format('YYYY-MM-DD') : null,
+    email: values.email,
+    gender: values.gender as UpdateMyUserInfoInput['gender'],
+    geographic:
+      city || province
+        ? {
+            ...(city ? { city } : {}),
+            ...(province ? { province } : {}),
+          }
+        : null,
+    nickname: values.nickname,
+    phone: values.phone,
+    signature: values.signature,
+    tags: values.tags,
+  };
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  return left.every((value, index) => value === right[index]);
+}
+
+function isBasicFormDirty(currentValues: BasicFormValues, initialValues: BasicFormValues) {
+  const normalizedCurrent = normalizeBasicFormValues(currentValues);
+  const normalizedInitial = normalizeBasicFormValues(initialValues);
+
+  return (
+    normalizedCurrent.nickname.trim() !== normalizedInitial.nickname.trim() ||
+    normalizedCurrent.gender !== normalizedInitial.gender ||
+    normalizedCurrent.birthDate !== normalizedInitial.birthDate ||
+    normalizedCurrent.email?.trim() !== normalizedInitial.email?.trim() ||
+    normalizedCurrent.signature?.trim() !== normalizedInitial.signature?.trim() ||
+    normalizedCurrent.address?.trim() !== normalizedInitial.address?.trim() ||
+    normalizedCurrent.phone?.trim() !== normalizedInitial.phone?.trim() ||
+    JSON.stringify(normalizedCurrent.geographic) !== JSON.stringify(normalizedInitial.geographic) ||
+    !areStringArraysEqual(normalizedCurrent.tags, normalizedInitial.tags)
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Recent Login List
 // ---------------------------------------------------------------------------
@@ -160,34 +250,101 @@ function RecentLoginList({
 // Basic Tab
 // ---------------------------------------------------------------------------
 
-function BasicTab({ data }: { data: MyProfileBasicData | null }) {
-  const [form] = Form.useForm();
+function BasicTab({
+  data,
+  onUpdated,
+}: {
+  data: MyProfileBasicData | null;
+  onUpdated: (userInfo: MyProfileBasicData['userInfo']) => void;
+}) {
+  const [form] = Form.useForm<BasicFormValues>();
   const [isDirty, setIsDirty] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const initialValues = data ? buildBasicFormValues(data.userInfo) : EMPTY_BASIC_FORM_VALUES;
+
+  useEffect(() => {
+    if (!data) {
+      form.resetFields();
+      setIsDirty(false);
+      setSubmitError(null);
+      return;
+    }
+
+    form.setFieldsValue(buildBasicFormValues(data.userInfo));
+    setIsDirty(false);
+    setSubmitError(null);
+  }, [data, form]);
+
+  const handleValuesChange = useCallback(
+    (_: unknown, allValues: BasicFormValues) => {
+      if (!data) {
+        setIsDirty(false);
+        return;
+      }
+
+      setIsDirty(isBasicFormDirty(allValues, buildBasicFormValues(data.userInfo)));
+    },
+    [data],
+  );
+
+  const handleSubmit = useCallback(
+    async (values: BasicFormValues) => {
+      setSubmitting(true);
+      setSubmitError(null);
+      setSuccess(null);
+
+      try {
+        const result = await updateMyUserInfo(normalizeBasicFormValues(values));
+        const nextValues = buildBasicFormValues(result.userInfo);
+
+        form.setFieldsValue(nextValues);
+        onUpdated(result.userInfo);
+        setIsDirty(false);
+        setSuccess(result.isUpdated ? '基本资料已更新。' : '基本资料未发生变化。');
+      } catch (err: unknown) {
+        setSubmitError(err instanceof Error ? err.message : '更新失败');
+      } finally {
+        setSubmitting(false);
+      }
+    },
+    [form, onUpdated],
+  );
 
   if (!data) return <Skeleton active paragraph={{ rows: 8 }} />;
 
-  const { account, userInfo } = data;
-
-  const initialValues = {
-    nickname: userInfo.nickname,
-    gender: userInfo.gender,
-    email: userInfo.email,
-    birthDate: userInfo.birthDate ? dayjs(userInfo.birthDate) : null,
-    province: userInfo.geographic?.province ?? '',
-    city: userInfo.geographic?.city ?? '',
-    address: userInfo.address ?? '',
-    phone: userInfo.phone ?? '',
-    signature: userInfo.signature ?? '',
-  };
+  const { account } = data;
 
   return (
-    <Form
+    <Form<BasicFormValues>
       form={form}
       initialValues={initialValues}
-      onValuesChange={() => setIsDirty(true)}
+      onFinish={handleSubmit}
+      onValuesChange={handleValuesChange}
       layout="vertical"
     >
       <div className="flex flex-col gap-6">
+        {success ? (
+          <Alert
+            type="success"
+            showIcon
+            message={success}
+            closable
+            onClose={() => setSuccess(null)}
+          />
+        ) : null}
+
+        {submitError ? (
+          <Alert
+            type="error"
+            showIcon
+            message={submitError}
+            closable
+            onClose={() => setSubmitError(null)}
+          />
+        ) : null}
+
         <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
           <FieldItem label="昵称">
             <Form.Item name="nickname" noStyle>
@@ -246,44 +403,15 @@ function BasicTab({ data }: { data: MyProfileBasicData | null }) {
 
         <div className="flex flex-col gap-4">
           <FieldItem label="标签">
-            <Flex align="center" gap={8} wrap>
-              {(userInfo.tags || []).map((tag) => (
-                <Tag
-                  key={tag}
-                  color="cyan"
-                  style={{
-                    alignItems: 'center',
-                    display: 'inline-flex',
-                    gap: 2,
-                    marginInlineEnd: 0,
-                    paddingInlineEnd: 4,
-                  }}
-                >
-                  {tag}
-                  <Button
-                    aria-label={`删除标签 ${tag}`}
-                    icon={<CloseOutlined />}
-                    size="small"
-                    type="text"
-                    style={{
-                      color: 'var(--ant-color-text-secondary)',
-                      height: 18,
-                      minWidth: 18,
-                      paddingInline: 0,
-                    }}
-                    onClick={() => setIsDirty(true)}
-                  />
-                </Tag>
-              ))}
-              <Button
-                aria-label="新增标签"
-                icon={<PlusOutlined />}
-                shape="circle"
-                size="small"
-                type="dashed"
-                onClick={() => setIsDirty(true)}
+            <Form.Item name="tags" noStyle>
+              <Select
+                mode="tags"
+                tokenSeparators={[',', '，']}
+                placeholder="输入后回车添加标签"
+                variant="filled"
+                style={{ width: '100%' }}
               />
-            </Flex>
+            </Form.Item>
           </FieldItem>
 
           <Flex justify="end" align="center" gap={8}>
@@ -291,14 +419,20 @@ function BasicTab({ data }: { data: MyProfileBasicData | null }) {
               <Button
                 type="text"
                 onClick={() => {
-                  form.resetFields();
+                  form.setFieldsValue(initialValues);
                   setIsDirty(false);
+                  setSubmitError(null);
                 }}
               >
                 还原设置
               </Button>
             )}
-            <Button type={isDirty ? 'primary' : 'default'} disabled={!isDirty}>
+            <Button
+              type={isDirty ? 'primary' : 'default'}
+              disabled={!isDirty}
+              htmlType="submit"
+              loading={submitting}
+            >
               更新基本资料
             </Button>
           </Flex>
@@ -779,7 +913,14 @@ export function MyProfileLabPage() {
                     {
                       key: 'basic',
                       label: '基本资料',
-                      children: <BasicTab data={data} />,
+                      children: (
+                        <BasicTab
+                          data={data}
+                          onUpdated={(userInfo) =>
+                            setData((current) => (current ? { ...current, userInfo } : current))
+                          }
+                        />
+                      ),
                     },
                     {
                       key: 'identity',
