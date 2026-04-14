@@ -54,6 +54,10 @@ import {
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
+import {
+  loadUpstreamSessionDemoLabRouteModule,
+  upstreamSessionDemoLabAccess,
+} from '@/labs/upstream-session-demo';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 const PUBLIC_PATH_PREFIXES = [
@@ -70,7 +74,7 @@ function isPublicPath(pathname: string): boolean {
 }
 
 type AppEnv = 'dev' | 'test' | 'prod';
-type AppAccessLevel = 'guest' | 'admin';
+type AppAccessLevel = 'guest' | 'admin' | 'staff';
 type LabAccess = {
   allowedAccessLevels: readonly AppAccessLevel[];
   env: readonly ('dev' | 'prod')[];
@@ -88,19 +92,39 @@ function getCurrentAppEnv(): AppEnv {
 
 const currentAppEnv = getCurrentAppEnv();
 
-function getCurrentSessionAccessLevel(): AppAccessLevel {
+function getCurrentSessionAccessLevels() {
   const snapshot = getAuthSessionSnapshot();
 
-  return hasAdminAccess(snapshot) ? 'admin' : 'guest';
+  if (!snapshot) {
+    return ['guest'] as const;
+  }
+
+  const accessLevels: AppAccessLevel[] = [];
+
+  if (snapshot.userInfo.accessGroup.includes('ADMIN')) {
+    accessLevels.push('admin');
+  }
+
+  if (snapshot.userInfo.accessGroup.includes('STAFF')) {
+    accessLevels.push('staff');
+  }
+
+  if (accessLevels.length === 0) {
+    accessLevels.push('guest');
+  }
+
+  return accessLevels;
 }
 
 function hasLabAccess(access: LabAccess): boolean {
-  const accessLevel = getCurrentSessionAccessLevel();
+  const accessLevels = getCurrentSessionAccessLevels();
   const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
 
   return (
     access.env.includes(effectiveLabEnv) &&
-    access.allowedAccessLevels.some((allowedAccessLevel) => allowedAccessLevel === accessLevel)
+    access.allowedAccessLevels.some((allowedAccessLevel) =>
+      accessLevels.includes(allowedAccessLevel),
+    )
   );
 }
 
@@ -425,6 +449,42 @@ async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(upstreamSessionDemoLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(upstreamSessionDemoLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -618,6 +678,11 @@ const router = createBrowserRouter([
             path: 'change-login-email',
             loader: changeLoginEmailLabLoader,
             lazy: loadChangeLoginEmailLabRouteModule,
+          },
+          {
+            path: 'upstream-session-demo',
+            loader: upstreamSessionDemoLabLoader,
+            lazy: loadUpstreamSessionDemoLabRouteModule,
           },
         ],
       },

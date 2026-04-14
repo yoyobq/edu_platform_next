@@ -28,6 +28,7 @@ describe('navigation catalog', () => {
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
   });
@@ -43,6 +44,22 @@ describe('navigation catalog', () => {
     expect(prodAdminItems.at(-1)?.children?.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/upstream-session-demo',
+    ]);
+  });
+
+  it('shows only the shared upstream lab to staff users, while keeping admin-only labs hidden', () => {
+    const staffItems = getNavigationItems(
+      buildFilter({
+        accountId: 1001,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+      }),
+    );
+
+    expect(staffItems.map((item) => item.key)).toEqual(['labs']);
+    expect(staffItems[0]?.children?.map((item) => item.key)).toEqual([
+      '/labs/upstream-session-demo',
     ]);
   });
 
@@ -66,6 +83,7 @@ describe('navigation catalog', () => {
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([
