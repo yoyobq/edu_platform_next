@@ -112,6 +112,10 @@ export const demoLabMeta = {
   - 用于临时调用 `inviteStaff` / `inviteStudent` 生成联调 invite link
   - 属于实验性联调工具，不承担正式管理后台职责
   - 若后续出现正式管理入口，应优先迁入正式区拥有者切片，而不是继续扩展该 labs 页面
+- `/labs/upstream-session-demo`
+  - 用于演示“前端持有 upstream token、后端代访问 upstream”的当前标准链路
+  - 当前使用 `fetchTeacherDirectory(sessionToken)` 作为示例数据源
+  - 若后续出现正式 upstream 业务页，应优先迁入正式区拥有者切片，而不是让 labs 长期承担正式入口
 
 ## 例外声明位置
 

@@ -35,6 +35,7 @@ This directory contains project documentation.
 - 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - 想确认 public auth 一次性入口当前由谁承接、哪些已是真实流程、哪些仍是 shell 时，先看 [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - 想确认当前身份、授权摘要、会话恢复以及 protected route 前置续期边界时，先看 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
+- 想确认 upstream token 为什么由前端持有、当前 `/labs/upstream-session-demo` 的行为边界，以及后续 upstream 功能应复用什么模式时，先看 [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
 - 想确认 `/welcome` 首次资料补全的进入条件、回跳规则和表单复用边界时，先看 [project-convention/welcome-profile-completion.md](./project-convention/welcome-profile-completion.md)
 - 想确认 `shared/graphql` 与 `auth` 的运行时边界、主动/兜底续期、请求鉴权语义与会话失效跳转时，先看 [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
 - 想确认 `executeGraphQL()` 的统一异常出口、`GraphQLIngressError` 分类、Apollo 4.x 映射和默认中文错误提示时，先看 [project-convention/graphql-error-model.md](./project-convention/graphql-error-model.md)
@@ -96,6 +97,7 @@ This directory contains project documentation.
 - [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
+- [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
 - [project-convention/welcome-profile-completion.md](./project-convention/welcome-profile-completion.md)
 - [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
 
