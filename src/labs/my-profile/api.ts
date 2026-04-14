@@ -1,5 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
+import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 // ---------------------------------------------------------------------------
@@ -134,7 +135,6 @@ const MY_PROFILE_IDENTITY_QUERY = `
         departmentId
         employmentStatus
         jobTitle
-        remark
       }
       ... on MyProfileStudentIdentityDTO {
         id
@@ -142,7 +142,6 @@ const MY_PROFILE_IDENTITY_QUERY = `
         name
         classId
         studentStatus
-        remarks
       }
     }
   }
@@ -156,7 +155,6 @@ export type MyProfileStaffIdentity = {
   departmentId: string | null;
   employmentStatus: string;
   jobTitle: string | null;
-  remark: string | null;
 };
 
 export type MyProfileStudentIdentity = {
@@ -166,7 +164,6 @@ export type MyProfileStudentIdentity = {
   name: string;
   classId: number | null;
   studentStatus: string;
-  remarks: string | null;
 };
 
 export type MyProfileIdentityData = MyProfileStaffIdentity | MyProfileStudentIdentity;
@@ -181,6 +178,64 @@ export async function fetchMyProfileIdentity(): Promise<MyProfileIdentityData | 
     return response.myProfileIdentity;
   } catch (error) {
     throw new Error(resolveErrorMessage(error, '无法加载身份信息。'));
+  }
+}
+
+// ---------------------------------------------------------------------------
+// myProfileDepartmentOptions
+// ---------------------------------------------------------------------------
+
+const MY_PROFILE_DEPARTMENT_OPTIONS_QUERY = `
+  query MyProfileDepartmentOptions($limit: Int) {
+    departments(limit: $limit) {
+      departmentName
+      id
+      isEnabled
+      shortName
+    }
+  }
+`;
+
+export type MyProfileDepartmentOption = {
+  departmentName: string;
+  id: string;
+  isEnabled: boolean;
+  shortName: string | null;
+};
+
+type MyProfileDepartmentOptionsResponse = {
+  departments: MyProfileDepartmentOption[];
+};
+
+type MyProfileDepartmentOptionsVariables = {
+  limit: number;
+};
+
+export async function fetchMyProfileDepartmentOptions(): Promise<
+  readonly MyProfileDepartmentOption[]
+> {
+  try {
+    const response = await requestGraphQL<
+      MyProfileDepartmentOptionsResponse,
+      MyProfileDepartmentOptionsVariables
+    >(MY_PROFILE_DEPARTMENT_OPTIONS_QUERY, { limit: 500 });
+
+    return [
+      {
+        departmentName: WHITE_HOUSE_DEPARTMENT_NAME,
+        id: '',
+        isEnabled: true,
+        shortName: null,
+      },
+      ...response.departments.map((department) => ({
+        departmentName: normalizeDepartmentName(department.departmentName),
+        id: department.id,
+        isEnabled: department.isEnabled,
+        shortName: department.shortName,
+      })),
+    ];
+  } catch (error) {
+    throw new Error(resolveErrorMessage(error, '无法加载系部信息。'));
   }
 }
 

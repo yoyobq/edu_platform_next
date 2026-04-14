@@ -16,11 +16,13 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 
+import { WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
 import { HexAvatar } from '@/shared/hex-avatar';
 
 import { myProfileLabAccess } from './access';
 import type {
   MyProfileBasicData,
+  MyProfileDepartmentOption,
   MyProfileIdentityData,
   MyProfileStaffIdentity,
   MyProfileStudentIdentity,
@@ -28,6 +30,7 @@ import type {
 } from './api';
 import {
   fetchMyProfileBasic,
+  fetchMyProfileDepartmentOptions,
   fetchMyProfileIdentity,
   requestChangeLoginEmailSelf,
   requestPasswordResetEmail,
@@ -118,6 +121,19 @@ function displayValue(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return '—';
 
   return String(value);
+}
+
+function getDepartmentDisplayName(
+  departmentId: string | null | undefined,
+  departmentOptions: readonly MyProfileDepartmentOption[],
+) {
+  if (!departmentId) {
+    return WHITE_HOUSE_DEPARTMENT_NAME;
+  }
+
+  const department = departmentOptions.find((option) => option.id === departmentId);
+
+  return department?.departmentName ?? departmentId;
 }
 
 type BasicFormValues = {
@@ -475,7 +491,13 @@ function BasicTab({
 // Identity Tab
 // ---------------------------------------------------------------------------
 
-function StaffIdentitySection({ staff }: { staff: MyProfileStaffIdentity }) {
+function StaffIdentitySection({
+  staff,
+  departmentOptions,
+}: {
+  staff: MyProfileStaffIdentity;
+  departmentOptions: readonly MyProfileDepartmentOption[];
+}) {
   return (
     <FieldGrid>
       <FieldItem label="员工 ID">{staff.id}</FieldItem>
@@ -485,9 +507,10 @@ function StaffIdentitySection({ staff }: { staff: MyProfileStaffIdentity }) {
           {EMPLOYMENT_STATUS_LABELS[staff.employmentStatus] ?? staff.employmentStatus}
         </Tag>
       </FieldItem>
-      <FieldItem label="职务/职称">{displayValue(staff.jobTitle)}</FieldItem>
-      <FieldItem label="主归属系 ID">{displayValue(staff.departmentId)}</FieldItem>
-      <FieldItem label="备注">{displayValue(staff.remark)}</FieldItem>
+      <FieldItem label="称呼">{displayValue(staff.jobTitle)}</FieldItem>
+      <FieldItem label="系部名称">
+        {getDepartmentDisplayName(staff.departmentId, departmentOptions)}
+      </FieldItem>
     </FieldGrid>
   );
 }
@@ -503,7 +526,6 @@ function StudentIdentitySection({ student }: { student: MyProfileStudentIdentity
         </Tag>
       </FieldItem>
       <FieldItem label="班级 ID">{displayValue(student.classId)}</FieldItem>
-      <FieldItem label="备注">{displayValue(student.remarks)}</FieldItem>
     </FieldGrid>
   );
 }
@@ -512,14 +534,21 @@ function IdentityTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MyProfileIdentityData | null | undefined>(undefined);
+  const [departmentOptions, setDepartmentOptions] = useState<readonly MyProfileDepartmentOption[]>(
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
 
-    fetchMyProfileIdentity()
-      .then((result) => {
+    Promise.all([
+      fetchMyProfileIdentity(),
+      fetchMyProfileDepartmentOptions().catch(() => [] as const),
+    ])
+      .then(([identityResult, departmentResult]) => {
         if (!cancelled) {
-          setData(result);
+          setData(identityResult);
+          setDepartmentOptions(departmentResult);
           setError(null);
         }
       })
@@ -552,7 +581,10 @@ function IdentityTab() {
     <div className="flex flex-col gap-6">
       <Typography.Text strong>{isStaff ? '教职工身份' : '学生身份'}</Typography.Text>
       {isStaff ? (
-        <StaffIdentitySection staff={data as MyProfileStaffIdentity} />
+        <StaffIdentitySection
+          staff={data as MyProfileStaffIdentity}
+          departmentOptions={departmentOptions}
+        />
       ) : (
         <StudentIdentitySection student={data as MyProfileStudentIdentity} />
       )}
