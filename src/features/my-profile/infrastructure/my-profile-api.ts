@@ -3,10 +3,6 @@ import type { OperationVariables } from '@apollo/client';
 import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-// ---------------------------------------------------------------------------
-// Shared helpers
-// ---------------------------------------------------------------------------
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -28,10 +24,6 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
   return error instanceof Error ? error.message : fallback;
 }
-
-// ---------------------------------------------------------------------------
-// myProfileBasic
-// ---------------------------------------------------------------------------
 
 const MY_PROFILE_BASIC_QUERY = `
   query MyProfileBasic {
@@ -120,10 +112,6 @@ export async function fetchMyProfileBasic(): Promise<MyProfileBasicData> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// myProfileIdentity
-// ---------------------------------------------------------------------------
-
 const MY_PROFILE_IDENTITY_QUERY = `
   query MyProfileIdentity {
     myProfileIdentity {
@@ -181,10 +169,6 @@ export async function fetchMyProfileIdentity(): Promise<MyProfileIdentityData | 
   }
 }
 
-// ---------------------------------------------------------------------------
-// myProfileDepartmentOptions
-// ---------------------------------------------------------------------------
-
 const MY_PROFILE_DEPARTMENT_OPTIONS_QUERY = `
   query MyProfileDepartmentOptions($limit: Int) {
     departments(limit: $limit) {
@@ -238,10 +222,6 @@ export async function fetchMyProfileDepartmentOptions(): Promise<
     throw new Error(resolveErrorMessage(error, '无法加载系部信息。'));
   }
 }
-
-// ---------------------------------------------------------------------------
-// updateMyUserInfo (self)
-// ---------------------------------------------------------------------------
 
 const UPDATE_MY_USER_INFO_MUTATION = `
   mutation UpdateMyUserInfo($input: UpdateMyUserInfoInput!) {
@@ -336,10 +316,6 @@ export async function updateMyUserInfo(input: UpdateMyUserInfoInput) {
   }
 }
 
-// ---------------------------------------------------------------------------
-// requestChangeLoginEmail (self)
-// ---------------------------------------------------------------------------
-
 const REQUEST_CHANGE_LOGIN_EMAIL_MUTATION = `
   mutation RequestChangeLoginEmail($input: RequestChangeLoginEmailInput!) {
     requestChangeLoginEmail(input: $input) {
@@ -374,10 +350,6 @@ export async function requestChangeLoginEmailSelf(newLoginEmail: string) {
     throw new Error(resolveErrorMessage(error, '暂时无法发送登录邮箱变更邮件。'));
   }
 }
-
-// ---------------------------------------------------------------------------
-// requestPasswordResetEmail
-// ---------------------------------------------------------------------------
 
 const REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
   mutation RequestPasswordResetEmail($input: RequestPasswordResetEmailInput!) {

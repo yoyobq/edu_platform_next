@@ -9,7 +9,13 @@ import {
   useRef,
   useState,
 } from 'react';
-import { LogoutOutlined, MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
+import {
+  LogoutOutlined,
+  MoonOutlined,
+  SearchOutlined,
+  SunOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import {
   Button,
   Card,
@@ -476,6 +482,14 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                         </div>
                         <Divider style={{ margin: 0 }} />
                         <div className="px-1 py-1">
+                          <button
+                            type="button"
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"
+                            onClick={() => navigate('/profile')}
+                          >
+                            <UserOutlined />
+                            个人资料
+                          </button>
                           <button
                             type="button"
                             className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"

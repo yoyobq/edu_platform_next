@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -8,6 +9,7 @@ import {
   Flex,
   Form,
   Input,
+  type InputRef,
   Select,
   Skeleton,
   Tabs,
@@ -19,7 +21,6 @@ import dayjs, { type Dayjs } from 'dayjs';
 import { WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
 import { HexAvatar } from '@/shared/hex-avatar';
 
-import { myProfileLabAccess } from './access';
 import type {
   MyProfileBasicData,
   MyProfileDepartmentOption,
@@ -27,7 +28,7 @@ import type {
   MyProfileStaffIdentity,
   MyProfileStudentIdentity,
   UpdateMyUserInfoInput,
-} from './api';
+} from '../infrastructure/my-profile-api';
 import {
   fetchMyProfileBasic,
   fetchMyProfileDepartmentOptions,
@@ -35,12 +36,7 @@ import {
   requestChangeLoginEmailSelf,
   requestPasswordResetEmail,
   updateMyUserInfo,
-} from './api';
-import { myProfileLabMeta } from './meta';
-
-// ---------------------------------------------------------------------------
-// Label maps
-// ---------------------------------------------------------------------------
+} from '../infrastructure/my-profile-api';
 
 const GENDER_LABELS: Record<string, string> = {
   FEMALE: '女',
@@ -97,10 +93,6 @@ function getStatusTagColor(status: string) {
       return 'default';
   }
 }
-
-// ---------------------------------------------------------------------------
-// Field display primitives (aligned with admin-user-detail pattern)
-// ---------------------------------------------------------------------------
 
 function FieldItem({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -225,9 +217,134 @@ function isBasicFormDirty(currentValues: BasicFormValues, initialValues: BasicFo
   );
 }
 
-// ---------------------------------------------------------------------------
-// Recent Login List
-// ---------------------------------------------------------------------------
+function normalizeTagsValue(tags: readonly string[]) {
+  return Array.from(new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
+}
+
+function MyProfileTagsEditor({
+  disabled = false,
+  onChange,
+  value,
+}: {
+  disabled?: boolean;
+  onChange?: (nextValue: string[]) => void;
+  value?: readonly string[];
+}) {
+  const normalizedValue = normalizeTagsValue(value ?? []);
+  const [draftValue, setDraftValue] = useState('');
+  const [isInputVisible, setIsInputVisible] = useState(false);
+  const inputRef = useRef<InputRef | null>(null);
+  const pendingTags = normalizeTagsValue(draftValue.split(/[,\n，]+/));
+  const hasPendingTags = pendingTags.length > 0;
+
+  useEffect(() => {
+    if (isInputVisible) {
+      inputRef.current?.focus();
+    }
+  }, [isInputVisible]);
+
+  function openInput() {
+    if (disabled) {
+      return;
+    }
+
+    setIsInputVisible(true);
+  }
+
+  function closeInput() {
+    setDraftValue('');
+    setIsInputVisible(false);
+  }
+
+  function handleAddTags() {
+    if (disabled) {
+      return;
+    }
+
+    if (!hasPendingTags) {
+      closeInput();
+      return;
+    }
+
+    onChange?.(normalizeTagsValue([...normalizedValue, ...pendingTags]));
+    closeInput();
+  }
+
+  function handleRemoveTag(tagToRemove: string) {
+    if (disabled) {
+      return;
+    }
+
+    onChange?.(normalizedValue.filter((tag) => tag !== tagToRemove));
+  }
+
+  return (
+    <Flex align="center" gap={8} wrap>
+      {normalizedValue.map((tag) => (
+        <Tag
+          key={tag}
+          style={{
+            alignItems: 'center',
+            display: 'inline-flex',
+            gap: 2,
+            marginInlineEnd: 0,
+            paddingInlineEnd: 4,
+          }}
+        >
+          {tag}
+          <Button
+            aria-label={`删除标签 ${tag}`}
+            disabled={disabled}
+            icon={<CloseOutlined />}
+            onClick={() => handleRemoveTag(tag)}
+            size="small"
+            type="text"
+            style={{
+              color: 'var(--ant-color-text-secondary)',
+              height: 18,
+              minWidth: 18,
+              paddingInline: 0,
+            }}
+          />
+        </Tag>
+      ))}
+      {isInputVisible ? (
+        <Input
+          aria-label="标签输入"
+          disabled={disabled}
+          maxLength={32}
+          onBlur={handleAddTags}
+          onChange={(event) => setDraftValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              closeInput();
+            }
+          }}
+          onPressEnter={(event) => {
+            event.preventDefault();
+            handleAddTags();
+          }}
+          placeholder="输入标签"
+          ref={inputRef}
+          size="small"
+          style={{ width: 140 }}
+          value={draftValue}
+        />
+      ) : (
+        <Button
+          aria-label="新增标签"
+          disabled={disabled}
+          icon={<PlusOutlined />}
+          onClick={openInput}
+          shape="circle"
+          size="small"
+          type="dashed"
+        />
+      )}
+    </Flex>
+  );
+}
 
 function RecentLoginList({
   items,
@@ -261,10 +378,6 @@ function RecentLoginList({
     </Flex>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Basic Tab
-// ---------------------------------------------------------------------------
 
 function BasicTab({
   data,
@@ -420,13 +533,7 @@ function BasicTab({
         <div className="flex flex-col gap-4">
           <FieldItem label="标签">
             <Form.Item name="tags" noStyle>
-              <Select
-                mode="tags"
-                tokenSeparators={[',', '，']}
-                placeholder="输入后回车添加标签"
-                variant="filled"
-                style={{ width: '100%' }}
-              />
+              <MyProfileTagsEditor />
             </Form.Item>
           </FieldItem>
 
@@ -486,10 +593,6 @@ function BasicTab({
     </Form>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Identity Tab
-// ---------------------------------------------------------------------------
 
 function StaffIdentitySection({
   staff,
@@ -592,11 +695,13 @@ function IdentityTab() {
   );
 }
 
-// ---------------------------------------------------------------------------
-// Security Tab
-// ---------------------------------------------------------------------------
-
-function ChangeEmailCard({ currentLoginEmail }: { currentLoginEmail: string | null }) {
+function ChangeEmailCard({
+  currentLoginEmail,
+  disabled = false,
+}: {
+  currentLoginEmail: string | null;
+  disabled?: boolean;
+}) {
   const [form] = Form.useForm<{ newLoginEmail: string }>();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -652,8 +757,18 @@ function ChangeEmailCard({ currentLoginEmail }: { currentLoginEmail: string | nu
         />
       ) : null}
 
+      {disabled ? (
+        <Alert
+          type="info"
+          showIcon
+          message="当前 guest 账户不支持在这里修改登录邮箱。"
+          style={{ marginBottom: 16 }}
+        />
+      ) : null}
+
       <Form<{ newLoginEmail: string }>
         form={form}
+        disabled={disabled}
         layout="vertical"
         requiredMark={false}
         onFinish={handleSubmit}
@@ -670,7 +785,7 @@ function ChangeEmailCard({ currentLoginEmail }: { currentLoginEmail: string | nu
         </Form.Item>
 
         <Form.Item style={{ marginBottom: 0 }}>
-          <Button type="primary" htmlType="submit" loading={submitting}>
+          <Button type="primary" htmlType="submit" loading={submitting} disabled={disabled}>
             发送验证邮件
           </Button>
         </Form.Item>
@@ -770,16 +885,18 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
 }
 
 function SecurityTab({
+  disableChangeLoginEmail,
   loginEmail,
   loginHistory,
 }: {
+  disableChangeLoginEmail: boolean;
   loginEmail: string | null;
   loginHistory: MyProfileBasicData['account']['recentLoginHistory'];
 }) {
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <div className="flex flex-col gap-6">
-        <ChangeEmailCard currentLoginEmail={loginEmail} />
+        <ChangeEmailCard currentLoginEmail={loginEmail} disabled={disableChangeLoginEmail} />
         <ResetPasswordCard currentLoginEmail={loginEmail} />
       </div>
 
@@ -789,10 +906,6 @@ function SecurityTab({
     </div>
   );
 }
-
-// ---------------------------------------------------------------------------
-// Sidebar
-// ---------------------------------------------------------------------------
 
 function ProfileSidebar({ data, loading }: { data: MyProfileBasicData | null; loading: boolean }) {
   if (loading || !data) {
@@ -812,88 +925,68 @@ function ProfileSidebar({ data, loading }: { data: MyProfileBasicData | null; lo
   const { userInfo, account } = data;
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="rounded-card shadow-card">
-        <Card styles={{ body: { padding: 24 } }}>
-          <Flex vertical align="center" gap={16}>
-            <HexAvatar
-              accountId={account.id}
-              avatarUrl={userInfo.avatarUrl}
-              size={160}
-              style={{
-                border: '3px solid var(--ant-color-bg-container)',
-                boxShadow: 'var(--ant-box-shadow-tertiary)',
-              }}
-            />
+    <div className="rounded-card shadow-card">
+      <Card styles={{ body: { padding: 24 } }}>
+        <Flex vertical align="center" gap={16}>
+          <HexAvatar
+            accountId={account.id}
+            avatarUrl={userInfo.avatarUrl}
+            size={160}
+            style={{
+              border: '3px solid var(--ant-color-bg-container)',
+              boxShadow: 'var(--ant-box-shadow-tertiary)',
+            }}
+          />
 
-            <div className="text-center">
-              <Typography.Title level={4} style={{ margin: 0 }}>
-                {userInfo.nickname}
-              </Typography.Title>
-              {account.loginName ? (
-                <Typography.Text type="secondary">@{account.loginName}</Typography.Text>
-              ) : null}
-            </div>
-
-            {userInfo.signature ? (
-              <Typography.Paragraph
-                type="secondary"
-                ellipsis={{ rows: 2, tooltip: userInfo.signature }}
-                style={{ marginBottom: 0, textAlign: 'center' }}
-              >
-                {userInfo.signature}
-              </Typography.Paragraph>
+          <div className="text-center">
+            <Typography.Title level={4} style={{ margin: 0 }}>
+              {userInfo.nickname}
+            </Typography.Title>
+            {account.loginName ? (
+              <Typography.Text type="secondary">@{account.loginName}</Typography.Text>
             ) : null}
+          </div>
 
-            <Flex gap={4} wrap justify="center">
-              {userInfo.accessGroup.map((group) => (
-                <Tag key={group} color={getAccessGroupTagColor(group)}>
-                  {group}
+          {userInfo.signature ? (
+            <Typography.Paragraph
+              type="secondary"
+              ellipsis={{ rows: 2, tooltip: userInfo.signature }}
+              style={{ marginBottom: 0, textAlign: 'center' }}
+            >
+              {userInfo.signature}
+            </Typography.Paragraph>
+          ) : null}
+
+          <Flex gap={4} wrap justify="center">
+            {userInfo.accessGroup.map((group) => (
+              <Tag key={group} color={getAccessGroupTagColor(group)}>
+                {group}
+              </Tag>
+            ))}
+          </Flex>
+        </Flex>
+
+        {userInfo.tags && userInfo.tags.length > 0 ? (
+          <div className="mt-4 border-t border-border pt-4">
+            <Flex gap={4} wrap>
+              {userInfo.tags.map((tag) => (
+                <Tag key={tag} color="cyan">
+                  {tag}
                 </Tag>
               ))}
             </Flex>
-          </Flex>
-
-          {userInfo.tags && userInfo.tags.length > 0 ? (
-            <div className="mt-4 border-t border-border pt-4">
-              <Flex gap={4} wrap>
-                {userInfo.tags.map((tag) => (
-                  <Tag key={tag} color="cyan">
-                    {tag}
-                  </Tag>
-                ))}
-              </Flex>
-            </div>
-          ) : null}
-        </Card>
-      </div>
-
-      <div className="rounded-card shadow-card">
-        <Card styles={{ body: { padding: 16 } }}>
-          <Flex vertical gap={6}>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
-              Lab Status
-            </Typography.Text>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              {myProfileLabMeta.purpose}
-            </Typography.Paragraph>
-            <Flex gap={4} wrap>
-              <Tag>{myProfileLabMeta.owner}</Tag>
-              <Tag>{myProfileLabMeta.reviewAt}</Tag>
-              <Tag>{myProfileLabAccess.env.join(', ')}</Tag>
-            </Flex>
-          </Flex>
-        </Card>
-      </div>
+          </div>
+        ) : null}
+      </Card>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Main Page
-// ---------------------------------------------------------------------------
-
-export function MyProfileLabPage() {
+export function MyProfilePageContent({
+  disableChangeLoginEmail = false,
+}: {
+  disableChangeLoginEmail?: boolean;
+}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<MyProfileBasicData | null>(null);
@@ -964,6 +1057,7 @@ export function MyProfileLabPage() {
                       label: '安全设置',
                       children: (
                         <SecurityTab
+                          disableChangeLoginEmail={disableChangeLoginEmail}
                           loginEmail={data?.account.loginEmail ?? null}
                           loginHistory={data?.account.recentLoginHistory ?? []}
                         />
