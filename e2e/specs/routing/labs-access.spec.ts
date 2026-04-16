@@ -176,7 +176,9 @@ test('具备 staff 权限的已登录会话，应允许进入 labs upstream sess
   await page.goto(routes.labsUpstreamSessionDemo);
 
   await expect(page.getByRole('heading', { name: 'Upstream 会话示例页' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '登录并读取教师字典' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '使用说明' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '教师字典' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '登录 upstream' })).toHaveCount(0);
 });
 
 test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 labs invite issuer', async ({
@@ -215,6 +217,8 @@ test('labs upstream session demo 可登录 upstream、读取教师字典并滚�
   });
 
   let fetchTeacherDirectoryCount = 0;
+  let fetchCurriculumPlanListCount = 0;
+  let fetchVerifiedStaffIdentityCount = 0;
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
@@ -270,15 +274,86 @@ test('labs upstream session demo 可登录 upstream、读取教师字典并滚�
       return;
     }
 
+    if (query.includes('query FetchCurriculumPlanList')) {
+      fetchCurriculumPlanListCount += 1;
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            fetchCurriculumPlanList: {
+              count: 2,
+              expiresAt: '2026-05-01T11:00:00.000Z',
+              plans: [
+                {
+                  courseCode: 'CS101',
+                  courseName: 'Programming Basics',
+                },
+                {
+                  courseCode: 'CS102',
+                  courseName: 'Data Structures',
+                },
+              ],
+              upstreamSessionToken: `upstream-session-token-00${fetchTeacherDirectoryCount + fetchVerifiedStaffIdentityCount + fetchCurriculumPlanListCount + 1}`,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('query FetchVerifiedStaffIdentity')) {
+      fetchVerifiedStaffIdentityCount += 1;
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            fetchVerifiedStaffIdentity: {
+              departmentName: '信息工程学院',
+              expiresAt: '2026-05-01T10:00:00.000Z',
+              identityKind: 'STAFF_TEACHER',
+              orgId: 'org-001',
+              personId: 'person-001',
+              personName: 'Alice Zhang',
+              upstreamLoginId: 'teacher.alice',
+              upstreamSessionToken: `upstream-session-token-00${fetchTeacherDirectoryCount + fetchVerifiedStaffIdentityCount + 1}`,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
     await route.fallback();
   });
 
   await page.goto(routes.labsUpstreamSessionDemo);
+  await expect(
+    page.getByText('本页面用于演示与上游系统 (Upstream) 的会话集成与数据交互。'),
+  ).toBeVisible();
+
+  await page.getByRole('tab', { name: '教师字典' }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByLabel('Upstream 用户名').fill('teacher.alice');
   await page.getByLabel('Upstream 密码').fill('secret-password');
-  await page.getByRole('button', { name: '登录并读取教师字典' }).click();
+  await page.getByRole('button', { name: '登录并继续' }).click();
 
   await expect(page.getByText('"value": "teacher-001"')).toBeVisible();
+  await expect(page.getByText('预览条数：5')).toBeVisible();
+
+  await page.getByRole('tab', { name: '教职工身份' }).click();
+  await expect(page.getByText('姓名：Alice Zhang')).toBeVisible();
+  await expect(page.getByText('"identityKind": "STAFF_TEACHER"')).toBeVisible();
+
+  await page.getByRole('tab', { name: '教学计划列表' }).click();
+  await page.getByLabel('学年').fill('2026');
+  await page.getByLabel('学期').fill('1');
+  await page.getByRole('button', { name: '查询' }).click();
+  await expect(page.getByText('"courseCode": "CS101"')).toBeVisible();
+  await expect(page.getByText('预览条数：2')).toBeVisible();
 
   await expect
     .poll(async () =>
@@ -287,12 +362,15 @@ test('labs upstream session demo 可登录 upstream、读取教师字典并滚�
         return raw ? JSON.parse(raw).upstreamSessionToken : null;
       }, UPSTREAM_SESSION_STORAGE_KEY),
     )
-    .toBe('upstream-session-token-002');
+    .toBe('upstream-session-token-004');
 
   await page.reload();
 
+  await expect(page.getByText('teacher.alice').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: '登录 upstream' })).toHaveCount(0);
+  await page.getByRole('tab', { name: '教师字典' }).click();
   await expect(page.getByText('"value": "teacher-001"')).toBeVisible();
-  await expect(page.getByLabel('Upstream 用户名')).toHaveCount(0);
+  await expect(page.getByRole('tab', { name: '教学计划列表' })).toBeVisible();
 });
 
 test('labs upstream session demo 遇到跨账号残留 token 时，应清空旧 token 并要求重新登录', async ({
@@ -331,7 +409,8 @@ test('labs upstream session demo 遇到跨账号残留 token 时，应清空旧 
 
   await page.goto(routes.labsUpstreamSessionDemo);
 
-  await expect(page.getByRole('button', { name: '登录并读取教师字典' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '登录 upstream' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '读取教师字典' })).toBeVisible();
   await expect(page.getByText('stale-upstream-token')).toHaveCount(0);
   await expect
     .poll(async () =>

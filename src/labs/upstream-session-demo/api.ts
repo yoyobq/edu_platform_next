@@ -28,6 +28,14 @@ type TeacherDirectoryResponse = {
   fetchTeacherDirectory: TeacherDirectoryResult;
 };
 
+type CurriculumPlanListResponse = {
+  fetchCurriculumPlanList: CurriculumPlanListResult;
+};
+
+type VerifiedStaffIdentityResponse = {
+  fetchVerifiedStaffIdentity: VerifiedStaffIdentityResult;
+};
+
 export type CurrentUpstreamDemoAccount = {
   accountId: number;
   displayName: string;
@@ -42,6 +50,24 @@ export type TeacherDirectoryResult = {
     text: string;
     value: string;
   }[];
+  upstreamSessionToken: string;
+};
+
+export type CurriculumPlanListResult = {
+  count: number;
+  expiresAt: string;
+  plans: unknown;
+  upstreamSessionToken: string;
+};
+
+export type VerifiedStaffIdentityResult = {
+  departmentName: string | null;
+  expiresAt: string;
+  identityKind: string;
+  orgId: string | null;
+  personId: string;
+  personName: string;
+  upstreamLoginId: string;
   upstreamSessionToken: string;
 };
 
@@ -65,6 +91,42 @@ const FETCH_TEACHER_DIRECTORY_QUERY = `
         text
         value
       }
+      upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_CURRICULUM_PLAN_LIST_QUERY = `
+  query FetchCurriculumPlanList(
+    $departmentId: String
+    $schoolYear: String!
+    $semester: String!
+    $sessionToken: String!
+  ) {
+    fetchCurriculumPlanList(
+      departmentId: $departmentId
+      schoolYear: $schoolYear
+      semester: $semester
+      sessionToken: $sessionToken
+    ) {
+      count
+      expiresAt
+      plans
+      upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
+  query FetchVerifiedStaffIdentity($sessionToken: String!) {
+    fetchVerifiedStaffIdentity(sessionToken: $sessionToken) {
+      departmentName
+      expiresAt
+      identityKind
+      orgId
+      personId
+      personName
+      upstreamLoginId
       upstreamSessionToken
     }
   }
@@ -135,4 +197,41 @@ export async function fetchTeacherDirectory(input: { sessionToken: string }) {
   });
 
   return response.fetchTeacherDirectory;
+}
+
+export async function fetchCurriculumPlanList(input: {
+  departmentId?: string;
+  schoolYear: string;
+  semester: string;
+  sessionToken: string;
+}) {
+  const response = await requestGraphQL<
+    CurriculumPlanListResponse,
+    {
+      departmentId?: string;
+      schoolYear: string;
+      semester: string;
+      sessionToken: string;
+    }
+  >(FETCH_CURRICULUM_PLAN_LIST_QUERY, {
+    departmentId: input.departmentId?.trim() || undefined,
+    schoolYear: String(input.schoolYear || '').trim(),
+    semester: String(input.semester || '').trim(),
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchCurriculumPlanList;
+}
+
+export async function fetchVerifiedStaffIdentity(input: { sessionToken: string }) {
+  const response = await requestGraphQL<
+    VerifiedStaffIdentityResponse,
+    {
+      sessionToken: string;
+    }
+  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchVerifiedStaffIdentity;
 }

@@ -92,11 +92,11 @@ function getCurrentAppEnv(): AppEnv {
 
 const currentAppEnv = getCurrentAppEnv();
 
-function getCurrentSessionAccessLevels() {
+function getCurrentSessionAccessLevels(): AppAccessLevel[] {
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    return ['guest'] as const;
+    return ['guest'];
   }
 
   const accessLevels: AppAccessLevel[] = [];
