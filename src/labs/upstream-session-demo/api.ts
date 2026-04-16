@@ -1,6 +1,12 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
+import {
+  executeGraphQL,
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+} from '@/shared/graphql';
+
+export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
 type LoginUpstreamSessionResponse = {
   loginUpstreamSession: {
@@ -80,52 +86,6 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   variables: TVariables,
 ): Promise<TData> {
   return executeGraphQL(query, variables);
-}
-
-function readGraphQLErrorDetail(error: unknown) {
-  if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
-    return null;
-  }
-
-  const firstError = error.graphqlErrors[0];
-  const extensions = (firstError.extensions as Record<string, unknown> | undefined) || {};
-
-  return {
-    code: typeof extensions.code === 'string' ? extensions.code : null,
-    errorCode: typeof extensions.errorCode === 'string' ? extensions.errorCode : null,
-    message:
-      typeof extensions.errorMessage === 'string'
-        ? extensions.errorMessage
-        : typeof firstError.message === 'string'
-          ? firstError.message
-          : null,
-  };
-}
-
-export function isExpiredUpstreamSessionError(error: unknown) {
-  const detail = readGraphQLErrorDetail(error);
-  const message = detail?.message || (error instanceof Error ? error.message : '');
-
-  return (
-    detail?.errorCode === 'UPSTREAM_ACCESS_SESSION_EXPIRED' ||
-    detail?.errorCode === 'UPSTREAM_ACCESS_AUTH_REQUIRED' ||
-    message.includes('上游会话已失效') ||
-    message.includes('请重新登录 upstream')
-  );
-}
-
-export function resolveUpstreamErrorMessage(error: unknown, fallback: string) {
-  const detail = readGraphQLErrorDetail(error);
-
-  if (detail?.message) {
-    return detail.message;
-  }
-
-  if (isGraphQLIngressError(error)) {
-    return error.userMessage;
-  }
-
-  return error instanceof Error ? error.message : fallback;
 }
 
 export async function loginUpstreamSession(input: { password: string; userId: string }) {

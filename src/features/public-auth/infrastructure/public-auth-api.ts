@@ -1,7 +1,13 @@
 import type { OperationVariables } from '@apollo/client';
 
 import { normalizeDepartmentName } from '@/shared/department';
-import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
+import {
+  executeGraphQL,
+  type GraphQLAuthMode,
+  isGraphQLIngressError,
+  resolveStaffInviteUpstreamErrorMessage,
+  resolveUpstreamErrorMessage,
+} from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type {
@@ -443,77 +449,8 @@ function resolveInviteIntentFailureMessage(
   return '暂时无法确认邀请链接状态，请稍后重试。';
 }
 
-function getGraphQLErrorDetail(error: unknown): {
-  code?: string;
-  errorCode?: string;
-  message?: string;
-} | null {
-  if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
-    return null;
-  }
-
-  const [firstError] = error.graphqlErrors;
-  const extensions = (firstError.extensions as Record<string, unknown> | undefined) || {};
-
-  return {
-    code: typeof extensions.code === 'string' ? extensions.code : undefined,
-    errorCode: typeof extensions.errorCode === 'string' ? extensions.errorCode : undefined,
-    message:
-      typeof extensions.errorMessage === 'string'
-        ? extensions.errorMessage
-        : typeof firstError.message === 'string'
-          ? firstError.message
-          : undefined,
-  };
-}
-
-function resolveGraphQLErrorMessage(error: unknown): string | null {
-  const detail = getGraphQLErrorDetail(error);
-
-  if (!detail?.message) {
-    return null;
-  }
-
-  if (detail.message === detail.code || detail.message === detail.errorCode) {
-    return null;
-  }
-
-  return detail.message;
-}
-
 function resolvePublicAuthErrorMessage(error: unknown, fallback: string): string {
-  if (isGraphQLIngressError(error)) {
-    return resolveGraphQLErrorMessage(error) || error.userMessage;
-  }
-
-  return error instanceof Error ? error.message : fallback;
-}
-
-function resolveStaffInviteIngressMessage(error: unknown, fallback: string): string {
-  const graphQLMessage = resolveGraphQLErrorMessage(error);
-
-  if (graphQLMessage) {
-    return graphQLMessage;
-  }
-
-  const detail = getGraphQLErrorDetail(error);
-
-  switch (detail?.errorCode) {
-    case 'EMAIL_TAKEN':
-      return '邀请邮箱已被注册，请直接返回登录页或联系管理员处理。';
-    case 'UPSTREAM_ACCESS_AUTH_FAILED':
-      return '上游账号或密码不正确，请重新核对。';
-    case 'UPSTREAM_ACCESS_SESSION_EXPIRED':
-      return '上游会话已失效，请重新进行身份核对。';
-    case 'UPSTREAM_ACCESS_AUTH_REQUIRED':
-      return '请先完成上游身份核对后再继续。';
-    case 'INVITE_EMAIL_MISMATCH':
-    case 'INVITE_IDENTITY_MISMATCH_WITH_INVITE':
-    case 'INVITE_STAFF_ID_MISMATCH':
-      return '当前教职工身份与邀请不一致，该邀请已不可继续使用。';
-    default:
-      return resolvePublicAuthErrorMessage(error, fallback);
-  }
+  return resolveUpstreamErrorMessage(error, fallback);
 }
 
 function resolveChangeLoginEmailFailureMessage(
@@ -597,6 +534,7 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
 }
 
 async function loginUpstreamSession(input: { password: string; userId: string }): Promise<{
+  expiresAt: string;
   upstreamSessionToken: string;
 }> {
   try {
@@ -613,10 +551,13 @@ async function loginUpstreamSession(input: { password: string; userId: string })
     });
 
     return {
+      expiresAt: response.loginUpstreamSession.expiresAt,
       upstreamSessionToken: response.loginUpstreamSession.upstreamSessionToken,
     };
   } catch (error) {
-    throw new Error(resolveStaffInviteIngressMessage(error, '上游身份核对失败，请稍后重试。'));
+    throw new Error(
+      resolveStaffInviteUpstreamErrorMessage(error, '上游身份核对失败，请稍后重试。'),
+    );
   }
 }
 
@@ -653,7 +594,7 @@ async function fetchVerifiedStaffIdentity(input: {
     }
 
     throw new Error(
-      resolveStaffInviteIngressMessage(error, '暂时无法确认教职工身份，请稍后重试。'),
+      resolveStaffInviteUpstreamErrorMessage(error, '暂时无法确认教职工身份，请稍后重试。'),
     );
   }
 }
@@ -794,7 +735,7 @@ export const publicAuthApi: PublicAuthApiPort = {
     } catch (error) {
       return {
         status: 'error',
-        message: resolveStaffInviteIngressMessage(error, '暂时无法完成邀请注册。'),
+        message: resolveStaffInviteUpstreamErrorMessage(error, '暂时无法完成邀请注册。'),
       };
     }
   },

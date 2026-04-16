@@ -22,6 +22,7 @@ export type PublicAuthApiPort = {
   }) => Promise<VerificationIntentResult>;
   getStaffInviteInfo: (input: { verificationCode: string }) => Promise<StaffInviteIntentResult>;
   loginUpstreamSession: (input: { password: string; userId: string }) => Promise<{
+    expiresAt: string;
     upstreamSessionToken: string;
   }>;
   fetchVerifiedStaffIdentity: (input: { sessionToken: string }) => Promise<StaffInviteIdentity>;

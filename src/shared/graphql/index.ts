@@ -3,3 +3,9 @@ export type { GraphQLIngressErrorType } from './errors';
 export { GraphQLIngressError, isGraphQLIngressError, toGraphQLIngressError } from './errors';
 export type { GraphQLAuthMode } from './request';
 export { executeGraphQL } from './request';
+export {
+  isExpiredUpstreamSessionError,
+  readUpstreamGraphQLErrorDetail,
+  resolveStaffInviteUpstreamErrorMessage,
+  resolveUpstreamErrorMessage,
+} from './upstream-error-feedback';
