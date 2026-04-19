@@ -463,7 +463,7 @@ export function UpstreamSessionDemoLabPage() {
           <Alert
             type="info"
             showIcon
-            message="您尚未登录上游账号，请点击右上角“登录”按钮开始体验。"
+            title="您尚未登录上游账号，请点击右上角“登录”按钮开始体验。"
           />
         )}
       </div>
@@ -473,20 +473,20 @@ export function UpstreamSessionDemoLabPage() {
   function renderTeacherDirectoryPanel() {
     return (
       <div className="flex flex-col gap-4">
-        {activePanelError ? <Alert type="warning" showIcon message={activePanelError} /> : null}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
         {isLoadingDirectory ? (
-          <Alert type="info" showIcon message="正在读取教师字典..." />
+          <Alert type="info" showIcon title="正在读取教师字典..." />
         ) : directoryResult ? (
           <>
             <div className="flex flex-wrap gap-2">
-              <Tag bordered={false} color="processing">
+              <Tag variant="filled" color="processing">
                 教师总数：{directoryResult.teachers.length}
               </Tag>
-              <Tag bordered={false} color="cyan">
+              <Tag variant="filled" color="cyan">
                 过期时间：{formatDateTime(directoryResult.expiresAt)}
               </Tag>
-              <Tag bordered={false} color="blue">
+              <Tag variant="filled" color="blue">
                 预览条数：{Math.min(directoryResult.teachers.length, TEACHER_PREVIEW_LIMIT)}
               </Tag>
               <Button
@@ -506,7 +506,7 @@ export function UpstreamSessionDemoLabPage() {
           <Alert
             type="info"
             showIcon
-            message={
+            title={
               hasStoredSession ? '正在尝试读取数据...' : '登录 upstream 后即可自动读取教师字典。'
             }
           />
@@ -518,20 +518,20 @@ export function UpstreamSessionDemoLabPage() {
   function renderVerifiedStaffIdentityPanel() {
     return (
       <div className="flex flex-col gap-4">
-        {activePanelError ? <Alert type="warning" showIcon message={activePanelError} /> : null}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
         {isLoadingIdentity ? (
-          <Alert type="info" showIcon message="正在读取教职工身份..." />
+          <Alert type="info" showIcon title="正在读取教职工身份..." />
         ) : verifiedIdentityResult ? (
           <>
             <div className="flex flex-wrap gap-2">
-              <Tag bordered={false} color="green">
+              <Tag variant="filled" color="green">
                 姓名：{verifiedIdentityResult.personName}
               </Tag>
-              <Tag bordered={false} color="gold">
+              <Tag variant="filled" color="gold">
                 身份：{verifiedIdentityResult.identityKind}
               </Tag>
-              <Tag bordered={false} color="cyan">
+              <Tag variant="filled" color="cyan">
                 过期时间：{formatDateTime(verifiedIdentityResult.expiresAt)}
               </Tag>
               <Button
@@ -551,7 +551,7 @@ export function UpstreamSessionDemoLabPage() {
           <Alert
             type="info"
             showIcon
-            message={
+            title={
               hasStoredSession ? '正在尝试读取数据...' : '登录 upstream 后即可自动读取教职工身份。'
             }
           />
@@ -563,7 +563,7 @@ export function UpstreamSessionDemoLabPage() {
   function renderCurriculumPlanPanel() {
     return (
       <div className="flex flex-col gap-4">
-        {activePanelError ? <Alert type="warning" showIcon message={activePanelError} /> : null}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
         <Form<CurriculumPlanFormValues>
           form={curriculumPlanForm}
@@ -606,17 +606,17 @@ export function UpstreamSessionDemoLabPage() {
         </Form>
 
         {isLoadingCurriculumPlans ? (
-          <Alert type="info" showIcon message="正在读取教学计划列表..." />
+          <Alert type="info" showIcon title="正在读取教学计划列表..." />
         ) : curriculumPlanResult ? (
           <>
             <div className="flex flex-wrap gap-2">
-              <Tag bordered={false} color="magenta">
+              <Tag variant="filled" color="magenta">
                 计划总数：{curriculumPlanResult.count}
               </Tag>
-              <Tag bordered={false} color="cyan">
+              <Tag variant="filled" color="cyan">
                 过期时间：{formatDateTime(curriculumPlanResult.expiresAt)}
               </Tag>
-              <Tag bordered={false} color="blue">
+              <Tag variant="filled" color="blue">
                 预览条数：
                 {Array.isArray(curriculumPlanResult.plans)
                   ? Math.min(curriculumPlanResult.plans.length, CURRICULUM_PLAN_PREVIEW_LIMIT)
@@ -632,7 +632,7 @@ export function UpstreamSessionDemoLabPage() {
           <Alert
             type="info"
             showIcon
-            message={
+            title={
               hasStoredSession
                 ? '填写参数后点击“查询”即可查看预览结果。'
                 : '登录 upstream 后即可读取教学计划列表。'
@@ -669,16 +669,16 @@ export function UpstreamSessionDemoLabPage() {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Tag bordered={false} color="blue">
+          <Tag variant="filled" color="blue">
             负责人：{upstreamSessionDemoLabMeta.owner}
           </Tag>
-          <Tag bordered={false} color="purple">
+          <Tag variant="filled" color="purple">
             复核时间：{upstreamSessionDemoLabMeta.reviewAt}
           </Tag>
-          <Tag bordered={false} color="green">
+          <Tag variant="filled" color="green">
             环境：{upstreamSessionDemoLabAccess.env.join(', ')}
           </Tag>
-          <Tag bordered={false} color="gold">
+          <Tag variant="filled" color="gold">
             访问级别：{upstreamSessionDemoLabAccess.allowedAccessLevels.join(', ')}
           </Tag>
         </div>
@@ -686,7 +686,7 @@ export function UpstreamSessionDemoLabPage() {
         <Alert
           type="info"
           showIcon
-          message="链路说明"
+          title="链路说明"
           description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换标签页会自动读取数据。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
@@ -729,14 +729,14 @@ export function UpstreamSessionDemoLabPage() {
                   >
                     <Tag
                       color="processing"
-                      bordered={false}
+                      variant="filled"
                       style={{ cursor: 'help', marginInlineEnd: 0 }}
                     >
                       已持有
                     </Tag>
                   </Tooltip>
                 ) : (
-                  <Tag bordered={false} style={{ marginInlineEnd: 0 }}>
+                  <Tag variant="filled" style={{ marginInlineEnd: 0 }}>
                     未持有
                   </Tag>
                 ),
@@ -773,12 +773,12 @@ export function UpstreamSessionDemoLabPage() {
           <Card styles={{ body: { padding: 0 } }}>
             {pageError ? (
               <div className="p-4">
-                <Alert type="error" showIcon message={pageError} />
+                <Alert type="error" showIcon title={pageError} />
               </div>
             ) : null}
 
             <Tabs
-              tabPosition="left"
+              tabPlacement="left"
               activeKey={activePanelKey}
               onChange={(key) => setActivePanelKey(key as UpstreamPanelKey)}
               style={{ minHeight: 400 }}
@@ -819,7 +819,7 @@ export function UpstreamSessionDemoLabPage() {
             {getPendingActionLabel(pendingAction)}。
           </Typography.Text>
 
-          {loginError ? <Alert type="error" showIcon message={loginError} /> : null}
+          {loginError ? <Alert type="error" showIcon title={loginError} /> : null}
 
           <Form<UpstreamLoginFormValues>
             form={form}

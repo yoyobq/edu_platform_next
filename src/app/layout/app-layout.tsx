@@ -455,7 +455,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   <Dropdown
                     placement="bottomRight"
                     trigger={['click']}
-                    dropdownRender={() => (
+                    popupRender={() => (
                       <div
                         style={{
                           background: 'var(--ant-color-bg-elevated)',

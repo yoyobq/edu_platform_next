@@ -102,7 +102,7 @@ function getHeaderAccessGroupTagColor(
 
 function RecentLoginList({ items }: { items: AdminUserDetail['account']['recentLoginHistory'] }) {
   if (items.length === 0) {
-    return <Alert type="info" showIcon message="后端当前未返回最近登录记录。" />;
+    return <Alert type="info" showIcon title="后端当前未返回最近登录记录。" />;
   }
 
   return (
@@ -729,7 +729,7 @@ export function AdminUserDetailPageContent({
         <Alert
           type="error"
           showIcon
-          message="无法加载用户详情"
+          title="无法加载用户详情"
           description={errorMessage || '账户信息获取失败'}
           action={
             <Button size="small" type="primary" onClick={retry}>

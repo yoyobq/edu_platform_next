@@ -70,7 +70,7 @@ export function ChangeLoginEmailLabPage() {
           <Alert
             type="info"
             showIcon
-            message="联调说明"
+            title="联调说明"
             description="当前页面支持两种签发：给当前登录账号自己发，或以 admin 身份给指定 accountId 发。邮件中的真实验证 token 不会返回给前端，邮件跳转地址是否正确取决于后端 CHANGE_LOGIN_EMAIL_FRONTEND_URL 配置。"
           />
         </div>

@@ -874,7 +874,7 @@ export function AdminUserListPageContent({
                 type="error"
                 showIcon
                 closable
-                message={accountStatusUpdateErrorMessage}
+                title={accountStatusUpdateErrorMessage}
                 onClose={() => setAccountStatusUpdateErrorMessage(null)}
               />
             </div>
@@ -885,7 +885,7 @@ export function AdminUserListPageContent({
                 type="error"
                 showIcon
                 closable
-                message={staffEmploymentStatusUpdateErrorMessage}
+                title={staffEmploymentStatusUpdateErrorMessage}
                 onClose={() => setStaffEmploymentStatusUpdateErrorMessage(null)}
               />
             </div>
@@ -897,7 +897,7 @@ export function AdminUserListPageContent({
                 <Alert
                   type="error"
                   showIcon
-                  message="用户列表加载失败"
+                  title="用户列表加载失败"
                   description={errorMessage}
                   action={
                     <Button size="small" type="primary" onClick={retry}>

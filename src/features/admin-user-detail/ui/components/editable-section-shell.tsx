@@ -39,7 +39,7 @@ export function EditableSectionShell({
           </Button>
         )}
       </Flex>
-      {errorMessage ? <Alert type="error" showIcon message={errorMessage} /> : null}
+      {errorMessage ? <Alert type="error" showIcon title={errorMessage} /> : null}
       {children}
     </Flex>
   );

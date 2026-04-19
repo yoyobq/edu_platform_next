@@ -228,7 +228,7 @@ function StaffInviteFailureState({
       <Button
         type="primary"
         icon={<RightOutlined />}
-        iconPosition="end"
+        iconPlacement="end"
         onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}
       >
         返回登录
@@ -412,7 +412,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
               <Button
                 type="primary"
                 icon={<RightOutlined />}
-                iconPosition="end"
+                iconPlacement="end"
                 onClick={() => {
                   setUpstreamError(null);
                   setPhase('upstream-auth');
@@ -476,7 +476,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
                 form={UPSTREAM_VERIFICATION_FORM_ID}
                 htmlType="submit"
                 icon={<RightOutlined />}
-                iconPosition="end"
+                iconPlacement="end"
                 loading={verifyingIdentity}
               >
                 核对身份并继续
@@ -607,7 +607,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
           <Button
             type="primary"
             icon={<RightOutlined />}
-            iconPosition="end"
+            iconPlacement="end"
             size="large"
             onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}
           >

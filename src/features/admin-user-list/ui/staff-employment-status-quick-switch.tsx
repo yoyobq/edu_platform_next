@@ -104,7 +104,7 @@ export function StaffEmploymentStatusQuickSwitch({
       open={open}
       placement="bottomLeft"
       content={popoverContent}
-      overlayClassName="p-0"
+      classNames={{ root: 'p-0' }}
       onOpenChange={(nextOpen) => {
         if (updating || disabled) {
           return;

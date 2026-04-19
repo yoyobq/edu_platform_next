@@ -395,7 +395,6 @@ function BasicTab({
 
   useEffect(() => {
     if (!data) {
-      form.resetFields();
       setIsDirty(false);
       setSubmitError(null);
       return;
@@ -458,7 +457,7 @@ function BasicTab({
           <Alert
             type="success"
             showIcon
-            message={success}
+            title={success}
             closable
             onClose={() => setSuccess(null)}
           />
@@ -468,7 +467,7 @@ function BasicTab({
           <Alert
             type="error"
             showIcon
-            message={submitError}
+            title={submitError}
             closable
             onClose={() => setSubmitError(null)}
           />
@@ -672,7 +671,7 @@ function IdentityTab() {
   }, []);
 
   if (loading) return <Skeleton active paragraph={{ rows: 6 }} />;
-  if (error) return <Alert type="error" showIcon message="加载失败" description={error} />;
+  if (error) return <Alert type="error" showIcon title="加载失败" description={error} />;
 
   if (!data) {
     return <Empty description="当前账户暂无关联的身份信息（教职工或学生）" />;
@@ -739,7 +738,7 @@ function ChangeEmailCard({
         <Alert
           type="success"
           showIcon
-          message={success}
+          title={success}
           closable
           onClose={() => setSuccess(null)}
           style={{ marginBottom: 16 }}
@@ -750,7 +749,7 @@ function ChangeEmailCard({
         <Alert
           type="error"
           showIcon
-          message={submitError}
+          title={submitError}
           closable
           onClose={() => setSubmitError(null)}
           style={{ marginBottom: 16 }}
@@ -761,7 +760,7 @@ function ChangeEmailCard({
         <Alert
           type="info"
           showIcon
-          message="当前 guest 账户不支持在这里修改登录邮箱。"
+          title="当前 guest 账户不支持在这里修改登录邮箱。"
           style={{ marginBottom: 16 }}
         />
       ) : null}
@@ -830,7 +829,7 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
         <Alert
           type="success"
           showIcon
-          message={success}
+          title={success}
           closable
           onClose={() => setSuccess(null)}
           style={{ marginBottom: 16 }}
@@ -841,7 +840,7 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
         <Alert
           type="error"
           showIcon
-          message={submitError}
+          title={submitError}
           closable
           onClose={() => setSubmitError(null)}
           style={{ marginBottom: 16 }}
@@ -861,7 +860,7 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
         </Flex>
       ) : (
         <Flex vertical gap={12}>
-          <Alert type="warning" showIcon message="当前账户未设置登录邮箱，请手动输入邮箱地址。" />
+          <Alert type="warning" showIcon title="当前账户未设置登录邮箱，请手动输入邮箱地址。" />
           <Input
             placeholder="请输入邮箱地址"
             value={manualEmail}
@@ -1020,7 +1019,7 @@ export function MyProfilePageContent({
   if (error && !data) {
     return (
       <div className="mx-auto w-full max-w-[--width-content-readable]">
-        <Alert type="error" showIcon message="加载失败" description={error} />
+        <Alert type="error" showIcon title="加载失败" description={error} />
       </div>
     );
   }
