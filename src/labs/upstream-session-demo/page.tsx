@@ -7,6 +7,7 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Tabs,
   Tag,
   Tooltip,
@@ -16,8 +17,10 @@ import {
 import { upstreamSessionDemoLabAccess } from './access';
 import {
   type CurrentUpstreamDemoAccount,
+  type CurriculumPlanDetailResult,
   type CurriculumPlanListResult,
   fetchCurrentUpstreamDemoAccount,
+  fetchCurriculumPlanDetail,
   fetchCurriculumPlanList,
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
@@ -41,7 +44,9 @@ type UpstreamLoginFormValues = {
 };
 
 type CurriculumPlanFormValues = {
+  className?: string;
   departmentId: string;
+  courseName?: string;
   schoolYear: string;
   semester: string;
 };
@@ -49,7 +54,15 @@ type CurriculumPlanFormValues = {
 type PendingUpstreamAction =
   | { type: 'teacher-directory' }
   | { type: 'verified-staff-identity' }
-  | { type: 'curriculum-plan'; values: CurriculumPlanFormValues };
+  | { type: 'curriculum-plan'; values: CurriculumPlanFormValues }
+  | {
+      type: 'curriculum-plan-detail';
+      values: {
+        className: string;
+        courseName: string;
+        planId: string;
+      };
+    };
 
 type UpstreamPanelKey = PendingUpstreamAction['type'] | 'introduction';
 
@@ -60,6 +73,15 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const CURRICULUM_PLAN_PREVIEW_LIMIT = 3;
+const CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT = 3;
+
+type CurriculumPlanRecord = {
+  className: string;
+  courseName: string;
+  planId: string;
+  teacherName: string | null;
+  weeklyHours: string | null;
+};
 
 const UPSTREAM_PANELS: Array<{
   key: UpstreamPanelKey;
@@ -79,13 +101,15 @@ const UPSTREAM_PANELS: Array<{
   },
   {
     key: 'curriculum-plan',
-    label: '教学计划列表',
+    label: '教学计划',
   },
 ];
 
 function getDefaultCurriculumPlanValues(): CurriculumPlanFormValues {
   return {
+    className: undefined,
     departmentId: 'ORG0302',
+    courseName: undefined,
     schoolYear: '2025',
     semester: '2',
   };
@@ -142,9 +166,123 @@ function buildCurriculumPlanPreview(result: CurriculumPlanListResult) {
   };
 }
 
+function buildCurriculumPlanDetailPreview(result: CurriculumPlanDetailResult) {
+  if (Array.isArray(result.details)) {
+    return {
+      count: result.count,
+      details: result.details.slice(0, CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT),
+      expiresAt: result.expiresAt,
+      truncated: result.details.length > CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT,
+      upstreamSessionToken: result.upstreamSessionToken,
+    };
+  }
+
+  return {
+    count: result.count,
+    details: result.details,
+    expiresAt: result.expiresAt,
+    truncated: false,
+    upstreamSessionToken: result.upstreamSessionToken,
+  };
+}
+
+function readCurriculumPlanString(
+  record: Record<string, unknown>,
+  candidates: string[],
+): string | null {
+  for (const candidate of candidates) {
+    const value = record[candidate];
+
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return String(value);
+    }
+  }
+
+  return null;
+}
+
+function normalizeCurriculumPlanRecord(entry: unknown): CurriculumPlanRecord | null {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+    return null;
+  }
+
+  const record = entry as Record<string, unknown>;
+  const planId = readCurriculumPlanString(record, [
+    'LECTURE_PLAN_ID',
+    'lecturePlanId',
+    'PLAN_ID',
+    'planId',
+    'SELECTEDKEY',
+  ]);
+  const className = readCurriculumPlanString(record, ['CLASS_NAME', 'className', 'classname']);
+  const courseName = readCurriculumPlanString(record, ['COURSE_NAME', 'courseName', 'coursename']);
+
+  if (!planId || !className || !courseName) {
+    return null;
+  }
+
+  return {
+    className,
+    courseName,
+    planId,
+    teacherName: readCurriculumPlanString(record, ['TEACHER_NAME', 'teacherName']),
+    weeklyHours: readCurriculumPlanString(record, ['WEEKLY_HOURS', 'weeklyHours']),
+  };
+}
+
+function getCurriculumPlanRecords(result: CurriculumPlanListResult | null): CurriculumPlanRecord[] {
+  if (!result || !Array.isArray(result.plans)) {
+    return [];
+  }
+
+  return result.plans.reduce<CurriculumPlanRecord[]>((records, entry) => {
+    const normalized = normalizeCurriculumPlanRecord(entry);
+
+    if (normalized) {
+      records.push(normalized);
+    }
+
+    return records;
+  }, []);
+}
+
+function getUniqueValues(values: string[]) {
+  const seen = new Set<string>();
+  const result: string[] = [];
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      continue;
+    }
+
+    seen.add(value);
+    result.push(value);
+  }
+
+  return result;
+}
+
+function findMatchingCurriculumPlans(
+  records: CurriculumPlanRecord[],
+  input: {
+    className?: string;
+    courseName?: string;
+  },
+) {
+  return records.filter(
+    (record) => record.className === input.className && record.courseName === input.courseName,
+  );
+}
+
 export function UpstreamSessionDemoLabPage() {
   const [form] = Form.useForm<UpstreamLoginFormValues>();
   const [curriculumPlanForm] = Form.useForm<CurriculumPlanFormValues>();
+  const selectedClassName = Form.useWatch('className', curriculumPlanForm);
+  const selectedCourseName = Form.useWatch('courseName', curriculumPlanForm);
   const [activePanelKey, setActivePanelKey] = useState<UpstreamPanelKey>('introduction');
   const [currentAccount, setCurrentAccount] = useState<CurrentUpstreamDemoAccount | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -152,6 +290,7 @@ export function UpstreamSessionDemoLabPage() {
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [isLoadingCurriculumPlans, setIsLoadingCurriculumPlans] = useState(false);
+  const [isLoadingCurriculumPlanDetail, setIsLoadingCurriculumPlanDetail] = useState(false);
   const [isLoadingIdentity, setIsLoadingIdentity] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -159,11 +298,24 @@ export function UpstreamSessionDemoLabPage() {
   const [curriculumPlanResult, setCurriculumPlanResult] = useState<CurriculumPlanListResult | null>(
     null,
   );
+  const [curriculumPlanDetailResult, setCurriculumPlanDetailResult] =
+    useState<CurriculumPlanDetailResult | null>(null);
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
   const [verifiedIdentityResult, setVerifiedIdentityResult] =
     useState<VerifiedStaffIdentityResult | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
   const [storedSession, setStoredSession] = useState<StoredUpstreamSession | null>(null);
+  const curriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult);
+  const classNameOptions = getUniqueValues(curriculumPlanRecords.map((record) => record.className));
+  const courseNameOptions = getUniqueValues(
+    curriculumPlanRecords
+      .filter((record) => !selectedClassName || record.className === selectedClassName)
+      .map((record) => record.courseName),
+  );
+  const matchingCurriculumPlans = findMatchingCurriculumPlans(curriculumPlanRecords, {
+    className: selectedClassName,
+    courseName: selectedCourseName,
+  });
 
   const persistStoredSession = useCallback(
     (
@@ -197,6 +349,7 @@ export function UpstreamSessionDemoLabPage() {
     clearStoredUpstreamSession();
     setStoredSession(null);
     setCurriculumPlanResult(null);
+    setCurriculumPlanDetailResult(null);
     setDirectoryResult(null);
     setVerifiedIdentityResult(null);
     setActionError(error ?? null);
@@ -235,6 +388,7 @@ export function UpstreamSessionDemoLabPage() {
           }
           case 'curriculum-plan': {
             setIsLoadingCurriculumPlans(true);
+            setCurriculumPlanDetailResult(null);
             const result = await fetchCurriculumPlanList({
               departmentId: action.values.departmentId,
               schoolYear: action.values.schoolYear,
@@ -247,6 +401,20 @@ export function UpstreamSessionDemoLabPage() {
               upstreamSessionToken: result.upstreamSessionToken,
             });
             setCurriculumPlanResult(result);
+            return;
+          }
+          case 'curriculum-plan-detail': {
+            setIsLoadingCurriculumPlanDetail(true);
+            const result = await fetchCurriculumPlanDetail({
+              planId: action.values.planId,
+              sessionToken: session.upstreamSessionToken,
+            });
+
+            persistStoredSession(session, {
+              expiresAt: result.expiresAt,
+              upstreamSessionToken: result.upstreamSessionToken,
+            });
+            setCurriculumPlanDetailResult(result);
             return;
           }
         }
@@ -285,9 +453,17 @@ export function UpstreamSessionDemoLabPage() {
               message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划列表。'),
             });
             return;
+          case 'curriculum-plan-detail':
+            setCurriculumPlanDetailResult(null);
+            setActionError({
+              panel: 'curriculum-plan',
+              message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划详情。'),
+            });
+            return;
         }
       } finally {
         setIsLoadingCurriculumPlans(false);
+        setIsLoadingCurriculumPlanDetail(false);
         setIsLoadingDirectory(false);
         setIsLoadingIdentity(false);
       }
@@ -324,6 +500,7 @@ export function UpstreamSessionDemoLabPage() {
       setLoginError(null);
       setActionError(null);
       setCurriculumPlanResult(null);
+      setCurriculumPlanDetailResult(null);
       setDirectoryResult(null);
       setVerifiedIdentityResult(null);
 
@@ -384,9 +561,46 @@ export function UpstreamSessionDemoLabPage() {
     isLoginModalOpen,
   ]);
 
+  useEffect(() => {
+    const records = getCurriculumPlanRecords(curriculumPlanResult);
+
+    if (!records.length) {
+      curriculumPlanForm.setFieldsValue({
+        className: undefined,
+        courseName: undefined,
+      });
+      return;
+    }
+
+    const nextClassNameOptions = getUniqueValues(records.map((record) => record.className));
+    const currentClassName = curriculumPlanForm.getFieldValue('className') as string | undefined;
+    const nextClassName = nextClassNameOptions.includes(currentClassName ?? '')
+      ? currentClassName
+      : nextClassNameOptions[0];
+    const nextCourseNameOptions = getUniqueValues(
+      records
+        .filter((record) => record.className === nextClassName)
+        .map((record) => record.courseName),
+    );
+    const currentCourseName = curriculumPlanForm.getFieldValue('courseName') as string | undefined;
+    const nextCourseName = nextCourseNameOptions.includes(currentCourseName ?? '')
+      ? currentCourseName
+      : nextCourseNameOptions[0];
+
+    if (currentClassName !== nextClassName || currentCourseName !== nextCourseName) {
+      curriculumPlanForm.setFieldsValue({
+        className: nextClassName,
+        courseName: nextCourseName,
+      });
+    }
+  }, [curriculumPlanForm, curriculumPlanResult]);
+
   const hasStoredSession = Boolean(storedSession);
   const isRunningUpstreamAction =
-    isLoadingCurriculumPlans || isLoadingDirectory || isLoadingIdentity;
+    isLoadingCurriculumPlans ||
+    isLoadingCurriculumPlanDetail ||
+    isLoadingDirectory ||
+    isLoadingIdentity;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
 
   function getPendingActionLabel(action: PendingUpstreamAction | null) {
@@ -397,6 +611,8 @@ export function UpstreamSessionDemoLabPage() {
         return '读取教职工身份';
       case 'curriculum-plan':
         return '读取教学计划列表';
+      case 'curriculum-plan-detail':
+        return '读取教学计划详情';
       default:
         return '读取上游数据';
     }
@@ -404,7 +620,11 @@ export function UpstreamSessionDemoLabPage() {
 
   async function handleCurriculumPlanRequest() {
     try {
-      const values = await curriculumPlanForm.validateFields();
+      const values = await curriculumPlanForm.validateFields([
+        'schoolYear',
+        'semester',
+        'departmentId',
+      ]);
 
       await ensureSessionAndRun({
         type: 'curriculum-plan',
@@ -423,6 +643,57 @@ export function UpstreamSessionDemoLabPage() {
       setActionError({
         panel: 'curriculum-plan',
         message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划列表。'),
+      });
+    }
+  }
+
+  async function handleCurriculumPlanDetailRequest() {
+    try {
+      const values = await curriculumPlanForm.validateFields(['className', 'courseName']);
+      const matches = findMatchingCurriculumPlans(curriculumPlanRecords, {
+        className: values.className,
+        courseName: values.courseName,
+      });
+
+      if (matches.length === 0) {
+        setCurriculumPlanDetailResult(null);
+        setActionError({
+          panel: 'curriculum-plan',
+          message: '当前列表中未找到匹配的班级与课程，请先重新查询教学计划列表。',
+        });
+        return;
+      }
+
+      if (matches.length > 1) {
+        setCurriculumPlanDetailResult(null);
+        setActionError({
+          panel: 'curriculum-plan',
+          message: `当前班级与课程组合匹配到 ${matches.length} 条教学计划，暂时无法唯一定位详情。`,
+        });
+        return;
+      }
+
+      await ensureSessionAndRun({
+        type: 'curriculum-plan-detail',
+        values: {
+          className: matches[0].className,
+          courseName: matches[0].courseName,
+          planId: matches[0].planId,
+        },
+      });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'errorFields' in error &&
+        Array.isArray(error.errorFields)
+      ) {
+        return;
+      }
+
+      setActionError({
+        panel: 'curriculum-plan',
+        message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划详情。'),
       });
     }
   }
@@ -450,7 +721,7 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>按需查询：</strong>
-              “教学计划列表”标签页支持参数化的按需查询，需要手动填写年份、学期等信息后点击“查询”。
+              “教学计划”标签页支持按学年、学期查询列表，并基于班级与课程读取对应详情。
             </li>
             <li>
               <strong>Token 滚动：</strong>
@@ -603,42 +874,196 @@ export function UpstreamSessionDemoLabPage() {
               查询
             </Button>
           </Form.Item>
+
+          {isLoadingCurriculumPlans ? (
+            <Alert type="info" showIcon title="正在读取教学计划列表..." />
+          ) : curriculumPlanResult ? (
+            <>
+              <div className="flex flex-wrap gap-2">
+                <Tag variant="filled" color="magenta">
+                  计划总数：{curriculumPlanResult.count}
+                </Tag>
+                <Tag variant="filled" color="cyan">
+                  过期时间：{formatDateTime(curriculumPlanResult.expiresAt)}
+                </Tag>
+                <Tag variant="filled" color="blue">
+                  预览条数：
+                  {Array.isArray(curriculumPlanResult.plans)
+                    ? Math.min(curriculumPlanResult.plans.length, CURRICULUM_PLAN_PREVIEW_LIMIT)
+                    : CURRICULUM_PLAN_PREVIEW_LIMIT}
+                </Tag>
+                <Tag variant="filled" color="processing">
+                  可匹配计划：{curriculumPlanRecords.length}
+                </Tag>
+              </div>
+
+              {curriculumPlanRecords.length > 0 ? (
+                <Card size="small" title="详情定位">
+                  <div className="flex flex-col gap-4">
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                      详情查询只暴露班级名称和课程名称。前端会先从列表中定位唯一计划，再在内部调用
+                      `fetchCurriculumPlanDetail`。
+                    </Typography.Paragraph>
+
+                    <div className="flex flex-wrap gap-4">
+                      <Form.Item
+                        label="班级名称"
+                        name="className"
+                        rules={[{ required: true, message: '请选择班级名称' }]}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          placeholder="请选择班级名称"
+                          style={{ width: 280 }}
+                          options={classNameOptions.map((value) => ({
+                            label: value,
+                            value,
+                          }))}
+                          onChange={() => {
+                            setCurriculumPlanDetailResult(null);
+                            setActionError(null);
+                          }}
+                        />
+                      </Form.Item>
+
+                      <Form.Item
+                        label="课程名称"
+                        name="courseName"
+                        rules={[{ required: true, message: '请选择课程名称' }]}
+                        style={{ marginBottom: 0 }}
+                      >
+                        <Select
+                          placeholder="请选择课程名称"
+                          style={{ width: 360 }}
+                          options={courseNameOptions.map((value) => ({
+                            label: value,
+                            value,
+                          }))}
+                          onChange={() => {
+                            setCurriculumPlanDetailResult(null);
+                            setActionError(null);
+                          }}
+                        />
+                      </Form.Item>
+                    </div>
+
+                    {selectedClassName && selectedCourseName ? (
+                      matchingCurriculumPlans.length === 1 ? (
+                        <Alert
+                          type="success"
+                          showIcon
+                          title={`已定位计划：${matchingCurriculumPlans[0].className} / ${matchingCurriculumPlans[0].courseName}`}
+                          description={
+                            matchingCurriculumPlans[0].teacherName
+                              ? `任课教师：${matchingCurriculumPlans[0].teacherName}${
+                                  matchingCurriculumPlans[0].weeklyHours
+                                    ? `，周学时：${matchingCurriculumPlans[0].weeklyHours}`
+                                    : ''
+                                }`
+                              : undefined
+                          }
+                        />
+                      ) : matchingCurriculumPlans.length > 1 ? (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title={`当前组合匹配到 ${matchingCurriculumPlans.length} 条计划，暂时无法唯一定位详情。`}
+                        />
+                      ) : (
+                        <Alert
+                          type="warning"
+                          showIcon
+                          title="当前班级与课程在列表中没有匹配项，请重新选择。"
+                        />
+                      )
+                    ) : null}
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        type="primary"
+                        loading={isLoadingCurriculumPlanDetail}
+                        disabled={!curriculumPlanRecords.length}
+                        onClick={() => {
+                          void handleCurriculumPlanDetailRequest();
+                        }}
+                      >
+                        查看详情
+                      </Button>
+                      <Button
+                        onClick={() => {
+                          setCurriculumPlanDetailResult(null);
+                          setActionError(null);
+                          curriculumPlanForm.setFieldsValue({
+                            className: classNameOptions[0],
+                            courseName: getUniqueValues(
+                              curriculumPlanRecords
+                                .filter((record) => record.className === classNameOptions[0])
+                                .map((record) => record.courseName),
+                            )[0],
+                          });
+                        }}
+                      >
+                        重置选择
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ) : (
+                <Alert
+                  type="info"
+                  showIcon
+                  title="当前列表未识别出可用的班级名称、课程名称或计划 ID，暂时无法继续读取详情。"
+                />
+              )}
+
+              <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                {JSON.stringify(buildCurriculumPlanPreview(curriculumPlanResult), null, 2)}
+              </pre>
+
+              {isLoadingCurriculumPlanDetail ? (
+                <Alert type="info" showIcon title="正在读取教学计划详情..." />
+              ) : curriculumPlanDetailResult ? (
+                <>
+                  <div className="flex flex-wrap gap-2">
+                    <Tag variant="filled" color="purple">
+                      详情条数：{curriculumPlanDetailResult.count}
+                    </Tag>
+                    <Tag variant="filled" color="cyan">
+                      过期时间：{formatDateTime(curriculumPlanDetailResult.expiresAt)}
+                    </Tag>
+                    <Button
+                      size="small"
+                      type="link"
+                      onClick={() => {
+                        void handleCurriculumPlanDetailRequest();
+                      }}
+                    >
+                      刷新详情
+                    </Button>
+                  </div>
+
+                  <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                    {JSON.stringify(
+                      buildCurriculumPlanDetailPreview(curriculumPlanDetailResult),
+                      null,
+                      2,
+                    )}
+                  </pre>
+                </>
+              ) : null}
+            </>
+          ) : (
+            <Alert
+              type="info"
+              showIcon
+              title={
+                hasStoredSession
+                  ? '填写参数后点击“查询”即可查看预览结果。'
+                  : '登录 upstream 后即可读取教学计划列表。'
+              }
+            />
+          )}
         </Form>
-
-        {isLoadingCurriculumPlans ? (
-          <Alert type="info" showIcon title="正在读取教学计划列表..." />
-        ) : curriculumPlanResult ? (
-          <>
-            <div className="flex flex-wrap gap-2">
-              <Tag variant="filled" color="magenta">
-                计划总数：{curriculumPlanResult.count}
-              </Tag>
-              <Tag variant="filled" color="cyan">
-                过期时间：{formatDateTime(curriculumPlanResult.expiresAt)}
-              </Tag>
-              <Tag variant="filled" color="blue">
-                预览条数：
-                {Array.isArray(curriculumPlanResult.plans)
-                  ? Math.min(curriculumPlanResult.plans.length, CURRICULUM_PLAN_PREVIEW_LIMIT)
-                  : CURRICULUM_PLAN_PREVIEW_LIMIT}
-              </Tag>
-            </div>
-
-            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
-              {JSON.stringify(buildCurriculumPlanPreview(curriculumPlanResult), null, 2)}
-            </pre>
-          </>
-        ) : (
-          <Alert
-            type="info"
-            showIcon
-            title={
-              hasStoredSession
-                ? '填写参数后点击“查询”即可查看预览结果。'
-                : '登录 upstream 后即可读取教学计划列表。'
-            }
-          />
-        )}
       </div>
     );
   }
@@ -778,7 +1203,7 @@ export function UpstreamSessionDemoLabPage() {
             ) : null}
 
             <Tabs
-              tabPlacement="left"
+              tabPosition="left"
               activeKey={activePanelKey}
               onChange={(key) => setActivePanelKey(key as UpstreamPanelKey)}
               style={{ minHeight: 400 }}

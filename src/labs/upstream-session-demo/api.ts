@@ -32,6 +32,10 @@ type CurriculumPlanListResponse = {
   fetchCurriculumPlanList: CurriculumPlanListResult;
 };
 
+type CurriculumPlanDetailResponse = {
+  fetchCurriculumPlanDetail: CurriculumPlanDetailResult;
+};
+
 type VerifiedStaffIdentityResponse = {
   fetchVerifiedStaffIdentity: VerifiedStaffIdentityResult;
 };
@@ -57,6 +61,13 @@ export type CurriculumPlanListResult = {
   count: number;
   expiresAt: string;
   plans: unknown;
+  upstreamSessionToken: string;
+};
+
+export type CurriculumPlanDetailResult = {
+  count: number;
+  details: unknown;
+  expiresAt: string;
   upstreamSessionToken: string;
 };
 
@@ -112,6 +123,17 @@ const FETCH_CURRICULUM_PLAN_LIST_QUERY = `
       count
       expiresAt
       plans
+      upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_CURRICULUM_PLAN_DETAIL_QUERY = `
+  query FetchCurriculumPlanDetail($planId: String!, $sessionToken: String!) {
+    fetchCurriculumPlanDetail(planId: $planId, sessionToken: $sessionToken) {
+      count
+      details
+      expiresAt
       upstreamSessionToken
     }
   }
@@ -221,6 +243,21 @@ export async function fetchCurriculumPlanList(input: {
   });
 
   return response.fetchCurriculumPlanList;
+}
+
+export async function fetchCurriculumPlanDetail(input: { planId: string; sessionToken: string }) {
+  const response = await requestGraphQL<
+    CurriculumPlanDetailResponse,
+    {
+      planId: string;
+      sessionToken: string;
+    }
+  >(FETCH_CURRICULUM_PLAN_DETAIL_QUERY, {
+    planId: input.planId,
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchCurriculumPlanDetail;
 }
 
 export async function fetchVerifiedStaffIdentity(input: { sessionToken: string }) {
