@@ -1,5 +1,7 @@
 import type { AuthAccessGroup } from '@/features/auth';
 
+import { hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
+
 import type { NavigationItemsProvider } from '../types';
 
 function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
@@ -43,6 +45,13 @@ function hasLabNavigationAccess(
   });
 }
 
+function hasAcademicCalendarAdminNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
+  return hasAdminOrAcademicOfficerAccess({
+    accessGroup: filter.accessGroup,
+    slotGroup: filter.slotGroup,
+  });
+}
+
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
   const children = [
     ...(hasPayloadCryptoNavigationAccess({
@@ -82,6 +91,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: '邀请管理',
             navMode: 'rail' as const,
             path: '/labs/invite-issuer',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicCalendarAdminNavigationAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CalendarOutlined',
+            key: '/labs/academic-calendar-admin',
+            label: '学期与校历',
+            navMode: 'rail' as const,
+            path: '/labs/academic-calendar-admin',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },

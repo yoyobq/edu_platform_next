@@ -28,6 +28,7 @@ describe('navigation catalog', () => {
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
@@ -44,6 +45,7 @@ describe('navigation catalog', () => {
     expect(prodAdminItems.at(-1)?.children?.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
     ]);
   });
@@ -59,6 +61,23 @@ describe('navigation catalog', () => {
 
     expect(staffItems.map((item) => item.key)).toEqual(['labs']);
     expect(staffItems[0]?.children?.map((item) => item.key)).toEqual([
+      '/labs/upstream-session-demo',
+    ]);
+  });
+
+  it('shows the academic calendar lab to academic officers via slotGroup-aware filtering', () => {
+    const staffItems = getNavigationItems(
+      buildFilter({
+        accountId: 1002,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    );
+
+    expect(staffItems.map((item) => item.key)).toEqual(['labs']);
+    expect(staffItems[0]?.children?.map((item) => item.key)).toEqual([
+      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
     ]);
   });
@@ -83,6 +102,7 @@ describe('navigation catalog', () => {
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
+      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);

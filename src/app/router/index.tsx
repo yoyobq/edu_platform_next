@@ -45,8 +45,13 @@ import {
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
+import { hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
+import {
+  academicCalendarAdminLabAccess,
+  loadAcademicCalendarAdminLabRouteModule,
+} from '@/labs/academic-calendar-admin';
 import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
@@ -413,6 +418,47 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function academicCalendarAdminLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(academicCalendarAdminLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(academicCalendarAdminLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasAdminOrAcademicOfficerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(changeLoginEmailLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -673,6 +719,11 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
+          },
+          {
+            path: 'academic-calendar-admin',
+            loader: academicCalendarAdminLabLoader,
+            lazy: loadAcademicCalendarAdminLabRouteModule,
           },
           {
             path: 'change-login-email',
