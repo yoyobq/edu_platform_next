@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { LeftOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Flex, message, Skeleton, Tag, Typography } from 'antd';
+import { Alert, Button, Card, Flex, message, Skeleton, Tabs, Tag, Typography } from 'antd';
 import { useLocation, useNavigate } from 'react-router';
 
 import { HexAvatar } from '@/shared/hex-avatar';
@@ -9,6 +9,7 @@ import type { AdminUserDetail } from '../application/get-admin-user-detail';
 import {
   ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS,
+  ADMIN_USER_DETAIL_STAFF_SLOT_LABELS,
 } from '../application/get-admin-user-detail';
 import type {
   UpdateAdminUserDetailAccountSectionCommand,
@@ -637,7 +638,6 @@ export function AdminUserDetailPageContent({
       const message = error instanceof Error ? error.message : 'staff slot 任职新增失败。';
 
       setStaffSlotError(message);
-      throw error;
     } finally {
       setStaffSlotAssigning(false);
     }
@@ -666,7 +666,6 @@ export function AdminUserDetailPageContent({
       const message = error instanceof Error ? error.message : 'staff slot 任职结束失败。';
 
       setStaffSlotError(message);
-      throw error;
     } finally {
       setEndingStaffSlotPostId(null);
     }
@@ -810,125 +809,228 @@ export function AdminUserDetailPageContent({
         />
       ) : (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="flex flex-col gap-6 lg:col-span-2">
+          <div className="lg:col-span-2">
             <div className="rounded-card shadow-card">
-              <Card
-                styles={{ body: { padding: 24 } }}
-                title={<BilingualLabel title="账户配置" subtitle="Account Settings" />}
-              >
-                <Flex vertical gap={24}>
-                  <DetailSectionBlock section={accountSections.fixed} />
-                  <div
-                    className={`rounded-block border border-border transition-colors duration-150 ${
-                      editingSection === 'account'
-                        ? 'bg-fill-secondary p-6'
-                        : 'p-4 hover:bg-fill-hover'
-                    }`}
-                  >
-                    {editingSection === 'account' ? (
-                      <AccountSectionEditor
-                        detail={result}
-                        errorMessage={sectionErrors.account}
-                        formId="account-section-form"
-                        onCancel={() => cancelSectionEditor('account')}
-                        onEdit={() => openSectionEditor('account')}
-                        onSubmit={handleAccountSectionSubmit}
-                        saving={savingSection === 'account'}
-                      />
-                    ) : (
-                      <AccountSectionViewer
-                        section={accountSections.editable}
-                        onEdit={() => openSectionEditor('account')}
-                      />
-                    )}
-                  </div>
-                  <DetailSectionBlock section={accountSections.reference} />
-                </Flex>
-              </Card>
-            </div>
+              <Card styles={{ body: { padding: '8px 24px 24px' } }}>
+                <div className="app-profile-tabs">
+                  <Tabs
+                    defaultActiveKey="basic"
+                    items={[
+                      {
+                        key: 'basic',
+                        label: '基本资料',
+                        children: (
+                          <Flex vertical gap={32} style={{ marginTop: 16 }}>
+                            <div className="flex flex-col gap-4">
+                              <div className="flex items-center gap-2.5 mb-2">
+                                <div className="w-1 h-4 bg-primary rounded-full" />
+                                <div className="flex items-baseline gap-2">
+                                  <Typography.Title
+                                    level={5}
+                                    style={{ margin: 0, fontWeight: 700 }}
+                                  >
+                                    账户配置
+                                  </Typography.Title>
+                                  <Typography.Text
+                                    type="secondary"
+                                    style={{
+                                      fontSize: 11,
+                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em',
+                                      opacity: 0.6,
+                                    }}
+                                  >
+                                    Account Settings
+                                  </Typography.Text>
+                                </div>
+                              </div>
+                              <DetailSectionBlock section={accountSections.fixed} />
+                              <div
+                                className={`rounded-block border border-border transition-colors duration-150 ${
+                                  editingSection === 'account'
+                                    ? 'bg-fill-secondary p-6'
+                                    : 'p-4 hover:bg-fill-hover'
+                                }`}
+                              >
+                                {editingSection === 'account' ? (
+                                  <AccountSectionEditor
+                                    detail={result}
+                                    errorMessage={sectionErrors.account}
+                                    formId="account-section-form"
+                                    onCancel={() => cancelSectionEditor('account')}
+                                    onEdit={() => openSectionEditor('account')}
+                                    onSubmit={handleAccountSectionSubmit}
+                                    saving={savingSection === 'account'}
+                                  />
+                                ) : (
+                                  <AccountSectionViewer
+                                    section={accountSections.editable}
+                                    onEdit={() => openSectionEditor('account')}
+                                  />
+                                )}
+                              </div>
+                              <DetailSectionBlock section={accountSections.reference} />
+                            </div>
 
-            <div className="rounded-card shadow-card">
-              <Card
-                styles={{ body: { padding: 24 } }}
-                title={<BilingualLabel title="个人背景" subtitle="Personal Profile" />}
-              >
-                <Flex vertical gap={24}>
-                  <DetailSectionBlock section={userInfoSections.fixed} />
-                  <div
-                    className={`rounded-block border border-border transition-colors duration-150 ${
-                      editingSection === 'userInfo'
-                        ? 'bg-fill-secondary p-6'
-                        : 'p-4 hover:bg-fill-hover'
-                    }`}
-                  >
-                    {editingSection === 'userInfo' ? (
-                      <UserInfoSectionEditor
-                        detail={result}
-                        errorMessage={sectionErrors.userInfo}
-                        formId="user-info-section-form"
-                        onCancel={() => cancelSectionEditor('userInfo')}
-                        onEdit={() => openSectionEditor('userInfo')}
-                        onSubmit={handleUserInfoSectionSubmit}
-                        saving={savingSection === 'userInfo'}
-                      />
-                    ) : (
-                      <UserInfoSectionViewer
-                        section={userInfoSections.editable}
-                        onEdit={() => openSectionEditor('userInfo')}
-                      />
-                    )}
-                  </div>
-                  <DetailSectionBlock section={userInfoSections.reference} />
-                </Flex>
-              </Card>
-            </div>
+                            <div className="border-t border-border pt-8 flex flex-col gap-4">
+                              <div className="flex items-center gap-2.5 mb-2">
+                                <div className="w-1 h-4 bg-primary rounded-full" />
+                                <div className="flex items-baseline gap-2">
+                                  <Typography.Title
+                                    level={5}
+                                    style={{ margin: 0, fontWeight: 700 }}
+                                  >
+                                    个人背景
+                                  </Typography.Title>
+                                  <Typography.Text
+                                    type="secondary"
+                                    style={{
+                                      fontSize: 11,
+                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em',
+                                      opacity: 0.6,
+                                    }}
+                                  >
+                                    Personal Profile
+                                  </Typography.Text>
+                                </div>
+                              </div>
+                              <DetailSectionBlock section={userInfoSections.fixed} />
+                              <div
+                                className={`rounded-block border border-border transition-colors duration-150 ${
+                                  editingSection === 'userInfo'
+                                    ? 'bg-fill-secondary p-6'
+                                    : 'p-4 hover:bg-fill-hover'
+                                }`}
+                              >
+                                {editingSection === 'userInfo' ? (
+                                  <UserInfoSectionEditor
+                                    detail={result}
+                                    errorMessage={sectionErrors.userInfo}
+                                    formId="user-info-section-form"
+                                    onCancel={() => cancelSectionEditor('userInfo')}
+                                    onEdit={() => openSectionEditor('userInfo')}
+                                    onSubmit={handleUserInfoSectionSubmit}
+                                    saving={savingSection === 'userInfo'}
+                                  />
+                                ) : (
+                                  <UserInfoSectionViewer
+                                    section={userInfoSections.editable}
+                                    onEdit={() => openSectionEditor('userInfo')}
+                                  />
+                                )}
+                              </div>
+                              <DetailSectionBlock section={userInfoSections.reference} />
+                            </div>
+                          </Flex>
+                        ),
+                      },
+                      {
+                        key: 'job',
+                        label: '身份信息',
+                        children: (
+                          <Flex vertical gap={32} style={{ marginTop: 16 }}>
+                            <div className="flex flex-col gap-4">
+                              <div className="flex items-center gap-2.5 mb-2">
+                                <div className="w-1 h-4 bg-primary rounded-full" />
+                                <div className="flex items-baseline gap-2">
+                                  <Typography.Title
+                                    level={5}
+                                    style={{ margin: 0, fontWeight: 700 }}
+                                  >
+                                    基础职务
+                                  </Typography.Title>
+                                  <Typography.Text
+                                    type="secondary"
+                                    style={{
+                                      fontSize: 11,
+                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em',
+                                      opacity: 0.6,
+                                    }}
+                                  >
+                                    Basic Position
+                                  </Typography.Text>
+                                </div>
+                              </div>
+                              <DetailSectionBlock section={staffSections.fixed} />
+                              <div
+                                className={`rounded-block border border-border transition-colors duration-150 ${
+                                  editingSection === 'staff'
+                                    ? 'bg-fill-secondary p-6'
+                                    : 'p-4 hover:bg-fill-hover'
+                                }`}
+                              >
+                                {editingSection === 'staff' ? (
+                                  <StaffSectionEditor
+                                    departmentLoadErrorMessage={departmentLoadErrorMessage}
+                                    departmentOptions={departmentOptions}
+                                    detail={result}
+                                    errorMessage={sectionErrors.staff}
+                                    formId="staff-section-form"
+                                    onCancel={() => cancelSectionEditor('staff')}
+                                    onEdit={() => openSectionEditor('staff')}
+                                    onSubmit={handleStaffSectionSubmit}
+                                    saving={savingSection === 'staff'}
+                                  />
+                                ) : (
+                                  <StaffSectionViewer
+                                    section={staffSections.editable}
+                                    onEdit={() => openSectionEditor('staff')}
+                                  />
+                                )}
+                              </div>
+                            </div>
 
-            <div className="rounded-card shadow-card">
-              <Card
-                styles={{ body: { padding: 24 } }}
-                title={<BilingualLabel title="Staff 职业信息" subtitle="Staff Identity" />}
-              >
-                <Flex vertical gap={24}>
-                  <DetailSectionBlock section={staffSections.fixed} />
-                  <div
-                    className={`rounded-block border border-border transition-colors duration-150 ${
-                      editingSection === 'staff'
-                        ? 'bg-fill-secondary p-6'
-                        : 'p-4 hover:bg-fill-hover'
-                    }`}
-                  >
-                    {editingSection === 'staff' ? (
-                      <StaffSectionEditor
-                        departmentLoadErrorMessage={departmentLoadErrorMessage}
-                        departmentOptions={departmentOptions}
-                        detail={result}
-                        errorMessage={sectionErrors.staff}
-                        formId="staff-section-form"
-                        onCancel={() => cancelSectionEditor('staff')}
-                        onEdit={() => openSectionEditor('staff')}
-                        onSubmit={handleStaffSectionSubmit}
-                        saving={savingSection === 'staff'}
-                      />
-                    ) : (
-                      <StaffSectionViewer
-                        section={staffSections.editable}
-                        onEdit={() => openSectionEditor('staff')}
-                      />
-                    )}
-                  </div>
-                  <StaffSlotSection
-                    actionPostId={endingStaffSlotPostId}
-                    assigning={staffSlotAssigning}
-                    departmentLoadErrorMessage={departmentLoadErrorMessage}
-                    departmentMap={departmentMap}
-                    departmentOptions={departmentOptions}
-                    detail={result}
-                    errorMessage={staffSlotError}
-                    onAssign={handleStaffSlotAssign}
-                    onEnd={handleStaffSlotEnd}
+                            <div className="border-t border-border pt-8 flex flex-col gap-6">
+                              <div className="flex items-center gap-2.5 mb-2">
+                                <div className="w-1 h-4 bg-primary rounded-full" />
+                                <div className="flex items-baseline gap-2">
+                                  <Typography.Title
+                                    level={5}
+                                    style={{ margin: 0, fontWeight: 700 }}
+                                  >
+                                    权责
+                                  </Typography.Title>
+                                  <Typography.Text
+                                    type="secondary"
+                                    style={{
+                                      fontSize: 11,
+                                      fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                                      textTransform: 'uppercase',
+                                      letterSpacing: '0.05em',
+                                      opacity: 0.6,
+                                    }}
+                                  >
+                                    Staff Slot
+                                  </Typography.Text>
+                                </div>
+                              </div>
+                              <StaffSlotSection
+                                actionPostId={endingStaffSlotPostId}
+                                assigning={staffSlotAssigning}
+                                departmentLoadErrorMessage={departmentLoadErrorMessage}
+                                departmentMap={departmentMap}
+                                departmentOptions={departmentOptions}
+                                detail={result}
+                                errorMessage={staffSlotError}
+                                onAssign={handleStaffSlotAssign}
+                                onEnd={handleStaffSlotEnd}
+                              />
+                            </div>
+
+                            <div className="border-t border-border pt-4">
+                              <DetailSectionBlock section={staffSections.reference} />
+                            </div>
+                          </Flex>
+                        ),
+                      },
+                    ]}
                   />
-                  <DetailSectionBlock section={staffSections.reference} />
-                </Flex>
+                </div>
               </Card>
             </div>
           </div>
@@ -961,6 +1063,26 @@ export function AdminUserDetailPageContent({
                   </div>
 
                   <div className="border-t border-border pt-4 flex flex-col gap-4">
+                    <div className="flex flex-col gap-2">
+                      <span className="text-xs text-text-secondary">身份标签</span>
+                      <Flex gap={6} wrap>
+                        {result.staff.jobTitle ? (
+                          <Tag color="geekblue" style={{ margin: 0 }}>
+                            {result.staff.jobTitle}
+                          </Tag>
+                        ) : null}
+                        {result.staffSlotPosts.map((post) => (
+                          <Tag
+                            key={`quick-slot-${post.id}`}
+                            color="processing"
+                            style={{ margin: 0 }}
+                          >
+                            {ADMIN_USER_DETAIL_STAFF_SLOT_LABELS[post.slotCode]}
+                          </Tag>
+                        ))}
+                      </Flex>
+                    </div>
+
                     <div className="flex flex-col gap-1">
                       <span className="text-xs text-text-secondary">登录邮箱</span>
                       <span

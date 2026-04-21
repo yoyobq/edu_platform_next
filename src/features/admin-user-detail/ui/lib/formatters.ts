@@ -37,6 +37,20 @@ export function formatDateTime(value: string | null | undefined) {
   });
 }
 
+export function formatDate(value: string | null | undefined) {
+  if (!value) {
+    return '—';
+  }
+
+  const date = dayjs(value);
+
+  if (!date.isValid()) {
+    return value;
+  }
+
+  return date.format('YYYY-MM-DD');
+}
+
 export function formatOptionalValue(value: string | null | undefined) {
   return value && value.trim() ? value : '—';
 }

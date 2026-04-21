@@ -144,13 +144,13 @@ export function StaffSectionEditor({
 
   return (
     <EditableSectionShell
-      editLabel="编辑 staff 常用字段"
+      editLabel="编辑基础职务"
       editing
       errorMessage={errorMessage}
       formId={formId}
       onCancel={onCancel}
       onEdit={onEdit}
-      saveLabel="保存 staff 常用字段"
+      saveLabel="保存基础职务"
       saving={saving}
     >
       <Form<StaffSectionFormValues>
@@ -257,7 +257,7 @@ export function StaffSectionViewer({
 }) {
   return (
     <EditableSectionShell
-      editLabel="编辑 staff 常用字段"
+      editLabel="编辑基础职务"
       editing={false}
       errorMessage={null}
       formId="staff-section-form"

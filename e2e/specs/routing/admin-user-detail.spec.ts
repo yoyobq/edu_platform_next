@@ -199,9 +199,14 @@ test('admin 用户详情页应渲染 staff 字段', async ({ page }) => {
   await expect(page.getByText('staff-1011').first()).toBeVisible();
   await expect(page.getByText('Lambda Xu').first()).toBeVisible();
   await expect(page.getByText('辅导员')).toBeVisible();
-  await expect(page.getByText('Staff Slot 任职')).toBeVisible();
   await expect(page.getByText('教务员')).toBeVisible();
+
+  await page.getByRole('tab', { name: '身份信息' }).click();
+
   await expect(page.getByText('班级 ID：class-2026-1')).toBeVisible();
+  await expect(page.getByText('2026-04-01')).toBeVisible();
+  await expect(page.getByText('长期')).toHaveCount(2);
+  await expect(page.getByText('正式任职')).toHaveCount(2);
 });
 
 test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
@@ -312,6 +317,7 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
 
   await page.goto(`/admin/users/${accountId}`);
 
+  await page.getByRole('tab', { name: '身份信息' }).click();
   await page.getByTestId('staff-slot-add-button').click();
   await page.getByTestId('staff-slot-code-select').locator('input').click();
   await page.getByTitle('学工员').click();
@@ -319,9 +325,8 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
   await page.getByTitle('数学系').click();
   await page.getByRole('button', { name: '保存任职' }).click();
 
-  await expect(
-    page.getByRole('row', { name: /学工员 STUDENT_AFFAIRS_OFFICER 数学系/ }),
-  ).toBeVisible();
+  await expect(page.getByText('学工员').last()).toBeVisible();
+  await expect(page.getByText('STUDENT_AFFAIRS_OFFICER')).toHaveCount(1);
   expect(assignInput).toMatchObject({
     accountId,
     departmentId: 'd-math',
@@ -338,6 +343,61 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
     departmentId: 'd-lambda',
     slotCode: 'ACADEMIC_OFFICER',
   });
+});
+
+test('staff slot 结束失败时应保留当前视图并显示错误', async ({ page }) => {
+  const accountId = 1011;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserDetailPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserStaffPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation EndStaffSlot')) {
+      await fulfillGraphQLError(route, 'END_STAFF_SLOT_FORBIDDEN');
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByRole('tab', { name: '身份信息' }).click();
+  await page.getByRole('button', { name: '结束 7001' }).click();
+  await page.getByTestId('staff-slot-end-confirm-7001').click();
+
+  await expect(page.getByText('END_STAFF_SLOT_FORBIDDEN')).toBeVisible();
+  await expect(page.getByRole('button', { name: '结束 7001' })).toBeVisible();
 });
 
 test('LEFT staff 应禁用 staff slot 新增入口', async ({ page }) => {
@@ -384,6 +444,7 @@ test('LEFT staff 应禁用 staff slot 新增入口', async ({ page }) => {
 
   await page.goto(`/admin/users/${accountId}`);
 
+  await page.getByRole('tab', { name: '身份信息' }).click();
   await expect(page.getByText('已离职 staff 不能新增 slot。')).toBeVisible();
   await expect(page.getByTestId('staff-slot-add-button')).toBeDisabled();
 });
