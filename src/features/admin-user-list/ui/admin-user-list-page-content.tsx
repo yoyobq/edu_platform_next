@@ -78,23 +78,6 @@ const ACCOUNT_STATUS_BULK_OPTIONS = ADMIN_USER_ACCOUNT_STATUSES.map((status) => 
   value: status,
 }));
 
-function formatDateTimeToMinute(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-    minute: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  }).format(date);
-}
-
 function toSorterOrder(sortOrder: AdminUserSortOrder): 'ascend' | 'descend' {
   return sortOrder === 'ASC' ? 'ascend' : 'descend';
 }
@@ -133,6 +116,31 @@ function resolveFilterSummary(criteria: AdminUserListQuery) {
 
 function isSortField(value: unknown): value is AdminUserSortField {
   return ADMIN_USER_SORT_FIELDS.includes(value as AdminUserSortField);
+}
+
+function renderPillTags(values: readonly string[]) {
+  if (values.length === 0) {
+    return <span className="text-text-quaternary">—</span>;
+  }
+
+  return (
+    <Flex gap={4} wrap>
+      {values.map((value) => (
+        <Tag
+          key={value}
+          style={{
+            margin: 0,
+            border: 'none',
+            background: 'var(--ant-color-primary-bg)',
+            padding: '0 8px',
+            color: 'var(--ant-color-primary)',
+          }}
+        >
+          {value}
+        </Tag>
+      ))}
+    </Flex>
+  );
 }
 
 function parseHasStaffSearchParam(value: string | null): boolean | undefined {
@@ -199,7 +207,7 @@ function parseAdminUserListQuery(searchParams: URLSearchParams): AdminUserListQu
 }
 
 function AdminUserListTableSkeleton() {
-  const gridTemplate = '44px 110px 140px 160px 220px 160px 160px 168px';
+  const gridTemplate = '44px 110px 140px 160px 220px 220px 160px 160px';
   const rows = [
     { idW: 68, staffIdW: 88, nameW: 96, tagsCount: 2 as const, hasStaff: true },
     { idW: 52, staffIdW: 56, nameW: 72, tagsCount: 1 as const, hasStaff: false },
@@ -222,20 +230,18 @@ function AdminUserListTableSkeleton() {
           }}
         >
           <div />
-          {['账户 ID', '工号', '姓名', '访问组', '账户状态', '在职状态', '创建时间'].map(
-            (label) => (
-              <span
-                key={label}
-                style={{
-                  color: 'var(--ant-color-text-secondary)',
-                  fontSize: 'var(--ant-font-size)',
-                  fontWeight: 600,
-                }}
-              >
-                {label}
-              </span>
-            ),
-          )}
+          {['账户 ID', '工号', '姓名', '访问组', '权限组', '账户状态', '在职状态'].map((label) => (
+            <span
+              key={label}
+              style={{
+                color: 'var(--ant-color-text-secondary)',
+                fontSize: 'var(--ant-font-size)',
+                fontWeight: 600,
+              }}
+            >
+              {label}
+            </span>
+          ))}
         </div>
 
         {/* 数据行 */}
@@ -288,6 +294,19 @@ function AdminUserListTableSkeleton() {
                 />
               ))}
             </div>
+            {/* 权限组 */}
+            <div className="flex gap-1">
+              {row.hasStaff ? (
+                <Skeleton.Button
+                  active
+                  size="small"
+                  shape="round"
+                  style={{ width: 88, height: 22 }}
+                />
+              ) : (
+                <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
+              )}
+            </div>
             {/* 账户状态 */}
             <div>
               <Skeleton.Button active size="small" style={{ width: 100, height: 26 }} />
@@ -299,10 +318,6 @@ function AdminUserListTableSkeleton() {
               ) : (
                 <span style={{ color: 'var(--ant-color-text-quaternary)' }}>—</span>
               )}
-            </div>
-            {/* 创建时间 */}
-            <div>
-              <Skeleton.Button active size="small" style={{ width: 120, height: 18 }} />
             </div>
           </div>
         ))}
@@ -595,24 +610,15 @@ export function AdminUserListPageContent({
         key: 'accessGroup',
         title: '访问组',
         width: 220,
-        render: (value: readonly AuthAccessGroup[]) => (
-          <Flex gap={4} wrap>
-            {value.map((accessGroup) => (
-              <Tag
-                key={accessGroup}
-                style={{
-                  margin: 0,
-                  border: 'none',
-                  background: 'var(--ant-color-primary-bg)',
-                  padding: '0 8px',
-                  color: 'var(--ant-color-primary)',
-                }}
-              >
-                {accessGroup}
-              </Tag>
-            ))}
-          </Flex>
-        ),
+        render: (value: readonly AuthAccessGroup[]) => renderPillTags(value),
+      },
+      {
+        dataIndex: 'slotGroups',
+        key: 'slotGroups',
+        title: '权限组',
+        width: 220,
+        render: (value: AdminUserListItem['slotGroups']) =>
+          renderPillTags(value.map((slotGroup) => slotGroup.name)),
       },
       {
         dataIndex: ['account', 'status'],
@@ -655,15 +661,6 @@ export function AdminUserListPageContent({
           ) : (
             <span className="text-text-quaternary">—</span>
           ),
-      },
-      {
-        dataIndex: ['account', 'createdAt'],
-        key: 'createdAt',
-        title: '创建时间',
-        width: 168,
-        render: (value: string) => (
-          <span className="text-xs text-text-secondary">{formatDateTimeToMinute(value)}</span>
-        ),
       },
     ],
     [

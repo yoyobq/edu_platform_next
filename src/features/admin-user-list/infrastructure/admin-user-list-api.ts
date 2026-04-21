@@ -51,6 +51,10 @@ type AdminUserListItemDTO = {
     jobTitle: string | null;
     name: string;
   } | null;
+  slotGroups: readonly {
+    code: string;
+    name: string;
+  }[];
   userInfo: {
     accessGroup: AdminUserListItem['userInfo']['accessGroup'];
     avatarUrl: string | null;
@@ -126,6 +130,10 @@ const ADMIN_USERS_QUERY = `
           loginName
           status
         }
+        slotGroups {
+          code
+          name
+        }
         userInfo {
           accessGroup
           avatarUrl
@@ -149,6 +157,7 @@ function mapAdminUserListItem(dto: AdminUserListItemDTO): AdminUserListItem {
   return {
     account: dto.account,
     staff: dto.staff,
+    slotGroups: dto.slotGroups,
     userInfo: dto.userInfo,
   };
 }

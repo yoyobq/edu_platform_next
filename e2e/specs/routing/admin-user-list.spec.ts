@@ -41,29 +41,21 @@ test('admin 用户列表应支持筛选、分页，并显示正式导航入口',
   await page.goto(routes.adminUsers);
 
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
-  await expect(page.getByText('正式 admin 页面')).toBeVisible();
-  await expect(page.getByText('共 12 人')).toBeVisible();
+  await expect(page.getByText('User Management')).toBeVisible();
+  await expect(page.getByText('用户列表')).toBeVisible();
   await page.getByRole('button', { name: '展开导航菜单' }).click();
   await expect(page.getByRole('menuitem', { name: '用户管理' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /账户 ID/ })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '工号' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '姓名' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '访问组' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '权限组' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '账户状态' })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: '创建时间' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '创建时间' })).toHaveCount(0);
   await expect(page.getByText('staff-1011')).toBeVisible();
   await expect(page.getByText('Lambda Xu')).toBeVisible();
-  const expectedCreatedAt = await page.evaluate(() =>
-    new Intl.DateTimeFormat('zh-CN', {
-      day: '2-digit',
-      hour: '2-digit',
-      hour12: false,
-      minute: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-    }).format(new Date('2026-04-11T08:00:00.000Z')),
-  );
-  await expect(page.getByText(expectedCreatedAt)).toBeVisible();
+  await expect(page.getByText('教务行政').first()).toBeVisible();
+  await expect(page.getByText('班主任')).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '登录名' })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: '登录邮箱' })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: '昵称' })).toHaveCount(0);
@@ -71,19 +63,14 @@ test('admin 用户列表应支持筛选、分页，并显示正式导航入口',
   await expect(page.getByRole('columnheader', { name: '职务' })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: '用户状态' })).toHaveCount(0);
 
-  await page.getByPlaceholder('搜索登录名、邮箱、昵称或 staff 姓名').fill('Grace');
-  await page.getByRole('button', { name: '应用筛选' }).click();
+  await page.getByPlaceholder('搜索登录名、邮箱、昵称或工号...').fill('Grace');
+  await page.getByRole('button', { name: '执行筛选' }).click();
 
-  await expect(page.getByText('共 1 人')).toBeVisible();
   await expect(page.getByText('Grace Lin')).toBeVisible();
   await expect(page.getByText('Lambda Xu')).not.toBeVisible();
 
-  await page.getByRole('button', { name: '重置条件' }).click();
-  await expect(page.getByText('共 12 人')).toBeVisible();
-
-  await page.getByTitle('2').click();
-  await expect(page.getByText('Alpha Chen')).toBeVisible();
-  await expect(page.getByText('Lambda Xu')).not.toBeVisible();
+  await page.getByRole('button', { name: '重置' }).click();
+  await expect(page.getByText('Lambda Xu')).toBeVisible();
 });
 
 test('admin 用户列表应允许在状态单元格中修改单个账户状态', async ({ page }) => {

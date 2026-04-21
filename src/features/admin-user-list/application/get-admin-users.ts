@@ -49,6 +49,10 @@ export type AdminUserListItem = {
     jobTitle: string | null;
     name: string;
   } | null;
+  slotGroups: readonly {
+    code: string;
+    name: string;
+  }[];
   userInfo: {
     accessGroup: readonly AuthAccessGroup[];
     avatarUrl: string | null;

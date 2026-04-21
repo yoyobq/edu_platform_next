@@ -26,6 +26,7 @@ const STATUS_COLORS: Record<AdminUserAccountStatus, string> = {
 };
 
 export function AccountStatusQuickSwitch({
+  accountId,
   disabled = false,
   updating = false,
   value,
@@ -61,6 +62,7 @@ export function AccountStatusQuickSwitch({
                 }`}
               >
                 <Button
+                  data-testid={`account-status-option-${accountId}-${status}`}
                   type="text"
                   block
                   style={{ height: 'auto', padding: 0, textAlign: 'left' }}
@@ -98,7 +100,7 @@ export function AccountStatusQuickSwitch({
         </div>
       </div>
     ),
-    [onChange, updating, value],
+    [accountId, onChange, updating, value],
   );
 
   return (
@@ -117,6 +119,7 @@ export function AccountStatusQuickSwitch({
       }}
     >
       <div
+        data-testid={`account-status-trigger-${accountId}`}
         className={`group flex w-fit cursor-pointer items-center gap-1.5 rounded-badge border border-transparent px-1.5 py-0.5 transition-all duration-200 hover:border-border hover:bg-fill-hover ${
           updating ? 'opacity-70 grayscale pointer-events-none' : ''
         } ${disabled ? 'cursor-not-allowed opacity-50 grayscale pointer-events-none' : ''}`}

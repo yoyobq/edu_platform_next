@@ -45,7 +45,10 @@ type SessionProfile = {
   identityHint: AuthAccessGroup | null;
   needsProfileCompletion: boolean;
   primaryAccessGroup: SessionIdentityKind;
-  slotGroup: readonly string[];
+  slotGroups: readonly {
+    code: string;
+    name: string;
+  }[];
 };
 
 type MockAuthGraphQLOptions = {
@@ -82,6 +85,10 @@ type AdminUserListSeed = {
     jobTitle: string | null;
     name: string;
   } | null;
+  slotGroups: readonly {
+    code: string;
+    name: string;
+  }[];
   userInfo: {
     accessGroup: readonly AuthAccessGroup[];
     avatarUrl: string | null;
@@ -312,6 +319,7 @@ function cloneAdminUserListSeed(item: AdminUserListSeed): AdminUserListSeed {
   return {
     account: { ...item.account },
     staff: item.staff ? { ...item.staff } : null,
+    slotGroups: item.slotGroups.map((slotGroup) => ({ ...slotGroup })),
     userInfo: {
       ...item.userInfo,
       accessGroup: [...item.userInfo.accessGroup],
@@ -341,6 +349,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         loginName: 'student.mu',
         status: 'DELETED',
       },
+      slotGroups: [],
       staff: null,
       userInfo: {
         accessGroup: ['STUDENT'],
@@ -366,6 +375,10 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '辅导员',
         name: 'Lambda Xu',
       },
+      slotGroups: [
+        { code: 'ACADEMIC_OFFICER', name: '教务行政' },
+        { code: 'CLASS_ADVISER', name: '班主任' },
+      ],
       userInfo: {
         accessGroup: ['STAFF'],
         avatarUrl: null,
@@ -383,6 +396,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         loginName: 'guest.kappa',
         status: 'INACTIVE',
       },
+      slotGroups: [],
       staff: null,
       userInfo: {
         accessGroup: ['GUEST'],
@@ -408,6 +422,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '教研秘书',
         name: 'Grace Lin',
       },
+      slotGroups: [{ code: 'STUDENT_AFFAIRS_OFFICER', name: '学工行政' }],
       userInfo: {
         accessGroup: ['STAFF'],
         avatarUrl: null,
@@ -425,6 +440,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         loginName: 'noinfo.theta',
         status: 'ACTIVE',
       },
+      slotGroups: [],
       staff: null,
       userInfo: {
         accessGroup: ['REGISTRANT'],
@@ -450,6 +466,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '辅导员',
         name: 'Eta Huang',
       },
+      slotGroups: [],
       userInfo: {
         accessGroup: ['STAFF'],
         avatarUrl: null,
@@ -474,6 +491,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '实验员',
         name: 'Zeta Li',
       },
+      slotGroups: [],
       userInfo: {
         accessGroup: ['STAFF'],
         avatarUrl: null,
@@ -498,6 +516,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '管理员',
         name: 'Epsilon Wu',
       },
+      slotGroups: [{ code: 'ACADEMIC_OFFICER', name: '教务行政' }],
       userInfo: {
         accessGroup: ['ADMIN', 'STAFF'],
         avatarUrl: null,
@@ -515,6 +534,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         loginName: 'registrant.delta',
         status: 'PENDING',
       },
+      slotGroups: [],
       staff: null,
       userInfo: {
         accessGroup: ['REGISTRANT'],
@@ -533,6 +553,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         loginName: 'student.gamma',
         status: 'INACTIVE',
       },
+      slotGroups: [],
       staff: null,
       userInfo: {
         accessGroup: ['STUDENT'],
@@ -558,6 +579,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '讲师',
         name: 'Beta Wang',
       },
+      slotGroups: [],
       userInfo: {
         accessGroup: ['STAFF'],
         avatarUrl: null,
@@ -582,6 +604,7 @@ function buildDefaultAdminUserListSeeds(): readonly AdminUserListSeed[] {
         jobTitle: '系统管理员',
         name: 'Alpha Chen',
       },
+      slotGroups: [],
       userInfo: {
         accessGroup: ['ADMIN'],
         avatarUrl: null,
