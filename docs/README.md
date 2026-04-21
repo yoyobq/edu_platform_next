@@ -25,6 +25,8 @@ This directory contains project documentation.
 - 想明确 `antd`、`antdX` 和 `tailwindcss` 的职责分工时，先看 [ui-stack-rules.md](./ui-stack-rules.md)
 - 想确认颜色、圆角、间距、排版的视觉基准与 token 约定时，先看 [ui-design/README.md](./ui-design/README.md)
 - 想明确间距档位在各结构层级的具体用法与节奏规则时，先看 [ui-design/spacing.md](./ui-design/spacing.md)
+- 想统一业务表格的信息结构、列宽、密度、状态表达与行内操作边界时，先看 [ui-design/table-rules.md](./ui-design/table-rules.md)
+- 想确定什么情况下该出图、图表需要哪些口径，以及如何保证可复核与可导出时，先看 [ui-design/chart.md](./ui-design/chart.md)
 - 想快速判断什么时候该用页面、抽屉、弹窗、Popover、Popconfirm、Tooltip 等交互容器，或判断确认边界与反馈形式时，先看 [ui-design/ux-guidelines.md](./ui-design/ux-guidelines.md)
 - 想参考外部 UI 风格、判断哪些风格能被局部吸收以及适用边界时，再看 [ui-design/inspirations/README.md](./ui-design/inspirations/README.md)
 - 想新增或修改 `labs` 功能时，先看 [labs-rules.md](./labs-rules.md)
@@ -136,6 +138,8 @@ docs/
   ui-stack-rules.md
   ui-design/
     README.md
+    chart.md
+    table-rules.md
     inspirations/
       README.md
       IBM.md
