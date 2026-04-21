@@ -10,10 +10,13 @@ import type { AdminDepartmentOption } from '../application/get-admin-department-
 import {
   type AdminUserDetail,
   type AdminUserDetailAccountStatus,
+  type AdminUserDetailAssignableStaffSlotCode,
   type AdminUserDetailGender,
   type AdminUserDetailIdentityHint,
+  type AdminUserDetailIdentityPostStatus,
   type AdminUserDetailPort,
   type AdminUserDetailStaffEmploymentStatus,
+  type AdminUserDetailStaffSlotCode,
   type AdminUserDetailUserState,
   getAdminUserDetail,
 } from '../application/get-admin-user-detail';
@@ -48,6 +51,7 @@ type AdminUserDetailResponse = {
 
 type AdminUserDetailStaffResponse = {
   staff: StaffDTO;
+  staffCurrentSlotPosts?: StaffSlotPostDTO[];
 };
 
 type AdminUserDetailVariables = {
@@ -87,6 +91,58 @@ type StaffDTO = {
   name: string;
   remark: string | null;
   updatedAt: string;
+};
+
+type StaffSlotPostDTO = {
+  endAt: string | null;
+  id: number;
+  isTemporary: boolean;
+  remarks: string | null;
+  scope: {
+    classId: string | null;
+    departmentId: string | null;
+    teachingGroupId: string | null;
+  };
+  slotCode: AdminUserDetailStaffSlotCode;
+  staffId: string;
+  startAt: string | null;
+  status: AdminUserDetailIdentityPostStatus;
+};
+
+type StaffSlotMutationResponse = {
+  assignStaffSlot?: StaffSlotMutationResultDTO;
+  endStaffSlot?: StaffSlotMutationResultDTO;
+};
+
+type StaffSlotMutationResultDTO = {
+  binding: {
+    slotCode: AdminUserDetailStaffSlotCode;
+    status: 'ACTIVE' | 'ENDED' | 'INACTIVE';
+  };
+  changed: boolean;
+  post: StaffSlotPostDTO | null;
+};
+
+type AssignStaffSlotVariables = {
+  input: {
+    accountId: number;
+    departmentId: string;
+    endAt?: string;
+    isTemporary: boolean;
+    remarks?: string;
+    slotCode: AdminUserDetailAssignableStaffSlotCode;
+    startAt?: string;
+  };
+};
+
+type EndStaffSlotVariables = {
+  input: {
+    accountId: number;
+    classId?: string;
+    departmentId?: string;
+    slotCode: AdminUserDetailStaffSlotCode;
+    teachingGroupId?: string;
+  };
 };
 
 type BatchUpdateAccountStatusResponse = {
@@ -265,6 +321,21 @@ const ADMIN_USER_DETAIL_STAFF_QUERY = `
       remark
       updatedAt
     }
+    staffCurrentSlotPosts(accountId: $accountId) {
+      endAt
+      id
+      isTemporary
+      remarks
+      scope {
+        classId
+        departmentId
+        teachingGroupId
+      }
+      slotCode
+      staffId
+      startAt
+      status
+    }
   }
 `;
 
@@ -373,6 +444,60 @@ const UPDATE_STAFF_MUTATION = `
   }
 `;
 
+const ASSIGN_STAFF_SLOT_MUTATION = `
+  mutation AssignStaffSlot($input: AssignStaffSlotInput!) {
+    assignStaffSlot(input: $input) {
+      changed
+      binding {
+        slotCode
+        status
+      }
+      post {
+        endAt
+        id
+        isTemporary
+        remarks
+        scope {
+          classId
+          departmentId
+          teachingGroupId
+        }
+        slotCode
+        staffId
+        startAt
+        status
+      }
+    }
+  }
+`;
+
+const END_STAFF_SLOT_MUTATION = `
+  mutation EndStaffSlot($input: EndStaffSlotInput!) {
+    endStaffSlot(input: $input) {
+      changed
+      binding {
+        slotCode
+        status
+      }
+      post {
+        endAt
+        id
+        isTemporary
+        remarks
+        scope {
+          classId
+          departmentId
+          teachingGroupId
+        }
+        slotCode
+        staffId
+        startAt
+        status
+      }
+    }
+  }
+`;
+
 const ADMIN_DEPARTMENTS_QUERY = `
   query AdminDepartments($limit: Int) {
     departments(limit: $limit) {
@@ -423,6 +548,10 @@ function mapStaff(dto: StaffDTO): AdminUserDetail['staff'] {
   return dto;
 }
 
+function mapStaffSlotPost(dto: StaffSlotPostDTO): AdminUserDetail['staffSlotPosts'][number] {
+  return dto;
+}
+
 function normalizeOptionalTextValue(value: string | null | undefined) {
   if (value === undefined || value === null) {
     return null;
@@ -470,6 +599,7 @@ const adminUserDetailPort: AdminUserDetailPort = {
         recentLoginHistory: detailResponse.account.recentLoginHistory ?? [],
       },
       staff: mapStaff(staffResponse.staff),
+      staffSlotPosts: (staffResponse.staffCurrentSlotPosts ?? []).map(mapStaffSlotPost),
       userInfo: mapUserInfo(detailResponse.userInfo),
     };
   },
@@ -607,6 +737,61 @@ export async function requestAdminUserDetailStaffSectionUpdate(
       updatedAt: employmentStatusStaff?.updatedAt ?? updatedStaff.updatedAt,
     },
   };
+}
+
+export async function requestAdminUserDetailStaffSlotAssign(input: {
+  accountId: number;
+  departmentId: string;
+  endAt?: string;
+  isTemporary: boolean;
+  remarks?: string;
+  slotCode: AdminUserDetailAssignableStaffSlotCode;
+  startAt?: string;
+}): Promise<StaffSlotMutationResultDTO> {
+  const response = await executeGraphQL<StaffSlotMutationResponse, AssignStaffSlotVariables>(
+    ASSIGN_STAFF_SLOT_MUTATION,
+    {
+      input: {
+        accountId: input.accountId,
+        departmentId: input.departmentId,
+        endAt: input.endAt,
+        isTemporary: input.isTemporary,
+        remarks: normalizeOptionalTextValue(input.remarks) ?? undefined,
+        slotCode: input.slotCode,
+        startAt: input.startAt,
+      },
+    },
+  );
+
+  if (!response.assignStaffSlot) {
+    throw new Error('staff slot 新增结果缺失。');
+  }
+
+  return response.assignStaffSlot;
+}
+
+export async function requestAdminUserDetailStaffSlotEnd(input: {
+  accountId: number;
+  post: AdminUserDetail['staffSlotPosts'][number];
+}): Promise<StaffSlotMutationResultDTO> {
+  const response = await executeGraphQL<StaffSlotMutationResponse, EndStaffSlotVariables>(
+    END_STAFF_SLOT_MUTATION,
+    {
+      input: {
+        accountId: input.accountId,
+        classId: input.post.scope.classId ?? undefined,
+        departmentId: input.post.scope.departmentId ?? undefined,
+        slotCode: input.post.slotCode,
+        teachingGroupId: input.post.scope.teachingGroupId ?? undefined,
+      },
+    },
+  );
+
+  if (!response.endStaffSlot) {
+    throw new Error('staff slot 结束结果缺失。');
+  }
+
+  return response.endStaffSlot;
 }
 
 export async function requestAdminDepartmentOptions(): Promise<readonly AdminDepartmentOption[]> {

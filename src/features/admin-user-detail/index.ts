@@ -11,10 +11,17 @@ import {
   requestAdminUserDetail,
   requestAdminUserDetailAccountSectionUpdate as requestAdminUserDetailAccountSectionUpdatePort,
   requestAdminUserDetailStaffSectionUpdate as requestAdminUserDetailStaffSectionUpdatePort,
+  requestAdminUserDetailStaffSlotAssign,
+  requestAdminUserDetailStaffSlotEnd,
   requestAdminUserDetailUserInfoSectionUpdate as requestAdminUserDetailUserInfoSectionUpdatePort,
 } from './infrastructure/admin-user-detail-api';
 
-export { requestAdminDepartmentOptions, requestAdminUserDetail };
+export {
+  requestAdminDepartmentOptions,
+  requestAdminUserDetail,
+  requestAdminUserDetailStaffSlotAssign,
+  requestAdminUserDetailStaffSlotEnd,
+};
 
 export function requestAdminUserDetailAccountSectionUpdate(
   input: UpdateAdminUserDetailAccountSectionCommand,

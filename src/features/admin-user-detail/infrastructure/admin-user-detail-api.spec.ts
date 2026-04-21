@@ -13,6 +13,8 @@ import {
   requestAdminUserDetail,
   requestAdminUserDetailAccountSectionUpdate,
   requestAdminUserDetailStaffSectionUpdate,
+  requestAdminUserDetailStaffSlotAssign,
+  requestAdminUserDetailStaffSlotEnd,
   requestAdminUserDetailUserInfoSectionUpdate,
 } from './admin-user-detail-api';
 
@@ -63,6 +65,23 @@ function buildStaffResponse() {
       remark: null,
       updatedAt: '2026-04-02T00:00:00.000Z',
     },
+    staffCurrentSlotPosts: [
+      {
+        endAt: null,
+        id: 7001,
+        isTemporary: false,
+        remarks: '负责日常教务',
+        scope: {
+          classId: null,
+          departmentId: 'd-alpha',
+          teachingGroupId: null,
+        },
+        slotCode: 'ACADEMIC_OFFICER' as const,
+        staffId: 'staff-1001',
+        startAt: '2026-04-01T00:00:00.000Z',
+        status: 'ACTIVE' as const,
+      },
+    ],
   };
 }
 
@@ -83,6 +102,7 @@ describe('requestAdminUserDetail', () => {
         recentLoginHistory: [],
       },
       staff: staffResponse.staff,
+      staffSlotPosts: staffResponse.staffCurrentSlotPosts,
       userInfo: {
         ...detailResponse.userInfo,
         gender: 'SECRET',
@@ -99,6 +119,11 @@ describe('requestAdminUserDetail', () => {
     expect(executeGraphQLMock).toHaveBeenNthCalledWith(
       2,
       expect.stringContaining('query AdminUserDetailStaff($accountId: Int!)'),
+      { accountId: 1001 },
+    );
+    expect(executeGraphQLMock).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('staffCurrentSlotPosts(accountId: $accountId)'),
       { accountId: 1001 },
     );
   });
@@ -443,6 +468,133 @@ describe('requestAdminUserDetail', () => {
           jobTitle: '主任',
           name: 'Beta Chen',
           remark: null,
+        },
+      },
+    );
+  });
+
+  it('assigns a department staff slot with normalized optional fields', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      assignStaffSlot: {
+        binding: {
+          slotCode: 'ACADEMIC_OFFICER',
+          status: 'ACTIVE',
+        },
+        changed: true,
+        post: {
+          endAt: null,
+          id: 7002,
+          isTemporary: true,
+          remarks: '临时协助',
+          scope: {
+            classId: null,
+            departmentId: 'd-alpha',
+            teachingGroupId: null,
+          },
+          slotCode: 'ACADEMIC_OFFICER',
+          staffId: 'staff-1001',
+          startAt: null,
+          status: 'ACTIVE',
+        },
+      },
+    });
+
+    await expect(
+      requestAdminUserDetailStaffSlotAssign({
+        accountId: 1001,
+        departmentId: 'd-alpha',
+        isTemporary: true,
+        remarks: ' 临时协助 ',
+        slotCode: 'ACADEMIC_OFFICER',
+      }),
+    ).resolves.toEqual({
+      binding: {
+        slotCode: 'ACADEMIC_OFFICER',
+        status: 'ACTIVE',
+      },
+      changed: true,
+      post: {
+        endAt: null,
+        id: 7002,
+        isTemporary: true,
+        remarks: '临时协助',
+        scope: {
+          classId: null,
+          departmentId: 'd-alpha',
+          teachingGroupId: null,
+        },
+        slotCode: 'ACADEMIC_OFFICER',
+        staffId: 'staff-1001',
+        startAt: null,
+        status: 'ACTIVE',
+      },
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation AssignStaffSlot'),
+      {
+        input: {
+          accountId: 1001,
+          departmentId: 'd-alpha',
+          endAt: undefined,
+          isTemporary: true,
+          remarks: '临时协助',
+          slotCode: 'ACADEMIC_OFFICER',
+          startAt: undefined,
+        },
+      },
+    );
+  });
+
+  it('ends a staff slot with only the matching scope field', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      endStaffSlot: {
+        binding: {
+          slotCode: 'CLASS_ADVISER',
+          status: 'ENDED',
+        },
+        changed: true,
+        post: null,
+      },
+    });
+
+    await expect(
+      requestAdminUserDetailStaffSlotEnd({
+        accountId: 1001,
+        post: {
+          endAt: null,
+          id: 7003,
+          isTemporary: false,
+          remarks: null,
+          scope: {
+            classId: 'class-1',
+            departmentId: null,
+            teachingGroupId: null,
+          },
+          slotCode: 'CLASS_ADVISER',
+          staffId: 'staff-1001',
+          startAt: null,
+          status: 'ACTIVE',
+        },
+      }),
+    ).resolves.toEqual({
+      binding: {
+        slotCode: 'CLASS_ADVISER',
+        status: 'ENDED',
+      },
+      changed: true,
+      post: null,
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation EndStaffSlot'),
+      {
+        input: {
+          accountId: 1001,
+          classId: 'class-1',
+          departmentId: undefined,
+          slotCode: 'CLASS_ADVISER',
+          teachingGroupId: undefined,
         },
       },
     );

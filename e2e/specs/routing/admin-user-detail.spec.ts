@@ -99,6 +99,38 @@ function buildAdminUserStaffPayload(accountId: number) {
       remark: '重点关注',
       updatedAt: '2026-04-13T08:00:00.000Z',
     },
+    staffCurrentSlotPosts: [
+      {
+        endAt: null,
+        id: 7001,
+        isTemporary: false,
+        remarks: '负责日常教务',
+        scope: {
+          classId: null,
+          departmentId: 'd-lambda',
+          teachingGroupId: null,
+        },
+        slotCode: 'ACADEMIC_OFFICER',
+        staffId: `staff-${accountId}`,
+        startAt: '2026-04-01T08:00:00.000Z',
+        status: 'ACTIVE',
+      },
+      {
+        endAt: null,
+        id: 7002,
+        isTemporary: false,
+        remarks: null,
+        scope: {
+          classId: 'class-2026-1',
+          departmentId: null,
+          teachingGroupId: null,
+        },
+        slotCode: 'CLASS_ADVISER',
+        staffId: `staff-${accountId}`,
+        startAt: null,
+        status: 'ACTIVE',
+      },
+    ],
   };
 }
 
@@ -163,10 +195,197 @@ test('admin 用户详情页应渲染 staff 字段', async ({ page }) => {
 
   await page.goto(`/admin/users/${accountId}`);
 
-  await expect(page.getByRole('heading', { name: '用户详情' })).toBeVisible();
-  await expect(page.getByText('staff-1011')).toBeVisible();
-  await expect(page.getByText('Lambda Xu')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Lambda' })).toBeVisible();
+  await expect(page.getByText('staff-1011').first()).toBeVisible();
+  await expect(page.getByText('Lambda Xu').first()).toBeVisible();
   await expect(page.getByText('辅导员')).toBeVisible();
+  await expect(page.getByText('Staff Slot 任职')).toBeVisible();
+  await expect(page.getByText('教务员')).toBeVisible();
+  await expect(page.getByText('班级 ID：class-2026-1')).toBeVisible();
+});
+
+test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
+  const accountId = 1011;
+  const detailPayload = buildAdminUserDetailPayload(accountId);
+  const staffPayload = buildAdminUserStaffPayload(accountId);
+  let assignInput: Record<string, unknown> | null = null;
+  let endInput: Record<string, unknown> | null = null;
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: detailPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: staffPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    if (query.includes('mutation AssignStaffSlot')) {
+      const payload = route.request().postDataJSON() as
+        | { variables?: { input?: Record<string, unknown> } }
+        | undefined;
+      assignInput = payload?.variables?.input ?? null;
+      staffPayload.staffCurrentSlotPosts.push({
+        endAt: null,
+        id: 7003,
+        isTemporary: false,
+        remarks: null,
+        scope: {
+          classId: null,
+          departmentId: 'd-math',
+          teachingGroupId: null,
+        },
+        slotCode: 'STUDENT_AFFAIRS_OFFICER',
+        staffId: `staff-${accountId}`,
+        startAt: null,
+        status: 'ACTIVE',
+      });
+
+      await fulfillGraphQL(route, {
+        data: {
+          assignStaffSlot: {
+            binding: {
+              slotCode: 'STUDENT_AFFAIRS_OFFICER',
+              status: 'ACTIVE',
+            },
+            changed: true,
+            post: staffPayload.staffCurrentSlotPosts.at(-1),
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation EndStaffSlot')) {
+      const payload = route.request().postDataJSON() as
+        | { variables?: { input?: Record<string, unknown> } }
+        | undefined;
+      endInput = payload?.variables?.input ?? null;
+      staffPayload.staffCurrentSlotPosts.splice(
+        0,
+        staffPayload.staffCurrentSlotPosts.length,
+        ...staffPayload.staffCurrentSlotPosts.filter((post) => post.id !== 7001),
+      );
+
+      await fulfillGraphQL(route, {
+        data: {
+          endStaffSlot: {
+            binding: {
+              slotCode: 'ACADEMIC_OFFICER',
+              status: 'ACTIVE',
+            },
+            changed: true,
+            post: null,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await page.getByTestId('staff-slot-add-button').click();
+  await page.getByTestId('staff-slot-code-select').locator('input').click();
+  await page.getByTitle('学工员').click();
+  await page.getByTestId('staff-slot-department-select').locator('input').click();
+  await page.getByTitle('数学系').click();
+  await page.getByRole('button', { name: '保存任职' }).click();
+
+  await expect(
+    page.getByRole('row', { name: /学工员 STUDENT_AFFAIRS_OFFICER 数学系/ }),
+  ).toBeVisible();
+  expect(assignInput).toMatchObject({
+    accountId,
+    departmentId: 'd-math',
+    isTemporary: false,
+    slotCode: 'STUDENT_AFFAIRS_OFFICER',
+  });
+
+  await page.getByRole('button', { name: '结束 7001' }).click();
+  await page.getByTestId('staff-slot-end-confirm-7001').click();
+
+  await expect(page.getByText('负责日常教务')).toHaveCount(0);
+  expect(endInput).toMatchObject({
+    accountId,
+    departmentId: 'd-lambda',
+    slotCode: 'ACADEMIC_OFFICER',
+  });
+});
+
+test('LEFT staff 应禁用 staff slot 新增入口', async ({ page }) => {
+  const accountId = 1011;
+  const staffPayload = buildAdminUserStaffPayload(accountId);
+  staffPayload.staff.employmentStatus = 'LEFT';
+
+  await mockApiHealth(page);
+  await seedAuthSession(page, {
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const query = getQuery(route);
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQL(route, { data: { me: buildMePayload() } });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetail(')) {
+      await fulfillGraphQL(route, {
+        data: buildAdminUserDetailPayload(accountId),
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUserDetailStaff(')) {
+      await fulfillGraphQL(route, {
+        data: staffPayload,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminDepartments')) {
+      await fulfillGraphQL(route, {
+        data: buildDepartmentsPayload(),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(`/admin/users/${accountId}`);
+
+  await expect(page.getByText('已离职 staff 不能新增 slot。')).toBeVisible();
+  await expect(page.getByTestId('staff-slot-add-button')).toBeDisabled();
 });
 
 test('staff resolver 报错时应显示失败态并允许重试', async ({ page }) => {
@@ -219,14 +438,14 @@ test('staff resolver 报错时应显示失败态并允许重试', async ({ page 
 
   await page.goto(`/admin/users/${accountId}`);
 
-  await expect(page.getByText('用户详情加载失败')).toBeVisible();
+  await expect(page.getByText('无法加载用户详情')).toBeVisible();
   await expect(page.getByText('STAFF_RESOLVER_FAILED')).toBeVisible();
   await expect(page.getByText('当前账户暂无 staff 信息')).toHaveCount(0);
 
   await page.getByRole('button', { name: '重试' }).click();
 
-  await expect(page.getByText('用户详情加载失败')).toHaveCount(0);
-  await expect(page.getByText('Lambda Xu')).toBeVisible();
+  await expect(page.getByText('无法加载用户详情')).toHaveCount(0);
+  await expect(page.getByText('Lambda Xu').first()).toBeVisible();
 });
 
 test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
@@ -312,7 +531,7 @@ test('account 常用字段应支持分区编辑与保存', async ({ page }) => {
 
   await page.goto(`/admin/users/${accountId}`);
 
-  await expect(page.getByText('人工智能系')).toBeVisible();
+  await expect(page.getByText('人工智能系').first()).toBeVisible();
   await page.getByRole('button', { name: '编辑账户常用字段' }).click();
 
   await expect(page.getByText('当前暂不支持修改。')).toBeVisible();

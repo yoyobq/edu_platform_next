@@ -55,6 +55,7 @@ import {
   type StaffSectionFormValues,
   StaffSectionViewer,
 } from './sections/staff-section';
+import { type AssignStaffSlotCommand, StaffSlotSection } from './sections/staff-slot-section';
 import {
   buildUserInfoSectionGroup,
   UserInfoSectionEditor,
@@ -73,6 +74,13 @@ type AdminUserDetailPageContentProps = {
   updateStaffSection: (
     input: UpdateAdminUserDetailStaffSectionInput,
   ) => Promise<UpdateAdminUserDetailStaffSectionResult>;
+  assignStaffSlot: (
+    input: AssignStaffSlotCommand & { accountId: number },
+  ) => Promise<{ changed: boolean }>;
+  endStaffSlot: (input: {
+    accountId: number;
+    post: AdminUserDetail['staffSlotPosts'][number];
+  }) => Promise<{ changed: boolean }>;
   updateUserInfoSection: (
     input: UpdateAdminUserDetailUserInfoSectionInput,
   ) => Promise<UpdateAdminUserDetailUserInfoSectionResult>;
@@ -361,6 +369,8 @@ function AdminUserDetailLoadingSkeleton() {
 
 export function AdminUserDetailPageContent({
   accountId,
+  assignStaffSlot,
+  endStaffSlot,
   loadDepartmentOptions,
   loadDetail,
   updateAccountSection,
@@ -373,6 +383,9 @@ export function AdminUserDetailPageContent({
   const [editingSection, setEditingSection] = useState<EditableSectionKey | null>(null);
   const [savingSection, setSavingSection] = useState<EditableSectionKey | null>(null);
   const [sectionErrors, setSectionErrors] = useState(INITIAL_SECTION_ERROR_STATE);
+  const [staffSlotError, setStaffSlotError] = useState<string | null>(null);
+  const [staffSlotAssigning, setStaffSlotAssigning] = useState(false);
+  const [endingStaffSlotPostId, setEndingStaffSlotPostId] = useState<number | null>(null);
   const {
     applyAccountUpdate,
     applyStaffUpdate,
@@ -598,6 +611,64 @@ export function AdminUserDetailPageContent({
       }));
     } finally {
       setSavingSection(null);
+    }
+  }
+
+  async function handleStaffSlotAssign(input: AssignStaffSlotCommand) {
+    if (!result) {
+      return;
+    }
+
+    setStaffSlotAssigning(true);
+    setStaffSlotError(null);
+
+    try {
+      const mutationResult = await assignStaffSlot({
+        accountId: result.account.id,
+        ...input,
+      });
+
+      retry();
+      void messageApi.success({
+        content: mutationResult.changed ? '已新增 staff slot 任职' : 'staff slot 任职无变化',
+        duration: 2,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'staff slot 任职新增失败。';
+
+      setStaffSlotError(message);
+      throw error;
+    } finally {
+      setStaffSlotAssigning(false);
+    }
+  }
+
+  async function handleStaffSlotEnd(post: AdminUserDetail['staffSlotPosts'][number]) {
+    if (!result) {
+      return;
+    }
+
+    setEndingStaffSlotPostId(post.id);
+    setStaffSlotError(null);
+
+    try {
+      const mutationResult = await endStaffSlot({
+        accountId: result.account.id,
+        post,
+      });
+
+      retry();
+      void messageApi.success({
+        content: mutationResult.changed ? '已结束 staff slot 任职' : 'staff slot 任职无变化',
+        duration: 2,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'staff slot 任职结束失败。';
+
+      setStaffSlotError(message);
+      throw error;
+    } finally {
+      setEndingStaffSlotPostId(null);
     }
   }
 
@@ -845,6 +916,17 @@ export function AdminUserDetailPageContent({
                       />
                     )}
                   </div>
+                  <StaffSlotSection
+                    actionPostId={endingStaffSlotPostId}
+                    assigning={staffSlotAssigning}
+                    departmentLoadErrorMessage={departmentLoadErrorMessage}
+                    departmentMap={departmentMap}
+                    departmentOptions={departmentOptions}
+                    detail={result}
+                    errorMessage={staffSlotError}
+                    onAssign={handleStaffSlotAssign}
+                    onEnd={handleStaffSlotEnd}
+                  />
                   <DetailSectionBlock section={staffSections.reference} />
                 </Flex>
               </Card>

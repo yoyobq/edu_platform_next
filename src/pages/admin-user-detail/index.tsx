@@ -7,6 +7,8 @@ import {
   requestAdminUserDetail,
   requestAdminUserDetailAccountSectionUpdate,
   requestAdminUserDetailStaffSectionUpdate,
+  requestAdminUserDetailStaffSlotAssign,
+  requestAdminUserDetailStaffSlotEnd,
   requestAdminUserDetailUserInfoSectionUpdate,
 } from '@/features/admin-user-detail';
 import { Error403 } from '@/features/error-feedback';
@@ -34,6 +36,8 @@ export function AdminUserDetailPage() {
   return (
     <AdminUserDetailPageContent
       accountId={accountId}
+      assignStaffSlot={requestAdminUserDetailStaffSlotAssign}
+      endStaffSlot={requestAdminUserDetailStaffSlotEnd}
       loadDepartmentOptions={requestAdminDepartmentOptions}
       loadDetail={requestAdminUserDetail}
       updateAccountSection={requestAdminUserDetailAccountSectionUpdate}

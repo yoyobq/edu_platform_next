@@ -17,6 +17,18 @@ export const ADMIN_USER_DETAIL_USER_STATES = [
 export const ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES = ['ACTIVE', 'LEFT', 'SUSPENDED'] as const;
 export const ADMIN_USER_DETAIL_GENDERS = ['FEMALE', 'MALE', 'SECRET'] as const;
 export const ADMIN_USER_DETAIL_IDENTITY_HINTS = ['ADMIN', 'STAFF', 'STUDENT'] as const;
+export const ADMIN_USER_DETAIL_STAFF_SLOT_CODES = [
+  'ACADEMIC_OFFICER',
+  'CLASS_ADVISER',
+  'COUNSELOR',
+  'STUDENT_AFFAIRS_OFFICER',
+  'TEACHING_GROUP_LEADER',
+] as const;
+export const ADMIN_USER_DETAIL_ASSIGNABLE_STAFF_SLOT_CODES = [
+  'ACADEMIC_OFFICER',
+  'STUDENT_AFFAIRS_OFFICER',
+] as const;
+export const ADMIN_USER_DETAIL_IDENTITY_POST_STATUSES = ['ACTIVE', 'ENDED', 'INACTIVE'] as const;
 
 export type AdminUserDetailAccountStatus = (typeof ADMIN_USER_DETAIL_ACCOUNT_STATUSES)[number];
 export type AdminUserDetailUserState = (typeof ADMIN_USER_DETAIL_USER_STATES)[number];
@@ -24,6 +36,11 @@ export type AdminUserDetailStaffEmploymentStatus =
   (typeof ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUSES)[number];
 export type AdminUserDetailGender = (typeof ADMIN_USER_DETAIL_GENDERS)[number];
 export type AdminUserDetailIdentityHint = (typeof ADMIN_USER_DETAIL_IDENTITY_HINTS)[number];
+export type AdminUserDetailStaffSlotCode = (typeof ADMIN_USER_DETAIL_STAFF_SLOT_CODES)[number];
+export type AdminUserDetailAssignableStaffSlotCode =
+  (typeof ADMIN_USER_DETAIL_ASSIGNABLE_STAFF_SLOT_CODES)[number];
+export type AdminUserDetailIdentityPostStatus =
+  (typeof ADMIN_USER_DETAIL_IDENTITY_POST_STATUSES)[number];
 
 export const ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS: Record<AdminUserDetailAccountStatus, string> =
   {
@@ -57,6 +74,23 @@ export const ADMIN_USER_DETAIL_GENDER_LABELS: Record<AdminUserDetailGender, stri
   SECRET: '保密',
 };
 
+export const ADMIN_USER_DETAIL_STAFF_SLOT_LABELS: Record<AdminUserDetailStaffSlotCode, string> = {
+  ACADEMIC_OFFICER: '教务员',
+  CLASS_ADVISER: '班主任',
+  COUNSELOR: '辅导员',
+  STUDENT_AFFAIRS_OFFICER: '学工员',
+  TEACHING_GROUP_LEADER: '教学组长',
+};
+
+export const ADMIN_USER_DETAIL_IDENTITY_POST_STATUS_LABELS: Record<
+  AdminUserDetailIdentityPostStatus,
+  string
+> = {
+  ACTIVE: '有效',
+  ENDED: '已结束',
+  INACTIVE: '未激活',
+};
+
 export type AdminUserDetail = {
   account: {
     createdAt: string;
@@ -83,6 +117,21 @@ export type AdminUserDetail = {
     remark: string | null;
     updatedAt: string;
   };
+  staffSlotPosts: readonly {
+    endAt: string | null;
+    id: number;
+    isTemporary: boolean;
+    remarks: string | null;
+    scope: {
+      classId: string | null;
+      departmentId: string | null;
+      teachingGroupId: string | null;
+    };
+    slotCode: AdminUserDetailStaffSlotCode;
+    staffId: string;
+    startAt: string | null;
+    status: AdminUserDetailIdentityPostStatus;
+  }[];
   userInfo: {
     accessGroup: readonly AuthAccessGroup[];
     address: string | null;
