@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import {
   Alert,
+  Badge,
   Button,
   Card,
+  Drawer,
   Form,
   Input,
   InputNumber,
   message,
-  Modal,
   Popconfirm,
   Select,
   Space,
   Switch,
   Table,
-  Tabs,
   Tag,
   Typography,
 } from 'antd';
@@ -93,11 +93,27 @@ const RECORD_STATUS_LABELS: Record<AcademicCalendarEventRecordStatus, string> = 
   TENTATIVE: '暂定',
 };
 
+const RECORD_STATUS_BADGE: Record<
+  AcademicCalendarEventRecordStatus,
+  'success' | 'default' | 'warning'
+> = {
+  ACTIVE: 'success',
+  EXPIRED: 'default',
+  TENTATIVE: 'warning',
+};
+
 const TEACHING_CALC_EFFECT_LABELS: Record<AcademicCalendarTeachingCalcEffect, string> = {
   CANCEL: '停课',
   MAKEUP: '补课',
   NO_CHANGE: '不影响',
   SWAP: '对调',
+};
+
+const TEACHING_CALC_EFFECT_TAG_COLORS: Record<AcademicCalendarTeachingCalcEffect, string> = {
+  CANCEL: 'red',
+  MAKEUP: 'blue',
+  NO_CHANGE: 'default',
+  SWAP: 'orange',
 };
 
 const DAY_PERIOD_OPTIONS = ACADEMIC_CALENDAR_EVENT_DAY_PERIODS.map((value) => ({
@@ -230,7 +246,6 @@ export function AcademicCalendarAdminLabPage() {
   const [messageApi, messageContextHolder] = message.useMessage();
   const [semesterForm] = Form.useForm<SemesterFormValues>();
   const [eventForm] = Form.useForm<CalendarEventFormValues>();
-  const [activeTab, setActiveTab] = useState('semesters');
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [semestersLoading, setSemestersLoading] = useState(true);
   const [semesterError, setSemesterError] = useState<string | null>(null);
@@ -318,59 +333,77 @@ export function AcademicCalendarAdminLabPage() {
       dataIndex: 'name',
       key: 'name',
       title: '学期名称',
+      width: 240,
       render: (_, record) => (
-        <Space size={8}>
-          <span>{record.name}</span>
-          {record.isCurrent ? <Tag color="green">当前学期</Tag> : null}
-        </Space>
+        <div className="max-w-full">
+          <Space size={8}>
+            <Typography.Text ellipsis={{ tooltip: record.name }}>{record.name}</Typography.Text>
+            {record.isCurrent ? (
+              <Tag color="green" bordered={false}>
+                当前学期
+              </Tag>
+            ) : null}
+          </Space>
+        </div>
       ),
     },
     {
       dataIndex: 'schoolYear',
       key: 'schoolYear',
       title: '学年',
+      width: 100,
+      align: 'right',
     },
     {
       dataIndex: 'termNumber',
       key: 'termNumber',
       title: '学期号',
+      width: 100,
+      align: 'right',
       render: (value: number) => `第 ${value} 学期`,
     },
     {
       dataIndex: 'startDate',
       key: 'startDate',
       title: '开始日期',
+      width: 120,
     },
     {
       dataIndex: 'endDate',
       key: 'endDate',
       title: '结束日期',
+      width: 120,
     },
     {
       dataIndex: 'firstTeachingDate',
       key: 'firstTeachingDate',
       title: '教学开始',
+      width: 120,
     },
     {
       dataIndex: 'examStartDate',
       key: 'examStartDate',
       title: '考试周开始',
+      width: 120,
     },
     {
       dataIndex: 'updatedAt',
       key: 'updatedAt',
       title: '更新时间',
+      width: 180,
       render: (value: string) => formatDateTime(value),
     },
     {
       key: 'actions',
       title: '操作',
-      width: 180,
+      width: 140,
+      fixed: 'right',
       render: (_, record) => (
         <Space size={8}>
           <Button
             size="small"
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation();
               setSemesterModalMode('edit');
               setEditingSemester(record);
               semesterForm.setFieldsValue({
@@ -394,7 +427,8 @@ export function AcademicCalendarAdminLabPage() {
             okText="删除"
             cancelText="取消"
             okButtonProps={{ danger: true }}
-            onConfirm={async () => {
+            onConfirm={async (e) => {
+              e?.stopPropagation();
               try {
                 await deleteAcademicSemester({ id: record.id });
                 messageApi.success('学期已删除。');
@@ -403,8 +437,9 @@ export function AcademicCalendarAdminLabPage() {
                 messageApi.error(error instanceof Error ? error.message : '暂时无法删除学期。');
               }
             }}
+            onCancel={(e) => e?.stopPropagation()}
           >
-            <Button size="small" danger>
+            <Button size="small" danger onClick={(e) => e.stopPropagation()}>
               删除
             </Button>
           </Popconfirm>
@@ -418,12 +453,17 @@ export function AcademicCalendarAdminLabPage() {
       dataIndex: 'topic',
       key: 'topic',
       title: '事件标题',
+      width: 240,
       render: (value: string, record) => (
-        <div className="flex flex-col gap-1">
-          <span>{value}</span>
-          <Typography.Text type="secondary">
-            {EVENT_TYPE_LABELS[record.eventType]} · {DAY_PERIOD_LABELS[record.dayPeriod]}
-          </Typography.Text>
+        <div className="flex flex-col">
+          <div className="max-w-full">
+            <Typography.Text ellipsis={{ tooltip: value }}>{value}</Typography.Text>
+          </div>
+          <div className="mt-0.5 text-xs">
+            <Typography.Text type="secondary">
+              {EVENT_TYPE_LABELS[record.eventType]} · {DAY_PERIOD_LABELS[record.dayPeriod]}
+            </Typography.Text>
+          </div>
         </div>
       ),
     },
@@ -431,41 +471,61 @@ export function AcademicCalendarAdminLabPage() {
       dataIndex: 'eventDate',
       key: 'eventDate',
       title: '事件日期',
+      width: 120,
     },
     {
       dataIndex: 'recordStatus',
       key: 'recordStatus',
       title: '状态',
-      render: (value: AcademicCalendarEventRecordStatus) => RECORD_STATUS_LABELS[value],
+      width: 100,
+      render: (value: AcademicCalendarEventRecordStatus) => (
+        <Badge status={RECORD_STATUS_BADGE[value]} text={RECORD_STATUS_LABELS[value]} />
+      ),
     },
     {
       dataIndex: 'teachingCalcEffect',
       key: 'teachingCalcEffect',
       title: '教学影响',
-      render: (value: AcademicCalendarTeachingCalcEffect) => TEACHING_CALC_EFFECT_LABELS[value],
+      width: 100,
+      render: (value: AcademicCalendarTeachingCalcEffect) => (
+        <Tag color={TEACHING_CALC_EFFECT_TAG_COLORS[value]} bordered={false}>
+          {TEACHING_CALC_EFFECT_LABELS[value]}
+        </Tag>
+      ),
     },
     {
       dataIndex: 'originalDate',
       key: 'originalDate',
       title: '原始日期',
+      width: 120,
       render: (value: string | null) => value || '—',
     },
     {
       dataIndex: 'ruleNote',
       key: 'ruleNote',
       title: '规则说明',
-      render: (value: string | null) => value || '—',
+      width: 200,
+      render: (value: string | null) =>
+        value ? (
+          <div className="max-w-full text-gray-500">
+            <Typography.Text ellipsis={{ tooltip: value }}>{value}</Typography.Text>
+          </div>
+        ) : (
+          '—'
+        ),
     },
     {
       dataIndex: 'updatedAt',
       key: 'updatedAt',
       title: '更新时间',
+      width: 180,
       render: (value: string) => formatDateTime(value),
     },
     {
       key: 'actions',
       title: '操作',
-      width: 180,
+      width: 140,
+      fixed: 'right',
       render: (_, record) => (
         <Space size={8}>
           <Button
@@ -544,242 +604,232 @@ export function AcademicCalendarAdminLabPage() {
             type="info"
             showIcon
             title="使用说明"
-            description="本页按 semester 组织 calendar event。事件列表默认只显示当前选中学期的数据，新增和编辑事件时仍可切换归属学期。"
+            description="本页按 semester 组织 calendar event。上方列表为学期管理，点击选中某一学期后，即可在下方列表中管理该学期下的校历事件。"
           />
         </div>
       </Card>
 
-      <Card styles={{ body: { padding: 0 } }}>
-        <Tabs
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={[
-            {
-              key: 'semesters',
-              label: '学期管理',
-              children: (
-                <div className="p-6">
-                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                        Academic Semester
-                      </Typography.Title>
-                      <Typography.Text type="secondary">
-                        维护学期的基本日期与当前学期标记。
-                      </Typography.Text>
-                    </div>
+      <Card
+        title="学期管理"
+        extra={
+          <Button
+            type="primary"
+            onClick={() => {
+              setSemesterModalMode('create');
+              setEditingSemester(null);
+              semesterForm.setFieldsValue({
+                endDate: '',
+                examStartDate: '',
+                firstTeachingDate: '',
+                isCurrent: false,
+                name: '',
+                schoolYear: new Date().getFullYear(),
+                startDate: '',
+                termNumber: 1,
+              });
+              setIsSemesterModalOpen(true);
+            }}
+          >
+            新增学期
+          </Button>
+        }
+      >
+        {semesterError ? (
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="error"
+            showIcon
+            title={semesterError}
+            action={
+              <Button size="small" type="primary" onClick={() => void loadSemesters()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
 
-                    <Button
-                      type="primary"
-                      onClick={() => {
-                        setSemesterModalMode('create');
-                        setEditingSemester(null);
-                        semesterForm.setFieldsValue({
-                          endDate: '',
-                          examStartDate: '',
-                          firstTeachingDate: '',
-                          isCurrent: false,
-                          name: '',
-                          schoolYear: new Date().getFullYear(),
-                          startDate: '',
-                          termNumber: 1,
-                        });
-                        setIsSemesterModalOpen(true);
-                      }}
-                    >
-                      新增学期
-                    </Button>
-                  </div>
-
-                  {semesterError ? (
-                    <Alert
-                      style={{ marginBottom: 16 }}
-                      type="error"
-                      showIcon
-                      title={semesterError}
-                      action={
-                        <Button size="small" type="primary" onClick={() => void loadSemesters()}>
-                          重试
-                        </Button>
-                      }
-                    />
-                  ) : null}
-
-                  <Table<AcademicSemesterRecord>
-                    rowKey="id"
-                    columns={semesterColumns}
-                    dataSource={semesters}
-                    loading={semestersLoading}
-                    pagination={{ pageSize: 10, showSizeChanger: false }}
-                    scroll={{ x: 1120 }}
-                  />
-                </div>
-              ),
-            },
-            {
-              key: 'events',
-              label: '校历事件管理',
-              children: (
-                <div className="p-6">
-                  <div className="mb-4 flex flex-col gap-4">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                          Academic Calendar Event
-                        </Typography.Title>
-                        <Typography.Text type="secondary">
-                          先选择学期，再查看和维护该学期下的校历事件。
-                        </Typography.Text>
-                      </div>
-
-                      <Button
-                        type="primary"
-                        disabled={selectedSemesterId === null}
-                        onClick={() => {
-                          setEventModalMode('create');
-                          setEditingEvent(null);
-                          eventForm.setFieldsValue({
-                            dayPeriod: 'ALL_DAY',
-                            eventDate: '',
-                            eventType: 'ACTIVITY',
-                            originalDate: undefined,
-                            recordStatus: 'ACTIVE',
-                            ruleNote: undefined,
-                            semesterId: selectedSemesterId ?? undefined,
-                            teachingCalcEffect: 'NO_CHANGE',
-                            topic: '',
-                            version: 1,
-                          });
-                          setIsEventModalOpen(true);
-                        }}
-                      >
-                        新增事件
-                      </Button>
-                    </div>
-
-                    <div className="grid gap-3 xl:grid-cols-[minmax(260px,360px)_repeat(4,minmax(0,1fr))]">
-                      <Select
-                        allowClear
-                        showSearch
-                        placeholder="请选择学期"
-                        optionFilterProp="label"
-                        options={semesterOptions}
-                        value={selectedSemesterId ?? undefined}
-                        onChange={(value) => setSelectedSemesterId(value ?? null)}
-                      />
-                      <Input
-                        type="date"
-                        value={eventFilters.eventDate || ''}
-                        onChange={(event) =>
-                          setEventFilters((current) => ({
-                            ...current,
-                            eventDate: event.target.value || undefined,
-                          }))
-                        }
-                      />
-                      <Select
-                        allowClear
-                        placeholder="筛选事件类型"
-                        options={EVENT_TYPE_OPTIONS}
-                        value={eventFilters.eventType}
-                        onChange={(value) =>
-                          setEventFilters((current) => ({
-                            ...current,
-                            eventType: value,
-                          }))
-                        }
-                      />
-                      <Select
-                        allowClear
-                        placeholder="筛选记录状态"
-                        options={RECORD_STATUS_OPTIONS}
-                        value={eventFilters.recordStatus}
-                        onChange={(value) =>
-                          setEventFilters((current) => ({
-                            ...current,
-                            recordStatus: value,
-                          }))
-                        }
-                      />
-                      <Button
-                        onClick={() =>
-                          setEventFilters({
-                            eventDate: undefined,
-                            eventType: undefined,
-                            recordStatus: undefined,
-                          })
-                        }
-                      >
-                        重置筛选
-                      </Button>
-                    </div>
-
-                    {selectedSemester ? (
-                      <Typography.Text type="secondary">
-                        当前学期：{getSemesterDisplayName(selectedSemester)}
-                      </Typography.Text>
-                    ) : (
-                      <Alert type="warning" showIcon message="请先选择一个学期，再管理校历事件。" />
-                    )}
-                  </div>
-
-                  {eventsError ? (
-                    <Alert
-                      style={{ marginBottom: 16 }}
-                      type="error"
-                      showIcon
-                      title={eventsError}
-                      action={
-                        <Button
-                          size="small"
-                          type="primary"
-                          disabled={selectedSemesterId === null}
-                          onClick={() => {
-                            if (selectedSemesterId !== null) {
-                              void loadEvents(selectedSemesterId, eventFilters);
-                            }
-                          }}
-                        >
-                          重试
-                        </Button>
-                      }
-                    />
-                  ) : null}
-
-                  <Table<AcademicCalendarEventRecord>
-                    rowKey="id"
-                    columns={eventColumns}
-                    dataSource={selectedSemesterId === null ? [] : events}
-                    loading={eventsLoading}
-                    pagination={{ pageSize: 12, showSizeChanger: false }}
-                    scroll={{ x: 1180 }}
-                    locale={{
-                      emptyText:
-                        selectedSemesterId === null ? '请选择学期' : '当前筛选条件下暂无校历事件',
-                    }}
-                  />
-                </div>
-              ),
-            },
-          ]}
+        <Table<AcademicSemesterRecord>
+          rowKey="id"
+          size="middle"
+          columns={semesterColumns}
+          dataSource={semesters}
+          loading={semestersLoading}
+          pagination={{ pageSize: 10, showSizeChanger: false }}
+          scroll={{ x: 1120 }}
+          rowSelection={{
+            type: 'radio',
+            selectedRowKeys: selectedSemesterId !== null ? [selectedSemesterId] : [],
+            onChange: (selectedRowKeys) => setSelectedSemesterId(selectedRowKeys[0] as number),
+          }}
+          onRow={(record) => ({
+            onClick: () => setSelectedSemesterId(record.id),
+            className: 'cursor-pointer',
+          })}
         />
       </Card>
 
-      <Modal
-        destroyOnHidden
+      <Card
+        title={
+          <div className="flex flex-col">
+            <span>校历事件管理</span>
+            {selectedSemester ? (
+              <div className="mt-1 text-sm font-normal">
+                <Typography.Text type="secondary">
+                  当前选中学期：{getSemesterDisplayName(selectedSemester)}
+                </Typography.Text>
+              </div>
+            ) : null}
+          </div>
+        }
+        extra={
+          <Button
+            type="primary"
+            disabled={selectedSemesterId === null}
+            onClick={() => {
+              setEventModalMode('create');
+              setEditingEvent(null);
+              eventForm.setFieldsValue({
+                dayPeriod: 'ALL_DAY',
+                eventDate: '',
+                eventType: 'ACTIVITY',
+                originalDate: undefined,
+                recordStatus: 'ACTIVE',
+                ruleNote: undefined,
+                semesterId: selectedSemesterId ?? undefined,
+                teachingCalcEffect: 'NO_CHANGE',
+                topic: '',
+                version: 1,
+              });
+              setIsEventModalOpen(true);
+            }}
+          >
+            新增事件
+          </Button>
+        }
+      >
+        <div className="mb-4 flex flex-col gap-4">
+          <div className="grid gap-3 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
+            <Input
+              type="date"
+              placeholder="筛选事件日期"
+              value={eventFilters.eventDate || ''}
+              onChange={(event) =>
+                setEventFilters((current) => ({
+                  ...current,
+                  eventDate: event.target.value || undefined,
+                }))
+              }
+            />
+            <Select
+              allowClear
+              placeholder="筛选事件类型"
+              options={EVENT_TYPE_OPTIONS}
+              value={eventFilters.eventType}
+              onChange={(value) =>
+                setEventFilters((current) => ({
+                  ...current,
+                  eventType: value,
+                }))
+              }
+            />
+            <Select
+              allowClear
+              placeholder="筛选记录状态"
+              options={RECORD_STATUS_OPTIONS}
+              value={eventFilters.recordStatus}
+              onChange={(value) =>
+                setEventFilters((current) => ({
+                  ...current,
+                  recordStatus: value,
+                }))
+              }
+            />
+            <Button
+              onClick={() =>
+                setEventFilters({
+                  eventDate: undefined,
+                  eventType: undefined,
+                  recordStatus: undefined,
+                })
+              }
+            >
+              重置筛选
+            </Button>
+          </div>
+        </div>
+
+        {eventsError ? (
+          <Alert
+            style={{ marginBottom: 16 }}
+            type="error"
+            showIcon
+            title={eventsError}
+            action={
+              <Button
+                size="small"
+                type="primary"
+                disabled={selectedSemesterId === null}
+                onClick={() => {
+                  if (selectedSemesterId !== null) {
+                    void loadEvents(selectedSemesterId, eventFilters);
+                  }
+                }}
+              >
+                重试
+              </Button>
+            }
+          />
+        ) : null}
+
+        <Table<AcademicCalendarEventRecord>
+          rowKey="id"
+          size="middle"
+          columns={eventColumns}
+          dataSource={selectedSemesterId === null ? [] : events}
+          loading={eventsLoading}
+          pagination={{ pageSize: 12, showSizeChanger: false }}
+          scroll={{ x: 1180 }}
+          locale={{
+            emptyText:
+              selectedSemesterId === null
+                ? '请在上方选择学期以查看校历事件'
+                : '当前筛选条件下暂无校历事件',
+          }}
+        />
+      </Card>
+
+      <Drawer
+        destroyOnClose
         open={isSemesterModalOpen}
         title={semesterModalMode === 'create' ? '新增学期' : '编辑学期'}
-        okText={semesterModalMode === 'create' ? '创建' : '保存'}
-        cancelText="取消"
-        confirmLoading={semesterSubmitting}
-        onCancel={() => {
+        width={480}
+        onClose={() => {
           setIsSemesterModalOpen(false);
           setEditingSemester(null);
           semesterForm.resetFields();
         }}
-        onOk={() => {
-          void semesterForm.submit();
-        }}
+        extra={
+          <Space>
+            <Button
+              onClick={() => {
+                setIsSemesterModalOpen(false);
+                setEditingSemester(null);
+                semesterForm.resetFields();
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={semesterSubmitting}
+              onClick={() => {
+                void semesterForm.submit();
+              }}
+            >
+              {semesterModalMode === 'create' ? '创建' : '保存'}
+            </Button>
+          </Space>
+        }
       >
         <Form<SemesterFormValues>
           form={semesterForm}
@@ -879,23 +929,40 @@ export function AcademicCalendarAdminLabPage() {
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
 
-      <Modal
-        destroyOnHidden
+      <Drawer
+        destroyOnClose
         open={isEventModalOpen}
         title={eventModalMode === 'create' ? '新增校历事件' : '编辑校历事件'}
-        okText={eventModalMode === 'create' ? '创建' : '保存'}
-        cancelText="取消"
-        confirmLoading={eventSubmitting}
-        onCancel={() => {
+        width={480}
+        onClose={() => {
           setIsEventModalOpen(false);
           setEditingEvent(null);
           eventForm.resetFields();
         }}
-        onOk={() => {
-          void eventForm.submit();
-        }}
+        extra={
+          <Space>
+            <Button
+              onClick={() => {
+                setIsEventModalOpen(false);
+                setEditingEvent(null);
+                eventForm.resetFields();
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              type="primary"
+              loading={eventSubmitting}
+              onClick={() => {
+                void eventForm.submit();
+              }}
+            >
+              {eventModalMode === 'create' ? '创建' : '保存'}
+            </Button>
+          </Space>
+        }
       >
         <Form<CalendarEventFormValues>
           form={eventForm}
@@ -1014,7 +1081,7 @@ export function AcademicCalendarAdminLabPage() {
             <Input.TextArea rows={4} placeholder="可选，填写规则说明" />
           </Form.Item>
         </Form>
-      </Modal>
+      </Drawer>
     </div>
   );
 }
