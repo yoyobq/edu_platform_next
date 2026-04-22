@@ -1,4 +1,4 @@
-export type { NavigationFilter, NavigationMetaItem } from '@/app/navigation';
+export type { NavigationFilter, NavigationLeafItem, NavigationMetaItem } from '@/app/navigation';
 export {
   canAccessNavigationPath,
   getNavigationItems,

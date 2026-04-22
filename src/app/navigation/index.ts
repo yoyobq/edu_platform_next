@@ -5,4 +5,10 @@ export {
   hasPayloadCryptoNavigationAccess,
   resolveNavMode,
 } from './catalog';
-export type { NavigationFilter, NavigationMetaItem } from './types';
+export type {
+  NavigationFilter,
+  NavigationGroupItem,
+  NavigationLeafItem,
+  NavigationMetaItem,
+} from './types';
+export { isNavigationGroupItem, isNavigationLeafItem } from './types';

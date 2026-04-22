@@ -20,7 +20,11 @@ import { Menu, Tooltip } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useLocation, useNavigate } from 'react-router';
 
-import type { NavigationMetaItem } from '@/app/navigation';
+import {
+  isNavigationGroupItem,
+  type NavigationLeafItem,
+  type NavigationMetaItem,
+} from '@/app/navigation';
 import { NAV_FULL_WIDTH, NAV_RAIL_WIDTH, useNavCapability } from '@/app/providers';
 
 const ICON_MAP: Record<string, React.ComponentType> = {
@@ -44,7 +48,7 @@ function resolveIcon(iconKey: string): React.ReactNode {
 
 function toMenuItems(items: NavigationMetaItem[], collapsed: boolean): ItemType[] {
   return items.map((item) => {
-    if (item.children) {
+    if (isNavigationGroupItem(item)) {
       return {
         key: item.key,
         icon: resolveIcon(item.iconKey),
@@ -64,11 +68,11 @@ function toMenuItems(items: NavigationMetaItem[], collapsed: boolean): ItemType[
 }
 
 /** Collect all leaf paths (including from children) for route matching. */
-function flattenPaths(items: NavigationMetaItem[]): NavigationMetaItem[] {
-  const result: NavigationMetaItem[] = [];
+function flattenPaths(items: NavigationMetaItem[]): NavigationLeafItem[] {
+  const result: NavigationLeafItem[] = [];
 
   for (const item of items) {
-    if (item.children) {
+    if (isNavigationGroupItem(item)) {
       result.push(...flattenPaths(item.children));
     } else {
       result.push(item);
@@ -81,7 +85,7 @@ function flattenPaths(items: NavigationMetaItem[]): NavigationMetaItem[] {
 /** Find which top-level group key should be open for the current route. */
 function findOpenGroupKeys(items: NavigationMetaItem[], pathname: string): string[] {
   for (const item of items) {
-    if (!item.children) continue;
+    if (!isNavigationGroupItem(item)) continue;
 
     for (const child of item.children) {
       if (pathname === child.path || pathname.startsWith(child.path + '/')) {

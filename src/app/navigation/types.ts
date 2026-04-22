@@ -7,18 +7,35 @@ type NavigationLocalEntryMeta = {
   keywords: readonly string[];
 };
 
-export type NavigationMetaItem = {
+type NavigationBaseItem = {
   key: string;
   label: string;
   iconKey: string;
+  navMode: NavMode;
+};
+
+export type NavigationLeafItem = NavigationBaseItem & {
   path: string;
   primaryAccessGroup: AuthAccessGroup;
   allowedAccessGroups?: readonly AuthAccessGroup[];
   slotGroup: string | null;
-  navMode: NavMode;
   localEntry?: NavigationLocalEntryMeta;
-  children?: NavigationMetaItem[];
 };
+
+export type NavigationGroupItem = NavigationBaseItem & {
+  allowedAccessGroups: readonly AuthAccessGroup[];
+  children: NavigationLeafItem[];
+};
+
+export type NavigationMetaItem = NavigationGroupItem | NavigationLeafItem;
+
+export function isNavigationGroupItem(item: NavigationMetaItem): item is NavigationGroupItem {
+  return 'children' in item;
+}
+
+export function isNavigationLeafItem(item: NavigationMetaItem): item is NavigationLeafItem {
+  return 'path' in item;
+}
 
 export type NavigationFilter = {
   accountId?: number;

@@ -33,9 +33,6 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       key: 'academic-affairs',
       label: '教务管理',
       navMode: 'rail',
-      path: '/academic-affairs',
-      primaryAccessGroup: 'ADMIN',
-      slotGroup: null,
     },
   ];
 };

@@ -4,9 +4,11 @@ import {
   canAccessNavigationPath,
   getNavigationItems,
   getNavigationLeafItems,
+  isNavigationGroupItem,
   resolveNavMode,
 } from './index';
 import type { NavigationFilter } from './types';
+import type { NavigationGroupItem, NavigationMetaItem } from './types';
 
 function buildFilter(overrides?: Partial<NavigationFilter>): NavigationFilter {
   return {
@@ -17,6 +19,12 @@ function buildFilter(overrides?: Partial<NavigationFilter>): NavigationFilter {
     appEnv: 'dev',
     ...overrides,
   };
+}
+
+function findGroup(items: NavigationMetaItem[], key: string): NavigationGroupItem | undefined {
+  const item = items.find((candidate) => candidate.key === key);
+
+  return item && isNavigationGroupItem(item) ? item : undefined;
 }
 
 describe('navigation catalog', () => {
@@ -30,10 +38,10 @@ describe('navigation catalog', () => {
       '/errors/preview',
       'labs',
     ]);
-    expect(
-      items.find((item) => item.key === 'academic-affairs')?.children?.map((item) => item.key),
-    ).toEqual(['/academic-affairs/academic-calendar']);
-    expect(items.find((item) => item.key === 'labs')?.children?.map((item) => item.key)).toEqual([
+    expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/academic-calendar',
+    ]);
+    expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
@@ -50,14 +58,14 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(
-      prodAdminItems
-        .find((item) => item.key === 'academic-affairs')
-        ?.children?.map((item) => item.key),
-    ).toEqual(['/academic-affairs/academic-calendar']);
-    expect(
-      prodAdminItems.find((item) => item.key === 'labs')?.children?.map((item) => item.key),
-    ).toEqual(['/labs/change-login-email', '/labs/invite-issuer', '/labs/upstream-session-demo']);
+    expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
+      ['/academic-affairs/academic-calendar'],
+    );
+    expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/change-login-email',
+      '/labs/invite-issuer',
+      '/labs/upstream-session-demo',
+    ]);
   });
 
   it('shows only the shared upstream lab to staff users, while keeping admin-only labs hidden', () => {
@@ -70,7 +78,7 @@ describe('navigation catalog', () => {
     );
 
     expect(staffItems.map((item) => item.key)).toEqual(['labs']);
-    expect(staffItems[0]?.children?.map((item) => item.key)).toEqual([
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
     ]);
   });
@@ -86,12 +94,12 @@ describe('navigation catalog', () => {
     );
 
     expect(staffItems.map((item) => item.key)).toEqual(['academic-affairs', 'labs']);
-    expect(
-      staffItems.find((item) => item.key === 'academic-affairs')?.children?.map((item) => item.key),
-    ).toEqual(['/academic-affairs/academic-calendar']);
-    expect(
-      staffItems.find((item) => item.key === 'labs')?.children?.map((item) => item.key),
-    ).toEqual(['/labs/upstream-session-demo']);
+    expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/academic-calendar',
+    ]);
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/upstream-session-demo',
+    ]);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {

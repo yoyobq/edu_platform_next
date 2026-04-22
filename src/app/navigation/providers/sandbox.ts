@@ -7,6 +7,7 @@ export const getSandboxNavigationItems: NavigationItemsProvider = (filter) => {
 
   return [
     {
+      allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
       children: [
         {
           iconKey: 'CodeOutlined',
@@ -26,9 +27,6 @@ export const getSandboxNavigationItems: NavigationItemsProvider = (filter) => {
       key: 'labs',
       label: 'Labs',
       navMode: 'rail',
-      path: '/labs',
-      primaryAccessGroup: 'ADMIN',
-      slotGroup: null,
     },
   ];
 };

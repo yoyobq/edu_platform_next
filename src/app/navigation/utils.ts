@@ -1,13 +1,29 @@
-import type { NavigationFilter, NavigationMetaItem } from './types';
+import type {
+  NavigationFilter,
+  NavigationGroupItem,
+  NavigationLeafItem,
+  NavigationMetaItem,
+} from './types';
+import { isNavigationGroupItem } from './types';
+
+function cloneNavigationLeafItem(item: NavigationLeafItem): NavigationLeafItem {
+  return { ...item };
+}
+
+function cloneNavigationGroupItem(item: NavigationGroupItem): NavigationGroupItem {
+  return { ...item, children: item.children.map(cloneNavigationLeafItem) };
+}
 
 function cloneNavigationItem(item: NavigationMetaItem): NavigationMetaItem {
-  return item.children
-    ? { ...item, children: item.children.map(cloneNavigationItem) }
-    : { ...item };
+  return isNavigationGroupItem(item)
+    ? cloneNavigationGroupItem(item)
+    : cloneNavigationLeafItem(item);
 }
 
 function canAccessByGroup(item: NavigationMetaItem, filter: NavigationFilter) {
-  const allowedAccessGroups = item.allowedAccessGroups ?? [item.primaryAccessGroup];
+  const allowedAccessGroups = isNavigationGroupItem(item)
+    ? item.allowedAccessGroups
+    : (item.allowedAccessGroups ?? [item.primaryAccessGroup]);
 
   return allowedAccessGroups.some((accessGroup) => filter.accessGroup.includes(accessGroup));
 }
@@ -25,18 +41,14 @@ export function filterNavigationItem(
   item: NavigationMetaItem,
   filter: NavigationFilter,
 ): NavigationMetaItem | null {
-  if (item.children) {
-    const filteredChildren = filterNavigationItems(item.children, filter);
+  if (isNavigationGroupItem(item)) {
+    const filteredChildren = filterNavigationItems(item.children, filter) as NavigationLeafItem[];
 
     if (filteredChildren.length === 0) {
       return null;
     }
 
     if (!canAccessByGroup(item, filter)) {
-      return null;
-    }
-
-    if (item.slotGroup !== null && !filter.slotGroup.includes(item.slotGroup)) {
       return null;
     }
 
@@ -77,7 +89,7 @@ function mergeNavigationItem(
   current: NavigationMetaItem,
   next: NavigationMetaItem,
 ): NavigationMetaItem {
-  if (!current.children || !next.children) {
+  if (!isNavigationGroupItem(current) && !isNavigationGroupItem(next)) {
     return {
       ...current,
       allowedAccessGroups: current.allowedAccessGroups ?? next.allowedAccessGroups,
@@ -85,23 +97,32 @@ function mergeNavigationItem(
     };
   }
 
-  return {
-    ...current,
-    allowedAccessGroups: current.allowedAccessGroups ?? next.allowedAccessGroups,
-    children: mergeNavigationItems([...current.children, ...next.children]),
-  };
+  if (isNavigationGroupItem(current) && isNavigationGroupItem(next)) {
+    return {
+      ...current,
+      allowedAccessGroups: current.allowedAccessGroups,
+      children: mergeNavigationItems([
+        ...current.children,
+        ...next.children,
+      ]) as NavigationLeafItem[],
+    };
+  }
+
+  return cloneNavigationItem(current);
 }
 
-export function flattenNavigationItems(items: readonly NavigationMetaItem[]): NavigationMetaItem[] {
-  return items.flatMap((item) => (item.children ? flattenNavigationItems(item.children) : [item]));
+export function flattenNavigationItems(items: readonly NavigationMetaItem[]): NavigationLeafItem[] {
+  return items.flatMap((item) =>
+    isNavigationGroupItem(item) ? flattenNavigationItems(item.children) : [item],
+  );
 }
 
 export function findNavigationItemByPath(
   items: readonly NavigationMetaItem[],
   path: string,
-): NavigationMetaItem | null {
+): NavigationLeafItem | null {
   for (const item of items) {
-    if (item.children) {
+    if (isNavigationGroupItem(item)) {
       const matchedChild = findNavigationItemByPath(item.children, path);
 
       if (matchedChild) {
