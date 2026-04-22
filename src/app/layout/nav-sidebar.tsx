@@ -2,11 +2,15 @@
 
 import { useMemo } from 'react';
 import {
+  ApiOutlined,
+  CalendarOutlined,
   CodeOutlined,
   ExperimentOutlined,
   HomeOutlined,
   LeftOutlined,
   LockOutlined,
+  MailOutlined,
+  ReadOutlined,
   RightOutlined,
   SendOutlined,
   TeamOutlined,
@@ -20,10 +24,14 @@ import type { NavigationMetaItem } from '@/app/navigation';
 import { NAV_FULL_WIDTH, NAV_RAIL_WIDTH, useNavCapability } from '@/app/providers';
 
 const ICON_MAP: Record<string, React.ComponentType> = {
+  ApiOutlined,
+  CalendarOutlined,
   CodeOutlined,
   ExperimentOutlined,
   HomeOutlined,
   LockOutlined,
+  MailOutlined,
+  ReadOutlined,
   SendOutlined,
   TeamOutlined,
   WarningOutlined,

@@ -296,6 +296,7 @@ function buildMePayload(profile: SessionProfile) {
             }
           : null,
     needsProfileCompletion: profile.needsProfileCompletion,
+    slotGroup: profile.slotGroup,
     userInfo: {
       accessGroup: profile.accessGroup,
       avatarUrl: null,

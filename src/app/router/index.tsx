@@ -15,6 +15,7 @@ import {
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
+import { AcademicCalendarPage } from '@/pages/academic-calendar';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
@@ -48,10 +49,6 @@ import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 import { hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  academicCalendarAdminLabAccess,
-  loadAcademicCalendarAdminLabRouteModule,
-} from '@/labs/academic-calendar-admin';
 import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
@@ -418,33 +415,11 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function academicCalendarAdminLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(academicCalendarAdminLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
+async function academicCalendarPageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(academicCalendarAdminLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
+    return null;
   }
 
   if (
@@ -453,10 +428,14 @@ async function academicCalendarAdminLabLoader({ request }: LoaderFunctionArgs) {
       slotGroup: snapshot.slotGroup,
     })
   ) {
-    throw new Response('Forbidden', { status: 403 });
+    return {
+      isForbidden: true,
+    };
   }
 
-  return null;
+  return {
+    isForbidden: false,
+  };
 }
 
 async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
@@ -699,6 +678,11 @@ const router = createBrowserRouter([
         Component: ErrorPreviewPage,
       },
       {
+        path: '/academic-affairs/academic-calendar',
+        loader: academicCalendarPageLoader,
+        Component: AcademicCalendarPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -719,11 +703,6 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
-          },
-          {
-            path: 'academic-calendar-admin',
-            loader: academicCalendarAdminLabLoader,
-            lazy: loadAcademicCalendarAdminLabRouteModule,
           },
           {
             path: 'change-login-email',

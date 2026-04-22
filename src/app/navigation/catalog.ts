@@ -1,3 +1,4 @@
+import { getAcademicAffairsNavigationItems } from './providers/academic-affairs';
 import { getAdminNavigationItems } from './providers/admin';
 import { getErrorNavigationItems } from './providers/errors';
 import { getHomeNavigationItems } from './providers/home';
@@ -14,6 +15,7 @@ import {
 const NAVIGATION_PROVIDERS = [
   getHomeNavigationItems,
   getAdminNavigationItems,
+  getAcademicAffairsNavigationItems,
   getErrorNavigationItems,
   getLabsNavigationItems,
   getSandboxNavigationItems,

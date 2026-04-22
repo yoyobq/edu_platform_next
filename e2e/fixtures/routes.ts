@@ -1,4 +1,5 @@
 export const routes = {
+  academicCalendar: '/academic-affairs/academic-calendar',
   adminUsers: '/admin/users',
   forgotPassword: '/forgot-password',
   home: '/',

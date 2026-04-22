@@ -23,12 +23,20 @@ describe('navigation catalog', () => {
   it('merges domain providers into the current admin navigation tree', () => {
     const items = getNavigationItems(buildFilter());
 
-    expect(items.map((item) => item.key)).toEqual(['/', '/admin/users', '/errors/preview', 'labs']);
-    expect(items.at(-1)?.children?.map((item) => item.key)).toEqual([
+    expect(items.map((item) => item.key)).toEqual([
+      '/',
+      '/admin/users',
+      'academic-affairs',
+      '/errors/preview',
+      'labs',
+    ]);
+    expect(
+      items.find((item) => item.key === 'academic-affairs')?.children?.map((item) => item.key),
+    ).toEqual(['/academic-affairs/academic-calendar']);
+    expect(items.find((item) => item.key === 'labs')?.children?.map((item) => item.key)).toEqual([
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
-      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
@@ -42,12 +50,14 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(prodAdminItems.at(-1)?.children?.map((item) => item.key)).toEqual([
-      '/labs/change-login-email',
-      '/labs/invite-issuer',
-      '/labs/academic-calendar-admin',
-      '/labs/upstream-session-demo',
-    ]);
+    expect(
+      prodAdminItems
+        .find((item) => item.key === 'academic-affairs')
+        ?.children?.map((item) => item.key),
+    ).toEqual(['/academic-affairs/academic-calendar']);
+    expect(
+      prodAdminItems.find((item) => item.key === 'labs')?.children?.map((item) => item.key),
+    ).toEqual(['/labs/change-login-email', '/labs/invite-issuer', '/labs/upstream-session-demo']);
   });
 
   it('shows only the shared upstream lab to staff users, while keeping admin-only labs hidden', () => {
@@ -65,7 +75,7 @@ describe('navigation catalog', () => {
     ]);
   });
 
-  it('shows the academic calendar lab to academic officers via slotGroup-aware filtering', () => {
+  it('shows the academic calendar page to academic officers via slotGroup-aware filtering', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1002,
@@ -75,11 +85,13 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(staffItems.map((item) => item.key)).toEqual(['labs']);
-    expect(staffItems[0]?.children?.map((item) => item.key)).toEqual([
-      '/labs/academic-calendar-admin',
-      '/labs/upstream-session-demo',
-    ]);
+    expect(staffItems.map((item) => item.key)).toEqual(['academic-affairs', 'labs']);
+    expect(
+      staffItems.find((item) => item.key === 'academic-affairs')?.children?.map((item) => item.key),
+    ).toEqual(['/academic-affairs/academic-calendar']);
+    expect(
+      staffItems.find((item) => item.key === 'labs')?.children?.map((item) => item.key),
+    ).toEqual(['/labs/upstream-session-demo']);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {
@@ -98,11 +110,11 @@ describe('navigation catalog', () => {
     expect(leaves.map((item) => item.key)).toEqual([
       '/',
       '/admin/users',
+      '/academic-affairs/academic-calendar',
       '/errors/preview',
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
-      '/labs/academic-calendar-admin',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
