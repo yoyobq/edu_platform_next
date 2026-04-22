@@ -7,6 +7,120 @@ import { expect, test } from '../../test';
 const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 const UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.labs.upstream-session-demo.v1';
 
+type AcademicSemesterSeed = {
+  createdAt: string;
+  endDate: string;
+  examStartDate: string;
+  firstTeachingDate: string;
+  id: number;
+  isCurrent: boolean;
+  name: string;
+  schoolYear: number;
+  startDate: string;
+  termNumber: number;
+  updatedAt: string;
+};
+
+type AcademicCalendarEventSeed = {
+  createdAt: string;
+  dayPeriod: 'AFTERNOON' | 'ALL_DAY' | 'MORNING';
+  eventDate: string;
+  eventType: 'ACTIVITY' | 'EXAM' | 'HOLIDAY' | 'HOLIDAY_MAKEUP' | 'SPORTS_MEET' | 'WEEKDAY_SWAP';
+  id: number;
+  originalDate: string | null;
+  recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
+  ruleNote: string | null;
+  semesterId: number;
+  teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'SWAP';
+  topic: string;
+  updatedAt: string;
+  updatedByAccountId: number | null;
+  version: number;
+};
+
+function buildAcademicCalendarState() {
+  const semesters: AcademicSemesterSeed[] = [
+    {
+      createdAt: '2026-04-01T00:00:00.000Z',
+      endDate: '2026-07-10',
+      examStartDate: '2026-06-22',
+      firstTeachingDate: '2026-02-20',
+      id: 101,
+      isCurrent: true,
+      name: '2025-2026 学年第二学期',
+      schoolYear: 2025,
+      startDate: '2026-02-17',
+      termNumber: 2,
+      updatedAt: '2026-04-02T00:00:00.000Z',
+    },
+  ];
+  const events: AcademicCalendarEventSeed[] = [
+    {
+      createdAt: '2026-04-05T00:00:00.000Z',
+      dayPeriod: 'ALL_DAY',
+      eventDate: '2026-04-20',
+      eventType: 'SPORTS_MEET',
+      id: 201,
+      originalDate: null,
+      recordStatus: 'ACTIVE',
+      ruleNote: '春季活动安排',
+      semesterId: 101,
+      teachingCalcEffect: 'NO_CHANGE',
+      topic: '春季运动会',
+      updatedAt: '2026-04-06T00:00:00.000Z',
+      updatedByAccountId: 9527,
+      version: 1,
+    },
+  ];
+
+  return { events, semesters };
+}
+
+async function mockAcademicCalendarGraphQL(page: Page) {
+  const state = buildAcademicCalendarState();
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: Record<string, unknown>;
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+    const variables = payload?.variables ?? {};
+
+    if (query.includes('query AcademicSemesters')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            academicSemesters: state.semesters,
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('query AcademicCalendarEvents')) {
+      const semesterId = Number(variables.semesterId ?? 0);
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            academicCalendarEvents: state.events.filter((item) => item.semesterId === semesterId),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+}
+
 function createJwtWithExpOffsetMs(offsetMs: number) {
   const header = Buffer.from(JSON.stringify({ alg: 'none', typ: 'JWT' })).toString('base64url');
   const payload = Buffer.from(
@@ -82,6 +196,15 @@ test('未登录访问 labs upstream session demo 时，应先跳登录并保留�
 
   await expect(page).toHaveURL(
     new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsUpstreamSessionDemo)}$`),
+  );
+  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+});
+
+test('未登录访问 labs 学期校历时，应先跳登录并保留原目标', async ({ page }) => {
+  await page.goto(routes.labsSemesterCalendar);
+
+  await expect(page).toHaveURL(
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsSemesterCalendar)}$`),
   );
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
@@ -179,6 +302,29 @@ test('具备 staff 权限的已登录会话，应允许进入 labs upstream sess
   await expect(page.getByRole('tab', { name: '使用说明' })).toBeVisible();
   await expect(page.getByRole('tab', { name: '教师字典' })).toBeVisible();
   await expect(page.getByRole('button', { name: '登录 upstream' })).toHaveCount(0);
+});
+
+test('具备 guest 权限的已登录会话，应允许进入 labs 学期校历', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'guest-user',
+      primaryAccessGroup: 'GUEST',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'guest-user',
+    primaryAccessGroup: 'GUEST',
+  });
+  await mockAcademicCalendarGraphQL(page);
+
+  await page.goto(routes.labsSemesterCalendar);
+
+  await expect(page.getByRole('heading', { name: '学期校历' })).toBeVisible();
+  await expect(page.getByText('当前身份：访客身份')).toBeVisible();
+  await expect(
+    page.locator('.ant-card-head-title').filter({ hasText: '2025-2026 学年第二学期' }),
+  ).toBeVisible();
 });
 
 test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 labs invite issuer', async ({
