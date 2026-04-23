@@ -50,6 +50,10 @@ import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import {
+  academicTimetableLabAccess,
+  loadAcademicTimetableLabRouteModule,
+} from '@/labs/academic-timetable';
+import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
@@ -544,6 +548,48 @@ async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(academicTimetableLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(academicTimetableLabAccess)) {
+      return { viewerKind: 'authenticated' };
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(academicTimetableLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  return {
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    viewerKind:
+      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
+  };
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -757,6 +803,11 @@ const router = createBrowserRouter([
             path: 'semester-calendar',
             loader: semesterCalendarLabLoader,
             lazy: loadSemesterCalendarLabRouteModule,
+          },
+          {
+            path: 'academic-timetable',
+            loader: academicTimetableLabLoader,
+            lazy: loadAcademicTimetableLabRouteModule,
           },
         ],
       },

@@ -115,6 +115,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
+    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CalendarOutlined',
+            key: '/labs/academic-timetable',
+            label: '课表视图',
+            navMode: 'rail' as const,
+            path: '/labs/academic-timetable',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
   ];
 
   if (children.length === 0) {

@@ -1,0 +1,103 @@
+.academic-timetable-grid {
+  display: grid;
+  position: relative;
+}
+
+.academic-timetable-header-cell,
+.academic-timetable-period-cell,
+.academic-timetable-base-cell {
+  border-right: 1px solid var(--ant-color-border-secondary);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+}
+
+.academic-timetable-header-cell,
+.academic-timetable-period-cell {
+  align-items: center;
+  background: linear-gradient(
+    180deg,
+    var(--ant-color-fill-tertiary) 0%,
+    var(--ant-color-bg-container) 100%
+  );
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  justify-content: center;
+}
+
+.academic-timetable-header-corner {
+  background: linear-gradient(
+    180deg,
+    var(--ant-color-fill-secondary) 0%,
+    var(--ant-color-fill-tertiary) 100%
+  );
+}
+
+.academic-timetable-base-cell {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.7) 0%,
+    var(--ant-color-fill-quaternary) 100%
+  );
+}
+
+.academic-timetable-slot-group {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 4px;
+  min-height: calc(100% - 8px);
+  position: relative;
+  z-index: 1;
+}
+
+.academic-timetable-entry {
+  background: linear-gradient(180deg, rgba(22, 119, 255, 0.08) 0%, rgba(22, 119, 255, 0.16) 100%);
+  border: 1px solid var(--ant-color-primary-border);
+  border-radius: 12px;
+  box-shadow: 0 8px 20px rgba(9, 30, 66, 0.08);
+  color: var(--ant-color-text);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 100%;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.academic-timetable-entry-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.academic-timetable-entry-subtitle,
+.academic-timetable-entry-meta,
+.academic-timetable-entry-foot {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.academic-timetable-entry-week {
+  color: var(--ant-color-primary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.5;
+  margin: 0;
+}
+
+@media (max-width: 768px) {
+  .academic-timetable-slot-group {
+    margin: 3px;
+  }
+
+  .academic-timetable-entry {
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+}
