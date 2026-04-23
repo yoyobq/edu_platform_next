@@ -1,12 +1,13 @@
 import type { OperationVariables } from '@apollo/client';
 
+import { requestAcademicSemesters } from '@/entities/academic-semester';
 import {
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream';
 
-import { executeGraphQL, requestAcademicSemesters } from '@/shared/graphql';
+import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 

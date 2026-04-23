@@ -1,9 +1,10 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
-  requestAcademicSemesters as requestSharedAcademicSemesters,
-  type SharedAcademicSemesterRecord,
-} from '@/shared/graphql';
+  type AcademicSemesterRecord as AcademicSemesterEntityRecord,
+  requestAcademicSemesters as requestEntityAcademicSemesters,
+} from '@/entities/academic-semester';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type {
@@ -118,7 +119,7 @@ const DELETE_ACADEMIC_CALENDAR_EVENT_MUTATION = `
   }
 `;
 
-type AcademicSemesterDTO = SharedAcademicSemesterRecord;
+type AcademicSemesterDTO = AcademicSemesterEntityRecord;
 type AcademicCalendarEventDTO = AcademicCalendarEventRecord;
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
@@ -182,7 +183,7 @@ function resolveAcademicCalendarErrorMessage(error: unknown, fallback: string) {
 
 export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
   try {
-    const response = await requestSharedAcademicSemesters(input);
+    const response = await requestEntityAcademicSemesters(input);
 
     return response.map(mapAcademicSemesterRecord);
   } catch (error) {

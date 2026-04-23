@@ -8,10 +8,13 @@ const { executeGraphQLMock, isGraphQLIngressErrorMock, requestAcademicSemestersM
   }),
 );
 
+vi.mock('@/entities/academic-semester', () => ({
+  requestAcademicSemesters: requestAcademicSemestersMock,
+}));
+
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
   isGraphQLIngressError: isGraphQLIngressErrorMock,
-  requestAcademicSemesters: requestAcademicSemestersMock,
 }));
 
 import {

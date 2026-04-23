@@ -1,8 +1,8 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL } from './request';
+import { executeGraphQL } from '@/shared/graphql';
 
-export type SharedAcademicSemesterRecord = {
+export type AcademicSemesterRecord = {
   createdAt: string;
   endDate: string;
   examStartDate: string;
@@ -52,7 +52,7 @@ const LIST_ACADEMIC_SEMESTERS_QUERY = `
 
 export async function requestAcademicSemesters(input: RequestAcademicSemestersInput = {}) {
   const response = await executeGraphQL<
-    { academicSemesters: SharedAcademicSemesterRecord[] },
+    { academicSemesters: AcademicSemesterRecord[] },
     RequestAcademicSemestersInput
   >(LIST_ACADEMIC_SEMESTERS_QUERY, input as OperationVariables & RequestAcademicSemestersInput);
 
