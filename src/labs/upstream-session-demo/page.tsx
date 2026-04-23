@@ -14,7 +14,7 @@ import {
   Typography,
 } from 'antd';
 
-import { type StoredUpstreamSession, useStoredUpstreamSession } from '@/shared/upstream';
+import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream';
 
 import { upstreamSessionDemoLabAccess } from './access';
 import {
@@ -27,7 +27,6 @@ import {
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
   isExpiredUpstreamSessionError,
-  loginUpstreamSession,
   resolveUpstreamErrorMessage,
   type TeacherDirectoryResult,
   type VerifiedStaffIdentityResult,
@@ -337,10 +336,14 @@ export function UpstreamSessionDemoLabPage() {
   const [verifiedIdentityResult, setVerifiedIdentityResult] =
     useState<VerifiedStaffIdentityResult | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
-  const { clearSession, loginAndStoreSession, persistSession, storedSession } =
-    useStoredUpstreamSession({
-      account: currentAccount,
-    });
+  const {
+    clear,
+    login: loginUpstream,
+    persistRollingSession,
+    session: storedSession,
+  } = useUpstreamSession({
+    account: currentAccount,
+  });
   const personalCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.personal);
   const personalClassNameOptions = getUniqueValues(
     personalCurriculumPlanRecords.map((record) => record.className),
@@ -381,7 +384,7 @@ export function UpstreamSessionDemoLabPage() {
 
   const clearCurrentSession = useCallback(
     (error?: UpstreamActionError) => {
-      clearSession();
+      clear();
       setCurriculumPlanResult({
         personal: null,
         department: null,
@@ -390,7 +393,7 @@ export function UpstreamSessionDemoLabPage() {
       setVerifiedIdentityResult(null);
       setActionError(error ?? null);
     },
-    [clearSession],
+    [clear],
   );
 
   const performAction = useCallback(
@@ -403,7 +406,7 @@ export function UpstreamSessionDemoLabPage() {
               sessionToken: session.upstreamSessionToken,
             });
 
-            persistSession(session, {
+            persistRollingSession(session, {
               expiresAt: result.expiresAt,
               upstreamSessionToken: result.upstreamSessionToken,
             });
@@ -416,7 +419,7 @@ export function UpstreamSessionDemoLabPage() {
               sessionToken: session.upstreamSessionToken,
             });
 
-            persistSession(session, {
+            persistRollingSession(session, {
               expiresAt: result.expiresAt,
               upstreamLoginId: result.upstreamLoginId,
               upstreamSessionToken: result.upstreamSessionToken,
@@ -440,7 +443,7 @@ export function UpstreamSessionDemoLabPage() {
                     sessionToken: session.upstreamSessionToken,
                   });
 
-            persistSession(session, {
+            persistRollingSession(session, {
               expiresAt: result.expiresAt,
               upstreamSessionToken: result.upstreamSessionToken,
             });
@@ -505,7 +508,7 @@ export function UpstreamSessionDemoLabPage() {
         setIsLoadingIdentity(false);
       }
     },
-    [persistSession, clearCurrentSession, form, storedSession?.upstreamLoginId],
+    [persistRollingSession, clearCurrentSession, form, storedSession?.upstreamLoginId],
   );
 
   const ensureSessionAndRun = useCallback(
@@ -1310,8 +1313,7 @@ export function UpstreamSessionDemoLabPage() {
               setActionError(null);
 
               try {
-                const nextStoredSession = await loginAndStoreSession({
-                  login: loginUpstreamSession,
+                const nextStoredSession = await loginUpstream({
                   password: values.password,
                   userId: values.userId,
                 });

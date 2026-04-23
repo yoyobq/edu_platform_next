@@ -1,6 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL } from './request';
+import { executeGraphQL } from '@/shared/graphql';
 
 export type UpstreamLoginSessionResult = {
   expiresAt: string;

@@ -1,13 +1,12 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
-  executeGraphQL,
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
-  requestAcademicSemesters,
-  requestUpstreamLoginSession,
   resolveUpstreamErrorMessage,
-} from '@/shared/graphql';
+} from '@/entities/upstream';
+
+import { executeGraphQL, requestAcademicSemesters } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 
@@ -114,14 +113,6 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   variables: TVariables,
 ): Promise<TData> {
   return executeGraphQL(query, variables);
-}
-
-export async function loginUpstreamSession(input: { password: string; userId: string }) {
-  try {
-    return await requestUpstreamLoginSession(input);
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法登录 upstream。'));
-  }
 }
 
 export async function fetchCourseScheduleSyncSemesterOptions() {

@@ -14,7 +14,7 @@ import {
   Typography,
 } from 'antd';
 
-import { type StoredUpstreamSession, useStoredUpstreamSession } from '@/shared/upstream';
+import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream';
 
 import {
   type CourseScheduleSyncDepartmentOption,
@@ -26,7 +26,6 @@ import {
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
   isExpiredUpstreamSessionError,
-  loginUpstreamSession,
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
 } from '../api';
@@ -166,15 +165,19 @@ export function SemesterCourseScheduleSyncPageContent({
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
   const [pendingSyncValues, setPendingSyncValues] = useState<SyncFormValues | null>(null);
-  const { clearSession, loginAndStoreSession, persistSession, storedSession } =
-    useStoredUpstreamSession({
-      account: currentAccount,
-    });
+  const {
+    clear,
+    login: loginUpstream,
+    persistRollingSession,
+    session: storedSession,
+  } = useUpstreamSession({
+    account: currentAccount,
+  });
 
   const clearCurrentSession = useCallback(() => {
-    clearSession();
+    clear();
     setPendingSyncValues(null);
-  }, [clearSession]);
+  }, [clear]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues) => {
@@ -194,7 +197,7 @@ export function SemesterCourseScheduleSyncPageContent({
           upstreamSessionToken: session.upstreamSessionToken,
         });
 
-        persistSession(session, {
+        persistRollingSession(session, {
           expiresAt: syncResult.expiresAt,
           upstreamSessionToken: syncResult.upstreamSessionToken,
         });
@@ -219,7 +222,7 @@ export function SemesterCourseScheduleSyncPageContent({
         setIsSyncing(false);
       }
     },
-    [clearCurrentSession, loginForm, persistSession],
+    [clearCurrentSession, loginForm, persistRollingSession],
   );
 
   const handleRunSync = useCallback(async () => {
@@ -336,8 +339,7 @@ export function SemesterCourseScheduleSyncPageContent({
       setLoginError(null);
 
       try {
-        const nextStoredSession = await loginAndStoreSession({
-          login: loginUpstreamSession,
+        const nextStoredSession = await loginUpstream({
           password: values.password,
           userId: values.userId,
         });
@@ -356,7 +358,7 @@ export function SemesterCourseScheduleSyncPageContent({
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginAndStoreSession, loginForm, pendingSyncValues, performSync],
+    [currentAccount, loginForm, loginUpstream, pendingSyncValues, performSync],
   );
 
   const syncItemsColumns = [

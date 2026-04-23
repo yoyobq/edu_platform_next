@@ -11,7 +11,6 @@ export {
   fetchCourseScheduleSyncSemesterOptions,
   isAcademicSemesterNotFoundError,
   isExpiredUpstreamSessionError,
-  loginUpstreamSession,
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
 } from './api';

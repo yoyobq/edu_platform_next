@@ -1,35 +1,31 @@
 import { useCallback, useState } from 'react';
 
+import { requestUpstreamLoginSession } from '../infrastructure/upstream-session-api';
 import {
   clearStoredUpstreamSession,
   readStoredUpstreamSession,
   type StoredUpstreamSession,
   writeStoredUpstreamSession,
-} from './session-storage';
+} from '../infrastructure/upstream-session-storage';
 
 export type UpstreamAccountIdentity = {
   accountId: number;
   displayName: string;
 };
 
-type PersistedUpstreamSessionInput = {
+type RollingUpstreamSessionInput = {
   expiresAt?: string | null;
   upstreamLoginId?: string | null;
   upstreamSessionToken: string;
 };
 
-type UpstreamLoginSessionRequest = (input: { password: string; userId: string }) => Promise<{
-  expiresAt: string | null;
-  upstreamSessionToken: string;
-}>;
-
-type UseStoredUpstreamSessionOptions = {
+type UseUpstreamSessionOptions = {
   account: UpstreamAccountIdentity | null;
 };
 
-export function persistUpstreamSession(
+function persistUpstreamSession(
   session: StoredUpstreamSession,
-  input: PersistedUpstreamSessionInput,
+  input: RollingUpstreamSessionInput,
 ) {
   writeStoredUpstreamSession({
     accountId: session.accountId,
@@ -48,40 +44,36 @@ export function persistUpstreamSession(
   );
 }
 
-export function createUpstreamSession(input: {
+function createUpstreamSession(input: {
   accountId: number;
   expiresAt: string | null;
   upstreamLoginId?: string | null;
   upstreamSessionToken: string;
-}) {
-  const nextSession: StoredUpstreamSession = {
+}): StoredUpstreamSession {
+  return {
     accountId: input.accountId,
     expiresAt: input.expiresAt,
     upstreamLoginId: input.upstreamLoginId?.trim() || null,
     upstreamSessionToken: input.upstreamSessionToken,
     version: 1,
   };
-
-  writeStoredUpstreamSession(nextSession);
-
-  return nextSession;
 }
 
-export function clearUpstreamSessionState() {
+function clearUpstreamSessionState() {
   clearStoredUpstreamSession();
 }
 
-export function useStoredUpstreamSession(options: UseStoredUpstreamSessionOptions) {
+export function useUpstreamSession(options: UseUpstreamSessionOptions) {
   const [, setStorageRevision] = useState(0);
   const accountId = options.account?.accountId ?? null;
-  const storedSession = accountId ? readStoredUpstreamSession(accountId) : null;
+  const session = accountId ? readStoredUpstreamSession(accountId) : null;
   const refreshStoredSession = useCallback(() => {
     setStorageRevision((revision) => revision + 1);
   }, []);
 
-  const persistSession = useCallback(
-    (session: StoredUpstreamSession, input: PersistedUpstreamSessionInput) => {
-      const nextSession = persistUpstreamSession(session, input);
+  const persistRollingSession = useCallback(
+    (currentSession: StoredUpstreamSession, input: RollingUpstreamSessionInput) => {
+      const nextSession = persistUpstreamSession(currentSession, input);
 
       refreshStoredSession();
       return nextSession;
@@ -89,27 +81,27 @@ export function useStoredUpstreamSession(options: UseStoredUpstreamSessionOption
     [refreshStoredSession],
   );
 
-  const clearSession = useCallback(() => {
+  const clear = useCallback(() => {
     clearUpstreamSessionState();
     refreshStoredSession();
   }, [refreshStoredSession]);
 
   const commitSession = useCallback(
-    (session: StoredUpstreamSession) => {
-      writeStoredUpstreamSession(session);
+    (nextSession: StoredUpstreamSession) => {
+      writeStoredUpstreamSession(nextSession);
       refreshStoredSession();
     },
     [refreshStoredSession],
   );
 
-  const loginAndStoreSession = useCallback(
-    async (input: { login: UpstreamLoginSessionRequest; password: string; userId: string }) => {
+  const login = useCallback(
+    async (input: { password: string; userId: string }) => {
       if (!accountId) {
         throw new Error('当前登录账号尚未就绪，请稍后再试。');
       }
 
       const normalizedUserId = input.userId.trim();
-      const upstreamSession = await input.login({
+      const upstreamSession = await requestUpstreamLoginSession({
         password: input.password,
         userId: normalizedUserId,
       });
@@ -127,10 +119,9 @@ export function useStoredUpstreamSession(options: UseStoredUpstreamSessionOption
   );
 
   return {
-    clearSession,
-    commitSession,
-    loginAndStoreSession,
-    persistSession,
-    storedSession,
+    clear,
+    login,
+    persistRollingSession,
+    session,
   };
 }

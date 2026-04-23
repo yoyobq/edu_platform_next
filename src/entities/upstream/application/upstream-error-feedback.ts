@@ -1,4 +1,4 @@
-import { isGraphQLIngressError } from './errors';
+import { isGraphQLIngressError } from '@/shared/graphql';
 
 type UpstreamGraphQLErrorDetail = {
   code: string | null;

@@ -1,14 +1,13 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { normalizeDepartmentName } from '@/shared/department';
 import {
-  executeGraphQL,
-  type GraphQLAuthMode,
-  isGraphQLIngressError,
   requestUpstreamLoginSession,
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
-} from '@/shared/graphql';
+} from '@/entities/upstream';
+
+import { normalizeDepartmentName } from '@/shared/department';
+import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type {

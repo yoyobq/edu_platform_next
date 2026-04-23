@@ -15,6 +15,7 @@ import {
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
+import { AcademicCalendarPage } from '@/pages/academic-calendar';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
@@ -22,6 +23,7 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
+import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -54,6 +56,10 @@ import {
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
+import {
+  loadSemesterCalendarLabRouteModule,
+  semesterCalendarLabAccess,
+} from '@/labs/semester-calendar';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -285,6 +291,14 @@ async function errorPreviewLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/errors/preview');
 }
 
+async function academicCalendarPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/academic-affairs/academic-calendar');
+}
+
+async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/academic-affairs/semester-course-schedule-sync');
+}
+
 async function welcomeLoader({ request }: LoaderFunctionArgs) {
   const snapshot = await ensureAuthenticatedSession(request, {
     allowIncomplete: true,
@@ -485,6 +499,51 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(semesterCalendarLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(semesterCalendarLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(semesterCalendarLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  return {
+    viewerKind:
+      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF')
+        ? 'internal'
+        : accessGroup.includes('GUEST')
+          ? 'guest'
+          : 'authenticated',
+  };
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -653,6 +712,16 @@ const router = createBrowserRouter([
         Component: ErrorPreviewPage,
       },
       {
+        path: '/academic-affairs/academic-calendar',
+        loader: academicCalendarPageLoader,
+        Component: AcademicCalendarPage,
+      },
+      {
+        path: '/academic-affairs/semester-course-schedule-sync',
+        loader: semesterCourseScheduleSyncPageLoader,
+        Component: SemesterCourseScheduleSyncPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -683,6 +752,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'semester-calendar',
+            loader: semesterCalendarLabLoader,
+            lazy: loadSemesterCalendarLabRouteModule,
           },
         ],
       },

@@ -33,6 +33,8 @@ import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 import { semesterCalendarLabAccess } from './access';
 import { semesterCalendarLabMeta } from './meta';
 
+import './page.css';
+
 type AcademicCalendarEventDayPeriod = 'AFTERNOON' | 'ALL_DAY' | 'MORNING';
 type AcademicCalendarEventRecordStatus = 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
 type AcademicCalendarEventType =

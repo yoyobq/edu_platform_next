@@ -91,5 +91,6 @@ plan 不负责定义稳定规则。
 - [public-auth-flows-explain.md](./public-auth-flows-explain.md)
 - [public-auth-flows-now.md](./public-auth-flows-now.md)
 - [public-auth-flows-future.md](./public-auth-flows-future.md)
+- [upstream-session-ownership-plan.md](./upstream-session-ownership-plan.md)
 - [welcome-profile-completion-followup.md](./welcome-profile-completion-followup.md)
 - [workbench-entry-plan.md](./workbench-entry-plan.md)
