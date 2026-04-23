@@ -353,7 +353,7 @@ export function SemesterCourseScheduleSyncPageContent({
           await performSync(nextStoredSession, nextPendingSyncValues);
         }
       } catch (error) {
-        setLoginError(resolveCourseScheduleSyncErrorMessage(error));
+        setLoginError(resolveCourseScheduleSyncErrorMessage(error, 'login'));
       } finally {
         setIsSubmittingLogin(false);
       }

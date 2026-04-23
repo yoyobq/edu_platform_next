@@ -5,7 +5,8 @@ import { mockApiHealth, mockAuthGraphQL, seedAuthSession } from '../../helpers/a
 import { expect, test } from '../../test';
 
 const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
-const UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.labs.upstream-session-demo.v1';
+const UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.upstream.session.v2';
+const LEGACY_UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.labs.upstream-session-demo.v1';
 
 type AcademicSemesterSeed = {
   createdAt: string;
@@ -549,7 +550,7 @@ test('labs upstream session demo 遇到跨账号残留 token 时，应清空旧 
       );
     },
     {
-      key: UPSTREAM_SESSION_STORAGE_KEY,
+      key: LEGACY_UPSTREAM_SESSION_STORAGE_KEY,
     },
   );
 
@@ -558,6 +559,14 @@ test('labs upstream session demo 遇到跨账号残留 token 时，应清空旧 
   await expect(page.getByRole('button', { name: '登录 upstream' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '读取教师字典' })).toBeVisible();
   await expect(page.getByText('stale-upstream-token')).toHaveCount(0);
+  await expect
+    .poll(async () =>
+      page.evaluate(
+        (storageKey) => window.localStorage.getItem(storageKey),
+        LEGACY_UPSTREAM_SESSION_STORAGE_KEY,
+      ),
+    )
+    .toBeNull();
   await expect
     .poll(async () =>
       page.evaluate(

@@ -197,10 +197,16 @@ export function isAcademicSemesterNotFoundError(error: unknown) {
   return message.includes('ACADEMIC_SEMESTER_NOT_FOUND');
 }
 
-export function resolveCourseScheduleSyncErrorMessage(error: unknown) {
+export function resolveCourseScheduleSyncErrorMessage(
+  error: unknown,
+  context: 'login' | 'sync' = 'sync',
+) {
   if (isAcademicSemesterNotFoundError(error)) {
     return '当前学年与学期在本地 academic semester 中不存在，请先补齐学期数据后再同步。';
   }
 
-  return resolveUpstreamErrorMessage(error, '暂时无法同步课程表。');
+  return resolveUpstreamErrorMessage(
+    error,
+    context === 'login' ? '暂时无法登录 upstream，请稍后重试。' : '暂时无法同步课程表。',
+  );
 }

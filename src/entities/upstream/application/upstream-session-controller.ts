@@ -55,7 +55,7 @@ function createUpstreamSession(input: {
     expiresAt: input.expiresAt,
     upstreamLoginId: input.upstreamLoginId?.trim() || null,
     upstreamSessionToken: input.upstreamSessionToken,
-    version: 1,
+    version: 2,
   };
 }
 
