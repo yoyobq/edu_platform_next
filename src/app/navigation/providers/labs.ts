@@ -1,7 +1,5 @@
 import type { AuthAccessGroup } from '@/features/auth';
 
-import { hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
-
 import type { NavigationItemsProvider } from '../types';
 
 function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
@@ -10,13 +8,6 @@ function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGrou
 
 function hasStaffNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   return input.accessGroup?.includes('STAFF') ?? false;
-}
-
-function hasAdminOrAcademicOfficerNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
-  return hasAdminOrAcademicOfficerAccess({
-    accessGroup: filter.accessGroup,
-    slotGroup: filter.slotGroup,
-  });
 }
 
 export function hasPayloadCryptoNavigationAccess(input: {
@@ -105,20 +96,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: 'Upstream 会话示例',
             navMode: 'rail' as const,
             path: '/labs/upstream-session-demo',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasAdminOrAcademicOfficerNavigationAccess(filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'SyncOutlined',
-            key: '/labs/course-schedule-sync',
-            label: '课程表同步',
-            navMode: 'rail' as const,
-            path: '/labs/course-schedule-sync',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },

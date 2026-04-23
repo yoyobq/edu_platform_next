@@ -23,6 +23,7 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
+import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -53,10 +54,6 @@ import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
-import {
-  courseScheduleSyncLabAccess,
-  loadCourseScheduleSyncLabRouteModule,
-} from '@/labs/course-schedule-sync';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
@@ -447,6 +444,29 @@ async function academicCalendarPageLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function semesterCourseScheduleSyncPageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  if (
+    !hasAdminOrAcademicOfficerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    isForbidden: false,
+  };
+}
+
 async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(changeLoginEmailLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -562,47 +582,6 @@ async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
           ? 'guest'
           : 'authenticated',
   };
-}
-
-async function courseScheduleSyncLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(courseScheduleSyncLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(courseScheduleSyncLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  if (
-    !hasAdminOrAcademicOfficerAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
 }
 
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
@@ -778,6 +757,11 @@ const router = createBrowserRouter([
         Component: AcademicCalendarPage,
       },
       {
+        path: '/academic-affairs/semester-course-schedule-sync',
+        loader: semesterCourseScheduleSyncPageLoader,
+        Component: SemesterCourseScheduleSyncPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -811,8 +795,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'course-schedule-sync',
-            loader: courseScheduleSyncLabLoader,
-            lazy: loadCourseScheduleSyncLabRouteModule,
+            loader: () => redirect('/academic-affairs/semester-course-schedule-sync'),
           },
           {
             path: 'semester-calendar',

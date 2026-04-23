@@ -21,7 +21,6 @@ import {
   writeStoredUpstreamSession,
 } from '@/shared/upstream';
 
-import { courseScheduleSyncLabAccess } from './access';
 import {
   type CourseScheduleSyncDepartmentOption,
   type CourseScheduleSyncFailure,
@@ -37,8 +36,7 @@ import {
   loginUpstreamSession,
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
-} from './api';
-import { courseScheduleSyncLabMeta } from './meta';
+} from '../api';
 
 type UpstreamLoginFormValues = {
   password: string;
@@ -110,16 +108,6 @@ function getUniqueSchoolYearOptions(options: SemesterOption[]) {
   }, []);
 }
 
-function renderLabAccessTags() {
-  return (
-    <div className="flex flex-wrap gap-2">
-      <Tag color="geekblue">Labs</Tag>
-      <Tag color="purple">ADMIN / ACADEMIC_OFFICER</Tag>
-      <Tag color="gold">{courseScheduleSyncLabAccess.env.join(' / ')}</Tag>
-    </div>
-  );
-}
-
 function formatDateTime(value: string | null) {
   if (!value) {
     return '未返回';
@@ -158,7 +146,7 @@ function formatFailureDetails(value: unknown) {
   }
 }
 
-export function CourseScheduleSyncLabPage() {
+export function SemesterCourseScheduleSyncPageContent() {
   const [syncForm] = Form.useForm<SyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [currentAccount, setCurrentAccount] = useState<CurrentCourseScheduleSyncAccount | null>(
@@ -505,12 +493,13 @@ export function CourseScheduleSyncLabPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Typography.Title level={3} style={{ margin: 0 }}>
-              课程表同步实验页
+              学期课表同步
             </Typography.Title>
             <Typography.Paragraph style={{ margin: 0 }} type="secondary">
-              {courseScheduleSyncLabMeta.purpose}
+              通过当前账号绑定的 upstream
+              会话，按学年、学期和院系拉取教学计划并同步课程表。每次同步成功后，前端会覆盖本地旧
+              token；若接口部分成功，失败明细会单独展示。
             </Typography.Paragraph>
-            {renderLabAccessTags()}
           </div>
 
           <Alert
@@ -524,9 +513,7 @@ export function CourseScheduleSyncLabPage() {
             <Descriptions.Item label="当前账号">
               {currentAccount?.displayName || '未恢复'}
             </Descriptions.Item>
-            <Descriptions.Item label="Labs owner">
-              {courseScheduleSyncLabMeta.owner}
-            </Descriptions.Item>
+            <Descriptions.Item label="能力归属">教务管理</Descriptions.Item>
             <Descriptions.Item label="upstream token 过期时间">
               {formatDateTime(storedSession?.expiresAt ?? null)}
             </Descriptions.Item>
