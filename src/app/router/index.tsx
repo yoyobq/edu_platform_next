@@ -518,7 +518,7 @@ async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
     }
 
     if (hasGuestLabAccess(semesterCalendarLabAccess)) {
-      return null;
+      return { viewerKind: 'guest' };
     }
 
     throw redirect(buildLoginRedirectURL(request));
