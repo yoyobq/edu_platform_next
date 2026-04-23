@@ -17,11 +17,11 @@ import {
 import { upstreamSessionDemoLabAccess } from './access';
 import {
   type CurrentUpstreamDemoAccount,
-  type CurriculumPlanDetailResult,
   type CurriculumPlanListResult,
+  type DepartmentCurriculumPlanReviewStatus,
   fetchCurrentUpstreamDemoAccount,
-  fetchCurriculumPlanDetail,
   fetchCurriculumPlanList,
+  fetchDepartmentCurriculumPlanList,
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
   isExpiredUpstreamSessionError,
@@ -43,7 +43,7 @@ type UpstreamLoginFormValues = {
   userId: string;
 };
 
-type CurriculumPlanFormValues = {
+type PersonalCurriculumPlanFormValues = {
   className?: string;
   departmentId: string;
   courseName?: string;
@@ -51,20 +51,29 @@ type CurriculumPlanFormValues = {
   semester: string;
 };
 
+type DepartmentCurriculumPlanFormValues = {
+  className?: string;
+  courseName?: string;
+  departmentId: string;
+  reviewStatus?: DepartmentCurriculumPlanReviewStatus;
+  schoolYear: string;
+  semester: string;
+  teacherId?: string;
+};
+
+type CurriculumPlanScope = 'personal' | 'department';
+type CurriculumPlanPanelKey = 'personal-curriculum-plan' | 'department-curriculum-plan';
+
 type PendingUpstreamAction =
   | { type: 'teacher-directory' }
   | { type: 'verified-staff-identity' }
-  | { type: 'curriculum-plan'; values: CurriculumPlanFormValues }
   | {
-      type: 'curriculum-plan-detail';
-      values: {
-        className: string;
-        courseName: string;
-        planId: string;
-      };
+      scope: CurriculumPlanScope;
+      type: 'curriculum-plan';
+      values: PersonalCurriculumPlanFormValues | DepartmentCurriculumPlanFormValues;
     };
 
-type UpstreamPanelKey = PendingUpstreamAction['type'] | 'introduction';
+type UpstreamPanelKey = PendingUpstreamAction['type'] | CurriculumPlanPanelKey | 'introduction';
 
 type UpstreamActionError = {
   message: string;
@@ -73,12 +82,45 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const CURRICULUM_PLAN_PREVIEW_LIMIT = 3;
-const CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT = 3;
+const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
+  personal: 'personal-curriculum-plan',
+  department: 'department-curriculum-plan',
+};
+const CURRICULUM_PLAN_SCOPE_LABEL: Record<CurriculumPlanScope, string> = {
+  personal: '个人教学计划',
+  department: '系部教学计划',
+};
+const DEPARTMENT_CURRICULUM_PLAN_REVIEW_STATUS_OPTIONS: Array<{
+  label: string;
+  value: DepartmentCurriculumPlanReviewStatus;
+}> = [
+  {
+    label: '未录入',
+    value: 'UNRECORDED',
+  },
+  {
+    label: '待提交',
+    value: 'PENDING_SUBMIT',
+  },
+  {
+    label: '审核中',
+    value: 'UNDER_REVIEW',
+  },
+  {
+    label: '审核通过',
+    value: 'APPROVED',
+  },
+  {
+    label: '审核不通过',
+    value: 'REJECTED',
+  },
+];
 
 type CurriculumPlanRecord = {
   className: string;
   courseName: string;
   planId: string;
+  raw: Record<string, unknown>;
   teacherName: string | null;
   weeklyHours: string | null;
 };
@@ -100,12 +142,16 @@ const UPSTREAM_PANELS: Array<{
     label: '教职工身份',
   },
   {
-    key: 'curriculum-plan',
-    label: '教学计划',
+    key: 'personal-curriculum-plan',
+    label: '个人教学计划',
+  },
+  {
+    key: 'department-curriculum-plan',
+    label: '系部教学计划',
   },
 ];
 
-function getDefaultCurriculumPlanValues(): CurriculumPlanFormValues {
+function getDefaultPersonalCurriculumPlanValues(): PersonalCurriculumPlanFormValues {
   return {
     className: undefined,
     departmentId: 'ORG0302',
@@ -113,6 +159,28 @@ function getDefaultCurriculumPlanValues(): CurriculumPlanFormValues {
     schoolYear: '2025',
     semester: '2',
   };
+}
+
+function getDefaultDepartmentCurriculumPlanValues(): DepartmentCurriculumPlanFormValues {
+  return {
+    className: undefined,
+    courseName: undefined,
+    departmentId: 'ORG0302',
+    reviewStatus: undefined,
+    schoolYear: '2025',
+    semester: '2',
+    teacherId: undefined,
+  };
+}
+
+function renderUpstreamInterfaceTag(name: string) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Tag variant="filled" color="geekblue">
+        接口：{name}
+      </Tag>
+    </div>
+  );
 }
 
 function formatDateTime(value: string | null) {
@@ -142,46 +210,6 @@ function buildTeacherDirectoryPreview(result: TeacherDirectoryResult) {
     expiresAt: result.expiresAt,
     teacherCount: result.teachers.length,
     teachers: result.teachers.slice(0, TEACHER_PREVIEW_LIMIT),
-    upstreamSessionToken: result.upstreamSessionToken,
-  };
-}
-
-function buildCurriculumPlanPreview(result: CurriculumPlanListResult) {
-  if (Array.isArray(result.plans)) {
-    return {
-      count: result.count,
-      expiresAt: result.expiresAt,
-      plans: result.plans.slice(0, CURRICULUM_PLAN_PREVIEW_LIMIT),
-      truncated: result.plans.length > CURRICULUM_PLAN_PREVIEW_LIMIT,
-      upstreamSessionToken: result.upstreamSessionToken,
-    };
-  }
-
-  return {
-    count: result.count,
-    expiresAt: result.expiresAt,
-    plans: result.plans,
-    truncated: false,
-    upstreamSessionToken: result.upstreamSessionToken,
-  };
-}
-
-function buildCurriculumPlanDetailPreview(result: CurriculumPlanDetailResult) {
-  if (Array.isArray(result.details)) {
-    return {
-      count: result.count,
-      details: result.details.slice(0, CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT),
-      expiresAt: result.expiresAt,
-      truncated: result.details.length > CURRICULUM_PLAN_DETAIL_PREVIEW_LIMIT,
-      upstreamSessionToken: result.upstreamSessionToken,
-    };
-  }
-
-  return {
-    count: result.count,
-    details: result.details,
-    expiresAt: result.expiresAt,
-    truncated: false,
     upstreamSessionToken: result.upstreamSessionToken,
   };
 }
@@ -229,6 +257,7 @@ function normalizeCurriculumPlanRecord(entry: unknown): CurriculumPlanRecord | n
     className,
     courseName,
     planId,
+    raw: record,
     teacherName: readCurriculumPlanString(record, ['TEACHER_NAME', 'teacherName']),
     weeklyHours: readCurriculumPlanString(record, ['WEEKLY_HOURS', 'weeklyHours']),
   };
@@ -280,42 +309,76 @@ function findMatchingCurriculumPlans(
 
 export function UpstreamSessionDemoLabPage() {
   const [form] = Form.useForm<UpstreamLoginFormValues>();
-  const [curriculumPlanForm] = Form.useForm<CurriculumPlanFormValues>();
-  const selectedClassName = Form.useWatch('className', curriculumPlanForm);
-  const selectedCourseName = Form.useWatch('courseName', curriculumPlanForm);
+  const [personalCurriculumPlanForm] = Form.useForm<PersonalCurriculumPlanFormValues>();
+  const [departmentCurriculumPlanForm] = Form.useForm<DepartmentCurriculumPlanFormValues>();
+  const selectedPersonalClassName = Form.useWatch('className', personalCurriculumPlanForm);
+  const selectedPersonalCourseName = Form.useWatch('courseName', personalCurriculumPlanForm);
+  const selectedDepartmentClassName = Form.useWatch('className', departmentCurriculumPlanForm);
+  const selectedDepartmentCourseName = Form.useWatch('courseName', departmentCurriculumPlanForm);
   const [activePanelKey, setActivePanelKey] = useState<UpstreamPanelKey>('introduction');
   const [currentAccount, setCurrentAccount] = useState<CurrentUpstreamDemoAccount | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
-  const [isLoadingCurriculumPlans, setIsLoadingCurriculumPlans] = useState(false);
-  const [isLoadingCurriculumPlanDetail, setIsLoadingCurriculumPlanDetail] = useState(false);
+  const [isLoadingCurriculumPlans, setIsLoadingCurriculumPlans] = useState<
+    Record<CurriculumPlanScope, boolean>
+  >({
+    personal: false,
+    department: false,
+  });
   const [isLoadingIdentity, setIsLoadingIdentity] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<UpstreamActionError | null>(null);
-  const [curriculumPlanResult, setCurriculumPlanResult] = useState<CurriculumPlanListResult | null>(
-    null,
-  );
-  const [curriculumPlanDetailResult, setCurriculumPlanDetailResult] =
-    useState<CurriculumPlanDetailResult | null>(null);
+  const [curriculumPlanResult, setCurriculumPlanResult] = useState<
+    Record<CurriculumPlanScope, CurriculumPlanListResult | null>
+  >({
+    personal: null,
+    department: null,
+  });
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
   const [verifiedIdentityResult, setVerifiedIdentityResult] =
     useState<VerifiedStaffIdentityResult | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
   const [storedSession, setStoredSession] = useState<StoredUpstreamSession | null>(null);
-  const curriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult);
-  const classNameOptions = getUniqueValues(curriculumPlanRecords.map((record) => record.className));
-  const courseNameOptions = getUniqueValues(
-    curriculumPlanRecords
-      .filter((record) => !selectedClassName || record.className === selectedClassName)
+  const personalCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.personal);
+  const personalClassNameOptions = getUniqueValues(
+    personalCurriculumPlanRecords.map((record) => record.className),
+  );
+  const personalCourseNameOptions = getUniqueValues(
+    personalCurriculumPlanRecords
+      .filter(
+        (record) => !selectedPersonalClassName || record.className === selectedPersonalClassName,
+      )
       .map((record) => record.courseName),
   );
-  const matchingCurriculumPlans = findMatchingCurriculumPlans(curriculumPlanRecords, {
-    className: selectedClassName,
-    courseName: selectedCourseName,
-  });
+  const personalMatchingCurriculumPlans = findMatchingCurriculumPlans(
+    personalCurriculumPlanRecords,
+    {
+      className: selectedPersonalClassName,
+      courseName: selectedPersonalCourseName,
+    },
+  );
+  const departmentCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.department);
+  const departmentClassNameOptions = getUniqueValues(
+    departmentCurriculumPlanRecords.map((record) => record.className),
+  );
+  const departmentCourseNameOptions = getUniqueValues(
+    departmentCurriculumPlanRecords
+      .filter(
+        (record) =>
+          !selectedDepartmentClassName || record.className === selectedDepartmentClassName,
+      )
+      .map((record) => record.courseName),
+  );
+  const departmentMatchingCurriculumPlans = findMatchingCurriculumPlans(
+    departmentCurriculumPlanRecords,
+    {
+      className: selectedDepartmentClassName,
+      courseName: selectedDepartmentCourseName,
+    },
+  );
 
   const persistStoredSession = useCallback(
     (
@@ -348,8 +411,10 @@ export function UpstreamSessionDemoLabPage() {
   const clearCurrentSession = useCallback((error?: UpstreamActionError) => {
     clearStoredUpstreamSession();
     setStoredSession(null);
-    setCurriculumPlanResult(null);
-    setCurriculumPlanDetailResult(null);
+    setCurriculumPlanResult({
+      personal: null,
+      department: null,
+    });
     setDirectoryResult(null);
     setVerifiedIdentityResult(null);
     setActionError(error ?? null);
@@ -387,34 +452,29 @@ export function UpstreamSessionDemoLabPage() {
             return;
           }
           case 'curriculum-plan': {
-            setIsLoadingCurriculumPlans(true);
-            setCurriculumPlanDetailResult(null);
-            const result = await fetchCurriculumPlanList({
-              departmentId: action.values.departmentId,
-              schoolYear: action.values.schoolYear,
-              semester: action.values.semester,
-              sessionToken: session.upstreamSessionToken,
-            });
+            setIsLoadingCurriculumPlans((current) => ({
+              ...current,
+              [action.scope]: true,
+            }));
+            const result =
+              action.scope === 'personal'
+                ? await fetchCurriculumPlanList({
+                    ...(action.values as PersonalCurriculumPlanFormValues),
+                    sessionToken: session.upstreamSessionToken,
+                  })
+                : await fetchDepartmentCurriculumPlanList({
+                    ...(action.values as DepartmentCurriculumPlanFormValues),
+                    sessionToken: session.upstreamSessionToken,
+                  });
 
             persistStoredSession(session, {
               expiresAt: result.expiresAt,
               upstreamSessionToken: result.upstreamSessionToken,
             });
-            setCurriculumPlanResult(result);
-            return;
-          }
-          case 'curriculum-plan-detail': {
-            setIsLoadingCurriculumPlanDetail(true);
-            const result = await fetchCurriculumPlanDetail({
-              planId: action.values.planId,
-              sessionToken: session.upstreamSessionToken,
-            });
-
-            persistStoredSession(session, {
-              expiresAt: result.expiresAt,
-              upstreamSessionToken: result.upstreamSessionToken,
-            });
-            setCurriculumPlanDetailResult(result);
+            setCurriculumPlanResult((current) => ({
+              ...current,
+              [action.scope]: result,
+            }));
             return;
           }
         }
@@ -447,23 +507,27 @@ export function UpstreamSessionDemoLabPage() {
             });
             return;
           case 'curriculum-plan':
-            setCurriculumPlanResult(null);
+            setCurriculumPlanResult((current) => ({
+              ...current,
+              [action.scope]: null,
+            }));
             setActionError({
-              panel: 'curriculum-plan',
-              message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划列表。'),
-            });
-            return;
-          case 'curriculum-plan-detail':
-            setCurriculumPlanDetailResult(null);
-            setActionError({
-              panel: 'curriculum-plan',
-              message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划详情。'),
+              panel: CURRICULUM_PLAN_PANEL_BY_SCOPE[action.scope],
+              message: resolveUpstreamErrorMessage(
+                error,
+                `暂时无法读取${CURRICULUM_PLAN_SCOPE_LABEL[action.scope]}列表。`,
+              ),
             });
             return;
         }
       } finally {
-        setIsLoadingCurriculumPlans(false);
-        setIsLoadingCurriculumPlanDetail(false);
+        if (action.type === 'curriculum-plan') {
+          setIsLoadingCurriculumPlans((current) => ({
+            ...current,
+            [action.scope]: false,
+          }));
+        }
+
         setIsLoadingDirectory(false);
         setIsLoadingIdentity(false);
       }
@@ -499,8 +563,10 @@ export function UpstreamSessionDemoLabPage() {
       setPageError(null);
       setLoginError(null);
       setActionError(null);
-      setCurriculumPlanResult(null);
-      setCurriculumPlanDetailResult(null);
+      setCurriculumPlanResult({
+        personal: null,
+        department: null,
+      });
       setDirectoryResult(null);
       setVerifiedIdentityResult(null);
 
@@ -562,10 +628,10 @@ export function UpstreamSessionDemoLabPage() {
   ]);
 
   useEffect(() => {
-    const records = getCurriculumPlanRecords(curriculumPlanResult);
+    const records = personalCurriculumPlanRecords;
 
     if (!records.length) {
-      curriculumPlanForm.setFieldsValue({
+      personalCurriculumPlanForm.setFieldsValue({
         className: undefined,
         courseName: undefined,
       });
@@ -573,7 +639,9 @@ export function UpstreamSessionDemoLabPage() {
     }
 
     const nextClassNameOptions = getUniqueValues(records.map((record) => record.className));
-    const currentClassName = curriculumPlanForm.getFieldValue('className') as string | undefined;
+    const currentClassName = personalCurriculumPlanForm.getFieldValue('className') as
+      | string
+      | undefined;
     const nextClassName = nextClassNameOptions.includes(currentClassName ?? '')
       ? currentClassName
       : nextClassNameOptions[0];
@@ -582,23 +650,63 @@ export function UpstreamSessionDemoLabPage() {
         .filter((record) => record.className === nextClassName)
         .map((record) => record.courseName),
     );
-    const currentCourseName = curriculumPlanForm.getFieldValue('courseName') as string | undefined;
+    const currentCourseName = personalCurriculumPlanForm.getFieldValue('courseName') as
+      | string
+      | undefined;
     const nextCourseName = nextCourseNameOptions.includes(currentCourseName ?? '')
       ? currentCourseName
       : nextCourseNameOptions[0];
 
     if (currentClassName !== nextClassName || currentCourseName !== nextCourseName) {
-      curriculumPlanForm.setFieldsValue({
+      personalCurriculumPlanForm.setFieldsValue({
         className: nextClassName,
         courseName: nextCourseName,
       });
     }
-  }, [curriculumPlanForm, curriculumPlanResult]);
+  }, [personalCurriculumPlanForm, personalCurriculumPlanRecords]);
+
+  useEffect(() => {
+    const records = departmentCurriculumPlanRecords;
+
+    if (!records.length) {
+      departmentCurriculumPlanForm.setFieldsValue({
+        className: undefined,
+        courseName: undefined,
+      });
+      return;
+    }
+
+    const nextClassNameOptions = getUniqueValues(records.map((record) => record.className));
+    const currentClassName = departmentCurriculumPlanForm.getFieldValue('className') as
+      | string
+      | undefined;
+    const nextClassName = nextClassNameOptions.includes(currentClassName ?? '')
+      ? currentClassName
+      : nextClassNameOptions[0];
+    const nextCourseNameOptions = getUniqueValues(
+      records
+        .filter((record) => record.className === nextClassName)
+        .map((record) => record.courseName),
+    );
+    const currentCourseName = departmentCurriculumPlanForm.getFieldValue('courseName') as
+      | string
+      | undefined;
+    const nextCourseName = nextCourseNameOptions.includes(currentCourseName ?? '')
+      ? currentCourseName
+      : nextCourseNameOptions[0];
+
+    if (currentClassName !== nextClassName || currentCourseName !== nextCourseName) {
+      departmentCurriculumPlanForm.setFieldsValue({
+        className: nextClassName,
+        courseName: nextCourseName,
+      });
+    }
+  }, [departmentCurriculumPlanForm, departmentCurriculumPlanRecords]);
 
   const hasStoredSession = Boolean(storedSession);
   const isRunningUpstreamAction =
-    isLoadingCurriculumPlans ||
-    isLoadingCurriculumPlanDetail ||
+    isLoadingCurriculumPlans.personal ||
+    isLoadingCurriculumPlans.department ||
     isLoadingDirectory ||
     isLoadingIdentity;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
@@ -610,26 +718,41 @@ export function UpstreamSessionDemoLabPage() {
       case 'verified-staff-identity':
         return '读取教职工身份';
       case 'curriculum-plan':
-        return '读取教学计划列表';
-      case 'curriculum-plan-detail':
-        return '读取教学计划详情';
+        return `读取${CURRICULUM_PLAN_SCOPE_LABEL[action.scope]}列表`;
       default:
         return '读取上游数据';
     }
   }
 
-  async function handleCurriculumPlanRequest() {
+  async function handleCurriculumPlanRequest(scope: CurriculumPlanScope) {
     try {
-      const values = await curriculumPlanForm.validateFields([
-        'schoolYear',
-        'semester',
-        'departmentId',
-      ]);
+      if (scope === 'personal') {
+        const values = await personalCurriculumPlanForm.validateFields([
+          'schoolYear',
+          'semester',
+          'departmentId',
+        ]);
 
-      await ensureSessionAndRun({
-        type: 'curriculum-plan',
-        values,
-      });
+        await ensureSessionAndRun({
+          scope,
+          type: 'curriculum-plan',
+          values,
+        });
+      } else {
+        const values = await departmentCurriculumPlanForm.validateFields([
+          'schoolYear',
+          'semester',
+          'departmentId',
+          'reviewStatus',
+          'teacherId',
+        ]);
+
+        await ensureSessionAndRun({
+          scope,
+          type: 'curriculum-plan',
+          values,
+        });
+      }
     } catch (error) {
       if (
         error &&
@@ -641,59 +764,11 @@ export function UpstreamSessionDemoLabPage() {
       }
 
       setActionError({
-        panel: 'curriculum-plan',
-        message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划列表。'),
-      });
-    }
-  }
-
-  async function handleCurriculumPlanDetailRequest() {
-    try {
-      const values = await curriculumPlanForm.validateFields(['className', 'courseName']);
-      const matches = findMatchingCurriculumPlans(curriculumPlanRecords, {
-        className: values.className,
-        courseName: values.courseName,
-      });
-
-      if (matches.length === 0) {
-        setCurriculumPlanDetailResult(null);
-        setActionError({
-          panel: 'curriculum-plan',
-          message: '当前列表中未找到匹配的班级与课程，请先重新查询教学计划列表。',
-        });
-        return;
-      }
-
-      if (matches.length > 1) {
-        setCurriculumPlanDetailResult(null);
-        setActionError({
-          panel: 'curriculum-plan',
-          message: `当前班级与课程组合匹配到 ${matches.length} 条教学计划，暂时无法唯一定位详情。`,
-        });
-        return;
-      }
-
-      await ensureSessionAndRun({
-        type: 'curriculum-plan-detail',
-        values: {
-          className: matches[0].className,
-          courseName: matches[0].courseName,
-          planId: matches[0].planId,
-        },
-      });
-    } catch (error) {
-      if (
-        error &&
-        typeof error === 'object' &&
-        'errorFields' in error &&
-        Array.isArray(error.errorFields)
-      ) {
-        return;
-      }
-
-      setActionError({
-        panel: 'curriculum-plan',
-        message: resolveUpstreamErrorMessage(error, '暂时无法读取教学计划详情。'),
+        panel: CURRICULUM_PLAN_PANEL_BY_SCOPE[scope],
+        message: resolveUpstreamErrorMessage(
+          error,
+          `暂时无法读取${CURRICULUM_PLAN_SCOPE_LABEL[scope]}列表。`,
+        ),
       });
     }
   }
@@ -721,7 +796,7 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>按需查询：</strong>
-              “教学计划”标签页支持按学年、学期查询列表，并基于班级与课程读取对应详情。
+              “个人教学计划”和“系部教学计划”标签页均支持按学年、学期查询列表，并基于班级与课程读取对应详情。
             </li>
             <li>
               <strong>Token 滚动：</strong>
@@ -744,6 +819,7 @@ export function UpstreamSessionDemoLabPage() {
   function renderTeacherDirectoryPanel() {
     return (
       <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchTeacherDirectory')}
         {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
         {isLoadingDirectory ? (
@@ -789,6 +865,7 @@ export function UpstreamSessionDemoLabPage() {
   function renderVerifiedStaffIdentityPanel() {
     return (
       <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchVerifiedStaffIdentity')}
         {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
         {isLoadingIdentity ? (
@@ -832,13 +909,40 @@ export function UpstreamSessionDemoLabPage() {
   }
 
   function renderCurriculumPlanPanel() {
+    const scope: CurriculumPlanScope =
+      activePanelKey === 'department-curriculum-plan' ? 'department' : 'personal';
+    const curriculumPlanForm =
+      scope === 'personal' ? personalCurriculumPlanForm : departmentCurriculumPlanForm;
+    const currentCurriculumPlanResult = curriculumPlanResult[scope];
+    const currentCurriculumPlanRecords =
+      scope === 'personal' ? personalCurriculumPlanRecords : departmentCurriculumPlanRecords;
+    const currentClassNameOptions =
+      scope === 'personal' ? personalClassNameOptions : departmentClassNameOptions;
+    const currentCourseNameOptions =
+      scope === 'personal' ? personalCourseNameOptions : departmentCourseNameOptions;
+    const currentMatchingCurriculumPlans =
+      scope === 'personal' ? personalMatchingCurriculumPlans : departmentMatchingCurriculumPlans;
+    const selectedClassName =
+      scope === 'personal' ? selectedPersonalClassName : selectedDepartmentClassName;
+    const selectedCourseName =
+      scope === 'personal' ? selectedPersonalCourseName : selectedDepartmentCourseName;
+    const isLoadingCurriculumPlanList = isLoadingCurriculumPlans[scope];
+    const panelLabel = CURRICULUM_PLAN_SCOPE_LABEL[scope];
+
     return (
       <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag(
+          scope === 'personal' ? 'fetchCurriculumPlanList' : 'fetchDepartmentCurriculumPlanList',
+        )}
         {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
-        <Form<CurriculumPlanFormValues>
+        <Form
           form={curriculumPlanForm}
-          initialValues={getDefaultCurriculumPlanValues()}
+          initialValues={
+            scope === 'personal'
+              ? getDefaultPersonalCurriculumPlanValues()
+              : getDefaultDepartmentCurriculumPlanValues()
+          }
           layout="inline"
           requiredMark={false}
           style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}
@@ -863,46 +967,65 @@ export function UpstreamSessionDemoLabPage() {
             <Input placeholder="ORG0302" style={{ width: 120 }} />
           </Form.Item>
 
+          {scope === 'department' ? (
+            <Form.Item label="审核状态" name="reviewStatus">
+              <Select
+                allowClear
+                placeholder="全部"
+                style={{ width: 140 }}
+                options={DEPARTMENT_CURRICULUM_PLAN_REVIEW_STATUS_OPTIONS}
+              />
+            </Form.Item>
+          ) : null}
+
+          {scope === 'department' ? (
+            <Form.Item label="教师 ID" name="teacherId">
+              <Input placeholder="默认空字符串" style={{ width: 140 }} />
+            </Form.Item>
+          ) : null}
+
           <Form.Item>
             <Button
               type="primary"
-              loading={isLoadingCurriculumPlans}
+              loading={isLoadingCurriculumPlanList}
               onClick={() => {
-                void handleCurriculumPlanRequest();
+                void handleCurriculumPlanRequest(scope);
               }}
             >
               查询
             </Button>
           </Form.Item>
 
-          {isLoadingCurriculumPlans ? (
-            <Alert type="info" showIcon title="正在读取教学计划列表..." />
-          ) : curriculumPlanResult ? (
+          {isLoadingCurriculumPlanList ? (
+            <Alert type="info" showIcon title={`正在读取${panelLabel}列表...`} />
+          ) : currentCurriculumPlanResult ? (
             <>
               <div className="flex flex-wrap gap-2">
                 <Tag variant="filled" color="magenta">
-                  计划总数：{curriculumPlanResult.count}
+                  计划总数：{currentCurriculumPlanResult.count}
                 </Tag>
                 <Tag variant="filled" color="cyan">
-                  过期时间：{formatDateTime(curriculumPlanResult.expiresAt)}
+                  过期时间：{formatDateTime(currentCurriculumPlanResult.expiresAt)}
                 </Tag>
                 <Tag variant="filled" color="blue">
                   预览条数：
-                  {Array.isArray(curriculumPlanResult.plans)
-                    ? Math.min(curriculumPlanResult.plans.length, CURRICULUM_PLAN_PREVIEW_LIMIT)
+                  {Array.isArray(currentCurriculumPlanResult.plans)
+                    ? Math.min(
+                        currentCurriculumPlanResult.plans.length,
+                        CURRICULUM_PLAN_PREVIEW_LIMIT,
+                      )
                     : CURRICULUM_PLAN_PREVIEW_LIMIT}
                 </Tag>
                 <Tag variant="filled" color="processing">
-                  可匹配计划：{curriculumPlanRecords.length}
+                  可匹配计划：{currentCurriculumPlanRecords.length}
                 </Tag>
               </div>
 
-              {curriculumPlanRecords.length > 0 ? (
+              {currentCurriculumPlanRecords.length > 0 ? (
                 <Card size="small" title="详情定位">
                   <div className="flex flex-col gap-4">
                     <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      详情查询只暴露班级名称和课程名称。前端会先从列表中定位唯一计划，再在内部调用
-                      `fetchCurriculumPlanDetail`。
+                      这里直接展示当前班级与课程唯一命中的计划原始记录，便于确认定位是否正确。
                     </Typography.Paragraph>
 
                     <div className="flex flex-wrap gap-4">
@@ -915,12 +1038,11 @@ export function UpstreamSessionDemoLabPage() {
                         <Select
                           placeholder="请选择班级名称"
                           style={{ width: 280 }}
-                          options={classNameOptions.map((value) => ({
+                          options={currentClassNameOptions.map((value) => ({
                             label: value,
                             value,
                           }))}
                           onChange={() => {
-                            setCurriculumPlanDetailResult(null);
                             setActionError(null);
                           }}
                         />
@@ -935,12 +1057,11 @@ export function UpstreamSessionDemoLabPage() {
                         <Select
                           placeholder="请选择课程名称"
                           style={{ width: 360 }}
-                          options={courseNameOptions.map((value) => ({
+                          options={currentCourseNameOptions.map((value) => ({
                             label: value,
                             value,
                           }))}
                           onChange={() => {
-                            setCurriculumPlanDetailResult(null);
                             setActionError(null);
                           }}
                         />
@@ -948,26 +1069,38 @@ export function UpstreamSessionDemoLabPage() {
                     </div>
 
                     {selectedClassName && selectedCourseName ? (
-                      matchingCurriculumPlans.length === 1 ? (
-                        <Alert
-                          type="success"
-                          showIcon
-                          title={`已定位计划：${matchingCurriculumPlans[0].className} / ${matchingCurriculumPlans[0].courseName}`}
-                          description={
-                            matchingCurriculumPlans[0].teacherName
-                              ? `任课教师：${matchingCurriculumPlans[0].teacherName}${
-                                  matchingCurriculumPlans[0].weeklyHours
-                                    ? `，周学时：${matchingCurriculumPlans[0].weeklyHours}`
-                                    : ''
-                                }`
-                              : undefined
-                          }
-                        />
-                      ) : matchingCurriculumPlans.length > 1 ? (
+                      currentMatchingCurriculumPlans.length === 1 ? (
+                        <Card
+                          size="small"
+                          title={`已定位计划：${currentMatchingCurriculumPlans[0].className} / ${currentMatchingCurriculumPlans[0].courseName}`}
+                        >
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-wrap gap-2">
+                              <Tag variant="filled" color="processing">
+                                计划 ID：{currentMatchingCurriculumPlans[0].planId}
+                              </Tag>
+                              {currentMatchingCurriculumPlans[0].teacherName ? (
+                                <Tag variant="filled" color="cyan">
+                                  任课教师：{currentMatchingCurriculumPlans[0].teacherName}
+                                </Tag>
+                              ) : null}
+                              {currentMatchingCurriculumPlans[0].weeklyHours ? (
+                                <Tag variant="filled" color="blue">
+                                  周学时：{currentMatchingCurriculumPlans[0].weeklyHours}
+                                </Tag>
+                              ) : null}
+                            </div>
+
+                            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                              {JSON.stringify(currentMatchingCurriculumPlans[0].raw, null, 2)}
+                            </pre>
+                          </div>
+                        </Card>
+                      ) : currentMatchingCurriculumPlans.length > 1 ? (
                         <Alert
                           type="warning"
                           showIcon
-                          title={`当前组合匹配到 ${matchingCurriculumPlans.length} 条计划，暂时无法唯一定位详情。`}
+                          title={`当前组合匹配到 ${currentMatchingCurriculumPlans.length} 条计划，暂时无法唯一定位详情。`}
                         />
                       ) : (
                         <Alert
@@ -980,24 +1113,13 @@ export function UpstreamSessionDemoLabPage() {
 
                     <div className="flex flex-wrap gap-2">
                       <Button
-                        type="primary"
-                        loading={isLoadingCurriculumPlanDetail}
-                        disabled={!curriculumPlanRecords.length}
                         onClick={() => {
-                          void handleCurriculumPlanDetailRequest();
-                        }}
-                      >
-                        查看详情
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          setCurriculumPlanDetailResult(null);
                           setActionError(null);
                           curriculumPlanForm.setFieldsValue({
-                            className: classNameOptions[0],
+                            className: currentClassNameOptions[0],
                             courseName: getUniqueValues(
-                              curriculumPlanRecords
-                                .filter((record) => record.className === classNameOptions[0])
+                              currentCurriculumPlanRecords
+                                .filter((record) => record.className === currentClassNameOptions[0])
                                 .map((record) => record.courseName),
                             )[0],
                           });
@@ -1015,53 +1137,11 @@ export function UpstreamSessionDemoLabPage() {
                   title="当前列表未识别出可用的班级名称、课程名称或计划 ID，暂时无法继续读取详情。"
                 />
               )}
-
-              <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
-                {JSON.stringify(buildCurriculumPlanPreview(curriculumPlanResult), null, 2)}
-              </pre>
-
-              {isLoadingCurriculumPlanDetail ? (
-                <Alert type="info" showIcon title="正在读取教学计划详情..." />
-              ) : curriculumPlanDetailResult ? (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    <Tag variant="filled" color="purple">
-                      详情条数：{curriculumPlanDetailResult.count}
-                    </Tag>
-                    <Tag variant="filled" color="cyan">
-                      过期时间：{formatDateTime(curriculumPlanDetailResult.expiresAt)}
-                    </Tag>
-                    <Button
-                      size="small"
-                      type="link"
-                      onClick={() => {
-                        void handleCurriculumPlanDetailRequest();
-                      }}
-                    >
-                      刷新详情
-                    </Button>
-                  </div>
-
-                  <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
-                    {JSON.stringify(
-                      buildCurriculumPlanDetailPreview(curriculumPlanDetailResult),
-                      null,
-                      2,
-                    )}
-                  </pre>
-                </>
-              ) : null}
             </>
           ) : (
-            <Alert
-              type="info"
-              showIcon
-              title={
-                hasStoredSession
-                  ? '填写参数后点击“查询”即可查看预览结果。'
-                  : '登录 upstream 后即可读取教学计划列表。'
-              }
-            />
+            !hasStoredSession && (
+              <Alert type="info" showIcon title={`登录 upstream 后即可读取${panelLabel}列表。`} />
+            )
           )}
         </Form>
       </div>
@@ -1076,7 +1156,8 @@ export function UpstreamSessionDemoLabPage() {
         return renderTeacherDirectoryPanel();
       case 'verified-staff-identity':
         return renderVerifiedStaffIdentityPanel();
-      case 'curriculum-plan':
+      case 'personal-curriculum-plan':
+      case 'department-curriculum-plan':
         return renderCurriculumPlanPanel();
     }
   }
@@ -1112,7 +1193,7 @@ export function UpstreamSessionDemoLabPage() {
           type="info"
           showIcon
           title="链路说明"
-          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换标签页会自动读取数据。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
+          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典或教职工身份会自动读取数据，个人/系部教学计划则按需查询。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
 
@@ -1276,7 +1357,10 @@ export function UpstreamSessionDemoLabPage() {
 
                 writeStoredUpstreamSession(nextStoredSession);
                 setStoredSession(nextStoredSession);
-                setCurriculumPlanResult(null);
+                setCurriculumPlanResult({
+                  personal: null,
+                  department: null,
+                });
                 setDirectoryResult(null);
                 setVerifiedIdentityResult(null);
                 setIsLoginModalOpen(false);

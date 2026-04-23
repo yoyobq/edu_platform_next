@@ -32,6 +32,10 @@ type CurriculumPlanListResponse = {
   fetchCurriculumPlanList: CurriculumPlanListResult;
 };
 
+type DepartmentCurriculumPlanListResponse = {
+  fetchDepartmentCurriculumPlanList: CurriculumPlanListResult;
+};
+
 type CurriculumPlanDetailResponse = {
   fetchCurriculumPlanDetail: CurriculumPlanDetailResult;
 };
@@ -56,6 +60,13 @@ export type TeacherDirectoryResult = {
   }[];
   upstreamSessionToken: string;
 };
+
+export type DepartmentCurriculumPlanReviewStatus =
+  | 'APPROVED'
+  | 'PENDING_SUBMIT'
+  | 'REJECTED'
+  | 'UNDER_REVIEW'
+  | 'UNRECORDED';
 
 export type CurriculumPlanListResult = {
   count: number;
@@ -119,6 +130,31 @@ const FETCH_CURRICULUM_PLAN_LIST_QUERY = `
       schoolYear: $schoolYear
       semester: $semester
       sessionToken: $sessionToken
+    ) {
+      count
+      expiresAt
+      plans
+      upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY = `
+  query FetchDepartmentCurriculumPlanList(
+    $departmentId: String!
+    $reviewStatus: DepartmentCurriculumPlanReviewStatus
+    $schoolYear: String!
+    $semester: String!
+    $sessionToken: String!
+    $teacherId: String
+  ) {
+    fetchDepartmentCurriculumPlanList(
+      departmentId: $departmentId
+      reviewStatus: $reviewStatus
+      schoolYear: $schoolYear
+      semester: $semester
+      sessionToken: $sessionToken
+      teacherId: $teacherId
     ) {
       count
       expiresAt
@@ -243,6 +279,36 @@ export async function fetchCurriculumPlanList(input: {
   });
 
   return response.fetchCurriculumPlanList;
+}
+
+export async function fetchDepartmentCurriculumPlanList(input: {
+  departmentId: string;
+  reviewStatus?: DepartmentCurriculumPlanReviewStatus;
+  schoolYear: string;
+  semester: string;
+  sessionToken: string;
+  teacherId?: string;
+}) {
+  const response = await requestGraphQL<
+    DepartmentCurriculumPlanListResponse,
+    {
+      departmentId: string;
+      reviewStatus?: DepartmentCurriculumPlanReviewStatus;
+      schoolYear: string;
+      semester: string;
+      sessionToken: string;
+      teacherId?: string;
+    }
+  >(FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY, {
+    departmentId: input.departmentId.trim(),
+    reviewStatus: input.reviewStatus,
+    schoolYear: String(input.schoolYear || '').trim(),
+    semester: String(input.semester || '').trim(),
+    sessionToken: input.sessionToken,
+    teacherId: input.teacherId?.trim() || undefined,
+  });
+
+  return response.fetchDepartmentCurriculumPlanList;
 }
 
 export async function fetchCurriculumPlanDetail(input: { planId: string; sessionToken: string }) {
