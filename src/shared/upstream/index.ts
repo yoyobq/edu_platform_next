@@ -1,6 +1,6 @@
-export type { StoredUpstreamSession } from '@/shared/upstream';
+export type { StoredUpstreamSession } from './session-storage';
 export {
   clearStoredUpstreamSession,
   readStoredUpstreamSession,
   writeStoredUpstreamSession,
-} from '@/shared/upstream';
+} from './session-storage';

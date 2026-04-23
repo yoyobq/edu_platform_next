@@ -46,6 +46,8 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/course-schedule-sync',
+      '/labs/semester-calendar',
       '/sandbox/playground',
     ]);
   });
@@ -65,10 +67,12 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/course-schedule-sync',
+      '/labs/semester-calendar',
     ]);
   });
 
-  it('shows only the shared upstream lab to staff users, while keeping admin-only labs hidden', () => {
+  it('shows the shared staff labs while keeping admin-only labs hidden', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1001,
@@ -80,6 +84,7 @@ describe('navigation catalog', () => {
     expect(staffItems.map((item) => item.key)).toEqual(['labs']);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
+      '/labs/semester-calendar',
     ]);
   });
 
@@ -99,6 +104,8 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
+      '/labs/course-schedule-sync',
+      '/labs/semester-calendar',
     ]);
   });
 
@@ -124,6 +131,8 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/course-schedule-sync',
+      '/labs/semester-calendar',
       '/sandbox/playground',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([

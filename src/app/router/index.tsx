@@ -53,6 +53,10 @@ import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
+import {
+  courseScheduleSyncLabAccess,
+  loadCourseScheduleSyncLabRouteModule,
+} from '@/labs/course-schedule-sync';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
@@ -560,6 +564,47 @@ async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function courseScheduleSyncLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(courseScheduleSyncLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(courseScheduleSyncLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  if (
+    !hasAdminOrAcademicOfficerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -763,6 +808,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'course-schedule-sync',
+            loader: courseScheduleSyncLabLoader,
+            lazy: loadCourseScheduleSyncLabRouteModule,
           },
           {
             path: 'semester-calendar',
