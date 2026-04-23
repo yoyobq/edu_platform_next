@@ -14,12 +14,7 @@ import {
   Typography,
 } from 'antd';
 
-import {
-  clearStoredUpstreamSession,
-  readStoredUpstreamSession,
-  type StoredUpstreamSession,
-  writeStoredUpstreamSession,
-} from '@/shared/upstream';
+import { type StoredUpstreamSession, useStoredUpstreamSession } from '@/shared/upstream';
 
 import {
   type CourseScheduleSyncDepartmentOption,
@@ -27,11 +22,9 @@ import {
   type CourseScheduleSyncItem,
   type CourseScheduleSyncResult,
   type CourseScheduleSyncSemesterOption,
-  type CurrentCourseScheduleSyncAccount,
   type DepartmentCurriculumPlanReviewStatus,
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
-  fetchCurrentCourseScheduleSyncAccount,
   isExpiredUpstreamSessionError,
   loginUpstreamSession,
   resolveCourseScheduleSyncErrorMessage,
@@ -64,6 +57,16 @@ type DepartmentOption = {
   disabled: boolean;
   id: string;
   label: string;
+};
+
+type SemesterCourseScheduleSyncCurrentAccount = {
+  accountId: number;
+  displayName: string;
+};
+
+type SemesterCourseScheduleSyncPageContentProps = {
+  currentAccount: SemesterCourseScheduleSyncCurrentAccount | null;
+  isAuthenticating: boolean;
 };
 
 const REVIEW_STATUS_OPTIONS: Array<{
@@ -146,14 +149,12 @@ function formatFailureDetails(value: unknown) {
   }
 }
 
-export function SemesterCourseScheduleSyncPageContent() {
+export function SemesterCourseScheduleSyncPageContent({
+  currentAccount,
+  isAuthenticating,
+}: SemesterCourseScheduleSyncPageContentProps) {
   const [syncForm] = Form.useForm<SyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const [currentAccount, setCurrentAccount] = useState<CurrentCourseScheduleSyncAccount | null>(
-    null,
-  );
-  const [storedSession, setStoredSession] = useState<StoredUpstreamSession | null>(null);
-  const [isBootstrapping, setIsBootstrapping] = useState(true);
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -165,40 +166,15 @@ export function SemesterCourseScheduleSyncPageContent() {
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
   const [pendingSyncValues, setPendingSyncValues] = useState<SyncFormValues | null>(null);
-
-  const persistStoredSession = useCallback(
-    (
-      session: StoredUpstreamSession,
-      input: {
-        expiresAt?: string | null;
-        upstreamLoginId?: string | null;
-        upstreamSessionToken: string;
-      },
-    ) => {
-      writeStoredUpstreamSession({
-        accountId: session.accountId,
-        expiresAt: input.expiresAt ?? session.expiresAt,
-        upstreamLoginId: input.upstreamLoginId ?? session.upstreamLoginId,
-        upstreamSessionToken: input.upstreamSessionToken,
-      });
-
-      setStoredSession(
-        readStoredUpstreamSession(session.accountId) ?? {
-          ...session,
-          expiresAt: input.expiresAt ?? session.expiresAt,
-          upstreamLoginId: input.upstreamLoginId ?? session.upstreamLoginId,
-          upstreamSessionToken: input.upstreamSessionToken,
-        },
-      );
-    },
-    [],
-  );
+  const { clearSession, loginAndStoreSession, persistSession, storedSession } =
+    useStoredUpstreamSession({
+      account: currentAccount,
+    });
 
   const clearCurrentSession = useCallback(() => {
-    clearStoredUpstreamSession();
-    setStoredSession(null);
+    clearSession();
     setPendingSyncValues(null);
-  }, []);
+  }, [clearSession]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues) => {
@@ -218,7 +194,7 @@ export function SemesterCourseScheduleSyncPageContent() {
           upstreamSessionToken: session.upstreamSessionToken,
         });
 
-        persistStoredSession(session, {
+        persistSession(session, {
           expiresAt: syncResult.expiresAt,
           upstreamSessionToken: syncResult.upstreamSessionToken,
         });
@@ -243,7 +219,7 @@ export function SemesterCourseScheduleSyncPageContent() {
         setIsSyncing(false);
       }
     },
-    [clearCurrentSession, loginForm, persistStoredSession],
+    [clearCurrentSession, loginForm, persistSession],
   );
 
   const handleRunSync = useCallback(async () => {
@@ -271,42 +247,13 @@ export function SemesterCourseScheduleSyncPageContent() {
   }, [currentAccount, loginForm, performSync, storedSession, syncForm]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function bootstrapAccount() {
-      setIsBootstrapping(true);
-      setPageError(null);
-
-      try {
-        const nextAccount = await fetchCurrentCourseScheduleSyncAccount();
-
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(nextAccount);
-        setStoredSession(readStoredUpstreamSession(nextAccount.accountId));
-      } catch (error) {
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(null);
-        setStoredSession(null);
-        setPageError(resolveCourseScheduleSyncErrorMessage(error));
-      } finally {
-        if (!isCancelled) {
-          setIsBootstrapping(false);
-        }
-      }
+    if (!isAuthenticating && !currentAccount) {
+      setPageError('当前登录会话已失效，请重新登录后再试。');
+      return;
     }
 
-    void bootstrapAccount();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, []);
+    setPageError(null);
+  }, [currentAccount, isAuthenticating]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -389,23 +336,13 @@ export function SemesterCourseScheduleSyncPageContent() {
       setLoginError(null);
 
       try {
-        const normalizedUserId = values.userId.trim();
-        const upstreamSession = await loginUpstreamSession({
+        const nextStoredSession = await loginAndStoreSession({
+          login: loginUpstreamSession,
           password: values.password,
-          userId: normalizedUserId,
+          userId: values.userId,
         });
         const nextPendingSyncValues = pendingSyncValues;
 
-        const nextStoredSession: StoredUpstreamSession = {
-          accountId: currentAccount.accountId,
-          expiresAt: upstreamSession.expiresAt,
-          upstreamLoginId: normalizedUserId || null,
-          upstreamSessionToken: upstreamSession.upstreamSessionToken,
-          version: 1,
-        };
-
-        writeStoredUpstreamSession(nextStoredSession);
-        setStoredSession(nextStoredSession);
         setPendingSyncValues(null);
         setIsLoginModalOpen(false);
         loginForm.resetFields();
@@ -419,7 +356,7 @@ export function SemesterCourseScheduleSyncPageContent() {
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginForm, pendingSyncValues, performSync],
+    [currentAccount, loginAndStoreSession, loginForm, pendingSyncValues, performSync],
   );
 
   const syncItemsColumns = [
@@ -469,7 +406,7 @@ export function SemesterCourseScheduleSyncPageContent() {
     },
   ];
 
-  if (isBootstrapping) {
+  if (isAuthenticating) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spin size="large" />

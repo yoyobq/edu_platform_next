@@ -1,5 +1,9 @@
 import type { OperationVariables } from '@apollo/client';
 
+import {
+  requestAcademicSemesters as requestSharedAcademicSemesters,
+  type SharedAcademicSemesterRecord,
+} from '@/shared/graphql';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type {
@@ -42,19 +46,6 @@ const ACADEMIC_CALENDAR_EVENT_FIELDS = `
   updatedAt
   updatedByAccountId
   version
-`;
-
-const LIST_ACADEMIC_SEMESTERS_QUERY = `
-  query AcademicSemesters($isCurrent: Boolean, $limit: Int, $schoolYear: Int, $termNumber: Int) {
-    academicSemesters(
-      isCurrent: $isCurrent
-      limit: $limit
-      schoolYear: $schoolYear
-      termNumber: $termNumber
-    ) {
-      ${ACADEMIC_SEMESTER_FIELDS}
-    }
-  }
 `;
 
 const CREATE_ACADEMIC_SEMESTER_MUTATION = `
@@ -127,7 +118,7 @@ const DELETE_ACADEMIC_CALENDAR_EVENT_MUTATION = `
   }
 `;
 
-type AcademicSemesterDTO = AcademicSemesterRecord;
+type AcademicSemesterDTO = SharedAcademicSemesterRecord;
 type AcademicCalendarEventDTO = AcademicCalendarEventRecord;
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
@@ -191,12 +182,9 @@ function resolveAcademicCalendarErrorMessage(error: unknown, fallback: string) {
 
 export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
   try {
-    const response = await requestGraphQL<
-      { academicSemesters: AcademicSemesterDTO[] },
-      ListAcademicSemestersInput
-    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+    const response = await requestSharedAcademicSemesters(input);
 
-    return response.academicSemesters.map(mapAcademicSemesterRecord);
+    return response.map(mapAcademicSemesterRecord);
   } catch (error) {
     throw new Error(resolveAcademicCalendarErrorMessage(error, '暂时无法加载学期列表。'));
   }

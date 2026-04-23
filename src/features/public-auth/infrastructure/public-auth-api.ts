@@ -5,6 +5,7 @@ import {
   executeGraphQL,
   type GraphQLAuthMode,
   isGraphQLIngressError,
+  requestUpstreamLoginSession,
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
 } from '@/shared/graphql';
@@ -82,13 +83,6 @@ type PublicInviteInfoResponse = {
     message?: string | null;
     reason?: VerificationRecordFailureReason | null;
     success: boolean;
-  };
-};
-
-type LoginUpstreamSessionResponse = {
-  loginUpstreamSession: {
-    expiresAt: string;
-    upstreamSessionToken: string;
   };
 };
 
@@ -190,15 +184,6 @@ const PUBLIC_INVITE_INFO_QUERY = `
         title
         type
       }
-    }
-  }
-`;
-
-const LOGIN_UPSTREAM_SESSION_MUTATION = `
-  mutation LoginUpstreamSession($input: LoginUpstreamSessionInput!) {
-    loginUpstreamSession(input: $input) {
-      expiresAt
-      upstreamSessionToken
     }
   }
 `;
@@ -538,22 +523,7 @@ async function loginUpstreamSession(input: { password: string; userId: string })
   upstreamSessionToken: string;
 }> {
   try {
-    const response = await requestGraphQL<
-      LoginUpstreamSessionResponse,
-      {
-        input: {
-          password: string;
-          userId: string;
-        };
-      }
-    >(LOGIN_UPSTREAM_SESSION_MUTATION, {
-      input,
-    });
-
-    return {
-      expiresAt: response.loginUpstreamSession.expiresAt,
-      upstreamSessionToken: response.loginUpstreamSession.upstreamSessionToken,
-    };
+    return await requestUpstreamLoginSession(input);
   } catch (error) {
     throw new Error(
       resolveStaffInviteUpstreamErrorMessage(error, '上游身份核对失败，请稍后重试。'),

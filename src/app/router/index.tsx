@@ -15,7 +15,6 @@ import {
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
-import { AcademicCalendarPage } from '@/pages/academic-calendar';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
@@ -23,7 +22,6 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
-import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -47,7 +45,6 @@ import {
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
-import { hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import {
@@ -57,10 +54,6 @@ import {
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
-import {
-  loadSemesterCalendarLabRouteModule,
-  semesterCalendarLabAccess,
-} from '@/labs/semester-calendar';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -84,7 +77,6 @@ type AppEnv = 'dev' | 'test' | 'prod';
 type AppAccessLevel = 'guest' | 'admin' | 'staff';
 type LabAccess = {
   allowedAccessLevels: readonly AppAccessLevel[];
-  allowAnonymous?: boolean;
   env: readonly ('dev' | 'prod')[];
 };
 
@@ -142,8 +134,8 @@ function hasLabEnvExposure(access: LabAccess): boolean {
   return access.env.includes(effectiveLabEnv);
 }
 
-function allowsAnonymousLabAccess(access: LabAccess): boolean {
-  return access.allowAnonymous === true;
+function hasGuestLabAccess(access: LabAccess): boolean {
+  return access.allowedAccessLevels.includes('guest');
 }
 
 function getRequestTarget(request: Request) {
@@ -327,7 +319,7 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
       return null;
     }
 
-    if (allowsAnonymousLabAccess(demoLabAccess)) {
+    if (hasGuestLabAccess(demoLabAccess)) {
       return null;
     }
 
@@ -363,7 +355,7 @@ async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
       return null;
     }
 
-    if (allowsAnonymousLabAccess(payloadCryptoLabAccess)) {
+    if (hasGuestLabAccess(payloadCryptoLabAccess)) {
       return null;
     }
 
@@ -403,7 +395,7 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
       return null;
     }
 
-    if (allowsAnonymousLabAccess(inviteIssuerLabAccess)) {
+    if (hasGuestLabAccess(inviteIssuerLabAccess)) {
       return null;
     }
 
@@ -419,52 +411,6 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   return null;
-}
-
-async function academicCalendarPageLoader({ request }: LoaderFunctionArgs) {
-  const snapshot = await ensureAuthenticatedSession(request);
-
-  if (!snapshot) {
-    return null;
-  }
-
-  if (
-    !hasAdminOrAcademicOfficerAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    return {
-      isForbidden: true,
-    };
-  }
-
-  return {
-    isForbidden: false,
-  };
-}
-
-async function semesterCourseScheduleSyncPageLoader({ request }: LoaderFunctionArgs) {
-  const snapshot = await ensureAuthenticatedSession(request);
-
-  if (!snapshot) {
-    return null;
-  }
-
-  if (
-    !hasAdminOrAcademicOfficerAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    return {
-      isForbidden: true,
-    };
-  }
-
-  return {
-    isForbidden: false,
-  };
 }
 
 async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
@@ -485,7 +431,7 @@ async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
       return null;
     }
 
-    if (allowsAnonymousLabAccess(changeLoginEmailLabAccess)) {
+    if (hasGuestLabAccess(changeLoginEmailLabAccess)) {
       return null;
     }
 
@@ -521,7 +467,7 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
       return null;
     }
 
-    if (allowsAnonymousLabAccess(upstreamSessionDemoLabAccess)) {
+    if (hasGuestLabAccess(upstreamSessionDemoLabAccess)) {
       return null;
     }
 
@@ -537,51 +483,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   return null;
-}
-
-async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(semesterCalendarLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (allowsAnonymousLabAccess(semesterCalendarLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(semesterCalendarLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  const accessGroup = snapshot.userInfo.accessGroup;
-
-  return {
-    viewerKind:
-      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF')
-        ? 'internal'
-        : accessGroup.includes('GUEST')
-          ? 'guest'
-          : 'authenticated',
-  };
 }
 
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
@@ -752,16 +653,6 @@ const router = createBrowserRouter([
         Component: ErrorPreviewPage,
       },
       {
-        path: '/academic-affairs/academic-calendar',
-        loader: academicCalendarPageLoader,
-        Component: AcademicCalendarPage,
-      },
-      {
-        path: '/academic-affairs/semester-course-schedule-sync',
-        loader: semesterCourseScheduleSyncPageLoader,
-        Component: SemesterCourseScheduleSyncPage,
-      },
-      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -792,15 +683,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'course-schedule-sync',
-            loader: () => redirect('/academic-affairs/semester-course-schedule-sync'),
-          },
-          {
-            path: 'semester-calendar',
-            loader: semesterCalendarLabLoader,
-            lazy: loadSemesterCalendarLabRouteModule,
           },
         ],
       },

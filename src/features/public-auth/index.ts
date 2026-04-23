@@ -38,3 +38,7 @@ export function verifyResetPasswordIntent(input: { verificationCode: string }) {
 export function resetPassword(input: { newPassword: string; verificationCode: string }) {
   return runResetPassword(publicAuthPorts, input);
 }
+
+export function loginUpstreamSession(input: { password: string; userId: string }) {
+  return publicAuthApi.loginUpstreamSession(input);
+}

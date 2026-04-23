@@ -3,17 +3,11 @@ import type { OperationVariables } from '@apollo/client';
 import {
   executeGraphQL,
   isExpiredUpstreamSessionError,
+  requestUpstreamLoginSession,
   resolveUpstreamErrorMessage,
 } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
-
-type LoginUpstreamSessionResponse = {
-  loginUpstreamSession: {
-    expiresAt: string;
-    upstreamSessionToken: string;
-  };
-};
 
 type CurrentAccountResponse = {
   me: {
@@ -92,15 +86,6 @@ export type VerifiedStaffIdentityResult = {
   upstreamLoginId: string;
   upstreamSessionToken: string;
 };
-
-const LOGIN_UPSTREAM_SESSION_MUTATION = `
-  mutation LoginUpstreamSession($input: LoginUpstreamSessionInput!) {
-    loginUpstreamSession(input: $input) {
-      expiresAt
-      upstreamSessionToken
-    }
-  }
-`;
 
 const FETCH_TEACHER_DIRECTORY_QUERY = `
   query FetchTeacherDirectory($sessionToken: String!) {
@@ -210,19 +195,7 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
 
 export async function loginUpstreamSession(input: { password: string; userId: string }) {
   try {
-    const response = await requestGraphQL<
-      LoginUpstreamSessionResponse,
-      {
-        input: {
-          password: string;
-          userId: string;
-        };
-      }
-    >(LOGIN_UPSTREAM_SESSION_MUTATION, {
-      input,
-    });
-
-    return response.loginUpstreamSession;
+    return await requestUpstreamLoginSession(input);
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法登录 upstream。'));
   }

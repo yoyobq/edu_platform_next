@@ -4,6 +4,8 @@ import {
   executeGraphQL,
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
+  requestAcademicSemesters,
+  requestUpstreamLoginSession,
   resolveUpstreamErrorMessage,
 } from '@/shared/graphql';
 
@@ -44,11 +46,6 @@ export type CourseScheduleSyncResult = {
   updatedCount: number;
 };
 
-export type CurrentCourseScheduleSyncAccount = {
-  accountId: number;
-  displayName: string;
-};
-
 export type CourseScheduleSyncSemesterOption = {
   id: number;
   isCurrent: boolean;
@@ -63,26 +60,6 @@ export type CourseScheduleSyncDepartmentOption = {
   shortName: string | null;
 };
 
-type LoginUpstreamSessionResponse = {
-  loginUpstreamSession: {
-    expiresAt: string;
-    upstreamSessionToken: string;
-  };
-};
-
-type CurrentAccountResponse = {
-  me: {
-    accountId: number;
-    userInfo: {
-      nickname: string | null;
-    };
-  };
-};
-
-type AcademicSemestersResponse = {
-  academicSemesters: CourseScheduleSyncSemesterOption[];
-};
-
 type DepartmentOptionsResponse = {
   departments: CourseScheduleSyncDepartmentOption[];
 };
@@ -90,15 +67,6 @@ type DepartmentOptionsResponse = {
 type SyncCourseSchedulesResponse = {
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans: CourseScheduleSyncResult;
 };
-
-const LOGIN_UPSTREAM_SESSION_MUTATION = `
-  mutation LoginUpstreamSession($input: LoginUpstreamSessionInput!) {
-    loginUpstreamSession(input: $input) {
-      expiresAt
-      upstreamSessionToken
-    }
-  }
-`;
 
 const SYNC_COURSE_SCHEDULES_MUTATION = `
   mutation SyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
@@ -130,28 +98,6 @@ const SYNC_COURSE_SCHEDULES_MUTATION = `
   }
 `;
 
-const CURRENT_ACCOUNT_QUERY = `
-  query Me {
-    me {
-      accountId
-      userInfo {
-        nickname
-      }
-    }
-  }
-`;
-
-const ACADEMIC_SEMESTERS_QUERY = `
-  query CourseScheduleSyncAcademicSemesters($limit: Int) {
-    academicSemesters(limit: $limit) {
-      id
-      isCurrent
-      schoolYear
-      termNumber
-    }
-  }
-`;
-
 const DEPARTMENTS_QUERY = `
   query CourseScheduleSyncDepartments($limit: Int) {
     departments(limit: $limit) {
@@ -172,50 +118,22 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
 
 export async function loginUpstreamSession(input: { password: string; userId: string }) {
   try {
-    const response = await requestGraphQL<
-      LoginUpstreamSessionResponse,
-      {
-        input: {
-          password: string;
-          userId: string;
-        };
-      }
-    >(LOGIN_UPSTREAM_SESSION_MUTATION, {
-      input,
-    });
-
-    return response.loginUpstreamSession;
+    return await requestUpstreamLoginSession(input);
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法登录 upstream。'));
   }
 }
 
-export async function fetchCurrentCourseScheduleSyncAccount(): Promise<CurrentCourseScheduleSyncAccount> {
-  try {
-    const response = await requestGraphQL<CurrentAccountResponse, Record<string, never>>(
-      CURRENT_ACCOUNT_QUERY,
-      {},
-    );
-
-    return {
-      accountId: response.me.accountId,
-      displayName: response.me.userInfo.nickname?.trim() || `account-${response.me.accountId}`,
-    };
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
-  }
-}
-
 export async function fetchCourseScheduleSyncSemesterOptions() {
   try {
-    const response = await requestGraphQL<
-      AcademicSemestersResponse,
-      {
-        limit: number;
-      }
-    >(ACADEMIC_SEMESTERS_QUERY, { limit: 500 });
+    const response = await requestAcademicSemesters({ limit: 500 });
 
-    return response.academicSemesters;
+    return response.map((semester) => ({
+      id: semester.id,
+      isCurrent: semester.isCurrent,
+      schoolYear: semester.schoolYear,
+      termNumber: semester.termNumber,
+    }));
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
   }

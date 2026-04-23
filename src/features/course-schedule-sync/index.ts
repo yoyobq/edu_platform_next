@@ -4,13 +4,11 @@ export type {
   CourseScheduleSyncItem,
   CourseScheduleSyncResult,
   CourseScheduleSyncSemesterOption,
-  CurrentCourseScheduleSyncAccount,
   DepartmentCurriculumPlanReviewStatus,
 } from './api';
 export {
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
-  fetchCurrentCourseScheduleSyncAccount,
   isAcademicSemesterNotFoundError,
   isExpiredUpstreamSessionError,
   loginUpstreamSession,

@@ -101,20 +101,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
-            key: '/labs/semester-calendar',
-            label: '学期校历',
-            navMode: 'rail' as const,
-            path: '/labs/semester-calendar',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
   ];
 
   if (children.length === 0) {
@@ -129,6 +115,9 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       key: 'labs',
       label: 'Labs',
       navMode: 'rail',
+      path: '/labs',
+      primaryAccessGroup: 'ADMIN',
+      slotGroup: null,
     },
   ];
 };
