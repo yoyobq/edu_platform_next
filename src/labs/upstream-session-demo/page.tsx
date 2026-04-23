@@ -14,7 +14,7 @@ import {
   Typography,
 } from 'antd';
 
-import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream';
+import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
 
 import { upstreamSessionDemoLabAccess } from './access';
 import {

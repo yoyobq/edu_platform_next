@@ -1,6 +1,9 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage } from '@/entities/upstream';
+import {
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+} from '@/entities/upstream-session';
 
 import { executeGraphQL } from '@/shared/graphql';
 

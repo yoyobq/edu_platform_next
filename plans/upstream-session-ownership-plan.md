@@ -4,7 +4,7 @@
 
 ## 决策
 
-- Upstream session 是跨 feature 的领域能力，长期归属 `entities/upstream`。
+- Upstream session 是跨 feature 的领域能力，长期归属 `entities/upstream-session`。
 - `shared/graphql` 只保留 transport/runtime，不承载 `loginUpstreamSession` 这类业务 facade。
 - Upstream token 主权继续在前端，不进入 `features/auth`，也不由本站后端持久化。
 - 本站 auth session 只作为当前账号来源，upstream session 按本站 `accountId` 绑定。
@@ -12,10 +12,10 @@
 
 ## P1：Upstream Session Entity（已落地）
 
-- 已新增 `src/entities/upstream/`，作为唯一公共入口。
-- upstream 登录 mutation 落在 `entities/upstream/infrastructure/upstream-session-api.ts`。
-- upstream 本地存储落在 `entities/upstream/infrastructure/upstream-session-storage.ts`，storage key 已升级到 `aigc-friendly-frontend.upstream.session.v2`，并对旧 labs key 提供一次性迁移与清理。
-- upstream 错误识别与用户反馈落在 `entities/upstream/application/upstream-error-feedback.ts`。
+- 已新增 `src/entities/upstream-session/`，作为唯一公共入口。
+- upstream 登录 mutation 落在 `entities/upstream-session/infrastructure/upstream-session-api.ts`。
+- upstream 本地存储落在 `entities/upstream-session/infrastructure/upstream-session-storage.ts`，storage key 已升级到 `aigc-friendly-frontend.upstream.session.v2`，并对旧 labs key 提供一次性迁移与清理。
+- upstream 错误识别与用户反馈落在 `entities/upstream-session/application/upstream-error-feedback.ts`。
 - 对外提供 `useUpstreamSession({ account })`：
   - `session`
   - `login({ userId, password })`
@@ -24,9 +24,9 @@
 
 ## P1：调用方收敛（已落地）
 
-- `course-schedule-sync` 仅从 `@/entities/upstream` 消费 upstream 登录、token 生命周期和错误反馈；登录场景错误经 feature 自身的 `resolveCourseScheduleSyncErrorMessage(error, 'login')` 出口归一，不直接调用 upstream 通用函数。
-- `public-auth` staff invite 仅从 `@/entities/upstream` 消费 upstream 登录与 invite 场景错误反馈。
-- `labs/upstream-session-demo` 仅从 `@/entities/upstream` 消费 upstream session 能力，原本地 `storage.ts` re-export 已删除。
+- `course-schedule-sync` 仅从 `@/entities/upstream-session` 消费 upstream 登录、token 生命周期和错误反馈；登录场景错误经 feature 自身的 `resolveCourseScheduleSyncErrorMessage(error, 'login')` 出口归一，不直接调用 upstream 通用函数。
+- `public-auth` staff invite 仅从 `@/entities/upstream-session` 消费 upstream 登录与 invite 场景错误反馈。
+- `labs/upstream-session-demo` 仅从 `@/entities/upstream-session` 消费 upstream session 能力，原本地 `storage.ts` re-export 已删除。
 - 页面只保留各自业务 continuation，不再直接组合 storage read/write 与 login mutation。
 
 ## 存储边界
@@ -57,14 +57,14 @@
 
 ## P2（条件触发，未启动）
 
-- 若后端新增 upstream refresh token contract，再在 `entities/upstream` 内统一扩展，不下放到页面。
+- 若后端新增 upstream refresh token contract，再在 `entities/upstream-session` 内统一扩展，不下放到页面。
 - 若未来一个本站账号允许绑定多个 upstream 身份，再调整 storage key/model，不让 feature 自行扩展第二套结构。
 
 ## 验证
 
 - `npm run lint`
 - `npm run build`
-- 单测：`src/entities/upstream/infrastructure/upstream-session-storage.spec.ts`、`src/features/academic-calendar-management/infrastructure/academic-calendar-management-api.spec.ts`
+- 单测：`src/entities/upstream-session/infrastructure/upstream-session-storage.spec.ts`、`src/features/academic-calendar-management/infrastructure/academic-calendar-management-api.spec.ts`
 - E2E 覆盖场景：
   - 无 upstream token 时要求登录
   - 登录成功后继续原业务动作

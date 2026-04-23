@@ -5,7 +5,7 @@ import {
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
   resolveUpstreamErrorMessage,
-} from '@/entities/upstream';
+} from '@/entities/upstream-session';
 
 import { executeGraphQL } from '@/shared/graphql';
 

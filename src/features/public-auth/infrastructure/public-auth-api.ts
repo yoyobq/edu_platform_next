@@ -4,7 +4,7 @@ import {
   requestUpstreamLoginSession,
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
-} from '@/entities/upstream';
+} from '@/entities/upstream-session';
 
 import { normalizeDepartmentName } from '@/shared/department';
 import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
