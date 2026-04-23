@@ -493,7 +493,7 @@ test('reset-password 返回登录时，不应触发 restore -> me', async ({ pag
   await page.getByLabel('新密码', { exact: true }).fill('password-1234');
   await page.getByLabel('确认新密码').fill('password-1234');
   await page.getByRole('button', { name: '更新密码' }).click();
-  await page.getByRole('button', { name: '返回登录' }).click();
+  await page.getByRole('button', { name: '前往登录' }).click();
 
   await expect(page).toHaveURL(/\/login\?skipRestore=1$/);
   await expect(page.getByRole('heading', { name: '登录后再进入工作台' })).toBeVisible();

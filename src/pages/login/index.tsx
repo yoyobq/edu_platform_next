@@ -49,7 +49,7 @@ export function LoginPage() {
     <div className="min-h-screen bg-bg-layout px-6 py-12 text-text">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
         <Flex gap={32} className="w-full" wrap>
-          <Flex vertical gap={24} className="min-w-[280px] flex-1">
+          <Flex vertical gap={24} className="min-w-70 flex-1">
             <BrandLockup variant="public-entry" />
             <div>
               <h1

@@ -1,3 +1,4 @@
+import { routes } from '../../fixtures/routes';
 import { openEntrySidecar, openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
@@ -9,7 +10,7 @@ test('用户主动关闭入口面板后，跨路由切换也不应自动重新�
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toHaveCount(0);
 
-  await page.getByRole('link', { name: '沙盒演练场' }).click();
+  await page.goto(routes.sandboxPlayground);
   await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toHaveCount(0);
 });

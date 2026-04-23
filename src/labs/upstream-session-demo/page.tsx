@@ -1256,7 +1256,7 @@ export function UpstreamSessionDemoLabPage() {
             ) : null}
 
             <Tabs
-              tabPosition="left"
+              tabPlacement="start"
               activeKey={activePanelKey}
               onChange={(key) => setActivePanelKey(key as UpstreamPanelKey)}
               style={{ minHeight: 400 }}

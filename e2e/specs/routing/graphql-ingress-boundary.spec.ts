@@ -125,6 +125,24 @@ async function fulfillGraphQLError(route: Route, message: string, code?: string)
   });
 }
 
+async function expectAuthenticatedUserMenu(
+  page: Page,
+  displayName: string,
+  identity: string = 'admin',
+) {
+  const userMenuButton = page.getByRole('button', { name: '用户菜单' });
+
+  await expect(userMenuButton).toBeVisible();
+  await userMenuButton.click();
+
+  const dropdown = page.locator('.ant-dropdown').last();
+
+  await expect(dropdown.getByText(displayName, { exact: true })).toBeVisible();
+  await expect(dropdown.getByText(identity, { exact: true })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+}
+
 test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', async ({ page }) => {
   const session = {
     accessToken: 'runtime-access-token',
@@ -184,7 +202,7 @@ test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', as
   });
 
   await page.goto(routes.home);
-  await expect(page.getByRole('banner')).toContainText('admin-user');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 
   await page.goto(routes.forgotPassword);
   await page.getByLabel('邮箱').fill('tester@example.com');
@@ -577,7 +595,7 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
   });
 
   await page.goto(routes.home);
-  await expect(page.getByRole('banner')).toContainText('root-admin');
+  await expectAuthenticatedUserMenu(page, 'root-admin');
 
   // auth 主流程 restore -> me 失败 -> 走 auth 自己的 refresh -> 再 me 成功
   // shared retry 不应介入（refreshRequestCount 应为 1，来自 auth 自身的 restore 逻辑）
@@ -705,7 +723,7 @@ test('restore 触发 refresh 后，后续 me 请求应显式使用 refresh 返�
 
   await page.goto(routes.home);
 
-  await expect(page.getByRole('banner')).toContainText('refreshed-admin');
+  await expectAuthenticatedUserMenu(page, 'refreshed-admin');
   expect(meAuthHeaders).toEqual(['Bearer stale-access-token', 'Bearer fresh-access-token']);
   expect(refreshAuthHeader).toBeNull();
 });

@@ -20,7 +20,9 @@ test('路由切换后，入口面板仍应保持可继续使用', async ({ page 
   const input = page.getByPlaceholder('输入你想去的页面名称');
   await input.fill('沙盒');
   await input.press('Enter');
-  await page.getByRole('button', { name: '进入Sandbox 演练场' }).click();
+  const sandboxCard = page.locator('.sidecar-entry-card').filter({ hasText: '沙盒演练场' });
+  await expect(sandboxCard).toBeVisible();
+  await sandboxCard.getByRole('button', { name: '进入' }).click();
   await expect(page.getByRole('heading', { name: 'Sandbox 演练场' })).toBeVisible();
 
   await input.fill('首页');
@@ -28,7 +30,9 @@ test('路由切换后，入口面板仍应保持可继续使用', async ({ page 
 
   await expect(page.getByText('先帮你找到 1 个和“首页”相关的入口，确认后即可进入。')).toBeVisible();
 
-  await page.getByRole('button', { name: '进入首页' }).click();
-  await expect(page.getByRole('heading', { name: 'aigc-friendly-frontend' })).toBeVisible();
+  const homeCard = page.locator('.sidecar-entry-card').filter({ hasText: '首页' });
+  await expect(homeCard).toBeVisible();
+  await homeCard.getByRole('button', { name: '进入' }).click();
+  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
 });

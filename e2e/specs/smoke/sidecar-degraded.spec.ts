@@ -13,5 +13,5 @@ test('增强入口降级时，应回退到本地语义入口卡片', async ({ pa
   await input.press('Enter');
 
   await expect(page.getByText('先帮你找到 1 个和“沙盒”相关的入口，确认后即可进入。')).toBeVisible();
-  await expect(page.getByText('Sandbox 演练场')).toBeVisible();
+  await expect(page.getByText('沙盒演练场')).toBeVisible();
 });

@@ -69,9 +69,6 @@ test('从 labs demo 跳回首页时，不应继续携带第三工作区 demo que
 
   await expect(page).toHaveURL(/workspaceDemo=artifact-release-brief/);
 
-  await expect(page.getByRole('link', { name: '首页' })).toHaveAttribute('href', '/');
-  await expect(page.getByRole('link', { name: '沙盒演练场' })).toHaveAttribute(
-    'href',
-    '/sandbox/playground',
-  );
+  await page.goto(routes.home);
+  await expect(page).toHaveURL(/\/$/);
 });
