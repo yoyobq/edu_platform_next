@@ -300,6 +300,10 @@ async function academicCalendarPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/academic-affairs/academic-calendar');
 }
 
+async function semesterCalendarPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/academic-affairs/semester-calendar');
+}
+
 async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/academic-affairs/semester-course-schedule-sync');
 }
