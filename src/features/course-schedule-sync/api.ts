@@ -148,7 +148,6 @@ export async function fetchCourseScheduleSyncDepartmentOptions() {
 }
 
 export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input: {
-  coefficient?: string;
   departmentId: string;
   reviewStatus?: DepartmentCurriculumPlanReviewStatus;
   schoolYear: string;
@@ -160,7 +159,6 @@ export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(i
     SyncCourseSchedulesResponse,
     {
       input: {
-        coefficient?: string;
         departmentId: string;
         reviewStatus?: DepartmentCurriculumPlanReviewStatus;
         schoolYear: string;
@@ -171,7 +169,6 @@ export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(i
     }
   >(SYNC_COURSE_SCHEDULES_MUTATION, {
     input: {
-      coefficient: input.coefficient?.trim() || undefined,
       departmentId: input.departmentId.trim(),
       reviewStatus: input.reviewStatus,
       schoolYear: String(input.schoolYear || '').trim(),

@@ -36,7 +36,6 @@ type UpstreamLoginFormValues = {
 };
 
 type SyncFormValues = {
-  coefficient: string;
   departmentId: string;
   reviewStatus?: DepartmentCurriculumPlanReviewStatus;
   schoolYear: string;
@@ -191,7 +190,6 @@ export function SemesterCourseScheduleSyncPageContent({
 
       try {
         const syncResult = await syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans({
-          coefficient: values.coefficient,
           departmentId: values.departmentId,
           reviewStatus: values.reviewStatus,
           schoolYear: values.schoolYear,
@@ -323,7 +321,6 @@ export function SemesterCourseScheduleSyncPageContent({
         const preferredDepartment = nextDepartmentOptions[0];
 
         syncForm.setFieldsValue({
-          coefficient: currentValues.coefficient || '1.00',
           departmentId: currentValues.departmentId || preferredDepartment?.id,
           reviewStatus: currentValues.reviewStatus,
           schoolYear: currentValues.schoolYear || preferredSemester?.schoolYear,
@@ -490,7 +487,7 @@ export function SemesterCourseScheduleSyncPageContent({
           </div>
         ) : null}
 
-        <Form form={syncForm} layout="vertical" initialValues={{ coefficient: '1.00' }}>
+        <Form form={syncForm} layout="vertical">
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Form.Item
               help={semesterOptionsError ?? undefined}
@@ -561,10 +558,6 @@ export function SemesterCourseScheduleSyncPageContent({
 
             <Form.Item label="审核状态" name="reviewStatus">
               <Select allowClear options={REVIEW_STATUS_OPTIONS} placeholder="可选，不筛选则留空" />
-            </Form.Item>
-
-            <Form.Item label="系数" name="coefficient">
-              <Input placeholder="默认 1.00" />
             </Form.Item>
           </div>
 

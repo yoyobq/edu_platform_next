@@ -199,8 +199,8 @@ function mapAcademicTimetableItem(
     slotId: item.slotId,
     staffId: item.staffId,
     staffName: item.staffName,
-    sstsCourseId: item.sstsCourseId ?? null,
-    sstsTeachingClassId: item.sstsTeachingClassId ?? null,
+    sstsCourseId: null,
+    sstsTeachingClassId: null,
     teachingClassName: item.teachingClassName,
     weekIndex: item.weekIndex,
   };
