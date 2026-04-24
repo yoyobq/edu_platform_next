@@ -473,7 +473,7 @@ export function SemesterCalendarPageContent({
                                   : `${formatDisplayDate(day.dateKey)}，无事件`
                               }
                               aria-disabled={!hasDayEvents}
-                              className={`semester-calendar-day-cell relative min-h-[92px] overflow-hidden p-2 ${
+                              className={`semester-calendar-day-cell relative min-h-23 overflow-hidden p-2 ${
                                 hasDayEvents ? 'semester-calendar-day-cell-clickable' : ''
                               } ${
                                 highlightCurrentWeekDay

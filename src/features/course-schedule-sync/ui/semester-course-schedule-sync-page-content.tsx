@@ -53,7 +53,6 @@ type SemesterOption = {
 };
 
 type DepartmentOption = {
-  disabled: boolean;
   id: string;
   label: string;
 };
@@ -160,6 +159,8 @@ export function SemesterCourseScheduleSyncPageContent({
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
+  const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [result, setResult] = useState<CourseScheduleSyncResult | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
@@ -173,6 +174,8 @@ export function SemesterCourseScheduleSyncPageContent({
   } = useUpstreamSession({
     account: currentAccount,
   });
+  const hasNoDepartmentOptions =
+    !isLoadingOptions && !departmentOptionsError && departmentOptions.length === 0;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -263,9 +266,11 @@ export function SemesterCourseScheduleSyncPageContent({
 
     async function bootstrapOptions() {
       setIsLoadingOptions(true);
+      setSemesterOptionsError(null);
+      setDepartmentOptionsError(null);
 
       try {
-        const [semesters, departments] = await Promise.all([
+        const [semesterResult, departmentResult] = await Promise.allSettled([
           fetchCourseScheduleSyncSemesterOptions(),
           fetchCourseScheduleSyncDepartmentOptions(),
         ]);
@@ -274,31 +279,48 @@ export function SemesterCourseScheduleSyncPageContent({
           return;
         }
 
-        const nextSemesterOptions = sortSemesterOptions(
-          semesters.map((semester: CourseScheduleSyncSemesterOption) => ({
-            id: semester.id,
-            isCurrent: semester.isCurrent,
-            label: `${semester.schoolYear}-${semester.schoolYear + 1} 学年第${semester.termNumber}学期`,
-            schoolYear: String(semester.schoolYear),
-            semester: String(semester.termNumber),
-          })),
-        );
-        const nextDepartmentOptions = departments
-          .filter((department: CourseScheduleSyncDepartmentOption) => department.id !== '')
-          .map((department: CourseScheduleSyncDepartmentOption) => ({
-            disabled: !department.isEnabled,
-            id: department.id,
-            label: `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`,
-          }));
+        const nextSemesterOptions =
+          semesterResult.status === 'fulfilled'
+            ? sortSemesterOptions(
+                semesterResult.value.map((semester: CourseScheduleSyncSemesterOption) => ({
+                  id: semester.id,
+                  isCurrent: semester.isCurrent,
+                  label: `${semester.schoolYear}-${semester.schoolYear + 1} 学年第${semester.termNumber}学期`,
+                  schoolYear: String(semester.schoolYear),
+                  semester: String(semester.termNumber),
+                })),
+              )
+            : [];
+        const nextDepartmentOptions =
+          departmentResult.status === 'fulfilled'
+            ? departmentResult.value
+                .filter((department: CourseScheduleSyncDepartmentOption) => department.id !== '')
+                .map((department: CourseScheduleSyncDepartmentOption) => ({
+                  id: department.id,
+                  label: `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`,
+                }))
+            : [];
+        const nextSemesterOptionsError =
+          semesterResult.status === 'rejected'
+            ? semesterResult.reason instanceof Error
+              ? semesterResult.reason.message
+              : '暂时无法加载学期列表。'
+            : null;
+        const nextDepartmentOptionsError =
+          departmentResult.status === 'rejected'
+            ? departmentResult.reason instanceof Error
+              ? departmentResult.reason.message
+              : '暂时无法加载院系列表。'
+            : null;
 
         setSemesterOptions(nextSemesterOptions);
         setDepartmentOptions(nextDepartmentOptions);
+        setSemesterOptionsError(nextSemesterOptionsError);
+        setDepartmentOptionsError(nextDepartmentOptionsError);
 
         const currentValues = syncForm.getFieldsValue();
         const preferredSemester = nextSemesterOptions[0];
-        const preferredDepartment = nextDepartmentOptions.find(
-          (department) => !department.disabled,
-        );
+        const preferredDepartment = nextDepartmentOptions[0];
 
         syncForm.setFieldsValue({
           coefficient: currentValues.coefficient || '1.00',
@@ -308,12 +330,6 @@ export function SemesterCourseScheduleSyncPageContent({
           semester: currentValues.semester || preferredSemester?.semester,
           teacherId: currentValues.teacherId,
         });
-      } catch {
-        if (isCancelled) {
-          return;
-        }
-
-        setSyncError('暂时无法加载学期或院系列表，请稍后重试。');
       } finally {
         if (!isCancelled) {
           setIsLoadingOptions(false);
@@ -477,11 +493,14 @@ export function SemesterCourseScheduleSyncPageContent({
         <Form form={syncForm} layout="vertical" initialValues={{ coefficient: '1.00' }}>
           <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
             <Form.Item
+              help={semesterOptionsError ?? undefined}
               label="学年"
               name="schoolYear"
               rules={[{ required: true, message: '请选择学年' }]}
+              validateStatus={semesterOptionsError ? 'warning' : undefined}
             >
               <Select
+                disabled={isLoadingOptions || schoolYearOptions.length === 0}
                 loading={isLoadingOptions}
                 optionFilterProp="label"
                 options={schoolYearOptions}
@@ -491,11 +510,14 @@ export function SemesterCourseScheduleSyncPageContent({
             </Form.Item>
 
             <Form.Item
+              help={semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined}
               label="学期"
               name="semester"
               rules={[{ required: true, message: '请选择学期' }]}
+              validateStatus={semesterOptionsError ? 'warning' : undefined}
             >
               <Select
+                disabled={isLoadingOptions || schoolYearOptions.length === 0}
                 loading={isLoadingOptions}
                 options={[
                   { label: '第 1 学期', value: '1' },
@@ -506,15 +528,25 @@ export function SemesterCourseScheduleSyncPageContent({
             </Form.Item>
 
             <Form.Item
+              help={
+                departmentOptionsError ??
+                (hasNoDepartmentOptions
+                  ? '当前未返回可选院系，请检查后端 departments 数据或查询权限。'
+                  : undefined)
+              }
               label="院系"
               name="departmentId"
               rules={[{ required: true, message: '请选择院系' }]}
+              validateStatus={
+                departmentOptionsError || hasNoDepartmentOptions ? 'warning' : undefined
+              }
             >
               <Select
+                disabled={isLoadingOptions || departmentOptions.length === 0}
                 loading={isLoadingOptions}
+                notFoundContent={hasNoDepartmentOptions ? '当前未返回可选院系' : undefined}
                 optionFilterProp="label"
                 options={departmentOptions.map((option) => ({
-                  disabled: option.disabled,
                   label: option.label,
                   value: option.id,
                 }))}
