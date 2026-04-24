@@ -55,6 +55,10 @@ import {
   loadAcademicTimetableLabRouteModule,
 } from '@/labs/academic-timetable';
 import {
+  academicWorkloadLabAccess,
+  loadAcademicWorkloadLabRouteModule,
+} from '@/labs/academic-workload';
+import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
@@ -594,6 +598,49 @@ async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
 }
+
+async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(academicWorkloadLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(academicWorkloadLabAccess)) {
+      return { viewerKind: 'authenticated' };
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(academicWorkloadLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  return {
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    viewerKind:
+      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
+  };
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -817,6 +864,11 @@ const router = createBrowserRouter([
             path: 'academic-timetable',
             loader: academicTimetableLabLoader,
             lazy: loadAcademicTimetableLabRouteModule,
+          },
+          {
+            path: 'academic-workload',
+            loader: academicWorkloadLabLoader,
+            lazy: loadAcademicWorkloadLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

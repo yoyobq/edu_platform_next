@@ -50,5 +50,8 @@
     "window.activeBorder": "#2B74B6",
     "window.inactiveBorder": "#2B74B699"
   },
-  "peacock.remoteColor": "#2B74B6"
+  "peacock.remoteColor": "#2B74B6",
+  "chat.tools.terminal.autoApprove": {
+    "npx tsc": true
+  }
 }
