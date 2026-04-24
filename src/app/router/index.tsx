@@ -66,10 +66,6 @@ import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import {
-  loadSemesterCalendarLabRouteModule,
-  semesterCalendarLabAccess,
-} from '@/labs/semester-calendar';
-import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
@@ -512,51 +508,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function semesterCalendarLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(semesterCalendarLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(semesterCalendarLabAccess)) {
-      return { viewerKind: 'guest' };
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(semesterCalendarLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  const accessGroup = snapshot.userInfo.accessGroup;
-
-  return {
-    viewerKind:
-      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF')
-        ? 'internal'
-        : accessGroup.includes('GUEST')
-          ? 'guest'
-          : 'authenticated',
-  };
-}
-
 async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(academicTimetableLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -854,11 +805,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'semester-calendar',
-            loader: semesterCalendarLabLoader,
-            lazy: loadSemesterCalendarLabRouteModule,
           },
           {
             path: 'academic-timetable',

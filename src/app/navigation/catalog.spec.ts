@@ -48,8 +48,8 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/semester-calendar',
       '/labs/academic-timetable',
+      '/labs/academic-workload',
       '/sandbox/playground',
     ]);
   });
@@ -73,8 +73,8 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/semester-calendar',
       '/labs/academic-timetable',
+      '/labs/academic-workload',
     ]);
   });
 
@@ -90,8 +90,8 @@ describe('navigation catalog', () => {
     expect(staffItems.map((item) => item.key)).toEqual(['labs']);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
-      '/labs/semester-calendar',
       '/labs/academic-timetable',
+      '/labs/academic-workload',
     ]);
   });
 
@@ -113,8 +113,8 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
-      '/labs/semester-calendar',
       '/labs/academic-timetable',
+      '/labs/academic-workload',
     ]);
   });
 
@@ -142,8 +142,8 @@ describe('navigation catalog', () => {
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/semester-calendar',
       '/labs/academic-timetable',
+      '/labs/academic-workload',
       '/sandbox/playground',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([

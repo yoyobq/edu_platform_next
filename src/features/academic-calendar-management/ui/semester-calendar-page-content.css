@@ -7,10 +7,10 @@
   background: var(--ant-color-fill-quaternary);
   box-shadow: 0 1px 0 var(--ant-color-border-secondary);
   isolation: isolate;
+  overflow: hidden;
   position: sticky;
   top: 0;
   z-index: 3;
-  overflow: hidden;
 }
 
 .semester-calendar-sticky-head {
@@ -137,15 +137,15 @@ button.semester-calendar-day-cell {
 .semester-calendar-day-cell-clickable {
   cursor: pointer;
   position: relative;
-  z-index: 0;
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
+  z-index: 0;
 }
 
 .semester-calendar-day-cell-clickable::after {
-  border-radius: var(--ant-border-radius-sm);
   background: color-mix(in srgb, var(--ant-color-bg-container) 30%, transparent);
+  border-radius: var(--ant-border-radius-sm);
   content: '';
   inset: 4px;
   opacity: 0;

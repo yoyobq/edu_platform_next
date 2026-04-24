@@ -106,20 +106,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'CalendarOutlined',
-            key: '/labs/semester-calendar',
-            label: '学期校历',
-            navMode: 'rail' as const,
-            path: '/labs/semester-calendar',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
             key: '/labs/academic-timetable',
             label: '课表视图',
             navMode: 'rail' as const,
