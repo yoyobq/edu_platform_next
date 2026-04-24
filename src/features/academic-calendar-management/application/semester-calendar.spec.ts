@@ -66,7 +66,7 @@ describe('semester-calendar application', () => {
     expect(weeks[9]?.hasToday).toBe(true);
     expect(weeks[18]?.days.some((day) => day.isExamStart)).toBe(true);
     expect(weeks.at(-1)?.endDate).toBe('2026-07-12');
-    expect(countTeachingWeeks(weeks)).toBe(20);
+    expect(countTeachingWeeks(weeks)).toBe(17);
   });
 
   it('groups weeks by display month and buckets events by date', () => {

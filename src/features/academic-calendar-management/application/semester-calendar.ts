@@ -244,7 +244,12 @@ export function buildWeekMonthSpans(weeks: SemesterWeek[]): SemesterMonthSpan[] 
 }
 
 export function countTeachingWeeks(weeks: SemesterWeek[]) {
-  return weeks.filter((week) => week.weekNumber !== null).length;
+  const firstExamWeekIndex = weeks.findIndex((week) =>
+    week.days.some((day) => day.isExamStart || day.isExamPeriod),
+  );
+  const teachingWeeks = firstExamWeekIndex === -1 ? weeks : weeks.slice(0, firstExamWeekIndex);
+
+  return teachingWeeks.filter((week) => week.weekNumber !== null).length;
 }
 
 export function isWeekendDate(date: Date) {

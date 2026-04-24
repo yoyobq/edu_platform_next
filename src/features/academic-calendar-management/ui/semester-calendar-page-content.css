@@ -1,10 +1,72 @@
 .semester-calendar-sheet {
   background: var(--ant-color-bg-container);
+  border-end-end-radius: var(--radius-block);
+  border-end-start-radius: var(--radius-block);
   display: grid;
+}
+
+.semester-calendar-current-dot {
+  background: var(--ant-color-success);
+  border-radius: 999px;
+  display: block;
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}
+
+.semester-calendar-legend {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: var(--ant-font-size-sm);
+  gap: 8px 16px;
+}
+
+.semester-calendar-legend-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  min-height: 24px;
+}
+
+.semester-calendar-legend-swatch {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius-sm);
+  display: inline-flex;
+  height: 12px;
+  width: 12px;
+}
+
+.semester-calendar-legend-swatch-holiday {
+  background: var(--ant-color-warning-bg);
+}
+
+.semester-calendar-legend-swatch-exam {
+  background: var(--ant-color-error-bg);
+}
+
+.semester-calendar-legend-swatch-current {
+  background: var(--ant-color-success-bg);
+  border-color: var(--ant-color-success-border);
+}
+
+.semester-calendar-table-toolbar {
+  align-items: center;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-block-end: 0;
+  border-start-end-radius: var(--radius-block);
+  border-start-start-radius: var(--radius-block);
+  display: flex;
+  justify-content: flex-end;
+  min-height: 36px;
+  padding-inline: 16px;
 }
 
 .semester-calendar-sticky-head-shell {
   background: var(--ant-color-fill-quaternary);
+  border-inline: 1px solid var(--ant-color-border-secondary);
   box-shadow: 0 1px 0 var(--ant-color-border-secondary);
   isolation: isolate;
   overflow: hidden;

@@ -11,6 +11,7 @@ import {
   CalendarOutlined,
   FlagOutlined,
   ReadOutlined,
+  ReloadOutlined,
   SwapOutlined,
   TrophyOutlined,
 } from '@ant-design/icons';
@@ -19,8 +20,8 @@ import {
   Button,
   Card,
   Descriptions,
+  Drawer,
   Empty,
-  Modal,
   Select,
   Skeleton,
   Tag,
@@ -276,66 +277,63 @@ export function SemesterCalendarPageContent({
   const monthSpans = useMemo(() => buildWeekMonthSpans(weeks), [weeks]);
   const eventBuckets = useMemo(() => buildEventBuckets(events), [events]);
   const teachingWeekCount = useMemo(() => countTeachingWeeks(weeks), [weeks]);
+  const semesterSelectOptions = useMemo(
+    () =>
+      semesters.map((semester) => ({
+        value: semester.id,
+        plainLabel: semester.name,
+        label: (
+          <div className="flex items-center gap-2">
+            <span>{semester.name}</span>
+            {semester.isCurrent ? (
+              <span
+                aria-label="当前学期"
+                title="当前学期"
+                className="semester-calendar-current-dot"
+              />
+            ) : null}
+          </div>
+        ),
+      })),
+    [semesters],
+  );
 
   return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <div className="flex flex-col gap-3">
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            学期校历
-          </Typography.Title>
-          <Typography.Paragraph style={{ marginBottom: 0 }}>
-            按学期周视图浏览校历。可视范围从 <code>startDate</code> 所在周开始，到{' '}
-            <code>endDate</code> 所在周结束；周次从 <code>firstTeachingDate</code> 所在周开始计为第
-            1 周。
-          </Typography.Paragraph>
-          <Typography.Paragraph style={{ marginBottom: 0 }} type="secondary">
-            淡化日期表示补齐该周时带出的学期外日期。点击含事件的日期可查看详情。
-          </Typography.Paragraph>
-        </div>
-      </Card>
+    <div className="flex flex-col gap-4">
+      <section className="rounded-card bg-bg-container p-4 shadow-card">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-col gap-1">
+            <Typography.Title level={3} style={{ marginBottom: 0 }}>
+              学期校历
+            </Typography.Title>
+            <Typography.Text type="secondary">
+              按周排布的校历视图，点击含事件的日期查看详情
+            </Typography.Text>
+          </div>
 
-      <Card
-        extra={
-          semesterError ? (
-            <Button size="small" type="primary" onClick={() => void loadSemesters()}>
-              重试
-            </Button>
-          ) : semestersLoading ? (
-            <Button size="small" loading>
-              加载学期
-            </Button>
-          ) : selectedSemester ? (
-            <div className="min-w-45 max-w-60">
+          <div className="flex items-center gap-2 sm:min-w-80">
+            {semesterError ? (
+              <Button icon={<ReloadOutlined />} type="primary" onClick={() => void loadSemesters()}>
+                重新加载学期
+              </Button>
+            ) : semestersLoading ? (
+              <Button loading>加载学期</Button>
+            ) : semesters.length > 0 ? (
               <Select
                 aria-label="选择学期"
                 optionLabelProp="plainLabel"
                 popupMatchSelectWidth={false}
-                size="small"
                 value={selectedSemesterId}
-                options={semesters.map((semester) => ({
-                  value: semester.id,
-                  plainLabel: semester.name,
-                  label: (
-                    <div className="flex items-center gap-2">
-                      <span>{semester.name}</span>
-                      {semester.isCurrent ? (
-                        <span
-                          aria-label="当前学期"
-                          title="当前学期"
-                          className="block h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500"
-                        />
-                      ) : null}
-                    </div>
-                  ),
-                }))}
+                options={semesterSelectOptions}
                 onChange={(value) => setSelectedSemesterId(value)}
               />
-            </div>
-          ) : null
-        }
-        title={selectedSemester ? selectedSemester.name : '学期周视图'}
-      >
+            ) : null}
+            {selectedSemester?.isCurrent ? <Tag color="success">当前</Tag> : null}
+          </div>
+        </div>
+      </section>
+
+      <Card title={selectedSemester ? selectedSemester.name : '学期周视图'}>
         {semesterError ? (
           <Alert
             action={
@@ -359,6 +357,7 @@ export function SemesterCalendarPageContent({
           <Alert
             action={
               <Button
+                icon={<ReloadOutlined />}
                 size="small"
                 type="primary"
                 onClick={() => {
@@ -378,15 +377,36 @@ export function SemesterCalendarPageContent({
           <Empty description="当前学期没有可展示的周视图" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Tag color="blue">共 {teachingWeekCount} 周（按教学开始日所在周计算）</Tag>
-              <Tag color="gold">教学开始：{selectedSemester.firstTeachingDate}</Tag>
-              <Tag color="purple">
-                学期范围：{selectedSemester.startDate} 至 {selectedSemester.endDate}
-              </Tag>
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+              <div className="flex flex-wrap gap-2">
+                <Tag color="blue">教学周 {teachingWeekCount} 周（截至考试周前）</Tag>
+                <Tag color="gold">教学开始：{selectedSemester.firstTeachingDate}</Tag>
+                <Tag color="purple">考试周开始：{selectedSemester.examStartDate}</Tag>
+              </div>
+              <div className="semester-calendar-legend" aria-label="校历图例">
+                <span className="semester-calendar-legend-item">
+                  <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-holiday" />
+                  周末/假期
+                </span>
+                <span className="semester-calendar-legend-item">
+                  <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-exam" />
+                  考试
+                </span>
+                <span className="semester-calendar-legend-item">
+                  <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-current" />
+                  本周
+                </span>
+                <span className="semester-calendar-legend-item">
+                  <CalendarOutlined aria-hidden />
+                  含事件
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-col">
+              <div className="semester-calendar-table-toolbar">
+                <Typography.Text type="secondary">横向滚动可查看完整星期。</Typography.Text>
+              </div>
               <div className="semester-calendar-sticky-head-shell">
                 <div
                   className="semester-calendar-sticky-head grid min-w-230"
@@ -413,7 +433,7 @@ export function SemesterCalendarPageContent({
                 }}
               >
                 <div
-                  className="semester-calendar-sheet min-w-230 overflow-hidden rounded-b-md border border-t-0"
+                  className="semester-calendar-sheet min-w-230 overflow-hidden border border-t-0"
                   style={{
                     borderColor: 'var(--ant-color-border-secondary)',
                     gridTemplateColumns: '52px 56px repeat(7, minmax(100px, 1fr))',
@@ -577,20 +597,20 @@ export function SemesterCalendarPageContent({
         )}
       </Card>
 
-      <Modal
-        destroyOnHidden
-        footer={null}
+      <Drawer
+        destroyOnClose
         open={selectedDayEvents !== null}
+        placement="right"
+        size={520}
         title={
           selectedDayEvents
             ? `${formatDisplayDate(selectedDayEvents.dateKey)} 事件详情（${selectedDayEvents.events.length} 项）`
             : '事件详情'
         }
-        width={760}
-        onCancel={() => setSelectedDayEvents(null)}
+        onClose={() => setSelectedDayEvents(null)}
       >
         {selectedDayEvents ? (
-          <div className="flex flex-col gap-4 pt-2">
+          <div className="flex flex-col gap-4">
             {selectedDayEvents.events.map((event, index) => {
               const isExpired = event.recordStatus === 'EXPIRED';
 
@@ -663,7 +683,7 @@ export function SemesterCalendarPageContent({
             })}
           </div>
         ) : null}
-      </Modal>
+      </Drawer>
     </div>
   );
 }
