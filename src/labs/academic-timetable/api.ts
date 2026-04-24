@@ -2,7 +2,7 @@ import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-export type AcademicTimetableWeekType = 'ALL' | 'EVEN' | 'ODD';
+export type AcademicTimetableCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';
 
 type AcademicPlannedTimetableProjectionInvalidReasonCode = string;
 type AcademicPlannedTimetableProjectionTruncationReasonCode = string;
@@ -39,12 +39,15 @@ type AcademicPlannedTimetableResultDTO<TItem> = {
 };
 
 export type AcademicTimetableItem = {
+  calcEffect: AcademicTimetableCalcEffect;
   classroomId: string | null;
   classroomName: string | null;
   coefficient: number | null;
   courseCategory: string | null;
   courseName: string;
+  date: string;
   dayOfWeek: number;
+  isEffective: boolean;
   periodEnd: number;
   periodStart: number;
   scheduleId: number | string;
@@ -55,8 +58,7 @@ export type AcademicTimetableItem = {
   sstsCourseId: string | null;
   sstsTeachingClassId: string | null;
   teachingClassName: string;
-  weekPattern: string | null;
-  weekType: AcademicTimetableWeekType;
+  weekIndex: number;
 };
 
 export type AcademicTimetableQueryFilters = {
@@ -181,12 +183,15 @@ function mapAcademicTimetableItem(
   item: AcademicSemesterPlannedTimetableItemDTO | AcademicWeeklyPlannedTimetableItemDTO,
 ): AcademicTimetableItem {
   return {
+    calcEffect: item.calcEffect as AcademicTimetableCalcEffect,
     classroomId: null,
     classroomName: item.classroomName,
     coefficient: mapCoefficient(item.coefficient),
     courseCategory: item.courseCategory,
     courseName: item.courseName?.trim() || '未命名课程',
-    dayOfWeek: item.logicalDayOfWeek,
+    date: item.date,
+    dayOfWeek: item.physicalDayOfWeek,
+    isEffective: item.isEffective,
     periodEnd: item.periodEnd,
     periodStart: item.periodStart,
     scheduleId: item.scheduleId,
@@ -194,11 +199,10 @@ function mapAcademicTimetableItem(
     slotId: item.slotId,
     staffId: item.staffId,
     staffName: item.staffName,
-    sstsCourseId: null,
-    sstsTeachingClassId: null,
+    sstsCourseId: item.sstsCourseId ?? null,
+    sstsTeachingClassId: item.sstsTeachingClassId ?? null,
     teachingClassName: item.teachingClassName,
-    weekPattern: `第${item.weekIndex}周`,
-    weekType: 'ALL',
+    weekIndex: item.weekIndex,
   };
 }
 

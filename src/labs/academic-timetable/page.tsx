@@ -56,11 +56,6 @@ const MIN_PERIOD_COUNT = 12;
 const VIEW_LABELS: Record<TimetableViewKey, string> = {
   weekly: '基础课表',
 };
-const WEEK_TYPE_LABELS = {
-  ALL: '全周',
-  EVEN: '双周',
-  ODD: '单周',
-} as const;
 const REQUIRED_ID_FILTER_MESSAGE =
   '请至少填写教师 ID、上游教学班 ID、上游课程 ID 之一，再发起课表查询。';
 const DEFAULT_FILTERS: TimetableFilters = {
@@ -186,15 +181,45 @@ function resolvePeriodCount(items: AcademicTimetableItem[]) {
   return Math.max(MIN_PERIOD_COUNT, maxPeriodEnd);
 }
 
-function formatWeekScope(item: AcademicTimetableItem) {
-  const weekPattern = item.weekPattern?.trim();
-  const weekTypeLabel = WEEK_TYPE_LABELS[item.weekType];
+function formatOccurrenceDate(value: string) {
+  const date = new Date(value);
 
-  if (weekPattern) {
-    return `${weekPattern} · ${weekTypeLabel}`;
+  if (Number.isNaN(date.getTime())) {
+    return value;
   }
 
-  return weekTypeLabel;
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+  }).format(date);
+}
+
+function resolveOccurrenceStatusLabel(item: AcademicTimetableItem) {
+  switch (item.calcEffect) {
+    case 'CANCEL':
+      return '停课';
+    case 'MAKEUP':
+      return '调休补课';
+    case 'SWAP_IN':
+      return '调课补上';
+    case 'SWAP_OUT':
+      return '调课停上';
+    case 'NORMAL':
+    default:
+      return null;
+  }
+}
+
+function resolveOccurrenceStatusClassName(item: AcademicTimetableItem) {
+  if (!item.isEffective) {
+    return 'academic-timetable-entry-status academic-timetable-entry-status-inactive';
+  }
+
+  if (item.calcEffect === 'MAKEUP' || item.calcEffect === 'SWAP_IN') {
+    return 'academic-timetable-entry-status academic-timetable-entry-status-active';
+  }
+
+  return 'academic-timetable-entry-status academic-timetable-entry-status-default';
 }
 
 function formatCoefficient(value: number | null) {
@@ -208,7 +233,6 @@ function formatCoefficient(value: number | null) {
 function TimetableGrid(props: {
   emptyDescription: string;
   items: AcademicTimetableItem[];
-  showWeekMeta: boolean;
   viewKey: TimetableViewKey;
 }) {
   const slotGroups = useMemo(() => groupTimetableItems(props.items), [props.items]);
@@ -288,12 +312,27 @@ function TimetableGrid(props: {
             >
               {group.items.map((item) => {
                 const coefficient = formatCoefficient(item.coefficient);
+                const statusLabel = resolveOccurrenceStatusLabel(item);
 
                 return (
                   <article
                     key={`${item.scheduleId}-${item.slotId}`}
-                    className="academic-timetable-entry"
+                    className={`academic-timetable-entry ${
+                      item.isEffective ? '' : 'academic-timetable-entry-inactive'
+                    }`}
                   >
+                    <div className="academic-timetable-entry-status-row">
+                      {statusLabel ? (
+                        <span className={resolveOccurrenceStatusClassName(item)}>
+                          {statusLabel}
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <span className="academic-timetable-entry-date">
+                        {formatOccurrenceDate(item.date)}
+                      </span>
+                    </div>
                     <p className="academic-timetable-entry-title">{item.courseName}</p>
                     <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
                     <p className="academic-timetable-entry-meta">
@@ -301,9 +340,6 @@ function TimetableGrid(props: {
                       {' · '}
                       {item.staffName?.trim() || '待定教师'}
                     </p>
-                    {props.showWeekMeta ? (
-                      <p className="academic-timetable-entry-week">{formatWeekScope(item)}</p>
-                    ) : null}
                     <p className="academic-timetable-entry-foot">
                       {item.courseCategory?.trim() || '未标注课程类别'}
                       {coefficient ? ` · 系数 ${coefficient}` : ''}
@@ -592,7 +628,6 @@ export function AcademicTimetableLabPage() {
           <TimetableGrid
             emptyDescription="当前教学周没有命中的课表项"
             items={timetableItems}
-            showWeekMeta={false}
             viewKey="weekly"
           />
         )}
@@ -624,9 +659,9 @@ export function AcademicTimetableLabPage() {
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            我核对了当前 schema：semester 与 weekly 两条 planned timetable 查询返回的是同构
-            occurrence DTO。结合实测周视图未体现校历增减课差异，本页收敛为基础课表视图，
-            用指定教学周结果承载常规排课浏览。
+            当前页面直接消费 occurrence-based weekly planned timetable：以 weekIndex 作为结果窗口，
+            并用 calcEffect 与 isEffective 表达停课、调休补课与调课状态，不再回退到 weekPattern 或
+            weekType 的静态解释。
           </Typography.Paragraph>
         </div>
       </Card>

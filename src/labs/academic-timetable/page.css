@@ -67,6 +67,12 @@
   text-align: left;
 }
 
+.academic-timetable-entry-inactive {
+  background: linear-gradient(180deg, rgba(140, 140, 140, 0.08) 0%, rgba(140, 140, 140, 0.14) 100%);
+  border-color: var(--ant-color-border);
+  box-shadow: none;
+}
+
 .academic-timetable-slot-group-stacked {
   align-self: start;
   min-height: auto;
@@ -83,19 +89,49 @@
   margin: 0;
 }
 
+.academic-timetable-entry-status-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.academic-timetable-entry-status {
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.academic-timetable-entry-status-default {
+  background: rgba(22, 119, 255, 0.12);
+  color: var(--ant-color-primary);
+}
+
+.academic-timetable-entry-status-active {
+  background: rgba(82, 196, 26, 0.14);
+  color: #3f8600;
+}
+
+.academic-timetable-entry-status-inactive {
+  background: rgba(140, 140, 140, 0.14);
+  color: var(--ant-color-text-secondary);
+}
+
+.academic-timetable-entry-date {
+  color: var(--ant-color-text-tertiary);
+  font-size: 10px;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .academic-timetable-entry-subtitle,
 .academic-timetable-entry-meta,
 .academic-timetable-entry-foot {
   color: var(--ant-color-text-secondary);
   font-size: 11px;
-  line-height: 1.45;
-  margin: 0;
-}
-
-.academic-timetable-entry-week {
-  color: var(--ant-color-primary);
-  font-size: 11px;
-  font-weight: 600;
   line-height: 1.45;
   margin: 0;
 }
