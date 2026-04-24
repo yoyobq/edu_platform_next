@@ -13,6 +13,7 @@ import {
   ReadOutlined,
   RightOutlined,
   SendOutlined,
+  SyncOutlined,
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -36,6 +37,7 @@ const ICON_MAP: Record<string, React.ComponentType> = {
   LockOutlined,
   MailOutlined,
   ReadOutlined,
+  SyncOutlined,
   SendOutlined,
   TeamOutlined,
   WarningOutlined,

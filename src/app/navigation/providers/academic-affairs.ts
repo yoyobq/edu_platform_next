@@ -30,6 +30,16 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
         },
         {
           allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+          iconKey: 'CalendarOutlined',
+          key: '/academic-affairs/semester-calendar',
+          label: '学期校历',
+          navMode: 'rail' as const,
+          path: '/academic-affairs/semester-calendar',
+          primaryAccessGroup: 'ADMIN' as const,
+          slotGroup: null,
+        },
+        {
+          allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
           iconKey: 'SyncOutlined',
           key: '/academic-affairs/semester-course-schedule-sync',
           label: '学期课表同步',

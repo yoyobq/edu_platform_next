@@ -23,6 +23,7 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { ProfilePage } from '@/pages/profile';
+import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import {
   InviteIntentPage,
@@ -589,7 +590,6 @@ async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
 }
-
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -763,6 +763,11 @@ const router = createBrowserRouter([
         Component: AcademicCalendarPage,
       },
       {
+        path: '/academic-affairs/semester-calendar',
+        loader: semesterCalendarPageLoader,
+        Component: SemesterCalendarPage,
+      },
+      {
         path: '/academic-affairs/semester-course-schedule-sync',
         loader: semesterCourseScheduleSyncPageLoader,
         Component: SemesterCourseScheduleSyncPage,
@@ -808,6 +813,10 @@ const router = createBrowserRouter([
             path: 'academic-timetable',
             loader: academicTimetableLabLoader,
             lazy: loadAcademicTimetableLabRouteModule,
+          },
+          {
+            path: 'course-schedule-sync',
+            loader: () => redirect('/academic-affairs/semester-course-schedule-sync'),
           },
         ],
       },

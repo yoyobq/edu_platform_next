@@ -604,7 +604,7 @@ export function AcademicCalendarManagementPageContent({
         }
       >
         <div className="mb-4 flex flex-col gap-4">
-          <div className="grid gap-3 xl:grid-cols-[repeat(4,minmax(0,1fr))]">
+          <div className="grid gap-3 xl:grid-cols-4">
             <Input
               placeholder="筛选事件日期"
               type="date"
