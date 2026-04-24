@@ -9,7 +9,6 @@ import {
   InputNumber,
   Select,
   Skeleton,
-  Tabs,
   Tag,
   Typography,
 } from 'antd';
@@ -24,7 +23,6 @@ import { academicTimetableLabAccess } from './access';
 import {
   type AcademicTimetableItem,
   type AcademicTimetableQueryFilters,
-  requestAcademicSemesterTimetableItems,
   requestAcademicWeeklyTimetableItems,
 } from './api';
 import { academicTimetableLabMeta } from './meta';
@@ -36,10 +34,9 @@ type AcademicTimetableLabLoaderData = {
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 
-type TimetableViewKey = 'semester' | 'weekly';
+type TimetableViewKey = 'weekly';
 
 type TimetableFilters = {
-  limit: number;
   staffId: string;
   sstsCourseId: string;
   sstsTeachingClassId: string;
@@ -57,8 +54,7 @@ type TimetableSlotGroup = {
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const MIN_PERIOD_COUNT = 12;
 const VIEW_LABELS: Record<TimetableViewKey, string> = {
-  semester: '学期总览',
-  weekly: '单周课表',
+  weekly: '基础课表',
 };
 const WEEK_TYPE_LABELS = {
   ALL: '全周',
@@ -68,7 +64,6 @@ const WEEK_TYPE_LABELS = {
 const REQUIRED_ID_FILTER_MESSAGE =
   '请至少填写教师 ID、上游教学班 ID、上游课程 ID 之一，再发起课表查询。';
 const DEFAULT_FILTERS: TimetableFilters = {
-  limit: 100,
   staffId: '',
   sstsCourseId: '',
   sstsTeachingClassId: '',
@@ -122,7 +117,6 @@ function buildSharedQueryFilters(
   filters: TimetableFilters,
 ): AcademicTimetableQueryFilters {
   return {
-    limit: filters.limit,
     semesterId,
     staffId: normalizeStringFilter(filters.staffId),
     sstsCourseId: normalizeStringFilter(filters.sstsCourseId),
@@ -284,7 +278,9 @@ function TimetableGrid(props: {
           {slotGroups.map((group) => (
             <div
               key={group.key}
-              className="academic-timetable-slot-group"
+              className={`academic-timetable-slot-group ${
+                group.items.length > 1 ? 'academic-timetable-slot-group-stacked' : ''
+              }`}
               style={{
                 gridColumn: group.dayOfWeek + 1,
                 gridRow: `${group.periodStart + 1} / span ${group.periodEnd - group.periodStart + 1}`,
@@ -328,21 +324,17 @@ export function AcademicTimetableLabPage() {
   const loaderDefaultStaffId = loaderData?.defaultStaffId?.trim() || '';
   const roleLabel = loaderData?.viewerKind === 'internal' ? '内部用户' : '登录用户';
 
-  const [activeView, setActiveView] = useState<TimetableViewKey>('semester');
   const [filters, setFilters] = useState<TimetableFilters>({
     ...DEFAULT_FILTERS,
     staffId: loaderDefaultStaffId,
   });
   const [semesterError, setSemesterError] = useState<string | null>(null);
-  const [semesterItems, setSemesterItems] = useState<AcademicTimetableItem[]>([]);
-  const [semesterItemsError, setSemesterItemsError] = useState<string | null>(null);
-  const [semesterItemsLoading, setSemesterItemsLoading] = useState(false);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [semestersLoading, setSemestersLoading] = useState(true);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [weeklyItems, setWeeklyItems] = useState<AcademicTimetableItem[]>([]);
-  const [weeklyItemsError, setWeeklyItemsError] = useState<string | null>(null);
-  const [weeklyItemsLoading, setWeeklyItemsLoading] = useState(false);
+  const [timetableItems, setTimetableItems] = useState<AcademicTimetableItem[]>([]);
+  const [timetableItemsError, setTimetableItemsError] = useState<string | null>(null);
+  const [timetableItemsLoading, setTimetableItemsLoading] = useState(false);
   const latestFiltersRef = useRef(filters);
 
   const hasAnyQueryId = useMemo(() => hasAtLeastOneQueryId(filters), [filters]);
@@ -368,39 +360,14 @@ export function AcademicTimetableLabPage() {
     }
   }, []);
 
-  const loadSemesterItems = useCallback(
+  const loadTimetableItems = useCallback(
     async (semesterId: number, currentFilters: TimetableFilters) => {
       if (!hasAtLeastOneQueryId(currentFilters)) {
         return;
       }
 
-      setSemesterItemsLoading(true);
-      setSemesterItemsError(null);
-
-      try {
-        const result = await requestAcademicSemesterTimetableItems(
-          buildSharedQueryFilters(semesterId, currentFilters),
-        );
-
-        setSemesterItems(result);
-      } catch (error) {
-        setSemesterItemsError(error instanceof Error ? error.message : '暂时无法加载学期课表。');
-        setSemesterItems([]);
-      } finally {
-        setSemesterItemsLoading(false);
-      }
-    },
-    [],
-  );
-
-  const loadWeeklyItems = useCallback(
-    async (semesterId: number, currentFilters: TimetableFilters) => {
-      if (!hasAtLeastOneQueryId(currentFilters)) {
-        return;
-      }
-
-      setWeeklyItemsLoading(true);
-      setWeeklyItemsError(null);
+      setTimetableItemsLoading(true);
+      setTimetableItemsError(null);
 
       try {
         const result = await requestAcademicWeeklyTimetableItems({
@@ -408,12 +375,12 @@ export function AcademicTimetableLabPage() {
           weekIndex: currentFilters.weekIndex,
         });
 
-        setWeeklyItems(result);
+        setTimetableItems(result);
       } catch (error) {
-        setWeeklyItemsError(error instanceof Error ? error.message : '暂时无法加载单周课表。');
-        setWeeklyItems([]);
+        setTimetableItemsError(error instanceof Error ? error.message : '暂时无法加载课表。');
+        setTimetableItems([]);
       } finally {
-        setWeeklyItemsLoading(false);
+        setTimetableItemsLoading(false);
       }
     },
     [],
@@ -446,17 +413,14 @@ export function AcademicTimetableLabPage() {
 
   useEffect(() => {
     if (selectedSemesterId === null) {
-      setSemesterItems([]);
-      setWeeklyItems([]);
+      setTimetableItems([]);
       return;
     }
 
-    void loadSemesterItems(selectedSemesterId, latestFiltersRef.current);
-    setWeeklyItems([]);
-    setWeeklyItemsError(null);
-  }, [loadSemesterItems, selectedSemesterId]);
+    void loadTimetableItems(selectedSemesterId, latestFiltersRef.current);
+  }, [loadTimetableItems, selectedSemesterId]);
 
-  function renderSemesterSelector() {
+  function renderQueryControls() {
     if (semesterError) {
       return (
         <Alert
@@ -545,34 +509,16 @@ export function AcademicTimetableLabPage() {
             />
           </div>
 
-          {activeView === 'weekly' ? (
-            <div className="w-32">
-              <Typography.Text strong>教学周</Typography.Text>
-              <InputNumber
-                style={{ marginTop: 8, width: '100%' }}
-                min={1}
-                value={filters.weekIndex}
-                onChange={(value) => {
-                  setFilters((current) => ({
-                    ...current,
-                    weekIndex: typeof value === 'number' ? value : 1,
-                  }));
-                }}
-              />
-            </div>
-          ) : null}
-
           <div className="w-32">
-            <Typography.Text strong>limit</Typography.Text>
+            <Typography.Text strong>教学周</Typography.Text>
             <InputNumber
               style={{ marginTop: 8, width: '100%' }}
               min={1}
-              max={500}
-              value={filters.limit}
+              value={filters.weekIndex}
               onChange={(value) => {
                 setFilters((current) => ({
                   ...current,
-                  limit: typeof value === 'number' ? value : 100,
+                  weekIndex: typeof value === 'number' ? value : 1,
                 }));
               }}
             />
@@ -582,22 +528,17 @@ export function AcademicTimetableLabPage() {
             <Button
               block
               type="primary"
-              loading={activeView === 'semester' ? semesterItemsLoading : weeklyItemsLoading}
+              loading={timetableItemsLoading}
               disabled={selectedSemesterId === null || !hasAnyQueryId}
               onClick={() => {
                 if (selectedSemesterId === null) {
                   return;
                 }
 
-                if (activeView === 'semester') {
-                  void loadSemesterItems(selectedSemesterId, filters);
-                  return;
-                }
-
-                void loadWeeklyItems(selectedSemesterId, filters);
+                void loadTimetableItems(selectedSemesterId, filters);
               }}
             >
-              查询{VIEW_LABELS[activeView]}
+              查询课表
             </Button>
           </div>
         </div>
@@ -635,46 +576,22 @@ export function AcademicTimetableLabPage() {
     );
   }
 
-  function renderSemesterPanel() {
+  function renderTimetablePanel() {
     return (
       <div className="flex flex-col gap-4">
         <Alert
           showIcon
           type="info"
-          title="学期总览直接读取 listAcademicSemesterTimetableItems，前端只按星期和节次排版，不再 join 两张表。"
+          title="当前页面以 listAcademicWeeklyPlannedTimetable 作为基础课表视图；结合现有口径，它比“学期总览”更接近实际可用的常规课表。"
         />
-        {renderSemesterSelector()}
-        {semesterItemsError ? <Alert showIcon title={semesterItemsError} type="error" /> : null}
-        {semesterItemsLoading ? (
-          <Skeleton active paragraph={{ rows: 10 }} />
-        ) : (
-          <TimetableGrid
-            emptyDescription="当前筛选下没有学期课表项"
-            items={semesterItems}
-            showWeekMeta
-            viewKey="semester"
-          />
-        )}
-      </div>
-    );
-  }
-
-  function renderWeeklyPanel() {
-    return (
-      <div className="flex flex-col gap-4">
-        <Alert
-          showIcon
-          type="info"
-          title="单周课表读取 listAcademicWeeklyTimetableItems；接口已经按周命中过滤，本页不解析 weekPattern 判断是否上课。"
-        />
-        {renderSemesterSelector()}
-        {weeklyItemsError ? <Alert showIcon title={weeklyItemsError} type="error" /> : null}
-        {weeklyItemsLoading ? (
+        {renderQueryControls()}
+        {timetableItemsError ? <Alert showIcon title={timetableItemsError} type="error" /> : null}
+        {timetableItemsLoading ? (
           <Skeleton active paragraph={{ rows: 10 }} />
         ) : (
           <TimetableGrid
             emptyDescription="当前教学周没有命中的课表项"
-            items={weeklyItems}
+            items={timetableItems}
             showWeekMeta={false}
             viewKey="weekly"
           />
@@ -707,30 +624,14 @@ export function AcademicTimetableLabPage() {
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            后端返回的是可直接渲染的扁平课表项列表：学期视图保留原始 weekPattern 与
-            weekType，单周视图只展示该周实际命中的课程。
+            我核对了当前 schema：semester 与 weekly 两条 planned timetable 查询返回的是同构
+            occurrence DTO。结合实测周视图未体现校历增减课差异，本页收敛为基础课表视图，
+            用指定教学周结果承载常规排课浏览。
           </Typography.Paragraph>
         </div>
       </Card>
 
-      <Card>
-        <Tabs
-          activeKey={activeView}
-          items={[
-            {
-              key: 'semester',
-              label: '学期总览',
-              children: renderSemesterPanel(),
-            },
-            {
-              key: 'weekly',
-              label: '单周课表',
-              children: renderWeeklyPanel(),
-            },
-          ]}
-          onChange={(value) => setActiveView(value as TimetableViewKey)}
-        />
-      </Card>
+      <Card>{renderTimetablePanel()}</Card>
     </div>
   );
 }

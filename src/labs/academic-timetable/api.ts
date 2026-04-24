@@ -4,6 +4,40 @@ import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export type AcademicTimetableWeekType = 'ALL' | 'EVEN' | 'ODD';
 
+type AcademicPlannedTimetableProjectionInvalidReasonCode = string;
+type AcademicPlannedTimetableProjectionTruncationReasonCode = string;
+
+type AcademicSemesterPlannedTimetableItemDTO = {
+  calcEffect: string;
+  classroomName: string | null;
+  coefficient: string;
+  courseCategory: string | null;
+  courseName: string | null;
+  date: string;
+  isEffective: boolean;
+  logicalDayOfWeek: number;
+  periodEnd: number;
+  periodStart: number;
+  physicalDayOfWeek: number;
+  scheduleId: number;
+  semesterId: number;
+  slotId: number;
+  staffId: string;
+  staffName: string;
+  teachingClassName: string;
+  weekIndex: number;
+};
+
+type AcademicWeeklyPlannedTimetableItemDTO = AcademicSemesterPlannedTimetableItemDTO;
+
+type AcademicPlannedTimetableResultDTO<TItem> = {
+  invalidReason: AcademicPlannedTimetableProjectionInvalidReasonCode | null;
+  isComplete: boolean;
+  isValid: boolean;
+  items: TItem[];
+  truncationReason: AcademicPlannedTimetableProjectionTruncationReasonCode | null;
+};
+
 export type AcademicTimetableItem = {
   classroomId: string | null;
   classroomName: string | null;
@@ -38,72 +72,80 @@ export type AcademicWeeklyTimetableQueryFilters = AcademicTimetableQueryFilters 
 };
 
 type AcademicSemesterTimetableItemsResponse = {
-  listAcademicSemesterTimetableItems: AcademicTimetableItem[];
+  listAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
 };
 
 type AcademicWeeklyTimetableItemsResponse = {
-  listAcademicWeeklyTimetableItems: AcademicTimetableItem[];
+  listAcademicWeeklyPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicWeeklyPlannedTimetableItemDTO>;
 };
 
 const ACADEMIC_TIMETABLE_ITEM_FIELDS = `
+  calcEffect
+  classroomName
+  coefficient
+  courseCategory
+  courseName
+  date
+  isEffective
+  logicalDayOfWeek
+  periodStart
+  periodEnd
+  physicalDayOfWeek
   scheduleId
+  semesterId
   slotId
   staffId
   staffName
-  semesterId
-  courseName
   teachingClassName
-  classroomId
-  classroomName
-  courseCategory
-  coefficient
-  sstsCourseId
-  sstsTeachingClassId
-  dayOfWeek
-  periodStart
-  periodEnd
-  weekPattern
-  weekType
+  weekIndex
 `;
 
 const LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
-  query ListAcademicSemesterTimetableItems(
-    $limit: Int
+  query ListAcademicSemesterPlannedTimetable(
     $semesterId: Int!
     $staffId: String
     $sstsCourseId: String
     $sstsTeachingClassId: String
   ) {
-    listAcademicSemesterTimetableItems(
-      limit: $limit
+    listAcademicSemesterPlannedTimetable(
       semesterId: $semesterId
       staffId: $staffId
       sstsCourseId: $sstsCourseId
       sstsTeachingClassId: $sstsTeachingClassId
     ) {
-      ${ACADEMIC_TIMETABLE_ITEM_FIELDS}
+      invalidReason
+      isComplete
+      isValid
+      items {
+        ${ACADEMIC_TIMETABLE_ITEM_FIELDS}
+      }
+      truncationReason
     }
   }
 `;
 
 const LIST_ACADEMIC_WEEKLY_TIMETABLE_ITEMS_QUERY = `
-  query ListAcademicWeeklyTimetableItems(
-    $limit: Int
+  query ListAcademicWeeklyPlannedTimetable(
     $semesterId: Int!
     $staffId: String
     $sstsCourseId: String
     $sstsTeachingClassId: String
     $weekIndex: Int!
   ) {
-    listAcademicWeeklyTimetableItems(
-      limit: $limit
+    listAcademicWeeklyPlannedTimetable(
       semesterId: $semesterId
       staffId: $staffId
       sstsCourseId: $sstsCourseId
       sstsTeachingClassId: $sstsTeachingClassId
       weekIndex: $weekIndex
     ) {
-      ${ACADEMIC_TIMETABLE_ITEM_FIELDS}
+      invalidReason
+      isComplete
+      isValid
+      items {
+        ${ACADEMIC_TIMETABLE_ITEM_FIELDS}
+      }
+      truncationReason
     }
   }
 `;
@@ -116,12 +158,58 @@ function normalizeStringFilter(value?: string) {
 
 function normalizeSharedFilters(input: AcademicTimetableQueryFilters) {
   return {
-    limit: input.limit ?? 100,
     semesterId: input.semesterId,
     staffId: normalizeStringFilter(input.staffId),
     sstsCourseId: normalizeStringFilter(input.sstsCourseId),
     sstsTeachingClassId: normalizeStringFilter(input.sstsTeachingClassId),
   };
+}
+
+function mapCoefficient(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+
+  return Number.isNaN(parsedValue) ? null : parsedValue;
+}
+
+function mapAcademicTimetableItem(
+  item: AcademicSemesterPlannedTimetableItemDTO | AcademicWeeklyPlannedTimetableItemDTO,
+): AcademicTimetableItem {
+  return {
+    classroomId: null,
+    classroomName: item.classroomName,
+    coefficient: mapCoefficient(item.coefficient),
+    courseCategory: item.courseCategory,
+    courseName: item.courseName?.trim() || '未命名课程',
+    dayOfWeek: item.logicalDayOfWeek,
+    periodEnd: item.periodEnd,
+    periodStart: item.periodStart,
+    scheduleId: item.scheduleId,
+    semesterId: item.semesterId,
+    slotId: item.slotId,
+    staffId: item.staffId,
+    staffName: item.staffName,
+    sstsCourseId: null,
+    sstsTeachingClassId: null,
+    teachingClassName: item.teachingClassName,
+    weekPattern: `第${item.weekIndex}周`,
+    weekType: 'ALL',
+  };
+}
+
+function resolvePlannedTimetableItems<TItem extends AcademicSemesterPlannedTimetableItemDTO>(
+  result: AcademicPlannedTimetableResultDTO<TItem>,
+) {
+  if (!result.isValid && result.invalidReason) {
+    throw new Error(`课表投影无效：${result.invalidReason}`);
+  }
+
+  return result.items.map(mapAcademicTimetableItem);
 }
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
@@ -153,7 +241,7 @@ export async function requestAcademicSemesterTimetableItems(input: AcademicTimet
       AcademicTimetableQueryFilters
     >(LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY, normalizeSharedFilters(input));
 
-    return response.listAcademicSemesterTimetableItems;
+    return resolvePlannedTimetableItems(response.listAcademicSemesterPlannedTimetable);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载学期课表。'));
   }
@@ -171,7 +259,7 @@ export async function requestAcademicWeeklyTimetableItems(
       weekIndex: input.weekIndex,
     });
 
-    return response.listAcademicWeeklyTimetableItems;
+    return resolvePlannedTimetableItems(response.listAcademicWeeklyPlannedTimetable);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载单周课表。'));
   }
