@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Button,
@@ -9,6 +9,7 @@ import {
   InputNumber,
   Select,
   Skeleton,
+  Tabs,
   Tag,
   Typography,
 } from 'antd';
@@ -21,8 +22,11 @@ import {
 
 import { academicTimetableLabAccess } from './access';
 import {
+  type AcademicTeacherSemesterScheduleItem,
+  type AcademicTimetableGridItem,
   type AcademicTimetableItem,
   type AcademicTimetableQueryFilters,
+  requestAcademicTeacherSemesterScheduleItems,
   requestAcademicWeeklyTimetableItems,
 } from './api';
 import { academicTimetableLabMeta } from './meta';
@@ -34,7 +38,7 @@ type AcademicTimetableLabLoaderData = {
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 
-type TimetableViewKey = 'weekly';
+type TimetableViewKey = 'semester' | 'weekly';
 
 type TimetableFilters = {
   staffId: string;
@@ -43,9 +47,9 @@ type TimetableFilters = {
   weekIndex: number;
 };
 
-type TimetableSlotGroup = {
+type TimetableSlotGroup<TItem extends AcademicTimetableGridItem> = {
   dayOfWeek: number;
-  items: AcademicTimetableItem[];
+  items: TItem[];
   key: string;
   periodEnd: number;
   periodStart: number;
@@ -54,10 +58,12 @@ type TimetableSlotGroup = {
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const MIN_PERIOD_COUNT = 12;
 const VIEW_LABELS: Record<TimetableViewKey, string> = {
-  weekly: '基础课表',
+  semester: '学期课表',
+  weekly: '周课表',
 };
 const REQUIRED_ID_FILTER_MESSAGE =
   '请至少填写教师 ID、上游教学班 ID、上游课程 ID 之一，再发起课表查询。';
+const REQUIRED_STAFF_ID_FILTER_MESSAGE = '学期课表以教师 + 学期为视口，请先填写教师 ID。';
 const DEFAULT_FILTERS: TimetableFilters = {
   staffId: '',
   sstsCourseId: '',
@@ -127,7 +133,10 @@ function hasAtLeastOneQueryId(filters: TimetableFilters) {
   );
 }
 
-function sortTimetableItems(items: AcademicTimetableItem[]) {
+function sortTimetableItems<TItem extends AcademicTimetableGridItem>(
+  items: TItem[],
+  getTieBreaker: (item: TItem) => string,
+) {
   return [...items].sort((left, right) => {
     if (left.dayOfWeek !== right.dayOfWeek) {
       return left.dayOfWeek - right.dayOfWeek;
@@ -141,17 +150,17 @@ function sortTimetableItems(items: AcademicTimetableItem[]) {
       return left.periodEnd - right.periodEnd;
     }
 
-    return `${left.courseName}-${left.teachingClassName}`.localeCompare(
-      `${right.courseName}-${right.teachingClassName}`,
-      'zh-CN',
-    );
+    return getTieBreaker(left).localeCompare(getTieBreaker(right), 'zh-CN');
   });
 }
 
-function groupTimetableItems(items: AcademicTimetableItem[]) {
-  const groups = new Map<string, TimetableSlotGroup>();
+function groupTimetableItems<TItem extends AcademicTimetableGridItem>(
+  items: TItem[],
+  getTieBreaker: (item: TItem) => string,
+) {
+  const groups = new Map<string, TimetableSlotGroup<TItem>>();
 
-  for (const item of sortTimetableItems(items)) {
+  for (const item of sortTimetableItems(items, getTieBreaker)) {
     const key = `${item.dayOfWeek}:${item.periodStart}-${item.periodEnd}`;
     const currentGroup = groups.get(key);
 
@@ -172,7 +181,7 @@ function groupTimetableItems(items: AcademicTimetableItem[]) {
   return [...groups.values()];
 }
 
-function resolvePeriodCount(items: AcademicTimetableItem[]) {
+function resolvePeriodCount<TItem extends AcademicTimetableGridItem>(items: TItem[]) {
   const maxPeriodEnd = items.reduce(
     (currentMax, item) => Math.max(currentMax, item.periodEnd),
     MIN_PERIOD_COUNT,
@@ -230,12 +239,55 @@ function formatCoefficient(value: number | null) {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-function TimetableGrid(props: {
+function getWeeklyTimetableEntryKey(item: AcademicTimetableItem) {
+  return `${item.scheduleId}-${item.slotId}`;
+}
+
+function getWeeklyTimetableItemTieBreaker(item: AcademicTimetableItem) {
+  return `${item.courseName}-${item.teachingClassName}-${item.date}`;
+}
+
+function getSemesterScheduleEntryKey(item: AcademicTeacherSemesterScheduleItem) {
+  return `${item.scheduleId}-${item.slotId}`;
+}
+
+function getSemesterScheduleItemTieBreaker(item: AcademicTeacherSemesterScheduleItem) {
+  return `${item.courseName}-${item.teachingClassName}-${item.weekPattern}`;
+}
+
+function resolveWeekTypeLabel(value: string) {
+  switch (value) {
+    case 'ALL':
+    case 'EVERY':
+      return '全周';
+    case 'ODD':
+      return '单周';
+    case 'EVEN':
+      return '双周';
+    default:
+      return value || '未知周型';
+  }
+}
+
+function resolveWeekPatternLabel(item: AcademicTeacherSemesterScheduleItem) {
+  const normalizedWeekRanges = item.weekRanges?.trim();
+  const normalizedWeekPattern = item.weekPattern.trim();
+
+  return normalizedWeekRanges || normalizedWeekPattern || '未标注周次';
+}
+
+function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
   emptyDescription: string;
-  items: AcademicTimetableItem[];
+  getEntryKey: (item: TItem) => string;
+  getTieBreaker: (item: TItem) => string;
+  items: TItem[];
+  renderEntry: (item: TItem) => ReactNode;
   viewKey: TimetableViewKey;
 }) {
-  const slotGroups = useMemo(() => groupTimetableItems(props.items), [props.items]);
+  const slotGroups = useMemo(
+    () => groupTimetableItems(props.items, props.getTieBreaker),
+    [props.getTieBreaker, props.items],
+  );
   const periodCount = useMemo(() => resolvePeriodCount(props.items), [props.items]);
 
   if (props.items.length === 0) {
@@ -310,48 +362,102 @@ function TimetableGrid(props: {
                 gridRow: `${group.periodStart + 1} / span ${group.periodEnd - group.periodStart + 1}`,
               }}
             >
-              {group.items.map((item) => {
-                const coefficient = formatCoefficient(item.coefficient);
-                const statusLabel = resolveOccurrenceStatusLabel(item);
-
-                return (
-                  <article
-                    key={`${item.scheduleId}-${item.slotId}`}
-                    className={`academic-timetable-entry ${
-                      item.isEffective ? '' : 'academic-timetable-entry-inactive'
-                    }`}
-                  >
-                    <div className="academic-timetable-entry-status-row">
-                      {statusLabel ? (
-                        <span className={resolveOccurrenceStatusClassName(item)}>
-                          {statusLabel}
-                        </span>
-                      ) : (
-                        <span />
-                      )}
-                      <span className="academic-timetable-entry-date">
-                        {formatOccurrenceDate(item.date)}
-                      </span>
-                    </div>
-                    <p className="academic-timetable-entry-title">{item.courseName}</p>
-                    <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
-                    <p className="academic-timetable-entry-meta">
-                      {item.classroomName?.trim() || '待定教室'}
-                      {' · '}
-                      {item.staffName?.trim() || '待定教师'}
-                    </p>
-                    <p className="academic-timetable-entry-foot">
-                      {item.courseCategory?.trim() || '未标注课程类别'}
-                      {coefficient ? ` · 系数 ${coefficient}` : ''}
-                    </p>
-                  </article>
-                );
-              })}
+              {group.items.map((item) => (
+                <div key={props.getEntryKey(item)}>{props.renderEntry(item)}</div>
+              ))}
             </div>
           ))}
         </div>
       </div>
     </div>
+  );
+}
+
+function WeeklyTimetableGrid(props: { emptyDescription: string; items: AcademicTimetableItem[] }) {
+  return (
+    <BaseTimetableGrid
+      emptyDescription={props.emptyDescription}
+      getEntryKey={getWeeklyTimetableEntryKey}
+      getTieBreaker={getWeeklyTimetableItemTieBreaker}
+      items={props.items}
+      renderEntry={(item) => {
+        const coefficient = formatCoefficient(item.coefficient);
+        const statusLabel = resolveOccurrenceStatusLabel(item);
+
+        return (
+          <article
+            className={`academic-timetable-entry ${
+              item.isEffective ? '' : 'academic-timetable-entry-inactive'
+            }`}
+          >
+            <div className="academic-timetable-entry-status-row">
+              {statusLabel ? (
+                <span className={resolveOccurrenceStatusClassName(item)}>{statusLabel}</span>
+              ) : (
+                <span />
+              )}
+              <span className="academic-timetable-entry-date">
+                {formatOccurrenceDate(item.date)}
+              </span>
+            </div>
+            <p className="academic-timetable-entry-title">{item.courseName}</p>
+            <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
+            <p className="academic-timetable-entry-meta">
+              {item.classroomName?.trim() || '待定教室'}
+              {' · '}
+              {item.staffName?.trim() || '待定教师'}
+            </p>
+            <p className="academic-timetable-entry-foot">
+              {item.courseCategory?.trim() || '未标注课程类别'}
+              {coefficient ? ` · 系数 ${coefficient}` : ''}
+            </p>
+          </article>
+        );
+      }}
+      viewKey="weekly"
+    />
+  );
+}
+
+function SemesterTimetableGrid(props: {
+  emptyDescription: string;
+  items: AcademicTeacherSemesterScheduleItem[];
+}) {
+  return (
+    <BaseTimetableGrid
+      emptyDescription={props.emptyDescription}
+      getEntryKey={getSemesterScheduleEntryKey}
+      getTieBreaker={getSemesterScheduleItemTieBreaker}
+      items={props.items}
+      renderEntry={(item) => {
+        const coefficient = formatCoefficient(item.coefficient);
+
+        return (
+          <article className="academic-timetable-entry academic-timetable-entry-semester">
+            <div className="academic-timetable-entry-pill-row">
+              <span className="academic-timetable-entry-pill">
+                {resolveWeekTypeLabel(item.weekType)}
+              </span>
+              <span className="academic-timetable-entry-date academic-timetable-entry-week-pattern">
+                {resolveWeekPatternLabel(item)}
+              </span>
+            </div>
+            <p className="academic-timetable-entry-title">{item.courseName}</p>
+            <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
+            <p className="academic-timetable-entry-meta">
+              {item.classroomName?.trim() || '待定教室'}
+              {' · '}
+              {item.staffName.trim() || '待定教师'}
+            </p>
+            <p className="academic-timetable-entry-foot">
+              {item.courseCategory?.trim() || '未标注课程类别'}
+              {coefficient ? ` · 系数 ${coefficient}` : ''}
+            </p>
+          </article>
+        );
+      }}
+      viewKey="semester"
+    />
   );
 }
 
@@ -364,16 +470,26 @@ export function AcademicTimetableLabPage() {
     ...DEFAULT_FILTERS,
     staffId: loaderDefaultStaffId,
   });
+  const [activeViewKey, setActiveViewKey] = useState<TimetableViewKey>('weekly');
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [semestersLoading, setSemestersLoading] = useState(true);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
+  const [semesterScheduleItems, setSemesterScheduleItems] = useState<
+    AcademicTeacherSemesterScheduleItem[]
+  >([]);
+  const [semesterScheduleItemsError, setSemesterScheduleItemsError] = useState<string | null>(null);
+  const [semesterScheduleItemsLoading, setSemesterScheduleItemsLoading] = useState(false);
   const [timetableItems, setTimetableItems] = useState<AcademicTimetableItem[]>([]);
   const [timetableItemsError, setTimetableItemsError] = useState<string | null>(null);
   const [timetableItemsLoading, setTimetableItemsLoading] = useState(false);
   const latestFiltersRef = useRef(filters);
 
   const hasAnyQueryId = useMemo(() => hasAtLeastOneQueryId(filters), [filters]);
+  const hasSemesterQueryId = useMemo(
+    () => Boolean(normalizeStringFilter(filters.staffId)),
+    [filters.staffId],
+  );
 
   const selectedSemester = useMemo(
     () => semesters.find((record) => record.id === selectedSemesterId) ?? null,
@@ -399,6 +515,8 @@ export function AcademicTimetableLabPage() {
   const loadTimetableItems = useCallback(
     async (semesterId: number, currentFilters: TimetableFilters) => {
       if (!hasAtLeastOneQueryId(currentFilters)) {
+        setTimetableItemsError(null);
+        setTimetableItems([]);
         return;
       }
 
@@ -417,6 +535,38 @@ export function AcademicTimetableLabPage() {
         setTimetableItems([]);
       } finally {
         setTimetableItemsLoading(false);
+      }
+    },
+    [],
+  );
+
+  const loadSemesterScheduleItems = useCallback(
+    async (semesterId: number, currentFilters: TimetableFilters) => {
+      const normalizedStaffId = normalizeStringFilter(currentFilters.staffId);
+
+      if (!normalizedStaffId) {
+        setSemesterScheduleItemsError(null);
+        setSemesterScheduleItems([]);
+        return;
+      }
+
+      setSemesterScheduleItemsLoading(true);
+      setSemesterScheduleItemsError(null);
+
+      try {
+        const result = await requestAcademicTeacherSemesterScheduleItems({
+          semesterId,
+          staffId: normalizedStaffId,
+        });
+
+        setSemesterScheduleItems(result);
+      } catch (error) {
+        setSemesterScheduleItemsError(
+          error instanceof Error ? error.message : '暂时无法加载学期课表。',
+        );
+        setSemesterScheduleItems([]);
+      } finally {
+        setSemesterScheduleItemsLoading(false);
       }
     },
     [],
@@ -450,13 +600,19 @@ export function AcademicTimetableLabPage() {
   useEffect(() => {
     if (selectedSemesterId === null) {
       setTimetableItems([]);
+      setSemesterScheduleItems([]);
+      return;
+    }
+
+    if (activeViewKey === 'semester') {
+      void loadSemesterScheduleItems(selectedSemesterId, latestFiltersRef.current);
       return;
     }
 
     void loadTimetableItems(selectedSemesterId, latestFiltersRef.current);
-  }, [loadTimetableItems, selectedSemesterId]);
+  }, [activeViewKey, loadSemesterScheduleItems, loadTimetableItems, selectedSemesterId]);
 
-  function renderQueryControls() {
+  function renderQueryControls(viewKey: TimetableViewKey) {
     if (semesterError) {
       return (
         <Alert
@@ -482,8 +638,12 @@ export function AcademicTimetableLabPage() {
 
     return (
       <div className="flex flex-col gap-4">
-        {!hasAnyQueryId ? (
+        {viewKey === 'weekly' && !hasAnyQueryId ? (
           <Alert showIcon title={REQUIRED_ID_FILTER_MESSAGE} type="warning" />
+        ) : null}
+
+        {viewKey === 'semester' && !hasSemesterQueryId ? (
+          <Alert showIcon title={REQUIRED_STAFF_ID_FILTER_MESSAGE} type="warning" />
         ) : null}
 
         <div className="flex flex-wrap gap-4">
@@ -515,66 +675,80 @@ export function AcademicTimetableLabPage() {
             />
           </div>
 
-          <div className="min-w-40 flex-1">
-            <Typography.Text strong>上游教学班 ID</Typography.Text>
-            <Input
-              style={{ marginTop: 8 }}
-              placeholder="sstsTeachingClassId"
-              value={filters.sstsTeachingClassId}
-              onChange={(event) => {
-                setFilters((current) => ({
-                  ...current,
-                  sstsTeachingClassId: event.target.value,
-                }));
-              }}
-            />
-          </div>
+          {viewKey === 'weekly' ? (
+            <>
+              <div className="min-w-40 flex-1">
+                <Typography.Text strong>上游教学班 ID</Typography.Text>
+                <Input
+                  style={{ marginTop: 8 }}
+                  placeholder="sstsTeachingClassId"
+                  value={filters.sstsTeachingClassId}
+                  onChange={(event) => {
+                    setFilters((current) => ({
+                      ...current,
+                      sstsTeachingClassId: event.target.value,
+                    }));
+                  }}
+                />
+              </div>
 
-          <div className="min-w-40 flex-1">
-            <Typography.Text strong>上游课程 ID</Typography.Text>
-            <Input
-              style={{ marginTop: 8 }}
-              placeholder="sstsCourseId"
-              value={filters.sstsCourseId}
-              onChange={(event) => {
-                setFilters((current) => ({
-                  ...current,
-                  sstsCourseId: event.target.value,
-                }));
-              }}
-            />
-          </div>
+              <div className="min-w-40 flex-1">
+                <Typography.Text strong>上游课程 ID</Typography.Text>
+                <Input
+                  style={{ marginTop: 8 }}
+                  placeholder="sstsCourseId"
+                  value={filters.sstsCourseId}
+                  onChange={(event) => {
+                    setFilters((current) => ({
+                      ...current,
+                      sstsCourseId: event.target.value,
+                    }));
+                  }}
+                />
+              </div>
 
-          <div className="w-32">
-            <Typography.Text strong>教学周</Typography.Text>
-            <InputNumber
-              style={{ marginTop: 8, width: '100%' }}
-              min={1}
-              value={filters.weekIndex}
-              onChange={(value) => {
-                setFilters((current) => ({
-                  ...current,
-                  weekIndex: typeof value === 'number' ? value : 1,
-                }));
-              }}
-            />
-          </div>
+              <div className="w-32">
+                <Typography.Text strong>教学周</Typography.Text>
+                <InputNumber
+                  style={{ marginTop: 8, width: '100%' }}
+                  min={1}
+                  value={filters.weekIndex}
+                  onChange={(value) => {
+                    setFilters((current) => ({
+                      ...current,
+                      weekIndex: typeof value === 'number' ? value : 1,
+                    }));
+                  }}
+                />
+              </div>
+            </>
+          ) : null}
 
           <div className="flex min-w-32 items-end">
             <Button
               block
               type="primary"
-              loading={timetableItemsLoading}
-              disabled={selectedSemesterId === null || !hasAnyQueryId}
+              loading={
+                viewKey === 'semester' ? semesterScheduleItemsLoading : timetableItemsLoading
+              }
+              disabled={
+                selectedSemesterId === null ||
+                (viewKey === 'semester' ? !hasSemesterQueryId : !hasAnyQueryId)
+              }
               onClick={() => {
                 if (selectedSemesterId === null) {
+                  return;
+                }
+
+                if (viewKey === 'semester') {
+                  void loadSemesterScheduleItems(selectedSemesterId, filters);
                   return;
                 }
 
                 void loadTimetableItems(selectedSemesterId, filters);
               }}
             >
-              查询课表
+              {viewKey === 'semester' ? '查询学期课表' : '查询周课表'}
             </Button>
           </div>
         </div>
@@ -612,7 +786,7 @@ export function AcademicTimetableLabPage() {
     );
   }
 
-  function renderTimetablePanel() {
+  function renderWeeklyTimetablePanel() {
     return (
       <div className="flex flex-col gap-4">
         <Alert
@@ -620,15 +794,43 @@ export function AcademicTimetableLabPage() {
           type="info"
           title="当前页面以 listAcademicWeeklyPlannedTimetable 作为基础课表视图；结合现有口径，它比“学期总览”更接近实际可用的常规课表。"
         />
-        {renderQueryControls()}
+        {renderQueryControls('weekly')}
         {timetableItemsError ? <Alert showIcon title={timetableItemsError} type="error" /> : null}
         {timetableItemsLoading ? (
           <Skeleton active paragraph={{ rows: 10 }} />
         ) : (
-          <TimetableGrid
+          <WeeklyTimetableGrid
             emptyDescription="当前教学周没有命中的课表项"
             items={timetableItems}
-            viewKey="weekly"
+          />
+        )}
+      </div>
+    );
+  }
+
+  function renderSemesterTimetablePanel() {
+    return (
+      <div className="flex flex-col gap-4">
+        <Alert
+          showIcon
+          type="info"
+          title="学期课表视图直接展示教师在该学期的原始排课项，不按日期展开 occurrence，也不混入校历补停调课语义；管理员 token 已验证可访问，普通 staff 账号会被拒绝。"
+        />
+        <Alert
+          showIcon
+          type="warning"
+          title="正常课表展示优先使用 weekRanges；如需调试或特殊逻辑，可继续参考 weekPattern 与 weekType。"
+        />
+        {renderQueryControls('semester')}
+        {semesterScheduleItemsError ? (
+          <Alert showIcon title={semesterScheduleItemsError} type="error" />
+        ) : null}
+        {semesterScheduleItemsLoading ? (
+          <Skeleton active paragraph={{ rows: 10 }} />
+        ) : (
+          <SemesterTimetableGrid
+            emptyDescription="当前教师在该学期还没有命中的排课项"
+            items={semesterScheduleItems}
           />
         )}
       </div>
@@ -659,14 +861,39 @@ export function AcademicTimetableLabPage() {
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前页面直接消费 occurrence-based weekly planned timetable：以 weekIndex 作为结果窗口，
-            并用 calcEffect 与 isEffective 表达停课、调休补课与调课状态，不再回退到 weekPattern 或
-            weekType 的静态解释。
+            当前页面同时提供两套只读口径：周课表使用 occurrence-based weekly planned
+            timetable，以教学周为结果窗口；学期课表使用教师学期原始排课项，直接展示固定格位与
+            周次表达，需管理端可用 token 调用，不再在前端拼接 schedule 与 slot。
           </Typography.Paragraph>
         </div>
       </Card>
 
-      <Card>{renderTimetablePanel()}</Card>
+      <Card styles={{ body: { padding: 0 } }}>
+        <Tabs
+          activeKey={activeViewKey}
+          onChange={(key) => setActiveViewKey(key as TimetableViewKey)}
+          items={[
+            {
+              key: 'weekly',
+              label: VIEW_LABELS.weekly,
+              children: (
+                <div className="p-6">
+                  {activeViewKey === 'weekly' ? renderWeeklyTimetablePanel() : null}
+                </div>
+              ),
+            },
+            {
+              key: 'semester',
+              label: VIEW_LABELS.semester,
+              children: (
+                <div className="p-6">
+                  {activeViewKey === 'semester' ? renderSemesterTimetablePanel() : null}
+                </div>
+              ),
+            },
+          ]}
+        />
+      </Card>
     </div>
   );
 }
