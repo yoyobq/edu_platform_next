@@ -23,9 +23,11 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 import { upstreamSessionDemoLabAccess } from './access';
 import {
   type CurrentUpstreamDemoAccount,
+  type CurriculumPlanDetailResult,
   type CurriculumPlanListResult,
   type DepartmentCurriculumPlanReviewStatus,
   fetchCurrentUpstreamDemoAccount,
+  fetchCurriculumPlanDetail,
   fetchCurriculumPlanList,
   fetchDepartmentCurriculumPlanList,
   fetchLectureJournalList,
@@ -91,7 +93,6 @@ type UpstreamActionError = {
 };
 
 const TEACHER_PREVIEW_LIMIT = 5;
-const CURRICULUM_PLAN_PREVIEW_LIMIT = 3;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
@@ -134,6 +135,11 @@ type CurriculumPlanRecord = {
   raw: Record<string, unknown>;
   teacherName: string | null;
   weeklyHours: string | null;
+};
+
+type CurriculumPlanDetailState = {
+  planId: string;
+  result: CurriculumPlanDetailResult | null;
 };
 
 type LectureJournalTeachingClassSample = {
@@ -435,12 +441,24 @@ export function UpstreamSessionDemoLabPage() {
     personal: false,
     department: false,
   });
+  const [isLoadingCurriculumPlanDetails, setIsLoadingCurriculumPlanDetails] = useState<
+    Record<CurriculumPlanScope, boolean>
+  >({
+    personal: false,
+    department: false,
+  });
   const [isLoadingIdentity, setIsLoadingIdentity] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<UpstreamActionError | null>(null);
   const [curriculumPlanResult, setCurriculumPlanResult] = useState<
     Record<CurriculumPlanScope, CurriculumPlanListResult | null>
+  >({
+    personal: null,
+    department: null,
+  });
+  const [curriculumPlanDetailResult, setCurriculumPlanDetailResult] = useState<
+    Record<CurriculumPlanScope, CurriculumPlanDetailState | null>
   >({
     personal: null,
     department: null,
@@ -487,6 +505,8 @@ export function UpstreamSessionDemoLabPage() {
       courseName: selectedPersonalCourseName,
     },
   );
+  const personalMatchedCurriculumPlan =
+    personalMatchingCurriculumPlans.length === 1 ? personalMatchingCurriculumPlans[0] : null;
   const departmentCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.department);
   const departmentClassNameOptions = getUniqueValues(
     departmentCurriculumPlanRecords.map((record) => record.className),
@@ -506,11 +526,17 @@ export function UpstreamSessionDemoLabPage() {
       courseName: selectedDepartmentCourseName,
     },
   );
+  const departmentMatchedCurriculumPlan =
+    departmentMatchingCurriculumPlans.length === 1 ? departmentMatchingCurriculumPlans[0] : null;
 
   const clearCurrentSession = useCallback(
     (error?: UpstreamActionError) => {
       clear();
       setCurriculumPlanResult({
+        personal: null,
+        department: null,
+      });
+      setCurriculumPlanDetailResult({
         personal: null,
         department: null,
       });
@@ -585,6 +611,66 @@ export function UpstreamSessionDemoLabPage() {
     }
   }, [lectureJournalForm]);
 
+  const loadCurriculumPlanDetail = useCallback(
+    async (scope: CurriculumPlanScope, planId: string, session: StoredUpstreamSession) => {
+      setIsLoadingCurriculumPlanDetails((current) => ({
+        ...current,
+        [scope]: true,
+      }));
+
+      try {
+        const result = await fetchCurriculumPlanDetail({
+          planId,
+          sessionToken: session.upstreamSessionToken,
+        });
+
+        persistRollingSession(session, {
+          expiresAt: result.expiresAt,
+          upstreamSessionToken: result.upstreamSessionToken,
+        });
+        setCurriculumPlanDetailResult((current) => ({
+          ...current,
+          [scope]: {
+            planId,
+            result,
+          },
+        }));
+      } catch (error) {
+        if (isExpiredUpstreamSessionError(error)) {
+          clearCurrentSession();
+          setLoginError('upstream 会话已失效，请重新登录后继续。');
+          setIsLoginModalOpen(true);
+          form.setFieldsValue({
+            password: '',
+            userId: session.upstreamLoginId ?? '',
+          });
+          return;
+        }
+
+        setCurriculumPlanDetailResult((current) => ({
+          ...current,
+          [scope]: {
+            planId,
+            result: null,
+          },
+        }));
+        setActionError({
+          panel: CURRICULUM_PLAN_PANEL_BY_SCOPE[scope],
+          message: resolveUpstreamErrorMessage(
+            error,
+            `暂时无法读取${CURRICULUM_PLAN_SCOPE_LABEL[scope]}详情。`,
+          ),
+        });
+      } finally {
+        setIsLoadingCurriculumPlanDetails((current) => ({
+          ...current,
+          [scope]: false,
+        }));
+      }
+    },
+    [clearCurrentSession, form, persistRollingSession],
+  );
+
   const performAction = useCallback(
     async (session: StoredUpstreamSession, action: PendingUpstreamAction) => {
       try {
@@ -634,6 +720,10 @@ export function UpstreamSessionDemoLabPage() {
             setIsLoadingCurriculumPlans((current) => ({
               ...current,
               [action.scope]: true,
+            }));
+            setCurriculumPlanDetailResult((current) => ({
+              ...current,
+              [action.scope]: null,
             }));
             const result =
               action.scope === 'personal'
@@ -700,6 +790,10 @@ export function UpstreamSessionDemoLabPage() {
               ...current,
               [action.scope]: null,
             }));
+            setCurriculumPlanDetailResult((current) => ({
+              ...current,
+              [action.scope]: null,
+            }));
             setActionError({
               panel: CURRICULUM_PLAN_PANEL_BY_SCOPE[action.scope],
               message: resolveUpstreamErrorMessage(
@@ -760,6 +854,10 @@ export function UpstreamSessionDemoLabPage() {
       setLoginError(null);
       setActionError(null);
       setCurriculumPlanResult({
+        personal: null,
+        department: null,
+      });
+      setCurriculumPlanDetailResult({
         personal: null,
         department: null,
       });
@@ -839,6 +937,74 @@ export function UpstreamSessionDemoLabPage() {
       isCancelled = true;
     };
   }, [lectureJournalForm]);
+
+  useEffect(() => {
+    if (!personalMatchedCurriculumPlan) {
+      if (curriculumPlanDetailResult.personal) {
+        setCurriculumPlanDetailResult((current) => ({
+          ...current,
+          personal: null,
+        }));
+      }
+      return;
+    }
+
+    if (
+      !storedSession ||
+      isLoginModalOpen ||
+      isLoadingCurrentAccount ||
+      isLoadingCurriculumPlanDetails.personal ||
+      curriculumPlanDetailResult.personal?.planId === personalMatchedCurriculumPlan.planId
+    ) {
+      return;
+    }
+
+    void loadCurriculumPlanDetail('personal', personalMatchedCurriculumPlan.planId, storedSession);
+  }, [
+    curriculumPlanDetailResult.personal,
+    isLoadingCurrentAccount,
+    isLoadingCurriculumPlanDetails.personal,
+    isLoginModalOpen,
+    loadCurriculumPlanDetail,
+    personalMatchedCurriculumPlan,
+    storedSession,
+  ]);
+
+  useEffect(() => {
+    if (!departmentMatchedCurriculumPlan) {
+      if (curriculumPlanDetailResult.department) {
+        setCurriculumPlanDetailResult((current) => ({
+          ...current,
+          department: null,
+        }));
+      }
+      return;
+    }
+
+    if (
+      !storedSession ||
+      isLoginModalOpen ||
+      isLoadingCurrentAccount ||
+      isLoadingCurriculumPlanDetails.department ||
+      curriculumPlanDetailResult.department?.planId === departmentMatchedCurriculumPlan.planId
+    ) {
+      return;
+    }
+
+    void loadCurriculumPlanDetail(
+      'department',
+      departmentMatchedCurriculumPlan.planId,
+      storedSession,
+    );
+  }, [
+    curriculumPlanDetailResult.department,
+    departmentMatchedCurriculumPlan,
+    isLoadingCurrentAccount,
+    isLoadingCurriculumPlanDetails.department,
+    isLoginModalOpen,
+    loadCurriculumPlanDetail,
+    storedSession,
+  ]);
 
   useEffect(() => {
     if (!storedSession || isLoginModalOpen || isLoadingCurrentAccount) {
@@ -991,6 +1157,8 @@ export function UpstreamSessionDemoLabPage() {
   const isRunningUpstreamAction =
     isLoadingCurriculumPlans.personal ||
     isLoadingCurriculumPlans.department ||
+    isLoadingCurriculumPlanDetails.personal ||
+    isLoadingCurriculumPlanDetails.department ||
     isLoadingDirectory ||
     isLoadingIdentity ||
     isLoadingLectureJournal;
@@ -1456,17 +1624,26 @@ export function UpstreamSessionDemoLabPage() {
       scope === 'personal' ? personalCourseNameOptions : departmentCourseNameOptions;
     const currentMatchingCurriculumPlans =
       scope === 'personal' ? personalMatchingCurriculumPlans : departmentMatchingCurriculumPlans;
+    const currentMatchedCurriculumPlan =
+      scope === 'personal' ? personalMatchedCurriculumPlan : departmentMatchedCurriculumPlan;
+    const currentCurriculumPlanDetail = curriculumPlanDetailResult[scope];
     const selectedClassName =
       scope === 'personal' ? selectedPersonalClassName : selectedDepartmentClassName;
     const selectedCourseName =
       scope === 'personal' ? selectedPersonalCourseName : selectedDepartmentCourseName;
     const isLoadingCurriculumPlanList = isLoadingCurriculumPlans[scope];
+    const isLoadingCurriculumPlanDetail = isLoadingCurriculumPlanDetails[scope];
     const panelLabel = CURRICULUM_PLAN_SCOPE_LABEL[scope];
+    const returnedPlanCount = Array.isArray(currentCurriculumPlanResult?.plans)
+      ? currentCurriculumPlanResult.plans.length
+      : (currentCurriculumPlanResult?.count ?? 0);
 
     return (
       <div className="flex flex-col gap-4">
         {renderUpstreamInterfaceTag(
-          scope === 'personal' ? 'fetchCurriculumPlanList' : 'fetchDepartmentCurriculumPlanList',
+          scope === 'personal'
+            ? 'fetchCurriculumPlanList -> fetchCurriculumPlanDetail'
+            : 'fetchDepartmentCurriculumPlanList -> fetchCurriculumPlanDetail',
         )}
         {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
 
@@ -1542,13 +1719,7 @@ export function UpstreamSessionDemoLabPage() {
                   过期时间：{formatDateTime(currentCurriculumPlanResult.expiresAt)}
                 </Tag>
                 <Tag variant="filled" color="blue">
-                  预览条数：
-                  {Array.isArray(currentCurriculumPlanResult.plans)
-                    ? Math.min(
-                        currentCurriculumPlanResult.plans.length,
-                        CURRICULUM_PLAN_PREVIEW_LIMIT,
-                      )
-                    : CURRICULUM_PLAN_PREVIEW_LIMIT}
+                  返回条数：{returnedPlanCount}
                 </Tag>
                 <Tag variant="filled" color="processing">
                   可匹配计划：{currentCurriculumPlanRecords.length}
@@ -1559,7 +1730,8 @@ export function UpstreamSessionDemoLabPage() {
                 <Card size="small" title="详情定位">
                   <div className="flex flex-col gap-4">
                     <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      这里直接展示当前班级与课程唯一命中的计划原始记录，便于确认定位是否正确。
+                      当前班级与课程唯一命中后，会继续调用 detail
+                      接口，并完整输出列表响应与详情响应。
                     </Typography.Paragraph>
 
                     <div className="flex flex-wrap gap-4">
@@ -1603,31 +1775,80 @@ export function UpstreamSessionDemoLabPage() {
                     </div>
 
                     {selectedClassName && selectedCourseName ? (
-                      currentMatchingCurriculumPlans.length === 1 ? (
+                      currentMatchedCurriculumPlan ? (
                         <Card
                           size="small"
-                          title={`已定位计划：${currentMatchingCurriculumPlans[0].className} / ${currentMatchingCurriculumPlans[0].courseName}`}
+                          title={`已定位计划：${currentMatchedCurriculumPlan.className} / ${currentMatchedCurriculumPlan.courseName}`}
                         >
                           <div className="flex flex-col gap-3">
                             <div className="flex flex-wrap gap-2">
                               <Tag variant="filled" color="processing">
-                                计划 ID：{currentMatchingCurriculumPlans[0].planId}
+                                计划 ID：{currentMatchedCurriculumPlan.planId}
                               </Tag>
-                              {currentMatchingCurriculumPlans[0].teacherName ? (
+                              {currentMatchedCurriculumPlan.teacherName ? (
                                 <Tag variant="filled" color="cyan">
-                                  任课教师：{currentMatchingCurriculumPlans[0].teacherName}
+                                  任课教师：{currentMatchedCurriculumPlan.teacherName}
                                 </Tag>
                               ) : null}
-                              {currentMatchingCurriculumPlans[0].weeklyHours ? (
+                              {currentMatchedCurriculumPlan.weeklyHours ? (
                                 <Tag variant="filled" color="blue">
-                                  周学时：{currentMatchingCurriculumPlans[0].weeklyHours}
+                                  周学时：{currentMatchedCurriculumPlan.weeklyHours}
                                 </Tag>
                               ) : null}
                             </div>
 
-                            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
-                              {JSON.stringify(currentMatchingCurriculumPlans[0].raw, null, 2)}
-                            </pre>
+                            {renderUpstreamInterfaceTag('fetchCurriculumPlanDetail')}
+
+                            {isLoadingCurriculumPlanDetail ? (
+                              <Alert type="info" showIcon title="正在读取计划详情..." />
+                            ) : currentCurriculumPlanDetail?.planId ===
+                              currentMatchedCurriculumPlan.planId ? (
+                              currentCurriculumPlanDetail.result ? (
+                                <>
+                                  <div className="flex flex-wrap gap-2">
+                                    <Tag variant="filled" color="magenta">
+                                      详情返回条数：{currentCurriculumPlanDetail.result.count}
+                                    </Tag>
+                                    <Tag variant="filled" color="cyan">
+                                      详情过期时间：
+                                      {formatDateTime(currentCurriculumPlanDetail.result.expiresAt)}
+                                    </Tag>
+                                  </div>
+
+                                  <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                                    {JSON.stringify(currentCurriculumPlanDetail.result, null, 2)}
+                                  </pre>
+                                </>
+                              ) : (
+                                <div className="flex flex-col gap-3">
+                                  <Alert
+                                    type="warning"
+                                    showIcon
+                                    title="当前计划详情读取失败，可重新触发一次 detail 请求。"
+                                  />
+                                  <div>
+                                    <Button
+                                      onClick={() => {
+                                        if (!storedSession) {
+                                          return;
+                                        }
+
+                                        void loadCurriculumPlanDetail(
+                                          scope,
+                                          currentMatchedCurriculumPlan.planId,
+                                          storedSession,
+                                        );
+                                      }}
+                                      disabled={!storedSession}
+                                    >
+                                      重试详情
+                                    </Button>
+                                  </div>
+                                </div>
+                              )
+                            ) : (
+                              <Alert type="info" showIcon title="正在准备读取计划详情..." />
+                            )}
                           </div>
                         </Card>
                       ) : currentMatchingCurriculumPlans.length > 1 ? (
@@ -1662,6 +1883,12 @@ export function UpstreamSessionDemoLabPage() {
                         重置选择
                       </Button>
                     </div>
+
+                    <Card size="small" title="列表原始响应">
+                      <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                        {JSON.stringify(currentCurriculumPlanResult, null, 2)}
+                      </pre>
+                    </Card>
                   </div>
                 </Card>
               ) : (

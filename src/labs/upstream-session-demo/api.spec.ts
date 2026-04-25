@@ -14,7 +14,11 @@ vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
 }));
 
-import { fetchLectureJournalList, fetchLectureJournalTeachingClassSamples } from './api';
+import {
+  fetchCurriculumPlanDetail,
+  fetchLectureJournalList,
+  fetchLectureJournalTeachingClassSamples,
+} from './api';
 
 describe('upstream-session-demo api', () => {
   beforeEach(() => {
@@ -88,6 +92,41 @@ describe('upstream-session-demo api', () => {
       {
         semesterId: 202601,
         staffId: 'STAFF-002',
+      },
+    );
+  });
+
+  it('requests curriculum plan detail with the selected plan id', async () => {
+    const payload = {
+      count: 1,
+      details: {
+        planId: 'PLAN-001',
+        sections: [
+          {
+            courseName: '高等数学',
+          },
+        ],
+      },
+      expiresAt: '2026-04-25T12:00:00.000Z',
+      upstreamSessionToken: 'rolling-token-003',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      fetchCurriculumPlanDetail: payload,
+    });
+
+    await expect(
+      fetchCurriculumPlanDetail({
+        planId: 'PLAN-001',
+        sessionToken: 'rolling-token-002',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('fetchCurriculumPlanDetail'),
+      {
+        planId: 'PLAN-001',
+        sessionToken: 'rolling-token-002',
       },
     );
   });
