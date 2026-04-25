@@ -1,5 +1,7 @@
 export type VerificationFailureReason = 'invalid' | 'expired' | 'used' | 'unknown';
 
+export type StaffInviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
+
 export type VerificationIntentResult =
   | { status: 'valid' }
   | { status: 'invalid'; reason: VerificationFailureReason }
@@ -39,10 +41,13 @@ export type ChangeLoginEmailConfirmResult =
   | { message: string; status: 'error' };
 
 export type StaffInviteInfo = {
+  canProceed: boolean;
   description: string | null;
   expiresAt: string;
   invitedEmail: string;
   issuer: string | null;
+  staffId: string;
+  statusReason: StaffInviteStatusReason;
   title: string | null;
 };
 
@@ -58,7 +63,12 @@ export type StaffInviteIdentity = {
 
 export type StaffInviteIntentResult =
   | { invite: StaffInviteInfo; status: 'ready' }
-  | { message: string; reason: VerificationFailureReason; status: 'failure' }
+  | {
+      invite: StaffInviteInfo | null;
+      message: string;
+      reason: VerificationFailureReason;
+      status: 'failure';
+    }
   | { message: string; status: 'error' };
 
 export type StaffInviteIdentityResult =

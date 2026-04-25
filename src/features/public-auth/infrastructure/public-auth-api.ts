@@ -16,6 +16,7 @@ import type {
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
+  StaffInviteStatusReason,
   VerificationFailureReason,
   VerificationIntentResult,
 } from '../application/types';
@@ -75,6 +76,7 @@ type PublicInviteInfoResponse = {
       expiresAt: string;
       invitedEmail: string;
       issuer?: string | null;
+      staffId: string;
       statusReason: 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
       title?: string | null;
       type: 'INVITE_STAFF' | 'INVITE_STUDENT' | 'PASSWORD_RESET' | 'MAGIC_LINK';
@@ -179,6 +181,7 @@ const PUBLIC_INVITE_INFO_QUERY = `
         expiresAt
         invitedEmail
         issuer
+        staffId
         statusReason
         title
         type
@@ -486,19 +489,14 @@ async function findStaffInviteIntent(verificationCode: string): Promise<StaffInv
     ) {
       return {
         status: 'ready',
-        invite: {
-          description: info.description || null,
-          expiresAt: info.expiresAt,
-          invitedEmail: info.invitedEmail,
-          issuer: info.issuer || null,
-          title: info.title || null,
-        },
+        invite: mapStaffInviteInfo(info),
       };
     }
 
     const reason = mapInviteStatusReasonToFailureReason(info?.statusReason, result.reason);
 
     return {
+      invite: info && info.type === 'INVITE_STAFF' ? mapStaffInviteInfo(info) : null,
       status: 'failure',
       reason,
       message: resolveInviteIntentFailureMessage(reason, result.message),
@@ -515,6 +513,30 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   const normalized = value?.trim();
 
   return normalized ? normalized : undefined;
+}
+
+function mapStaffInviteInfo(
+  info: NonNullable<PublicInviteInfoResponse['publicInviteInfo']['info']>,
+): {
+  canProceed: boolean;
+  description: string | null;
+  expiresAt: string;
+  invitedEmail: string;
+  issuer: string | null;
+  staffId: string;
+  statusReason: StaffInviteStatusReason;
+  title: string | null;
+} {
+  return {
+    canProceed: info.canProceed,
+    description: info.description || null,
+    expiresAt: info.expiresAt,
+    invitedEmail: info.invitedEmail,
+    issuer: info.issuer || null,
+    staffId: info.staffId,
+    statusReason: info.statusReason,
+    title: info.title || null,
+  };
 }
 
 async function loginUpstreamSession(input: { password: string; userId: string }): Promise<{

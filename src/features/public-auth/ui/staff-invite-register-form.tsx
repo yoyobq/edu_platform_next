@@ -17,6 +17,7 @@ type StaffInviteRegisterFormProps = {
   formId: string;
   identity: StaffInviteIdentity;
   inviteEmail: string;
+  inviteStaffId: string;
   onSubmit: (values: StaffInviteRegisterFormValues) => Promise<void>;
 };
 
@@ -37,9 +38,11 @@ function getPasswordRuleState(password: string) {
 function IdentityBlock({
   identity,
   inviteEmail,
+  inviteStaffId,
 }: {
   identity: StaffInviteIdentity;
   inviteEmail: string;
+  inviteStaffId: string;
 }) {
   const departmentDisplayName = identity.departmentName || identity.orgId;
 
@@ -76,7 +79,7 @@ function IdentityBlock({
               工号
             </Typography.Text>
             <div style={{ marginTop: 2 }}>
-              <Typography.Text>{identity.personId}</Typography.Text>
+              <Typography.Text>{inviteStaffId}</Typography.Text>
             </div>
           </div>
         </Flex>
@@ -91,11 +94,12 @@ export function StaffInviteRegisterForm({
   formId,
   identity,
   inviteEmail,
+  inviteStaffId,
   onSubmit,
 }: StaffInviteRegisterFormProps) {
   return (
     <Flex vertical gap={16}>
-      <IdentityBlock identity={identity} inviteEmail={inviteEmail} />
+      <IdentityBlock identity={identity} inviteEmail={inviteEmail} inviteStaffId={inviteStaffId} />
 
       <Form<StaffInviteRegisterFormValues>
         form={form}

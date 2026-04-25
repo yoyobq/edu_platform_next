@@ -20,6 +20,7 @@ import {
 import type {
   StaffInviteIdentity,
   StaffInviteInfo,
+  StaffInviteStatusReason,
   VerificationFailureReason,
 } from '../application/types';
 import { publicAuthApi } from '../infrastructure/public-auth-api';
@@ -206,9 +207,11 @@ function StaffInviteStepActions({
 }
 
 function StaffInviteFailureState({
+  invite,
   message,
   reason,
 }: {
+  invite: StaffInviteInfo | null;
   message: string;
   reason: VerificationFailureReason;
 }) {
@@ -224,6 +227,7 @@ function StaffInviteFailureState({
 
   return (
     <Flex vertical gap={16}>
+      {invite ? <StaffInviteSummaryCard invite={invite} /> : null}
       <Alert type="error" showIcon title={title} description={message} />
       <Button
         type="primary"
@@ -234,6 +238,70 @@ function StaffInviteFailureState({
         返回登录
       </Button>
     </Flex>
+  );
+}
+
+function getInviteStatusLabel(statusReason: StaffInviteStatusReason) {
+  switch (statusReason) {
+    case 'AVAILABLE':
+      return '可继续';
+    case 'CONSUMED':
+      return '已使用';
+    case 'EXPIRED':
+      return '已过期';
+    case 'INVALID':
+      return '无效';
+  }
+}
+
+function StaffInviteSummaryCard({ invite }: { invite: StaffInviteInfo }) {
+  return (
+    <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
+      <Flex vertical gap={12}>
+        <Flex gap={8} align="center">
+          <MailOutlined
+            style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
+          />
+          <Typography.Text strong>{invite.invitedEmail}</Typography.Text>
+        </Flex>
+        <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+              staffId
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{invite.staffId}</Typography.Text>
+            </div>
+          </div>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+              当前状态
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{getInviteStatusLabel(invite.statusReason)}</Typography.Text>
+            </div>
+          </div>
+          <div>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+              过期时间
+            </Typography.Text>
+            <div style={{ marginTop: 2 }}>
+              <Typography.Text>{formatDateTime(invite.expiresAt)}</Typography.Text>
+            </div>
+          </div>
+          {invite.issuer && (
+            <div>
+              <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+                邀请人
+              </Typography.Text>
+              <div style={{ marginTop: 2 }}>
+                <Typography.Text>{invite.issuer}</Typography.Text>
+              </div>
+            </div>
+          )}
+        </Flex>
+      </Flex>
+    </div>
   );
 }
 
@@ -250,6 +318,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
   const [invite, setInvite] = useState<StaffInviteInfo | null>(null);
   const [identity, setIdentity] = useState<StaffInviteIdentity | null>(null);
   const [inviteFailure, setInviteFailure] = useState<{
+    invite: StaffInviteInfo | null;
     message: string;
     reason: VerificationFailureReason;
   } | null>(null);
@@ -290,6 +359,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
 
       if (result.status === 'failure') {
         setInviteFailure({
+          invite: result.invite,
           message: result.message,
           reason: result.reason,
         });
@@ -334,7 +404,11 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
   if (phase === 'invite-failure' && inviteFailure) {
     return (
       <StaffInviteFlowSection phase={phase}>
-        <StaffInviteFailureState message={inviteFailure.message} reason={inviteFailure.reason} />
+        <StaffInviteFailureState
+          invite={inviteFailure.invite}
+          message={inviteFailure.message}
+          reason={inviteFailure.reason}
+        />
       </StaffInviteFlowSection>
     );
   }
@@ -367,41 +441,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
     return (
       <StaffInviteFlowSection phase={phase}>
         <Flex vertical gap={16}>
-          <div
-            className="rounded-card p-4"
-            style={{ background: 'var(--ant-color-fill-quaternary)' }}
-          >
-            <Flex vertical gap={12}>
-              <Flex gap={8} align="center">
-                <MailOutlined
-                  style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
-                />
-                <Typography.Text strong>{invite.invitedEmail}</Typography.Text>
-              </Flex>
-              <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
-                {invite.issuer && (
-                  <div>
-                    <Typography.Text
-                      type="secondary"
-                      style={{ fontSize: 'var(--ant-font-size-sm)' }}
-                    ></Typography.Text>
-                    <div style={{ marginTop: 2 }}>
-                      <Typography.Text>{invite.issuer}</Typography.Text>
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <Typography.Text
-                    type="secondary"
-                    style={{ fontSize: 'var(--ant-font-size-sm)' }}
-                  ></Typography.Text>
-                  <div style={{ marginTop: 2 }}>
-                    <Typography.Text>{formatDateTime(invite.expiresAt)}</Typography.Text>
-                  </div>
-                </div>
-              </Flex>
-            </Flex>
-          </div>
+          <StaffInviteSummaryCard invite={invite} />
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             {invite.description || '请核对邮箱，无误后进入身份核对流程。'}
@@ -437,7 +477,8 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
       <StaffInviteFlowSection phase={phase}>
         <Flex vertical gap={16}>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前邀请邮箱：{invite.invitedEmail}。核对通过后，身份信息会自动锁定并回填。
+            当前邀请邮箱：{invite.invitedEmail}，邀请 staffId：{invite.staffId}
+            。核对通过后，身份信息会自动锁定并回填。
           </Typography.Paragraph>
 
           <UpstreamStaffVerificationForm
@@ -507,6 +548,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
             formId={REGISTER_FORM_ID}
             identity={identity}
             inviteEmail={invite.invitedEmail}
+            inviteStaffId={invite.staffId}
             onSubmit={async (values) => {
               setSubmitting(true);
               setSubmitError(null);
