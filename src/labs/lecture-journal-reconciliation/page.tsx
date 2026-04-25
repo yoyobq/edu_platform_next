@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   AutoComplete,
@@ -11,12 +11,10 @@ import {
   Modal,
   Select,
   Skeleton,
-  Table,
   Tabs,
   Tag,
   Typography,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 import { useLoaderData } from 'react-router';
 
 import {
@@ -27,9 +25,11 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 
 import { lectureJournalReconciliationLabAccess } from './access';
 import {
+  fetchLectureJournalDepartmentOptions,
   fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
   isExpiredUpstreamSessionError,
+  type LectureJournalDepartmentOption,
   type LectureJournalReconciliationItem,
   type LectureJournalReconciliationResult,
   type MissingLectureJournalItem,
@@ -57,7 +57,41 @@ type UpstreamLoginFormValues = {
 
 type PendingAction = 'directory' | 'query' | null;
 
+const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const JOURNAL_STATUS_SUGGESTIONS = ['优', '良', '中', '差'];
+
+type DepartmentOption = {
+  id: string;
+  label: string;
+};
+
+type JournalEditableCardItem = {
+  courseId: string | null;
+  courseName: string | null;
+  dayOfWeek: number | null;
+  journal: LectureJournalReconciliationItem['journal'];
+  key: string;
+  sectionId: string | null;
+  sectionName: string | null;
+  status: 'FILLED' | 'MISSING';
+  teacherId: string | null;
+  teacherName: string | null;
+  teachingClassId: string | null;
+  teachingClassName: string | null;
+  teachingDate: string | null;
+  weekNumber: number | null;
+};
+
+type JournalDraft = {
+  courseContent: string;
+  homeworkAssignment: string;
+  sourceLabel: string;
+  sourceType: 'blank' | 'filled' | 'prefilled';
+  statusText: string;
+};
+
+type JournalDraftMap = Record<string, JournalDraft>;
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -162,6 +196,10 @@ function buildTeacherOptionLabel(teacher: TeacherDirectoryEntry) {
   return normalizedCode ? `${teacher.name} (${normalizedCode})` : teacher.name;
 }
 
+function buildDepartmentOptionLabel(department: LectureJournalDepartmentOption) {
+  return `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`;
+}
+
 function buildItemKey(item: {
   lecturePlanDetailId: string | null;
   lecturePlanId: string | null;
@@ -182,6 +220,151 @@ async function requestTeacherDirectoryWithSession(session: StoredUpstreamSession
   });
 }
 
+function resolveSectionLabel(sectionName: string | null, sectionId: string | null) {
+  return sectionName || sectionId || '节次待识别';
+}
+
+function resolveTeacherLabel(teacherName: string | null, teacherId: string | null) {
+  return teacherName || teacherId || '教师待识别';
+}
+
+function resolveTeachingDateTimestamp(value: string | null) {
+  if (!value) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  const timestamp = new Date(`${value}T00:00:00Z`).getTime();
+
+  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
+}
+
+function buildEditableCardItemFromReconciliation(
+  item: LectureJournalReconciliationItem,
+): JournalEditableCardItem | null {
+  if (item.status !== 'FILLED' && item.status !== 'MISSING') {
+    return null;
+  }
+
+  return {
+    courseId: item.courseId,
+    courseName: item.courseName,
+    dayOfWeek: item.dayOfWeek,
+    journal: item.journal,
+    key: buildItemKey(item),
+    sectionId: item.sectionId,
+    sectionName: item.sectionName,
+    status: item.status,
+    teacherId: item.teacherId,
+    teacherName: item.teacherName,
+    teachingClassId: item.teachingClassId,
+    teachingClassName: item.teachingClassName,
+    teachingDate: item.teachingDate,
+    weekNumber: item.weekNumber,
+  };
+}
+
+function buildEditableCardItemFromMissing(
+  item: MissingLectureJournalItem,
+): JournalEditableCardItem {
+  return {
+    courseId: item.courseId,
+    courseName: item.courseName,
+    dayOfWeek: item.dayOfWeek,
+    journal: null,
+    key: buildItemKey(item),
+    sectionId: item.sectionId,
+    sectionName: item.sectionName,
+    status: 'MISSING',
+    teacherId: item.teacherId,
+    teacherName: item.teacherName,
+    teachingClassId: item.teachingClassId,
+    teachingClassName: item.teachingClassName,
+    teachingDate: item.teachingDate,
+    weekNumber: item.weekNumber,
+  };
+}
+
+function pickNearestFilledJournalTemplate(
+  target: JournalEditableCardItem,
+  filledItems: JournalEditableCardItem[],
+) {
+  const candidateGroups = [
+    filledItems.filter(
+      (item) =>
+        Boolean(target.teachingClassId) &&
+        item.teachingClassId === target.teachingClassId &&
+        item.journal,
+    ),
+    filledItems.filter(
+      (item) => Boolean(target.courseId) && item.courseId === target.courseId && item.journal,
+    ),
+    filledItems.filter(
+      (item) =>
+        Boolean(target.courseName) &&
+        item.courseName === target.courseName &&
+        Boolean(item.journal),
+    ),
+  ];
+
+  const candidates = candidateGroups.find((group) => group.length > 0) ?? [];
+
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const targetTimestamp = resolveTeachingDateTimestamp(target.teachingDate);
+
+  return [...candidates].sort((left, right) => {
+    const leftDistance = Math.abs(
+      resolveTeachingDateTimestamp(left.teachingDate) - targetTimestamp,
+    );
+    const rightDistance = Math.abs(
+      resolveTeachingDateTimestamp(right.teachingDate) - targetTimestamp,
+    );
+
+    if (leftDistance !== rightDistance) {
+      return leftDistance - rightDistance;
+    }
+
+    return (
+      resolveTeachingDateTimestamp(left.teachingDate) -
+      resolveTeachingDateTimestamp(right.teachingDate)
+    );
+  })[0];
+}
+
+function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
+  const filledItems = items.filter((item) => item.status === 'FILLED' && item.journal);
+
+  return items.reduce<JournalDraftMap>((result, item) => {
+    if (item.status === 'FILLED' && item.journal) {
+      result[item.key] = {
+        courseContent: item.journal.courseContent || '',
+        homeworkAssignment: item.journal.homeworkAssignment || '',
+        sourceLabel: '已使用当前已填日志内容',
+        sourceType: 'filled',
+        statusText: item.journal.statusName || item.journal.statusCode || '',
+      };
+
+      return result;
+    }
+
+    const template = pickNearestFilledJournalTemplate(item, filledItems);
+
+    result[item.key] = {
+      courseContent: template?.journal?.courseContent || '',
+      homeworkAssignment: template?.journal?.homeworkAssignment || '',
+      sourceLabel: template
+        ? `已从 ${template.teachingClassName || template.courseName || '已填日志'} 预填日志侧内容`
+        : '未找到可复用的日志侧内容',
+      sourceType: template ? 'prefilled' : 'blank',
+      statusText: template?.journal?.statusName || template?.journal?.statusCode || '',
+    };
+
+    return result;
+  }, {});
+}
+
 export function LectureJournalReconciliationLabPage() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
@@ -194,19 +377,23 @@ export function LectureJournalReconciliationLabPage() {
     account: loaderData?.upstreamAccount ?? null,
   });
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [departmentId, setDepartmentId] = useState(loaderData?.defaultDepartmentId ?? '');
+  const [departmentId, setDepartmentId] = useState(DEFAULT_DEPARTMENT_ID);
   const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
   const [reconciliationResult, setReconciliationResult] =
     useState<LectureJournalReconciliationResult | null>(null);
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
+  const [isLoadingDepartmentOptions, setIsLoadingDepartmentOptions] = useState(true);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
+  const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const [journalDrafts, setJournalDrafts] = useState<JournalDraftMap>({});
   const [queryError, setQueryError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -228,19 +415,53 @@ export function LectureJournalReconciliationLabPage() {
   useEffect(() => {
     let cancelled = false;
 
-    async function loadSemesters() {
+    async function loadOptions() {
       setIsLoadingSemesters(true);
+      setIsLoadingDepartmentOptions(true);
       setSemesterError(null);
+      setDepartmentOptionsError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const [semesterResult, departmentResult] = await Promise.allSettled([
+          requestAcademicSemesters({ limit: 500 }),
+          fetchLectureJournalDepartmentOptions(),
+        ]);
 
         if (cancelled) {
           return;
         }
 
-        setSemesters(result);
-        setSelectedSemesterId((currentSelection) => pickNextSemesterId(result, currentSelection));
+        const nextSemesters =
+          semesterResult.status === 'fulfilled' ? sortSemesters(semesterResult.value) : [];
+        const nextDepartmentOptions =
+          departmentResult.status === 'fulfilled'
+            ? departmentResult.value
+                .filter((department) => department.id !== '')
+                .map((department) => ({
+                  id: department.id,
+                  label: buildDepartmentOptionLabel(department),
+                }))
+            : [];
+
+        setSemesters(nextSemesters);
+        setDepartmentOptions(nextDepartmentOptions);
+        setSelectedSemesterId((currentSelection) =>
+          pickNextSemesterId(nextSemesters, currentSelection),
+        );
+        setSemesterError(
+          semesterResult.status === 'rejected'
+            ? semesterResult.reason instanceof Error
+              ? semesterResult.reason.message
+              : '暂时无法加载学期列表。'
+            : null,
+        );
+        setDepartmentOptionsError(
+          departmentResult.status === 'rejected'
+            ? departmentResult.reason instanceof Error
+              ? departmentResult.reason.message
+              : '暂时无法加载院系列表。'
+            : null,
+        );
       } catch (error) {
         if (!cancelled) {
           setSemesterError(error instanceof Error ? error.message : '暂时无法加载学期列表。');
@@ -248,11 +469,12 @@ export function LectureJournalReconciliationLabPage() {
       } finally {
         if (!cancelled) {
           setIsLoadingSemesters(false);
+          setIsLoadingDepartmentOptions(false);
         }
       }
     }
 
-    void loadSemesters();
+    void loadOptions();
 
     return () => {
       cancelled = true;
@@ -260,10 +482,10 @@ export function LectureJournalReconciliationLabPage() {
   }, []);
 
   useEffect(() => {
-    if (!departmentId && loaderData?.defaultDepartmentId) {
-      setDepartmentId(loaderData.defaultDepartmentId);
+    if (!departmentId) {
+      setDepartmentId(DEFAULT_DEPARTMENT_ID);
     }
-  }, [departmentId, loaderData?.defaultDepartmentId]);
+  }, [departmentId]);
 
   useEffect(() => {
     if (!staffId && loaderData?.defaultStaffId) {
@@ -275,14 +497,44 @@ export function LectureJournalReconciliationLabPage() {
   const normalizedDepartmentId = normalizeOptionalString(departmentId);
   const normalizedStaffId = normalizeOptionalString(staffId);
   const hasFilterPairMismatch = Boolean(normalizedDepartmentId) !== Boolean(normalizedStaffId);
+  const hasNoDepartmentOptions =
+    !isLoadingDepartmentOptions && !departmentOptionsError && departmentOptions.length === 0;
   const teacherOptions = (directoryResult?.teachers ?? []).map((teacher) => ({
     label: buildTeacherOptionLabel(teacher),
     value: teacher.value,
   }));
+  const selectedDepartmentOption = departmentOptions.find(
+    (department) => department.id === normalizedDepartmentId,
+  );
   const selectedTeacherOption = (directoryResult?.teachers ?? []).find(
     (teacher) => teacher.value === normalizedStaffId,
   );
+  const selectedDepartmentLabel =
+    selectedDepartmentOption?.label || normalizedDepartmentId || '未指定系部';
   const selectedTeacherLabel = selectedTeacherOption?.name || normalizedStaffId || '全体教师';
+  const editableItems = useMemo(
+    () =>
+      (reconciliationResult?.items ?? [])
+        .map((item) => buildEditableCardItemFromReconciliation(item))
+        .filter((item): item is JournalEditableCardItem => item !== null),
+    [reconciliationResult?.items],
+  );
+  const missingEditableItems = useMemo(
+    () => (reconciliationResult?.missingItems ?? []).map(buildEditableCardItemFromMissing),
+    [reconciliationResult?.missingItems],
+  );
+  const journalStatusOptions = useMemo(() => {
+    const dynamicOptions = editableItems
+      .map((item) => item.journal?.statusName || item.journal?.statusCode || '')
+      .filter((value, index, collection) => value && collection.indexOf(value) === index)
+      .map((value) => ({ label: value, value }));
+
+    const defaultOptions = JOURNAL_STATUS_SUGGESTIONS.filter(
+      (value) => !dynamicOptions.some((option) => option.value === value),
+    ).map((value) => ({ label: value, value }));
+
+    return [...dynamicOptions, ...defaultOptions];
+  }, [editableItems]);
   const reconciliationBaseCount =
     (reconciliationResult?.filledCount ?? 0) + (reconciliationResult?.missingCount ?? 0);
   const fillRate =
@@ -290,161 +542,150 @@ export function LectureJournalReconciliationLabPage() {
       ? `${Math.round(((reconciliationResult?.filledCount ?? 0) / reconciliationBaseCount) * 100)}%`
       : '无可对账课次';
 
-  const itemColumns: ColumnsType<LectureJournalReconciliationItem> = [
-    {
-      key: 'status',
-      render: (_, record) => (
-        <Tag color={resolveStatusColor(record.status)}>{resolveStatusLabel(record.status)}</Tag>
-      ),
-      title: '状态',
-      width: 110,
+  useEffect(() => {
+    setJournalDrafts(buildJournalDrafts(editableItems));
+  }, [editableItems]);
+
+  const updateJournalDraft = useCallback(
+    (
+      key: string,
+      patch: Partial<Pick<JournalDraft, 'courseContent' | 'homeworkAssignment' | 'statusText'>>,
+    ) => {
+      setJournalDrafts((current) => ({
+        ...current,
+        [key]: {
+          ...(current[key] ?? {
+            courseContent: '',
+            homeworkAssignment: '',
+            sourceLabel: '手动编辑',
+            sourceType: 'blank',
+            statusText: '',
+          }),
+          ...patch,
+        },
+      }));
     },
-    {
-      key: 'time',
-      render: (_, record) => (
-        <div className="flex min-w-32 flex-col gap-1">
-          <Typography.Text>{formatTeachingDate(record.teachingDate)}</Typography.Text>
-          <Typography.Text type="secondary">
-            {record.weekNumber ? `第 ${record.weekNumber} 周` : '周次待识别'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {record.dayOfWeek
-              ? DAY_OF_WEEK_LABELS[record.dayOfWeek - 1] || `周${record.dayOfWeek}`
-              : '星期待识别'}
-          </Typography.Text>
-        </div>
-      ),
-      title: '时间',
-      width: 150,
-    },
-    {
-      key: 'course',
-      render: (_, record) => (
-        <div className="flex min-w-48 flex-col gap-1">
-          <Typography.Text strong>{record.courseName || '未命名课程'}</Typography.Text>
-          <Typography.Text type="secondary">
-            {record.teachingClassName || '教学班待识别'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {record.teacherName || record.teacherId || '教师待识别'}
-          </Typography.Text>
-        </div>
-      ),
-      title: '课程信息',
-    },
-    {
-      key: 'plan',
-      render: (_, record) => (
-        <div className="flex min-w-44 flex-col gap-1">
-          <Typography.Text>
-            {record.sectionName || record.sectionId || '节次待识别'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {record.lessonHours !== null ? `${record.lessonHours} 课时` : '课时待识别'}
-          </Typography.Text>
-          <Typography.Text type="secondary">{record.matchKey || '匹配键待构造'}</Typography.Text>
-        </div>
-      ),
-      title: '计划侧',
-      width: 220,
-    },
-    {
-      key: 'journal',
-      render: (_, record) => (
-        <div className="flex min-w-52 flex-col gap-1">
-          {record.journal ? (
-            <>
-              <Typography.Text>
-                {record.journal.statusName || record.journal.statusCode || '已匹配日志'}
-              </Typography.Text>
-              <Typography.Text type="secondary">
-                {record.journal.courseContent || '日志课程内容为空'}
-              </Typography.Text>
-              <Typography.Text type="secondary">
-                {record.journal.homeworkAssignment || '日志作业为空'}
-              </Typography.Text>
-            </>
-          ) : (
+    [],
+  );
+
+  function renderJournalDraftCard(item: JournalEditableCardItem) {
+    const draft =
+      journalDrafts[item.key] ??
+      ({
+        courseContent: '',
+        homeworkAssignment: '',
+        sourceLabel: '未找到可复用的日志侧内容',
+        sourceType: 'blank',
+        statusText: '',
+      } satisfies JournalDraft);
+
+    return (
+      <Card key={item.key} size="small">
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag color={resolveStatusColor(item.status)}>{resolveStatusLabel(item.status)}</Tag>
+            <Typography.Text strong>{item.courseName || '未命名课程'}</Typography.Text>
             <Typography.Text type="secondary">
-              {record.status === 'MISSING'
-                ? '未找到对应教学日志。'
-                : record.reason || '当前计划项无法参与对账。'}
+              {formatTeachingDate(item.teachingDate)}
             </Typography.Text>
-          )}
-        </div>
-      ),
-      title: '日志侧',
-    },
-  ];
+            <Typography.Text type="secondary">
+              {item.weekNumber ? `第 ${item.weekNumber} 周` : '周次待识别'}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {item.dayOfWeek
+                ? DAY_OF_WEEK_LABELS[item.dayOfWeek - 1] || `周${item.dayOfWeek}`
+                : '星期待识别'}
+            </Typography.Text>
+          </div>
 
-  const missingColumns: ColumnsType<MissingLectureJournalItem> = [
-    {
-      key: 'time',
-      render: (_, record) => (
-        <div className="flex min-w-32 flex-col gap-1">
-          <Typography.Text>{formatTeachingDate(record.teachingDate)}</Typography.Text>
-          <Typography.Text type="secondary">第 {record.weekNumber} 周</Typography.Text>
-          <Typography.Text type="secondary">
-            {DAY_OF_WEEK_LABELS[record.dayOfWeek - 1] || `周${record.dayOfWeek}`}
-          </Typography.Text>
-        </div>
-      ),
-      title: '时间',
-      width: 150,
-    },
-    {
-      key: 'course',
-      render: (_, record) => (
-        <div className="flex min-w-48 flex-col gap-1">
-          <Typography.Text strong>{record.courseName || '未命名课程'}</Typography.Text>
-          <Typography.Text type="secondary">
-            {record.teachingClassName || '教学班待识别'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            {record.teacherName || record.teacherId || '教师待识别'}
-          </Typography.Text>
-        </div>
-      ),
-      title: '课程信息',
-    },
-    {
-      key: 'plan',
-      render: (_, record) => (
-        <div className="flex min-w-44 flex-col gap-1">
-          <Typography.Text>{record.sectionName || record.sectionId}</Typography.Text>
-          <Typography.Text type="secondary">{record.lessonHours} 课时</Typography.Text>
-          <Typography.Text type="secondary">{record.matchKey}</Typography.Text>
-        </div>
-      ),
-      title: '计划侧',
-      width: 220,
-    },
-  ];
+          <div className="flex flex-col gap-1">
+            <Typography.Text type="secondary">
+              {resolveSectionLabel(item.sectionName, item.sectionId)}
+            </Typography.Text>
+            <Typography.Text type="secondary">
+              {item.teachingClassName || '教学班待识别'} ·{' '}
+              {resolveTeacherLabel(item.teacherName, item.teacherId)}
+            </Typography.Text>
+          </div>
 
-  const unmatchedColumns: ColumnsType<UnmatchedLectureJournalPlanItem> = [
-    {
-      dataIndex: 'reason',
-      key: 'reason',
-      render: (value: string) => <Typography.Text>{value}</Typography.Text>,
-      title: '无法对账原因',
-    },
-    {
-      key: 'ids',
-      render: (_, record) => (
-        <div className="flex min-w-40 flex-col gap-1">
-          <Typography.Text type="secondary">计划：{record.lecturePlanId || '缺失'}</Typography.Text>
+          <div className="grid gap-4 xl:grid-cols-3">
+            <label className="flex flex-col gap-2">
+              <Typography.Text strong>课堂记录</Typography.Text>
+              <AutoComplete
+                options={journalStatusOptions}
+                placeholder="例如 优 / 良 / 中 / 差"
+                value={draft.statusText}
+                onChange={(value) => {
+                  updateJournalDraft(item.key, { statusText: value });
+                }}
+              />
+            </label>
+
+            <label className="flex flex-col gap-2 xl:col-span-2">
+              <Typography.Text strong>课程内容</Typography.Text>
+              <Input.TextArea
+                autoSize={{ minRows: 3, maxRows: 6 }}
+                placeholder="使用日志侧内容预填，可继续调整"
+                value={draft.courseContent}
+                onChange={(event) => {
+                  updateJournalDraft(item.key, { courseContent: event.target.value });
+                }}
+              />
+            </label>
+          </div>
+
+          <label className="flex flex-col gap-2">
+            <Typography.Text strong>作业</Typography.Text>
+            <Input.TextArea
+              autoSize={{ minRows: 2, maxRows: 5 }}
+              placeholder="使用日志侧作业预填，可继续调整"
+              value={draft.homeworkAssignment}
+              onChange={(event) => {
+                updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
+              }}
+            />
+          </label>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <Tag
+              color={
+                draft.sourceType === 'filled'
+                  ? 'success'
+                  : draft.sourceType === 'prefilled'
+                    ? 'processing'
+                    : 'default'
+              }
+            >
+              {draft.sourceType === 'filled'
+                ? '已填日志'
+                : draft.sourceType === 'prefilled'
+                  ? '日志侧预填'
+                  : '待补充'}
+            </Tag>
+            <Typography.Text type="secondary">{draft.sourceLabel}</Typography.Text>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  function renderUnmatchedCard(item: UnmatchedLectureJournalPlanItem) {
+    return (
+      <Card key={buildItemKey(item)} size="small">
+        <div className="flex flex-col gap-2">
+          <Tag color="default">无法对账</Tag>
+          <Typography.Text strong>{item.reason}</Typography.Text>
+          <Typography.Text type="secondary">计划：{item.lecturePlanId || '缺失'}</Typography.Text>
           <Typography.Text type="secondary">
-            详情：{record.lecturePlanDetailId || '缺失'}
+            详情：{item.lecturePlanDetailId || '缺失'}
           </Typography.Text>
           <Typography.Text type="secondary">
-            教学班：{record.teachingClassId || '缺失'}
+            教学班：{item.teachingClassId || '缺失'}
           </Typography.Text>
         </div>
-      ),
-      title: '原始标识',
-      width: 240,
-    },
-  ];
+      </Card>
+    );
+  }
 
   async function runDirectoryAction(sessionOverride?: StoredUpstreamSession) {
     const session = sessionOverride ?? storedSession;
@@ -633,10 +874,19 @@ export function LectureJournalReconciliationLabPage() {
 
             <label className="flex flex-col gap-2">
               <Typography.Text strong>departmentId</Typography.Text>
-              <Input
-                placeholder={loaderData?.defaultDepartmentId || '例如 ORG0302'}
+              <Select
+                loading={isLoadingDepartmentOptions}
+                disabled={isLoadingDepartmentOptions || departmentOptions.length === 0}
+                notFoundContent={hasNoDepartmentOptions ? '当前未返回可选院系' : undefined}
+                optionFilterProp="label"
+                options={departmentOptions.map((option) => ({
+                  label: option.label,
+                  value: option.id,
+                }))}
+                placeholder="请选择院系"
+                showSearch
                 value={departmentId}
-                onChange={(event) => setDepartmentId(event.target.value)}
+                onChange={(value) => setDepartmentId(value)}
               />
             </label>
 
@@ -664,15 +914,16 @@ export function LectureJournalReconciliationLabPage() {
                 <div className="flex flex-col gap-1">
                   <Typography.Text>{selectedSemester?.name || '未选择学期'}</Typography.Text>
                   <Typography.Text type="secondary">{selectedTeacherLabel}</Typography.Text>
-                  <Typography.Text type="secondary">
-                    {normalizedDepartmentId || '未指定系部'}
-                  </Typography.Text>
+                  <Typography.Text type="secondary">{selectedDepartmentLabel}</Typography.Text>
                 </div>
               </Card>
             </div>
           </div>
 
           {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+          {departmentOptionsError ? (
+            <Alert message={departmentOptionsError} showIcon type="error" />
+          ) : null}
           {directoryError ? <Alert message={directoryError} showIcon type="error" /> : null}
           {hasFilterPairMismatch ? (
             <Alert
@@ -704,7 +955,7 @@ export function LectureJournalReconciliationLabPage() {
             <Button
               disabled={!normalizedDepartmentId && !normalizedStaffId}
               onClick={() => {
-                setDepartmentId(loaderData?.defaultDepartmentId ?? '');
+                setDepartmentId(DEFAULT_DEPARTMENT_ID);
                 setStaffId(loaderData?.defaultStaffId ?? '');
               }}
             >
@@ -798,9 +1049,7 @@ export function LectureJournalReconciliationLabPage() {
                 {selectedSemester?.name || '未选择'}
               </Descriptions.Item>
               <Descriptions.Item label="教师">{selectedTeacherLabel}</Descriptions.Item>
-              <Descriptions.Item label="departmentId">
-                {normalizedDepartmentId || '未指定'}
-              </Descriptions.Item>
+              <Descriptions.Item label="departmentId">{selectedDepartmentLabel}</Descriptions.Item>
               <Descriptions.Item label="返回条数">
                 完整 {reconciliationResult.items.length} / 未填{' '}
                 {reconciliationResult.missingItems.length}
@@ -818,38 +1067,30 @@ export function LectureJournalReconciliationLabPage() {
                 key: 'items',
                 label: `完整对账 (${reconciliationResult.items.length})`,
                 children:
-                  reconciliationResult.items.length === 0 ? (
+                  editableItems.length === 0 ? (
                     <Empty
                       description="当前查询没有返回任何可展示课次。"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                     />
                   ) : (
-                    <Table<LectureJournalReconciliationItem>
-                      columns={itemColumns}
-                      dataSource={reconciliationResult.items}
-                      pagination={{ pageSize: 20, showSizeChanger: true }}
-                      rowKey={(record) => buildItemKey(record)}
-                      scroll={{ x: 1240 }}
-                    />
+                    <div className="flex flex-col gap-4">
+                      {editableItems.map((item) => renderJournalDraftCard(item))}
+                    </div>
                   ),
               },
               {
                 key: 'missing',
                 label: `疑似未填 (${reconciliationResult.missingItems.length})`,
                 children:
-                  reconciliationResult.missingItems.length === 0 ? (
+                  missingEditableItems.length === 0 ? (
                     <Empty
                       description="当前查询没有疑似未填课次。"
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                     />
                   ) : (
-                    <Table<MissingLectureJournalItem>
-                      columns={missingColumns}
-                      dataSource={reconciliationResult.missingItems}
-                      pagination={{ pageSize: 20, showSizeChanger: true }}
-                      rowKey={(record) => buildItemKey(record)}
-                      scroll={{ x: 1080 }}
-                    />
+                    <div className="flex flex-col gap-4">
+                      {missingEditableItems.map((item) => renderJournalDraftCard(item))}
+                    </div>
                   ),
               },
               {
@@ -862,13 +1103,11 @@ export function LectureJournalReconciliationLabPage() {
                       image={Empty.PRESENTED_IMAGE_SIMPLE}
                     />
                   ) : (
-                    <Table<UnmatchedLectureJournalPlanItem>
-                      columns={unmatchedColumns}
-                      dataSource={reconciliationResult.unmatchedPlanItems}
-                      pagination={{ pageSize: 20, showSizeChanger: true }}
-                      rowKey={(record) => buildItemKey(record)}
-                      scroll={{ x: 960 }}
-                    />
+                    <div className="flex flex-col gap-4">
+                      {reconciliationResult.unmatchedPlanItems.map((item) =>
+                        renderUnmatchedCard(item),
+                      )}
+                    </div>
                   ),
               },
             ]}

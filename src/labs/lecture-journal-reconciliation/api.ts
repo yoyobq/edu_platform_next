@@ -13,8 +13,19 @@ type TeacherDirectoryResponse = {
   fetchTeacherDirectory: TeacherDirectoryResult;
 };
 
+type DepartmentOptionsResponse = {
+  departments: LectureJournalDepartmentOption[];
+};
+
 type LectureJournalReconciliationResponse = {
   fetchLectureJournalReconciliation: LectureJournalReconciliationResult;
+};
+
+export type LectureJournalDepartmentOption = {
+  departmentName: string;
+  id: string;
+  isEnabled: boolean;
+  shortName: string | null;
 };
 
 export type TeacherDirectoryEntry = {
@@ -133,6 +144,17 @@ const FETCH_TEACHER_DIRECTORY_QUERY = `
         value
       }
       upstreamSessionToken
+    }
+  }
+`;
+
+const DEPARTMENTS_QUERY = `
+  query LectureJournalReconciliationDepartments($isEnabled: Boolean, $limit: Int) {
+    departments(isEnabled: $isEnabled, limit: $limit) {
+      departmentName
+      id
+      isEnabled
+      shortName
     }
   }
 `;
@@ -268,6 +290,25 @@ export async function fetchTeacherDirectory(input: { sessionToken: string }) {
   });
 
   return response.fetchTeacherDirectory;
+}
+
+export async function fetchLectureJournalDepartmentOptions() {
+  try {
+    const response = await requestGraphQL<
+      DepartmentOptionsResponse,
+      {
+        isEnabled: boolean;
+        limit: number;
+      }
+    >(DEPARTMENTS_QUERY, {
+      isEnabled: true,
+      limit: 500,
+    });
+
+    return response.departments;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载院系列表。'));
+  }
 }
 
 export async function fetchLectureJournalReconciliation(

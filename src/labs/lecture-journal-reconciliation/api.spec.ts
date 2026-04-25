@@ -15,7 +15,11 @@ vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
 }));
 
-import { fetchLectureJournalReconciliation, fetchTeacherDirectory } from './api';
+import {
+  fetchLectureJournalDepartmentOptions,
+  fetchLectureJournalReconciliation,
+  fetchTeacherDirectory,
+} from './api';
 
 describe('lecture-journal-reconciliation api', () => {
   beforeEach(() => {
@@ -53,6 +57,31 @@ describe('lecture-journal-reconciliation api', () => {
       expect.stringContaining('fetchTeacherDirectory'),
       {
         sessionToken: 'rolling-token-001',
+      },
+    );
+  });
+
+  it('requests enabled department options for the department selector', async () => {
+    const payload = [
+      {
+        departmentName: '人工智能系',
+        id: 'ORG0302',
+        isEnabled: true,
+        shortName: 'AI',
+      },
+    ];
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      departments: payload,
+    });
+
+    await expect(fetchLectureJournalDepartmentOptions()).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('LectureJournalReconciliationDepartments'),
+      {
+        isEnabled: true,
+        limit: 500,
       },
     );
   });
