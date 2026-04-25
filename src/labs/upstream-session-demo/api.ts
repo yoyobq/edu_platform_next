@@ -38,6 +38,16 @@ type VerifiedStaffIdentityResponse = {
   fetchVerifiedStaffIdentity: VerifiedStaffIdentityResult;
 };
 
+type LectureJournalListResponse = {
+  fetchLectureJournalList: LectureJournalListResult;
+};
+
+type LectureJournalTeachingClassSamplesResponse = {
+  listAcademicTeacherSemesterScheduleItems: {
+    items: LectureJournalTeachingClassRecord[];
+  };
+};
+
 export type CurrentUpstreamDemoAccount = {
   accountId: number;
   displayName: string;
@@ -85,6 +95,22 @@ export type VerifiedStaffIdentityResult = {
   personName: string;
   upstreamLoginId: string;
   upstreamSessionToken: string;
+};
+
+export type LectureJournalListResult = {
+  count: number;
+  expiresAt: string;
+  journals: unknown;
+  upstreamSessionToken: string;
+};
+
+export type LectureJournalTeachingClassRecord = {
+  courseName: string | null;
+  scheduleId: number;
+  staffId: string;
+  staffName: string;
+  sstsTeachingClassId: string | null;
+  teachingClassName: string;
 };
 
 const FETCH_TEACHER_DIRECTORY_QUERY = `
@@ -171,6 +197,32 @@ const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
       personName
       upstreamLoginId
       upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_LECTURE_JOURNAL_LIST_QUERY = `
+  query FetchLectureJournalList($sessionToken: String!, $teachingClassId: String!) {
+    fetchLectureJournalList(sessionToken: $sessionToken, teachingClassId: $teachingClassId) {
+      count
+      expiresAt
+      journals
+      upstreamSessionToken
+    }
+  }
+`;
+
+const LIST_LECTURE_JOURNAL_TEACHING_CLASS_SAMPLES_QUERY = `
+  query ListLectureJournalTeachingClassSamples($semesterId: Int!, $staffId: String!) {
+    listAcademicTeacherSemesterScheduleItems(semesterId: $semesterId, staffId: $staffId) {
+      items {
+        courseName
+        scheduleId
+        staffId
+        staffName
+        sstsTeachingClassId
+        teachingClassName
+      }
     }
   }
 `;
@@ -302,4 +354,43 @@ export async function fetchVerifiedStaffIdentity(input: { sessionToken: string }
   });
 
   return response.fetchVerifiedStaffIdentity;
+}
+
+export async function fetchLectureJournalList(input: {
+  sessionToken: string;
+  teachingClassId: string;
+}) {
+  const response = await requestGraphQL<
+    LectureJournalListResponse,
+    {
+      sessionToken: string;
+      teachingClassId: string;
+    }
+  >(FETCH_LECTURE_JOURNAL_LIST_QUERY, {
+    sessionToken: input.sessionToken,
+    teachingClassId: input.teachingClassId.trim(),
+  });
+
+  return response.fetchLectureJournalList;
+}
+
+export async function fetchLectureJournalTeachingClassSamples(input: {
+  semesterId: number;
+  staffId: string;
+}) {
+  const response = await requestGraphQL<
+    LectureJournalTeachingClassSamplesResponse,
+    {
+      semesterId: number;
+      staffId: string;
+    }
+  >(LIST_LECTURE_JOURNAL_TEACHING_CLASS_SAMPLES_QUERY, {
+    semesterId: input.semesterId,
+    staffId: input.staffId.trim(),
+  });
+
+  return response.listAcademicTeacherSemesterScheduleItems.items.map((item) => ({
+    ...item,
+    courseName: item.courseName?.trim() || '未命名课程',
+  }));
 }

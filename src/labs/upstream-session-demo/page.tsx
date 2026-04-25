@@ -14,6 +14,10 @@ import {
   Typography,
 } from 'antd';
 
+import {
+  type AcademicSemesterRecord,
+  requestAcademicSemesters,
+} from '@/entities/academic-semester';
 import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
 
 import { upstreamSessionDemoLabAccess } from './access';
@@ -24,9 +28,13 @@ import {
   fetchCurrentUpstreamDemoAccount,
   fetchCurriculumPlanList,
   fetchDepartmentCurriculumPlanList,
+  fetchLectureJournalList,
+  fetchLectureJournalTeachingClassSamples,
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
   isExpiredUpstreamSessionError,
+  type LectureJournalListResult,
+  type LectureJournalTeachingClassRecord,
   resolveUpstreamErrorMessage,
   type TeacherDirectoryResult,
   type VerifiedStaffIdentityResult,
@@ -56,11 +64,18 @@ type DepartmentCurriculumPlanFormValues = {
   teacherId?: string;
 };
 
+type LectureJournalFormValues = {
+  semesterId?: number;
+  staffId?: string;
+  teachingClassId?: string;
+};
+
 type CurriculumPlanScope = 'personal' | 'department';
 type CurriculumPlanPanelKey = 'personal-curriculum-plan' | 'department-curriculum-plan';
 
 type PendingUpstreamAction =
   | { type: 'teacher-directory' }
+  | { teachingClassId: string; type: 'lecture-journal' }
   | { type: 'verified-staff-identity' }
   | {
       scope: CurriculumPlanScope;
@@ -77,6 +92,7 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const CURRICULUM_PLAN_PREVIEW_LIMIT = 3;
+const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
   department: 'department-curriculum-plan',
@@ -120,6 +136,15 @@ type CurriculumPlanRecord = {
   weeklyHours: string | null;
 };
 
+type LectureJournalTeachingClassSample = {
+  courseName: string;
+  scheduleId: number;
+  staffId: string;
+  staffName: string;
+  teachingClassId: string;
+  teachingClassName: string;
+};
+
 const UPSTREAM_PANELS: Array<{
   key: UpstreamPanelKey;
   label: string;
@@ -135,6 +160,10 @@ const UPSTREAM_PANELS: Array<{
   {
     key: 'verified-staff-identity',
     label: '教职工身份',
+  },
+  {
+    key: 'lecture-journal',
+    label: '教学日志',
   },
   {
     key: 'personal-curriculum-plan',
@@ -302,20 +331,104 @@ function findMatchingCurriculumPlans(
   );
 }
 
+function sortSemesters(records: AcademicSemesterRecord[]) {
+  return [...records].sort((left, right) => {
+    if (left.isCurrent !== right.isCurrent) {
+      return left.isCurrent ? -1 : 1;
+    }
+
+    if (left.schoolYear !== right.schoolYear) {
+      return right.schoolYear - left.schoolYear;
+    }
+
+    if (left.termNumber !== right.termNumber) {
+      return right.termNumber - left.termNumber;
+    }
+
+    return right.id - left.id;
+  });
+}
+
+function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection?: number) {
+  if (currentSelection && records.some((record) => record.id === currentSelection)) {
+    return currentSelection;
+  }
+
+  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id;
+}
+
+function hashString(value: string) {
+  let hash = 0;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 33 + value.charCodeAt(index)) >>> 0;
+  }
+
+  return hash;
+}
+
+function buildLectureJournalTeachingClassSamples(
+  items: LectureJournalTeachingClassRecord[],
+): LectureJournalTeachingClassSample[] {
+  const samplesByTeachingClassId = new Map<string, LectureJournalTeachingClassSample>();
+
+  for (const item of items) {
+    if (!item.sstsTeachingClassId || samplesByTeachingClassId.has(item.sstsTeachingClassId)) {
+      continue;
+    }
+
+    samplesByTeachingClassId.set(item.sstsTeachingClassId, {
+      courseName: item.courseName,
+      scheduleId: item.scheduleId,
+      staffId: item.staffId,
+      staffName: item.staffName,
+      teachingClassId: item.sstsTeachingClassId,
+      teachingClassName: item.teachingClassName,
+    });
+  }
+
+  return [...samplesByTeachingClassId.values()]
+    .sort((left, right) => {
+      const leftHash = hashString(
+        `${left.teachingClassId}:${left.courseName}:${left.teachingClassName}:${left.scheduleId}`,
+      );
+      const rightHash = hashString(
+        `${right.teachingClassId}:${right.courseName}:${right.teachingClassName}:${right.scheduleId}`,
+      );
+
+      if (leftHash !== rightHash) {
+        return leftHash - rightHash;
+      }
+
+      return left.teachingClassId.localeCompare(right.teachingClassId, 'zh-CN');
+    })
+    .slice(0, LECTURE_JOURNAL_SAMPLE_LIMIT);
+}
+
 export function UpstreamSessionDemoLabPage() {
   const [form] = Form.useForm<UpstreamLoginFormValues>();
   const [personalCurriculumPlanForm] = Form.useForm<PersonalCurriculumPlanFormValues>();
   const [departmentCurriculumPlanForm] = Form.useForm<DepartmentCurriculumPlanFormValues>();
+  const [lectureJournalForm] = Form.useForm<LectureJournalFormValues>();
   const selectedPersonalClassName = Form.useWatch('className', personalCurriculumPlanForm);
   const selectedPersonalCourseName = Form.useWatch('courseName', personalCurriculumPlanForm);
   const selectedDepartmentClassName = Form.useWatch('className', departmentCurriculumPlanForm);
   const selectedDepartmentCourseName = Form.useWatch('courseName', departmentCurriculumPlanForm);
+  const selectedLectureJournalSemesterId = Form.useWatch('semesterId', lectureJournalForm);
+  const selectedLectureJournalStaffId = Form.useWatch('staffId', lectureJournalForm);
+  const selectedLectureJournalTeachingClassId = Form.useWatch(
+    'teachingClassId',
+    lectureJournalForm,
+  );
   const [activePanelKey, setActivePanelKey] = useState<UpstreamPanelKey>('introduction');
   const [currentAccount, setCurrentAccount] = useState<CurrentUpstreamDemoAccount | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [isLoadingLectureJournal, setIsLoadingLectureJournal] = useState(false);
+  const [isLoadingLectureJournalSamples, setIsLoadingLectureJournalSamples] = useState(false);
+  const [isLoadingLectureJournalSemesters, setIsLoadingLectureJournalSemesters] = useState(true);
   const [isLoadingCurriculumPlans, setIsLoadingCurriculumPlans] = useState<
     Record<CurriculumPlanScope, boolean>
   >({
@@ -333,6 +446,18 @@ export function UpstreamSessionDemoLabPage() {
     department: null,
   });
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
+  const [lectureJournalResult, setLectureJournalResult] = useState<LectureJournalListResult | null>(
+    null,
+  );
+  const [lectureJournalSemesterError, setLectureJournalSemesterError] = useState<string | null>(
+    null,
+  );
+  const [lectureJournalSemesterOptions, setLectureJournalSemesterOptions] = useState<
+    AcademicSemesterRecord[]
+  >([]);
+  const [lectureJournalTeachingClassSamples, setLectureJournalTeachingClassSamples] = useState<
+    LectureJournalTeachingClassSample[]
+  >([]);
   const [verifiedIdentityResult, setVerifiedIdentityResult] =
     useState<VerifiedStaffIdentityResult | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
@@ -390,11 +515,75 @@ export function UpstreamSessionDemoLabPage() {
         department: null,
       });
       setDirectoryResult(null);
+      setLectureJournalResult(null);
+      setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
       setActionError(error ?? null);
     },
     [clear],
   );
+
+  const loadLectureJournalTeachingClassSamples = useCallback(async () => {
+    const semesterId = lectureJournalForm.getFieldValue('semesterId') as number | undefined;
+    const staffId = String(lectureJournalForm.getFieldValue('staffId') || '').trim();
+
+    if (!semesterId) {
+      setActionError({
+        panel: 'lecture-journal',
+        message: '请先选择学期，再加载教学班样本。',
+      });
+      return;
+    }
+
+    if (!staffId) {
+      setActionError({
+        panel: 'lecture-journal',
+        message: '请输入 staffId，再加载教学班样本。',
+      });
+      return;
+    }
+
+    setIsLoadingLectureJournalSamples(true);
+    setActionError(null);
+
+    try {
+      const items = await fetchLectureJournalTeachingClassSamples({
+        semesterId,
+        staffId,
+      });
+      const samples = buildLectureJournalTeachingClassSamples(items);
+      const currentTeachingClassId = lectureJournalForm.getFieldValue('teachingClassId') as
+        | string
+        | undefined;
+      const nextTeachingClassId = samples.some(
+        (sample) => sample.teachingClassId === currentTeachingClassId,
+      )
+        ? currentTeachingClassId
+        : samples[0]?.teachingClassId;
+
+      setLectureJournalTeachingClassSamples(samples);
+      setLectureJournalResult(null);
+      lectureJournalForm.setFieldsValue({
+        teachingClassId: nextTeachingClassId,
+      });
+
+      if (!samples.length) {
+        setActionError({
+          panel: 'lecture-journal',
+          message: '当前 staffId 在所选学期的课表中未找到可用的上游教学班 ID。',
+        });
+      }
+    } catch (error) {
+      setLectureJournalTeachingClassSamples([]);
+      setLectureJournalResult(null);
+      setActionError({
+        panel: 'lecture-journal',
+        message: resolveUpstreamErrorMessage(error, '暂时无法加载教学班样本。'),
+      });
+    } finally {
+      setIsLoadingLectureJournalSamples(false);
+    }
+  }, [lectureJournalForm]);
 
   const performAction = useCallback(
     async (session: StoredUpstreamSession, action: PendingUpstreamAction) => {
@@ -411,6 +600,20 @@ export function UpstreamSessionDemoLabPage() {
               upstreamSessionToken: result.upstreamSessionToken,
             });
             setDirectoryResult(result);
+            return;
+          }
+          case 'lecture-journal': {
+            setIsLoadingLectureJournal(true);
+            const result = await fetchLectureJournalList({
+              sessionToken: session.upstreamSessionToken,
+              teachingClassId: action.teachingClassId,
+            });
+
+            persistRollingSession(session, {
+              expiresAt: result.expiresAt,
+              upstreamSessionToken: result.upstreamSessionToken,
+            });
+            setLectureJournalResult(result);
             return;
           }
           case 'verified-staff-identity': {
@@ -475,10 +678,20 @@ export function UpstreamSessionDemoLabPage() {
               message: resolveUpstreamErrorMessage(error, '暂时无法读取教师字典。'),
             });
             return;
+          case 'lecture-journal':
+            setLectureJournalResult(null);
+            setActionError({
+              panel: 'lecture-journal',
+              message: resolveUpstreamErrorMessage(error, '暂时无法读取教学日志。'),
+            });
+            return;
           case 'verified-staff-identity':
             setVerifiedIdentityResult(null);
             setActionError({
-              panel: 'verified-staff-identity',
+              panel:
+                activePanelKey === 'lecture-journal'
+                  ? 'lecture-journal'
+                  : 'verified-staff-identity',
               message: resolveUpstreamErrorMessage(error, '暂时无法读取教职工身份。'),
             });
             return;
@@ -505,10 +718,17 @@ export function UpstreamSessionDemoLabPage() {
         }
 
         setIsLoadingDirectory(false);
+        setIsLoadingLectureJournal(false);
         setIsLoadingIdentity(false);
       }
     },
-    [persistRollingSession, clearCurrentSession, form, storedSession?.upstreamLoginId],
+    [
+      activePanelKey,
+      persistRollingSession,
+      clearCurrentSession,
+      form,
+      storedSession?.upstreamLoginId,
+    ],
   );
 
   const ensureSessionAndRun = useCallback(
@@ -544,6 +764,8 @@ export function UpstreamSessionDemoLabPage() {
         department: null,
       });
       setDirectoryResult(null);
+      setLectureJournalResult(null);
+      setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
 
       try {
@@ -574,6 +796,51 @@ export function UpstreamSessionDemoLabPage() {
   }, []);
 
   useEffect(() => {
+    let isCancelled = false;
+
+    async function bootstrapLectureJournalSemesters() {
+      setIsLoadingLectureJournalSemesters(true);
+      setLectureJournalSemesterError(null);
+
+      try {
+        const result = sortSemesters(await requestAcademicSemesters({ limit: 200 }));
+
+        if (isCancelled) {
+          return;
+        }
+
+        setLectureJournalSemesterOptions(result);
+        lectureJournalForm.setFieldsValue({
+          semesterId: pickNextSemesterId(
+            result,
+            lectureJournalForm.getFieldValue('semesterId') as number | undefined,
+          ),
+          teachingClassId: undefined,
+        });
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setLectureJournalSemesterOptions([]);
+        setLectureJournalSemesterError(
+          error instanceof Error ? error.message : '暂时无法加载学期列表。',
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingLectureJournalSemesters(false);
+        }
+      }
+    }
+
+    void bootstrapLectureJournalSemesters();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [lectureJournalForm]);
+
+  useEffect(() => {
     if (!storedSession || isLoginModalOpen || isLoadingCurrentAccount) {
       return;
     }
@@ -582,6 +849,12 @@ export function UpstreamSessionDemoLabPage() {
       void performAction(storedSession, { type: 'teacher-directory' });
     } else if (
       activePanelKey === 'verified-staff-identity' &&
+      !verifiedIdentityResult &&
+      !isLoadingIdentity
+    ) {
+      void performAction(storedSession, { type: 'verified-staff-identity' });
+    } else if (
+      activePanelKey === 'lecture-journal' &&
       !verifiedIdentityResult &&
       !isLoadingIdentity
     ) {
@@ -597,6 +870,45 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingCurrentAccount,
     performAction,
     isLoginModalOpen,
+  ]);
+
+  useEffect(() => {
+    if (!verifiedIdentityResult?.personId) {
+      return;
+    }
+
+    const currentStaffId = String(lectureJournalForm.getFieldValue('staffId') || '').trim();
+
+    if (!currentStaffId) {
+      lectureJournalForm.setFieldsValue({
+        staffId: verifiedIdentityResult.personId,
+      });
+    }
+  }, [lectureJournalForm, verifiedIdentityResult?.personId]);
+
+  useEffect(() => {
+    if (
+      activePanelKey !== 'lecture-journal' ||
+      !selectedLectureJournalSemesterId ||
+      !String(selectedLectureJournalStaffId || '').trim() ||
+      isLoadingLectureJournalSamples ||
+      isLoadingLectureJournalSemesters ||
+      lectureJournalSemesterError ||
+      lectureJournalTeachingClassSamples.length > 0
+    ) {
+      return;
+    }
+
+    void loadLectureJournalTeachingClassSamples();
+  }, [
+    activePanelKey,
+    selectedLectureJournalSemesterId,
+    selectedLectureJournalStaffId,
+    isLoadingLectureJournalSamples,
+    isLoadingLectureJournalSemesters,
+    lectureJournalSemesterError,
+    lectureJournalTeachingClassSamples.length,
+    loadLectureJournalTeachingClassSamples,
   ]);
 
   useEffect(() => {
@@ -680,13 +992,16 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingCurriculumPlans.personal ||
     isLoadingCurriculumPlans.department ||
     isLoadingDirectory ||
-    isLoadingIdentity;
+    isLoadingIdentity ||
+    isLoadingLectureJournal;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
 
   function getPendingActionLabel(action: PendingUpstreamAction | null) {
     switch (action?.type) {
       case 'teacher-directory':
         return '读取教师字典';
+      case 'lecture-journal':
+        return '读取教学日志';
       case 'verified-staff-identity':
         return '读取教职工身份';
       case 'curriculum-plan':
@@ -745,6 +1060,31 @@ export function UpstreamSessionDemoLabPage() {
     }
   }
 
+  async function handleLectureJournalRequest() {
+    try {
+      const values = await lectureJournalForm.validateFields(['semesterId', 'teachingClassId']);
+
+      await ensureSessionAndRun({
+        type: 'lecture-journal',
+        teachingClassId: values.teachingClassId,
+      });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'errorFields' in error &&
+        Array.isArray(error.errorFields)
+      ) {
+        return;
+      }
+
+      setActionError({
+        panel: 'lecture-journal',
+        message: resolveUpstreamErrorMessage(error, '暂时无法读取教学日志。'),
+      });
+    }
+  }
+
   function renderIntroductionPanel() {
     return (
       <div className="flex flex-col gap-4">
@@ -768,7 +1108,7 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>按需查询：</strong>
-              “个人教学计划”和“系部教学计划”标签页均支持按学年、学期查询列表，并基于班级与课程读取对应详情。
+              “教学日志”“个人教学计划”和“系部教学计划”标签页均支持按需查询；其中教学日志标签会先从真实教师学期课表中抽取少量教学班样本。
             </li>
             <li>
               <strong>Token 滚动：</strong>
@@ -876,6 +1216,228 @@ export function UpstreamSessionDemoLabPage() {
             }
           />
         )}
+      </div>
+    );
+  }
+
+  function renderLectureJournalPanel() {
+    const selectedTeachingClassSample = lectureJournalTeachingClassSamples.find(
+      (sample) => sample.teachingClassId === selectedLectureJournalTeachingClassId,
+    );
+
+    return (
+      <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchLectureJournalList')}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
+
+        <Alert
+          type="info"
+          showIcon
+          title="样本来源"
+          description="教学班候选项来自本地教师学期课表，只抽取少量带 sstsTeachingClassId 的真实记录，避免列表过大。"
+        />
+
+        <div className="flex flex-wrap gap-2">
+          {verifiedIdentityResult ? (
+            <>
+              <Tag variant="filled" color="green">
+                当前教师：{verifiedIdentityResult.personName}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                staffId：{verifiedIdentityResult.personId}
+              </Tag>
+            </>
+          ) : (
+            <Tag variant="filled" color="default">
+              尚未读取教职工身份
+            </Tag>
+          )}
+
+          <Button
+            size="small"
+            type="link"
+            loading={isLoadingIdentity}
+            onClick={() => void ensureSessionAndRun({ type: 'verified-staff-identity' })}
+          >
+            刷新身份
+          </Button>
+        </div>
+
+        <Form<LectureJournalFormValues>
+          form={lectureJournalForm}
+          layout="inline"
+          requiredMark={false}
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}
+        >
+          <Form.Item
+            label="学期"
+            name="semesterId"
+            rules={[{ required: true, message: '请选择学期' }]}
+          >
+            <Select
+              loading={isLoadingLectureJournalSemesters}
+              placeholder="请选择学期"
+              style={{ width: 260 }}
+              options={lectureJournalSemesterOptions.map((semester) => ({
+                label: `${semester.schoolYear}-${semester.schoolYear + 1} 学年第${semester.termNumber}学期${semester.isCurrent ? '（当前）' : ''}`,
+                value: semester.id,
+              }))}
+              onChange={() => {
+                setActionError(null);
+                setLectureJournalResult(null);
+                setLectureJournalTeachingClassSamples([]);
+                lectureJournalForm.setFieldsValue({ teachingClassId: undefined });
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="staffId"
+            name="staffId"
+            rules={[{ required: true, message: '请输入 staffId' }]}
+          >
+            <Input
+              placeholder="默认带入当前身份，也可自定义"
+              style={{ width: 220 }}
+              onChange={() => {
+                setActionError(null);
+                setLectureJournalResult(null);
+                setLectureJournalTeachingClassSamples([]);
+                lectureJournalForm.setFieldsValue({ teachingClassId: undefined });
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="教学班"
+            name="teachingClassId"
+            rules={[{ required: true, message: '请选择教学班' }]}
+          >
+            <Select
+              showSearch
+              optionFilterProp="label"
+              loading={isLoadingLectureJournalSamples}
+              placeholder={
+                lectureJournalTeachingClassSamples.length > 0 ? '请选择教学班' : '先加载教学班样本'
+              }
+              style={{ width: 420 }}
+              options={lectureJournalTeachingClassSamples.map((sample) => ({
+                label: `${sample.courseName} / ${sample.teachingClassName} (${sample.teachingClassId})`,
+                value: sample.teachingClassId,
+              }))}
+              onChange={() => {
+                setActionError(null);
+                setLectureJournalResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              loading={isLoadingLectureJournalSamples}
+              disabled={Boolean(lectureJournalSemesterError)}
+              onClick={() => {
+                void loadLectureJournalTeachingClassSamples();
+              }}
+            >
+              加载课表样本
+            </Button>
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              loading={isLoadingLectureJournal}
+              onClick={() => {
+                void handleLectureJournalRequest();
+              }}
+            >
+              查询教学日志
+            </Button>
+          </Form.Item>
+        </Form>
+
+        {lectureJournalSemesterError ? (
+          <Alert type="warning" showIcon title={lectureJournalSemesterError} />
+        ) : null}
+
+        {isLoadingLectureJournalSamples ? (
+          <Alert type="info" showIcon title="正在从教师学期课表抽取教学班样本..." />
+        ) : lectureJournalTeachingClassSamples.length > 0 ? (
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-wrap gap-2">
+              <Tag variant="filled" color="processing">
+                抽样教学班：{lectureJournalTeachingClassSamples.length}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                当前样本 staffId：{String(selectedLectureJournalStaffId || '').trim() || '未填写'}
+              </Tag>
+              <Tag variant="filled" color="blue">
+                抽样策略：稳定散列裁剪 {LECTURE_JOURNAL_SAMPLE_LIMIT} 条以内
+              </Tag>
+            </div>
+
+            {selectedTeachingClassSample ? (
+              <Card size="small" title="当前教学班样本">
+                <div className="flex flex-col gap-3">
+                  <div className="flex flex-wrap gap-2">
+                    <Tag variant="filled" color="geekblue">
+                      教学班 ID：{selectedTeachingClassSample.teachingClassId}
+                    </Tag>
+                    <Tag variant="filled" color="cyan">
+                      教学班：{selectedTeachingClassSample.teachingClassName}
+                    </Tag>
+                    <Tag variant="filled" color="green">
+                      课程：{selectedTeachingClassSample.courseName}
+                    </Tag>
+                    <Tag variant="filled" color="gold">
+                      scheduleId：{selectedTeachingClassSample.scheduleId}
+                    </Tag>
+                  </div>
+
+                  <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+                    {JSON.stringify(selectedTeachingClassSample, null, 2)}
+                  </pre>
+                </div>
+              </Card>
+            ) : null}
+          </div>
+        ) : String(selectedLectureJournalStaffId || '').trim() ? (
+          <Alert type="info" showIcon title="当前还没有教学班样本，可点击“加载课表样本”重试。" />
+        ) : (
+          <Alert type="info" showIcon title="请输入 staffId，再从课表提取教学班样本。" />
+        )}
+
+        {isLoadingLectureJournal ? (
+          <Alert type="info" showIcon title="正在读取教学日志..." />
+        ) : lectureJournalResult ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Tag variant="filled" color="magenta">
+                日志条数：{lectureJournalResult.count}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                过期时间：{formatDateTime(lectureJournalResult.expiresAt)}
+              </Tag>
+              <Tag variant="filled" color="blue">
+                输出模式：全量
+              </Tag>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  void handleLectureJournalRequest();
+                }}
+              >
+                刷新
+              </Button>
+            </div>
+
+            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+              {JSON.stringify(lectureJournalResult, null, 2)}
+            </pre>
+          </>
+        ) : null}
       </div>
     );
   }
@@ -1126,6 +1688,8 @@ export function UpstreamSessionDemoLabPage() {
         return renderIntroductionPanel();
       case 'teacher-directory':
         return renderTeacherDirectoryPanel();
+      case 'lecture-journal':
+        return renderLectureJournalPanel();
       case 'verified-staff-identity':
         return renderVerifiedStaffIdentityPanel();
       case 'personal-curriculum-plan':
@@ -1165,7 +1729,7 @@ export function UpstreamSessionDemoLabPage() {
           type="info"
           showIcon
           title="链路说明"
-          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典或教职工身份会自动读取数据，个人/系部教学计划则按需查询。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
+          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
 
