@@ -129,6 +129,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
+    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'AuditOutlined',
+            key: '/labs/lecture-journal-reconciliation',
+            label: '教学日志对账',
+            navMode: 'rail' as const,
+            path: '/labs/lecture-journal-reconciliation',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
   ];
 
   if (children.length === 0) {

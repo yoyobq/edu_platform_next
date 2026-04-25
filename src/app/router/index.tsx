@@ -64,6 +64,10 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import {
+  lectureJournalReconciliationLabAccess,
+  loadLectureJournalReconciliationLabRouteModule,
+} from '@/labs/lecture-journal-reconciliation';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import {
   loadUpstreamSessionDemoLabRouteModule,
@@ -586,7 +590,61 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
   const accessGroup = snapshot.userInfo.accessGroup;
 
   return {
+    defaultDepartmentId:
+      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    upstreamAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
+    viewerKind:
+      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
+  };
+}
+
+async function lectureJournalReconciliationLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(lectureJournalReconciliationLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(lectureJournalReconciliationLabAccess)) {
+      return { viewerKind: 'authenticated' };
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(lectureJournalReconciliationLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  return {
+    defaultDepartmentId:
+      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    upstreamAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
@@ -815,6 +873,11 @@ const router = createBrowserRouter([
             path: 'academic-workload',
             loader: academicWorkloadLabLoader,
             lazy: loadAcademicWorkloadLabRouteModule,
+          },
+          {
+            path: 'lecture-journal-reconciliation',
+            loader: lectureJournalReconciliationLabLoader,
+            lazy: loadLectureJournalReconciliationLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

@@ -50,6 +50,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/lecture-journal-reconciliation',
       '/sandbox/playground',
     ]);
   });
@@ -75,6 +76,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -92,6 +94,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -115,6 +118,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -144,6 +148,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/lecture-journal-reconciliation',
       '/sandbox/playground',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([
