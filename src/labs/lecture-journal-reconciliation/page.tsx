@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Alert,
   AutoComplete,
@@ -13,6 +14,7 @@ import {
   Skeleton,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import { useLoaderData } from 'react-router';
@@ -40,6 +42,8 @@ import {
 } from './api';
 import { lectureJournalReconciliationLabMeta } from './meta';
 
+import './page.css';
+
 type LectureJournalReconciliationLabLoaderData = {
   defaultDepartmentId?: string | null;
   defaultStaffId?: string | null;
@@ -59,7 +63,9 @@ type PendingAction = 'directory' | 'query' | null;
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const JOURNAL_STATUS_SUGGESTIONS = ['优', '良', '中', '差'];
+const TOPIC_RECORD_OPTIONS = ['优', '良', '中', '差'];
+
+type MetricTone = 'default' | 'success' | 'warning';
 
 type DepartmentOption = {
   id: string;
@@ -67,13 +73,20 @@ type DepartmentOption = {
 };
 
 type JournalEditableCardItem = {
+  courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number | null;
+  homework: string | null;
   journal: LectureJournalReconciliationItem['journal'];
   key: string;
+  lecturePlanDetailId: string | null;
+  lecturePlanId: string | null;
+  lessonHours: number | null;
+  schoolYear: string | null;
   sectionId: string | null;
   sectionName: string | null;
+  semester: string | null;
   status: 'FILLED' | 'MISSING';
   teacherId: string | null;
   teacherName: string | null;
@@ -86,12 +99,15 @@ type JournalEditableCardItem = {
 type JournalDraft = {
   courseContent: string;
   homeworkAssignment: string;
-  sourceLabel: string;
-  sourceType: 'blank' | 'filled' | 'prefilled';
-  statusText: string;
+  submitStatusText: string;
+  topicRecord: string;
 };
 
 type JournalDraftMap = Record<string, JournalDraft>;
+type FieldTipConfig = {
+  fields: string[];
+  note?: string;
+};
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -166,6 +182,46 @@ function formatTeachingDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function resolveCampusSubmitStatusTagColor(statusText: string) {
+  const normalizedStatus = statusText.trim();
+
+  if (normalizedStatus === '审核中') {
+    return 'processing';
+  }
+
+  if (normalizedStatus === '待提交') {
+    return 'warning';
+  }
+
+  if (normalizedStatus === '已审核') {
+    return 'success';
+  }
+
+  return normalizedStatus ? 'default' : 'default';
+}
+
+function resolveCampusSubmitStatusTagLabel(statusText: string) {
+  const normalizedStatus = statusText.trim();
+
+  if (normalizedStatus === '审核中') {
+    return '校园网审核中';
+  }
+
+  if (normalizedStatus === '待提交') {
+    return '校园网待提交';
+  }
+
+  if (normalizedStatus === '已审核') {
+    return '校园网已审核';
+  }
+
+  if (!normalizedStatus) {
+    return '校园网未提交';
+  }
+
+  return `校园网${normalizedStatus}`;
+}
+
 function resolveStatusColor(status: LectureJournalReconciliationItem['status']) {
   if (status === 'FILLED') {
     return 'success';
@@ -190,6 +246,10 @@ function resolveStatusLabel(status: LectureJournalReconciliationItem['status']) 
   return '无法对账';
 }
 
+function resolveStatusTone(status: JournalEditableCardItem['status']) {
+  return status === 'FILLED' ? 'success' : 'warning';
+}
+
 function buildTeacherOptionLabel(teacher: TeacherDirectoryEntry) {
   const normalizedCode = teacher.code.trim();
 
@@ -212,6 +272,61 @@ function buildItemKey(item: {
     item.matchKey || 'match',
     item.reason || 'reason',
   ].join('-');
+}
+
+function buildFieldTipTitle(config: FieldTipConfig) {
+  const parts = [`接口字段：${config.fields.join(' / ')}`];
+
+  if (config.note) {
+    parts.push(config.note);
+  }
+
+  return parts.join('；');
+}
+
+function renderFieldLabel(label: string, config: FieldTipConfig) {
+  return (
+    <span className="lecture-journal-field-label">
+      <span>{label}</span>
+      <Tooltip placement="topLeft" title={buildFieldTipTitle(config)}>
+        <button
+          aria-label={`${label} 字段提示`}
+          className="lecture-journal-field-tip-trigger"
+          type="button"
+        >
+          <InfoCircleOutlined />
+        </button>
+      </Tooltip>
+    </span>
+  );
+}
+
+function renderMetricTile({
+  detail,
+  label,
+  tone = 'default',
+  value,
+}: {
+  detail?: string;
+  label: string;
+  tone?: MetricTone;
+  value: number | string;
+}) {
+  return (
+    <div className={`lecture-journal-metric lecture-journal-metric-${tone}`}>
+      <div className="lecture-journal-metric-label">
+        <Typography.Text type="secondary">{label}</Typography.Text>
+      </div>
+      <div className="lecture-journal-metric-value">
+        <Typography.Title level={3}>{value}</Typography.Title>
+      </div>
+      {detail ? (
+        <div className="lecture-journal-metric-detail">
+          <Typography.Text type="secondary">{detail}</Typography.Text>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 async function requestTeacherDirectoryWithSession(session: StoredUpstreamSession) {
@@ -246,13 +361,20 @@ function buildEditableCardItemFromReconciliation(
   }
 
   return {
+    courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
     dayOfWeek: item.dayOfWeek,
+    homework: item.homework,
     journal: item.journal,
     key: buildItemKey(item),
+    lecturePlanDetailId: item.lecturePlanDetailId,
+    lecturePlanId: item.lecturePlanId,
+    lessonHours: item.lessonHours,
+    schoolYear: item.schoolYear,
     sectionId: item.sectionId,
     sectionName: item.sectionName,
+    semester: item.semester,
     status: item.status,
     teacherId: item.teacherId,
     teacherName: item.teacherName,
@@ -267,13 +389,20 @@ function buildEditableCardItemFromMissing(
   item: MissingLectureJournalItem,
 ): JournalEditableCardItem {
   return {
+    courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
     dayOfWeek: item.dayOfWeek,
+    homework: item.homework,
     journal: null,
     key: buildItemKey(item),
+    lecturePlanDetailId: item.lecturePlanDetailId,
+    lecturePlanId: item.lecturePlanId,
+    lessonHours: item.lessonHours,
+    schoolYear: item.schoolYear,
     sectionId: item.sectionId,
     sectionName: item.sectionName,
+    semester: item.semester,
     status: 'MISSING',
     teacherId: item.teacherId,
     teacherName: item.teacherName,
@@ -341,9 +470,8 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
       result[item.key] = {
         courseContent: item.journal.courseContent || '',
         homeworkAssignment: item.journal.homeworkAssignment || '',
-        sourceLabel: '已使用当前已填日志内容',
-        sourceType: 'filled',
-        statusText: item.journal.statusName || item.journal.statusCode || '',
+        submitStatusText: item.journal.statusName || item.journal.statusCode || '',
+        topicRecord: item.journal.topicRecord || '',
       };
 
       return result;
@@ -354,15 +482,65 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
     result[item.key] = {
       courseContent: template?.journal?.courseContent || '',
       homeworkAssignment: template?.journal?.homeworkAssignment || '',
-      sourceLabel: template
-        ? `已从 ${template.teachingClassName || template.courseName || '已填日志'} 预填日志侧内容`
-        : '未找到可复用的日志侧内容',
-      sourceType: template ? 'prefilled' : 'blank',
-      statusText: template?.journal?.statusName || template?.journal?.statusCode || '',
+      submitStatusText: '',
+      topicRecord: template?.journal?.topicRecord || '',
     };
 
     return result;
   }, {});
+}
+
+function buildPlanSnapshot(item: JournalEditableCardItem) {
+  return JSON.stringify(
+    {
+      lecturePlanId: item.lecturePlanId,
+      lecturePlanDetailId: item.lecturePlanDetailId,
+      schoolYear: item.schoolYear,
+      semester: item.semester,
+      courseId: item.courseId,
+      courseName: item.courseName,
+      teachingClassId: item.teachingClassId,
+      teachingClassName: item.teachingClassName,
+      teacherId: item.teacherId,
+      teacherName: item.teacherName,
+      teachingDate: item.teachingDate,
+      weekNumber: item.weekNumber,
+      dayOfWeek: item.dayOfWeek,
+      sectionId: item.sectionId,
+      sectionName: item.sectionName,
+      lessonHours: item.lessonHours,
+      courseContent: item.courseContent,
+      homework: item.homework,
+    },
+    null,
+    2,
+  );
+}
+
+function renderMissingPlanSnapshotTrigger(item: JournalEditableCardItem) {
+  return (
+    <Tooltip
+      placement="bottomRight"
+      title={
+        <div className="lecture-journal-plan-tooltip">
+          <div className="lecture-journal-plan-tooltip-title">计划侧返回字段</div>
+          <div className="lecture-journal-plan-tooltip-note">
+            当前接口未返回 rawPlan /
+            rawPlanDetail，这里展示对账结果里的计划侧字段，方便核对未提交项。
+          </div>
+          <pre>{buildPlanSnapshot(item)}</pre>
+        </div>
+      }
+    >
+      <button
+        aria-label="查看计划侧原始数据"
+        className="lecture-journal-plan-tooltip-trigger"
+        type="button"
+      >
+        !
+      </button>
+    </Tooltip>
+  );
 }
 
 export function LectureJournalReconciliationLabPage() {
@@ -523,18 +701,6 @@ export function LectureJournalReconciliationLabPage() {
     () => (reconciliationResult?.missingItems ?? []).map(buildEditableCardItemFromMissing),
     [reconciliationResult?.missingItems],
   );
-  const journalStatusOptions = useMemo(() => {
-    const dynamicOptions = editableItems
-      .map((item) => item.journal?.statusName || item.journal?.statusCode || '')
-      .filter((value, index, collection) => value && collection.indexOf(value) === index)
-      .map((value) => ({ label: value, value }));
-
-    const defaultOptions = JOURNAL_STATUS_SUGGESTIONS.filter(
-      (value) => !dynamicOptions.some((option) => option.value === value),
-    ).map((value) => ({ label: value, value }));
-
-    return [...dynamicOptions, ...defaultOptions];
-  }, [editableItems]);
   const reconciliationBaseCount =
     (reconciliationResult?.filledCount ?? 0) + (reconciliationResult?.missingCount ?? 0);
   const fillRate =
@@ -549,7 +715,12 @@ export function LectureJournalReconciliationLabPage() {
   const updateJournalDraft = useCallback(
     (
       key: string,
-      patch: Partial<Pick<JournalDraft, 'courseContent' | 'homeworkAssignment' | 'statusText'>>,
+      patch: Partial<
+        Pick<
+          JournalDraft,
+          'courseContent' | 'homeworkAssignment' | 'submitStatusText' | 'topicRecord'
+        >
+      >,
     ) => {
       setJournalDrafts((current) => ({
         ...current,
@@ -557,9 +728,8 @@ export function LectureJournalReconciliationLabPage() {
           ...(current[key] ?? {
             courseContent: '',
             homeworkAssignment: '',
-            sourceLabel: '手动编辑',
-            sourceType: 'blank',
-            statusText: '',
+            submitStatusText: '',
+            topicRecord: '',
           }),
           ...patch,
         },
@@ -574,107 +744,127 @@ export function LectureJournalReconciliationLabPage() {
       ({
         courseContent: '',
         homeworkAssignment: '',
-        sourceLabel: '未找到可复用的日志侧内容',
-        sourceType: 'blank',
-        statusText: '',
+        submitStatusText: '',
+        topicRecord: '',
       } satisfies JournalDraft);
+    const statusTone = resolveStatusTone(item.status);
 
     return (
-      <Card key={item.key} size="small">
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center gap-2">
-            <Tag color={resolveStatusColor(item.status)}>{resolveStatusLabel(item.status)}</Tag>
-            <Typography.Text strong>{item.courseName || '未命名课程'}</Typography.Text>
-            <Typography.Text type="secondary">
-              {formatTeachingDate(item.teachingDate)}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              {item.weekNumber ? `第 ${item.weekNumber} 周` : '周次待识别'}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              {item.dayOfWeek
-                ? DAY_OF_WEEK_LABELS[item.dayOfWeek - 1] || `周${item.dayOfWeek}`
-                : '星期待识别'}
-            </Typography.Text>
+      <article
+        className={`lecture-journal-record lecture-journal-record-${statusTone}`}
+        key={item.key}
+      >
+        <div className="lecture-journal-record-header">
+          <div className="lecture-journal-record-title-group">
+            <div className="lecture-journal-record-title-row">
+              <span
+                aria-label={resolveStatusLabel(item.status)}
+                className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
+                title={resolveStatusLabel(item.status)}
+              />
+              <Tooltip placement="topLeft" title="接口字段：courseName / courseId">
+                <div className="lecture-journal-record-title">
+                  <Typography.Title level={5}>{item.courseName || '未命名课程'}</Typography.Title>
+                </div>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：sectionName / sectionId">
+                <Tag bordered={false}>{resolveSectionLabel(item.sectionName, item.sectionId)}</Tag>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：teachingClassName / teachingClassId">
+                <Tag bordered={false}>{item.teachingClassName || '教学班待识别'}</Tag>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：teachingDate">
+                <Tag bordered={false}>{formatTeachingDate(item.teachingDate)}</Tag>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：weekNumber">
+                <Tag bordered={false}>
+                  {item.weekNumber ? `第 ${item.weekNumber} 周` : '周次待识别'}
+                </Tag>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：dayOfWeek">
+                <Tag bordered={false}>
+                  {item.dayOfWeek
+                    ? DAY_OF_WEEK_LABELS[item.dayOfWeek - 1] || `周${item.dayOfWeek}`
+                    : '星期待识别'}
+                </Tag>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：teacherName / teacherId">
+                <Tag bordered={false}>{resolveTeacherLabel(item.teacherName, item.teacherId)}</Tag>
+              </Tooltip>
+            </div>
           </div>
 
-          <div className="flex flex-col gap-1">
-            <Typography.Text type="secondary">
-              {resolveSectionLabel(item.sectionName, item.sectionId)}
-            </Typography.Text>
-            <Typography.Text type="secondary">
-              {item.teachingClassName || '教学班待识别'} ·{' '}
-              {resolveTeacherLabel(item.teacherName, item.teacherId)}
-            </Typography.Text>
+          <div className="lecture-journal-record-status">
+            <Tooltip placement="topRight" title="接口字段：journal.statusName / journal.statusCode">
+              <Tag color={resolveCampusSubmitStatusTagColor(draft.submitStatusText)}>
+                {resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
+              </Tag>
+            </Tooltip>
+            {item.status === 'MISSING' ? renderMissingPlanSnapshotTrigger(item) : null}
           </div>
+        </div>
 
-          <div className="grid gap-4 xl:grid-cols-3">
-            <label className="flex flex-col gap-2">
-              <Typography.Text strong>课堂记录</Typography.Text>
-              <AutoComplete
-                options={journalStatusOptions}
-                placeholder="例如 优 / 良 / 中 / 差"
-                value={draft.statusText}
+        <div className="lecture-journal-editor">
+          <div className="lecture-journal-editor-grid">
+            <label className="lecture-journal-inline-field lecture-journal-inline-field-topic">
+              {renderFieldLabel('课堂记录', {
+                fields: ['journal.topicRecord'],
+              })}
+              <Select
+                allowClear
+                options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
+                placeholder="选择"
+                size="small"
+                value={draft.topicRecord || undefined}
                 onChange={(value) => {
-                  updateJournalDraft(item.key, { statusText: value });
+                  updateJournalDraft(item.key, { topicRecord: value || '' });
                 }}
               />
             </label>
 
-            <label className="flex flex-col gap-2 xl:col-span-2">
-              <Typography.Text strong>课程内容</Typography.Text>
-              <Input.TextArea
-                autoSize={{ minRows: 3, maxRows: 6 }}
+            <label className="lecture-journal-inline-field">
+              {renderFieldLabel('课程内容', {
+                fields: ['journal.courseContent', 'courseContent'],
+                note: '前者为日志侧，后者为计划侧参考',
+              })}
+              <Input
                 placeholder="使用日志侧内容预填，可继续调整"
+                size="small"
                 value={draft.courseContent}
                 onChange={(event) => {
                   updateJournalDraft(item.key, { courseContent: event.target.value });
                 }}
               />
             </label>
-          </div>
 
-          <label className="flex flex-col gap-2">
-            <Typography.Text strong>作业</Typography.Text>
-            <Input.TextArea
-              autoSize={{ minRows: 2, maxRows: 5 }}
-              placeholder="使用日志侧作业预填，可继续调整"
-              value={draft.homeworkAssignment}
-              onChange={(event) => {
-                updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
-              }}
-            />
-          </label>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <Tag
-              color={
-                draft.sourceType === 'filled'
-                  ? 'success'
-                  : draft.sourceType === 'prefilled'
-                    ? 'processing'
-                    : 'default'
-              }
-            >
-              {draft.sourceType === 'filled'
-                ? '已填日志'
-                : draft.sourceType === 'prefilled'
-                  ? '日志侧预填'
-                  : '待补充'}
-            </Tag>
-            <Typography.Text type="secondary">{draft.sourceLabel}</Typography.Text>
+            <label className="lecture-journal-inline-field">
+              {renderFieldLabel('作业', {
+                fields: ['journal.homeworkAssignment', 'homework'],
+                note: '前者为日志侧，后者为计划侧参考',
+              })}
+              <Input
+                placeholder="使用日志侧作业预填，可继续调整"
+                size="small"
+                value={draft.homeworkAssignment}
+                onChange={(event) => {
+                  updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
+                }}
+              />
+            </label>
           </div>
         </div>
-      </Card>
+      </article>
     );
   }
 
   function renderUnmatchedCard(item: UnmatchedLectureJournalPlanItem) {
     return (
-      <Card key={buildItemKey(item)} size="small">
-        <div className="flex flex-col gap-2">
+      <article className="lecture-journal-unmatched" key={buildItemKey(item)}>
+        <div className="lecture-journal-unmatched-heading">
           <Tag color="default">无法对账</Tag>
           <Typography.Text strong>{item.reason}</Typography.Text>
+        </div>
+        <div className="lecture-journal-unmatched-grid">
           <Typography.Text type="secondary">计划：{item.lecturePlanId || '缺失'}</Typography.Text>
           <Typography.Text type="secondary">
             详情：{item.lecturePlanDetailId || '缺失'}
@@ -683,7 +873,7 @@ export function LectureJournalReconciliationLabPage() {
             教学班：{item.teachingClassId || '缺失'}
           </Typography.Text>
         </div>
-      </Card>
+      </article>
     );
   }
 
@@ -802,7 +992,7 @@ export function LectureJournalReconciliationLabPage() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="lecture-journal-page flex flex-col gap-6">
       <div className="flex flex-col gap-2">
         <Typography.Title level={3} style={{ margin: 0 }}>
           教学日志填写对账
@@ -819,168 +1009,168 @@ export function LectureJournalReconciliationLabPage() {
         type="info"
       />
 
-      <Card>
-        <div className="flex flex-col gap-4">
-          {!storedSession ? (
-            <Alert
-              action={
-                <Button
-                  size="small"
-                  type="primary"
-                  onClick={() => {
-                    setPendingAction(null);
-                    openLoginModal();
-                  }}
-                >
-                  登录上游
-                </Button>
-              }
-              description="当前页面依赖上游 sessionToken。可以直接在此登录，或复用同账号已有的上游会话。"
-              message="尚未建立 upstream 会话"
-              showIcon
-              type="warning"
-            />
-          ) : (
-            <Descriptions column={3} size="small">
-              <Descriptions.Item label="上游登录 ID">
-                {storedSession.upstreamLoginId || '未记录'}
-              </Descriptions.Item>
-              <Descriptions.Item label="会话过期时间">
-                {formatDateTime(storedSession.expiresAt)}
-              </Descriptions.Item>
-              <Descriptions.Item label="当前视图身份">
-                {loaderData?.viewerKind ?? 'unknown'}
-              </Descriptions.Item>
-            </Descriptions>
-          )}
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <label className="flex flex-col gap-2">
-              <Typography.Text strong>学期</Typography.Text>
-              {isLoadingSemesters ? (
-                <Skeleton.Button active block />
-              ) : (
-                <Select
-                  options={semesters.map((semester) => ({
-                    label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                    value: semester.id,
-                  }))}
-                  placeholder="请选择学期"
-                  value={selectedSemesterId ?? undefined}
-                  onChange={(value) => setSelectedSemesterId(value)}
-                />
-              )}
-            </label>
-
-            <label className="flex flex-col gap-2">
-              <Typography.Text strong>departmentId</Typography.Text>
-              <Select
-                loading={isLoadingDepartmentOptions}
-                disabled={isLoadingDepartmentOptions || departmentOptions.length === 0}
-                notFoundContent={hasNoDepartmentOptions ? '当前未返回可选院系' : undefined}
-                optionFilterProp="label"
-                options={departmentOptions.map((option) => ({
-                  label: option.label,
-                  value: option.id,
-                }))}
-                placeholder="请选择院系"
-                showSearch
-                value={departmentId}
-                onChange={(value) => setDepartmentId(value)}
-              />
-            </label>
-
-            <label className="flex flex-col gap-2">
-              <Typography.Text strong>教师 staffId</Typography.Text>
-              <AutoComplete
-                options={teacherOptions}
-                placeholder={loaderData?.defaultStaffId || '先加载教师字典，或直接输入 staffId'}
-                value={staffId}
-                onChange={setStaffId}
-                filterOption={(inputValue, option) =>
-                  String(option?.label || '')
-                    .toLowerCase()
-                    .includes(inputValue.trim().toLowerCase()) ||
-                  String(option?.value || '')
-                    .toLowerCase()
-                    .includes(inputValue.trim().toLowerCase())
+      <div className="lecture-journal-control-card">
+        <Card>
+          <div className="flex flex-col gap-4">
+            {!storedSession ? (
+              <Alert
+                action={
+                  <Button
+                    size="small"
+                    type="primary"
+                    onClick={() => {
+                      setPendingAction(null);
+                      openLoginModal();
+                    }}
+                  >
+                    登录上游
+                  </Button>
                 }
+                description="当前页面依赖上游 sessionToken。可以直接在此登录，或复用同账号已有的上游会话。"
+                message="尚未建立 upstream 会话"
+                showIcon
+                type="warning"
               />
-            </label>
+            ) : (
+              <Descriptions column={3} size="small">
+                <Descriptions.Item label="上游登录 ID">
+                  {storedSession.upstreamLoginId || '未记录'}
+                </Descriptions.Item>
+                <Descriptions.Item label="会话过期时间">
+                  {formatDateTime(storedSession.expiresAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="当前视图身份">
+                  {loaderData?.viewerKind ?? 'unknown'}
+                </Descriptions.Item>
+              </Descriptions>
+            )}
 
-            <div className="flex flex-col gap-2">
-              <Typography.Text strong>当前筛选</Typography.Text>
-              <Card size="small">
-                <div className="flex flex-col gap-1">
-                  <Typography.Text>{selectedSemester?.name || '未选择学期'}</Typography.Text>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label className="flex flex-col gap-2">
+                <Typography.Text strong>学期</Typography.Text>
+                {isLoadingSemesters ? (
+                  <Skeleton.Button active block />
+                ) : (
+                  <Select
+                    options={semesters.map((semester) => ({
+                      label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
+                      value: semester.id,
+                    }))}
+                    placeholder="请选择学期"
+                    value={selectedSemesterId ?? undefined}
+                    onChange={(value) => setSelectedSemesterId(value)}
+                  />
+                )}
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <Typography.Text strong>departmentId</Typography.Text>
+                <Select
+                  loading={isLoadingDepartmentOptions}
+                  disabled={isLoadingDepartmentOptions || departmentOptions.length === 0}
+                  notFoundContent={hasNoDepartmentOptions ? '当前未返回可选院系' : undefined}
+                  optionFilterProp="label"
+                  options={departmentOptions.map((option) => ({
+                    label: option.label,
+                    value: option.id,
+                  }))}
+                  placeholder="请选择院系"
+                  showSearch
+                  value={departmentId}
+                  onChange={(value) => setDepartmentId(value)}
+                />
+              </label>
+
+              <label className="flex flex-col gap-2">
+                <Typography.Text strong>教师 staffId</Typography.Text>
+                <AutoComplete
+                  options={teacherOptions}
+                  placeholder={loaderData?.defaultStaffId || '先加载教师字典，或直接输入 staffId'}
+                  value={staffId}
+                  onChange={setStaffId}
+                  filterOption={(inputValue, option) =>
+                    String(option?.label || '')
+                      .toLowerCase()
+                      .includes(inputValue.trim().toLowerCase()) ||
+                    String(option?.value || '')
+                      .toLowerCase()
+                      .includes(inputValue.trim().toLowerCase())
+                  }
+                />
+              </label>
+
+              <div className="flex flex-col gap-2">
+                <Typography.Text strong>当前筛选</Typography.Text>
+                <div className="lecture-journal-filter-summary">
+                  <Typography.Text strong>{selectedSemester?.name || '未选择学期'}</Typography.Text>
                   <Typography.Text type="secondary">{selectedTeacherLabel}</Typography.Text>
                   <Typography.Text type="secondary">{selectedDepartmentLabel}</Typography.Text>
                 </div>
-              </Card>
+              </div>
+            </div>
+
+            {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+            {departmentOptionsError ? (
+              <Alert message={departmentOptionsError} showIcon type="error" />
+            ) : null}
+            {directoryError ? <Alert message={directoryError} showIcon type="error" /> : null}
+            {hasFilterPairMismatch ? (
+              <Alert
+                message="按教师过滤时，departmentId 和 staffId 需要同时填写。"
+                showIcon
+                type="warning"
+              />
+            ) : null}
+
+            <div className="flex flex-wrap gap-3">
+              <Button
+                loading={isLoadingDirectory}
+                onClick={() => {
+                  void runDirectoryAction();
+                }}
+              >
+                加载教师字典
+              </Button>
+              <Button
+                type="primary"
+                disabled={!selectedSemester || hasFilterPairMismatch}
+                loading={isLoadingReconciliation}
+                onClick={() => {
+                  void runQueryAction();
+                }}
+              >
+                查询对账
+              </Button>
+              <Button
+                disabled={!normalizedDepartmentId && !normalizedStaffId}
+                onClick={() => {
+                  setDepartmentId(DEFAULT_DEPARTMENT_ID);
+                  setStaffId(loaderData?.defaultStaffId ?? '');
+                }}
+              >
+                恢复默认筛选
+              </Button>
+              <Button
+                disabled={!storedSession}
+                onClick={() => {
+                  clearCurrentSession();
+                }}
+              >
+                清除 upstream 会话
+              </Button>
+              <Button
+                disabled={!storedSession}
+                onClick={() => {
+                  setPendingAction(null);
+                  openLoginModal();
+                }}
+              >
+                重新登录 upstream
+              </Button>
             </div>
           </div>
-
-          {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-          {departmentOptionsError ? (
-            <Alert message={departmentOptionsError} showIcon type="error" />
-          ) : null}
-          {directoryError ? <Alert message={directoryError} showIcon type="error" /> : null}
-          {hasFilterPairMismatch ? (
-            <Alert
-              message="按教师过滤时，departmentId 和 staffId 需要同时填写。"
-              showIcon
-              type="warning"
-            />
-          ) : null}
-
-          <div className="flex flex-wrap gap-3">
-            <Button
-              loading={isLoadingDirectory}
-              onClick={() => {
-                void runDirectoryAction();
-              }}
-            >
-              加载教师字典
-            </Button>
-            <Button
-              type="primary"
-              disabled={!selectedSemester || hasFilterPairMismatch}
-              loading={isLoadingReconciliation}
-              onClick={() => {
-                void runQueryAction();
-              }}
-            >
-              查询对账
-            </Button>
-            <Button
-              disabled={!normalizedDepartmentId && !normalizedStaffId}
-              onClick={() => {
-                setDepartmentId(DEFAULT_DEPARTMENT_ID);
-                setStaffId(loaderData?.defaultStaffId ?? '');
-              }}
-            >
-              恢复默认筛选
-            </Button>
-            <Button
-              disabled={!storedSession}
-              onClick={() => {
-                clearCurrentSession();
-              }}
-            >
-              清除 upstream 会话
-            </Button>
-            <Button
-              disabled={!storedSession}
-              onClick={() => {
-                setPendingAction(null);
-                openLoginModal();
-              }}
-            >
-              重新登录 upstream
-            </Button>
-          </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
 
@@ -988,62 +1178,38 @@ export function LectureJournalReconciliationLabPage() {
 
       {!isLoadingReconciliation && reconciliationResult ? (
         <div className="flex flex-col gap-6">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">已填写</Typography.Text>
-                <Typography.Title level={3} style={{ color: '#389e0d', margin: 0 }}>
-                  {reconciliationResult.filledCount}
-                </Typography.Title>
-              </div>
-            </Card>
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">疑似未填</Typography.Text>
-                <Typography.Title level={3} style={{ color: '#d48806', margin: 0 }}>
-                  {reconciliationResult.missingCount}
-                </Typography.Title>
-              </div>
-            </Card>
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">无法对账</Typography.Text>
-                <Typography.Title level={3} style={{ margin: 0 }}>
-                  {reconciliationResult.unmatchedPlanItemCount}
-                </Typography.Title>
-              </div>
-            </Card>
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">计划</Typography.Text>
-                <Typography.Title level={3} style={{ margin: 0 }}>
-                  {reconciliationResult.planCount}
-                </Typography.Title>
-                <Typography.Text type="secondary">
-                  详情 {reconciliationResult.planDetailCount}
-                </Typography.Text>
-              </div>
-            </Card>
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">教学日志</Typography.Text>
-                <Typography.Title level={3} style={{ margin: 0 }}>
-                  {reconciliationResult.journalCount}
-                </Typography.Title>
-              </div>
-            </Card>
-            <Card size="small">
-              <div className="flex flex-col gap-1">
-                <Typography.Text type="secondary">填写率</Typography.Text>
-                <Typography.Title level={3} style={{ margin: 0 }}>
-                  {fillRate}
-                </Typography.Title>
-                <Typography.Text type="secondary">不含无法对账项</Typography.Text>
-              </div>
-            </Card>
+          <div className="lecture-journal-metric-grid">
+            {renderMetricTile({
+              label: '已填写',
+              tone: 'success',
+              value: reconciliationResult.filledCount,
+            })}
+            {renderMetricTile({
+              label: '疑似未填',
+              tone: 'warning',
+              value: reconciliationResult.missingCount,
+            })}
+            {renderMetricTile({
+              label: '无法对账',
+              value: reconciliationResult.unmatchedPlanItemCount,
+            })}
+            {renderMetricTile({
+              detail: `详情 ${reconciliationResult.planDetailCount}`,
+              label: '计划',
+              value: reconciliationResult.planCount,
+            })}
+            {renderMetricTile({
+              label: '教学日志',
+              value: reconciliationResult.journalCount,
+            })}
+            {renderMetricTile({
+              detail: '不含无法对账项',
+              label: '填写率',
+              value: fillRate,
+            })}
           </div>
 
-          <Card size="small">
+          <section className="lecture-journal-result-summary">
             <Descriptions column={3} size="small">
               <Descriptions.Item label="学期">
                 {selectedSemester?.name || '未选择'}
@@ -1059,59 +1225,61 @@ export function LectureJournalReconciliationLabPage() {
               </Descriptions.Item>
               <Descriptions.Item label="对账顺序">按时间升序</Descriptions.Item>
             </Descriptions>
-          </Card>
+          </section>
 
-          <Tabs
-            items={[
-              {
-                key: 'items',
-                label: `完整对账 (${reconciliationResult.items.length})`,
-                children:
-                  editableItems.length === 0 ? (
-                    <Empty
-                      description="当前查询没有返回任何可展示课次。"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    />
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {editableItems.map((item) => renderJournalDraftCard(item))}
-                    </div>
-                  ),
-              },
-              {
-                key: 'missing',
-                label: `疑似未填 (${reconciliationResult.missingItems.length})`,
-                children:
-                  missingEditableItems.length === 0 ? (
-                    <Empty
-                      description="当前查询没有疑似未填课次。"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    />
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {missingEditableItems.map((item) => renderJournalDraftCard(item))}
-                    </div>
-                  ),
-              },
-              {
-                key: 'unmatched',
-                label: `无法对账 (${reconciliationResult.unmatchedPlanItems.length})`,
-                children:
-                  reconciliationResult.unmatchedPlanItems.length === 0 ? (
-                    <Empty
-                      description="当前查询没有无法对账的计划项。"
-                      image={Empty.PRESENTED_IMAGE_SIMPLE}
-                    />
-                  ) : (
-                    <div className="flex flex-col gap-4">
-                      {reconciliationResult.unmatchedPlanItems.map((item) =>
-                        renderUnmatchedCard(item),
-                      )}
-                    </div>
-                  ),
-              },
-            ]}
-          />
+          <div className="lecture-journal-tabs">
+            <Tabs
+              items={[
+                {
+                  key: 'items',
+                  label: `完整对账 (${reconciliationResult.items.length})`,
+                  children:
+                    editableItems.length === 0 ? (
+                      <Empty
+                        description="当前查询没有返回任何可展示课次。"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      />
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        {editableItems.map((item) => renderJournalDraftCard(item))}
+                      </div>
+                    ),
+                },
+                {
+                  key: 'missing',
+                  label: `疑似未填 (${reconciliationResult.missingItems.length})`,
+                  children:
+                    missingEditableItems.length === 0 ? (
+                      <Empty
+                        description="当前查询没有疑似未填课次。"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      />
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        {missingEditableItems.map((item) => renderJournalDraftCard(item))}
+                      </div>
+                    ),
+                },
+                {
+                  key: 'unmatched',
+                  label: `无法对账 (${reconciliationResult.unmatchedPlanItems.length})`,
+                  children:
+                    reconciliationResult.unmatchedPlanItems.length === 0 ? (
+                      <Empty
+                        description="当前查询没有无法对账的计划项。"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+                      />
+                    ) : (
+                      <div className="flex flex-col gap-4">
+                        {reconciliationResult.unmatchedPlanItems.map((item) =>
+                          renderUnmatchedCard(item),
+                        )}
+                      </div>
+                    ),
+                },
+              ]}
+            />
+          </div>
         </div>
       ) : null}
 
@@ -1124,7 +1292,7 @@ export function LectureJournalReconciliationLabPage() {
         />
       ) : null}
 
-      <Card size="small">
+      <section className="lecture-journal-lab-meta">
         <Descriptions column={1} size="small">
           <Descriptions.Item label="Lab meta">
             {lectureJournalReconciliationLabMeta.purpose}
@@ -1133,7 +1301,7 @@ export function LectureJournalReconciliationLabPage() {
             {lectureJournalReconciliationLabAccess.allowedAccessLevels.join(' / ')}
           </Descriptions.Item>
         </Descriptions>
-      </Card>
+      </section>
 
       <Modal
         destroyOnHidden

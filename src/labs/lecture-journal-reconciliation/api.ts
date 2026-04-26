@@ -52,6 +52,7 @@ export type MatchedLectureJournalSummary = {
   rawJournal: unknown;
   statusCode: string | null;
   statusName: string | null;
+  topicRecord: string | null;
 };
 
 export type LectureJournalReconciliationItem = {
@@ -190,6 +191,7 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
           rawJournal
           statusCode
           statusName
+          topicRecord
         }
         lecturePlanDetailId
         lecturePlanId
