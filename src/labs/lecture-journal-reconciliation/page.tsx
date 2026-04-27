@@ -64,7 +64,7 @@ type PendingAction = 'directory' | 'query' | null;
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const TOPIC_RECORD_OPTIONS = ['优', '良', '好', '正常', '一般'];
+const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const COURSE_CATEGORY_META = {
   '1': {
@@ -936,7 +936,7 @@ export function LectureJournalReconciliationLabPage() {
               <>
                 {renderMissingPlanSnapshotTrigger(item)}
                 <span className="lecture-journal-save-action">
-                  <Button type="primary">保存至校园网</Button>
+                  <Button>保存至校园网</Button>
                 </span>
               </>
             ) : null}
