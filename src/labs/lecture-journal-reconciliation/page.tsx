@@ -11,6 +11,7 @@ import {
   Input,
   InputNumber,
   Modal,
+  Segmented,
   Select,
   Skeleton,
   Tabs,
@@ -66,6 +67,8 @@ const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const DEFAULT_DISCIPLINE_SITUATION = '遵章守纪';
 const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
+const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
+const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const COURSE_CATEGORY_META = {
   '1': {
     accentClassName: 'lecture-journal-course-category-theory',
@@ -131,6 +134,7 @@ type JournalDraft = {
   productionProjectTitle: string;
   securityAndMaintain: string;
   submitStatusText: string;
+  topicRecord: string;
 };
 
 type JournalDraftPatch = Partial<
@@ -145,6 +149,7 @@ type JournalDraftPatch = Partial<
     | 'productionProjectTitle'
     | 'securityAndMaintain'
     | 'submitStatusText'
+    | 'topicRecord'
   >
 >;
 
@@ -165,6 +170,7 @@ const EMPTY_JOURNAL_DRAFT: JournalDraft = {
   productionProjectTitle: '',
   securityAndMaintain: '',
   submitStatusText: '',
+  topicRecord: '',
 };
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
@@ -413,6 +419,16 @@ function resolveLessonHoursLabel(lessonHours: number | null) {
   return lessonHours ? String(lessonHours) : '待识别';
 }
 
+function resolveTopicRecordControlValue(topicRecord: string) {
+  const normalizedValue = topicRecord.trim();
+
+  if (!normalizedValue) {
+    return TOPIC_RECORD_VISUAL_DEFAULT;
+  }
+
+  return TOPIC_RECORD_OPTIONS.includes(normalizedValue) ? normalizedValue : undefined;
+}
+
 function resolveCourseCategoryMeta(courseCategory: string | null) {
   if (!courseCategory) {
     return null;
@@ -603,6 +619,7 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
         productionProjectTitle: item.practiceTeachingChapterContent || '',
         securityAndMaintain: '',
         submitStatusText: item.journal.statusName || item.journal.statusCode || '',
+        topicRecord: item.journal.topicRecord || '',
       };
 
       return result;
@@ -627,6 +644,7 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
         ? DEFAULT_SECURITY_AND_MAINTAIN
         : '',
       submitStatusText: '',
+      topicRecord: template?.journal?.topicRecord || '',
     };
 
     return result;
@@ -711,6 +729,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const dayOfWeekLabel = resolveDayOfWeekLabel(item.dayOfWeek);
   const teachingDateLabel = formatTeachingDate(item.teachingDate);
   const lessonHoursLabel = resolveLessonHoursLabel(item.lessonHours);
+  const topicRecordControlValue = resolveTopicRecordControlValue(draft.topicRecord);
   const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
   const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
   const isPracticeCard = isPracticeCourseCategory(item.courseCategory);
@@ -1192,6 +1211,48 @@ const JournalDraftCard = memo(function JournalDraftCard({
                   />
                 )}
               </label>
+
+              <div className="lecture-journal-card-field lecture-journal-card-field-topic">
+                {renderFieldLabel('课堂情况记录', {
+                  fields: ['journal.topicRecord'],
+                })}
+                {isFilled ? (
+                  <span className="lecture-journal-readonly-input">
+                    <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
+                  </span>
+                ) : (
+                  <div className="lecture-journal-topic-record-control">
+                    <div className="lecture-journal-topic-record-segmented">
+                      <Segmented
+                        onChange={(value) => {
+                          onUpdateDraft(item.key, { topicRecord: String(value) });
+                        }}
+                        options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
+                        size="large"
+                        value={topicRecordControlValue}
+                      />
+                    </div>
+                    <span className="lecture-journal-topic-record-reset-slot">
+                      {showRestoreButton ? (
+                        <span className="lecture-journal-topic-record-reset">
+                          <Button
+                            onClick={() => {
+                              onUpdateDraft(item.key, {
+                                courseContent: item.courseContent || '',
+                                homeworkAssignment: item.homework || '',
+                              });
+                            }}
+                            size="small"
+                            type="text"
+                          >
+                            恢复
+                          </Button>
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                )}
+              </div>
             </>
           )}
 
