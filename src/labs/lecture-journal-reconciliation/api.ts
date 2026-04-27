@@ -56,6 +56,7 @@ export type MatchedLectureJournalSummary = {
 };
 
 export type LectureJournalReconciliationItem = {
+  courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
@@ -81,6 +82,7 @@ export type LectureJournalReconciliationItem = {
 };
 
 export type MissingLectureJournalItem = {
+  courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
@@ -178,6 +180,7 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
       expiresAt
       filledCount
       items {
+        courseCategory
         courseContent
         courseId
         courseName
@@ -213,6 +216,7 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
       journalCount
       missingCount
       missingItems {
+        courseCategory
         courseContent
         courseId
         courseName

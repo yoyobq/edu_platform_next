@@ -10,6 +10,7 @@ import {
   Form,
   Input,
   Modal,
+  Segmented,
   Select,
   Skeleton,
   Tabs,
@@ -63,7 +64,25 @@ type PendingAction = 'directory' | 'query' | null;
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const TOPIC_RECORD_OPTIONS = ['优', '良', '中', '差'];
+const TOPIC_RECORD_OPTIONS = ['优', '良', '好', '正常', '一般'];
+const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
+const COURSE_CATEGORY_META = {
+  '1': {
+    accentClassName: 'lecture-journal-course-category-theory',
+    enumKey: 'THEORY',
+    label: '理论课',
+  },
+  '2': {
+    accentClassName: 'lecture-journal-course-category-practice',
+    enumKey: 'PRACTICE',
+    label: '实践课',
+  },
+  '3': {
+    accentClassName: 'lecture-journal-course-category-integrated',
+    enumKey: 'INTEGRATED',
+    label: '一体化',
+  },
+};
 
 type MetricTone = 'default' | 'success' | 'warning';
 
@@ -73,6 +92,7 @@ type DepartmentOption = {
 };
 
 type JournalEditableCardItem = {
+  courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
@@ -287,7 +307,10 @@ function buildFieldTipTitle(config: FieldTipConfig) {
 function renderFieldLabel(label: string, config: FieldTipConfig) {
   return (
     <span className="lecture-journal-field-label">
-      <span>{label}</span>
+      <span aria-hidden="true" className="lecture-journal-field-required">
+        *
+      </span>
+      <span className="lecture-journal-field-label-text">{label}</span>
       <Tooltip placement="topLeft" title={buildFieldTipTitle(config)}>
         <button
           aria-label={`${label} 字段提示`}
@@ -339,10 +362,35 @@ function resolveSectionLabel(sectionName: string | null, sectionId: string | nul
   return sectionName || sectionId || '节次待识别';
 }
 
-function resolveTeacherLabel(teacherName: string | null, teacherId: string | null) {
-  return teacherName || teacherId || '教师待识别';
+function resolveWeekLabel(weekNumber: number | null) {
+  return weekNumber ? `第 ${weekNumber} 周` : '周次待识别';
 }
 
+function resolveDayOfWeekLabel(dayOfWeek: number | null) {
+  return dayOfWeek ? DAY_OF_WEEK_LABELS[dayOfWeek - 1] || `周${dayOfWeek}` : '星期待识别';
+}
+
+function resolveLessonHoursLabel(lessonHours: number | null) {
+  return lessonHours ? String(lessonHours) : '待识别';
+}
+
+function resolveTopicRecordControlValue(topicRecord: string) {
+  const normalizedValue = topicRecord.trim();
+
+  if (!normalizedValue) {
+    return TOPIC_RECORD_VISUAL_DEFAULT;
+  }
+
+  return TOPIC_RECORD_OPTIONS.includes(normalizedValue) ? normalizedValue : undefined;
+}
+
+function resolveCourseCategoryMeta(courseCategory: string | null) {
+  if (!courseCategory) {
+    return null;
+  }
+
+  return COURSE_CATEGORY_META[courseCategory as keyof typeof COURSE_CATEGORY_META] ?? null;
+}
 function resolveTeachingDateTimestamp(value: string | null) {
   if (!value) {
     return Number.POSITIVE_INFINITY;
@@ -361,6 +409,7 @@ function buildEditableCardItemFromReconciliation(
   }
 
   return {
+    courseCategory: item.courseCategory,
     courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
@@ -389,6 +438,7 @@ function buildEditableCardItemFromMissing(
   item: MissingLectureJournalItem,
 ): JournalEditableCardItem {
   return {
+    courseCategory: item.courseCategory,
     courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
@@ -497,6 +547,7 @@ function buildPlanSnapshot(item: JournalEditableCardItem) {
       lecturePlanDetailId: item.lecturePlanDetailId,
       schoolYear: item.schoolYear,
       semester: item.semester,
+      courseCategory: item.courseCategory,
       courseId: item.courseId,
       courseName: item.courseName,
       teachingClassId: item.teachingClassId,
@@ -748,6 +799,15 @@ export function LectureJournalReconciliationLabPage() {
         topicRecord: '',
       } satisfies JournalDraft);
     const statusTone = resolveStatusTone(item.status);
+    const topicRecordControlValue = resolveTopicRecordControlValue(draft.topicRecord);
+    const sectionLabel = resolveSectionLabel(item.sectionName, item.sectionId);
+    const weekLabel = resolveWeekLabel(item.weekNumber);
+    const dayOfWeekLabel = resolveDayOfWeekLabel(item.dayOfWeek);
+    const teachingDateLabel = formatTeachingDate(item.teachingDate);
+    const lessonHoursLabel = resolveLessonHoursLabel(item.lessonHours);
+    const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
+    const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
+    const isFilled = item.status === 'FILLED';
 
     return (
       <article
@@ -755,41 +815,81 @@ export function LectureJournalReconciliationLabPage() {
         key={item.key}
       >
         <div className="lecture-journal-record-header">
-          <div className="lecture-journal-record-title-group">
-            <div className="lecture-journal-record-title-row">
+          <div className="lecture-journal-record-overview">
+            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
               <span
                 aria-label={resolveStatusLabel(item.status)}
                 className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
                 title={resolveStatusLabel(item.status)}
               />
-              <Tooltip placement="topLeft" title="接口字段：courseName / courseId">
-                <div className="lecture-journal-record-title">
-                  <Typography.Title level={5}>{item.courseName || '未命名课程'}</Typography.Title>
-                </div>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：sectionName / sectionId">
-                <Tag bordered={false}>{resolveSectionLabel(item.sectionName, item.sectionId)}</Tag>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：teachingClassName / teachingClassId">
-                <Tag bordered={false}>{item.teachingClassName || '教学班待识别'}</Tag>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：teachingDate">
-                <Tag bordered={false}>{formatTeachingDate(item.teachingDate)}</Tag>
-              </Tooltip>
               <Tooltip placement="top" title="接口字段：weekNumber">
-                <Tag bordered={false}>
-                  {item.weekNumber ? `第 ${item.weekNumber} 周` : '周次待识别'}
-                </Tag>
+                <span className="lecture-journal-record-overview-text">{weekLabel}</span>
               </Tooltip>
               <Tooltip placement="top" title="接口字段：dayOfWeek">
-                <Tag bordered={false}>
-                  {item.dayOfWeek
-                    ? DAY_OF_WEEK_LABELS[item.dayOfWeek - 1] || `周${item.dayOfWeek}`
-                    : '星期待识别'}
-                </Tag>
+                <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
               </Tooltip>
-              <Tooltip placement="top" title="接口字段：teacherName / teacherId">
-                <Tag bordered={false}>{resolveTeacherLabel(item.teacherName, item.teacherId)}</Tag>
+              <Tooltip placement="top" title="接口字段：sectionName / sectionId">
+                <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
+              </Tooltip>
+            </div>
+
+            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-center">
+              <Tooltip placement="top" title="接口字段：teachingClassName / teachingClassId">
+                <span
+                  className={[
+                    'lecture-journal-record-course-meta',
+                    'lecture-journal-record-course-meta-class',
+                    courseCategoryAccentClassName,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {item.teachingClassName || '教学班待识别'}
+                </span>
+              </Tooltip>
+              <Tooltip placement="topLeft" title="接口字段：courseName / courseId">
+                <span className="lecture-journal-record-course-title-wrap">
+                  <span
+                    className={[
+                      'lecture-journal-record-course-meta',
+                      'lecture-journal-record-course-meta-name',
+                      courseCategoryAccentClassName,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    {item.courseName || '未命名课程'}
+                  </span>
+                  {courseCategoryMeta ? (
+                    <span
+                      className={[
+                        'lecture-journal-course-category-tag',
+                        courseCategoryAccentClassName,
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
+                    </span>
+                  ) : null}
+                </span>
+              </Tooltip>
+            </div>
+
+            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-right">
+              <Tooltip placement="top" title="接口字段：teachingDate">
+                <span className="lecture-journal-record-meta-item">
+                  <span className="lecture-journal-record-meta-label">上课日期：</span>
+                  <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
+                </span>
+              </Tooltip>
+              <Tooltip placement="top" title="接口字段：lessonHours">
+                <span className="lecture-journal-record-meta-item">
+                  <span className="lecture-journal-record-meta-label">课时数：</span>
+                  <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
+                    {lessonHoursLabel}
+                  </span>
+                </span>
               </Tooltip>
             </div>
           </div>
@@ -806,51 +906,89 @@ export function LectureJournalReconciliationLabPage() {
 
         <div className="lecture-journal-editor">
           <div className="lecture-journal-editor-grid">
-            <label className="lecture-journal-inline-field lecture-journal-inline-field-topic">
-              {renderFieldLabel('课堂记录', {
-                fields: ['journal.topicRecord'],
-              })}
-              <Select
-                allowClear
-                options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
-                placeholder="选择"
-                size="small"
-                value={draft.topicRecord || undefined}
-                onChange={(value) => {
-                  updateJournalDraft(item.key, { topicRecord: value || '' });
-                }}
-              />
-            </label>
-
-            <label className="lecture-journal-inline-field">
+            <label className="lecture-journal-card-field lecture-journal-card-field-content">
               {renderFieldLabel('课程内容', {
                 fields: ['journal.courseContent', 'courseContent'],
                 note: '前者为日志侧，后者为计划侧参考',
               })}
-              <Input
-                placeholder="使用日志侧内容预填，可继续调整"
-                size="small"
-                value={draft.courseContent}
-                onChange={(event) => {
-                  updateJournalDraft(item.key, { courseContent: event.target.value });
-                }}
-              />
+              {isFilled ? (
+                <span className="lecture-journal-readonly-input">
+                  <Input placeholder="未填写" readOnly size="large" value={draft.courseContent} />
+                </span>
+              ) : (
+                <Input
+                  placeholder={item.courseContent?.trim() || '使用日志侧内容预填，可继续调整'}
+                  size="large"
+                  value={draft.courseContent}
+                  onChange={(event) => {
+                    updateJournalDraft(item.key, { courseContent: event.target.value });
+                  }}
+                />
+              )}
             </label>
 
-            <label className="lecture-journal-inline-field">
-              {renderFieldLabel('作业', {
+            <label className="lecture-journal-card-field lecture-journal-card-field-homework">
+              {renderFieldLabel('作业布置情况', {
                 fields: ['journal.homeworkAssignment', 'homework'],
                 note: '前者为日志侧，后者为计划侧参考',
               })}
-              <Input
-                placeholder="使用日志侧作业预填，可继续调整"
-                size="small"
-                value={draft.homeworkAssignment}
-                onChange={(event) => {
-                  updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
-                }}
-              />
+              {isFilled ? (
+                <span className="lecture-journal-readonly-input">
+                  <Input
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={draft.homeworkAssignment}
+                  />
+                </span>
+              ) : (
+                <Input
+                  placeholder={item.homework?.trim() || '使用日志侧作业预填，可继续调整'}
+                  size="large"
+                  value={draft.homeworkAssignment}
+                  onChange={(event) => {
+                    updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
+                  }}
+                />
+              )}
             </label>
+
+            <div className="lecture-journal-card-field lecture-journal-card-field-topic">
+              {renderFieldLabel('课堂情况记录', {
+                fields: ['journal.topicRecord'],
+              })}
+              {isFilled ? (
+                <span className="lecture-journal-readonly-input">
+                  <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
+                </span>
+              ) : (
+                <div className="lecture-journal-topic-record-control">
+                  <div className="lecture-journal-topic-record-segmented">
+                    <Segmented
+                      onChange={(value) => {
+                        updateJournalDraft(item.key, { topicRecord: String(value) });
+                      }}
+                      options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
+                      size="large"
+                      value={topicRecordControlValue}
+                    />
+                  </div>
+                  {draft.topicRecord ? (
+                    <span className="lecture-journal-topic-record-reset">
+                      <Button
+                        onClick={() => {
+                          updateJournalDraft(item.key, { topicRecord: '' });
+                        }}
+                        size="small"
+                        type="text"
+                      >
+                        清空
+                      </Button>
+                    </span>
+                  ) : null}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </article>
