@@ -198,11 +198,10 @@ function formatTeachingDate(value: string | null | undefined) {
     day: '2-digit',
     month: '2-digit',
     timeZone: 'UTC',
-    weekday: 'short',
   }).format(date);
 }
 
-function resolveCampusSubmitStatusTagColor(statusText: string) {
+function resolveCampusSubmitStatusDotTone(statusText: string) {
   const normalizedStatus = statusText.trim();
 
   if (normalizedStatus === '审核中') {
@@ -256,11 +255,11 @@ function resolveStatusColor(status: LectureJournalReconciliationItem['status']) 
 
 function resolveStatusLabel(status: LectureJournalReconciliationItem['status']) {
   if (status === 'FILLED') {
-    return '已填写';
+    return '校园网已填写';
   }
 
   if (status === 'MISSING') {
-    return '疑似未填';
+    return '校园网未填';
   }
 
   return '无法对账';
@@ -758,10 +757,11 @@ export function LectureJournalReconciliationLabPage() {
     reconciliationBaseCount > 0
       ? `${Math.round(((reconciliationResult?.filledCount ?? 0) / reconciliationBaseCount) * 100)}%`
       : '无可对账课次';
+  const initialJournalDrafts = useMemo(() => buildJournalDrafts(editableItems), [editableItems]);
 
   useEffect(() => {
-    setJournalDrafts(buildJournalDrafts(editableItems));
-  }, [editableItems]);
+    setJournalDrafts(initialJournalDrafts);
+  }, [initialJournalDrafts]);
 
   const updateJournalDraft = useCallback(
     (
@@ -790,6 +790,14 @@ export function LectureJournalReconciliationLabPage() {
   );
 
   function renderJournalDraftCard(item: JournalEditableCardItem) {
+    const initialDraft =
+      initialJournalDrafts[item.key] ??
+      ({
+        courseContent: '',
+        homeworkAssignment: '',
+        submitStatusText: '',
+        topicRecord: '',
+      } satisfies JournalDraft);
     const draft =
       journalDrafts[item.key] ??
       ({
@@ -808,6 +816,17 @@ export function LectureJournalReconciliationLabPage() {
     const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
     const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
     const isFilled = item.status === 'FILLED';
+    const hasCourseContentEdited =
+      normalizeOptionalString(draft.courseContent) !==
+      normalizeOptionalString(initialDraft.courseContent);
+    const hasHomeworkEdited =
+      normalizeOptionalString(draft.homeworkAssignment) !==
+      normalizeOptionalString(initialDraft.homeworkAssignment);
+    const hasPlanMismatch =
+      normalizeOptionalString(draft.courseContent) !== (item.courseContent?.trim() || '') ||
+      normalizeOptionalString(draft.homeworkAssignment) !== (item.homework?.trim() || '');
+    const showRestoreButton =
+      !isFilled && hasPlanMismatch && (hasCourseContentEdited || hasHomeworkEdited);
 
     return (
       <article
@@ -817,11 +836,29 @@ export function LectureJournalReconciliationLabPage() {
         <div className="lecture-journal-record-header">
           <div className="lecture-journal-record-overview">
             <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
-              <span
-                aria-label={resolveStatusLabel(item.status)}
-                className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
-                title={resolveStatusLabel(item.status)}
-              />
+              <Tooltip placement="top" title={resolveStatusLabel(item.status)}>
+                <span
+                  aria-label={resolveStatusLabel(item.status)}
+                  className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
+                />
+              </Tooltip>
+              {isFilled ? (
+                <Tooltip
+                  placement="top"
+                  title={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
+                >
+                  <span
+                    aria-label={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
+                    className={[
+                      'lecture-journal-record-status-dot',
+                      'lecture-journal-record-status-dot-campus',
+                      `lecture-journal-record-status-dot-campus-${resolveCampusSubmitStatusDotTone(
+                        draft.submitStatusText,
+                      )}`,
+                    ].join(' ')}
+                  />
+                </Tooltip>
+              ) : null}
               <Tooltip placement="top" title="接口字段：weekNumber">
                 <span className="lecture-journal-record-overview-text">{weekLabel}</span>
               </Tooltip>
@@ -895,12 +932,14 @@ export function LectureJournalReconciliationLabPage() {
           </div>
 
           <div className="lecture-journal-record-status">
-            <Tooltip placement="topRight" title="接口字段：journal.statusName / journal.statusCode">
-              <Tag color={resolveCampusSubmitStatusTagColor(draft.submitStatusText)}>
-                {resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
-              </Tag>
-            </Tooltip>
-            {item.status === 'MISSING' ? renderMissingPlanSnapshotTrigger(item) : null}
+            {item.status === 'MISSING' ? (
+              <>
+                {renderMissingPlanSnapshotTrigger(item)}
+                <span className="lecture-journal-save-action">
+                  <Button type="primary">保存至校园网</Button>
+                </span>
+              </>
+            ) : null}
           </div>
         </div>
 
@@ -973,19 +1012,24 @@ export function LectureJournalReconciliationLabPage() {
                       value={topicRecordControlValue}
                     />
                   </div>
-                  {draft.topicRecord ? (
-                    <span className="lecture-journal-topic-record-reset">
-                      <Button
-                        onClick={() => {
-                          updateJournalDraft(item.key, { topicRecord: '' });
-                        }}
-                        size="small"
-                        type="text"
-                      >
-                        清空
-                      </Button>
-                    </span>
-                  ) : null}
+                  <span className="lecture-journal-topic-record-reset-slot">
+                    {showRestoreButton ? (
+                      <span className="lecture-journal-topic-record-reset">
+                        <Button
+                          onClick={() => {
+                            updateJournalDraft(item.key, {
+                              courseContent: item.courseContent || '',
+                              homeworkAssignment: item.homework || '',
+                            });
+                          }}
+                          size="small"
+                          type="text"
+                        >
+                          恢复
+                        </Button>
+                      </span>
+                    ) : null}
+                  </span>
                 </div>
               )}
             </div>
