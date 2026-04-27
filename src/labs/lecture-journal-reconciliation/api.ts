@@ -61,12 +61,15 @@ export type LectureJournalReconciliationItem = {
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number | null;
+  demonstrationHours: number | null;
   homework: string | null;
   journal: MatchedLectureJournalSummary | null;
+  lectureHours: number | null;
   lecturePlanDetailId: string | null;
   lecturePlanId: string | null;
   lessonHours: number | null;
   matchKey: string | null;
+  practiceHours: number | null;
   reason: string | null;
   schoolYear: string | null;
   sectionId: string | null;
@@ -75,9 +78,11 @@ export type LectureJournalReconciliationItem = {
   status: LectureJournalReconciliationStatus;
   teacherId: string | null;
   teacherName: string | null;
+  teachingChapterContent: string | null;
   teachingClassId: string | null;
   teachingClassName: string | null;
   teachingDate: string | null;
+  topicName: string | null;
   weekNumber: number | null;
 };
 
@@ -87,20 +92,25 @@ export type MissingLectureJournalItem = {
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number;
+  demonstrationHours: number | null;
   homework: string | null;
+  lectureHours: number | null;
   lecturePlanDetailId: string | null;
   lecturePlanId: string | null;
   lessonHours: number;
   matchKey: string;
+  practiceHours: number | null;
   schoolYear: string | null;
   sectionId: string;
   sectionName: string | null;
   semester: string | null;
   teacherId: string | null;
   teacherName: string | null;
+  teachingChapterContent: string | null;
   teachingClassId: string | null;
   teachingClassName: string | null;
   teachingDate: string;
+  topicName: string | null;
   weekNumber: number;
 };
 
@@ -185,6 +195,7 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         courseId
         courseName
         dayOfWeek
+        demonstrationHours
         homework
         journal {
           courseContent
@@ -196,10 +207,12 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
           statusName
           topicRecord
         }
+        lectureHours
         lecturePlanDetailId
         lecturePlanId
         lessonHours
         matchKey
+        practiceHours
         reason
         schoolYear
         sectionId
@@ -208,9 +221,11 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         status
         teacherId
         teacherName
+        teachingChapterContent
         teachingClassId
         teachingClassName
         teachingDate
+        topicName
         weekNumber
       }
       journalCount
@@ -221,20 +236,25 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         courseId
         courseName
         dayOfWeek
+        demonstrationHours
         homework
+        lectureHours
         lecturePlanDetailId
         lecturePlanId
         lessonHours
         matchKey
+        practiceHours
         schoolYear
         sectionId
         sectionName
         semester
         teacherId
         teacherName
+        teachingChapterContent
         teachingClassId
         teachingClassName
         teachingDate
+        topicName
         weekNumber
       }
       planCount

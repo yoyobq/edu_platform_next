@@ -168,7 +168,7 @@
 .lecture-journal-record-overview {
   display: flex;
   flex: 1;
-  gap: var(--lecture-journal-record-gap);
+  gap: 12px;
   justify-content: space-between;
   min-width: 0;
 }
@@ -250,6 +250,13 @@
   line-height: 1.5;
 }
 
+.lecture-journal-record-overview-section-wrap {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .lecture-journal-record-course-meta {
   color: var(--ant-color-primary);
   font-weight: 700;
@@ -277,12 +284,33 @@
   font-size: 20px;
 }
 
-.lecture-journal-record-course-title-wrap {
+.lecture-journal-record-title-block {
   align-items: center;
-  display: inline-flex;
+  color: var(--ant-color-primary);
+  display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
+  font-weight: 700;
+  gap: 2px 10px;
+  justify-content: center;
+  line-height: 1.4;
+  max-width: 100%;
+  text-align: center;
+}
+
+.lecture-journal-record-title-line {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lecture-journal-record-title-line-class {
+  font-size: 18px;
+}
+
+.lecture-journal-record-title-line-course {
+  font-size: 20px;
 }
 
 .lecture-journal-course-category-tag {
@@ -464,6 +492,30 @@
   grid-template-columns: minmax(0, 1.8fr) minmax(0, 1.3fr) minmax(240px, 0.9fr);
 }
 
+.lecture-journal-editor-grid-practice {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.lecture-journal-practice-secondary-row {
+  display: grid;
+  gap: 18px;
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.lecture-journal-practice-notes-inline {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lecture-journal-practice-hours-inline {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: start;
+}
+
 .lecture-journal-card-field {
   display: flex;
   flex-direction: column;
@@ -472,18 +524,31 @@
 }
 
 .lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-input-number,
 .lecture-journal-card-field .ant-select,
 .lecture-journal-card-field .ant-segmented {
   min-width: 0;
+}
+
+.lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-select,
+.lecture-journal-card-field .ant-segmented {
   width: 100%;
 }
 
-.lecture-journal-card-field .ant-input {
+.lecture-journal-card-field .ant-input-number {
+  width: 100%;
+}
+
+.lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-input-number {
   border-radius: 12px;
 }
 
 .lecture-journal-card-field .ant-input:hover,
+.lecture-journal-card-field .ant-input-number:hover,
 .lecture-journal-card-field .ant-input:focus,
+.lecture-journal-card-field .ant-input-number:focus,
 .lecture-journal-card-field .ant-input:focus-within {
   border-color: var(--ant-color-primary-border);
 }
@@ -502,52 +567,22 @@
   box-shadow: none;
 }
 
-.lecture-journal-card-field-topic {
-  min-width: 0;
-}
-
-.lecture-journal-topic-record-control {
-  align-items: center;
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  min-width: 0;
-}
-
-.lecture-journal-topic-record-segmented {
-  grid-column: 2;
-  justify-self: center;
-  min-width: 0;
-  width: max-content;
-  max-width: 100%;
-}
-
-.lecture-journal-topic-record-segmented .ant-segmented {
-  max-width: 100%;
-  width: auto;
-}
-
-.lecture-journal-topic-record-segmented .ant-segmented-item-label {
-  font-weight: 400;
-  min-width: 36px;
-  padding-inline: 8px;
-  text-align: center;
-}
-
-.lecture-journal-topic-record-reset-slot {
-  display: inline-flex;
-  grid-column: 3;
+.lecture-journal-editor-actions {
+  display: flex;
+  grid-column: 1 / -1;
   justify-content: flex-end;
-  justify-self: end;
-  min-width: 44px;
 }
 
-.lecture-journal-topic-record-reset {
-  flex: 0 0 auto;
-}
-
-.lecture-journal-topic-record-reset .ant-btn {
+.lecture-journal-editor-actions .ant-btn {
   color: var(--ant-color-text-secondary);
+}
+
+.lecture-journal-practice-hours-warning {
+  grid-column: 1 / -1;
+}
+
+.lecture-journal-practice-hours-warning .ant-typography {
+  display: block;
 }
 
 .lecture-journal-save-action {
@@ -641,32 +676,21 @@
     grid-template-columns: 1fr;
   }
 
+  .lecture-journal-practice-secondary-row,
+  .lecture-journal-practice-notes-inline,
+  .lecture-journal-practice-hours-inline {
+    grid-template-columns: 1fr;
+  }
+
+  .lecture-journal-card-field .ant-input-number {
+    width: 100%;
+  }
+
   .lecture-journal-editor {
     padding: 18px 16px 16px;
   }
 
   .lecture-journal-record-header {
     padding: 18px 16px 14px;
-  }
-
-  .lecture-journal-topic-record-control {
-    display: flex;
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .lecture-journal-topic-record-segmented {
-    justify-self: stretch;
-    width: 100%;
-  }
-
-  .lecture-journal-topic-record-segmented .ant-segmented {
-    width: 100%;
-  }
-
-  .lecture-journal-topic-record-reset-slot {
-    justify-content: flex-start;
-    justify-self: auto;
-    min-width: 0;
   }
 }
