@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -123,10 +123,21 @@ type JournalDraft = {
   topicRecord: string;
 };
 
+type JournalDraftPatch = Partial<
+  Pick<JournalDraft, 'courseContent' | 'homeworkAssignment' | 'submitStatusText' | 'topicRecord'>
+>;
+
 type JournalDraftMap = Record<string, JournalDraft>;
 type FieldTipConfig = {
   fields: string[];
   note?: string;
+};
+
+const EMPTY_JOURNAL_DRAFT: JournalDraft = {
+  courseContent: '',
+  homeworkAssignment: '',
+  submitStatusText: '',
+  topicRecord: '',
 };
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
@@ -593,6 +604,251 @@ function renderMissingPlanSnapshotTrigger(item: JournalEditableCardItem) {
   );
 }
 
+type JournalDraftCardProps = {
+  initialDraft: JournalDraft;
+  item: JournalEditableCardItem;
+  onUpdateDraft: (key: string, patch: JournalDraftPatch) => void;
+  draft: JournalDraft;
+};
+
+const JournalDraftCard = memo(function JournalDraftCard({
+  initialDraft,
+  item,
+  onUpdateDraft,
+  draft,
+}: JournalDraftCardProps) {
+  const statusTone = resolveStatusTone(item.status);
+  const topicRecordControlValue = resolveTopicRecordControlValue(draft.topicRecord);
+  const sectionLabel = resolveSectionLabel(item.sectionName, item.sectionId);
+  const weekLabel = resolveWeekLabel(item.weekNumber);
+  const dayOfWeekLabel = resolveDayOfWeekLabel(item.dayOfWeek);
+  const teachingDateLabel = formatTeachingDate(item.teachingDate);
+  const lessonHoursLabel = resolveLessonHoursLabel(item.lessonHours);
+  const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
+  const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
+  const isFilled = item.status === 'FILLED';
+  const hasCourseContentEdited =
+    normalizeOptionalString(draft.courseContent) !==
+    normalizeOptionalString(initialDraft.courseContent);
+  const hasHomeworkEdited =
+    normalizeOptionalString(draft.homeworkAssignment) !==
+    normalizeOptionalString(initialDraft.homeworkAssignment);
+  const hasPlanMismatch =
+    normalizeOptionalString(draft.courseContent) !== (item.courseContent?.trim() || '') ||
+    normalizeOptionalString(draft.homeworkAssignment) !== (item.homework?.trim() || '');
+  const showRestoreButton =
+    !isFilled && hasPlanMismatch && (hasCourseContentEdited || hasHomeworkEdited);
+
+  return (
+    <article className={`lecture-journal-record lecture-journal-record-${statusTone}`}>
+      <div className="lecture-journal-record-header">
+        <div className="lecture-journal-record-overview">
+          <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
+            <Tooltip placement="top" title={resolveStatusLabel(item.status)}>
+              <span
+                aria-label={resolveStatusLabel(item.status)}
+                className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
+              />
+            </Tooltip>
+            {isFilled ? (
+              <Tooltip
+                placement="top"
+                title={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
+              >
+                <span
+                  aria-label={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
+                  className={[
+                    'lecture-journal-record-status-dot',
+                    'lecture-journal-record-status-dot-campus',
+                    `lecture-journal-record-status-dot-campus-${resolveCampusSubmitStatusDotTone(
+                      draft.submitStatusText,
+                    )}`,
+                  ].join(' ')}
+                />
+              </Tooltip>
+            ) : null}
+            <Tooltip placement="top" title="接口字段：weekNumber">
+              <span className="lecture-journal-record-overview-text">{weekLabel}</span>
+            </Tooltip>
+            <Tooltip placement="top" title="接口字段：dayOfWeek">
+              <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
+            </Tooltip>
+            <Tooltip placement="top" title="接口字段：sectionName / sectionId">
+              <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
+            </Tooltip>
+          </div>
+
+          <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-center">
+            <Tooltip placement="top" title="接口字段：teachingClassName / teachingClassId">
+              <span
+                className={[
+                  'lecture-journal-record-course-meta',
+                  'lecture-journal-record-course-meta-class',
+                  courseCategoryAccentClassName,
+                ]
+                  .filter(Boolean)
+                  .join(' ')}
+              >
+                {item.teachingClassName || '教学班待识别'}
+              </span>
+            </Tooltip>
+            <Tooltip placement="topLeft" title="接口字段：courseName / courseId">
+              <span className="lecture-journal-record-course-title-wrap">
+                <span
+                  className={[
+                    'lecture-journal-record-course-meta',
+                    'lecture-journal-record-course-meta-name',
+                    courseCategoryAccentClassName,
+                  ]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  {item.courseName || '未命名课程'}
+                </span>
+                {courseCategoryMeta ? (
+                  <span
+                    className={[
+                      'lecture-journal-course-category-tag',
+                      courseCategoryAccentClassName,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
+                    <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
+                  </span>
+                ) : null}
+              </span>
+            </Tooltip>
+          </div>
+
+          <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-right">
+            <Tooltip placement="top" title="接口字段：teachingDate">
+              <span className="lecture-journal-record-meta-item">
+                <span className="lecture-journal-record-meta-label">上课日期：</span>
+                <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
+              </span>
+            </Tooltip>
+            <Tooltip placement="top" title="接口字段：lessonHours">
+              <span className="lecture-journal-record-meta-item">
+                <span className="lecture-journal-record-meta-label">课时数：</span>
+                <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
+                  {lessonHoursLabel}
+                </span>
+              </span>
+            </Tooltip>
+          </div>
+        </div>
+
+        <div className="lecture-journal-record-status">
+          {item.status === 'MISSING' ? (
+            <>
+              {renderMissingPlanSnapshotTrigger(item)}
+              <span className="lecture-journal-save-action">
+                <Button>保存至校园网</Button>
+              </span>
+            </>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="lecture-journal-editor">
+        <div className="lecture-journal-editor-grid">
+          <label className="lecture-journal-card-field lecture-journal-card-field-content">
+            {renderFieldLabel('课程内容', {
+              fields: ['journal.courseContent', 'courseContent'],
+              note: '前者为日志侧，后者为计划侧参考',
+            })}
+            {isFilled ? (
+              <span className="lecture-journal-readonly-input">
+                <Input placeholder="未填写" readOnly size="large" value={draft.courseContent} />
+              </span>
+            ) : (
+              <Input
+                placeholder={item.courseContent?.trim() || '使用日志侧内容预填，可继续调整'}
+                size="large"
+                value={draft.courseContent}
+                onChange={(event) => {
+                  onUpdateDraft(item.key, { courseContent: event.target.value });
+                }}
+              />
+            )}
+          </label>
+
+          <label className="lecture-journal-card-field lecture-journal-card-field-homework">
+            {renderFieldLabel('作业布置情况', {
+              fields: ['journal.homeworkAssignment', 'homework'],
+              note: '前者为日志侧，后者为计划侧参考',
+            })}
+            {isFilled ? (
+              <span className="lecture-journal-readonly-input">
+                <Input
+                  placeholder="未填写"
+                  readOnly
+                  size="large"
+                  value={draft.homeworkAssignment}
+                />
+              </span>
+            ) : (
+              <Input
+                placeholder={item.homework?.trim() || '使用日志侧作业预填，可继续调整'}
+                size="large"
+                value={draft.homeworkAssignment}
+                onChange={(event) => {
+                  onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
+                }}
+              />
+            )}
+          </label>
+
+          <div className="lecture-journal-card-field lecture-journal-card-field-topic">
+            {renderFieldLabel('课堂情况记录', {
+              fields: ['journal.topicRecord'],
+            })}
+            {isFilled ? (
+              <span className="lecture-journal-readonly-input">
+                <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
+              </span>
+            ) : (
+              <div className="lecture-journal-topic-record-control">
+                <div className="lecture-journal-topic-record-segmented">
+                  <Segmented
+                    onChange={(value) => {
+                      onUpdateDraft(item.key, { topicRecord: String(value) });
+                    }}
+                    options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
+                    size="large"
+                    value={topicRecordControlValue}
+                  />
+                </div>
+                <span className="lecture-journal-topic-record-reset-slot">
+                  {showRestoreButton ? (
+                    <span className="lecture-journal-topic-record-reset">
+                      <Button
+                        onClick={() => {
+                          onUpdateDraft(item.key, {
+                            courseContent: item.courseContent || '',
+                            homeworkAssignment: item.homework || '',
+                          });
+                        }}
+                        size="small"
+                        type="text"
+                      >
+                        恢复
+                      </Button>
+                    </span>
+                  ) : null}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </article>
+  );
+});
+
+JournalDraftCard.displayName = 'JournalDraftCard';
+
 export function LectureJournalReconciliationLabPage() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
@@ -763,281 +1019,15 @@ export function LectureJournalReconciliationLabPage() {
     setJournalDrafts(initialJournalDrafts);
   }, [initialJournalDrafts]);
 
-  const updateJournalDraft = useCallback(
-    (
-      key: string,
-      patch: Partial<
-        Pick<
-          JournalDraft,
-          'courseContent' | 'homeworkAssignment' | 'submitStatusText' | 'topicRecord'
-        >
-      >,
-    ) => {
-      setJournalDrafts((current) => ({
-        ...current,
-        [key]: {
-          ...(current[key] ?? {
-            courseContent: '',
-            homeworkAssignment: '',
-            submitStatusText: '',
-            topicRecord: '',
-          }),
-          ...patch,
-        },
-      }));
-    },
-    [],
-  );
-
-  function renderJournalDraftCard(item: JournalEditableCardItem) {
-    const initialDraft =
-      initialJournalDrafts[item.key] ??
-      ({
-        courseContent: '',
-        homeworkAssignment: '',
-        submitStatusText: '',
-        topicRecord: '',
-      } satisfies JournalDraft);
-    const draft =
-      journalDrafts[item.key] ??
-      ({
-        courseContent: '',
-        homeworkAssignment: '',
-        submitStatusText: '',
-        topicRecord: '',
-      } satisfies JournalDraft);
-    const statusTone = resolveStatusTone(item.status);
-    const topicRecordControlValue = resolveTopicRecordControlValue(draft.topicRecord);
-    const sectionLabel = resolveSectionLabel(item.sectionName, item.sectionId);
-    const weekLabel = resolveWeekLabel(item.weekNumber);
-    const dayOfWeekLabel = resolveDayOfWeekLabel(item.dayOfWeek);
-    const teachingDateLabel = formatTeachingDate(item.teachingDate);
-    const lessonHoursLabel = resolveLessonHoursLabel(item.lessonHours);
-    const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
-    const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
-    const isFilled = item.status === 'FILLED';
-    const hasCourseContentEdited =
-      normalizeOptionalString(draft.courseContent) !==
-      normalizeOptionalString(initialDraft.courseContent);
-    const hasHomeworkEdited =
-      normalizeOptionalString(draft.homeworkAssignment) !==
-      normalizeOptionalString(initialDraft.homeworkAssignment);
-    const hasPlanMismatch =
-      normalizeOptionalString(draft.courseContent) !== (item.courseContent?.trim() || '') ||
-      normalizeOptionalString(draft.homeworkAssignment) !== (item.homework?.trim() || '');
-    const showRestoreButton =
-      !isFilled && hasPlanMismatch && (hasCourseContentEdited || hasHomeworkEdited);
-
-    return (
-      <article
-        className={`lecture-journal-record lecture-journal-record-${statusTone}`}
-        key={item.key}
-      >
-        <div className="lecture-journal-record-header">
-          <div className="lecture-journal-record-overview">
-            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
-              <Tooltip placement="top" title={resolveStatusLabel(item.status)}>
-                <span
-                  aria-label={resolveStatusLabel(item.status)}
-                  className={`lecture-journal-record-status-dot lecture-journal-record-status-dot-${resolveStatusColor(item.status)}`}
-                />
-              </Tooltip>
-              {isFilled ? (
-                <Tooltip
-                  placement="top"
-                  title={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
-                >
-                  <span
-                    aria-label={resolveCampusSubmitStatusTagLabel(draft.submitStatusText)}
-                    className={[
-                      'lecture-journal-record-status-dot',
-                      'lecture-journal-record-status-dot-campus',
-                      `lecture-journal-record-status-dot-campus-${resolveCampusSubmitStatusDotTone(
-                        draft.submitStatusText,
-                      )}`,
-                    ].join(' ')}
-                  />
-                </Tooltip>
-              ) : null}
-              <Tooltip placement="top" title="接口字段：weekNumber">
-                <span className="lecture-journal-record-overview-text">{weekLabel}</span>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：dayOfWeek">
-                <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：sectionName / sectionId">
-                <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
-              </Tooltip>
-            </div>
-
-            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-center">
-              <Tooltip placement="top" title="接口字段：teachingClassName / teachingClassId">
-                <span
-                  className={[
-                    'lecture-journal-record-course-meta',
-                    'lecture-journal-record-course-meta-class',
-                    courseCategoryAccentClassName,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {item.teachingClassName || '教学班待识别'}
-                </span>
-              </Tooltip>
-              <Tooltip placement="topLeft" title="接口字段：courseName / courseId">
-                <span className="lecture-journal-record-course-title-wrap">
-                  <span
-                    className={[
-                      'lecture-journal-record-course-meta',
-                      'lecture-journal-record-course-meta-name',
-                      courseCategoryAccentClassName,
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    {item.courseName || '未命名课程'}
-                  </span>
-                  {courseCategoryMeta ? (
-                    <span
-                      className={[
-                        'lecture-journal-course-category-tag',
-                        courseCategoryAccentClassName,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                    >
-                      <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
-                    </span>
-                  ) : null}
-                </span>
-              </Tooltip>
-            </div>
-
-            <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-right">
-              <Tooltip placement="top" title="接口字段：teachingDate">
-                <span className="lecture-journal-record-meta-item">
-                  <span className="lecture-journal-record-meta-label">上课日期：</span>
-                  <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
-                </span>
-              </Tooltip>
-              <Tooltip placement="top" title="接口字段：lessonHours">
-                <span className="lecture-journal-record-meta-item">
-                  <span className="lecture-journal-record-meta-label">课时数：</span>
-                  <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
-                    {lessonHoursLabel}
-                  </span>
-                </span>
-              </Tooltip>
-            </div>
-          </div>
-
-          <div className="lecture-journal-record-status">
-            {item.status === 'MISSING' ? (
-              <>
-                {renderMissingPlanSnapshotTrigger(item)}
-                <span className="lecture-journal-save-action">
-                  <Button>保存至校园网</Button>
-                </span>
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        <div className="lecture-journal-editor">
-          <div className="lecture-journal-editor-grid">
-            <label className="lecture-journal-card-field lecture-journal-card-field-content">
-              {renderFieldLabel('课程内容', {
-                fields: ['journal.courseContent', 'courseContent'],
-                note: '前者为日志侧，后者为计划侧参考',
-              })}
-              {isFilled ? (
-                <span className="lecture-journal-readonly-input">
-                  <Input placeholder="未填写" readOnly size="large" value={draft.courseContent} />
-                </span>
-              ) : (
-                <Input
-                  placeholder={item.courseContent?.trim() || '使用日志侧内容预填，可继续调整'}
-                  size="large"
-                  value={draft.courseContent}
-                  onChange={(event) => {
-                    updateJournalDraft(item.key, { courseContent: event.target.value });
-                  }}
-                />
-              )}
-            </label>
-
-            <label className="lecture-journal-card-field lecture-journal-card-field-homework">
-              {renderFieldLabel('作业布置情况', {
-                fields: ['journal.homeworkAssignment', 'homework'],
-                note: '前者为日志侧，后者为计划侧参考',
-              })}
-              {isFilled ? (
-                <span className="lecture-journal-readonly-input">
-                  <Input
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={draft.homeworkAssignment}
-                  />
-                </span>
-              ) : (
-                <Input
-                  placeholder={item.homework?.trim() || '使用日志侧作业预填，可继续调整'}
-                  size="large"
-                  value={draft.homeworkAssignment}
-                  onChange={(event) => {
-                    updateJournalDraft(item.key, { homeworkAssignment: event.target.value });
-                  }}
-                />
-              )}
-            </label>
-
-            <div className="lecture-journal-card-field lecture-journal-card-field-topic">
-              {renderFieldLabel('课堂情况记录', {
-                fields: ['journal.topicRecord'],
-              })}
-              {isFilled ? (
-                <span className="lecture-journal-readonly-input">
-                  <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
-                </span>
-              ) : (
-                <div className="lecture-journal-topic-record-control">
-                  <div className="lecture-journal-topic-record-segmented">
-                    <Segmented
-                      onChange={(value) => {
-                        updateJournalDraft(item.key, { topicRecord: String(value) });
-                      }}
-                      options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
-                      size="large"
-                      value={topicRecordControlValue}
-                    />
-                  </div>
-                  <span className="lecture-journal-topic-record-reset-slot">
-                    {showRestoreButton ? (
-                      <span className="lecture-journal-topic-record-reset">
-                        <Button
-                          onClick={() => {
-                            updateJournalDraft(item.key, {
-                              courseContent: item.courseContent || '',
-                              homeworkAssignment: item.homework || '',
-                            });
-                          }}
-                          size="small"
-                          type="text"
-                        >
-                          恢复
-                        </Button>
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      </article>
-    );
-  }
+  const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
+    setJournalDrafts((current) => ({
+      ...current,
+      [key]: {
+        ...(current[key] ?? EMPTY_JOURNAL_DRAFT),
+        ...patch,
+      },
+    }));
+  }, []);
 
   function renderUnmatchedCard(item: UnmatchedLectureJournalPlanItem) {
     return (
@@ -1423,7 +1413,15 @@ export function LectureJournalReconciliationLabPage() {
                       />
                     ) : (
                       <div className="flex flex-col gap-4">
-                        {editableItems.map((item) => renderJournalDraftCard(item))}
+                        {editableItems.map((item) => (
+                          <JournalDraftCard
+                            draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                            initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                            item={item}
+                            key={item.key}
+                            onUpdateDraft={updateJournalDraft}
+                          />
+                        ))}
                       </div>
                     ),
                 },
@@ -1438,7 +1436,15 @@ export function LectureJournalReconciliationLabPage() {
                       />
                     ) : (
                       <div className="flex flex-col gap-4">
-                        {missingEditableItems.map((item) => renderJournalDraftCard(item))}
+                        {missingEditableItems.map((item) => (
+                          <JournalDraftCard
+                            draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                            initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                            item={item}
+                            key={item.key}
+                            onUpdateDraft={updateJournalDraft}
+                          />
+                        ))}
                       </div>
                     ),
                 },

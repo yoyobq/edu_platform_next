@@ -106,25 +106,41 @@
     color-mix(in srgb, var(--lecture-journal-record-accent) 18%, var(--ant-color-border-secondary));
   border-radius: var(--lecture-journal-record-radius);
   box-shadow:
-    var(--ant-box-shadow-secondary),
-    inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 8%, transparent);
+    0 1px 2px color-mix(in srgb, black 4%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 6%, transparent);
   overflow: hidden;
   position: relative;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
 }
 
 .lecture-journal-record::before {
   background: radial-gradient(
     circle,
-    color-mix(in srgb, var(--lecture-journal-record-accent) 14%, transparent) 0%,
+    color-mix(in srgb, var(--lecture-journal-record-accent) 10%, transparent) 0%,
     transparent 72%
   );
   content: '';
-  height: 160px;
-  left: -36px;
+  height: 132px;
+  left: -28px;
   position: absolute;
-  top: -84px;
-  width: 160px;
+  top: -68px;
+  width: 132px;
   z-index: 0;
+}
+
+.lecture-journal-record:focus-within {
+  border-color: color-mix(
+    in srgb,
+    var(--lecture-journal-record-accent) 34%,
+    var(--ant-color-border)
+  );
+  box-shadow:
+    0 4px 12px color-mix(in srgb, black 6%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 10%, transparent);
+  transform: translateY(-1px);
 }
 
 .lecture-journal-record-success {
@@ -139,7 +155,7 @@
 
 .lecture-journal-record-header {
   align-items: center;
-  background: color-mix(in srgb, var(--ant-color-bg-container) 94%, white);
+  background: color-mix(in srgb, var(--ant-color-bg-container) 97%, white);
   border-bottom: 1px solid var(--ant-color-border-secondary);
   display: flex;
   gap: 16px;
