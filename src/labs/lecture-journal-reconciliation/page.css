@@ -102,23 +102,29 @@
   --lecture-journal-record-accent: var(--ant-color-border);
   --lecture-journal-record-accent-bg: var(--ant-color-fill-tertiary);
   background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
+  border: 1px solid
+    color-mix(in srgb, var(--lecture-journal-record-accent) 18%, var(--ant-color-border-secondary));
   border-radius: var(--lecture-journal-record-radius);
-  box-shadow: var(--ant-box-shadow-secondary);
+  box-shadow:
+    var(--ant-box-shadow-secondary),
+    inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 8%, transparent);
   overflow: hidden;
   position: relative;
 }
 
 .lecture-journal-record::before {
-  background: linear-gradient(
-    90deg,
-    var(--lecture-journal-record-accent),
-    color-mix(in srgb, var(--lecture-journal-record-accent) 16%, transparent)
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--lecture-journal-record-accent) 14%, transparent) 0%,
+    transparent 72%
   );
   content: '';
-  height: 4px;
-  inset: 0 0 auto;
+  height: 160px;
+  left: -36px;
   position: absolute;
+  top: -84px;
+  width: 160px;
+  z-index: 0;
 }
 
 .lecture-journal-record-success {
@@ -133,17 +139,14 @@
 
 .lecture-journal-record-header {
   align-items: center;
-  background: color-mix(
-    in srgb,
-    var(--lecture-journal-record-accent-bg) 20%,
-    var(--ant-color-primary-bg) 26%,
-    var(--ant-color-bg-container)
-  );
+  background: color-mix(in srgb, var(--ant-color-bg-container) 94%, white);
   border-bottom: 1px solid var(--ant-color-border-secondary);
   display: flex;
   gap: 16px;
   justify-content: space-between;
   padding: 22px 24px 18px;
+  position: relative;
+  z-index: 1;
 }
 
 .lecture-journal-record-overview {
@@ -200,6 +203,14 @@
 
 .lecture-journal-record-status-dot-campus-default {
   background: var(--ant-color-text-tertiary);
+}
+
+.lecture-journal-record-success .lecture-journal-record-status-dot-campus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ant-color-success-bg) 52%, white);
+}
+
+.lecture-journal-record-warning .lecture-journal-record-status-dot-campus {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ant-color-warning-bg) 54%, white);
 }
 
 .lecture-journal-record-overview-block-left {
