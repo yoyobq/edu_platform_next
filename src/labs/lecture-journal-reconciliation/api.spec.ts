@@ -19,6 +19,9 @@ import {
   fetchLectureJournalDepartmentOptions,
   fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
+  saveAcademicIntegratedTeachingLog,
+  saveAcademicPracticeTeachingLog,
+  saveAcademicTheoryTeachingLog,
 } from './api';
 
 describe('lecture-journal-reconciliation api', () => {
@@ -190,5 +193,162 @@ describe('lecture-journal-reconciliation api', () => {
         sessionToken: 'rolling-token-002',
       }),
     ).rejects.toBe(expiredError);
+  });
+
+  it('saves theory logs with sectionId only', async () => {
+    const payload = {
+      code: 200,
+      expiresAt: '2026-04-28T12:00:00.000Z',
+      lectureJournalDetailId: 'DETAIL-001',
+      msg: 'ok',
+      success: true,
+      upstreamSessionToken: 'rolling-token-005',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      saveAcademicTheoryTeachingLog: payload,
+    });
+
+    await expect(
+      saveAcademicTheoryTeachingLog({
+        courseContent: ' 理论内容 ',
+        dayOfWeek: ' 2 ',
+        homeworkAssignment: ' 作业 ',
+        lessonHours: 4,
+        sectionId: ' 5,6 ',
+        teachingClassId: ' CLASS-001 ',
+        teachingDate: ' 2026-04-28 ',
+        topicRecord: ' 良 ',
+        upstreamSessionToken: ' rolling-token-004 ',
+        weekNumber: ' 8 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('saveAcademicTheoryTeachingLog'),
+      {
+        input: {
+          courseContent: '理论内容',
+          dayOfWeek: '2',
+          homeworkAssignment: '作业',
+          lectureJournalDetailId: undefined,
+          lecturePlanDetailId: undefined,
+          lessonHours: 4,
+          minSectionId: undefined,
+          sectionId: '5,6',
+          teachingClassId: 'CLASS-001',
+          teachingDate: '2026-04-28',
+          topicRecord: '良',
+          upstreamSessionToken: 'rolling-token-004',
+          weekNumber: '8',
+        },
+      },
+    );
+  });
+
+  it('saves practice logs without section fields', async () => {
+    const payload = {
+      code: 200,
+      expiresAt: '2026-04-28T12:00:00.000Z',
+      lectureJournalDetailId: 'DETAIL-002',
+      msg: 'ok',
+      success: true,
+      upstreamSessionToken: 'rolling-token-006',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      saveAcademicPracticeTeachingLog: payload,
+    });
+
+    await expect(
+      saveAcademicPracticeTeachingLog({
+        courseContent: ' 实训内容 ',
+        dayOfWeek: ' 3 ',
+        homeworkAssignment: ' 实训作业 ',
+        lectureLessons: 1,
+        lessonHours: 4,
+        productionProjectTitle: ' 项目A ',
+        teachingClassId: ' CLASS-002 ',
+        teachingDate: ' 2026-04-29 ',
+        trainingLessons: 2,
+        exampleLessons: 1,
+        upstreamSessionToken: ' rolling-token-005 ',
+        weekNumber: ' 9 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('saveAcademicPracticeTeachingLog'),
+      {
+        input: expect.objectContaining({
+          courseContent: '实训内容',
+          dayOfWeek: '3',
+          exampleLessons: 1,
+          homeworkAssignment: '实训作业',
+          lectureLessons: 1,
+          lessonHours: 4,
+          minSectionId: undefined,
+          productionProjectTitle: '项目A',
+          teachingClassId: 'CLASS-002',
+          teachingDate: '2026-04-29',
+          trainingLessons: 2,
+          upstreamSessionToken: 'rolling-token-005',
+          weekNumber: '9',
+        }),
+      },
+    );
+  });
+
+  it('saves integrated logs with lecturePlanDetailId and rolling token', async () => {
+    const payload = {
+      code: 200,
+      expiresAt: '2026-04-28T12:00:00.000Z',
+      lectureJournalDetailId: 'DETAIL-003',
+      msg: 'ok',
+      success: true,
+      upstreamSessionToken: 'rolling-token-007',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      saveAcademicIntegratedTeachingLog: payload,
+    });
+
+    await expect(
+      saveAcademicIntegratedTeachingLog({
+        completeAndSummary: ' 小结 ',
+        dayOfWeek: ' 4 ',
+        lecturePlanDetailId: ' PLAN-DETAIL-001 ',
+        lessonHours: 6,
+        shift: ' 3 ',
+        teachingClassId: ' CLASS-003 ',
+        teachingDate: ' 2026-04-30 ',
+        upstreamSessionToken: ' rolling-token-006 ',
+        weekNumber: ' 10 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('saveAcademicIntegratedTeachingLog'),
+      {
+        input: {
+          completeAndSummary: '小结',
+          courseContent: undefined,
+          dayOfWeek: '4',
+          disciplineSituation: undefined,
+          homeworkAssignment: undefined,
+          lectureJournalDetailId: undefined,
+          lecturePlanDetailId: 'PLAN-DETAIL-001',
+          lessonHours: 6,
+          problemAndSolve: undefined,
+          securityAndMaintain: undefined,
+          shift: '3',
+          teachingClassId: 'CLASS-003',
+          teachingDate: '2026-04-30',
+          topicRecord: undefined,
+          upstreamSessionToken: 'rolling-token-006',
+          weekNumber: '10',
+        },
+      },
+    );
   });
 });

@@ -11,6 +11,7 @@ import {
   Form,
   Input,
   InputNumber,
+  message,
   Modal,
   Segmented,
   Select,
@@ -43,6 +44,9 @@ import {
   type LectureJournalReconciliationResult,
   type MissingLectureJournalItem,
   resolveUpstreamErrorMessage,
+  saveAcademicIntegratedTeachingLog,
+  saveAcademicPracticeTeachingLog,
+  saveAcademicTheoryTeachingLog,
   type TeacherDirectoryEntry,
   type TeacherDirectoryResult,
   type UnmatchedLectureJournalPlanItem,
@@ -762,6 +766,95 @@ function resolveTeachingDateTimestamp(value: string | null) {
   return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
 }
 
+function resolveJournalDetailId(item: JournalEditableCardItem) {
+  return item.matchedLectureJournalDetailId || item.journal?.lectureJournalDetailId || undefined;
+}
+
+function resolveMinSectionId(sectionId: string | null) {
+  const normalizedSectionId = normalizeOptionalString(sectionId || '');
+
+  if (!normalizedSectionId) {
+    return undefined;
+  }
+
+  const matchedValue = normalizedSectionId.match(/\d+/)?.[0];
+
+  return matchedValue || normalizedSectionId;
+}
+
+function resolveMissingSaveFieldLabels(item: JournalEditableCardItem, draft: JournalDraft) {
+  const requiredLabels = [
+    ['teachingClassId', item.teachingClassId],
+    ['teachingDate', item.teachingDate],
+    ['weekNumber', item.weekNumber === null ? null : String(item.weekNumber)],
+    ['dayOfWeek', item.dayOfWeek === null ? null : String(item.dayOfWeek)],
+    ['lessonHours', item.lessonHours === null ? null : String(item.lessonHours)],
+  ] satisfies Array<[string, string | null]>;
+
+  const missingLabels = requiredLabels
+    .filter(([, value]) => !normalizeOptionalString(value || ''))
+    .map(([label]) => label);
+
+  if (isIntegratedCourseCategory(item.courseCategory)) {
+    if (!normalizeOptionalString(item.lecturePlanDetailId || '')) {
+      missingLabels.push('lecturePlanDetailId');
+    }
+
+    return missingLabels;
+  }
+
+  if (!normalizeOptionalString(draft.courseContent)) {
+    missingLabels.push('courseContent');
+  }
+
+  if (!normalizeOptionalString(draft.homeworkAssignment)) {
+    missingLabels.push('homeworkAssignment');
+  }
+
+  if (isPracticeCourseCategory(item.courseCategory)) {
+    return missingLabels;
+  }
+
+  if (!normalizeOptionalString(draft.topicRecord)) {
+    missingLabels.push('topicRecord');
+  }
+
+  if (!normalizeOptionalString(item.sectionId || '')) {
+    missingLabels.push('sectionId');
+  }
+
+  return missingLabels;
+}
+
+function resolveSaveValidationError(item: JournalEditableCardItem, draft: JournalDraft) {
+  if (item.blockingIssue) {
+    return item.blockingIssue;
+  }
+
+  if (!item.canFill) {
+    return isIntegratedCourseCategory(item.courseCategory)
+      ? '当前一体化计划项尚不能稳定映射。'
+      : '当前课次不可保存。';
+  }
+
+  const missingLabels = resolveMissingSaveFieldLabels(item, draft);
+
+  if (missingLabels.length > 0) {
+    return `缺少必填字段：${missingLabels.join('、')}`;
+  }
+
+  if (isPracticeCourseCategory(item.courseCategory)) {
+    const practiceHoursTotal =
+      (draft.lectureHours || 0) + (draft.practiceHours || 0) + (draft.demonstrationHours || 0);
+
+    if (item.lessonHours !== null && practiceHoursTotal !== item.lessonHours) {
+      return `lectureLessons + trainingLessons + exampleLessons 必须等于 lessonHours，当前为 ${practiceHoursTotal} / ${item.lessonHours}`;
+    }
+  }
+
+  return null;
+}
+
 function buildEditableCardItemFromReconciliation(
   item: LectureJournalReconciliationItem,
 ): JournalEditableCardItem {
@@ -1279,13 +1372,17 @@ function renderIntegratedCoverage(expectedOccurrences: LectureJournalExpectedOcc
 type JournalDraftCardProps = {
   initialDraft: JournalDraft;
   item: JournalEditableCardItem;
+  isSaving: boolean;
+  onSave: (item: JournalEditableCardItem, draft: JournalDraft) => void;
   onUpdateDraft: (key: string, patch: JournalDraftPatch) => void;
   draft: JournalDraft;
 };
 
 const JournalDraftCard = memo(function JournalDraftCard({
   initialDraft,
+  isSaving,
   item,
+  onSave,
   onUpdateDraft,
   draft,
 }: JournalDraftCardProps) {
@@ -1366,6 +1463,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     (draft.lectureHours || 0) + (draft.practiceHours || 0) + (draft.demonstrationHours || 0);
   const hasPracticeHoursTotalMismatch =
     isPracticeCard && item.lessonHours !== null && practiceHoursTotal !== item.lessonHours;
+  const saveValidationError = resolveSaveValidationError(item, draft);
   const showRestoreButton =
     !isFilled &&
     (isIntegratedCard
@@ -1385,14 +1483,12 @@ const JournalDraftCard = memo(function JournalDraftCard({
       hasLearningObjectiveEdited ||
       hasProductionProjectTitleEdited ||
       hasSecurityAndMaintainEdited);
-  const isSaveDisabled = Boolean(item.blockingIssue) || !item.canFill;
-  const saveButtonTooltip = item.blockingIssue
-    ? `不可保存：${item.blockingIssue}`
-    : !item.canFill
-      ? '不可保存：当前一体化计划项尚不能稳定映射。'
-      : item.warnings.length > 0
-        ? `可保存；提示：${item.warnings.join('；')}`
-        : '保存至校园网。';
+  const isSaveDisabled = Boolean(saveValidationError) || isSaving;
+  const saveButtonTooltip = saveValidationError
+    ? `不可保存：${saveValidationError}`
+    : item.warnings.length > 0
+      ? `可保存；提示：${item.warnings.join('；')}`
+      : '保存至校园网。';
 
   return (
     <article
@@ -1516,17 +1612,19 @@ const JournalDraftCard = memo(function JournalDraftCard({
           {item.status === 'MISSING' ? (
             <>
               {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
-              {isIntegratedCard ? (
-                <Tooltip placement="top" title={saveButtonTooltip}>
-                  <span className="lecture-journal-save-action">
-                    <Button disabled={isSaveDisabled}>保存至校园网</Button>
-                  </span>
-                </Tooltip>
-              ) : (
+              <Tooltip placement="top" title={saveButtonTooltip}>
                 <span className="lecture-journal-save-action">
-                  <Button disabled={isSaveDisabled}>保存至校园网</Button>
+                  <Button
+                    disabled={isSaveDisabled}
+                    loading={isSaving}
+                    onClick={() => {
+                      onSave(item, draft);
+                    }}
+                  >
+                    保存至校园网
+                  </Button>
                 </span>
-              )}
+              </Tooltip>
             </>
           ) : null}
         </div>
@@ -2124,6 +2222,7 @@ JournalDraftCard.displayName = 'JournalDraftCard';
 
 export function LectureJournalReconciliationLabPage() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
+  const [messageApi, messageContextHolder] = message.useMessage();
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
   const {
     clear,
@@ -2157,6 +2256,7 @@ export function LectureJournalReconciliationLabPage() {
   const [queryError, setQueryError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [savingItemKey, setSavingItemKey] = useState<string | null>(null);
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -2350,6 +2450,101 @@ export function LectureJournalReconciliationLabPage() {
     }));
   }, []);
 
+  async function handleSaveToCampus(item: JournalEditableCardItem, draft: JournalDraft) {
+    const session = storedSession;
+
+    if (!session) {
+      setPendingAction(null);
+      setLoginError(null);
+      openLoginModal();
+      return;
+    }
+
+    const validationError = resolveSaveValidationError(item, draft);
+
+    if (validationError) {
+      void messageApi.error(validationError);
+      return;
+    }
+
+    setSavingItemKey(item.key);
+
+    try {
+      const commonInput = {
+        dayOfWeek: String(item.dayOfWeek),
+        lectureJournalDetailId: resolveJournalDetailId(item),
+        lessonHours: item.lessonHours as number,
+        teachingClassId: item.teachingClassId as string,
+        teachingDate: item.teachingDate as string,
+        upstreamSessionToken: session.upstreamSessionToken,
+        weekNumber: String(item.weekNumber),
+      };
+
+      const result = isIntegratedCourseCategory(item.courseCategory)
+        ? await saveAcademicIntegratedTeachingLog({
+            ...commonInput,
+            completeAndSummary: draft.completeAndSummary,
+            courseContent: draft.courseContent,
+            disciplineSituation: draft.disciplineSituation,
+            homeworkAssignment: draft.homeworkAssignment,
+            lecturePlanDetailId: item.lecturePlanDetailId as string,
+            problemAndSolve: draft.problemAndSolve,
+            securityAndMaintain: draft.securityAndMaintain,
+            shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
+            topicRecord: draft.topicRecord,
+          })
+        : isPracticeCourseCategory(item.courseCategory)
+          ? await saveAcademicPracticeTeachingLog({
+              ...commonInput,
+              courseContent: draft.courseContent,
+              disciplineSituation: draft.disciplineSituation,
+              exampleLessons: draft.demonstrationHours ?? 0,
+              homeworkAssignment: draft.homeworkAssignment,
+              lectureLessons: draft.lectureHours ?? 0,
+              lecturePlanDetailId: item.lecturePlanDetailId || undefined,
+              problemAndSolve: draft.problemAndSolve,
+              productionProjectTitle: draft.productionProjectTitle,
+              securityAndMaintain: draft.securityAndMaintain,
+              shift: draft.shift || item.shift || undefined,
+              topicRecord: draft.topicRecord || undefined,
+              trainingLessons: draft.practiceHours ?? 0,
+            })
+          : await saveAcademicTheoryTeachingLog({
+              ...commonInput,
+              courseContent: draft.courseContent,
+              homeworkAssignment: draft.homeworkAssignment,
+              lecturePlanDetailId: item.lecturePlanDetailId || undefined,
+              minSectionId: resolveMinSectionId(item.sectionId),
+              sectionId: item.sectionId as string,
+              topicRecord: draft.topicRecord,
+            });
+
+      if (!result.success) {
+        throw new Error(result.msg || '上游未保存成功。');
+      }
+
+      const nextSession = persistRollingSession(session, {
+        expiresAt: result.expiresAt,
+        upstreamSessionToken: result.upstreamSessionToken,
+      });
+
+      void messageApi.success(result.msg || '教学日志已保存。');
+      await runQueryAction(nextSession);
+    } catch (error) {
+      if (isExpiredUpstreamSessionError(error)) {
+        clearCurrentSession();
+        setPendingAction(null);
+        setLoginError('upstream 会话已失效，请重新登录后重新保存。');
+        openLoginModal();
+        return;
+      }
+
+      void messageApi.error(resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'));
+    } finally {
+      setSavingItemKey(null);
+    }
+  }
+
   function renderUnmatchedCard(item: UnmatchedLectureJournalPlanItem) {
     return (
       <article className="lecture-journal-unmatched" key={buildItemKey(item)}>
@@ -2539,8 +2734,10 @@ export function LectureJournalReconciliationLabPage() {
             <JournalDraftCard
               draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
               initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+              isSaving={savingItemKey === item.key}
               item={item}
               key={item.key}
+              onSave={handleSaveToCampus}
               onUpdateDraft={updateJournalDraft}
             />
           ))}
@@ -2551,6 +2748,7 @@ export function LectureJournalReconciliationLabPage() {
 
   return (
     <div className="lecture-journal-page flex flex-col gap-6">
+      {messageContextHolder}
       <div className="flex flex-col gap-2">
         <Typography.Title level={3} style={{ margin: 0 }}>
           教学日志填写对账

@@ -25,6 +25,18 @@ type AcademicTeachingLogPrefillResponse = {
   listAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
 };
 
+type SaveAcademicTheoryTeachingLogResponse = {
+  saveAcademicTheoryTeachingLog: AcademicTeachingLogSaveResult;
+};
+
+type SaveAcademicPracticeTeachingLogResponse = {
+  saveAcademicPracticeTeachingLog: AcademicTeachingLogSaveResult;
+};
+
+type SaveAcademicIntegratedTeachingLogResponse = {
+  saveAcademicIntegratedTeachingLog: AcademicTeachingLogSaveResult;
+};
+
 export type LectureJournalDepartmentOption = {
   departmentName: string;
   id: string;
@@ -215,6 +227,81 @@ export type FetchAcademicTeachingLogPrefillInput = {
   semesterId: number;
   staffId: string;
   upstreamSessionToken?: string;
+};
+
+export type AcademicTeachingLogSaveResult = {
+  code: number;
+  expiresAt: string;
+  lectureJournalDetailId: string | null;
+  msg: string;
+  success: boolean;
+  upstreamSessionToken: string;
+};
+
+export type SaveAcademicTheoryTeachingLogInput = {
+  courseContent: string;
+  dayOfWeek: string;
+  homeworkAssignment: string;
+  lectureJournalDetailId?: string;
+  lecturePlanDetailId?: string;
+  lessonHours: number;
+  minSectionId?: string;
+  sectionId: string;
+  teachingClassId: string;
+  teachingDate: string;
+  topicRecord: string;
+  upstreamSessionToken: string;
+  weekNumber: string;
+};
+
+export type SaveAcademicPracticeTeachingLogInput = {
+  completeAndSummary?: string;
+  courseContent: string;
+  dayOfWeek: string;
+  disciplineSituation?: string;
+  exampleLessons?: number;
+  homeworkAssignment: string;
+  lectureJournalDetailId?: string;
+  lectureLessons?: number;
+  lecturePlanDetailId?: string;
+  lessonHours: number;
+  minSectionId?: string;
+  problemAndSolve?: string;
+  productionBackNum?: number;
+  productionName?: string;
+  productionPlanNum?: number;
+  productionProjectTitle?: string;
+  productionQualifiedNum?: number;
+  productionWasteNum?: number;
+  sectionId?: string;
+  sectionName?: string;
+  securityAndMaintain?: string;
+  shift?: string;
+  teachingClassId: string;
+  teachingDate: string;
+  topicRecord?: string;
+  trainingLessons?: number;
+  upstreamSessionToken: string;
+  weekNumber: string;
+};
+
+export type SaveAcademicIntegratedTeachingLogInput = {
+  completeAndSummary?: string;
+  courseContent?: string;
+  dayOfWeek: string;
+  disciplineSituation?: string;
+  homeworkAssignment?: string;
+  lectureJournalDetailId?: string;
+  lecturePlanDetailId: string;
+  lessonHours: number;
+  problemAndSolve?: string;
+  securityAndMaintain?: string;
+  shift?: string;
+  teachingClassId: string;
+  teachingDate: string;
+  topicRecord?: string;
+  upstreamSessionToken: string;
+  weekNumber: string;
 };
 
 const FETCH_TEACHER_DIRECTORY_QUERY = `
@@ -430,6 +517,45 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
   }
 `;
 
+const SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION = `
+  mutation SaveAcademicTheoryTeachingLog($input: SaveAcademicTheoryTeachingLogInput!) {
+    saveAcademicTheoryTeachingLog(input: $input) {
+      code
+      expiresAt
+      lectureJournalDetailId
+      msg
+      success
+      upstreamSessionToken
+    }
+  }
+`;
+
+const SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION = `
+  mutation SaveAcademicPracticeTeachingLog($input: SaveAcademicPracticeTeachingLogInput!) {
+    saveAcademicPracticeTeachingLog(input: $input) {
+      code
+      expiresAt
+      lectureJournalDetailId
+      msg
+      success
+      upstreamSessionToken
+    }
+  }
+`;
+
+const SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION = `
+  mutation SaveAcademicIntegratedTeachingLog($input: SaveAcademicIntegratedTeachingLogInput!) {
+    saveAcademicIntegratedTeachingLog(input: $input) {
+      code
+      expiresAt
+      lectureJournalDetailId
+      msg
+      success
+      upstreamSessionToken
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -441,6 +567,20 @@ function normalizeOptionalString(value?: string) {
   const normalizedValue = value?.trim();
 
   return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizeRequiredString(value: string, fieldName: string) {
+  const normalizedValue = value.trim();
+
+  if (!normalizedValue) {
+    throw new Error(`${fieldName} 为必填。`);
+  }
+
+  return normalizedValue;
+}
+
+function normalizeOptionalNumber(value?: number) {
+  return typeof value === 'number' ? value : undefined;
 }
 
 function normalizeFetchLectureJournalReconciliationInput(
@@ -478,6 +618,89 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
     semesterId: input.semesterId,
     staffId,
     upstreamSessionToken,
+  };
+}
+
+function normalizeSaveAcademicTheoryTeachingLogInput(input: SaveAcademicTheoryTeachingLogInput) {
+  return {
+    courseContent: normalizeRequiredString(input.courseContent, 'courseContent'),
+    dayOfWeek: normalizeRequiredString(input.dayOfWeek, 'dayOfWeek'),
+    homeworkAssignment: normalizeRequiredString(input.homeworkAssignment, 'homeworkAssignment'),
+    lectureJournalDetailId: normalizeOptionalString(input.lectureJournalDetailId),
+    lecturePlanDetailId: normalizeOptionalString(input.lecturePlanDetailId),
+    lessonHours: input.lessonHours,
+    minSectionId: normalizeOptionalString(input.minSectionId),
+    sectionId: normalizeRequiredString(input.sectionId, 'sectionId'),
+    teachingClassId: normalizeRequiredString(input.teachingClassId, 'teachingClassId'),
+    teachingDate: normalizeRequiredString(input.teachingDate, 'teachingDate'),
+    topicRecord: normalizeRequiredString(input.topicRecord, 'topicRecord'),
+    upstreamSessionToken: normalizeRequiredString(
+      input.upstreamSessionToken,
+      'upstreamSessionToken',
+    ),
+    weekNumber: normalizeRequiredString(input.weekNumber, 'weekNumber'),
+  };
+}
+
+function normalizeSaveAcademicPracticeTeachingLogInput(
+  input: SaveAcademicPracticeTeachingLogInput,
+) {
+  return {
+    completeAndSummary: normalizeOptionalString(input.completeAndSummary),
+    courseContent: normalizeRequiredString(input.courseContent, 'courseContent'),
+    dayOfWeek: normalizeRequiredString(input.dayOfWeek, 'dayOfWeek'),
+    disciplineSituation: normalizeOptionalString(input.disciplineSituation),
+    exampleLessons: normalizeOptionalNumber(input.exampleLessons),
+    homeworkAssignment: normalizeRequiredString(input.homeworkAssignment, 'homeworkAssignment'),
+    lectureJournalDetailId: normalizeOptionalString(input.lectureJournalDetailId),
+    lectureLessons: normalizeOptionalNumber(input.lectureLessons),
+    lecturePlanDetailId: normalizeOptionalString(input.lecturePlanDetailId),
+    lessonHours: input.lessonHours,
+    minSectionId: normalizeOptionalString(input.minSectionId),
+    problemAndSolve: normalizeOptionalString(input.problemAndSolve),
+    productionBackNum: normalizeOptionalNumber(input.productionBackNum),
+    productionName: normalizeOptionalString(input.productionName),
+    productionPlanNum: normalizeOptionalNumber(input.productionPlanNum),
+    productionProjectTitle: normalizeOptionalString(input.productionProjectTitle),
+    productionQualifiedNum: normalizeOptionalNumber(input.productionQualifiedNum),
+    productionWasteNum: normalizeOptionalNumber(input.productionWasteNum),
+    securityAndMaintain: normalizeOptionalString(input.securityAndMaintain),
+    shift: normalizeOptionalString(input.shift),
+    teachingClassId: normalizeRequiredString(input.teachingClassId, 'teachingClassId'),
+    teachingDate: normalizeRequiredString(input.teachingDate, 'teachingDate'),
+    topicRecord: normalizeOptionalString(input.topicRecord),
+    trainingLessons: normalizeOptionalNumber(input.trainingLessons),
+    upstreamSessionToken: normalizeRequiredString(
+      input.upstreamSessionToken,
+      'upstreamSessionToken',
+    ),
+    weekNumber: normalizeRequiredString(input.weekNumber, 'weekNumber'),
+  };
+}
+
+function normalizeSaveAcademicIntegratedTeachingLogInput(
+  input: SaveAcademicIntegratedTeachingLogInput,
+) {
+  return {
+    completeAndSummary: normalizeOptionalString(input.completeAndSummary),
+    courseContent: normalizeOptionalString(input.courseContent),
+    dayOfWeek: normalizeRequiredString(input.dayOfWeek, 'dayOfWeek'),
+    disciplineSituation: normalizeOptionalString(input.disciplineSituation),
+    homeworkAssignment: normalizeOptionalString(input.homeworkAssignment),
+    lectureJournalDetailId: normalizeOptionalString(input.lectureJournalDetailId),
+    lecturePlanDetailId: normalizeRequiredString(input.lecturePlanDetailId, 'lecturePlanDetailId'),
+    lessonHours: input.lessonHours,
+    problemAndSolve: normalizeOptionalString(input.problemAndSolve),
+    securityAndMaintain: normalizeOptionalString(input.securityAndMaintain),
+    shift: normalizeOptionalString(input.shift),
+    teachingClassId: normalizeRequiredString(input.teachingClassId, 'teachingClassId'),
+    teachingDate: normalizeRequiredString(input.teachingDate, 'teachingDate'),
+    topicRecord: normalizeOptionalString(input.topicRecord),
+    upstreamSessionToken: normalizeRequiredString(
+      input.upstreamSessionToken,
+      'upstreamSessionToken',
+    ),
+    weekNumber: normalizeRequiredString(input.weekNumber, 'weekNumber'),
   };
 }
 
@@ -560,5 +783,70 @@ export async function fetchAcademicTeachingLogPrefillItems(
     }
 
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志预填项。'));
+  }
+}
+
+export async function saveAcademicTheoryTeachingLog(input: SaveAcademicTheoryTeachingLogInput) {
+  try {
+    const response = await requestGraphQL<
+      SaveAcademicTheoryTeachingLogResponse,
+      {
+        input: ReturnType<typeof normalizeSaveAcademicTheoryTeachingLogInput>;
+      }
+    >(SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicTheoryTeachingLogInput(input),
+    });
+
+    return response.saveAcademicTheoryTeachingLog;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存理论课教学日志。'));
+  }
+}
+
+export async function saveAcademicPracticeTeachingLog(input: SaveAcademicPracticeTeachingLogInput) {
+  try {
+    const response = await requestGraphQL<
+      SaveAcademicPracticeTeachingLogResponse,
+      {
+        input: ReturnType<typeof normalizeSaveAcademicPracticeTeachingLogInput>;
+      }
+    >(SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicPracticeTeachingLogInput(input),
+    });
+
+    return response.saveAcademicPracticeTeachingLog;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存实训课教学日志。'));
+  }
+}
+
+export async function saveAcademicIntegratedTeachingLog(
+  input: SaveAcademicIntegratedTeachingLogInput,
+) {
+  try {
+    const response = await requestGraphQL<
+      SaveAcademicIntegratedTeachingLogResponse,
+      {
+        input: ReturnType<typeof normalizeSaveAcademicIntegratedTeachingLogInput>;
+      }
+    >(SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicIntegratedTeachingLogInput(input),
+    });
+
+    return response.saveAcademicIntegratedTeachingLog;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存一体化教学日志。'));
   }
 }
