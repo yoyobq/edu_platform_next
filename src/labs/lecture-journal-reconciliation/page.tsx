@@ -5,6 +5,7 @@ import {
   AutoComplete,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Empty,
   Form,
@@ -29,6 +30,9 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 
 import { lectureJournalReconciliationLabAccess } from './access';
 import {
+  type AcademicIntegratedTeachingLogPrefillPreview,
+  type AcademicTeachingLogPrefillResult,
+  fetchAcademicTeachingLogPrefillItems,
   fetchLectureJournalDepartmentOptions,
   fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
@@ -67,6 +71,11 @@ type PendingAction = 'directory' | 'query' | null;
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const DEFAULT_DISCIPLINE_SITUATION = '遵章守纪';
+const DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY = 'learn_target';
+const DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE = '未发现问题';
+const DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN = '正常';
+const DEFAULT_INTEGRATED_SHIFT = '3';
+const DEFAULT_INTEGRATED_SHIFT_NAME = '常日班';
 const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
@@ -99,28 +108,47 @@ type DepartmentOption = {
 type JournalEditableCardItem = {
   blockingIssue: string | null;
   canFill: boolean;
+  completeAndSummary: string | null;
   courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number | null;
+  disciplineSituation: string | null;
   homework: string | null;
   expectedOccurrences: LectureJournalExpectedOccurrence[];
   journal: LectureJournalReconciliationItem['journal'];
   key: string;
+  learningSessionContent: string | null;
+  learningSessionNo: number | null;
+  learningSessionTarget: string | null;
+  learningTaskName: string | null;
+  learningTaskNo: number | null;
+  learningTaskText: string | null;
   lecturePlanDetailId: string | null;
   lecturePlanId: string | null;
   lessonHours: number | null;
+  matchedLectureJournalDetailId: string | null;
+  problemAndSolve: string | null;
   schoolYear: string | null;
   sectionId: string | null;
   sectionName: string | null;
+  securityAndMaintain: string | null;
   semester: string | null;
+  shift: string | null;
+  shiftName: string | null;
   status: LectureJournalReconciliationItem['status'];
   teacherId: string | null;
   teacherName: string | null;
   teachingClassId: string | null;
   teachingClassName: string | null;
   teachingDate: string | null;
+  teachingUnitAchievement: string | null;
+  teachingUnitContent: string | null;
+  teachingUnitName: string | null;
+  teachingUnitNo: number | null;
+  teachingUnitTarget: string | null;
+  teachingUnitText: string | null;
   warnings: string[];
   weekNumber: number | null;
   practiceDemonstrationHours: number | null;
@@ -131,15 +159,19 @@ type JournalEditableCardItem = {
 };
 
 type JournalDraft = {
+  completeAndSummary: string;
   courseContent: string;
   demonstrationHours: number | null;
   disciplineSituation: string;
   homeworkAssignment: string;
   lectureHours: number | null;
+  problemAndSolve: string;
   practiceHours: number | null;
   productionProjectTitle: string;
   learningObjective: string;
   securityAndMaintain: string;
+  shift: string;
+  shiftName: string;
   submitStatusText: string;
   topicRecord: string;
 };
@@ -147,15 +179,19 @@ type JournalDraft = {
 type JournalDraftPatch = Partial<
   Pick<
     JournalDraft,
+    | 'completeAndSummary'
     | 'courseContent'
     | 'demonstrationHours'
     | 'disciplineSituation'
     | 'homeworkAssignment'
     | 'lectureHours'
+    | 'problemAndSolve'
     | 'practiceHours'
     | 'productionProjectTitle'
     | 'learningObjective'
     | 'securityAndMaintain'
+    | 'shift'
+    | 'shiftName'
     | 'submitStatusText'
     | 'topicRecord'
   >
@@ -169,15 +205,19 @@ type FieldTipConfig = {
 };
 
 const EMPTY_JOURNAL_DRAFT: JournalDraft = {
+  completeAndSummary: '',
   courseContent: '',
   demonstrationHours: null,
   disciplineSituation: '',
   homeworkAssignment: '',
   lectureHours: null,
+  problemAndSolve: '',
   practiceHours: null,
   productionProjectTitle: '',
   learningObjective: '',
   securityAndMaintain: '',
+  shift: '',
+  shiftName: '',
   submitStatusText: '',
   topicRecord: '',
 };
@@ -436,26 +476,6 @@ function resolveLessonHoursLabel(lessonHours: number | null) {
   return lessonHours ? String(lessonHours) : '待识别';
 }
 
-function resolveCanFillLabel(item: JournalEditableCardItem) {
-  if (item.blockingIssue) {
-    return '阻塞';
-  }
-
-  if (!item.canFill) {
-    return '不可保存';
-  }
-
-  return item.status === 'MISSING' ? '可保存' : '可操作';
-}
-
-function resolveCanFillTagColor(item: JournalEditableCardItem) {
-  if (item.blockingIssue) {
-    return 'error';
-  }
-
-  return item.canFill ? 'success' : 'warning';
-}
-
 function resolveOccurrenceSectionLabel(occurrence: LectureJournalExpectedOccurrence) {
   if (occurrence.periodStart === occurrence.periodEnd) {
     return `第 ${occurrence.periodStart} 节`;
@@ -586,6 +606,11 @@ function resolveIntegratedTeachingUnitName(
       'TOPIC_NAME',
       'topicName',
     ]) ||
+    item.teachingUnitText ||
+    item.teachingUnitName ||
+    (item.teachingUnitNo === null || item.teachingUnitNo === undefined
+      ? ''
+      : String(item.teachingUnitNo)) ||
     item.practiceTopicName ||
     item.practiceTeachingChapterContent ||
     item.courseContent ||
@@ -608,6 +633,8 @@ function resolveIntegratedLearningObjective(
       'TEACHING_CHAPTER_CONTENT',
       'teachingChapterContent',
     ]) ||
+    item.teachingUnitTarget ||
+    item.learningSessionTarget ||
     item.practiceTeachingChapterContent ||
     ''
   );
@@ -627,6 +654,9 @@ function resolveIntegratedLearningContent(
       'STUDY_CONTENT',
       'studyContent',
     ]) ||
+    item.teachingUnitContent ||
+    item.learningSessionContent ||
+    item.learningTaskText ||
     item.courseContent ||
     ''
   );
@@ -646,8 +676,25 @@ function resolveIntegratedLearningOutcome(
       'HOMEWORK',
       'homeworkAssignment',
     ]) ||
+    item.teachingUnitAchievement ||
     item.homework ||
     ''
+  );
+}
+
+function resolveIntegratedLearningSessionText(item: JournalEditableCardItem) {
+  return [item.learningSessionNo, item.learningSessionContent].filter(Boolean).join(' ');
+}
+
+function resolveIntegratedLearningTaskText(item: JournalEditableCardItem) {
+  return (
+    item.learningTaskText || [item.learningTaskNo, item.learningTaskName].filter(Boolean).join(' ')
+  );
+}
+
+function resolveIntegratedTeachingUnitText(item: JournalEditableCardItem) {
+  return (
+    item.teachingUnitText || [item.teachingUnitNo, item.teachingUnitName].filter(Boolean).join(' ')
   );
 }
 
@@ -697,28 +744,47 @@ function buildEditableCardItemFromReconciliation(
   return {
     blockingIssue: item.blockingIssue,
     canFill: item.canFill,
+    completeAndSummary: null,
     courseCategory: item.courseCategory,
     courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
     dayOfWeek: item.dayOfWeek,
+    disciplineSituation: null,
     expectedOccurrences: item.expectedOccurrences,
     homework: item.homework,
     journal: item.journal,
     key: buildItemKey(item),
+    learningSessionContent: null,
+    learningSessionNo: null,
+    learningSessionTarget: null,
+    learningTaskName: null,
+    learningTaskNo: null,
+    learningTaskText: null,
     lecturePlanDetailId: item.lecturePlanDetailId,
     lecturePlanId: item.lecturePlanId,
     lessonHours: item.lessonHours,
+    matchedLectureJournalDetailId: item.journal?.lectureJournalDetailId ?? null,
+    problemAndSolve: null,
     schoolYear: item.schoolYear,
     sectionId: item.sectionId,
     sectionName: item.sectionName,
+    securityAndMaintain: null,
     semester: item.semester,
+    shift: null,
+    shiftName: null,
     status: item.status,
     teacherId: item.teacherId,
     teacherName: item.teacherName,
     teachingClassId: item.teachingClassId,
     teachingClassName: item.teachingClassName,
     teachingDate: item.teachingDate,
+    teachingUnitAchievement: null,
+    teachingUnitContent: null,
+    teachingUnitName: null,
+    teachingUnitNo: null,
+    teachingUnitTarget: null,
+    teachingUnitText: null,
     warnings: item.warnings,
     weekNumber: item.weekNumber,
     ...practicePlanFields,
@@ -733,31 +799,112 @@ function buildEditableCardItemFromMissing(
   return {
     blockingIssue: item.blockingIssue,
     canFill: item.canFill,
+    completeAndSummary: null,
     courseCategory: item.courseCategory,
     courseContent: item.courseContent,
     courseId: item.courseId,
     courseName: item.courseName,
     dayOfWeek: item.dayOfWeek,
+    disciplineSituation: null,
     expectedOccurrences: item.expectedOccurrences,
     homework: item.homework,
     journal: null,
     key: buildItemKey(item),
+    learningSessionContent: null,
+    learningSessionNo: null,
+    learningSessionTarget: null,
+    learningTaskName: null,
+    learningTaskNo: null,
+    learningTaskText: null,
     lecturePlanDetailId: item.lecturePlanDetailId,
     lecturePlanId: item.lecturePlanId,
     lessonHours: item.lessonHours,
+    matchedLectureJournalDetailId: null,
+    problemAndSolve: null,
     schoolYear: item.schoolYear,
     sectionId: item.sectionId,
     sectionName: item.sectionName,
+    securityAndMaintain: null,
     semester: item.semester,
+    shift: null,
+    shiftName: null,
     status: 'MISSING',
     teacherId: item.teacherId,
     teacherName: item.teacherName,
     teachingClassId: item.teachingClassId,
     teachingClassName: item.teachingClassName,
     teachingDate: item.teachingDate,
+    teachingUnitAchievement: null,
+    teachingUnitContent: null,
+    teachingUnitName: null,
+    teachingUnitNo: null,
+    teachingUnitTarget: null,
+    teachingUnitText: null,
     warnings: item.warnings,
     weekNumber: item.weekNumber,
     ...practicePlanFields,
+  };
+}
+
+function buildEditableCardItemFromIntegratedPreview(
+  item: AcademicIntegratedTeachingLogPrefillPreview,
+): JournalEditableCardItem {
+  return {
+    blockingIssue: item.blockingIssue,
+    canFill: item.canFill,
+    completeAndSummary: item.completeAndSummary,
+    courseCategory: '3',
+    courseContent: item.teachingUnitContent || item.learningTaskText || null,
+    courseId: null,
+    courseName: item.courseName,
+    dayOfWeek: item.dayOfWeek,
+    disciplineSituation: item.disciplineSituation,
+    expectedOccurrences: item.expectedOccurrences,
+    homework: item.teachingUnitAchievement,
+    journal: null,
+    key: buildItemKey({
+      lecturePlanDetailId: item.lecturePlanDetailId,
+      lecturePlanId: item.lecturePlanId,
+      matchKey: `integrated-preview-${item.matchedLectureJournalDetailId || item.status}`,
+      reason: item.blockingIssue,
+    }),
+    learningSessionContent: item.learningSessionContent,
+    learningSessionNo: item.learningSessionNo,
+    learningSessionTarget: item.learningSessionTarget,
+    learningTaskName: item.learningTaskName,
+    learningTaskNo: item.learningTaskNo,
+    learningTaskText: item.learningTaskText,
+    lecturePlanDetailId: item.lecturePlanDetailId,
+    lecturePlanId: item.lecturePlanId,
+    lessonHours: item.lessonHours,
+    matchedLectureJournalDetailId: item.matchedLectureJournalDetailId,
+    practiceDemonstrationHours: null,
+    practiceLectureHours: null,
+    practicePracticeHours: null,
+    practiceTeachingChapterContent: item.teachingUnitTarget || item.learningSessionTarget,
+    practiceTopicName: item.teachingUnitText || item.learningTaskText,
+    problemAndSolve: item.problemAndSolve,
+    schoolYear: null,
+    sectionId: null,
+    sectionName: null,
+    securityAndMaintain: item.securityAndMaintain,
+    semester: null,
+    shift: item.shift,
+    shiftName: item.shiftName,
+    status: item.status,
+    teacherId: null,
+    teacherName: null,
+    teachingClassId: item.teachingClassId,
+    teachingClassName: item.teachingClassName,
+    teachingDate: item.teachingDate,
+    teachingUnitAchievement: item.teachingUnitAchievement,
+    teachingUnitContent: item.teachingUnitContent,
+    teachingUnitName: item.teachingUnitName,
+    teachingUnitNo: item.teachingUnitNo,
+    teachingUnitTarget: item.teachingUnitTarget,
+    teachingUnitText: item.teachingUnitText,
+    warnings: item.warnings,
+    weekNumber: item.weekNumber,
   };
 }
 
@@ -818,11 +965,16 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
       const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
 
       result[item.key] = {
+        completeAndSummary: isIntegratedCard
+          ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
+          : '',
         courseContent: isIntegratedCard
           ? resolveIntegratedLearningContent(item, item.journal)
           : item.journal.courseContent || '',
         demonstrationHours: item.practiceDemonstrationHours,
-        disciplineSituation: '',
+        disciplineSituation: isIntegratedCard
+          ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
+          : '',
         homeworkAssignment: isIntegratedCard
           ? resolveIntegratedLearningOutcome(item, item.journal)
           : item.journal.homeworkAssignment || '',
@@ -830,11 +982,18 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
         learningObjective: isIntegratedCard
           ? resolveIntegratedLearningObjective(item, item.journal)
           : '',
+        problemAndSolve: isIntegratedCard
+          ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
+          : '',
         practiceHours: item.practicePracticeHours,
         productionProjectTitle: isIntegratedCard
           ? resolveIntegratedTeachingUnitName(item, item.journal)
           : item.practiceTeachingChapterContent || '',
-        securityAndMaintain: '',
+        securityAndMaintain: isIntegratedCard
+          ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
+          : '',
+        shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
+        shiftName: isIntegratedCard ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME : '',
         submitStatusText: item.journal.statusName || item.journal.statusCode || '',
         topicRecord: item.journal.topicRecord || '',
       };
@@ -854,23 +1013,34 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
       : '';
 
     result[item.key] = {
+      completeAndSummary: isIntegratedCard
+        ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
+        : '',
       courseContent: planCourseContent || template?.journal?.courseContent || '',
       demonstrationHours: item.practiceDemonstrationHours,
-      disciplineSituation: isPracticeCourseCategory(item.courseCategory)
-        ? DEFAULT_DISCIPLINE_SITUATION
-        : '',
+      disciplineSituation:
+        isPracticeCourseCategory(item.courseCategory) || isIntegratedCard
+          ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
+          : '',
       homeworkAssignment: isIntegratedCard
         ? integratedLearningOutcome || template?.journal?.homeworkAssignment || ''
         : item.homework || template?.journal?.homeworkAssignment || '',
       lectureHours: item.practiceLectureHours,
       learningObjective: isIntegratedCard ? resolveIntegratedLearningObjective(item) : '',
+      problemAndSolve: isIntegratedCard
+        ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
+        : '',
       practiceHours: item.practicePracticeHours,
       productionProjectTitle: isIntegratedCard
         ? resolveIntegratedTeachingUnitName(item)
         : item.practiceTeachingChapterContent || '',
-      securityAndMaintain: isPracticeCourseCategory(item.courseCategory)
-        ? DEFAULT_SECURITY_AND_MAINTAIN
-        : '',
+      securityAndMaintain: isIntegratedCard
+        ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
+        : isPracticeCourseCategory(item.courseCategory)
+          ? DEFAULT_SECURITY_AND_MAINTAIN
+          : '',
+      shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
+      shiftName: isIntegratedCard ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME : '',
       submitStatusText: '',
       topicRecord: template?.journal?.topicRecord || '',
     };
@@ -911,10 +1081,28 @@ function buildPlanSnapshot(item: JournalEditableCardItem) {
       practicePracticeHours: item.practicePracticeHours,
       practiceTeachingChapterContent: item.practiceTeachingChapterContent,
       practiceTopicName: item.practiceTopicName,
+      learningTaskText: item.learningTaskText,
+      learningSessionNo: item.learningSessionNo,
+      learningSessionContent: item.learningSessionContent,
+      learningSessionTarget: item.learningSessionTarget,
+      learningTaskNo: item.learningTaskNo,
+      learningTaskName: item.learningTaskName,
       integratedTeachingUnitName: resolveIntegratedTeachingUnitName(item),
       integratedLearningObjective: resolveIntegratedLearningObjective(item),
       integratedLearningContent: resolveIntegratedLearningContent(item),
       integratedLearningOutcome: resolveIntegratedLearningOutcome(item),
+      teachingUnitText: item.teachingUnitText,
+      teachingUnitNo: item.teachingUnitNo,
+      teachingUnitName: item.teachingUnitName,
+      teachingUnitTarget: item.teachingUnitTarget,
+      teachingUnitContent: item.teachingUnitContent,
+      teachingUnitAchievement: item.teachingUnitAchievement,
+      shift: item.shift,
+      shiftName: item.shiftName,
+      problemAndSolve: item.problemAndSolve,
+      completeAndSummary: item.completeAndSummary,
+      disciplineSituation: item.disciplineSituation,
+      securityAndMaintain: item.securityAndMaintain,
     },
     null,
     2,
@@ -1030,6 +1218,31 @@ function renderIntegratedExpectedOccurrences(
   );
 }
 
+function renderIntegratedCoverage(expectedOccurrences: LectureJournalExpectedOccurrence[]) {
+  const count = expectedOccurrences.length;
+
+  return (
+    <div className="lecture-journal-integrated-coverage">
+      <Collapse
+        defaultActiveKey={count > 1 ? ['expected-occurrences'] : []}
+        ghost
+        items={[
+          {
+            children: renderIntegratedExpectedOccurrences(expectedOccurrences),
+            key: 'expected-occurrences',
+            label: (
+              <span className="lecture-journal-integrated-coverage-title">
+                <Typography.Text strong>预计覆盖课次片段</Typography.Text>
+                <Typography.Text type="secondary">{count} 个片段</Typography.Text>
+              </span>
+            ),
+          },
+        ]}
+      />
+    </div>
+  );
+}
+
 type JournalDraftCardProps = {
   initialDraft: JournalDraft;
   item: JournalEditableCardItem;
@@ -1055,6 +1268,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const isPracticeCard = isPracticeCourseCategory(item.courseCategory);
   const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
   const isFilled = item.status === 'FILLED';
+  const isIntegratedEditable =
+    isIntegratedCard && item.status === 'MISSING' && item.canFill && !item.blockingIssue;
   const integratedTeachingUnitName = resolveIntegratedTeachingUnitName(item);
   const integratedLearningObjective = resolveIntegratedLearningObjective(item);
   const integratedLearningContent = resolveIntegratedLearningContent(item);
@@ -1137,9 +1352,25 @@ const JournalDraftCard = memo(function JournalDraftCard({
       hasLearningObjectiveEdited ||
       hasProductionProjectTitleEdited ||
       hasSecurityAndMaintainEdited);
+  const isSaveDisabled = Boolean(item.blockingIssue) || !item.canFill;
+  const saveButtonTooltip = item.blockingIssue
+    ? `不可保存：${item.blockingIssue}`
+    : !item.canFill
+      ? '不可保存：当前一体化计划项尚不能稳定映射。'
+      : item.warnings.length > 0
+        ? `可保存；提示：${item.warnings.join('；')}`
+        : '保存至校园网。';
 
   return (
-    <article className={`lecture-journal-record lecture-journal-record-${statusTone}`}>
+    <article
+      className={[
+        'lecture-journal-record',
+        `lecture-journal-record-${statusTone}`,
+        isIntegratedCard ? 'lecture-journal-record-integrated' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
+    >
       <div className="lecture-journal-record-header">
         <div className="lecture-journal-record-overview">
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
@@ -1169,26 +1400,27 @@ const JournalDraftCard = memo(function JournalDraftCard({
             <Tooltip placement="top" title="接口字段：weekNumber">
               <span className="lecture-journal-record-overview-text">{weekLabel}</span>
             </Tooltip>
-            <Tooltip placement="top" title="接口字段：dayOfWeek">
-              <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
-            </Tooltip>
-            <Tooltip placement="top" title="接口字段：sectionName / sectionId">
-              <span className="lecture-journal-record-overview-section-wrap">
-                <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
-                {courseCategoryMeta ? (
-                  <span
-                    className={[
-                      'lecture-journal-course-category-tag',
-                      courseCategoryAccentClassName,
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
-                  </span>
-                ) : null}
-              </span>
-            </Tooltip>
+            {!isIntegratedCard ? (
+              <Tooltip placement="top" title="接口字段：dayOfWeek">
+                <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
+              </Tooltip>
+            ) : null}
+            <span className="lecture-journal-record-overview-section-wrap">
+              {!isIntegratedCard ? (
+                <Tooltip placement="top" title="接口字段：sectionName / sectionId">
+                  <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
+                </Tooltip>
+              ) : null}
+              {courseCategoryMeta ? (
+                <span
+                  className={['lecture-journal-course-category-tag', courseCategoryAccentClassName]
+                    .filter(Boolean)
+                    .join(' ')}
+                >
+                  <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
+                </span>
+              ) : null}
+            </span>
           </div>
 
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-center">
@@ -1212,26 +1444,33 @@ const JournalDraftCard = memo(function JournalDraftCard({
           </div>
 
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-right">
-            <Tooltip placement="top" title="接口字段：teachingDate">
-              <span className="lecture-journal-record-meta-item">
-                <span className="lecture-journal-record-meta-label">上课日期：</span>
-                <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
-              </span>
-            </Tooltip>
+            {!isIntegratedCard ? (
+              <Tooltip placement="top" title="接口字段：teachingDate">
+                <span className="lecture-journal-record-meta-item">
+                  <span className="lecture-journal-record-meta-label">上课日期：</span>
+                  <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
+                </span>
+              </Tooltip>
+            ) : null}
             <Tooltip placement="top" title="接口字段：lessonHours">
               <span className="lecture-journal-record-meta-item">
-                <span className="lecture-journal-record-meta-label">课时数：</span>
+                <span className="lecture-journal-record-meta-label">
+                  {isIntegratedCard ? '总课时数：' : '课时数：'}
+                </span>
                 <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
                   {lessonHoursLabel}
                 </span>
               </span>
             </Tooltip>
-            {isIntegratedCard && item.journal?.lectureJournalDetailId ? (
-              <Tooltip placement="top" title="接口字段：journal.lectureJournalDetailId">
+            {isIntegratedCard && item.matchedLectureJournalDetailId ? (
+              <Tooltip
+                placement="top"
+                title="接口字段：matchedLectureJournalDetailId / journal.lectureJournalDetailId"
+              >
                 <span className="lecture-journal-record-meta-item">
                   <span className="lecture-journal-record-meta-label">日志：</span>
                   <span className="lecture-journal-record-meta-value">
-                    {item.journal.lectureJournalDetailId}
+                    {item.matchedLectureJournalDetailId}
                   </span>
                 </span>
               </Tooltip>
@@ -1240,18 +1479,21 @@ const JournalDraftCard = memo(function JournalDraftCard({
         </div>
 
         <div className="lecture-journal-record-status">
-          {isIntegratedCard ? (
-            <Tag color={resolveCanFillTagColor(item)}>{resolveCanFillLabel(item)}</Tag>
-          ) : null}
           {isFilled ? renderJournalRawSnapshotTrigger(item) : null}
           {item.status === 'MISSING' ? (
             <>
-              {renderMissingPlanSnapshotTrigger(item)}
-              <span className="lecture-journal-save-action">
-                <Button disabled={Boolean(item.blockingIssue) || !item.canFill}>
-                  保存至校园网
-                </Button>
-              </span>
+              {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
+              {isIntegratedCard ? (
+                <Tooltip placement="top" title={saveButtonTooltip}>
+                  <span className="lecture-journal-save-action">
+                    <Button disabled={isSaveDisabled}>保存至校园网</Button>
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className="lecture-journal-save-action">
+                  <Button disabled={isSaveDisabled}>保存至校园网</Button>
+                </span>
+              )}
             </>
           ) : null}
         </div>
@@ -1278,15 +1520,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
               type="warning"
             />
           ) : null}
-          <div className="lecture-journal-integrated-coverage">
-            <div className="lecture-journal-integrated-coverage-title">
-              <Typography.Text strong>预计覆盖课次片段</Typography.Text>
-              <Typography.Text type="secondary">
-                {item.expectedOccurrences.length} 个片段
-              </Typography.Text>
-            </div>
-            {renderIntegratedExpectedOccurrences(item.expectedOccurrences)}
-          </div>
+          {renderIntegratedCoverage(item.expectedOccurrences)}
         </div>
       ) : null}
 
@@ -1553,120 +1787,151 @@ const JournalDraftCard = memo(function JournalDraftCard({
             </>
           ) : isIntegratedCard ? (
             <>
-              <label className="lecture-journal-card-field lecture-journal-card-field-integrated-unit">
-                {renderFieldLabel('教学单元序号及名称', {
-                  fields: ['SSS002NAME', 'topicName', 'TOPIC_NAME'],
-                  note: '已填时优先读取 journal.rawJournal；未填时使用计划侧 topicName / courseContent 作为参考',
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-shift">
+                {renderFieldLabel('班次', {
+                  fields: ['shift', 'shiftName'],
+                  required: false,
                 })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input
-                      placeholder="未填写"
-                      readOnly
-                      size="large"
-                      value={draft.productionProjectTitle}
-                    />
-                  </span>
-                ) : (
+                <span className="lecture-journal-readonly-input">
+                  <Input readOnly size="large" value={`${draft.shift} / ${draft.shiftName}`} />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-task">
+                {renderFieldLabel('教学任务序号及名称', {
+                  fields: ['learningTaskText', 'learningTaskNo', 'learningTaskName'],
+                  note: '优先来自 integratedPreviews.learningTaskText',
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
+                  <Input.TextArea
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={resolveIntegratedLearningTaskText(item)}
+                  />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-session">
+                {renderFieldLabel('学习环节序号及名称', {
+                  fields: ['learningSessionNo', 'learningSessionContent'],
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
                   <Input
-                    placeholder="请输入教学单元序号及名称"
+                    placeholder="未填写"
+                    readOnly
                     size="large"
-                    value={draft.productionProjectTitle}
+                    value={resolveIntegratedLearningSessionText(item)}
+                  />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
+                {renderFieldLabel('教学单元序号及名称', {
+                  fields: ['teachingUnitText', 'teachingUnitNo', 'teachingUnitName', 'SSS002NAME'],
+                  note: '优先来自 integratedPreviews.teachingUnitText',
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
+                  <Input
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={resolveIntegratedTeachingUnitText(item)}
+                  />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-summary">
+                {renderFieldLabel('完成情况及教学小结', {
+                  fields: ['completeAndSummary'],
+                  required: false,
+                })}
+                {isIntegratedEditable ? (
+                  <Input.TextArea
+                    placeholder="请输入完成情况及教学小结"
+                    size="large"
+                    value={draft.completeAndSummary}
                     onChange={(event) => {
-                      onUpdateDraft(item.key, {
-                        productionProjectTitle: event.target.value,
-                      });
+                      onUpdateDraft(item.key, { completeAndSummary: event.target.value });
                     }}
                   />
+                ) : (
+                  <span className="lecture-journal-readonly-input">
+                    <Input.TextArea readOnly size="large" value={draft.completeAndSummary} />
+                  </span>
                 )}
               </label>
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-integrated-objective">
-                {renderFieldLabel('学习目标', {
-                  fields: [
-                    'learningObjective',
-                    'LEARNING_OBJECTIVE',
-                    'teachingChapterContent',
-                    'TEACHING_CHAPTER_CONTENT',
-                  ],
-                  note: '已填时优先读取 journal.rawJournal；未填时使用计划侧 teachingChapterContent 作为参考',
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-problem">
+                {renderFieldLabel('发现问题及解决方法', {
+                  fields: ['problemAndSolve'],
+                  required: false,
                 })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input.TextArea
-                      autoSize={{ minRows: 1, maxRows: 4 }}
-                      placeholder="未填写"
-                      readOnly
-                      size="large"
-                      value={draft.learningObjective}
-                    />
-                  </span>
-                ) : (
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 4 }}
-                    placeholder="请输入学习目标"
+                {isIntegratedEditable ? (
+                  <Input
+                    placeholder="请输入发现问题及解决方法"
                     size="large"
-                    value={draft.learningObjective}
+                    value={draft.problemAndSolve}
                     onChange={(event) => {
-                      onUpdateDraft(item.key, { learningObjective: event.target.value });
+                      onUpdateDraft(item.key, { problemAndSolve: event.target.value });
                     }}
                   />
+                ) : (
+                  <span className="lecture-journal-readonly-input">
+                    <Input readOnly size="large" value={draft.problemAndSolve} />
+                  </span>
                 )}
               </label>
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-integrated-content">
-                {renderFieldLabel('学习内容', {
-                  fields: ['journal.courseContent', 'courseContent', 'COURSE_CONTENT'],
-                  note: '日志侧 courseContent 对应一体化授课内容；未填时使用计划侧 courseContent',
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-discipline">
+                {renderFieldLabel('遵章守纪情况', {
+                  fields: ['disciplineSituation'],
+                  required: false,
                 })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input.TextArea
-                      autoSize={{ minRows: 1, maxRows: 4 }}
-                      placeholder="未填写"
-                      readOnly
-                      size="large"
-                      value={draft.courseContent}
-                    />
-                  </span>
-                ) : (
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 4 }}
-                    placeholder="请输入学习内容"
+                {isIntegratedEditable ? (
+                  <Input
+                    placeholder="请输入遵章守纪情况"
                     size="large"
-                    value={draft.courseContent}
+                    value={draft.disciplineSituation}
                     onChange={(event) => {
-                      onUpdateDraft(item.key, { courseContent: event.target.value });
+                      onUpdateDraft(item.key, { disciplineSituation: event.target.value });
                     }}
                   />
+                ) : (
+                  <span className="lecture-journal-readonly-input">
+                    <Input readOnly size="large" value={draft.disciplineSituation} />
+                  </span>
                 )}
               </label>
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-integrated-outcome">
-                {renderFieldLabel('学习成果', {
-                  fields: ['journal.homeworkAssignment', 'homework', 'HOMEWORK'],
-                  note: '当前对账接口没有单独的学习成果字段，先对齐到日志作业/计划侧 homework',
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-security">
+                {renderFieldLabel('文明安全及设备保养记', {
+                  fields: ['securityAndMaintain'],
+                  required: false,
                 })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input.TextArea
-                      autoSize={{ minRows: 1, maxRows: 4 }}
-                      placeholder="未填写"
-                      readOnly
-                      size="large"
-                      value={draft.homeworkAssignment}
-                    />
-                  </span>
-                ) : (
+                {isIntegratedEditable ? (
                   <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 4 }}
-                    placeholder="请输入学习成果"
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="请输入文明安全及设备保养记"
                     size="large"
-                    value={draft.homeworkAssignment}
+                    value={draft.securityAndMaintain}
                     onChange={(event) => {
-                      onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
+                      onUpdateDraft(item.key, { securityAndMaintain: event.target.value });
                     }}
                   />
+                ) : (
+                  <span className="lecture-journal-readonly-input">
+                    <Input.TextArea
+                      autoSize={{ minRows: 1, maxRows: 3 }}
+                      readOnly
+                      size="large"
+                      value={draft.securityAndMaintain}
+                    />
+                  </span>
                 )}
               </label>
             </>
@@ -1774,19 +2039,37 @@ const JournalDraftCard = memo(function JournalDraftCard({
                         ? item.practiceTopicName || ''
                         : item.courseContent || '',
                     demonstrationHours: isPracticeCard ? item.practiceDemonstrationHours : null,
-                    disciplineSituation: isPracticeCard ? DEFAULT_DISCIPLINE_SITUATION : '',
+                    disciplineSituation: isIntegratedCard
+                      ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
+                      : isPracticeCard
+                        ? DEFAULT_DISCIPLINE_SITUATION
+                        : '',
                     homeworkAssignment: isIntegratedCard
                       ? integratedLearningOutcome
                       : item.homework || '',
                     lectureHours: isPracticeCard ? item.practiceLectureHours : null,
                     learningObjective: isIntegratedCard ? integratedLearningObjective : '',
+                    completeAndSummary: isIntegratedCard
+                      ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
+                      : '',
+                    problemAndSolve: isIntegratedCard
+                      ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
+                      : '',
                     practiceHours: isPracticeCard ? item.practicePracticeHours : null,
                     productionProjectTitle: isIntegratedCard
                       ? integratedTeachingUnitName
                       : isPracticeCard
                         ? item.practiceTeachingChapterContent || ''
                         : draft.productionProjectTitle,
-                    securityAndMaintain: isPracticeCard ? DEFAULT_SECURITY_AND_MAINTAIN : '',
+                    securityAndMaintain: isIntegratedCard
+                      ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
+                      : isPracticeCard
+                        ? DEFAULT_SECURITY_AND_MAINTAIN
+                        : '',
+                    shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
+                    shiftName: isIntegratedCard
+                      ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME
+                      : '',
                   });
                 }}
                 size="small"
@@ -1823,6 +2106,7 @@ export function LectureJournalReconciliationLabPage() {
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
   const [reconciliationResult, setReconciliationResult] =
     useState<LectureJournalReconciliationResult | null>(null);
+  const [prefillResult, setPrefillResult] = useState<AcademicTeachingLogPrefillResult | null>(null);
   const [itemsCourseCategoryTab, setItemsCourseCategoryTab] = useState<string | null>(null);
   const [missingCourseCategoryTab, setMissingCourseCategoryTab] = useState<string | null>(null);
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
@@ -1953,17 +2237,46 @@ export function LectureJournalReconciliationLabPage() {
   const selectedDepartmentLabel =
     selectedDepartmentOption?.label || normalizedDepartmentId || '未指定系部';
   const selectedTeacherLabel = selectedTeacherOption?.name || normalizedStaffId || '全体教师';
-  const editableItems = useMemo(
+  const prefillIntegratedItems = useMemo(
     () =>
-      (reconciliationResult?.items ?? []).map((item) =>
-        buildEditableCardItemFromReconciliation(item),
+      (prefillResult?.integratedPreviews ?? []).map((item) =>
+        buildEditableCardItemFromIntegratedPreview(item),
       ),
-    [reconciliationResult?.items],
+    [prefillResult?.integratedPreviews],
   );
-  const missingEditableItems = useMemo(
-    () => (reconciliationResult?.missingItems ?? []).map(buildEditableCardItemFromMissing),
-    [reconciliationResult?.missingItems],
-  );
+  const editableItems = useMemo(() => {
+    const reconciliationItems = (reconciliationResult?.items ?? []).map((item) =>
+      buildEditableCardItemFromReconciliation(item),
+    );
+
+    if (prefillIntegratedItems.length === 0) {
+      return reconciliationItems;
+    }
+
+    return [
+      ...prefillIntegratedItems,
+      ...reconciliationItems.filter((item) => !isIntegratedCourseCategory(item.courseCategory)),
+    ];
+  }, [prefillIntegratedItems, reconciliationResult?.items]);
+  const missingEditableItems = useMemo(() => {
+    const reconciliationMissingItems = (reconciliationResult?.missingItems ?? []).map(
+      buildEditableCardItemFromMissing,
+    );
+    const missingPrefillIntegratedItems = prefillIntegratedItems.filter(
+      (item) => item.status === 'MISSING',
+    );
+
+    if (missingPrefillIntegratedItems.length === 0) {
+      return reconciliationMissingItems;
+    }
+
+    return [
+      ...missingPrefillIntegratedItems,
+      ...reconciliationMissingItems.filter(
+        (item) => !isIntegratedCourseCategory(item.courseCategory),
+      ),
+    ];
+  }, [prefillIntegratedItems, reconciliationResult?.missingItems]);
   const itemCourseCategoryTabs = useMemo(
     () => buildCourseCategoryTabs(editableItems),
     [editableItems],
@@ -2074,6 +2387,7 @@ export function LectureJournalReconciliationLabPage() {
 
     setIsLoadingReconciliation(true);
     setQueryError(null);
+    setPrefillResult(null);
 
     try {
       const result = await fetchLectureJournalReconciliation({
@@ -2083,12 +2397,29 @@ export function LectureJournalReconciliationLabPage() {
         sessionToken: session.upstreamSessionToken,
         staffId: normalizedStaffId || undefined,
       });
+      const nextPrefillResult = normalizedStaffId
+        ? await fetchAcademicTeachingLogPrefillItems({
+            departmentId: normalizedDepartmentId || undefined,
+            semesterId: selectedSemester.id,
+            staffId: normalizedStaffId,
+            upstreamSessionToken: result.upstreamSessionToken,
+          })
+        : null;
 
-      persistRollingSession(session, {
-        expiresAt: result.expiresAt,
-        upstreamSessionToken: result.upstreamSessionToken,
-      });
+      if (nextPrefillResult?.upstreamSessionToken && nextPrefillResult.expiresAt) {
+        persistRollingSession(session, {
+          expiresAt: nextPrefillResult.expiresAt,
+          upstreamSessionToken: nextPrefillResult.upstreamSessionToken,
+        });
+      } else {
+        persistRollingSession(session, {
+          expiresAt: result.expiresAt,
+          upstreamSessionToken: result.upstreamSessionToken,
+        });
+      }
+
       setReconciliationResult(result);
+      setPrefillResult(nextPrefillResult);
     } catch (error) {
       if (isExpiredUpstreamSessionError(error)) {
         clearCurrentSession();

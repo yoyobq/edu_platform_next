@@ -21,6 +21,10 @@ type LectureJournalReconciliationResponse = {
   fetchLectureJournalReconciliation: LectureJournalReconciliationResult;
 };
 
+type AcademicTeachingLogPrefillResponse = {
+  listAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
+};
+
 export type LectureJournalDepartmentOption = {
   departmentName: string;
   id: string;
@@ -62,6 +66,42 @@ export type LectureJournalExpectedOccurrence = {
   periodEnd: number;
   periodStart: number;
   weekNumber: number;
+};
+
+export type AcademicIntegratedTeachingLogPrefillPreview = {
+  blockingIssue: string | null;
+  canFill: boolean;
+  completeAndSummary: string | null;
+  courseName: string | null;
+  dayOfWeek: number | null;
+  disciplineSituation: string | null;
+  expectedOccurrences: LectureJournalExpectedOccurrence[];
+  learningSessionContent: string | null;
+  learningSessionNo: number | null;
+  learningSessionTarget: string | null;
+  learningTaskName: string | null;
+  learningTaskNo: number | null;
+  learningTaskText: string | null;
+  lecturePlanDetailId: string | null;
+  lecturePlanId: string | null;
+  lessonHours: number | null;
+  matchedLectureJournalDetailId: string | null;
+  problemAndSolve: string | null;
+  securityAndMaintain: string | null;
+  shift: string | null;
+  shiftName: string | null;
+  status: LectureJournalReconciliationStatus;
+  teachingClassId: string | null;
+  teachingClassName: string | null;
+  teachingDate: string | null;
+  teachingUnitAchievement: string | null;
+  teachingUnitContent: string | null;
+  teachingUnitName: string | null;
+  teachingUnitNo: number | null;
+  teachingUnitTarget: string | null;
+  teachingUnitText: string | null;
+  warnings: string[];
+  weekNumber: number | null;
 };
 
 export type LectureJournalReconciliationItem = {
@@ -154,12 +194,28 @@ export type LectureJournalReconciliationResult = {
   upstreamSessionToken: string;
 };
 
+export type AcademicTeachingLogPrefillResult = {
+  blockingIssue: string | null;
+  canFill: boolean;
+  expiresAt: string | null;
+  integratedPreviews: AcademicIntegratedTeachingLogPrefillPreview[];
+  upstreamSessionToken: string | null;
+  warnings: string[];
+};
+
 export type FetchLectureJournalReconciliationInput = {
   departmentId?: string;
   schoolYear: string;
   semester: string;
   sessionToken: string;
   staffId?: string;
+};
+
+export type FetchAcademicTeachingLogPrefillInput = {
+  departmentId?: string;
+  semesterId: number;
+  staffId: string;
+  upstreamSessionToken?: string;
 };
 
 const FETCH_TEACHER_DIRECTORY_QUERY = `
@@ -312,6 +368,70 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
+  query ListAcademicTeachingLogPrefillItems(
+    $departmentId: String
+    $semesterId: Int!
+    $staffId: String!
+    $upstreamSessionToken: String
+  ) {
+    listAcademicTeachingLogPrefillItems(
+      departmentId: $departmentId
+      semesterId: $semesterId
+      staffId: $staffId
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      blockingIssue
+      canFill
+      expiresAt
+      integratedPreviews {
+        blockingIssue
+        canFill
+        completeAndSummary
+        courseName
+        dayOfWeek
+        disciplineSituation
+        expectedOccurrences {
+          date
+          dayOfWeek
+          lessonHours
+          periodEnd
+          periodStart
+          weekNumber
+        }
+        learningSessionContent
+        learningSessionNo
+        learningSessionTarget
+        learningTaskName
+        learningTaskNo
+        learningTaskText
+        lecturePlanDetailId
+        lecturePlanId
+        lessonHours
+        matchedLectureJournalDetailId
+        problemAndSolve
+        securityAndMaintain
+        shift
+        shiftName
+        status
+        teachingClassId
+        teachingClassName
+        teachingDate
+        teachingUnitAchievement
+        teachingUnitContent
+        teachingUnitName
+        teachingUnitNo
+        teachingUnitTarget
+        teachingUnitText
+        warnings
+        weekNumber
+      }
+      upstreamSessionToken
+      warnings
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -341,6 +461,25 @@ function normalizeFetchLectureJournalReconciliationInput(
     semester: String(input.semester || '').trim(),
     sessionToken: input.sessionToken,
     staffId,
+  };
+}
+
+function normalizeFetchAcademicTeachingLogPrefillInput(
+  input: FetchAcademicTeachingLogPrefillInput,
+) {
+  const departmentId = normalizeOptionalString(input.departmentId);
+  const staffId = String(input.staffId || '').trim();
+  const upstreamSessionToken = normalizeOptionalString(input.upstreamSessionToken);
+
+  if (!staffId) {
+    throw new Error('staffId 为必填。');
+  }
+
+  return {
+    departmentId,
+    semesterId: input.semesterId,
+    staffId,
+    upstreamSessionToken,
   };
 }
 
@@ -398,5 +537,30 @@ export async function fetchLectureJournalReconciliation(
     }
 
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
+  }
+}
+
+export async function fetchAcademicTeachingLogPrefillItems(
+  input: FetchAcademicTeachingLogPrefillInput,
+) {
+  try {
+    const response = await requestGraphQL<
+      AcademicTeachingLogPrefillResponse,
+      FetchAcademicTeachingLogPrefillInput & {
+        departmentId?: string;
+        upstreamSessionToken?: string;
+      }
+    >(
+      LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
+      normalizeFetchAcademicTeachingLogPrefillInput(input),
+    );
+
+    return response.listAcademicTeachingLogPrefillItems;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志预填项。'));
   }
 }

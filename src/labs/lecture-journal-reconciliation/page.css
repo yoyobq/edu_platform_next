@@ -257,6 +257,18 @@
   justify-content: flex-end;
 }
 
+.lecture-journal-record-integrated .lecture-journal-record-overview-block-left {
+  flex: 0.8 1 18%;
+}
+
+.lecture-journal-record-integrated .lecture-journal-record-overview-block-center {
+  flex: 1.8 1 58%;
+}
+
+.lecture-journal-record-integrated .lecture-journal-record-overview-block-right {
+  flex: 0.7 1 16%;
+}
+
 .lecture-journal-record-overview-text {
   color: var(--ant-color-text-heading);
   font-size: 14px;
@@ -454,18 +466,30 @@
   margin-inline-end: 0;
 }
 
-.lecture-journal-integrated-coverage {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
+.lecture-journal-integrated-coverage > .ant-collapse > .ant-collapse-item {
+  border-bottom: 0;
+}
+
+.lecture-journal-integrated-coverage > .ant-collapse > .ant-collapse-item > .ant-collapse-header {
+  align-items: center;
+  background: color-mix(in srgb, var(--lecture-journal-record-accent-bg) 36%, transparent);
+  border: 1px dashed
+    color-mix(in srgb, var(--lecture-journal-record-accent) 24%, var(--ant-color-border));
   border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
+  padding: 8px 10px;
+}
+
+.lecture-journal-integrated-coverage
+  > .ant-collapse
+  > .ant-collapse-item
+  > .ant-collapse-content
+  > .ant-collapse-content-box {
+  padding: 8px 0 0;
 }
 
 .lecture-journal-integrated-coverage-title {
   align-items: center;
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 12px;
@@ -489,21 +513,23 @@
 }
 
 .lecture-journal-integrated-occurrence-list {
-  display: grid;
-  gap: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .lecture-journal-integrated-occurrence {
   align-items: center;
-  background: var(--ant-color-fill-quaternary);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: 8px;
-  display: grid;
+  background: color-mix(in srgb, var(--ant-color-fill-quaternary) 72%, white);
+  border: 1px solid
+    color-mix(in srgb, var(--lecture-journal-record-accent) 14%, var(--ant-color-border-secondary));
+  border-radius: 999px;
+  display: inline-flex;
+  flex-wrap: wrap;
   font-size: 12px;
-  gap: 8px;
-  grid-template-columns: 0.9fr 0.9fr 0.8fr 1fr 0.8fr;
+  gap: 4px 8px;
   line-height: 1.5;
-  padding: 8px 10px;
+  padding: 5px 10px;
 }
 
 .lecture-journal-integrated-occurrence span {
@@ -597,7 +623,60 @@
 }
 
 .lecture-journal-editor-grid-integrated {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
+  grid-template-columns: repeat(15, minmax(0, 1fr));
+}
+
+.lecture-journal-integrated-field-shift {
+  grid-column: 1 / 4;
+}
+
+.lecture-journal-integrated-field-task {
+  grid-column: 4 / 10;
+}
+
+.lecture-journal-integrated-field-session {
+  grid-column: 10 / 16;
+}
+
+.lecture-journal-integrated-field-unit {
+  grid-column: 1 / 7;
+  grid-row: 2;
+}
+
+.lecture-journal-integrated-field-problem {
+  grid-column: 1 / 7;
+  grid-row: 3;
+}
+
+.lecture-journal-integrated-field-discipline {
+  grid-column: 1 / 4;
+  grid-row: 4;
+}
+
+.lecture-journal-integrated-field-security {
+  grid-column: 4 / 7;
+  grid-row: 4;
+}
+
+.lecture-journal-integrated-field-summary {
+  align-self: stretch;
+  grid-column: 7 / 16;
+  grid-row: 2 / 5;
+  min-height: 0;
+}
+
+.lecture-journal-integrated-field-summary .lecture-journal-readonly-input {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.lecture-journal-integrated-field-summary textarea.ant-input {
+  flex: 1;
+  height: auto;
+  min-height: 0;
+  resize: vertical;
 }
 
 .lecture-journal-practice-secondary-row {
@@ -863,6 +942,18 @@
   .lecture-journal-practice-notes-inline,
   .lecture-journal-practice-hours-inline {
     grid-template-columns: 1fr;
+  }
+
+  .lecture-journal-integrated-field-shift,
+  .lecture-journal-integrated-field-task,
+  .lecture-journal-integrated-field-session,
+  .lecture-journal-integrated-field-unit,
+  .lecture-journal-integrated-field-problem,
+  .lecture-journal-integrated-field-discipline,
+  .lecture-journal-integrated-field-security,
+  .lecture-journal-integrated-field-summary {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .lecture-journal-topic-record-control {
