@@ -75,7 +75,12 @@ const DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY = 'learn_target';
 const DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE = '未发现问题';
 const DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN = '正常';
 const DEFAULT_INTEGRATED_SHIFT = '3';
-const DEFAULT_INTEGRATED_SHIFT_NAME = '常日班';
+const SHIFT_NAME_BY_VALUE = {
+  '1': '早班',
+  '2': '中班',
+  '3': '常日班',
+} as const;
+const DEFAULT_INTEGRATED_SHIFT_NAME = SHIFT_NAME_BY_VALUE[DEFAULT_INTEGRATED_SHIFT];
 const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
@@ -89,7 +94,7 @@ const COURSE_CATEGORY_META = {
   '2': {
     accentClassName: 'lecture-journal-course-category-practice',
     enumKey: 'PRACTICE',
-    label: '实践课',
+    label: '实训课',
   },
   '3': {
     accentClassName: 'lecture-journal-course-category-integrated',
@@ -474,6 +479,27 @@ function resolveDayOfWeekLabel(dayOfWeek: number | null) {
 
 function resolveLessonHoursLabel(lessonHours: number | null) {
   return lessonHours ? String(lessonHours) : '待识别';
+}
+
+function resolveShiftName(shift: string | null) {
+  const normalizedShift = shift?.trim() || '';
+
+  if (!normalizedShift) {
+    return '';
+  }
+
+  return SHIFT_NAME_BY_VALUE[normalizedShift as keyof typeof SHIFT_NAME_BY_VALUE] || '';
+}
+
+function resolveShiftDisplayLabel(shift: string | null) {
+  const normalizedShift = shift?.trim() || '';
+  const shiftName = resolveShiftName(normalizedShift);
+
+  if (shiftName) {
+    return shiftName;
+  }
+
+  return normalizedShift ? `未知班次（${normalizedShift}）` : '班次待识别';
 }
 
 function resolveOccurrenceSectionLabel(occurrence: LectureJournalExpectedOccurrence) {
@@ -993,7 +1019,10 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
           ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
           : '',
         shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
-        shiftName: isIntegratedCard ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME : '',
+        shiftName: isIntegratedCard
+          ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
+            DEFAULT_INTEGRATED_SHIFT_NAME
+          : '',
         submitStatusText: item.journal.statusName || item.journal.statusCode || '',
         topicRecord: item.journal.topicRecord || '',
       };
@@ -1040,7 +1069,9 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
           ? DEFAULT_SECURITY_AND_MAINTAIN
           : '',
       shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
-      shiftName: isIntegratedCard ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME : '',
+      shiftName: isIntegratedCard
+        ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) || DEFAULT_INTEGRATED_SHIFT_NAME
+        : '',
       submitStatusText: '',
       topicRecord: template?.journal?.topicRecord || '',
     };
@@ -1224,7 +1255,7 @@ function renderIntegratedCoverage(expectedOccurrences: LectureJournalExpectedOcc
   return (
     <div className="lecture-journal-integrated-coverage">
       <Collapse
-        defaultActiveKey={count > 1 ? ['expected-occurrences'] : []}
+        defaultActiveKey={['expected-occurrences']}
         ghost
         items={[
           {
@@ -1406,7 +1437,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
               </Tooltip>
             ) : null}
             <span className="lecture-journal-record-overview-section-wrap">
-              {!isIntegratedCard ? (
+              {!isIntegratedCard && !isPracticeCard ? (
                 <Tooltip placement="top" title="接口字段：sectionName / sectionId">
                   <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
                 </Tooltip>
@@ -1789,11 +1820,12 @@ const JournalDraftCard = memo(function JournalDraftCard({
             <>
               <label className="lecture-journal-card-field lecture-journal-integrated-field-shift">
                 {renderFieldLabel('班次', {
-                  fields: ['shift', 'shiftName'],
+                  fields: ['shift'],
+                  note: '前端按 shift 映射展示：1=早班、2=中班、3=常日班',
                   required: false,
                 })}
                 <span className="lecture-journal-readonly-input">
-                  <Input readOnly size="large" value={`${draft.shift} / ${draft.shiftName}`} />
+                  <Input readOnly size="large" value={resolveShiftDisplayLabel(draft.shift)} />
                 </span>
               </label>
 
@@ -1909,14 +1941,14 @@ const JournalDraftCard = memo(function JournalDraftCard({
               </label>
 
               <label className="lecture-journal-card-field lecture-journal-integrated-field-security">
-                {renderFieldLabel('文明安全及设备保养记', {
+                {renderFieldLabel('文明安全及设备保养记录', {
                   fields: ['securityAndMaintain'],
                   required: false,
                 })}
                 {isIntegratedEditable ? (
                   <Input.TextArea
                     autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="请输入文明安全及设备保养记"
+                    placeholder="请输入文明安全及设备保养记录"
                     size="large"
                     value={draft.securityAndMaintain}
                     onChange={(event) => {
@@ -2068,7 +2100,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                         : '',
                     shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
                     shiftName: isIntegratedCard
-                      ? item.shiftName || DEFAULT_INTEGRATED_SHIFT_NAME
+                      ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
+                        DEFAULT_INTEGRATED_SHIFT_NAME
                       : '',
                   });
                 }}
