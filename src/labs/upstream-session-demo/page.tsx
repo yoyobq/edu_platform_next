@@ -384,7 +384,7 @@ function buildLectureJournalTeachingClassSamples(
     }
 
     samplesByTeachingClassId.set(item.sstsTeachingClassId, {
-      courseName: item.courseName,
+      courseName: item.courseName || '未命名课程',
       scheduleId: item.scheduleId,
       staffId: item.staffId,
       staffName: item.staffName,
@@ -1231,10 +1231,15 @@ export function UpstreamSessionDemoLabPage() {
   async function handleLectureJournalRequest() {
     try {
       const values = await lectureJournalForm.validateFields(['semesterId', 'teachingClassId']);
+      const teachingClassId = values.teachingClassId;
+
+      if (!teachingClassId) {
+        return;
+      }
 
       await ensureSessionAndRun({
         type: 'lecture-journal',
-        teachingClassId: values.teachingClassId,
+        teachingClassId,
       });
     } catch (error) {
       if (

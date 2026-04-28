@@ -474,6 +474,7 @@ async function findStaffInviteIntent(verificationCode: string): Promise<StaffInv
 
     if (info?.type && info.type !== 'INVITE_STAFF') {
       return {
+        invite: null,
         status: 'failure',
         reason: 'invalid',
         message: '当前只支持教职工邀请链接。',

@@ -1,4 +1,12 @@
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   Button,
@@ -33,6 +41,10 @@ import { buildTimetableSlotPlacements, resolveCourseCategoryMeta } from './helpe
 import { academicTimetableLabMeta } from './meta';
 
 import './page.css';
+
+type TimetableSlotGroupStyle = CSSProperties & {
+  '--academic-timetable-slot-layer'?: string;
+};
 
 type AcademicTimetableLabLoaderData = {
   defaultStaffId?: string | null;
@@ -306,18 +318,20 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
               className={`academic-timetable-slot-group ${
                 group.items.length > 1 ? 'academic-timetable-slot-group-stacked' : ''
               }`}
-              style={{
-                gridColumn: group.dayOfWeek + 1,
-                gridRow: `${group.periodStart + 1} / span ${group.periodEnd - group.periodStart + 1}`,
-                insetInlineStart:
-                  group.laneCount > 1
-                    ? `calc(${(group.laneIndex * 100) / group.laneCount}% + 4px)`
-                    : undefined,
-                width: group.laneCount > 1 ? `calc(${100 / group.laneCount}% - 8px)` : undefined,
-                '--academic-timetable-slot-layer': String(
-                  group.laneCount > 1 ? group.laneIndex + 1 : 1,
-                ),
-              }}
+              style={
+                {
+                  gridColumn: group.dayOfWeek + 1,
+                  gridRow: `${group.periodStart + 1} / span ${group.periodEnd - group.periodStart + 1}`,
+                  insetInlineStart:
+                    group.laneCount > 1
+                      ? `calc(${(group.laneIndex * 100) / group.laneCount}% + 4px)`
+                      : undefined,
+                  width: group.laneCount > 1 ? `calc(${100 / group.laneCount}% - 8px)` : undefined,
+                  '--academic-timetable-slot-layer': String(
+                    group.laneCount > 1 ? group.laneIndex + 1 : 1,
+                  ),
+                } as TimetableSlotGroupStyle
+              }
             >
               {group.items.map((item) => (
                 <div className="academic-timetable-slot-group-item" key={props.getEntryKey(item)}>

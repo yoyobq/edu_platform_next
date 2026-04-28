@@ -11,6 +11,7 @@ export async function loadStaffInviteIntent(
 ): Promise<StaffInviteIntentResult> {
   if (!input.verificationCode.trim()) {
     return {
+      invite: null,
       status: 'failure',
       reason: 'invalid',
       message: '这个邀请链接无效，请确认链接是否完整。',
