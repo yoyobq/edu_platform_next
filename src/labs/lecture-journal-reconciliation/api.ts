@@ -89,7 +89,6 @@ export type AcademicIntegratedTeachingLogPrefillPreview = {
   problemAndSolve: string | null;
   securityAndMaintain: string | null;
   shift: string | null;
-  shiftName: string | null;
   status: LectureJournalReconciliationStatus;
   teachingClassId: string | null;
   teachingClassName: string | null;
@@ -412,7 +411,6 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
         problemAndSolve
         securityAndMaintain
         shift
-        shiftName
         status
         teachingClassId
         teachingClassName

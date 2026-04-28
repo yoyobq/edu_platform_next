@@ -875,6 +875,8 @@ function buildEditableCardItemFromMissing(
 function buildEditableCardItemFromIntegratedPreview(
   item: AcademicIntegratedTeachingLogPrefillPreview,
 ): JournalEditableCardItem {
+  const resolvedShift = item.shift || DEFAULT_INTEGRATED_SHIFT;
+
   return {
     blockingIssue: item.blockingIssue,
     canFill: item.canFill,
@@ -916,7 +918,7 @@ function buildEditableCardItemFromIntegratedPreview(
     securityAndMaintain: item.securityAndMaintain,
     semester: null,
     shift: item.shift,
-    shiftName: item.shiftName,
+    shiftName: resolveShiftName(resolvedShift) || DEFAULT_INTEGRATED_SHIFT_NAME,
     status: item.status,
     teacherId: null,
     teacherName: null,
