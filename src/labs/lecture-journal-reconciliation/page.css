@@ -869,6 +869,15 @@
   color: var(--ant-color-primary-hover);
 }
 
+.lecture-journal-save-popover-content {
+  max-width: 280px;
+}
+
+.lecture-journal-save-popover-content .ant-typography {
+  display: block;
+  line-height: 1.45;
+}
+
 .lecture-journal-unmatched {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);

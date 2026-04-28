@@ -11,8 +11,8 @@ import {
   Form,
   Input,
   InputNumber,
-  message,
   Modal,
+  Popover,
   Segmented,
   Select,
   Skeleton,
@@ -212,6 +212,11 @@ type FieldTipConfig = {
   note?: string;
   required?: boolean;
 };
+type SaveFeedback = {
+  text: string;
+  tone: 'error' | 'success';
+};
+type SaveFeedbackMap = Record<string, SaveFeedback | undefined>;
 
 const EMPTY_JOURNAL_DRAFT: JournalDraft = {
   completeAndSummary: '',
@@ -1376,6 +1381,7 @@ type JournalDraftCardProps = {
   onSave: (item: JournalEditableCardItem, draft: JournalDraft) => void;
   onUpdateDraft: (key: string, patch: JournalDraftPatch) => void;
   draft: JournalDraft;
+  saveFeedback?: SaveFeedback;
 };
 
 const JournalDraftCard = memo(function JournalDraftCard({
@@ -1385,6 +1391,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
   onSave,
   onUpdateDraft,
   draft,
+  saveFeedback,
 }: JournalDraftCardProps) {
   const statusTone = resolveStatusTone(item.status);
   const sectionLabel = resolveSectionLabel(item.sectionName, item.sectionId);
@@ -1612,19 +1619,34 @@ const JournalDraftCard = memo(function JournalDraftCard({
           {item.status === 'MISSING' ? (
             <>
               {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
-              <Tooltip placement="top" title={saveButtonTooltip}>
-                <span className="lecture-journal-save-action">
-                  <Button
-                    disabled={isSaveDisabled}
-                    loading={isSaving}
-                    onClick={() => {
-                      onSave(item, draft);
-                    }}
-                  >
-                    保存至校园网
-                  </Button>
-                </span>
-              </Tooltip>
+              <Popover
+                content={
+                  saveFeedback ? (
+                    <div className="lecture-journal-save-popover-content">
+                      <Typography.Text type={saveFeedback.tone === 'error' ? 'danger' : 'success'}>
+                        {saveFeedback.text}
+                      </Typography.Text>
+                    </div>
+                  ) : null
+                }
+                open={Boolean(saveFeedback)}
+                placement="bottomRight"
+                trigger={[]}
+              >
+                <Tooltip placement="top" title={saveButtonTooltip}>
+                  <span className="lecture-journal-save-action">
+                    <Button
+                      disabled={isSaveDisabled}
+                      loading={isSaving}
+                      onClick={() => {
+                        onSave(item, draft);
+                      }}
+                    >
+                      保存至校园网
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Popover>
             </>
           ) : null}
         </div>
@@ -2222,7 +2244,6 @@ JournalDraftCard.displayName = 'JournalDraftCard';
 
 export function LectureJournalReconciliationLabPage() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const [messageApi, messageContextHolder] = message.useMessage();
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
   const {
     clear,
@@ -2257,6 +2278,7 @@ export function LectureJournalReconciliationLabPage() {
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [savingItemKey, setSavingItemKey] = useState<string | null>(null);
+  const [saveFeedbackByKey, setSaveFeedbackByKey] = useState<SaveFeedbackMap>({});
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -2448,12 +2470,23 @@ export function LectureJournalReconciliationLabPage() {
         ...patch,
       },
     }));
+    setSaveFeedbackByKey((current) => ({
+      ...current,
+      [key]: undefined,
+    }));
   }, []);
 
   async function handleSaveToCampus(item: JournalEditableCardItem, draft: JournalDraft) {
     const session = storedSession;
 
     if (!session) {
+      setSaveFeedbackByKey((current) => ({
+        ...current,
+        [item.key]: {
+          text: '请先登录 upstream 后再保存。',
+          tone: 'error',
+        },
+      }));
       setPendingAction(null);
       setLoginError(null);
       openLoginModal();
@@ -2463,11 +2496,21 @@ export function LectureJournalReconciliationLabPage() {
     const validationError = resolveSaveValidationError(item, draft);
 
     if (validationError) {
-      void messageApi.error(validationError);
+      setSaveFeedbackByKey((current) => ({
+        ...current,
+        [item.key]: {
+          text: validationError,
+          tone: 'error',
+        },
+      }));
       return;
     }
 
     setSavingItemKey(item.key);
+    setSaveFeedbackByKey((current) => ({
+      ...current,
+      [item.key]: undefined,
+    }));
 
     try {
       const commonInput = {
@@ -2528,18 +2571,37 @@ export function LectureJournalReconciliationLabPage() {
         upstreamSessionToken: result.upstreamSessionToken,
       });
 
-      void messageApi.success(result.msg || '教学日志已保存。');
+      setSaveFeedbackByKey((current) => ({
+        ...current,
+        [item.key]: {
+          text: result.msg || '教学日志已保存。',
+          tone: 'success',
+        },
+      }));
       await runQueryAction(nextSession);
     } catch (error) {
       if (isExpiredUpstreamSessionError(error)) {
         clearCurrentSession();
+        setSaveFeedbackByKey((current) => ({
+          ...current,
+          [item.key]: {
+            text: 'upstream 会话已失效，请重新登录后重新保存。',
+            tone: 'error',
+          },
+        }));
         setPendingAction(null);
         setLoginError('upstream 会话已失效，请重新登录后重新保存。');
         openLoginModal();
         return;
       }
 
-      void messageApi.error(resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'));
+      setSaveFeedbackByKey((current) => ({
+        ...current,
+        [item.key]: {
+          text: resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'),
+          tone: 'error',
+        },
+      }));
     } finally {
       setSavingItemKey(null);
     }
@@ -2739,6 +2801,7 @@ export function LectureJournalReconciliationLabPage() {
               key={item.key}
               onSave={handleSaveToCampus}
               onUpdateDraft={updateJournalDraft}
+              saveFeedback={saveFeedbackByKey[item.key]}
             />
           ))}
         </div>
@@ -2748,7 +2811,6 @@ export function LectureJournalReconciliationLabPage() {
 
   return (
     <div className="lecture-journal-page flex flex-col gap-6">
-      {messageContextHolder}
       <div className="flex flex-col gap-2">
         <Typography.Title level={3} style={{ margin: 0 }}>
           教学日志填写对账
