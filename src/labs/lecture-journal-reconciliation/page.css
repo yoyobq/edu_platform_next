@@ -98,6 +98,20 @@
   margin-bottom: 16px;
 }
 
+.lecture-journal-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.lecture-journal-course-filter-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.lecture-journal-course-filter-tabs .ant-tabs-content-holder {
+  display: none;
+}
+
 .lecture-journal-record {
   --lecture-journal-record-accent: var(--ant-color-border);
   --lecture-journal-record-accent-bg: var(--ant-color-fill-tertiary);
@@ -419,6 +433,88 @@
   margin-inline-end: 0;
 }
 
+.lecture-journal-integrated-state {
+  background: color-mix(in srgb, var(--ant-color-fill-quaternary) 42%, white);
+  border-bottom: 1px solid var(--ant-color-border-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 24px;
+  position: relative;
+  z-index: 1;
+}
+
+.lecture-journal-integrated-warning-text {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lecture-journal-integrated-warning-text .ant-tag {
+  margin-inline-end: 0;
+}
+
+.lecture-journal-integrated-coverage {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+}
+
+.lecture-journal-integrated-coverage-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  justify-content: space-between;
+}
+
+.lecture-journal-integrated-occurrences {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lecture-journal-integrated-occurrence-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.lecture-journal-integrated-occurrence-tags .ant-tag {
+  margin-inline-end: 0;
+}
+
+.lecture-journal-integrated-occurrence-list {
+  display: grid;
+  gap: 6px;
+}
+
+.lecture-journal-integrated-occurrence {
+  align-items: center;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  display: grid;
+  font-size: 12px;
+  gap: 8px;
+  grid-template-columns: 0.9fr 0.9fr 0.8fr 1fr 0.8fr;
+  line-height: 1.5;
+  padding: 8px 10px;
+}
+
+.lecture-journal-integrated-occurrence span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lecture-journal-integrated-empty {
+  display: block;
+}
+
 .lecture-journal-plan-tooltip-trigger {
   align-items: center;
   background: var(--ant-color-warning);
@@ -444,6 +540,10 @@
 .lecture-journal-plan-tooltip-trigger:focus-visible {
   outline: 2px solid var(--ant-color-warning-border);
   outline-offset: 2px;
+}
+
+.lecture-journal-raw-tooltip-trigger {
+  background: var(--ant-color-primary);
 }
 
 .lecture-journal-plan-tooltip {
@@ -496,6 +596,10 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.lecture-journal-editor-grid-integrated {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
 .lecture-journal-practice-secondary-row {
   display: grid;
   gap: 18px;
@@ -524,6 +628,7 @@
 }
 
 .lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-input-affix-wrapper,
 .lecture-journal-card-field .ant-input-number,
 .lecture-journal-card-field .ant-select,
 .lecture-journal-card-field .ant-segmented {
@@ -531,6 +636,7 @@
 }
 
 .lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-input-affix-wrapper,
 .lecture-journal-card-field .ant-select,
 .lecture-journal-card-field .ant-segmented {
   width: 100%;
@@ -541,14 +647,18 @@
 }
 
 .lecture-journal-card-field .ant-input,
+.lecture-journal-card-field .ant-input-affix-wrapper,
 .lecture-journal-card-field .ant-input-number {
   border-radius: 12px;
   box-shadow: 0 1px 1px color-mix(in srgb, black 2%, transparent);
 }
 
 .lecture-journal-card-field .ant-input:hover,
+.lecture-journal-card-field .ant-input-affix-wrapper:hover,
 .lecture-journal-card-field .ant-input-number:hover,
 .lecture-journal-card-field .ant-input:focus,
+.lecture-journal-card-field .ant-input-affix-wrapper:focus,
+.lecture-journal-card-field .ant-input-affix-wrapper-focused,
 .lecture-journal-card-field .ant-input-number:focus,
 .lecture-journal-card-field .ant-input:focus-within {
   border-color: var(--ant-color-primary-border);
@@ -735,7 +845,16 @@
     align-items: flex-start;
   }
 
+  .lecture-journal-integrated-state {
+    padding: 12px 16px;
+  }
+
+  .lecture-journal-integrated-occurrence {
+    grid-template-columns: 1fr 1fr;
+  }
+
   .lecture-journal-editor-grid,
+  .lecture-journal-editor-grid-integrated,
   .lecture-journal-unmatched-grid {
     grid-template-columns: 1fr;
   }

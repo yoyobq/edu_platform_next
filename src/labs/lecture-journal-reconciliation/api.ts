@@ -55,13 +55,25 @@ export type MatchedLectureJournalSummary = {
   topicRecord: string | null;
 };
 
+export type LectureJournalExpectedOccurrence = {
+  date: string;
+  dayOfWeek: number;
+  lessonHours: number;
+  periodEnd: number;
+  periodStart: number;
+  weekNumber: number;
+};
+
 export type LectureJournalReconciliationItem = {
+  blockingIssue: string | null;
+  canFill: boolean;
   courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number | null;
   demonstrationHours: number | null;
+  expectedOccurrences: LectureJournalExpectedOccurrence[];
   homework: string | null;
   journal: MatchedLectureJournalSummary | null;
   lectureHours: number | null;
@@ -83,16 +95,20 @@ export type LectureJournalReconciliationItem = {
   teachingClassName: string | null;
   teachingDate: string | null;
   topicName: string | null;
+  warnings: string[];
   weekNumber: number | null;
 };
 
 export type MissingLectureJournalItem = {
+  blockingIssue: string | null;
+  canFill: boolean;
   courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number;
   demonstrationHours: number | null;
+  expectedOccurrences: LectureJournalExpectedOccurrence[];
   homework: string | null;
   lectureHours: number | null;
   lecturePlanDetailId: string | null;
@@ -111,6 +127,7 @@ export type MissingLectureJournalItem = {
   teachingClassName: string | null;
   teachingDate: string;
   topicName: string | null;
+  warnings: string[];
   weekNumber: number;
 };
 
@@ -190,12 +207,22 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
       expiresAt
       filledCount
       items {
+        blockingIssue
+        canFill
         courseCategory
         courseContent
         courseId
         courseName
         dayOfWeek
         demonstrationHours
+        expectedOccurrences {
+          date
+          dayOfWeek
+          lessonHours
+          periodEnd
+          periodStart
+          weekNumber
+        }
         homework
         journal {
           courseContent
@@ -226,17 +253,28 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         teachingClassName
         teachingDate
         topicName
+        warnings
         weekNumber
       }
       journalCount
       missingCount
       missingItems {
+        blockingIssue
+        canFill
         courseCategory
         courseContent
         courseId
         courseName
         dayOfWeek
         demonstrationHours
+        expectedOccurrences {
+          date
+          dayOfWeek
+          lessonHours
+          periodEnd
+          periodStart
+          weekNumber
+        }
         homework
         lectureHours
         lecturePlanDetailId
@@ -255,6 +293,7 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         teachingClassName
         teachingDate
         topicName
+        warnings
         weekNumber
       }
       planCount
