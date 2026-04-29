@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -32,9 +32,8 @@ import { lectureJournalReconciliationLabAccess } from './access';
 import {
   type AcademicIntegratedTeachingLogPrefillPreview,
   type AcademicTeachingLogPrefillResult,
-  fetchAcademicTeachingLogPrefillItems,
+  type AcademicTeachingLogSaveResult,
   fetchLectureJournalDepartmentOptions,
-  fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
   isExpiredUpstreamSessionError,
   type LectureJournalDepartmentOption,
@@ -49,6 +48,7 @@ import {
   type TeacherDirectoryResult,
 } from './api';
 import { lectureJournalReconciliationLabMeta } from './meta';
+import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 
 import './page.css';
 
@@ -102,8 +102,6 @@ const COURSE_CATEGORY_META = {
     label: '一体化',
   },
 };
-
-type MetricTone = 'default' | 'success' | 'warning';
 
 type DepartmentOption = {
   id: string;
@@ -433,34 +431,6 @@ function renderFieldLabel(label: string, config: FieldTipConfig) {
         </button>
       </Tooltip>
     </span>
-  );
-}
-
-function renderMetricTile({
-  detail,
-  label,
-  tone = 'default',
-  value,
-}: {
-  detail?: string;
-  label: string;
-  tone?: MetricTone;
-  value: number | string;
-}) {
-  return (
-    <div className={`lecture-journal-metric lecture-journal-metric-${tone}`}>
-      <div className="lecture-journal-metric-label">
-        <Typography.Text type="secondary">{label}</Typography.Text>
-      </div>
-      <div className="lecture-journal-metric-value">
-        <Typography.Title level={3}>{value}</Typography.Title>
-      </div>
-      {detail ? (
-        <div className="lecture-journal-metric-detail">
-          <Typography.Text type="secondary">{detail}</Typography.Text>
-        </div>
-      ) : null}
-    </div>
   );
 }
 
@@ -1361,9 +1331,9 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const isFilled = item.status === 'FILLED';
   const isIntegratedSaveCandidate =
     isIntegratedCard &&
+    item.status === 'MISSING' &&
     item.canFill &&
     !item.blockingIssue &&
-    item.status !== 'UNMATCHED' &&
     Boolean(normalizeOptionalString(item.lecturePlanDetailId || ''));
   const isIntegratedEditable = isIntegratedSaveCandidate;
   const hasCompleteAndSummaryEdited =
@@ -1466,11 +1436,46 @@ const JournalDraftCard = memo(function JournalDraftCard({
       className={[
         'lecture-journal-record',
         `lecture-journal-record-${statusTone}`,
+        shouldRenderSaveAction ? 'lecture-journal-record-has-save-action' : '',
         isIntegratedCard ? 'lecture-journal-record-integrated' : '',
       ]
         .filter(Boolean)
         .join(' ')}
     >
+      {shouldRenderSaveAction ? (
+        <Popover
+          content={
+            saveFeedback ? (
+              <div className="lecture-journal-save-popover-content">
+                <Typography.Text type={saveFeedback.tone === 'error' ? 'danger' : 'success'}>
+                  {saveFeedback.text}
+                </Typography.Text>
+              </div>
+            ) : null
+          }
+          open={Boolean(saveFeedback)}
+          placement="bottomRight"
+          trigger={[]}
+        >
+          <span className="lecture-journal-record-save-anchor">
+            {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
+            <Tooltip placement="top" title={saveButtonTooltip}>
+              <span className="lecture-journal-save-action">
+                <Button
+                  disabled={isSaveDisabled}
+                  loading={isSaving}
+                  onClick={() => {
+                    onSave(item, draft);
+                  }}
+                >
+                  保存
+                </Button>
+              </span>
+            </Tooltip>
+          </span>
+        </Popover>
+      ) : null}
+
       <div className="lecture-journal-record-header">
         <div className="lecture-journal-record-overview">
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-left">
@@ -1567,41 +1572,6 @@ const JournalDraftCard = memo(function JournalDraftCard({
 
         <div className="lecture-journal-record-status">
           {isFilled ? renderJournalRawSnapshotTrigger(item) : null}
-          {shouldRenderSaveAction ? (
-            <>
-              {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
-              <Popover
-                content={
-                  saveFeedback ? (
-                    <div className="lecture-journal-save-popover-content">
-                      <Typography.Text type={saveFeedback.tone === 'error' ? 'danger' : 'success'}>
-                        {saveFeedback.text}
-                      </Typography.Text>
-                    </div>
-                  ) : null
-                }
-                open={Boolean(saveFeedback)}
-                placement="bottomRight"
-                trigger={[]}
-              >
-                <Tooltip placement="top" title={saveButtonTooltip}>
-                  <span className="lecture-journal-save-action">
-                    <Button
-                      disabled={isSaveDisabled}
-                      loading={isSaving}
-                      onClick={() => {
-                        onSave(item, draft);
-                      }}
-                    >
-                      {isIntegratedCard && item.status === 'FILLED'
-                        ? '更新至校园网'
-                        : '保存至校园网'}
-                    </Button>
-                  </span>
-                </Tooltip>
-              </Popover>
-            </>
-          ) : null}
         </div>
       </div>
 
@@ -2222,10 +2192,13 @@ export function LectureJournalReconciliationLabPage() {
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [journalDrafts, setJournalDrafts] = useState<JournalDraftMap>({});
   const [queryError, setQueryError] = useState<string | null>(null);
+  const [prefillError, setPrefillError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [savingItemKey, setSavingItemKey] = useState<string | null>(null);
   const [saveFeedbackByKey, setSaveFeedbackByKey] = useState<SaveFeedbackMap>({});
+  const activeQueryRequestIdRef = useRef(0);
+  const isQueryInFlightRef = useRef(false);
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -2332,15 +2305,6 @@ export function LectureJournalReconciliationLabPage() {
     label: buildTeacherOptionLabel(teacher),
     value: teacher.value,
   }));
-  const selectedDepartmentOption = departmentOptions.find(
-    (department) => department.id === normalizedDepartmentId,
-  );
-  const selectedTeacherOption = (directoryResult?.teachers ?? []).find(
-    (teacher) => teacher.value === normalizedStaffId,
-  );
-  const selectedDepartmentLabel =
-    selectedDepartmentOption?.label || normalizedDepartmentId || '未指定系部';
-  const selectedTeacherLabel = selectedTeacherOption?.name || normalizedStaffId || '全体教师';
   const prefillIntegratedItems = useMemo(
     () =>
       (prefillResult?.integratedPreviews ?? []).map((item) =>
@@ -2399,14 +2363,6 @@ export function LectureJournalReconciliationLabPage() {
     activeCourseCategoryFilter === 'ALL'
       ? '全部课程'
       : resolveCourseCategoryMeta(activeCourseCategoryFilter)?.label || activeCourseCategoryFilter;
-  const visibleFilledCount = editableItems.filter((item) => item.status === 'FILLED').length;
-  const visibleMissingCount = missingEditableItems.length;
-  const visibleUnmatchedCount = unmatchedEditableItems.length;
-  const reconciliationBaseCount = visibleFilledCount + visibleMissingCount;
-  const fillRate =
-    reconciliationBaseCount > 0
-      ? `${Math.round((visibleFilledCount / reconciliationBaseCount) * 100)}%`
-      : '无可对账课次';
   const initialJournalDrafts = useMemo(() => buildJournalDrafts(editableItems), [editableItems]);
 
   useEffect(() => {
@@ -2426,6 +2382,79 @@ export function LectureJournalReconciliationLabPage() {
       [key]: undefined,
     }));
   }, []);
+
+  const applyLocalSaveSuccess = useCallback(
+    (item: JournalEditableCardItem, draft: JournalDraft, result: AcademicTeachingLogSaveResult) => {
+      if (isIntegratedCourseCategory(item.courseCategory)) {
+        setPrefillResult((current) => {
+          if (!current) {
+            return current;
+          }
+
+          return {
+            ...current,
+            integratedPreviews: current.integratedPreviews.map((preview) => {
+              const isTargetPreview =
+                preview.lecturePlanDetailId === item.lecturePlanDetailId &&
+                preview.lecturePlanId === item.lecturePlanId;
+
+              if (!isTargetPreview) {
+                return preview;
+              }
+
+              return {
+                ...preview,
+                completeAndSummary: draft.completeAndSummary,
+                disciplineSituation: draft.disciplineSituation,
+                matchedLectureJournalDetailId:
+                  result.lectureJournalDetailId || preview.matchedLectureJournalDetailId,
+                problemAndSolve: draft.problemAndSolve,
+                securityAndMaintain: draft.securityAndMaintain,
+                shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
+                status: 'FILLED',
+              };
+            }),
+          };
+        });
+
+        return;
+      }
+
+      setReconciliationResult((current) => {
+        if (!current) {
+          return current;
+        }
+
+        return {
+          ...current,
+          items: current.items.map((currentItem) => {
+            if (buildItemKey(currentItem) !== item.key) {
+              return currentItem;
+            }
+
+            return {
+              ...currentItem,
+              journal: {
+                courseContent: draft.courseContent,
+                homeworkAssignment: draft.homeworkAssignment,
+                lectureJournalDetailId:
+                  result.lectureJournalDetailId ||
+                  currentItem.journal?.lectureJournalDetailId ||
+                  null,
+                lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
+                rawJournal: currentItem.journal?.rawJournal ?? null,
+                statusCode: currentItem.journal?.statusCode ?? null,
+                statusName: currentItem.journal?.statusName ?? null,
+                topicRecord: draft.topicRecord || currentItem.journal?.topicRecord || null,
+              },
+              status: 'FILLED',
+            };
+          }),
+        };
+      });
+    },
+    [],
+  );
 
   async function handleSaveToCampus(item: JournalEditableCardItem, draft: JournalDraft) {
     const session = storedSession;
@@ -2516,10 +2545,12 @@ export function LectureJournalReconciliationLabPage() {
         throw new Error(result.msg || '上游未保存成功。');
       }
 
-      const nextSession = persistRollingSession(session, {
+      persistRollingSession(session, {
         expiresAt: result.expiresAt,
         upstreamSessionToken: result.upstreamSessionToken,
       });
+
+      applyLocalSaveSuccess(item, draft, result);
 
       setSaveFeedbackByKey((current) => ({
         ...current,
@@ -2528,7 +2559,6 @@ export function LectureJournalReconciliationLabPage() {
           tone: 'success',
         },
       }));
-      await runQueryAction(nextSession);
     } catch (error) {
       if (isExpiredUpstreamSessionError(error)) {
         clearCurrentSession();
@@ -2607,42 +2637,47 @@ export function LectureJournalReconciliationLabPage() {
       return;
     }
 
+    if (isQueryInFlightRef.current) {
+      return;
+    }
+
+    const requestId = activeQueryRequestIdRef.current + 1;
+
+    activeQueryRequestIdRef.current = requestId;
+    isQueryInFlightRef.current = true;
     setIsLoadingReconciliation(true);
     setQueryError(null);
+    setPrefillError(null);
+    setReconciliationResult(null);
     setPrefillResult(null);
 
     try {
-      const result = await fetchLectureJournalReconciliation({
+      const {
+        prefillError: nextPrefillError,
+        prefillResult: nextPrefillResult,
+        reconciliationResult: result,
+      } = await runLectureJournalReconciliationQueryWorkflow({
         departmentId: normalizedDepartmentId || undefined,
+        persistRollingSession,
         schoolYear: String(selectedSemester.schoolYear),
         semester: String(selectedSemester.termNumber),
-        sessionToken: session.upstreamSessionToken,
+        semesterId: selectedSemester.id,
+        session,
         staffId: normalizedStaffId || undefined,
       });
-      const nextPrefillResult = normalizedStaffId
-        ? await fetchAcademicTeachingLogPrefillItems({
-            departmentId: normalizedDepartmentId || undefined,
-            semesterId: selectedSemester.id,
-            staffId: normalizedStaffId,
-            upstreamSessionToken: result.upstreamSessionToken,
-          })
-        : null;
 
-      if (nextPrefillResult?.upstreamSessionToken && nextPrefillResult.expiresAt) {
-        persistRollingSession(session, {
-          expiresAt: nextPrefillResult.expiresAt,
-          upstreamSessionToken: nextPrefillResult.upstreamSessionToken,
-        });
-      } else {
-        persistRollingSession(session, {
-          expiresAt: result.expiresAt,
-          upstreamSessionToken: result.upstreamSessionToken,
-        });
+      if (activeQueryRequestIdRef.current !== requestId) {
+        return;
       }
 
       setReconciliationResult(result);
       setPrefillResult(nextPrefillResult);
+      setPrefillError(nextPrefillError);
     } catch (error) {
+      if (activeQueryRequestIdRef.current !== requestId) {
+        return;
+      }
+
       if (isExpiredUpstreamSessionError(error)) {
         clearCurrentSession();
         setPendingAction('query');
@@ -2653,7 +2688,10 @@ export function LectureJournalReconciliationLabPage() {
 
       setQueryError(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
     } finally {
-      setIsLoadingReconciliation(false);
+      if (activeQueryRequestIdRef.current === requestId) {
+        isQueryInFlightRef.current = false;
+        setIsLoadingReconciliation(false);
+      }
     }
   }
 
@@ -2817,15 +2855,6 @@ export function LectureJournalReconciliationLabPage() {
                   }
                 />
               </label>
-
-              <div className="flex flex-col gap-2">
-                <Typography.Text strong>当前筛选</Typography.Text>
-                <div className="lecture-journal-filter-summary">
-                  <Typography.Text strong>{selectedSemester?.name || '未选择学期'}</Typography.Text>
-                  <Typography.Text type="secondary">{selectedTeacherLabel}</Typography.Text>
-                  <Typography.Text type="secondary">{selectedDepartmentLabel}</Typography.Text>
-                </div>
-              </div>
             </div>
 
             {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
@@ -2892,60 +2921,19 @@ export function LectureJournalReconciliationLabPage() {
       </div>
 
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
+      {prefillError ? (
+        <Alert
+          description="主对账结果已经返回；当前只缺少一体化教学日志的补充预填信息。"
+          message={prefillError}
+          showIcon
+          type="warning"
+        />
+      ) : null}
 
       {isLoadingReconciliation ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!isLoadingReconciliation && reconciliationResult ? (
         <div className="flex flex-col gap-6">
-          <div className="lecture-journal-metric-grid">
-            {renderMetricTile({
-              label: '已填写',
-              tone: 'success',
-              value: visibleFilledCount,
-            })}
-            {renderMetricTile({
-              label: '疑似未填',
-              tone: 'warning',
-              value: visibleMissingCount,
-            })}
-            {renderMetricTile({
-              label: '无法对账',
-              value: visibleUnmatchedCount,
-            })}
-            {renderMetricTile({
-              detail: `详情 ${reconciliationResult.planDetailCount}`,
-              label: '计划',
-              value: reconciliationResult.planCount,
-            })}
-            {renderMetricTile({
-              label: '教学日志',
-              value: reconciliationResult.journalCount,
-            })}
-            {renderMetricTile({
-              detail: '不含无法对账项',
-              label: '填写率',
-              value: fillRate,
-            })}
-          </div>
-
-          <section className="lecture-journal-result-summary">
-            <Descriptions column={3} size="small">
-              <Descriptions.Item label="学期">
-                {selectedSemester?.name || '未选择'}
-              </Descriptions.Item>
-              <Descriptions.Item label="教师">{selectedTeacherLabel}</Descriptions.Item>
-              <Descriptions.Item label="departmentId">{selectedDepartmentLabel}</Descriptions.Item>
-              <Descriptions.Item label="返回条数">
-                完整 {editableItems.length} / 未填 {missingEditableItems.length} / 无法对账{' '}
-                {unmatchedEditableItems.length}
-              </Descriptions.Item>
-              <Descriptions.Item label="会话续期">
-                {formatDateTime(reconciliationResult.expiresAt)}
-              </Descriptions.Item>
-              <Descriptions.Item label="对账顺序">按时间升序</Descriptions.Item>
-            </Descriptions>
-          </section>
-
           <div className="lecture-journal-view-shell">
             <section className="lecture-journal-view-controls">
               <div className="lecture-journal-view-controls-head">
