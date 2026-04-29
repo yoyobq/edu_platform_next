@@ -196,7 +196,31 @@
 .lecture-journal-card-list {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+}
+
+.lecture-journal-card-item {
+  margin-bottom: 16px;
+  opacity: 1;
+  overflow: hidden;
+  transition:
+    margin-bottom 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 0.22s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.16s ease;
+}
+
+.lecture-journal-card-item:last-child {
+  margin-bottom: 0;
+}
+
+.lecture-journal-card-item-measured {
+  max-height: var(--lecture-journal-card-collapse-height);
+}
+
+.lecture-journal-card-item-collapsing {
+  margin-bottom: 0;
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .lecture-journal-record {
@@ -213,8 +237,7 @@
   position: relative;
   transition:
     border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s ease;
+    box-shadow 0.15s ease;
 }
 
 .lecture-journal-record::before {
@@ -241,7 +264,13 @@
   box-shadow:
     0 4px 12px color-mix(in srgb, black 6%, transparent),
     inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 10%, transparent);
-  transform: translateY(-1px);
+}
+
+.lecture-journal-record-collapsing {
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 8%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--lecture-journal-record-accent) 6%, transparent);
+  opacity: 0.94;
 }
 
 .lecture-journal-record-success {

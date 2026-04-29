@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -85,6 +85,7 @@ const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const COURSE_CATEGORY_TAB_ORDER = ['3', '1', '2'];
+const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
 const COURSE_CATEGORY_META = {
   '1': {
     accentClassName: 'lecture-journal-course-category-theory',
@@ -1300,6 +1301,7 @@ function renderIntegratedCoverage(expectedOccurrences: LectureJournalExpectedOcc
 
 type JournalDraftCardProps = {
   initialDraft: JournalDraft;
+  isCollapsing?: boolean;
   item: JournalEditableCardItem;
   isSaving: boolean;
   onSave: (item: JournalEditableCardItem, draft: JournalDraft) => void;
@@ -1310,6 +1312,7 @@ type JournalDraftCardProps = {
 
 const JournalDraftCard = memo(function JournalDraftCard({
   initialDraft,
+  isCollapsing = false,
   isSaving,
   item,
   onSave,
@@ -1436,6 +1439,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
       className={[
         'lecture-journal-record',
         `lecture-journal-record-${statusTone}`,
+        isCollapsing ? 'lecture-journal-record-collapsing' : '',
         shouldRenderSaveAction ? 'lecture-journal-record-has-save-action' : '',
         isIntegratedCard ? 'lecture-journal-record-integrated' : '',
       ]
@@ -2197,8 +2201,16 @@ export function LectureJournalReconciliationLabPage() {
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [savingItemKey, setSavingItemKey] = useState<string | null>(null);
   const [saveFeedbackByKey, setSaveFeedbackByKey] = useState<SaveFeedbackMap>({});
+  const [settlingSavedItemKeys, setSettlingSavedItemKeys] = useState<string[]>([]);
+  const [collapsingSavedItemKeys, setCollapsingSavedItemKeys] = useState<string[]>([]);
+  const [collapsingSavedItemHeights, setCollapsingSavedItemHeights] = useState<
+    Record<string, number>
+  >({});
   const activeQueryRequestIdRef = useRef(0);
   const isQueryInFlightRef = useRef(false);
+  const cardItemElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const savedCardCollapseAnimationFramesRef = useRef<Record<string, number>>({});
+  const savedCardCollapseTimeoutsRef = useRef<Record<string, number>>({});
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -2213,6 +2225,62 @@ export function LectureJournalReconciliationLabPage() {
     });
     setIsLoginModalOpen(true);
   }, [loginForm, storedSession?.upstreamLoginId]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(savedCardCollapseAnimationFramesRef.current).forEach((frameId) => {
+        window.cancelAnimationFrame(frameId);
+      });
+      Object.values(savedCardCollapseTimeoutsRef.current).forEach((timeoutId) => {
+        window.clearTimeout(timeoutId);
+      });
+    };
+  }, []);
+
+  const startSavedCardCollapse = useCallback((itemKey: string) => {
+    const cardItemElement = cardItemElementsRef.current[itemKey];
+    const measuredHeight = cardItemElement?.offsetHeight ?? 0;
+    const existingFrameId = savedCardCollapseAnimationFramesRef.current[itemKey];
+    const existingTimeoutId = savedCardCollapseTimeoutsRef.current[itemKey];
+
+    if (existingFrameId) {
+      window.cancelAnimationFrame(existingFrameId);
+    }
+
+    if (existingTimeoutId) {
+      window.clearTimeout(existingTimeoutId);
+    }
+
+    setCollapsingSavedItemHeights((current) => ({
+      ...current,
+      [itemKey]: measuredHeight,
+    }));
+    setSettlingSavedItemKeys((current) =>
+      current.includes(itemKey) ? current : [...current, itemKey],
+    );
+
+    savedCardCollapseAnimationFramesRef.current[itemKey] = window.requestAnimationFrame(() => {
+      savedCardCollapseAnimationFramesRef.current[itemKey] = window.requestAnimationFrame(() => {
+        setSettlingSavedItemKeys((current) => current.filter((key) => key !== itemKey));
+        setCollapsingSavedItemKeys((current) =>
+          current.includes(itemKey) ? current : [...current, itemKey],
+        );
+
+        savedCardCollapseTimeoutsRef.current[itemKey] = window.setTimeout(() => {
+          setSettlingSavedItemKeys((current) => current.filter((key) => key !== itemKey));
+          setCollapsingSavedItemKeys((current) => current.filter((key) => key !== itemKey));
+          setCollapsingSavedItemHeights((current) => {
+            const next = { ...current };
+
+            delete next[itemKey];
+            return next;
+          });
+          delete savedCardCollapseAnimationFramesRef.current[itemKey];
+          delete savedCardCollapseTimeoutsRef.current[itemKey];
+        }, SAVED_CARD_COLLAPSE_DURATION_MS);
+      });
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -2330,13 +2398,26 @@ export function LectureJournalReconciliationLabPage() {
     () => editableItems.filter((item) => item.status === 'MISSING'),
     [editableItems],
   );
+  const presentedMissingEditableItems = useMemo(() => {
+    const transitionSavedItemKeys = [...settlingSavedItemKeys, ...collapsingSavedItemKeys];
+
+    if (transitionSavedItemKeys.length === 0) {
+      return missingEditableItems;
+    }
+
+    const transitionSavedItemKeySet = new Set(transitionSavedItemKeys);
+
+    return editableItems.filter(
+      (item) => item.status === 'MISSING' || transitionSavedItemKeySet.has(item.key),
+    );
+  }, [collapsingSavedItemKeys, editableItems, missingEditableItems, settlingSavedItemKeys]);
   const unmatchedEditableItems = useMemo(
     () => editableItems.filter((item) => item.status === 'UNMATCHED'),
     [editableItems],
   );
   const scopedJournalItems = useMemo(() => {
     if (resultViewScope === 'missing') {
-      return missingEditableItems;
+      return presentedMissingEditableItems;
     }
 
     if (resultViewScope === 'unmatched') {
@@ -2344,7 +2425,7 @@ export function LectureJournalReconciliationLabPage() {
     }
 
     return editableItems;
-  }, [editableItems, missingEditableItems, resultViewScope, unmatchedEditableItems]);
+  }, [editableItems, presentedMissingEditableItems, resultViewScope, unmatchedEditableItems]);
   const courseCategoryOptions = useMemo(
     () => buildCourseCategoryFilterOptions(scopedJournalItems),
     [scopedJournalItems],
@@ -2552,6 +2633,10 @@ export function LectureJournalReconciliationLabPage() {
 
       applyLocalSaveSuccess(item, draft, result);
 
+      if (item.status === 'MISSING' && resultViewScope === 'missing') {
+        startSavedCardCollapse(item.key);
+      }
+
       setSaveFeedbackByKey((current) => ({
         ...current,
         [item.key]: {
@@ -2730,20 +2815,47 @@ export function LectureJournalReconciliationLabPage() {
   function renderJournalCardList(items: JournalEditableCardItem[]) {
     return (
       <div className="lecture-journal-card-list">
-        <div className="flex flex-col gap-4">
-          {items.map((item) => (
-            <JournalDraftCard
-              draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
-              initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
-              isSaving={savingItemKey === item.key}
-              item={item}
+        {items.map((item) => {
+          const isMeasured =
+            settlingSavedItemKeys.includes(item.key) || collapsingSavedItemKeys.includes(item.key);
+          const isCollapsing =
+            resultViewScope === 'missing' && collapsingSavedItemKeys.includes(item.key);
+          const collapseHeight = collapsingSavedItemHeights[item.key];
+          const collapseStyle =
+            isMeasured && collapseHeight
+              ? ({
+                  '--lecture-journal-card-collapse-height': `${collapseHeight}px`,
+                } as CSSProperties)
+              : undefined;
+
+          return (
+            <div
+              className={[
+                'lecture-journal-card-item',
+                isMeasured ? 'lecture-journal-card-item-measured' : '',
+                isCollapsing ? 'lecture-journal-card-item-collapsing' : '',
+              ]
+                .filter(Boolean)
+                .join(' ')}
               key={item.key}
-              onSave={handleSaveToCampus}
-              onUpdateDraft={updateJournalDraft}
-              saveFeedback={saveFeedbackByKey[item.key]}
-            />
-          ))}
-        </div>
+              ref={(node) => {
+                cardItemElementsRef.current[item.key] = node;
+              }}
+              style={collapseStyle}
+            >
+              <JournalDraftCard
+                draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                isCollapsing={isCollapsing}
+                isSaving={savingItemKey === item.key}
+                item={item}
+                onSave={handleSaveToCampus}
+                onUpdateDraft={updateJournalDraft}
+                saveFeedback={saveFeedbackByKey[item.key]}
+              />
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -2972,7 +3084,7 @@ export function LectureJournalReconciliationLabPage() {
                           label: (
                             <span className="lecture-journal-view-option">
                               <span>疑似未填</span>
-                              <strong>{missingEditableItems.length}</strong>
+                              <strong>{presentedMissingEditableItems.length}</strong>
                             </span>
                           ),
                           value: 'missing',
