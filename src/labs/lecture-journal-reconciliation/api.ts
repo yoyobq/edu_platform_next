@@ -150,58 +150,12 @@ export type LectureJournalReconciliationItem = {
   weekNumber: number | null;
 };
 
-export type MissingLectureJournalItem = {
-  blockingIssue: string | null;
-  canFill: boolean;
-  courseCategory: string | null;
-  courseContent: string | null;
-  courseId: string | null;
-  courseName: string | null;
-  dayOfWeek: number;
-  demonstrationHours: number | null;
-  expectedOccurrences: LectureJournalExpectedOccurrence[];
-  homework: string | null;
-  lectureHours: number | null;
-  lecturePlanDetailId: string | null;
-  lecturePlanId: string | null;
-  lessonHours: number;
-  matchKey: string;
-  practiceHours: number | null;
-  schoolYear: string | null;
-  sectionId: string;
-  sectionName: string | null;
-  semester: string | null;
-  teacherId: string | null;
-  teacherName: string | null;
-  teachingChapterContent: string | null;
-  teachingClassId: string | null;
-  teachingClassName: string | null;
-  teachingDate: string;
-  topicName: string | null;
-  warnings: string[];
-  weekNumber: number;
-};
-
-export type UnmatchedLectureJournalPlanItem = {
-  lecturePlanDetailId: string | null;
-  lecturePlanId: string | null;
-  rawPlan: unknown;
-  rawPlanDetail: unknown;
-  reason: string;
-  teachingClassId: string | null;
-};
-
 export type LectureJournalReconciliationResult = {
   expiresAt: string;
-  filledCount: number;
   items: LectureJournalReconciliationItem[];
   journalCount: number;
-  missingCount: number;
-  missingItems: MissingLectureJournalItem[];
   planCount: number;
   planDetailCount: number;
-  unmatchedPlanItemCount: number;
-  unmatchedPlanItems: UnmatchedLectureJournalPlanItem[];
   upstreamSessionToken: string;
 };
 
@@ -349,7 +303,6 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
       staffId: $staffId
     ) {
       expiresAt
-      filledCount
       items {
         blockingIssue
         canFill
@@ -401,56 +354,8 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
         weekNumber
       }
       journalCount
-      missingCount
-      missingItems {
-        blockingIssue
-        canFill
-        courseCategory
-        courseContent
-        courseId
-        courseName
-        dayOfWeek
-        demonstrationHours
-        expectedOccurrences {
-          date
-          dayOfWeek
-          lessonHours
-          periodEnd
-          periodStart
-          weekNumber
-        }
-        homework
-        lectureHours
-        lecturePlanDetailId
-        lecturePlanId
-        lessonHours
-        matchKey
-        practiceHours
-        schoolYear
-        sectionId
-        sectionName
-        semester
-        teacherId
-        teacherName
-        teachingChapterContent
-        teachingClassId
-        teachingClassName
-        teachingDate
-        topicName
-        warnings
-        weekNumber
-      }
       planCount
       planDetailCount
-      unmatchedPlanItemCount
-      unmatchedPlanItems {
-        lecturePlanDetailId
-        lecturePlanId
-        rawPlan
-        rawPlanDetail
-        reason
-        teachingClassId
-      }
       upstreamSessionToken
     }
   }

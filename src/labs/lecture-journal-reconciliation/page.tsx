@@ -47,7 +47,6 @@ import {
   saveAcademicTheoryTeachingLog,
   type TeacherDirectoryEntry,
   type TeacherDirectoryResult,
-  type UnmatchedLectureJournalPlanItem,
 } from './api';
 import { lectureJournalReconciliationLabMeta } from './meta';
 
@@ -2367,17 +2366,21 @@ export function LectureJournalReconciliationLabPage() {
     () => editableItems.filter((item) => item.status === 'MISSING'),
     [editableItems],
   );
+  const unmatchedEditableItems = useMemo(
+    () => editableItems.filter((item) => item.status === 'UNMATCHED'),
+    [editableItems],
+  );
   const scopedJournalItems = useMemo(() => {
     if (resultViewScope === 'missing') {
       return missingEditableItems;
     }
 
     if (resultViewScope === 'unmatched') {
-      return [];
+      return unmatchedEditableItems;
     }
 
     return editableItems;
-  }, [editableItems, missingEditableItems, resultViewScope]);
+  }, [editableItems, missingEditableItems, resultViewScope, unmatchedEditableItems]);
   const courseCategoryOptions = useMemo(
     () => buildCourseCategoryFilterOptions(scopedJournalItems),
     [scopedJournalItems],
@@ -2391,15 +2394,14 @@ export function LectureJournalReconciliationLabPage() {
     [activeCourseCategoryFilter, scopedJournalItems],
   );
   const currentResultCount =
-    resultViewScope === 'unmatched'
-      ? (reconciliationResult?.unmatchedPlanItems.length ?? 0)
-      : visibleJournalItems.length;
+    resultViewScope === 'unmatched' ? unmatchedEditableItems.length : visibleJournalItems.length;
   const currentCourseCategoryLabel =
     activeCourseCategoryFilter === 'ALL'
       ? '全部课程'
       : resolveCourseCategoryMeta(activeCourseCategoryFilter)?.label || activeCourseCategoryFilter;
   const visibleFilledCount = editableItems.filter((item) => item.status === 'FILLED').length;
   const visibleMissingCount = missingEditableItems.length;
+  const visibleUnmatchedCount = unmatchedEditableItems.length;
   const reconciliationBaseCount = visibleFilledCount + visibleMissingCount;
   const fillRate =
     reconciliationBaseCount > 0
@@ -2553,26 +2555,6 @@ export function LectureJournalReconciliationLabPage() {
     } finally {
       setSavingItemKey(null);
     }
-  }
-
-  function renderUnmatchedCard(item: UnmatchedLectureJournalPlanItem) {
-    return (
-      <article className="lecture-journal-unmatched" key={buildItemKey(item)}>
-        <div className="lecture-journal-unmatched-heading">
-          <Tag color="default">无法对账</Tag>
-          <Typography.Text strong>{item.reason}</Typography.Text>
-        </div>
-        <div className="lecture-journal-unmatched-grid">
-          <Typography.Text type="secondary">计划：{item.lecturePlanId || '缺失'}</Typography.Text>
-          <Typography.Text type="secondary">
-            详情：{item.lecturePlanDetailId || '缺失'}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            教学班：{item.teachingClassId || '缺失'}
-          </Typography.Text>
-        </div>
-      </article>
-    );
   }
 
   async function runDirectoryAction(sessionOverride?: StoredUpstreamSession) {
@@ -2928,7 +2910,7 @@ export function LectureJournalReconciliationLabPage() {
             })}
             {renderMetricTile({
               label: '无法对账',
-              value: reconciliationResult.unmatchedPlanItemCount,
+              value: visibleUnmatchedCount,
             })}
             {renderMetricTile({
               detail: `详情 ${reconciliationResult.planDetailCount}`,
@@ -2954,7 +2936,8 @@ export function LectureJournalReconciliationLabPage() {
               <Descriptions.Item label="教师">{selectedTeacherLabel}</Descriptions.Item>
               <Descriptions.Item label="departmentId">{selectedDepartmentLabel}</Descriptions.Item>
               <Descriptions.Item label="返回条数">
-                完整 {editableItems.length} / 未填 {missingEditableItems.length}
+                完整 {editableItems.length} / 未填 {missingEditableItems.length} / 无法对账{' '}
+                {unmatchedEditableItems.length}
               </Descriptions.Item>
               <Descriptions.Item label="会话续期">
                 {formatDateTime(reconciliationResult.expiresAt)}
@@ -3010,7 +2993,7 @@ export function LectureJournalReconciliationLabPage() {
                           label: (
                             <span className="lecture-journal-view-option">
                               <span>无法对账</span>
-                              <strong>{reconciliationResult.unmatchedPlanItems.length}</strong>
+                              <strong>{unmatchedEditableItems.length}</strong>
                             </span>
                           ),
                           value: 'unmatched',
@@ -3029,33 +3012,25 @@ export function LectureJournalReconciliationLabPage() {
                   <div className="lecture-journal-view-filter-label">
                     <Typography.Text strong>课程类型</Typography.Text>
                   </div>
-                  {resultViewScope === 'unmatched' ? (
-                    <div className="lecture-journal-view-filter-disabled">
-                      <Typography.Text type="secondary">
-                        无法对账项暂不区分课程类型。
-                      </Typography.Text>
-                    </div>
-                  ) : (
-                    <div className="lecture-journal-view-segmented lecture-journal-view-segmented-category">
-                      <Segmented
-                        block
-                        options={courseCategoryOptions.map((option) => ({
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>{option.label}</span>
-                              <strong>{option.count}</strong>
-                            </span>
-                          ),
-                          value: option.key,
-                        }))}
-                        size="large"
-                        value={activeCourseCategoryFilter}
-                        onChange={(value) => {
-                          setCourseCategoryFilter(value as CourseCategoryFilter);
-                        }}
-                      />
-                    </div>
-                  )}
+                  <div className="lecture-journal-view-segmented lecture-journal-view-segmented-category">
+                    <Segmented
+                      block
+                      options={courseCategoryOptions.map((option) => ({
+                        label: (
+                          <span className="lecture-journal-view-option">
+                            <span>{option.label}</span>
+                            <strong>{option.count}</strong>
+                          </span>
+                        ),
+                        value: option.key,
+                      }))}
+                      size="large"
+                      value={activeCourseCategoryFilter}
+                      onChange={(value) => {
+                        setCourseCategoryFilter(value as CourseCategoryFilter);
+                      }}
+                    />
+                  </div>
                 </div>
               </div>
             </section>
@@ -3067,38 +3042,23 @@ export function LectureJournalReconciliationLabPage() {
                     {resolveResultViewScopeLabel(resultViewScope)}
                   </Typography.Title>
                   <Typography.Text type="secondary">
-                    {resultViewScope === 'unmatched'
-                      ? '当前展示无法稳定建立计划与日志对应关系的计划项。'
-                      : `当前按 ${currentCourseCategoryLabel} 查看该状态下的课次。`}
+                    {`当前按 ${currentCourseCategoryLabel} 查看${resolveResultViewScopeLabel(resultViewScope)}课次。`}
                   </Typography.Text>
                 </div>
                 <div className="lecture-journal-view-stage-tags">
                   <Tag bordered={false}>{resolveResultViewScopeLabel(resultViewScope)}</Tag>
-                  {resultViewScope !== 'unmatched' ? (
-                    <Tag bordered={false}>{currentCourseCategoryLabel}</Tag>
-                  ) : null}
+                  <Tag bordered={false}>{currentCourseCategoryLabel}</Tag>
                 </div>
               </div>
 
-              {resultViewScope === 'unmatched' ? (
-                reconciliationResult.unmatchedPlanItems.length === 0 ? (
-                  <Empty
-                    description="当前查询没有无法对账的计划项。"
-                    image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  />
-                ) : (
-                  <div className="flex flex-col gap-4">
-                    {reconciliationResult.unmatchedPlanItems.map((item) =>
-                      renderUnmatchedCard(item),
-                    )}
-                  </div>
-                )
-              ) : visibleJournalItems.length === 0 ? (
+              {visibleJournalItems.length === 0 ? (
                 <Empty
                   description={
                     resultViewScope === 'missing'
                       ? '当前筛选下没有疑似未填课次。'
-                      : '当前筛选下没有可展示课次。'
+                      : resultViewScope === 'unmatched'
+                        ? '当前筛选下没有无法对账课次。'
+                        : '当前筛选下没有可展示课次。'
                   }
                   image={Empty.PRESENTED_IMAGE_SIMPLE}
                 />

@@ -93,15 +93,10 @@ describe('lecture-journal-reconciliation api', () => {
   it('requests reconciliation with trimmed teacher filters', async () => {
     const payload = {
       expiresAt: '2026-04-25T12:00:00.000Z',
-      filledCount: 8,
       items: [],
       journalCount: 8,
-      missingCount: 2,
-      missingItems: [],
       planCount: 1,
       planDetailCount: 10,
-      unmatchedPlanItemCount: 1,
-      unmatchedPlanItems: [],
       upstreamSessionToken: 'rolling-token-003',
     };
 
@@ -129,21 +124,17 @@ describe('lecture-journal-reconciliation api', () => {
         staffId: 'STAFF-001',
       },
     );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('missingItems');
   });
 
   it('allows semester-level reconciliation without teacher filters', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       fetchLectureJournalReconciliation: {
         expiresAt: '2026-04-25T12:00:00.000Z',
-        filledCount: 0,
         items: [],
         journalCount: 0,
-        missingCount: 0,
-        missingItems: [],
         planCount: 0,
         planDetailCount: 0,
-        unmatchedPlanItemCount: 0,
-        unmatchedPlanItems: [],
         upstreamSessionToken: 'rolling-token-004',
       },
     });
@@ -166,6 +157,7 @@ describe('lecture-journal-reconciliation api', () => {
         staffId: undefined,
       },
     );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('missingItems');
   });
 
   it('rejects when departmentId and staffId are not paired', async () => {
