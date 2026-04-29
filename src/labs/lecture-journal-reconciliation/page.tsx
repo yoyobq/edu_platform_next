@@ -42,7 +42,6 @@ import {
   type LectureJournalExpectedOccurrence,
   type LectureJournalReconciliationItem,
   type LectureJournalReconciliationResult,
-  type MissingLectureJournalItem,
   resolveUpstreamErrorMessage,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
@@ -708,7 +707,6 @@ function resolveIntegratedLearningOutcome(
       'HOMEWORK',
       'homeworkAssignment',
     ]) ||
-    item.teachingUnitAchievement ||
     item.homework ||
     ''
   );
@@ -800,13 +798,6 @@ function resolveMissingSaveFieldLabels(item: JournalEditableCardItem, draft: Jou
   if (isIntegratedCourseCategory(item.courseCategory)) {
     if (!normalizeOptionalString(item.lecturePlanDetailId || '')) {
       missingLabels.push('lecturePlanDetailId');
-    }
-
-    if (
-      item.status === 'FILLED' &&
-      !normalizeOptionalString(item.matchedLectureJournalDetailId || '')
-    ) {
-      missingLabels.push('matchedLectureJournalDetailId');
     }
 
     return missingLabels;
@@ -923,61 +914,6 @@ function buildEditableCardItemFromReconciliation(
   };
 }
 
-function buildEditableCardItemFromMissing(
-  item: MissingLectureJournalItem,
-): JournalEditableCardItem {
-  const practicePlanFields = buildPracticePlanFields(item);
-
-  return {
-    blockingIssue: item.blockingIssue,
-    canFill: item.canFill,
-    completeAndSummary: null,
-    courseCategory: item.courseCategory,
-    courseContent: item.courseContent,
-    courseId: item.courseId,
-    courseName: item.courseName,
-    dayOfWeek: item.dayOfWeek,
-    disciplineSituation: null,
-    expectedOccurrences: item.expectedOccurrences,
-    homework: item.homework,
-    journal: null,
-    key: buildItemKey(item),
-    learningSessionContent: null,
-    learningSessionNo: null,
-    learningSessionTarget: null,
-    learningTaskName: null,
-    learningTaskNo: null,
-    learningTaskText: null,
-    lecturePlanDetailId: item.lecturePlanDetailId,
-    lecturePlanId: item.lecturePlanId,
-    lessonHours: item.lessonHours,
-    matchedLectureJournalDetailId: null,
-    problemAndSolve: null,
-    schoolYear: item.schoolYear,
-    sectionId: item.sectionId,
-    sectionName: item.sectionName,
-    securityAndMaintain: null,
-    semester: item.semester,
-    shift: null,
-    shiftName: null,
-    status: 'MISSING',
-    teacherId: item.teacherId,
-    teacherName: item.teacherName,
-    teachingClassId: item.teachingClassId,
-    teachingClassName: item.teachingClassName,
-    teachingDate: item.teachingDate,
-    teachingUnitAchievement: null,
-    teachingUnitContent: null,
-    teachingUnitName: null,
-    teachingUnitNo: null,
-    teachingUnitTarget: null,
-    teachingUnitText: null,
-    warnings: item.warnings,
-    weekNumber: item.weekNumber,
-    ...practicePlanFields,
-  };
-}
-
 function buildEditableCardItemFromIntegratedPreview(
   item: AcademicIntegratedTeachingLogPrefillPreview,
 ): JournalEditableCardItem {
@@ -999,7 +935,7 @@ function buildEditableCardItemFromIntegratedPreview(
     key: buildItemKey({
       lecturePlanDetailId: item.lecturePlanDetailId,
       lecturePlanId: item.lecturePlanId,
-      matchKey: `integrated-preview-${item.matchedLectureJournalDetailId || item.status}`,
+      matchKey: `integrated-preview-${item.status}`,
       reason: item.blockingIssue,
     }),
     learningSessionContent: item.learningSessionContent,
@@ -1401,12 +1337,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
     item.canFill &&
     !item.blockingIssue &&
     item.status !== 'UNMATCHED' &&
-    Boolean(normalizeOptionalString(item.lecturePlanDetailId || '')) &&
-    (item.status === 'MISSING' ||
-      (item.status === 'FILLED' &&
-        Boolean(normalizeOptionalString(item.matchedLectureJournalDetailId || ''))));
-  const isIntegratedEditable =
-    isIntegratedSaveCandidate && (item.status === 'MISSING' || item.status === 'FILLED');
+    Boolean(normalizeOptionalString(item.lecturePlanDetailId || ''));
+  const isIntegratedEditable = isIntegratedSaveCandidate;
   const hasCompleteAndSummaryEdited =
     normalizeOptionalString(draft.completeAndSummary) !==
     normalizeOptionalString(initialDraft.completeAndSummary);
@@ -1603,7 +1535,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 </span>
               </span>
             </Tooltip>
-            {isIntegratedCard && item.matchedLectureJournalDetailId ? (
+            {isIntegratedCard && isFilled && item.matchedLectureJournalDetailId ? (
               <Tooltip
                 placement="top"
                 title="接口字段：matchedLectureJournalDetailId / journal.lectureJournalDetailId"
@@ -2002,54 +1934,6 @@ const JournalDraftCard = memo(function JournalDraftCard({
                     readOnly
                     size="large"
                     value={resolveIntegratedTeachingUnitText(item)}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
-                {renderFieldLabel('教学单元目标', {
-                  fields: ['teachingUnitTarget'],
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={item.teachingUnitTarget || ''}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
-                {renderFieldLabel('教学单元内容', {
-                  fields: ['teachingUnitContent'],
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={item.teachingUnitContent || ''}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
-                {renderFieldLabel('教学单元成果', {
-                  fields: ['teachingUnitAchievement'],
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={item.teachingUnitAchievement || ''}
                   />
                 </span>
               </label>
@@ -2464,25 +2348,10 @@ export function LectureJournalReconciliationLabPage() {
       ...reconciliationItems.filter((item) => !isIntegratedCourseCategory(item.courseCategory)),
     ];
   }, [prefillIntegratedItems, reconciliationResult?.items]);
-  const missingEditableItems = useMemo(() => {
-    const reconciliationMissingItems = (reconciliationResult?.missingItems ?? []).map(
-      buildEditableCardItemFromMissing,
-    );
-    const missingPrefillIntegratedItems = prefillIntegratedItems.filter(
-      (item) => item.status === 'MISSING',
-    );
-
-    if (missingPrefillIntegratedItems.length === 0) {
-      return reconciliationMissingItems;
-    }
-
-    return [
-      ...missingPrefillIntegratedItems,
-      ...reconciliationMissingItems.filter(
-        (item) => !isIntegratedCourseCategory(item.courseCategory),
-      ),
-    ];
-  }, [prefillIntegratedItems, reconciliationResult?.missingItems]);
+  const missingEditableItems = useMemo(
+    () => editableItems.filter((item) => item.status === 'MISSING'),
+    [editableItems],
+  );
   const itemCourseCategoryTabs = useMemo(
     () => buildCourseCategoryTabs(editableItems),
     [editableItems],
@@ -2499,11 +2368,12 @@ export function LectureJournalReconciliationLabPage() {
     missingCourseCategoryTabs,
     missingCourseCategoryTab,
   );
-  const reconciliationBaseCount =
-    (reconciliationResult?.filledCount ?? 0) + (reconciliationResult?.missingCount ?? 0);
+  const visibleFilledCount = editableItems.filter((item) => item.status === 'FILLED').length;
+  const visibleMissingCount = missingEditableItems.length;
+  const reconciliationBaseCount = visibleFilledCount + visibleMissingCount;
   const fillRate =
     reconciliationBaseCount > 0
-      ? `${Math.round(((reconciliationResult?.filledCount ?? 0) / reconciliationBaseCount) * 100)}%`
+      ? `${Math.round((visibleFilledCount / reconciliationBaseCount) * 100)}%`
       : '无可对账课次';
   const initialJournalDrafts = useMemo(() => buildJournalDrafts(editableItems), [editableItems]);
 
@@ -2564,7 +2434,6 @@ export function LectureJournalReconciliationLabPage() {
     try {
       const commonInput = {
         dayOfWeek: String(item.dayOfWeek),
-        lectureJournalDetailId: resolveJournalDetailId(item),
         lessonHours: item.lessonHours as number,
         teachingClassId: item.teachingClassId as string,
         teachingDate: item.teachingDate as string,
@@ -2577,6 +2446,7 @@ export function LectureJournalReconciliationLabPage() {
             ...commonInput,
             completeAndSummary: draft.completeAndSummary,
             disciplineSituation: draft.disciplineSituation,
+            lectureJournalDetailId: item.matchedLectureJournalDetailId || undefined,
             lecturePlanDetailId: item.lecturePlanDetailId as string,
             problemAndSolve: draft.problemAndSolve,
             securityAndMaintain: draft.securityAndMaintain,
@@ -2589,6 +2459,7 @@ export function LectureJournalReconciliationLabPage() {
               disciplineSituation: draft.disciplineSituation,
               exampleLessons: draft.demonstrationHours ?? 0,
               homeworkAssignment: draft.homeworkAssignment,
+              lectureJournalDetailId: resolveJournalDetailId(item),
               lectureLessons: draft.lectureHours ?? 0,
               lecturePlanDetailId: item.lecturePlanDetailId || undefined,
               problemAndSolve: draft.problemAndSolve,
@@ -2602,6 +2473,7 @@ export function LectureJournalReconciliationLabPage() {
               ...commonInput,
               courseContent: draft.courseContent,
               homeworkAssignment: draft.homeworkAssignment,
+              lectureJournalDetailId: resolveJournalDetailId(item),
               lecturePlanDetailId: item.lecturePlanDetailId || undefined,
               minSectionId: resolveMinSectionId(item.sectionId),
               sectionId: item.sectionId as string,
@@ -3046,12 +2918,12 @@ export function LectureJournalReconciliationLabPage() {
             {renderMetricTile({
               label: '已填写',
               tone: 'success',
-              value: reconciliationResult.filledCount,
+              value: visibleFilledCount,
             })}
             {renderMetricTile({
               label: '疑似未填',
               tone: 'warning',
-              value: reconciliationResult.missingCount,
+              value: visibleMissingCount,
             })}
             {renderMetricTile({
               label: '无法对账',
@@ -3081,8 +2953,7 @@ export function LectureJournalReconciliationLabPage() {
               <Descriptions.Item label="教师">{selectedTeacherLabel}</Descriptions.Item>
               <Descriptions.Item label="departmentId">{selectedDepartmentLabel}</Descriptions.Item>
               <Descriptions.Item label="返回条数">
-                完整 {reconciliationResult.items.length} / 未填{' '}
-                {reconciliationResult.missingItems.length}
+                完整 {editableItems.length} / 未填 {missingEditableItems.length}
               </Descriptions.Item>
               <Descriptions.Item label="会话续期">
                 {formatDateTime(reconciliationResult.expiresAt)}
@@ -3096,7 +2967,7 @@ export function LectureJournalReconciliationLabPage() {
               items={[
                 {
                   key: 'items',
-                  label: `完整对账 (${reconciliationResult.items.length})`,
+                  label: `完整对账 (${editableItems.length})`,
                   children:
                     editableItems.length === 0 ? (
                       <Empty
@@ -3114,7 +2985,7 @@ export function LectureJournalReconciliationLabPage() {
                 },
                 {
                   key: 'missing',
-                  label: `疑似未填 (${reconciliationResult.missingItems.length})`,
+                  label: `疑似未填 (${missingEditableItems.length})`,
                   children:
                     missingEditableItems.length === 0 ? (
                       <Empty
