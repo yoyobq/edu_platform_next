@@ -16,7 +16,6 @@ import {
   Segmented,
   Select,
   Skeleton,
-  Tabs,
   Tag,
   Tooltip,
   Typography,
@@ -70,6 +69,8 @@ type UpstreamLoginFormValues = {
 };
 
 type PendingAction = 'directory' | 'query' | null;
+type ResultViewScope = 'complete' | 'missing' | 'unmatched';
+type CourseCategoryFilter = 'ALL' | '1' | '2' | '3';
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -541,30 +542,57 @@ function resolveCourseCategoryMeta(courseCategory: string | null) {
   return COURSE_CATEGORY_META[courseCategory as keyof typeof COURSE_CATEGORY_META] ?? null;
 }
 
-function buildCourseCategoryTabs(items: JournalEditableCardItem[]) {
-  return COURSE_CATEGORY_TAB_ORDER.map((courseCategory) => {
-    const courseCategoryMeta = resolveCourseCategoryMeta(courseCategory);
-    const count = items.filter((item) => item.courseCategory === courseCategory).length;
+function buildCourseCategoryFilterOptions(items: JournalEditableCardItem[]) {
+  return [
+    {
+      count: items.length,
+      key: 'ALL' as const,
+      label: '全部',
+    },
+    ...COURSE_CATEGORY_TAB_ORDER.map((courseCategory) => {
+      const courseCategoryMeta = resolveCourseCategoryMeta(courseCategory);
 
-    return courseCategoryMeta && count > 0
-      ? {
-          count,
-          key: courseCategory,
-          label: courseCategoryMeta.label,
-        }
-      : null;
-  }).filter((tab): tab is { count: number; key: string; label: string } => tab !== null);
+      return {
+        count: items.filter((item) => item.courseCategory === courseCategory).length,
+        key: courseCategory as CourseCategoryFilter,
+        label: courseCategoryMeta?.label || courseCategory,
+      };
+    }),
+  ];
 }
 
-function resolveActiveCourseCategoryTab(
-  tabs: Array<{ key: string }>,
-  activeCourseCategory: string | null,
+function resolveCourseCategoryFilter(
+  options: Array<{ key: CourseCategoryFilter }>,
+  activeCourseCategory: CourseCategoryFilter,
 ) {
-  if (activeCourseCategory && tabs.some((tab) => tab.key === activeCourseCategory)) {
+  if (options.some((option) => option.key === activeCourseCategory)) {
     return activeCourseCategory;
   }
 
-  return tabs[0]?.key ?? null;
+  return 'ALL';
+}
+
+function filterItemsByCourseCategory(
+  items: JournalEditableCardItem[],
+  courseCategory: CourseCategoryFilter,
+) {
+  if (courseCategory === 'ALL') {
+    return items;
+  }
+
+  return items.filter((item) => item.courseCategory === courseCategory);
+}
+
+function resolveResultViewScopeLabel(scope: ResultViewScope) {
+  if (scope === 'missing') {
+    return '疑似未填';
+  }
+
+  if (scope === 'unmatched') {
+    return '无法对账';
+  }
+
+  return '完整对账';
 }
 
 function isPracticeCourseCategory(courseCategory: string | null) {
@@ -1535,19 +1563,6 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 </span>
               </span>
             </Tooltip>
-            {isIntegratedCard && isFilled && item.matchedLectureJournalDetailId ? (
-              <Tooltip
-                placement="top"
-                title="接口字段：matchedLectureJournalDetailId / journal.lectureJournalDetailId"
-              >
-                <span className="lecture-journal-record-meta-item">
-                  <span className="lecture-journal-record-meta-label">日志：</span>
-                  <span className="lecture-journal-record-meta-value">
-                    {item.matchedLectureJournalDetailId}
-                  </span>
-                </span>
-              </Tooltip>
-            ) : null}
           </div>
         </div>
 
@@ -2195,8 +2210,8 @@ export function LectureJournalReconciliationLabPage() {
   const [reconciliationResult, setReconciliationResult] =
     useState<LectureJournalReconciliationResult | null>(null);
   const [prefillResult, setPrefillResult] = useState<AcademicTeachingLogPrefillResult | null>(null);
-  const [itemsCourseCategoryTab, setItemsCourseCategoryTab] = useState<string | null>(null);
-  const [missingCourseCategoryTab, setMissingCourseCategoryTab] = useState<string | null>(null);
+  const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('complete');
+  const [courseCategoryFilter, setCourseCategoryFilter] = useState<CourseCategoryFilter>('ALL');
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
   const [isLoadingDepartmentOptions, setIsLoadingDepartmentOptions] = useState(true);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
@@ -2352,22 +2367,37 @@ export function LectureJournalReconciliationLabPage() {
     () => editableItems.filter((item) => item.status === 'MISSING'),
     [editableItems],
   );
-  const itemCourseCategoryTabs = useMemo(
-    () => buildCourseCategoryTabs(editableItems),
-    [editableItems],
+  const scopedJournalItems = useMemo(() => {
+    if (resultViewScope === 'missing') {
+      return missingEditableItems;
+    }
+
+    if (resultViewScope === 'unmatched') {
+      return [];
+    }
+
+    return editableItems;
+  }, [editableItems, missingEditableItems, resultViewScope]);
+  const courseCategoryOptions = useMemo(
+    () => buildCourseCategoryFilterOptions(scopedJournalItems),
+    [scopedJournalItems],
   );
-  const missingCourseCategoryTabs = useMemo(
-    () => buildCourseCategoryTabs(missingEditableItems),
-    [missingEditableItems],
+  const activeCourseCategoryFilter = resolveCourseCategoryFilter(
+    courseCategoryOptions,
+    courseCategoryFilter,
   );
-  const activeItemsCourseCategoryTab = resolveActiveCourseCategoryTab(
-    itemCourseCategoryTabs,
-    itemsCourseCategoryTab,
+  const visibleJournalItems = useMemo(
+    () => filterItemsByCourseCategory(scopedJournalItems, activeCourseCategoryFilter),
+    [activeCourseCategoryFilter, scopedJournalItems],
   );
-  const activeMissingCourseCategoryTab = resolveActiveCourseCategoryTab(
-    missingCourseCategoryTabs,
-    missingCourseCategoryTab,
-  );
+  const currentResultCount =
+    resultViewScope === 'unmatched'
+      ? (reconciliationResult?.unmatchedPlanItems.length ?? 0)
+      : visibleJournalItems.length;
+  const currentCourseCategoryLabel =
+    activeCourseCategoryFilter === 'ALL'
+      ? '全部课程'
+      : resolveCourseCategoryMeta(activeCourseCategoryFilter)?.label || activeCourseCategoryFilter;
   const visibleFilledCount = editableItems.filter((item) => item.status === 'FILLED').length;
   const visibleMissingCount = missingEditableItems.length;
   const reconciliationBaseCount = visibleFilledCount + visibleMissingCount;
@@ -2677,40 +2707,11 @@ export function LectureJournalReconciliationLabPage() {
     }
   }
 
-  function renderJournalCardList({
-    activeCourseCategory,
-    items,
-    onChangeCourseCategory,
-    tabs,
-  }: {
-    activeCourseCategory: string | null;
-    items: JournalEditableCardItem[];
-    onChangeCourseCategory: (courseCategory: string) => void;
-    tabs: Array<{ count: number; key: string; label: string }>;
-  }) {
-    const filteredItems = activeCourseCategory
-      ? items.filter((item) => item.courseCategory === activeCourseCategory)
-      : items;
-
+  function renderJournalCardList(items: JournalEditableCardItem[]) {
     return (
       <div className="lecture-journal-card-list">
-        {tabs.length > 0 && activeCourseCategory ? (
-          <div className="lecture-journal-course-filter-tabs">
-            <Tabs
-              activeKey={activeCourseCategory}
-              items={tabs.map((tab) => ({
-                children: null,
-                key: tab.key,
-                label: `${tab.label} (${tab.count})`,
-              }))}
-              size="small"
-              onChange={onChangeCourseCategory}
-            />
-          </div>
-        ) : null}
-
         <div className="flex flex-col gap-4">
-          {filteredItems.map((item) => (
+          {items.map((item) => (
             <JournalDraftCard
               draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
               initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
@@ -2962,64 +2963,149 @@ export function LectureJournalReconciliationLabPage() {
             </Descriptions>
           </section>
 
-          <div className="lecture-journal-tabs">
-            <Tabs
-              items={[
-                {
-                  key: 'items',
-                  label: `完整对账 (${editableItems.length})`,
-                  children:
-                    editableItems.length === 0 ? (
-                      <Empty
-                        description="当前查询没有返回任何可展示课次。"
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
+          <div className="lecture-journal-view-shell">
+            <section className="lecture-journal-view-controls">
+              <div className="lecture-journal-view-controls-head">
+                <div className="lecture-journal-view-controls-copy">
+                  <Typography.Text strong>结果视图</Typography.Text>
+                  <Typography.Text type="secondary">
+                    状态与课程类型是两组平级筛选，下面始终只有一个结果列表。
+                  </Typography.Text>
+                </div>
+                <div className="lecture-journal-view-current">
+                  <Typography.Text type="secondary">当前展示</Typography.Text>
+                  <Typography.Text strong>{currentResultCount}</Typography.Text>
+                  <Typography.Text type="secondary">条</Typography.Text>
+                </div>
+              </div>
+
+              <div className="lecture-journal-view-filter-grid">
+                <div className="lecture-journal-view-filter-block">
+                  <div className="lecture-journal-view-filter-label">
+                    <Typography.Text strong>状态视图</Typography.Text>
+                  </div>
+                  <div className="lecture-journal-view-segmented">
+                    <Segmented
+                      block
+                      options={[
+                        {
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>完整对账</span>
+                              <strong>{editableItems.length}</strong>
+                            </span>
+                          ),
+                          value: 'complete',
+                        },
+                        {
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>疑似未填</span>
+                              <strong>{missingEditableItems.length}</strong>
+                            </span>
+                          ),
+                          value: 'missing',
+                        },
+                        {
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>无法对账</span>
+                              <strong>{reconciliationResult.unmatchedPlanItems.length}</strong>
+                            </span>
+                          ),
+                          value: 'unmatched',
+                        },
+                      ]}
+                      size="large"
+                      value={resultViewScope}
+                      onChange={(value) => {
+                        setResultViewScope(value as ResultViewScope);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="lecture-journal-view-filter-block">
+                  <div className="lecture-journal-view-filter-label">
+                    <Typography.Text strong>课程类型</Typography.Text>
+                  </div>
+                  {resultViewScope === 'unmatched' ? (
+                    <div className="lecture-journal-view-filter-disabled">
+                      <Typography.Text type="secondary">
+                        无法对账项暂不区分课程类型。
+                      </Typography.Text>
+                    </div>
+                  ) : (
+                    <div className="lecture-journal-view-segmented lecture-journal-view-segmented-category">
+                      <Segmented
+                        block
+                        options={courseCategoryOptions.map((option) => ({
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>{option.label}</span>
+                              <strong>{option.count}</strong>
+                            </span>
+                          ),
+                          value: option.key,
+                        }))}
+                        size="large"
+                        value={activeCourseCategoryFilter}
+                        onChange={(value) => {
+                          setCourseCategoryFilter(value as CourseCategoryFilter);
+                        }}
                       />
-                    ) : (
-                      renderJournalCardList({
-                        activeCourseCategory: activeItemsCourseCategoryTab,
-                        items: editableItems,
-                        onChangeCourseCategory: setItemsCourseCategoryTab,
-                        tabs: itemCourseCategoryTabs,
-                      })
-                    ),
-                },
-                {
-                  key: 'missing',
-                  label: `疑似未填 (${missingEditableItems.length})`,
-                  children:
-                    missingEditableItems.length === 0 ? (
-                      <Empty
-                        description="当前查询没有疑似未填课次。"
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    ) : (
-                      renderJournalCardList({
-                        activeCourseCategory: activeMissingCourseCategoryTab,
-                        items: missingEditableItems,
-                        onChangeCourseCategory: setMissingCourseCategoryTab,
-                        tabs: missingCourseCategoryTabs,
-                      })
-                    ),
-                },
-                {
-                  key: 'unmatched',
-                  label: `无法对账 (${reconciliationResult.unmatchedPlanItems.length})`,
-                  children:
-                    reconciliationResult.unmatchedPlanItems.length === 0 ? (
-                      <Empty
-                        description="当前查询没有无法对账的计划项。"
-                        image={Empty.PRESENTED_IMAGE_SIMPLE}
-                      />
-                    ) : (
-                      <div className="flex flex-col gap-4">
-                        {reconciliationResult.unmatchedPlanItems.map((item) =>
-                          renderUnmatchedCard(item),
-                        )}
-                      </div>
-                    ),
-                },
-              ]}
-            />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+
+            <section className="lecture-journal-view-stage">
+              <div className="lecture-journal-view-stage-header">
+                <div className="lecture-journal-view-stage-copy">
+                  <Typography.Title level={5} style={{ margin: 0 }}>
+                    {resolveResultViewScopeLabel(resultViewScope)}
+                  </Typography.Title>
+                  <Typography.Text type="secondary">
+                    {resultViewScope === 'unmatched'
+                      ? '当前展示无法稳定建立计划与日志对应关系的计划项。'
+                      : `当前按 ${currentCourseCategoryLabel} 查看该状态下的课次。`}
+                  </Typography.Text>
+                </div>
+                <div className="lecture-journal-view-stage-tags">
+                  <Tag bordered={false}>{resolveResultViewScopeLabel(resultViewScope)}</Tag>
+                  {resultViewScope !== 'unmatched' ? (
+                    <Tag bordered={false}>{currentCourseCategoryLabel}</Tag>
+                  ) : null}
+                </div>
+              </div>
+
+              {resultViewScope === 'unmatched' ? (
+                reconciliationResult.unmatchedPlanItems.length === 0 ? (
+                  <Empty
+                    description="当前查询没有无法对账的计划项。"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-4">
+                    {reconciliationResult.unmatchedPlanItems.map((item) =>
+                      renderUnmatchedCard(item),
+                    )}
+                  </div>
+                )
+              ) : visibleJournalItems.length === 0 ? (
+                <Empty
+                  description={
+                    resultViewScope === 'missing'
+                      ? '当前筛选下没有疑似未填课次。'
+                      : '当前筛选下没有可展示课次。'
+                  }
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                />
+              ) : (
+                renderJournalCardList(visibleJournalItems)
+              )}
+            </section>
           </div>
         </div>
       ) : null}
