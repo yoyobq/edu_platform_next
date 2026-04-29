@@ -16,6 +16,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  fetchAcademicTeachingLogPrefillItems,
   fetchLectureJournalDepartmentOptions,
   fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
@@ -195,6 +196,90 @@ describe('lecture-journal-reconciliation api', () => {
     ).rejects.toBe(expiredError);
   });
 
+  it('requests integrated teaching log prefill items with date window and plan fields', async () => {
+    const payload = {
+      blockingIssue: null,
+      canFill: true,
+      expiresAt: '2026-04-25T12:00:00.000Z',
+      integratedPreviews: [
+        {
+          blockingIssue: null,
+          canFill: true,
+          completeAndSummary: '小结',
+          courseName: '一体化课程',
+          dayOfWeek: 4,
+          disciplineSituation: '遵章守纪',
+          expectedOccurrences: [],
+          learningSessionContent: '学习环节',
+          learningSessionNo: 1,
+          learningSessionTarget: '环节目标',
+          learningTaskName: '任务',
+          learningTaskNo: 1,
+          learningTaskText: '1 任务',
+          lecturePlanDetailId: 'PLAN-DETAIL-001',
+          lecturePlanId: 'PLAN-001',
+          lessonHours: 6,
+          matchedLectureJournalDetailId: null,
+          problemAndSolve: '未发现问题',
+          securityAndMaintain: '正常',
+          shift: '3',
+          status: 'MISSING',
+          teachingClassId: 'CLASS-003',
+          teachingClassName: '一体化 1 班',
+          teachingDate: '2026-04-30',
+          teachingUnitAchievement: '成果',
+          teachingUnitContent: '单元内容',
+          teachingUnitName: '单元',
+          teachingUnitNo: 1,
+          teachingUnitTarget: '单元目标',
+          teachingUnitText: '1 单元',
+          warnings: [],
+          weekNumber: 10,
+        },
+      ],
+      upstreamSessionToken: 'rolling-token-005',
+      warnings: [],
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      listAcademicTeachingLogPrefillItems: payload,
+    });
+
+    await expect(
+      fetchAcademicTeachingLogPrefillItems({
+        departmentId: ' ORG0302 ',
+        endDate: ' 2026-05-01 ',
+        semesterId: 202601,
+        staffId: ' STAFF-003 ',
+        startDate: ' 2026-04-01 ',
+        upstreamSessionToken: ' rolling-token-004 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('teachingUnitContent'),
+      {
+        departmentId: 'ORG0302',
+        endDate: '2026-05-01',
+        semesterId: 202601,
+        staffId: 'STAFF-003',
+        startDate: '2026-04-01',
+        upstreamSessionToken: 'rolling-token-004',
+      },
+    );
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('teachingUnitTarget'),
+      expect.any(Object),
+    );
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('teachingUnitAchievement'),
+      expect.any(Object),
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('courseContent');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('homeworkAssignment');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('topicRecord');
+  });
+
   it('saves theory logs with sectionId only', async () => {
     const payload = {
       code: 200,
@@ -348,6 +433,47 @@ describe('lecture-journal-reconciliation api', () => {
           upstreamSessionToken: 'rolling-token-006',
           weekNumber: '10',
         },
+      },
+    );
+  });
+
+  it('saves filled integrated logs with matched lecture journal detail id', async () => {
+    const payload = {
+      code: 200,
+      expiresAt: '2026-04-28T12:00:00.000Z',
+      lectureJournalDetailId: 'JOURNAL-DETAIL-009',
+      msg: 'ok',
+      success: true,
+      upstreamSessionToken: 'rolling-token-008',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      saveAcademicIntegratedTeachingLog: payload,
+    });
+
+    await expect(
+      saveAcademicIntegratedTeachingLog({
+        completeAndSummary: ' 已更新小结 ',
+        dayOfWeek: ' 4 ',
+        lectureJournalDetailId: ' JOURNAL-DETAIL-009 ',
+        lecturePlanDetailId: ' PLAN-DETAIL-001 ',
+        lessonHours: 6,
+        teachingClassId: ' CLASS-003 ',
+        teachingDate: ' 2026-04-30 ',
+        upstreamSessionToken: ' rolling-token-007 ',
+        weekNumber: ' 10 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('saveAcademicIntegratedTeachingLog'),
+      {
+        input: expect.objectContaining({
+          completeAndSummary: '已更新小结',
+          lectureJournalDetailId: 'JOURNAL-DETAIL-009',
+          lecturePlanDetailId: 'PLAN-DETAIL-001',
+          upstreamSessionToken: 'rolling-token-007',
+        }),
       },
     );
   });

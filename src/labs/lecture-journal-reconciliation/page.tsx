@@ -75,9 +75,6 @@ type PendingAction = 'directory' | 'query' | null;
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const DEFAULT_DISCIPLINE_SITUATION = '遵章守纪';
-const DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY = 'learn_target';
-const DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE = '未发现问题';
-const DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN = '正常';
 const DEFAULT_INTEGRATED_SHIFT = '3';
 const SHIFT_NAME_BY_VALUE = {
   '1': '早班',
@@ -805,6 +802,13 @@ function resolveMissingSaveFieldLabels(item: JournalEditableCardItem, draft: Jou
       missingLabels.push('lecturePlanDetailId');
     }
 
+    if (
+      item.status === 'FILLED' &&
+      !normalizeOptionalString(item.matchedLectureJournalDetailId || '')
+    ) {
+      missingLabels.push('matchedLectureJournalDetailId');
+    }
+
     return missingLabels;
   }
 
@@ -834,6 +838,10 @@ function resolveMissingSaveFieldLabels(item: JournalEditableCardItem, draft: Jou
 function resolveSaveValidationError(item: JournalEditableCardItem, draft: JournalDraft) {
   if (item.blockingIssue) {
     return item.blockingIssue;
+  }
+
+  if (isIntegratedCourseCategory(item.courseCategory) && item.status === 'UNMATCHED') {
+    return '当前一体化计划项无法可靠匹配。';
   }
 
   if (!item.canFill) {
@@ -980,13 +988,13 @@ function buildEditableCardItemFromIntegratedPreview(
     canFill: item.canFill,
     completeAndSummary: item.completeAndSummary,
     courseCategory: '3',
-    courseContent: item.teachingUnitContent || item.learningTaskText || null,
+    courseContent: null,
     courseId: null,
     courseName: item.courseName,
     dayOfWeek: item.dayOfWeek,
     disciplineSituation: item.disciplineSituation,
     expectedOccurrences: item.expectedOccurrences,
-    homework: item.teachingUnitAchievement,
+    homework: null,
     journal: null,
     key: buildItemKey({
       lecturePlanDetailId: item.lecturePlanDetailId,
@@ -1007,8 +1015,8 @@ function buildEditableCardItemFromIntegratedPreview(
     practiceDemonstrationHours: null,
     practiceLectureHours: null,
     practicePracticeHours: null,
-    practiceTeachingChapterContent: item.teachingUnitTarget || item.learningSessionTarget,
-    practiceTopicName: item.teachingUnitText || item.learningTaskText,
+    practiceTeachingChapterContent: null,
+    practiceTopicName: null,
     problemAndSolve: item.problemAndSolve,
     schoolYear: null,
     sectionId: null,
@@ -1091,16 +1099,12 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
       const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
 
       result[item.key] = {
-        completeAndSummary: isIntegratedCard
-          ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
-          : '',
+        completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
         courseContent: isIntegratedCard
           ? resolveIntegratedLearningContent(item, item.journal)
           : item.journal.courseContent || '',
         demonstrationHours: item.practiceDemonstrationHours,
-        disciplineSituation: isIntegratedCard
-          ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
-          : '',
+        disciplineSituation: isIntegratedCard ? item.disciplineSituation || '' : '',
         homeworkAssignment: isIntegratedCard
           ? resolveIntegratedLearningOutcome(item, item.journal)
           : item.journal.homeworkAssignment || '',
@@ -1108,16 +1112,12 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
         learningObjective: isIntegratedCard
           ? resolveIntegratedLearningObjective(item, item.journal)
           : '',
-        problemAndSolve: isIntegratedCard
-          ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
-          : '',
+        problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
         practiceHours: item.practicePracticeHours,
         productionProjectTitle: isIntegratedCard
           ? resolveIntegratedTeachingUnitName(item, item.journal)
           : item.practiceTeachingChapterContent || '',
-        securityAndMaintain: isIntegratedCard
-          ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
-          : '',
+        securityAndMaintain: isIntegratedCard ? item.securityAndMaintain || '' : '',
         shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
         shiftName: isIntegratedCard
           ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
@@ -1132,39 +1132,30 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
 
     const template = pickNearestFilledJournalTemplate(item, filledItems);
     const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
-    const planCourseContent = isIntegratedCard
-      ? resolveIntegratedLearningContent(item)
-      : isPracticeCourseCategory(item.courseCategory)
-        ? item.practiceTopicName || ''
-        : item.courseContent || '';
-    const integratedLearningOutcome = isIntegratedCard
-      ? resolveIntegratedLearningOutcome(item)
-      : '';
+    const planCourseContent = isPracticeCourseCategory(item.courseCategory)
+      ? item.practiceTopicName || ''
+      : item.courseContent || '';
 
     result[item.key] = {
-      completeAndSummary: isIntegratedCard
-        ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
-        : '',
-      courseContent: planCourseContent || template?.journal?.courseContent || '',
+      completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
+      courseContent: isIntegratedCard
+        ? ''
+        : planCourseContent || template?.journal?.courseContent || '',
       demonstrationHours: item.practiceDemonstrationHours,
       disciplineSituation:
         isPracticeCourseCategory(item.courseCategory) || isIntegratedCard
-          ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
+          ? item.disciplineSituation || ''
           : '',
       homeworkAssignment: isIntegratedCard
-        ? integratedLearningOutcome || template?.journal?.homeworkAssignment || ''
+        ? ''
         : item.homework || template?.journal?.homeworkAssignment || '',
       lectureHours: item.practiceLectureHours,
-      learningObjective: isIntegratedCard ? resolveIntegratedLearningObjective(item) : '',
-      problemAndSolve: isIntegratedCard
-        ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
-        : '',
+      learningObjective: '',
+      problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
       practiceHours: item.practicePracticeHours,
-      productionProjectTitle: isIntegratedCard
-        ? resolveIntegratedTeachingUnitName(item)
-        : item.practiceTeachingChapterContent || '',
+      productionProjectTitle: isIntegratedCard ? '' : item.practiceTeachingChapterContent || '',
       securityAndMaintain: isIntegratedCard
-        ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
+        ? item.securityAndMaintain || ''
         : isPracticeCourseCategory(item.courseCategory)
           ? DEFAULT_SECURITY_AND_MAINTAIN
           : '',
@@ -1172,8 +1163,8 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
       shiftName: isIntegratedCard
         ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) || DEFAULT_INTEGRATED_SHIFT_NAME
         : '',
-      submitStatusText: '',
-      topicRecord: template?.journal?.topicRecord || '',
+      submitStatusText: isIntegratedCard && item.status === 'FILLED' ? '已填写' : '',
+      topicRecord: isIntegratedCard ? '' : template?.journal?.topicRecord || '',
     };
 
     return result;
@@ -1405,12 +1396,20 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const isPracticeCard = isPracticeCourseCategory(item.courseCategory);
   const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
   const isFilled = item.status === 'FILLED';
+  const isIntegratedSaveCandidate =
+    isIntegratedCard &&
+    item.canFill &&
+    !item.blockingIssue &&
+    item.status !== 'UNMATCHED' &&
+    Boolean(normalizeOptionalString(item.lecturePlanDetailId || '')) &&
+    (item.status === 'MISSING' ||
+      (item.status === 'FILLED' &&
+        Boolean(normalizeOptionalString(item.matchedLectureJournalDetailId || ''))));
   const isIntegratedEditable =
-    isIntegratedCard && item.status === 'MISSING' && item.canFill && !item.blockingIssue;
-  const integratedTeachingUnitName = resolveIntegratedTeachingUnitName(item);
-  const integratedLearningObjective = resolveIntegratedLearningObjective(item);
-  const integratedLearningContent = resolveIntegratedLearningContent(item);
-  const integratedLearningOutcome = resolveIntegratedLearningOutcome(item);
+    isIntegratedSaveCandidate && (item.status === 'MISSING' || item.status === 'FILLED');
+  const hasCompleteAndSummaryEdited =
+    normalizeOptionalString(draft.completeAndSummary) !==
+    normalizeOptionalString(initialDraft.completeAndSummary);
   const hasCourseContentEdited =
     normalizeOptionalString(draft.courseContent) !==
     normalizeOptionalString(initialDraft.courseContent);
@@ -1435,27 +1434,28 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const hasLearningObjectiveEdited =
     normalizeOptionalString(draft.learningObjective) !==
     normalizeOptionalString(initialDraft.learningObjective);
-  const defaultCourseContentReference = isIntegratedCard
-    ? integratedLearningContent
-    : isPracticeCard
-      ? item.practiceTopicName?.trim() || ''
-      : item.courseContent?.trim() || '';
+  const hasProblemAndSolveEdited =
+    normalizeOptionalString(draft.problemAndSolve) !==
+    normalizeOptionalString(initialDraft.problemAndSolve);
+  const hasSecurityAndMaintainEdited =
+    normalizeOptionalString(draft.securityAndMaintain) !==
+    normalizeOptionalString(initialDraft.securityAndMaintain);
+  const defaultCourseContentReference = isPracticeCard
+    ? item.practiceTopicName?.trim() || ''
+    : item.courseContent?.trim() || '';
   const hasCourseContentPlanMismatch =
     normalizeOptionalString(draft.courseContent) !== defaultCourseContentReference;
   const hasIntegratedPlanMismatch =
-    normalizeOptionalString(draft.productionProjectTitle) !== integratedTeachingUnitName ||
-    normalizeOptionalString(draft.learningObjective) !== integratedLearningObjective ||
-    hasCourseContentPlanMismatch ||
-    normalizeOptionalString(draft.homeworkAssignment) !== integratedLearningOutcome;
+    hasCompleteAndSummaryEdited ||
+    hasDisciplineSituationEdited ||
+    hasProblemAndSolveEdited ||
+    hasSecurityAndMaintainEdited;
   const hasPlanMismatch =
     hasCourseContentPlanMismatch ||
     normalizeOptionalString(draft.homeworkAssignment) !== (item.homework?.trim() || '');
   const hasPracticePlanMismatch =
     normalizeOptionalString(draft.productionProjectTitle) !==
     (item.practiceTeachingChapterContent?.trim() || '');
-  const hasSecurityAndMaintainEdited =
-    normalizeOptionalString(draft.securityAndMaintain) !==
-    normalizeOptionalString(initialDraft.securityAndMaintain);
   const hasPracticeExtraFieldMismatch =
     normalizeOptionalString(draft.disciplineSituation) !== DEFAULT_DISCIPLINE_SITUATION ||
     normalizeOptionalString(draft.securityAndMaintain) !== DEFAULT_SECURITY_AND_MAINTAIN;
@@ -1472,7 +1472,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     isPracticeCard && item.lessonHours !== null && practiceHoursTotal !== item.lessonHours;
   const saveValidationError = resolveSaveValidationError(item, draft);
   const showRestoreButton =
-    !isFilled &&
+    (!isFilled || isIntegratedEditable) &&
     (isIntegratedCard
       ? hasIntegratedPlanMismatch
       : isPracticeCard
@@ -1482,12 +1482,14 @@ const JournalDraftCard = memo(function JournalDraftCard({
           hasPracticeExtraFieldMismatch
         : hasPlanMismatch) &&
     (hasCourseContentEdited ||
+      hasCompleteAndSummaryEdited ||
       hasDemonstrationHoursEdited ||
       hasDisciplineSituationEdited ||
       hasHomeworkEdited ||
       hasLectureHoursEdited ||
       hasPracticeHoursEdited ||
       hasLearningObjectiveEdited ||
+      hasProblemAndSolveEdited ||
       hasProductionProjectTitleEdited ||
       hasSecurityAndMaintainEdited);
   const isSaveDisabled = Boolean(saveValidationError) || isSaving;
@@ -1496,6 +1498,9 @@ const JournalDraftCard = memo(function JournalDraftCard({
     : item.warnings.length > 0
       ? `可保存；提示：${item.warnings.join('；')}`
       : '保存至校园网。';
+  const shouldRenderSaveAction = isIntegratedCard
+    ? isIntegratedSaveCandidate
+    : item.status === 'MISSING';
 
   return (
     <article
@@ -1616,7 +1621,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
 
         <div className="lecture-journal-record-status">
           {isFilled ? renderJournalRawSnapshotTrigger(item) : null}
-          {item.status === 'MISSING' ? (
+          {shouldRenderSaveAction ? (
             <>
               {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
               <Popover
@@ -1642,7 +1647,9 @@ const JournalDraftCard = memo(function JournalDraftCard({
                         onSave(item, draft);
                       }}
                     >
-                      保存至校园网
+                      {isIntegratedCard && item.status === 'FILLED'
+                        ? '更新至校园网'
+                        : '保存至校园网'}
                     </Button>
                   </span>
                 </Tooltip>
@@ -1999,6 +2006,54 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 </span>
               </label>
 
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
+                {renderFieldLabel('教学单元目标', {
+                  fields: ['teachingUnitTarget'],
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
+                  <Input.TextArea
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={item.teachingUnitTarget || ''}
+                  />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
+                {renderFieldLabel('教学单元内容', {
+                  fields: ['teachingUnitContent'],
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
+                  <Input.TextArea
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={item.teachingUnitContent || ''}
+                  />
+                </span>
+              </label>
+
+              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
+                {renderFieldLabel('教学单元成果', {
+                  fields: ['teachingUnitAchievement'],
+                  required: false,
+                })}
+                <span className="lecture-journal-readonly-input">
+                  <Input.TextArea
+                    autoSize={{ minRows: 1, maxRows: 3 }}
+                    placeholder="未填写"
+                    readOnly
+                    size="large"
+                    value={item.teachingUnitAchievement || ''}
+                  />
+                </span>
+              </label>
+
               <label className="lecture-journal-card-field lecture-journal-integrated-field-summary">
                 {renderFieldLabel('完成情况及教学小结', {
                   fields: ['completeAndSummary'],
@@ -2188,35 +2243,29 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 onClick={() => {
                   onUpdateDraft(item.key, {
                     courseContent: isIntegratedCard
-                      ? integratedLearningContent
+                      ? ''
                       : isPracticeCard
                         ? item.practiceTopicName || ''
                         : item.courseContent || '',
                     demonstrationHours: isPracticeCard ? item.practiceDemonstrationHours : null,
                     disciplineSituation: isIntegratedCard
-                      ? item.disciplineSituation || DEFAULT_DISCIPLINE_SITUATION
+                      ? item.disciplineSituation || ''
                       : isPracticeCard
                         ? DEFAULT_DISCIPLINE_SITUATION
                         : '',
-                    homeworkAssignment: isIntegratedCard
-                      ? integratedLearningOutcome
-                      : item.homework || '',
+                    homeworkAssignment: isIntegratedCard ? '' : item.homework || '',
                     lectureHours: isPracticeCard ? item.practiceLectureHours : null,
-                    learningObjective: isIntegratedCard ? integratedLearningObjective : '',
-                    completeAndSummary: isIntegratedCard
-                      ? item.completeAndSummary || DEFAULT_INTEGRATED_COMPLETE_AND_SUMMARY
-                      : '',
-                    problemAndSolve: isIntegratedCard
-                      ? item.problemAndSolve || DEFAULT_INTEGRATED_PROBLEM_AND_SOLVE
-                      : '',
+                    learningObjective: '',
+                    completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
+                    problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
                     practiceHours: isPracticeCard ? item.practicePracticeHours : null,
                     productionProjectTitle: isIntegratedCard
-                      ? integratedTeachingUnitName
+                      ? ''
                       : isPracticeCard
                         ? item.practiceTeachingChapterContent || ''
                         : draft.productionProjectTitle,
                     securityAndMaintain: isIntegratedCard
-                      ? item.securityAndMaintain || DEFAULT_INTEGRATED_SECURITY_AND_MAINTAIN
+                      ? item.securityAndMaintain || ''
                       : isPracticeCard
                         ? DEFAULT_SECURITY_AND_MAINTAIN
                         : '',
@@ -2527,14 +2576,11 @@ export function LectureJournalReconciliationLabPage() {
         ? await saveAcademicIntegratedTeachingLog({
             ...commonInput,
             completeAndSummary: draft.completeAndSummary,
-            courseContent: draft.courseContent,
             disciplineSituation: draft.disciplineSituation,
-            homeworkAssignment: draft.homeworkAssignment,
             lecturePlanDetailId: item.lecturePlanDetailId as string,
             problemAndSolve: draft.problemAndSolve,
             securityAndMaintain: draft.securityAndMaintain,
             shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
-            topicRecord: draft.topicRecord,
           })
         : isPracticeCourseCategory(item.courseCategory)
           ? await saveAcademicPracticeTeachingLog({

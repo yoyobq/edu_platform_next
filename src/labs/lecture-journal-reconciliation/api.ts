@@ -224,8 +224,10 @@ export type FetchLectureJournalReconciliationInput = {
 
 export type FetchAcademicTeachingLogPrefillInput = {
   departmentId?: string;
+  endDate?: string;
   semesterId: number;
   staffId: string;
+  startDate?: string;
   upstreamSessionToken?: string;
 };
 
@@ -457,14 +459,18 @@ const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
 const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
   query ListAcademicTeachingLogPrefillItems(
     $departmentId: String
+    $endDate: String
     $semesterId: Int!
     $staffId: String!
+    $startDate: String
     $upstreamSessionToken: String
   ) {
     listAcademicTeachingLogPrefillItems(
       departmentId: $departmentId
+      endDate: $endDate
       semesterId: $semesterId
       staffId: $staffId
+      startDate: $startDate
       upstreamSessionToken: $upstreamSessionToken
     ) {
       blockingIssue
@@ -606,7 +612,9 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
   input: FetchAcademicTeachingLogPrefillInput,
 ) {
   const departmentId = normalizeOptionalString(input.departmentId);
+  const endDate = normalizeOptionalString(input.endDate);
   const staffId = String(input.staffId || '').trim();
+  const startDate = normalizeOptionalString(input.startDate);
   const upstreamSessionToken = normalizeOptionalString(input.upstreamSessionToken);
 
   if (!staffId) {
@@ -615,8 +623,10 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
 
   return {
     departmentId,
+    endDate,
     semesterId: input.semesterId,
     staffId,
+    startDate,
     upstreamSessionToken,
   };
 }
@@ -769,6 +779,8 @@ export async function fetchAcademicTeachingLogPrefillItems(
       AcademicTeachingLogPrefillResponse,
       FetchAcademicTeachingLogPrefillInput & {
         departmentId?: string;
+        endDate?: string;
+        startDate?: string;
         upstreamSessionToken?: string;
       }
     >(
