@@ -1,5 +1,4 @@
 import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { InfoCircleOutlined } from '@ant-design/icons';
 import {
   Alert,
   AutoComplete,
@@ -33,7 +32,9 @@ import {
   type AcademicIntegratedTeachingLogPrefillPreview,
   type AcademicTeachingLogPrefillResult,
   type AcademicTeachingLogSaveResult,
+  fetchAcademicTeachingLogPrefillItems,
   fetchLectureJournalDepartmentOptions,
+  fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
   isExpiredUpstreamSessionError,
   type LectureJournalDepartmentOption,
@@ -48,7 +49,6 @@ import {
   type TeacherDirectoryResult,
 } from './api';
 import { lectureJournalReconciliationLabMeta } from './meta';
-import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 
 import './page.css';
 
@@ -231,6 +231,62 @@ const EMPTY_JOURNAL_DRAFT: JournalDraft = {
   topicRecord: '',
 };
 
+const reconciliationEditableItemCache = new WeakMap<
+  LectureJournalReconciliationItem,
+  JournalEditableCardItem
+>();
+const integratedPreviewEditableItemCache = new WeakMap<
+  AcademicIntegratedTeachingLogPrefillPreview,
+  JournalEditableCardItem
+>();
+
+function areJournalDraftsEqual(left: JournalDraft, right: JournalDraft) {
+  return (
+    left.completeAndSummary === right.completeAndSummary &&
+    left.courseContent === right.courseContent &&
+    left.demonstrationHours === right.demonstrationHours &&
+    left.disciplineSituation === right.disciplineSituation &&
+    left.homeworkAssignment === right.homeworkAssignment &&
+    left.learningObjective === right.learningObjective &&
+    left.lectureHours === right.lectureHours &&
+    left.practiceHours === right.practiceHours &&
+    left.problemAndSolve === right.problemAndSolve &&
+    left.productionProjectTitle === right.productionProjectTitle &&
+    left.securityAndMaintain === right.securityAndMaintain &&
+    left.shift === right.shift &&
+    left.shiftName === right.shiftName &&
+    left.submitStatusText === right.submitStatusText &&
+    left.topicRecord === right.topicRecord
+  );
+}
+
+function reuseJournalDraftMapReferences(
+  previous: JournalDraftMap,
+  next: JournalDraftMap,
+): JournalDraftMap {
+  let hasReferenceChange = false;
+  const result = {} as JournalDraftMap;
+
+  Object.keys(next).forEach((key) => {
+    const previousDraft = previous[key];
+    const nextDraft = next[key];
+
+    if (previousDraft && areJournalDraftsEqual(previousDraft, nextDraft)) {
+      result[key] = previousDraft;
+      return;
+    }
+
+    result[key] = nextDraft;
+    hasReferenceChange = true;
+  });
+
+  if (!hasReferenceChange && Object.keys(previous).length === Object.keys(next).length) {
+    return previous;
+  }
+
+  return result;
+}
+
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
     if (left.isCurrent !== right.isCurrent) {
@@ -403,16 +459,6 @@ function buildItemKey(item: {
   ].join('-');
 }
 
-function buildFieldTipTitle(config: FieldTipConfig) {
-  const parts = [`接口字段：${config.fields.join(' / ')}`];
-
-  if (config.note) {
-    parts.push(config.note);
-  }
-
-  return parts.join('；');
-}
-
 function renderFieldLabel(label: string, config: FieldTipConfig) {
   return (
     <span className="lecture-journal-field-label">
@@ -422,15 +468,6 @@ function renderFieldLabel(label: string, config: FieldTipConfig) {
         </span>
       )}
       <span className="lecture-journal-field-label-text">{label}</span>
-      <Tooltip placement="topLeft" title={buildFieldTipTitle(config)}>
-        <button
-          aria-label={`${label} 字段提示`}
-          className="lecture-journal-field-tip-trigger"
-          type="button"
-        >
-          <InfoCircleOutlined />
-        </button>
-      </Tooltip>
     </span>
   );
 }
@@ -860,9 +897,15 @@ function resolveSaveValidationError(item: JournalEditableCardItem, draft: Journa
 function buildEditableCardItemFromReconciliation(
   item: LectureJournalReconciliationItem,
 ): JournalEditableCardItem {
+  const cachedItem = reconciliationEditableItemCache.get(item);
+
+  if (cachedItem) {
+    return cachedItem;
+  }
+
   const practicePlanFields = buildPracticePlanFields(item);
 
-  return {
+  const editableItem = {
     blockingIssue: item.blockingIssue,
     canFill: item.canFill,
     completeAndSummary: null,
@@ -910,14 +953,24 @@ function buildEditableCardItemFromReconciliation(
     weekNumber: item.weekNumber,
     ...practicePlanFields,
   };
+
+  reconciliationEditableItemCache.set(item, editableItem);
+
+  return editableItem;
 }
 
 function buildEditableCardItemFromIntegratedPreview(
   item: AcademicIntegratedTeachingLogPrefillPreview,
 ): JournalEditableCardItem {
+  const cachedItem = integratedPreviewEditableItemCache.get(item);
+
+  if (cachedItem) {
+    return cachedItem;
+  }
+
   const resolvedShift = item.shift || DEFAULT_INTEGRATED_SHIFT;
 
-  return {
+  const editableItem = {
     blockingIssue: item.blockingIssue,
     canFill: item.canFill,
     completeAndSummary: item.completeAndSummary,
@@ -974,6 +1027,10 @@ function buildEditableCardItemFromIntegratedPreview(
     warnings: item.warnings,
     weekNumber: item.weekNumber,
   };
+
+  integratedPreviewEditableItemCache.set(item, editableItem);
+
+  return editableItem;
 }
 
 function pickNearestFilledJournalTemplate(
@@ -1103,130 +1160,6 @@ function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
 
     return result;
   }, {});
-}
-
-function buildPlanSnapshot(item: JournalEditableCardItem) {
-  return JSON.stringify(
-    {
-      lecturePlanId: item.lecturePlanId,
-      lecturePlanDetailId: item.lecturePlanDetailId,
-      status: item.status,
-      canFill: item.canFill,
-      warnings: item.warnings,
-      blockingIssue: item.blockingIssue,
-      schoolYear: item.schoolYear,
-      semester: item.semester,
-      courseCategory: item.courseCategory,
-      courseId: item.courseId,
-      courseName: item.courseName,
-      teachingClassId: item.teachingClassId,
-      teachingClassName: item.teachingClassName,
-      teacherId: item.teacherId,
-      teacherName: item.teacherName,
-      teachingDate: item.teachingDate,
-      weekNumber: item.weekNumber,
-      dayOfWeek: item.dayOfWeek,
-      sectionId: item.sectionId,
-      sectionName: item.sectionName,
-      lessonHours: item.lessonHours,
-      expectedOccurrences: item.expectedOccurrences,
-      courseContent: item.courseContent,
-      homework: item.homework,
-      practiceDemonstrationHours: item.practiceDemonstrationHours,
-      practiceLectureHours: item.practiceLectureHours,
-      practicePracticeHours: item.practicePracticeHours,
-      practiceTeachingChapterContent: item.practiceTeachingChapterContent,
-      practiceTopicName: item.practiceTopicName,
-      learningTaskText: item.learningTaskText,
-      learningSessionNo: item.learningSessionNo,
-      learningSessionContent: item.learningSessionContent,
-      learningSessionTarget: item.learningSessionTarget,
-      learningTaskNo: item.learningTaskNo,
-      learningTaskName: item.learningTaskName,
-      integratedTeachingUnitName: resolveIntegratedTeachingUnitName(item),
-      integratedLearningObjective: resolveIntegratedLearningObjective(item),
-      integratedLearningContent: resolveIntegratedLearningContent(item),
-      integratedLearningOutcome: resolveIntegratedLearningOutcome(item),
-      teachingUnitText: item.teachingUnitText,
-      teachingUnitNo: item.teachingUnitNo,
-      teachingUnitName: item.teachingUnitName,
-      teachingUnitTarget: item.teachingUnitTarget,
-      teachingUnitContent: item.teachingUnitContent,
-      teachingUnitAchievement: item.teachingUnitAchievement,
-      shift: item.shift,
-      shiftName: item.shiftName,
-      problemAndSolve: item.problemAndSolve,
-      completeAndSummary: item.completeAndSummary,
-      disciplineSituation: item.disciplineSituation,
-      securityAndMaintain: item.securityAndMaintain,
-    },
-    null,
-    2,
-  );
-}
-
-function buildJournalRawSnapshot(rawJournal: unknown) {
-  try {
-    return JSON.stringify(rawJournal, null, 2);
-  } catch {
-    return String(rawJournal);
-  }
-}
-
-function renderMissingPlanSnapshotTrigger(item: JournalEditableCardItem) {
-  return (
-    <Tooltip
-      placement="bottomRight"
-      title={
-        <div className="lecture-journal-plan-tooltip">
-          <div className="lecture-journal-plan-tooltip-title">计划侧返回字段</div>
-          <div className="lecture-journal-plan-tooltip-note">
-            当前接口未返回 rawPlan /
-            rawPlanDetail，这里展示对账结果里的计划侧字段，方便核对未提交项。
-          </div>
-          <pre>{buildPlanSnapshot(item)}</pre>
-        </div>
-      }
-    >
-      <button
-        aria-label="查看计划侧原始数据"
-        className="lecture-journal-plan-tooltip-trigger"
-        type="button"
-      >
-        !
-      </button>
-    </Tooltip>
-  );
-}
-
-function renderJournalRawSnapshotTrigger(item: JournalEditableCardItem) {
-  if (!item.journal) {
-    return null;
-  }
-
-  return (
-    <Tooltip
-      placement="bottomRight"
-      title={
-        <div className="lecture-journal-plan-tooltip">
-          <div className="lecture-journal-plan-tooltip-title">日志 rawJournal</div>
-          <div className="lecture-journal-plan-tooltip-note">
-            已匹配日志的上游原始行。一体化的 JOURNAL_TYPE、LECTURE_JOURNAL_DETAIL_ID、 SSS002NAME
-            等字段都在这里。
-          </div>
-          <pre>{buildJournalRawSnapshot(item.journal.rawJournal)}</pre>
-        </div>
-      }
-    >
-      <button
-        aria-label="查看日志原始数据"
-        className="lecture-journal-plan-tooltip-trigger lecture-journal-raw-tooltip-trigger"
-        type="button"
-      >
-        J
-      </button>
-    </Tooltip>
-  );
 }
 
 function renderIntegratedExpectedOccurrences(
@@ -1462,7 +1395,6 @@ const JournalDraftCard = memo(function JournalDraftCard({
           trigger={[]}
         >
           <span className="lecture-journal-record-save-anchor">
-            {!isIntegratedCard ? renderMissingPlanSnapshotTrigger(item) : null}
             <Tooltip placement="top" title={saveButtonTooltip}>
               <span className="lecture-journal-save-action">
                 <Button
@@ -1506,19 +1438,13 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 />
               </Tooltip>
             ) : null}
-            <Tooltip placement="top" title="接口字段：weekNumber">
-              <span className="lecture-journal-record-overview-text">{weekLabel}</span>
-            </Tooltip>
+            <span className="lecture-journal-record-overview-text">{weekLabel}</span>
             {!isIntegratedCard ? (
-              <Tooltip placement="top" title="接口字段：dayOfWeek">
-                <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
-              </Tooltip>
+              <span className="lecture-journal-record-overview-text">{dayOfWeekLabel}</span>
             ) : null}
             <span className="lecture-journal-record-overview-section-wrap">
               {!isIntegratedCard && !isPracticeCard ? (
-                <Tooltip placement="top" title="接口字段：sectionName / sectionId">
-                  <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
-                </Tooltip>
+                <span className="lecture-journal-record-overview-text">{sectionLabel}</span>
               ) : null}
               {courseCategoryMeta ? (
                 <span
@@ -1533,49 +1459,36 @@ const JournalDraftCard = memo(function JournalDraftCard({
           </div>
 
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-center">
-            <Tooltip
-              placement="topLeft"
-              title={`${item.teachingClassName || '教学班待识别'} / ${item.courseName || '未命名课程'}`}
+            <span
+              className={['lecture-journal-record-title-block', courseCategoryAccentClassName]
+                .filter(Boolean)
+                .join(' ')}
             >
-              <span
-                className={['lecture-journal-record-title-block', courseCategoryAccentClassName]
-                  .filter(Boolean)
-                  .join(' ')}
-              >
-                <span className="lecture-journal-record-title-line lecture-journal-record-title-line-class">
-                  {item.teachingClassName || '教学班待识别'}
-                </span>
-                <span className="lecture-journal-record-title-line lecture-journal-record-title-line-course">
-                  {item.courseName || '未命名课程'}
-                </span>
+              <span className="lecture-journal-record-title-line lecture-journal-record-title-line-class">
+                {item.teachingClassName || '教学班待识别'}
               </span>
-            </Tooltip>
+              <span className="lecture-journal-record-title-line lecture-journal-record-title-line-course">
+                {item.courseName || '未命名课程'}
+              </span>
+            </span>
           </div>
 
           <div className="lecture-journal-record-overview-block lecture-journal-record-overview-block-right">
             {!isIntegratedCard ? (
-              <Tooltip placement="top" title="接口字段：teachingDate">
-                <span className="lecture-journal-record-meta-item">
-                  <span className="lecture-journal-record-meta-label">上课日期：</span>
-                  <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
-                </span>
-              </Tooltip>
-            ) : null}
-            <Tooltip placement="top" title="接口字段：lessonHours">
               <span className="lecture-journal-record-meta-item">
-                <span className="lecture-journal-record-meta-label">
-                  {isIntegratedCard ? '总课时数：' : '课时数：'}
-                </span>
-                <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
-                  {lessonHoursLabel}
-                </span>
+                <span className="lecture-journal-record-meta-label">上课日期：</span>
+                <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
               </span>
-            </Tooltip>
+            ) : null}
+            <span className="lecture-journal-record-meta-item">
+              <span className="lecture-journal-record-meta-label">
+                {isIntegratedCard ? '总课时数：' : '课时数：'}
+              </span>
+              <span className="lecture-journal-record-meta-value lecture-journal-record-meta-value-accent">
+                {lessonHoursLabel}
+              </span>
+            </span>
           </div>
-        </div>
-
-        <div className="lecture-journal-record-status">
-          {isFilled ? renderJournalRawSnapshotTrigger(item) : null}
         </div>
       </div>
 
@@ -2207,6 +2120,7 @@ export function LectureJournalReconciliationLabPage() {
     Record<string, number>
   >({});
   const activeQueryRequestIdRef = useRef(0);
+  const initialJournalDraftsRef = useRef<JournalDraftMap>({});
   const isQueryInFlightRef = useRef(false);
   const cardItemElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
   const savedCardCollapseAnimationFramesRef = useRef<Record<string, number>>({});
@@ -2444,17 +2358,23 @@ export function LectureJournalReconciliationLabPage() {
     activeCourseCategoryFilter === 'ALL'
       ? '全部课程'
       : resolveCourseCategoryMeta(activeCourseCategoryFilter)?.label || activeCourseCategoryFilter;
-  const initialJournalDrafts = useMemo(() => buildJournalDrafts(editableItems), [editableItems]);
+  const initialJournalDrafts = useMemo(() => {
+    const nextDrafts = buildJournalDrafts(editableItems);
+    const reusedDrafts = reuseJournalDraftMapReferences(
+      initialJournalDraftsRef.current,
+      nextDrafts,
+    );
 
-  useEffect(() => {
-    setJournalDrafts(initialJournalDrafts);
-  }, [initialJournalDrafts]);
+    initialJournalDraftsRef.current = reusedDrafts;
+
+    return reusedDrafts;
+  }, [editableItems]);
 
   const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
     setJournalDrafts((current) => ({
       ...current,
       [key]: {
-        ...(current[key] ?? EMPTY_JOURNAL_DRAFT),
+        ...(current[key] ?? initialJournalDraftsRef.current[key] ?? EMPTY_JOURNAL_DRAFT),
         ...patch,
       },
     }));
@@ -2537,140 +2457,151 @@ export function LectureJournalReconciliationLabPage() {
     [],
   );
 
-  async function handleSaveToCampus(item: JournalEditableCardItem, draft: JournalDraft) {
-    const session = storedSession;
+  const handleSaveToCampus = useCallback(
+    async (item: JournalEditableCardItem, draft: JournalDraft) => {
+      const session = storedSession;
 
-    if (!session) {
-      setSaveFeedbackByKey((current) => ({
-        ...current,
-        [item.key]: {
-          text: '请先登录 upstream 后再保存。',
-          tone: 'error',
-        },
-      }));
-      setPendingAction(null);
-      setLoginError(null);
-      openLoginModal();
-      return;
-    }
-
-    const validationError = resolveSaveValidationError(item, draft);
-
-    if (validationError) {
-      setSaveFeedbackByKey((current) => ({
-        ...current,
-        [item.key]: {
-          text: validationError,
-          tone: 'error',
-        },
-      }));
-      return;
-    }
-
-    setSavingItemKey(item.key);
-    setSaveFeedbackByKey((current) => ({
-      ...current,
-      [item.key]: undefined,
-    }));
-
-    try {
-      const commonInput = {
-        dayOfWeek: String(item.dayOfWeek),
-        lessonHours: item.lessonHours as number,
-        teachingClassId: item.teachingClassId as string,
-        teachingDate: item.teachingDate as string,
-        upstreamSessionToken: session.upstreamSessionToken,
-        weekNumber: String(item.weekNumber),
-      };
-
-      const result = isIntegratedCourseCategory(item.courseCategory)
-        ? await saveAcademicIntegratedTeachingLog({
-            ...commonInput,
-            completeAndSummary: draft.completeAndSummary,
-            disciplineSituation: draft.disciplineSituation,
-            lectureJournalDetailId: item.matchedLectureJournalDetailId || undefined,
-            lecturePlanDetailId: item.lecturePlanDetailId as string,
-            problemAndSolve: draft.problemAndSolve,
-            securityAndMaintain: draft.securityAndMaintain,
-            shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
-          })
-        : isPracticeCourseCategory(item.courseCategory)
-          ? await saveAcademicPracticeTeachingLog({
-              ...commonInput,
-              courseContent: draft.courseContent,
-              disciplineSituation: draft.disciplineSituation,
-              exampleLessons: draft.demonstrationHours ?? 0,
-              homeworkAssignment: draft.homeworkAssignment,
-              lectureJournalDetailId: resolveJournalDetailId(item),
-              lectureLessons: draft.lectureHours ?? 0,
-              lecturePlanDetailId: item.lecturePlanDetailId || undefined,
-              problemAndSolve: draft.problemAndSolve,
-              productionProjectTitle: draft.productionProjectTitle,
-              securityAndMaintain: draft.securityAndMaintain,
-              shift: draft.shift || item.shift || undefined,
-              topicRecord: draft.topicRecord || undefined,
-              trainingLessons: draft.practiceHours ?? 0,
-            })
-          : await saveAcademicTheoryTeachingLog({
-              ...commonInput,
-              courseContent: draft.courseContent,
-              homeworkAssignment: draft.homeworkAssignment,
-              lectureJournalDetailId: resolveJournalDetailId(item),
-              lecturePlanDetailId: item.lecturePlanDetailId || undefined,
-              minSectionId: resolveMinSectionId(item.sectionId),
-              sectionId: item.sectionId as string,
-              topicRecord: draft.topicRecord,
-            });
-
-      if (!result.success) {
-        throw new Error(result.msg || '上游未保存成功。');
-      }
-
-      persistRollingSession(session, {
-        expiresAt: result.expiresAt,
-        upstreamSessionToken: result.upstreamSessionToken,
-      });
-
-      applyLocalSaveSuccess(item, draft, result);
-
-      if (item.status === 'MISSING' && resultViewScope === 'missing') {
-        startSavedCardCollapse(item.key);
-      }
-
-      setSaveFeedbackByKey((current) => ({
-        ...current,
-        [item.key]: {
-          text: result.msg || '教学日志已保存。',
-          tone: 'success',
-        },
-      }));
-    } catch (error) {
-      if (isExpiredUpstreamSessionError(error)) {
-        clearCurrentSession();
+      if (!session) {
         setSaveFeedbackByKey((current) => ({
           ...current,
           [item.key]: {
-            text: 'upstream 会话已失效，请重新登录后重新保存。',
+            text: '请先登录 upstream 后再保存。',
             tone: 'error',
           },
         }));
         setPendingAction(null);
-        setLoginError('upstream 会话已失效，请重新登录后重新保存。');
+        setLoginError(null);
         openLoginModal();
         return;
       }
 
+      const validationError = resolveSaveValidationError(item, draft);
+
+      if (validationError) {
+        setSaveFeedbackByKey((current) => ({
+          ...current,
+          [item.key]: {
+            text: validationError,
+            tone: 'error',
+          },
+        }));
+        return;
+      }
+
+      setSavingItemKey(item.key);
       setSaveFeedbackByKey((current) => ({
         ...current,
-        [item.key]: {
-          text: resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'),
-          tone: 'error',
-        },
+        [item.key]: undefined,
       }));
-    } finally {
-      setSavingItemKey(null);
-    }
-  }
+
+      try {
+        const commonInput = {
+          dayOfWeek: String(item.dayOfWeek),
+          lessonHours: item.lessonHours as number,
+          teachingClassId: item.teachingClassId as string,
+          teachingDate: item.teachingDate as string,
+          upstreamSessionToken: session.upstreamSessionToken,
+          weekNumber: String(item.weekNumber),
+        };
+
+        const result = isIntegratedCourseCategory(item.courseCategory)
+          ? await saveAcademicIntegratedTeachingLog({
+              ...commonInput,
+              completeAndSummary: draft.completeAndSummary,
+              disciplineSituation: draft.disciplineSituation,
+              lectureJournalDetailId: item.matchedLectureJournalDetailId || undefined,
+              lecturePlanDetailId: item.lecturePlanDetailId as string,
+              problemAndSolve: draft.problemAndSolve,
+              securityAndMaintain: draft.securityAndMaintain,
+              shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
+            })
+          : isPracticeCourseCategory(item.courseCategory)
+            ? await saveAcademicPracticeTeachingLog({
+                ...commonInput,
+                courseContent: draft.courseContent,
+                disciplineSituation: draft.disciplineSituation,
+                exampleLessons: draft.demonstrationHours ?? 0,
+                homeworkAssignment: draft.homeworkAssignment,
+                lectureJournalDetailId: resolveJournalDetailId(item),
+                lectureLessons: draft.lectureHours ?? 0,
+                lecturePlanDetailId: item.lecturePlanDetailId || undefined,
+                problemAndSolve: draft.problemAndSolve,
+                productionProjectTitle: draft.productionProjectTitle,
+                securityAndMaintain: draft.securityAndMaintain,
+                shift: draft.shift || item.shift || undefined,
+                topicRecord: draft.topicRecord || undefined,
+                trainingLessons: draft.practiceHours ?? 0,
+              })
+            : await saveAcademicTheoryTeachingLog({
+                ...commonInput,
+                courseContent: draft.courseContent,
+                homeworkAssignment: draft.homeworkAssignment,
+                lectureJournalDetailId: resolveJournalDetailId(item),
+                lecturePlanDetailId: item.lecturePlanDetailId || undefined,
+                minSectionId: resolveMinSectionId(item.sectionId),
+                sectionId: item.sectionId as string,
+                topicRecord: draft.topicRecord,
+              });
+
+        if (!result.success) {
+          throw new Error(result.msg || '上游未保存成功。');
+        }
+
+        persistRollingSession(session, {
+          expiresAt: result.expiresAt,
+          upstreamSessionToken: result.upstreamSessionToken,
+        });
+
+        applyLocalSaveSuccess(item, draft, result);
+
+        if (item.status === 'MISSING' && resultViewScope === 'missing') {
+          startSavedCardCollapse(item.key);
+        }
+
+        setSaveFeedbackByKey((current) => ({
+          ...current,
+          [item.key]: {
+            text: result.msg || '教学日志已保存。',
+            tone: 'success',
+          },
+        }));
+      } catch (error) {
+        if (isExpiredUpstreamSessionError(error)) {
+          clearCurrentSession();
+          setSaveFeedbackByKey((current) => ({
+            ...current,
+            [item.key]: {
+              text: 'upstream 会话已失效，请重新登录后重新保存。',
+              tone: 'error',
+            },
+          }));
+          setPendingAction(null);
+          setLoginError('upstream 会话已失效，请重新登录后重新保存。');
+          openLoginModal();
+          return;
+        }
+
+        setSaveFeedbackByKey((current) => ({
+          ...current,
+          [item.key]: {
+            text: resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'),
+            tone: 'error',
+          },
+        }));
+      } finally {
+        setSavingItemKey(null);
+      }
+    },
+    [
+      applyLocalSaveSuccess,
+      clearCurrentSession,
+      openLoginModal,
+      persistRollingSession,
+      resultViewScope,
+      startSavedCardCollapse,
+      storedSession,
+    ],
+  );
 
   async function runDirectoryAction(sessionOverride?: StoredUpstreamSession) {
     const session = sessionOverride ?? storedSession;
@@ -2733,21 +2664,20 @@ export function LectureJournalReconciliationLabPage() {
     setIsLoadingReconciliation(true);
     setQueryError(null);
     setPrefillError(null);
+    setJournalDrafts({});
+    setSaveFeedbackByKey({});
+    setSettlingSavedItemKeys([]);
+    setCollapsingSavedItemKeys([]);
+    setCollapsingSavedItemHeights({});
     setReconciliationResult(null);
     setPrefillResult(null);
 
     try {
-      const {
-        prefillError: nextPrefillError,
-        prefillResult: nextPrefillResult,
-        reconciliationResult: result,
-      } = await runLectureJournalReconciliationQueryWorkflow({
+      const result = await fetchLectureJournalReconciliation({
         departmentId: normalizedDepartmentId || undefined,
-        persistRollingSession,
         schoolYear: String(selectedSemester.schoolYear),
         semester: String(selectedSemester.termNumber),
-        semesterId: selectedSemester.id,
-        session,
+        sessionToken: session.upstreamSessionToken,
         staffId: normalizedStaffId || undefined,
       });
 
@@ -2755,9 +2685,57 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
+      const nextSession = persistRollingSession(session, {
+        expiresAt: result.expiresAt,
+        upstreamSessionToken: result.upstreamSessionToken,
+      });
+
       setReconciliationResult(result);
-      setPrefillResult(nextPrefillResult);
-      setPrefillError(nextPrefillError);
+      setIsLoadingReconciliation(false);
+
+      if (!normalizedStaffId) {
+        return;
+      }
+
+      const hasIntegratedItems = result.items.some((item) =>
+        isIntegratedCourseCategory(item.courseCategory),
+      );
+
+      if (!hasIntegratedItems) {
+        return;
+      }
+
+      try {
+        const nextPrefillResult = await fetchAcademicTeachingLogPrefillItems({
+          departmentId: normalizedDepartmentId || undefined,
+          semesterId: selectedSemester.id,
+          staffId: normalizedStaffId,
+          upstreamSessionToken: result.upstreamSessionToken,
+        });
+
+        if (activeQueryRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        if (nextPrefillResult.upstreamSessionToken && nextPrefillResult.expiresAt) {
+          persistRollingSession(nextSession, {
+            expiresAt: nextPrefillResult.expiresAt,
+            upstreamSessionToken: nextPrefillResult.upstreamSessionToken,
+          });
+        }
+
+        setPrefillResult(nextPrefillResult);
+      } catch (error) {
+        if (activeQueryRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        if (isExpiredUpstreamSessionError(error)) {
+          throw error;
+        }
+
+        setPrefillError(resolveUpstreamErrorMessage(error, '暂时无法加载一体化预填结果。'));
+      }
     } catch (error) {
       if (activeQueryRequestIdRef.current !== requestId) {
         return;
@@ -2844,7 +2822,9 @@ export function LectureJournalReconciliationLabPage() {
               style={collapseStyle}
             >
               <JournalDraftCard
-                draft={journalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
+                draft={
+                  journalDrafts[item.key] ?? initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT
+                }
                 initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
                 isCollapsing={isCollapsing}
                 isSaving={savingItemKey === item.key}
