@@ -55,6 +55,18 @@ import {
   type TeacherDirectoryResult,
 } from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
+import {
+  buildJournalDrafts,
+  DEFAULT_DISCIPLINE_SITUATION,
+  DEFAULT_INTEGRATED_SHIFT,
+  DEFAULT_INTEGRATED_SHIFT_NAME,
+  DEFAULT_SECURITY_AND_MAINTAIN,
+  EMPTY_JOURNAL_DRAFT,
+  type JournalDraft,
+  type JournalDraftMap,
+  resolveShiftName,
+  reuseJournalDraftMapReferences,
+} from './journal-draft-policy';
 import { lectureJournalReconciliationLabMeta } from './meta';
 import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
@@ -89,15 +101,6 @@ type ResultViewScopeOption = {
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const DEFAULT_DISCIPLINE_SITUATION = '遵章守纪';
-const DEFAULT_INTEGRATED_SHIFT = '3';
-const SHIFT_NAME_BY_VALUE = {
-  '1': '早班',
-  '2': '中班',
-  '3': '常日班',
-} as const;
-const DEFAULT_INTEGRATED_SHIFT_NAME = SHIFT_NAME_BY_VALUE[DEFAULT_INTEGRATED_SHIFT];
-const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const COURSE_CATEGORY_TAB_ORDER = ['1', '2', '3'];
@@ -178,24 +181,6 @@ type JournalEditableCardItem = {
   practiceTopicName: string | null;
 };
 
-type JournalDraft = {
-  completeAndSummary: string;
-  courseContent: string;
-  demonstrationHours: number | null;
-  disciplineSituation: string;
-  homeworkAssignment: string;
-  lectureHours: number | null;
-  problemAndSolve: string;
-  practiceHours: number | null;
-  productionProjectTitle: string;
-  learningObjective: string;
-  securityAndMaintain: string;
-  shift: string;
-  shiftName: string;
-  submitStatusText: string;
-  topicRecord: string;
-};
-
 type JournalDraftPatch = Partial<
   Pick<
     JournalDraft,
@@ -217,7 +202,6 @@ type JournalDraftPatch = Partial<
   >
 >;
 
-type JournalDraftMap = Record<string, JournalDraft>;
 type FieldTipConfig = {
   fields: string[];
   note?: string;
@@ -229,24 +213,6 @@ type SaveFeedback = {
 };
 type SaveFeedbackMap = Record<string, SaveFeedback | undefined>;
 
-const EMPTY_JOURNAL_DRAFT: JournalDraft = {
-  completeAndSummary: '',
-  courseContent: '',
-  demonstrationHours: null,
-  disciplineSituation: '',
-  homeworkAssignment: '',
-  lectureHours: null,
-  problemAndSolve: '',
-  practiceHours: null,
-  productionProjectTitle: '',
-  learningObjective: '',
-  securityAndMaintain: '',
-  shift: '',
-  shiftName: '',
-  submitStatusText: '',
-  topicRecord: '',
-};
-
 const reconciliationEditableItemCache = new WeakMap<
   LectureJournalReconciliationItem,
   JournalEditableCardItem
@@ -255,53 +221,6 @@ const integratedPreviewEditableItemCache = new WeakMap<
   AcademicIntegratedTeachingLogPrefillPreview,
   JournalEditableCardItem
 >();
-
-function areJournalDraftsEqual(left: JournalDraft, right: JournalDraft) {
-  return (
-    left.completeAndSummary === right.completeAndSummary &&
-    left.courseContent === right.courseContent &&
-    left.demonstrationHours === right.demonstrationHours &&
-    left.disciplineSituation === right.disciplineSituation &&
-    left.homeworkAssignment === right.homeworkAssignment &&
-    left.learningObjective === right.learningObjective &&
-    left.lectureHours === right.lectureHours &&
-    left.practiceHours === right.practiceHours &&
-    left.problemAndSolve === right.problemAndSolve &&
-    left.productionProjectTitle === right.productionProjectTitle &&
-    left.securityAndMaintain === right.securityAndMaintain &&
-    left.shift === right.shift &&
-    left.shiftName === right.shiftName &&
-    left.submitStatusText === right.submitStatusText &&
-    left.topicRecord === right.topicRecord
-  );
-}
-
-function reuseJournalDraftMapReferences(
-  previous: JournalDraftMap,
-  next: JournalDraftMap,
-): JournalDraftMap {
-  let hasReferenceChange = false;
-  const result = {} as JournalDraftMap;
-
-  Object.keys(next).forEach((key) => {
-    const previousDraft = previous[key];
-    const nextDraft = next[key];
-
-    if (previousDraft && areJournalDraftsEqual(previousDraft, nextDraft)) {
-      result[key] = previousDraft;
-      return;
-    }
-
-    result[key] = nextDraft;
-    hasReferenceChange = true;
-  });
-
-  if (!hasReferenceChange && Object.keys(previous).length === Object.keys(next).length) {
-    return previous;
-  }
-
-  return result;
-}
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -510,16 +429,6 @@ function resolveLessonHoursLabel(lessonHours: number | null) {
   return lessonHours ? String(lessonHours) : '待识别';
 }
 
-function resolveShiftName(shift: string | null) {
-  const normalizedShift = shift?.trim() || '';
-
-  if (!normalizedShift) {
-    return '';
-  }
-
-  return SHIFT_NAME_BY_VALUE[normalizedShift as keyof typeof SHIFT_NAME_BY_VALUE] || '';
-}
-
 function resolveShiftDisplayLabel(shift: string | null) {
   const normalizedShift = shift?.trim() || '';
   const shiftName = resolveShiftName(normalizedShift);
@@ -701,135 +610,6 @@ function normalizeOptionalNumber(value: number | null | undefined) {
   return value === null || value === undefined ? null : value;
 }
 
-function stringifyRawValue(value: unknown) {
-  if (value === null || value === undefined) {
-    return '';
-  }
-
-  if (typeof value === 'string') {
-    return value.trim();
-  }
-
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-
-  return '';
-}
-
-function pickRawObjectString(rawValue: unknown, keys: string[]) {
-  if (!rawValue || typeof rawValue !== 'object' || Array.isArray(rawValue)) {
-    return '';
-  }
-
-  const record = rawValue as Record<string, unknown>;
-  const lowerKeyMap = new Map(Object.keys(record).map((key) => [key.toLowerCase(), key]));
-
-  for (const key of keys) {
-    const exactValue = stringifyRawValue(record[key]);
-
-    if (exactValue) {
-      return exactValue;
-    }
-
-    const matchedKey = lowerKeyMap.get(key.toLowerCase());
-    const matchedValue = matchedKey ? stringifyRawValue(record[matchedKey]) : '';
-
-    if (matchedValue) {
-      return matchedValue;
-    }
-  }
-
-  return '';
-}
-
-function resolveIntegratedTeachingUnitName(
-  item: JournalEditableCardItem,
-  journal?: LectureJournalReconciliationItem['journal'],
-) {
-  return (
-    pickRawObjectString(journal?.rawJournal, [
-      'SSS002NAME',
-      'TEACHING_UNIT_NAME',
-      'teachingUnitName',
-      'TOPIC_NAME',
-      'topicName',
-    ]) ||
-    item.teachingUnitText ||
-    item.teachingUnitName ||
-    (item.teachingUnitNo === null || item.teachingUnitNo === undefined
-      ? ''
-      : String(item.teachingUnitNo)) ||
-    item.practiceTopicName ||
-    item.practiceTeachingChapterContent ||
-    item.courseContent ||
-    ''
-  );
-}
-
-function resolveIntegratedLearningObjective(
-  item: JournalEditableCardItem,
-  journal?: LectureJournalReconciliationItem['journal'],
-) {
-  return (
-    pickRawObjectString(journal?.rawJournal, [
-      'LEARNING_OBJECTIVE',
-      'LEARNING_TARGET',
-      'learningObjective',
-      'learningTarget',
-      'STUDY_GOAL',
-      'studyGoal',
-      'TEACHING_CHAPTER_CONTENT',
-      'teachingChapterContent',
-    ]) ||
-    item.teachingUnitTarget ||
-    item.learningSessionTarget ||
-    item.practiceTeachingChapterContent ||
-    ''
-  );
-}
-
-function resolveIntegratedLearningContent(
-  item: JournalEditableCardItem,
-  journal?: LectureJournalReconciliationItem['journal'],
-) {
-  return (
-    journal?.courseContent ||
-    pickRawObjectString(journal?.rawJournal, [
-      'COURSE_CONTENT',
-      'courseContent',
-      'LEARNING_CONTENT',
-      'learningContent',
-      'STUDY_CONTENT',
-      'studyContent',
-    ]) ||
-    item.teachingUnitContent ||
-    item.learningSessionContent ||
-    item.learningTaskText ||
-    item.courseContent ||
-    ''
-  );
-}
-
-function resolveIntegratedLearningOutcome(
-  item: JournalEditableCardItem,
-  journal?: LectureJournalReconciliationItem['journal'],
-) {
-  return (
-    journal?.homeworkAssignment ||
-    pickRawObjectString(journal?.rawJournal, [
-      'LEARNING_OUTCOME',
-      'learningOutcome',
-      'STUDY_RESULT',
-      'studyResult',
-      'HOMEWORK',
-      'homeworkAssignment',
-    ]) ||
-    item.homework ||
-    ''
-  );
-}
-
 function resolveIntegratedLearningSessionText(item: JournalEditableCardItem) {
   return [item.learningSessionNo, item.learningSessionContent].filter(Boolean).join(' ');
 }
@@ -872,16 +652,6 @@ function buildPracticePlanFields(item: {
     practiceTeachingChapterContent: item.teachingChapterContent ?? null,
     practiceTopicName: item.topicName ?? null,
   };
-}
-
-function resolveTeachingDateTimestamp(value: string | null) {
-  if (!value) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  const timestamp = new Date(`${value}T00:00:00Z`).getTime();
-
-  return Number.isNaN(timestamp) ? Number.POSITIVE_INFINITY : timestamp;
 }
 
 function resolveJournalDetailId(item: JournalEditableCardItem) {
@@ -1118,135 +888,6 @@ function buildEditableCardItemFromIntegratedPreview(
   integratedPreviewEditableItemCache.set(item, editableItem);
 
   return editableItem;
-}
-
-function pickNearestFilledJournalTemplate(
-  target: JournalEditableCardItem,
-  filledItems: JournalEditableCardItem[],
-) {
-  const candidateGroups = [
-    filledItems.filter(
-      (item) =>
-        Boolean(target.teachingClassId) &&
-        item.teachingClassId === target.teachingClassId &&
-        item.journal,
-    ),
-    filledItems.filter(
-      (item) => Boolean(target.courseId) && item.courseId === target.courseId && item.journal,
-    ),
-    filledItems.filter(
-      (item) =>
-        Boolean(target.courseName) &&
-        item.courseName === target.courseName &&
-        Boolean(item.journal),
-    ),
-  ];
-
-  const candidates = candidateGroups.find((group) => group.length > 0) ?? [];
-
-  if (candidates.length === 0) {
-    return null;
-  }
-
-  const targetTimestamp = resolveTeachingDateTimestamp(target.teachingDate);
-
-  return [...candidates].sort((left, right) => {
-    const leftDistance = Math.abs(
-      resolveTeachingDateTimestamp(left.teachingDate) - targetTimestamp,
-    );
-    const rightDistance = Math.abs(
-      resolveTeachingDateTimestamp(right.teachingDate) - targetTimestamp,
-    );
-
-    if (leftDistance !== rightDistance) {
-      return leftDistance - rightDistance;
-    }
-
-    return (
-      resolveTeachingDateTimestamp(left.teachingDate) -
-      resolveTeachingDateTimestamp(right.teachingDate)
-    );
-  })[0];
-}
-
-function buildJournalDrafts(items: JournalEditableCardItem[]): JournalDraftMap {
-  const filledItems = items.filter((item) => item.status === 'FILLED' && item.journal);
-
-  return items.reduce<JournalDraftMap>((result, item) => {
-    if (item.status === 'FILLED' && item.journal) {
-      const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
-
-      result[item.key] = {
-        completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
-        courseContent: isIntegratedCard
-          ? resolveIntegratedLearningContent(item, item.journal)
-          : item.journal.courseContent || '',
-        demonstrationHours: item.practiceDemonstrationHours,
-        disciplineSituation: isIntegratedCard ? item.disciplineSituation || '' : '',
-        homeworkAssignment: isIntegratedCard
-          ? resolveIntegratedLearningOutcome(item, item.journal)
-          : item.journal.homeworkAssignment || '',
-        lectureHours: item.practiceLectureHours,
-        learningObjective: isIntegratedCard
-          ? resolveIntegratedLearningObjective(item, item.journal)
-          : '',
-        problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
-        practiceHours: item.practicePracticeHours,
-        productionProjectTitle: isIntegratedCard
-          ? resolveIntegratedTeachingUnitName(item, item.journal)
-          : item.practiceTeachingChapterContent || '',
-        securityAndMaintain: isIntegratedCard ? item.securityAndMaintain || '' : '',
-        shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
-        shiftName: isIntegratedCard
-          ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
-            DEFAULT_INTEGRATED_SHIFT_NAME
-          : '',
-        submitStatusText: item.journal.statusName || item.journal.statusCode || '',
-        topicRecord: item.journal.topicRecord || '',
-      };
-
-      return result;
-    }
-
-    const template = pickNearestFilledJournalTemplate(item, filledItems);
-    const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
-    const planCourseContent = isPracticeCourseCategory(item.courseCategory)
-      ? item.practiceTopicName || ''
-      : item.courseContent || '';
-
-    result[item.key] = {
-      completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
-      courseContent: isIntegratedCard
-        ? ''
-        : planCourseContent || template?.journal?.courseContent || '',
-      demonstrationHours: item.practiceDemonstrationHours,
-      disciplineSituation:
-        isPracticeCourseCategory(item.courseCategory) || isIntegratedCard
-          ? item.disciplineSituation || ''
-          : '',
-      homeworkAssignment: isIntegratedCard
-        ? ''
-        : item.homework || template?.journal?.homeworkAssignment || '',
-      lectureHours: item.practiceLectureHours,
-      learningObjective: '',
-      problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
-      practiceHours: item.practicePracticeHours,
-      productionProjectTitle: isIntegratedCard ? '' : item.practiceTeachingChapterContent || '',
-      securityAndMaintain: isIntegratedCard
-        ? item.securityAndMaintain || ''
-        : isPracticeCourseCategory(item.courseCategory)
-          ? DEFAULT_SECURITY_AND_MAINTAIN
-          : '',
-      shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
-      shiftName: isIntegratedCard
-        ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) || DEFAULT_INTEGRATED_SHIFT_NAME
-        : '',
-      submitStatusText: isIntegratedCard && item.status === 'FILLED' ? '已填写' : '',
-      topicRecord: isIntegratedCard ? '' : template?.journal?.topicRecord || '',
-    };
-
-    return result;
-  }, {});
 }
 
 function renderIntegratedExpectedOccurrences(
