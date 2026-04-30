@@ -48,9 +48,6 @@ import {
   type LectureJournalExpectedOccurrence,
   type LectureJournalReconciliationItem,
   resolveUpstreamErrorMessage,
-  saveAcademicIntegratedTeachingLog,
-  saveAcademicPracticeTeachingLog,
-  saveAcademicTheoryTeachingLog,
   type TeacherDirectoryEntry,
   type TeacherDirectoryResult,
 } from './api';
@@ -70,6 +67,7 @@ import {
 import { lectureJournalReconciliationLabMeta } from './meta';
 import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
+import { resolveSaveValidationError, runLectureJournalSaveWorkflow } from './save-workflow';
 import { isFutureTeachingDate } from './teaching-date';
 
 import './page.css';
@@ -652,103 +650,6 @@ function buildPracticePlanFields(item: {
     practiceTeachingChapterContent: item.teachingChapterContent ?? null,
     practiceTopicName: item.topicName ?? null,
   };
-}
-
-function resolveJournalDetailId(item: JournalEditableCardItem) {
-  return item.matchedLectureJournalDetailId || item.journal?.lectureJournalDetailId || undefined;
-}
-
-function resolveMinSectionId(sectionId: string | null) {
-  const normalizedSectionId = normalizeOptionalString(sectionId || '');
-
-  if (!normalizedSectionId) {
-    return undefined;
-  }
-
-  const matchedValue = normalizedSectionId.match(/\d+/)?.[0];
-
-  return matchedValue || normalizedSectionId;
-}
-
-function resolveMissingSaveFieldLabels(item: JournalEditableCardItem, draft: JournalDraft) {
-  const requiredLabels = [
-    ['teachingClassId', item.teachingClassId],
-    ['teachingDate', item.teachingDate],
-    ['weekNumber', item.weekNumber === null ? null : String(item.weekNumber)],
-    ['dayOfWeek', item.dayOfWeek === null ? null : String(item.dayOfWeek)],
-    ['lessonHours', item.lessonHours === null ? null : String(item.lessonHours)],
-  ] satisfies Array<[string, string | null]>;
-
-  const missingLabels = requiredLabels
-    .filter(([, value]) => !normalizeOptionalString(value || ''))
-    .map(([label]) => label);
-
-  if (isIntegratedCourseCategory(item.courseCategory)) {
-    if (!normalizeOptionalString(item.lecturePlanDetailId || '')) {
-      missingLabels.push('lecturePlanDetailId');
-    }
-
-    return missingLabels;
-  }
-
-  if (!normalizeOptionalString(draft.courseContent)) {
-    missingLabels.push('courseContent');
-  }
-
-  if (!normalizeOptionalString(draft.homeworkAssignment)) {
-    missingLabels.push('homeworkAssignment');
-  }
-
-  if (isPracticeCourseCategory(item.courseCategory)) {
-    return missingLabels;
-  }
-
-  if (!normalizeOptionalString(draft.topicRecord)) {
-    missingLabels.push('topicRecord');
-  }
-
-  if (!normalizeOptionalString(item.sectionId || '')) {
-    missingLabels.push('sectionId');
-  }
-
-  return missingLabels;
-}
-
-function resolveSaveValidationError(item: JournalEditableCardItem, draft: JournalDraft) {
-  if (item.blockingIssue) {
-    return item.blockingIssue;
-  }
-
-  if (isFutureTeachingDate(item.teachingDate)) {
-    return '课程尚未开始，不能填写教学日志。';
-  }
-
-  if (isIntegratedCourseCategory(item.courseCategory) && item.status === 'UNMATCHED') {
-    return '当前一体化计划项无法可靠匹配。';
-  }
-
-  if (!item.canFill) {
-    return isIntegratedCourseCategory(item.courseCategory)
-      ? '当前一体化计划项尚不能稳定映射。'
-      : '当前课次不可保存。';
-  }
-
-  const missingLabels = resolveMissingSaveFieldLabels(item, draft);
-
-  if (missingLabels.length > 0) {
-    return `缺少必填字段：${missingLabels.join('、')}`;
-  }
-
-  if (isPracticeCourseCategory(item.courseCategory)) {
-    const practiceHoursTotal =
-      (draft.lectureHours || 0) + (draft.practiceHours || 0) + (draft.demonstrationHours || 0);
-
-    if (item.lessonHours !== null && practiceHoursTotal !== item.lessonHours) {
-      return `lectureLessons + trainingLessons + exampleLessons 必须等于 lessonHours，当前为 ${practiceHoursTotal} / ${item.lessonHours}`;
-    }
-  }
-
-  return null;
 }
 
 function buildEditableCardItemFromReconciliation(
@@ -2268,61 +2169,11 @@ export function LectureJournalReconciliationLabPage() {
       }));
 
       try {
-        const commonInput = {
-          dayOfWeek: String(item.dayOfWeek),
-          lessonHours: item.lessonHours as number,
-          teachingClassId: item.teachingClassId as string,
-          teachingDate: item.teachingDate as string,
-          upstreamSessionToken: session.upstreamSessionToken,
-          weekNumber: String(item.weekNumber),
-        };
-
-        const result = isIntegratedCourseCategory(item.courseCategory)
-          ? await saveAcademicIntegratedTeachingLog({
-              ...commonInput,
-              completeAndSummary: draft.completeAndSummary,
-              disciplineSituation: draft.disciplineSituation,
-              lectureJournalDetailId: item.matchedLectureJournalDetailId || undefined,
-              lecturePlanDetailId: item.lecturePlanDetailId as string,
-              problemAndSolve: draft.problemAndSolve,
-              securityAndMaintain: draft.securityAndMaintain,
-              shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
-            })
-          : isPracticeCourseCategory(item.courseCategory)
-            ? await saveAcademicPracticeTeachingLog({
-                ...commonInput,
-                courseContent: draft.courseContent,
-                disciplineSituation: draft.disciplineSituation,
-                exampleLessons: draft.demonstrationHours ?? 0,
-                homeworkAssignment: draft.homeworkAssignment,
-                lectureJournalDetailId: resolveJournalDetailId(item),
-                lectureLessons: draft.lectureHours ?? 0,
-                lecturePlanDetailId: item.lecturePlanDetailId || undefined,
-                problemAndSolve: draft.problemAndSolve,
-                productionProjectTitle: draft.productionProjectTitle,
-                securityAndMaintain: draft.securityAndMaintain,
-                shift: draft.shift || item.shift || undefined,
-                topicRecord: draft.topicRecord || undefined,
-                trainingLessons: draft.practiceHours ?? 0,
-              })
-            : await saveAcademicTheoryTeachingLog({
-                ...commonInput,
-                courseContent: draft.courseContent,
-                homeworkAssignment: draft.homeworkAssignment,
-                lectureJournalDetailId: resolveJournalDetailId(item),
-                lecturePlanDetailId: item.lecturePlanDetailId || undefined,
-                minSectionId: resolveMinSectionId(item.sectionId),
-                sectionId: item.sectionId as string,
-                topicRecord: draft.topicRecord,
-              });
-
-        if (!result.success) {
-          throw new Error(result.msg || '上游未保存成功。');
-        }
-
-        persistRollingSession(session, {
-          expiresAt: result.expiresAt,
-          upstreamSessionToken: result.upstreamSessionToken,
+        const { result } = await runLectureJournalSaveWorkflow({
+          draft,
+          item,
+          persistRollingSession,
+          session,
         });
 
         applyLocalSaveSuccess(item, draft, result);
