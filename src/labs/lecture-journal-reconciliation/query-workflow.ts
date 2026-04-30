@@ -8,6 +8,7 @@ import {
   type LectureJournalReconciliationResult,
   resolveUpstreamErrorMessage,
 } from './api';
+import { isIntegratedCourseCategory } from './course-category';
 
 type PersistRollingSession = (
   currentSession: StoredUpstreamSession,
@@ -20,6 +21,7 @@ type PersistRollingSession = (
 type QueryWorkflowParams = {
   departmentId?: string;
   isCurrent?: () => boolean;
+  onPrefillStart?: () => void;
   onReconciliationResult?: (result: LectureJournalReconciliationResult) => void;
   persistRollingSession: PersistRollingSession;
   schoolYear: string;
@@ -36,7 +38,7 @@ type QueryWorkflowOutcome = {
 };
 
 function hasIntegratedReconciliationItems(result: LectureJournalReconciliationResult) {
-  return result.items.some((item) => item.courseCategory === '3');
+  return result.items.some((item) => isIntegratedCourseCategory(item.courseCategory));
 }
 
 export async function runLectureJournalReconciliationQueryWorkflow(
@@ -72,6 +74,8 @@ export async function runLectureJournalReconciliationQueryWorkflow(
       reconciliationResult,
     };
   }
+
+  params.onPrefillStart?.();
 
   try {
     const prefillResult = await fetchAcademicTeachingLogPrefillItems({

@@ -46,6 +46,7 @@ import {
   type TeacherDirectoryEntry,
   type TeacherDirectoryResult,
 } from './api';
+import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import { lectureJournalReconciliationLabMeta } from './meta';
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 
@@ -599,14 +600,6 @@ function resolveResultViewScopeLabel(scope: ResultViewScope) {
   }
 
   return '完整对账';
-}
-
-function isPracticeCourseCategory(courseCategory: string | null) {
-  return courseCategory === '2';
-}
-
-function isIntegratedCourseCategory(courseCategory: string | null) {
-  return courseCategory === '3';
 }
 
 function resolveOptionalCountLabel(value: number | null | undefined, fallback: string) {
@@ -2101,6 +2094,7 @@ export function LectureJournalReconciliationLabPage() {
   const [isLoadingDepartmentOptions, setIsLoadingDepartmentOptions] = useState(true);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
+  const [isLoadingPrefill, setIsLoadingPrefill] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
@@ -2664,6 +2658,7 @@ export function LectureJournalReconciliationLabPage() {
     activeQueryRequestIdRef.current = requestId;
     isQueryInFlightRef.current = true;
     setIsLoadingReconciliation(true);
+    setIsLoadingPrefill(false);
     setQueryError(null);
     setPrefillError(null);
     setJournalDrafts({});
@@ -2682,6 +2677,9 @@ export function LectureJournalReconciliationLabPage() {
           setReconciliationResult(nextReconciliationResult);
           setIsLoadingReconciliation(false);
         },
+        onPrefillStart: () => {
+          setIsLoadingPrefill(true);
+        },
         persistRollingSession,
         schoolYear: String(selectedSemester.schoolYear),
         semester: String(selectedSemester.termNumber),
@@ -2698,10 +2696,13 @@ export function LectureJournalReconciliationLabPage() {
       setPrefillResult(result.prefillResult);
       setPrefillError(result.prefillError);
       setIsLoadingReconciliation(false);
+      setIsLoadingPrefill(false);
     } catch (error) {
       if (activeQueryRequestIdRef.current !== requestId) {
         return;
       }
+
+      setIsLoadingPrefill(false);
 
       if (isExpiredUpstreamSessionError(error)) {
         clearCurrentSession();
@@ -2716,6 +2717,7 @@ export function LectureJournalReconciliationLabPage() {
       if (activeQueryRequestIdRef.current === requestId) {
         isQueryInFlightRef.current = false;
         setIsLoadingReconciliation(false);
+        setIsLoadingPrefill(false);
       }
     }
   }
@@ -2935,13 +2937,18 @@ export function LectureJournalReconciliationLabPage() {
               </Button>
               <Button
                 type="primary"
-                disabled={!selectedSemester || hasFilterPairMismatch}
-                loading={isLoadingReconciliation}
+                disabled={
+                  !selectedSemester ||
+                  hasFilterPairMismatch ||
+                  isLoadingReconciliation ||
+                  isLoadingPrefill
+                }
+                loading={isLoadingReconciliation || isLoadingPrefill}
                 onClick={() => {
                   void runQueryAction();
                 }}
               >
-                查询对账
+                {isLoadingPrefill ? '补充预填中' : '查询对账'}
               </Button>
               <Button
                 disabled={!normalizedDepartmentId && !normalizedStaffId}

@@ -198,6 +198,125 @@ describe('lecture-journal-reconciliation query workflow', () => {
     );
   });
 
+  it('notifies when reconciliation is available and prefill starts', async () => {
+    const reconciliationResult = {
+      expiresAt: '2026-04-30T13:00:00.000Z',
+      items: [{ courseCategory: '3', courseName: '一体化' }],
+      journalCount: 5,
+      planCount: 4,
+      planDetailCount: 10,
+      upstreamSessionToken: 'token-002',
+    };
+    const prefillResult = {
+      blockingIssue: null,
+      canFill: true,
+      expiresAt: null,
+      integratedPreviews: [],
+      upstreamSessionToken: null,
+      warnings: [],
+    };
+    const onPrefillStart = vi.fn();
+    const onReconciliationResult = vi.fn();
+
+    fetchLectureJournalReconciliationMock.mockResolvedValueOnce(reconciliationResult);
+    fetchAcademicTeachingLogPrefillItemsMock.mockResolvedValueOnce(prefillResult);
+
+    await runLectureJournalReconciliationQueryWorkflow({
+      departmentId: 'ORG0302',
+      onPrefillStart,
+      onReconciliationResult,
+      persistRollingSession,
+      schoolYear: '2025',
+      semester: '2',
+      semesterId: 202502,
+      session,
+      staffId: 'STAFF-001',
+    });
+
+    expect(onReconciliationResult).toHaveBeenCalledTimes(1);
+    expect(onReconciliationResult).toHaveBeenCalledWith(reconciliationResult);
+    expect(onPrefillStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not persist or continue when the request is stale after reconciliation', async () => {
+    const reconciliationResult = {
+      expiresAt: '2026-04-30T13:00:00.000Z',
+      items: [{ courseCategory: '3', courseName: '一体化' }],
+      journalCount: 5,
+      planCount: 4,
+      planDetailCount: 10,
+      upstreamSessionToken: 'token-002',
+    };
+    const onPrefillStart = vi.fn();
+    const onReconciliationResult = vi.fn();
+
+    fetchLectureJournalReconciliationMock.mockResolvedValueOnce(reconciliationResult);
+
+    await expect(
+      runLectureJournalReconciliationQueryWorkflow({
+        departmentId: 'ORG0302',
+        isCurrent: () => false,
+        onPrefillStart,
+        onReconciliationResult,
+        persistRollingSession,
+        schoolYear: '2025',
+        semester: '2',
+        semesterId: 202502,
+        session,
+        staffId: 'STAFF-001',
+      }),
+    ).resolves.toEqual({
+      prefillError: null,
+      prefillResult: null,
+      reconciliationResult,
+    });
+
+    expect(persistRollingSession).not.toHaveBeenCalled();
+    expect(onReconciliationResult).not.toHaveBeenCalled();
+    expect(onPrefillStart).not.toHaveBeenCalled();
+    expect(fetchAcademicTeachingLogPrefillItemsMock).not.toHaveBeenCalled();
+  });
+
+  it('does not persist prefill token when the request is stale after prefill loading', async () => {
+    const reconciliationResult = {
+      expiresAt: '2026-04-30T13:00:00.000Z',
+      items: [{ courseCategory: '3', courseName: '一体化' }],
+      journalCount: 5,
+      planCount: 4,
+      planDetailCount: 10,
+      upstreamSessionToken: 'token-002',
+    };
+    const prefillResult = {
+      blockingIssue: null,
+      canFill: true,
+      expiresAt: '2026-04-30T13:30:00.000Z',
+      integratedPreviews: [],
+      upstreamSessionToken: 'token-003',
+      warnings: [],
+    };
+    const isCurrent = vi.fn().mockReturnValueOnce(true).mockReturnValueOnce(false);
+    const onPrefillStart = vi.fn();
+
+    fetchLectureJournalReconciliationMock.mockResolvedValueOnce(reconciliationResult);
+    fetchAcademicTeachingLogPrefillItemsMock.mockResolvedValueOnce(prefillResult);
+
+    await runLectureJournalReconciliationQueryWorkflow({
+      departmentId: 'ORG0302',
+      isCurrent,
+      onPrefillStart,
+      persistRollingSession,
+      schoolYear: '2025',
+      semester: '2',
+      semesterId: 202502,
+      session,
+      staffId: 'STAFF-001',
+    });
+
+    expect(onPrefillStart).toHaveBeenCalledTimes(1);
+    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+    expect(fetchAcademicTeachingLogPrefillItemsMock).toHaveBeenCalledTimes(1);
+  });
+
   it('rethrows expired upstream session errors from prefill loading', async () => {
     const reconciliationResult = {
       expiresAt: '2026-04-30T13:00:00.000Z',

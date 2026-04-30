@@ -22,8 +22,10 @@
 - 周课表与学期课表使用同一套类别颜色，不因数据来源不同而改色。
 - 若页面需要弱化卡片底色，应降低同一类别底色的混合强度，不得改成另一套颜色。
 - 未识别课程类别时，保留默认中性色，不伪造类别颜色。
+- 同一业务切片内，课程类别判断应收束到共享 helper，避免页面展示逻辑与流程编排逻辑分别硬编码 `1` / `2` / `3` 后漂移。
 
 ## 当前落点
 
 - 教学日志对账实验页：`src/labs/lecture-journal-reconciliation/page.tsx`
+  - 当前共享判断：`src/labs/lecture-journal-reconciliation/course-category.ts`
 - 周课表 / 学期课表实验页：`src/labs/academic-timetable/page.tsx`
