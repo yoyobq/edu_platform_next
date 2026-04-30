@@ -1,4 +1,13 @@
-import { type CSSProperties, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from 'react';
 import {
   Alert,
   AutoComplete,
@@ -30,7 +39,6 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 import { lectureJournalReconciliationLabAccess } from './access';
 import {
   type AcademicIntegratedTeachingLogPrefillPreview,
-  type AcademicTeachingLogPrefillResult,
   type AcademicTeachingLogSaveResult,
   fetchLectureJournalDepartmentOptions,
   fetchTeacherDirectory,
@@ -38,7 +46,6 @@ import {
   type LectureJournalDepartmentOption,
   type LectureJournalExpectedOccurrence,
   type LectureJournalReconciliationItem,
-  type LectureJournalReconciliationResult,
   resolveUpstreamErrorMessage,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
@@ -48,7 +55,9 @@ import {
 } from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import { lectureJournalReconciliationLabMeta } from './meta';
+import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
+import { isFutureTeachingDate } from './teaching-date';
 
 import './page.css';
 
@@ -70,6 +79,7 @@ type UpstreamLoginFormValues = {
 type PendingAction = 'directory' | 'query' | null;
 type ResultViewScope = 'complete' | 'missing' | 'unmatched';
 type CourseCategoryFilter = 'ALL' | '1' | '2' | '3';
+type FutureCourseVisibility = 'hide' | 'show';
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -858,6 +868,10 @@ function resolveSaveValidationError(item: JournalEditableCardItem, draft: Journa
     return item.blockingIssue;
   }
 
+  if (isFutureTeachingDate(item.teachingDate)) {
+    return '课程尚未开始，不能填写教学日志。';
+  }
+
   if (isIntegratedCourseCategory(item.courseCategory) && item.status === 'UNMATCHED') {
     return '当前一体化计划项无法可靠匹配。';
   }
@@ -1257,6 +1271,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const isPracticeCard = isPracticeCourseCategory(item.courseCategory);
   const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
   const isFilled = item.status === 'FILLED';
+  const isFutureCourse = isFutureTeachingDate(item.teachingDate);
   const isIntegratedSaveCandidate =
     isIntegratedCard &&
     item.status === 'MISSING' &&
@@ -1356,8 +1371,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
       ? `可保存；提示：${item.warnings.join('；')}`
       : '保存至校园网。';
   const shouldRenderSaveAction = isIntegratedCard
-    ? isIntegratedSaveCandidate
-    : item.status === 'MISSING';
+    ? !isFutureCourse && isIntegratedSaveCandidate
+    : !isFutureCourse && item.status === 'MISSING';
 
   return (
     <article
@@ -2085,24 +2100,31 @@ export function LectureJournalReconciliationLabPage() {
   const [departmentId, setDepartmentId] = useState(DEFAULT_DEPARTMENT_ID);
   const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
-  const [reconciliationResult, setReconciliationResult] =
-    useState<LectureJournalReconciliationResult | null>(null);
-  const [prefillResult, setPrefillResult] = useState<AcademicTeachingLogPrefillResult | null>(null);
+  const [queryState, dispatchQueryState] = useReducer(
+    lectureJournalQueryReducer,
+    initialLectureJournalQueryState,
+  );
+  const {
+    isLoadingPrefill,
+    isLoadingReconciliation,
+    prefillError,
+    prefillResult,
+    queryError,
+    reconciliationResult,
+  } = queryState;
   const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('complete');
   const [courseCategoryFilter, setCourseCategoryFilter] = useState<CourseCategoryFilter>('ALL');
+  const [futureCourseVisibility, setFutureCourseVisibility] =
+    useState<FutureCourseVisibility>('hide');
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
   const [isLoadingDepartmentOptions, setIsLoadingDepartmentOptions] = useState(true);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
-  const [isLoadingReconciliation, setIsLoadingReconciliation] = useState(false);
-  const [isLoadingPrefill, setIsLoadingPrefill] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [directoryError, setDirectoryError] = useState<string | null>(null);
   const [journalDrafts, setJournalDrafts] = useState<JournalDraftMap>({});
-  const [queryError, setQueryError] = useState<string | null>(null);
-  const [prefillError, setPrefillError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
   const [savingItemKey, setSavingItemKey] = useState<string | null>(null);
@@ -2336,20 +2358,30 @@ export function LectureJournalReconciliationLabPage() {
 
     return editableItems;
   }, [editableItems, presentedMissingEditableItems, resultViewScope, unmatchedEditableItems]);
-  const courseCategoryOptions = useMemo(
-    () => buildCourseCategoryFilterOptions(scopedJournalItems),
+  const futureScopedJournalItems = useMemo(
+    () => scopedJournalItems.filter((item) => isFutureTeachingDate(item.teachingDate)),
     [scopedJournalItems],
+  );
+  const dateVisibleJournalItems = useMemo(() => {
+    if (futureCourseVisibility === 'show') {
+      return scopedJournalItems;
+    }
+
+    return scopedJournalItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+  }, [futureCourseVisibility, scopedJournalItems]);
+  const courseCategoryOptions = useMemo(
+    () => buildCourseCategoryFilterOptions(dateVisibleJournalItems),
+    [dateVisibleJournalItems],
   );
   const activeCourseCategoryFilter = resolveCourseCategoryFilter(
     courseCategoryOptions,
     courseCategoryFilter,
   );
   const visibleJournalItems = useMemo(
-    () => filterItemsByCourseCategory(scopedJournalItems, activeCourseCategoryFilter),
-    [activeCourseCategoryFilter, scopedJournalItems],
+    () => filterItemsByCourseCategory(dateVisibleJournalItems, activeCourseCategoryFilter),
+    [activeCourseCategoryFilter, dateVisibleJournalItems],
   );
-  const currentResultCount =
-    resultViewScope === 'unmatched' ? unmatchedEditableItems.length : visibleJournalItems.length;
+  const currentResultCount = visibleJournalItems.length;
   const currentCourseCategoryLabel =
     activeCourseCategoryFilter === 'ALL'
       ? '全部课程'
@@ -2383,74 +2415,72 @@ export function LectureJournalReconciliationLabPage() {
   const applyLocalSaveSuccess = useCallback(
     (item: JournalEditableCardItem, draft: JournalDraft, result: AcademicTeachingLogSaveResult) => {
       if (isIntegratedCourseCategory(item.courseCategory)) {
-        setPrefillResult((current) => {
-          if (!current) {
-            return current;
-          }
+        dispatchQueryState({
+          prefillResult: prefillResult
+            ? {
+                ...prefillResult,
+                integratedPreviews: prefillResult.integratedPreviews.map((preview) => {
+                  const isTargetPreview =
+                    preview.lecturePlanDetailId === item.lecturePlanDetailId &&
+                    preview.lecturePlanId === item.lecturePlanId;
 
-          return {
-            ...current,
-            integratedPreviews: current.integratedPreviews.map((preview) => {
-              const isTargetPreview =
-                preview.lecturePlanDetailId === item.lecturePlanDetailId &&
-                preview.lecturePlanId === item.lecturePlanId;
+                  if (!isTargetPreview) {
+                    return preview;
+                  }
 
-              if (!isTargetPreview) {
-                return preview;
+                  return {
+                    ...preview,
+                    completeAndSummary: draft.completeAndSummary,
+                    disciplineSituation: draft.disciplineSituation,
+                    matchedLectureJournalDetailId:
+                      result.lectureJournalDetailId || preview.matchedLectureJournalDetailId,
+                    problemAndSolve: draft.problemAndSolve,
+                    securityAndMaintain: draft.securityAndMaintain,
+                    shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
+                    status: 'FILLED',
+                  };
+                }),
               }
-
-              return {
-                ...preview,
-                completeAndSummary: draft.completeAndSummary,
-                disciplineSituation: draft.disciplineSituation,
-                matchedLectureJournalDetailId:
-                  result.lectureJournalDetailId || preview.matchedLectureJournalDetailId,
-                problemAndSolve: draft.problemAndSolve,
-                securityAndMaintain: draft.securityAndMaintain,
-                shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
-                status: 'FILLED',
-              };
-            }),
-          };
+            : prefillResult,
+          type: 'prefillResultUpdated',
         });
 
         return;
       }
 
-      setReconciliationResult((current) => {
-        if (!current) {
-          return current;
-        }
+      dispatchQueryState({
+        reconciliationResult: reconciliationResult
+          ? {
+              ...reconciliationResult,
+              items: reconciliationResult.items.map((currentItem) => {
+                if (buildItemKey(currentItem) !== item.key) {
+                  return currentItem;
+                }
 
-        return {
-          ...current,
-          items: current.items.map((currentItem) => {
-            if (buildItemKey(currentItem) !== item.key) {
-              return currentItem;
+                return {
+                  ...currentItem,
+                  journal: {
+                    courseContent: draft.courseContent,
+                    homeworkAssignment: draft.homeworkAssignment,
+                    lectureJournalDetailId:
+                      result.lectureJournalDetailId ||
+                      currentItem.journal?.lectureJournalDetailId ||
+                      null,
+                    lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
+                    rawJournal: currentItem.journal?.rawJournal ?? null,
+                    statusCode: currentItem.journal?.statusCode ?? null,
+                    statusName: currentItem.journal?.statusName ?? null,
+                    topicRecord: draft.topicRecord || currentItem.journal?.topicRecord || null,
+                  },
+                  status: 'FILLED',
+                };
+              }),
             }
-
-            return {
-              ...currentItem,
-              journal: {
-                courseContent: draft.courseContent,
-                homeworkAssignment: draft.homeworkAssignment,
-                lectureJournalDetailId:
-                  result.lectureJournalDetailId ||
-                  currentItem.journal?.lectureJournalDetailId ||
-                  null,
-                lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
-                rawJournal: currentItem.journal?.rawJournal ?? null,
-                statusCode: currentItem.journal?.statusCode ?? null,
-                statusName: currentItem.journal?.statusName ?? null,
-                topicRecord: draft.topicRecord || currentItem.journal?.topicRecord || null,
-              },
-              status: 'FILLED',
-            };
-          }),
-        };
+          : reconciliationResult,
+        type: 'reconciliationResultUpdated',
       });
     },
-    [],
+    [prefillResult, reconciliationResult],
   );
 
   const handleSaveToCampus = useCallback(
@@ -2657,28 +2687,22 @@ export function LectureJournalReconciliationLabPage() {
 
     activeQueryRequestIdRef.current = requestId;
     isQueryInFlightRef.current = true;
-    setIsLoadingReconciliation(true);
-    setIsLoadingPrefill(false);
-    setQueryError(null);
-    setPrefillError(null);
+    dispatchQueryState({ type: 'started' });
     setJournalDrafts({});
     setSaveFeedbackByKey({});
     setSettlingSavedItemKeys([]);
     setCollapsingSavedItemKeys([]);
     setCollapsingSavedItemHeights({});
-    setReconciliationResult(null);
-    setPrefillResult(null);
 
     try {
       const result = await runLectureJournalReconciliationQueryWorkflow({
         departmentId: normalizedDepartmentId || undefined,
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
         onReconciliationResult: (nextReconciliationResult) => {
-          setReconciliationResult(nextReconciliationResult);
-          setIsLoadingReconciliation(false);
+          dispatchQueryState({ result: nextReconciliationResult, type: 'reconciliationLoaded' });
         },
         onPrefillStart: () => {
-          setIsLoadingPrefill(true);
+          dispatchQueryState({ type: 'prefillStarted' });
         },
         persistRollingSession,
         schoolYear: String(selectedSemester.schoolYear),
@@ -2692,19 +2716,19 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
-      setReconciliationResult(result.reconciliationResult);
-      setPrefillResult(result.prefillResult);
-      setPrefillError(result.prefillError);
-      setIsLoadingReconciliation(false);
-      setIsLoadingPrefill(false);
+      dispatchQueryState({
+        prefillError: result.prefillError,
+        prefillResult: result.prefillResult,
+        reconciliationResult: result.reconciliationResult,
+        type: 'succeeded',
+      });
     } catch (error) {
       if (activeQueryRequestIdRef.current !== requestId) {
         return;
       }
 
-      setIsLoadingPrefill(false);
-
       if (isExpiredUpstreamSessionError(error)) {
+        dispatchQueryState({ type: 'settled' });
         clearCurrentSession();
         setPendingAction('query');
         setLoginError('upstream 会话已失效，请重新登录后继续。');
@@ -2712,12 +2736,14 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
-      setQueryError(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
+      dispatchQueryState({
+        message: resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'),
+        type: 'failed',
+      });
     } finally {
       if (activeQueryRequestIdRef.current === requestId) {
         isQueryInFlightRef.current = false;
-        setIsLoadingReconciliation(false);
-        setIsLoadingPrefill(false);
+        dispatchQueryState({ type: 'settled' });
       }
     }
   }
@@ -3001,7 +3027,7 @@ export function LectureJournalReconciliationLabPage() {
                 <div className="lecture-journal-view-controls-copy">
                   <Typography.Text strong>结果视图</Typography.Text>
                   <Typography.Text type="secondary">
-                    状态与课程类型是两组平级筛选，下面始终只有一个结果列表。
+                    状态、未到日期与课程类型是三组平级筛选，下面始终只有一个结果列表。
                   </Typography.Text>
                 </div>
                 <div className="lecture-journal-view-current">
@@ -3059,6 +3085,42 @@ export function LectureJournalReconciliationLabPage() {
 
                 <div className="lecture-journal-view-filter-block">
                   <div className="lecture-journal-view-filter-label">
+                    <Typography.Text strong>未到日期</Typography.Text>
+                  </div>
+                  <div className="lecture-journal-view-segmented">
+                    <Segmented
+                      block
+                      options={[
+                        {
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>隐藏未到</span>
+                              <strong>{futureScopedJournalItems.length}</strong>
+                            </span>
+                          ),
+                          value: 'hide',
+                        },
+                        {
+                          label: (
+                            <span className="lecture-journal-view-option">
+                              <span>显示未到</span>
+                              <strong>{futureScopedJournalItems.length}</strong>
+                            </span>
+                          ),
+                          value: 'show',
+                        },
+                      ]}
+                      size="large"
+                      value={futureCourseVisibility}
+                      onChange={(value) => {
+                        setFutureCourseVisibility(value as FutureCourseVisibility);
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <div className="lecture-journal-view-filter-block">
+                  <div className="lecture-journal-view-filter-label">
                     <Typography.Text strong>课程类型</Typography.Text>
                   </div>
                   <div className="lecture-journal-view-segmented lecture-journal-view-segmented-category">
@@ -3091,11 +3153,16 @@ export function LectureJournalReconciliationLabPage() {
                     {resolveResultViewScopeLabel(resultViewScope)}
                   </Typography.Title>
                   <Typography.Text type="secondary">
-                    {`当前按 ${currentCourseCategoryLabel} 查看${resolveResultViewScopeLabel(resultViewScope)}课次。`}
+                    {`当前按 ${currentCourseCategoryLabel} 查看${resolveResultViewScopeLabel(resultViewScope)}课次${
+                      futureCourseVisibility === 'hide' ? '，已隐藏未到日期课次' : ''
+                    }。`}
                   </Typography.Text>
                 </div>
                 <div className="lecture-journal-view-stage-tags">
                   <Tag bordered={false}>{resolveResultViewScopeLabel(resultViewScope)}</Tag>
+                  <Tag bordered={false}>
+                    {futureCourseVisibility === 'hide' ? '隐藏未到日期' : '显示未到日期'}
+                  </Tag>
                   <Tag bordered={false}>{currentCourseCategoryLabel}</Tag>
                 </div>
               </div>
