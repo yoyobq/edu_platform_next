@@ -36,7 +36,10 @@ function hasErrorCode(
   detail: UpstreamGraphQLErrorDetail | null,
   errorCodes: readonly string[],
 ): boolean {
-  return Boolean(detail?.errorCode && errorCodes.includes(detail.errorCode));
+  return Boolean(
+    (detail?.code && errorCodes.includes(detail.code)) ||
+    (detail?.errorCode && errorCodes.includes(detail.errorCode)),
+  );
 }
 
 function matchesMessage(
@@ -70,6 +73,10 @@ export function readUpstreamGraphQLErrorDetail(error: unknown): UpstreamGraphQLE
 
 export function isExpiredUpstreamSessionError(error: unknown): boolean {
   const detail = readUpstreamGraphQLErrorDetail(error);
+
+  if (isGraphQLIngressError(error) && (error.type === 'auth' || error.statusCode === 401)) {
+    return true;
+  }
 
   if (hasErrorCode(detail, ['UPSTREAM_ACCESS_AUTH_REQUIRED', 'UPSTREAM_ACCESS_SESSION_EXPIRED'])) {
     return true;

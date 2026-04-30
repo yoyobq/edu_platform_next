@@ -41,7 +41,7 @@ describe('lecture journal save workflow', () => {
     upstreamSessionToken: 'token-002',
   };
 
-  const persistRollingSession = vi.fn((currentSession, input) => ({
+  const persistSessionFromResult = vi.fn((currentSession, input) => ({
     ...currentSession,
     expiresAt: input.expiresAt ?? currentSession.expiresAt,
     upstreamSessionToken: input.upstreamSessionToken,
@@ -83,7 +83,7 @@ describe('lecture journal save workflow', () => {
     saveAcademicIntegratedTeachingLogMock.mockReset();
     saveAcademicPracticeTeachingLogMock.mockReset();
     saveAcademicTheoryTeachingLogMock.mockReset();
-    persistRollingSession.mockClear();
+    persistSessionFromResult.mockClear();
   });
 
   it('saves theory logs with section fields and rolls the session', async () => {
@@ -93,7 +93,7 @@ describe('lecture journal save workflow', () => {
       runLectureJournalSaveWorkflow({
         draft: buildDraft({ topicRecord: '良' }),
         item: buildItem({ sectionId: 'section-03' }),
-        persistRollingSession,
+        persistSessionFromResult,
         session,
       }),
     ).resolves.toEqual({
@@ -116,10 +116,7 @@ describe('lecture journal save workflow', () => {
       upstreamSessionToken: 'token-001',
       weekNumber: '8',
     });
-    expect(persistRollingSession).toHaveBeenCalledWith(session, {
-      expiresAt: saveResult.expiresAt,
-      upstreamSessionToken: saveResult.upstreamSessionToken,
-    });
+    expect(persistSessionFromResult).toHaveBeenCalledWith(session, saveResult);
   });
 
   it('saves practice logs without section fields', async () => {
@@ -142,7 +139,7 @@ describe('lecture journal save workflow', () => {
         lessonHours: 4,
         matchedLectureJournalDetailId: 'matched-detail-001',
       }),
-      persistRollingSession,
+      persistSessionFromResult,
       session,
     });
 
@@ -185,7 +182,7 @@ describe('lecture journal save workflow', () => {
         matchedLectureJournalDetailId: 'integrated-detail-001',
         shift: '2',
       }),
-      persistRollingSession,
+      persistSessionFromResult,
       session,
     });
 
@@ -215,13 +212,13 @@ describe('lecture journal save workflow', () => {
       runLectureJournalSaveWorkflow({
         draft,
         item,
-        persistRollingSession,
+        persistSessionFromResult,
         session,
       }),
     ).rejects.toThrow('课程尚未开始，不能填写教学日志。');
 
     expect(saveAcademicTheoryTeachingLogMock).not.toHaveBeenCalled();
-    expect(persistRollingSession).not.toHaveBeenCalled();
+    expect(persistSessionFromResult).not.toHaveBeenCalled();
   });
 
   it('rejects practice hour mismatch before calling save APIs', async () => {
@@ -236,7 +233,7 @@ describe('lecture journal save workflow', () => {
           courseCategory: '2',
           lessonHours: 4,
         }),
-        persistRollingSession,
+        persistSessionFromResult,
         session,
       }),
     ).rejects.toThrow(
@@ -244,7 +241,7 @@ describe('lecture journal save workflow', () => {
     );
 
     expect(saveAcademicPracticeTeachingLogMock).not.toHaveBeenCalled();
-    expect(persistRollingSession).not.toHaveBeenCalled();
+    expect(persistSessionFromResult).not.toHaveBeenCalled();
   });
 
   it('rethrows save errors without rolling the session', async () => {
@@ -256,11 +253,11 @@ describe('lecture journal save workflow', () => {
       runLectureJournalSaveWorkflow({
         draft: buildDraft({}),
         item: buildItem({}),
-        persistRollingSession,
+        persistSessionFromResult,
         session,
       }),
     ).rejects.toBe(expiredError);
 
-    expect(persistRollingSession).not.toHaveBeenCalled();
+    expect(persistSessionFromResult).not.toHaveBeenCalled();
   });
 });

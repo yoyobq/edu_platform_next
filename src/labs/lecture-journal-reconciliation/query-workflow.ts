@@ -1,4 +1,8 @@
 import type { StoredUpstreamSession } from '@/entities/upstream-session';
+import {
+  hasRollingUpstreamSessionResult,
+  type PersistUpstreamSessionFromResult,
+} from '@/entities/upstream-session';
 
 import {
   type AcademicTeachingLogPrefillResult,
@@ -10,20 +14,12 @@ import {
 } from './api';
 import { isIntegratedCourseCategory } from './course-category';
 
-type PersistRollingSession = (
-  currentSession: StoredUpstreamSession,
-  input: {
-    expiresAt?: string | null;
-    upstreamSessionToken: string;
-  },
-) => StoredUpstreamSession;
-
 type QueryWorkflowParams = {
   departmentId?: string;
   isCurrent?: () => boolean;
   onPrefillStart?: () => void;
   onReconciliationResult?: (result: LectureJournalReconciliationResult) => void;
-  persistRollingSession: PersistRollingSession;
+  persistSessionFromResult: PersistUpstreamSessionFromResult;
   schoolYear: string;
   semester: string;
   semesterId: number;
@@ -60,10 +56,7 @@ export async function runLectureJournalReconciliationQueryWorkflow(
     };
   }
 
-  const nextSession = params.persistRollingSession(params.session, {
-    expiresAt: reconciliationResult.expiresAt,
-    upstreamSessionToken: reconciliationResult.upstreamSessionToken,
-  });
+  const nextSession = params.persistSessionFromResult(params.session, reconciliationResult);
 
   params.onReconciliationResult?.(reconciliationResult);
 
@@ -93,11 +86,8 @@ export async function runLectureJournalReconciliationQueryWorkflow(
       };
     }
 
-    if (prefillResult.upstreamSessionToken && prefillResult.expiresAt) {
-      params.persistRollingSession(nextSession, {
-        expiresAt: prefillResult.expiresAt,
-        upstreamSessionToken: prefillResult.upstreamSessionToken,
-      });
+    if (hasRollingUpstreamSessionResult(prefillResult)) {
+      params.persistSessionFromResult(nextSession, prefillResult);
     }
 
     return {

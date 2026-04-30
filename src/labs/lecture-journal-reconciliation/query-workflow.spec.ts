@@ -32,7 +32,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     version: 2 as const,
   };
 
-  const persistRollingSession = vi.fn((currentSession, input) => ({
+  const persistSessionFromResult = vi.fn((currentSession, input) => ({
     ...currentSession,
     expiresAt: input.expiresAt ?? currentSession.expiresAt,
     upstreamSessionToken: input.upstreamSessionToken,
@@ -43,7 +43,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     fetchLectureJournalReconciliationMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReturnValue(false);
-    persistRollingSession.mockClear();
+    persistSessionFromResult.mockClear();
     resolveUpstreamErrorMessageMock.mockClear();
   });
 
@@ -61,7 +61,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,
@@ -74,7 +74,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     });
 
     expect(fetchAcademicTeachingLogPrefillItemsMock).not.toHaveBeenCalled();
-    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+    expect(persistSessionFromResult).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the main reconciliation result when prefill loading fails', async () => {
@@ -94,7 +94,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
         departmentId: 'ORG0302',
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,
@@ -108,7 +108,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     });
 
     expect(fetchAcademicTeachingLogPrefillItemsMock).toHaveBeenCalledTimes(1);
-    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+    expect(persistSessionFromResult).toHaveBeenCalledTimes(1);
   });
 
   it('skips prefill loading when the staff has no integrated courses', async () => {
@@ -126,7 +126,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
         departmentId: 'ORG0302',
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,
@@ -140,7 +140,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     });
 
     expect(fetchAcademicTeachingLogPrefillItemsMock).not.toHaveBeenCalled();
-    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+    expect(persistSessionFromResult).toHaveBeenCalledTimes(1);
   });
 
   it('persists the latest rolling token when prefill succeeds', async () => {
@@ -167,7 +167,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
         departmentId: 'ORG0302',
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,
@@ -180,21 +180,15 @@ describe('lecture-journal-reconciliation query workflow', () => {
       reconciliationResult,
     });
 
-    expect(persistRollingSession).toHaveBeenCalledTimes(2);
-    expect(persistRollingSession).toHaveBeenNthCalledWith(1, session, {
-      expiresAt: '2026-04-30T13:00:00.000Z',
-      upstreamSessionToken: 'token-002',
-    });
-    expect(persistRollingSession).toHaveBeenNthCalledWith(
+    expect(persistSessionFromResult).toHaveBeenCalledTimes(2);
+    expect(persistSessionFromResult).toHaveBeenNthCalledWith(1, session, reconciliationResult);
+    expect(persistSessionFromResult).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({
         expiresAt: '2026-04-30T13:00:00.000Z',
         upstreamSessionToken: 'token-002',
       }),
-      {
-        expiresAt: '2026-04-30T13:30:00.000Z',
-        upstreamSessionToken: 'token-003',
-      },
+      prefillResult,
     );
   });
 
@@ -225,7 +219,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
       departmentId: 'ORG0302',
       onPrefillStart,
       onReconciliationResult,
-      persistRollingSession,
+      persistSessionFromResult,
       schoolYear: '2025',
       semester: '2',
       semesterId: 202502,
@@ -258,7 +252,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
         isCurrent: () => false,
         onPrefillStart,
         onReconciliationResult,
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,
@@ -271,7 +265,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
       reconciliationResult,
     });
 
-    expect(persistRollingSession).not.toHaveBeenCalled();
+    expect(persistSessionFromResult).not.toHaveBeenCalled();
     expect(onReconciliationResult).not.toHaveBeenCalled();
     expect(onPrefillStart).not.toHaveBeenCalled();
     expect(fetchAcademicTeachingLogPrefillItemsMock).not.toHaveBeenCalled();
@@ -304,7 +298,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
       departmentId: 'ORG0302',
       isCurrent,
       onPrefillStart,
-      persistRollingSession,
+      persistSessionFromResult,
       schoolYear: '2025',
       semester: '2',
       semesterId: 202502,
@@ -313,7 +307,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     });
 
     expect(onPrefillStart).toHaveBeenCalledTimes(1);
-    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+    expect(persistSessionFromResult).toHaveBeenCalledTimes(1);
     expect(fetchAcademicTeachingLogPrefillItemsMock).toHaveBeenCalledTimes(1);
   });
 
@@ -335,7 +329,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
         departmentId: 'ORG0302',
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: '2025',
         semester: '2',
         semesterId: 202502,

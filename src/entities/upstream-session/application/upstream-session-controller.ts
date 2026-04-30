@@ -1,12 +1,24 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { requestUpstreamLoginSession } from '../infrastructure/upstream-session-api';
+import {
+  requestUpstreamLoginSession,
+  requestUpstreamSessionRefresh,
+} from '../infrastructure/upstream-session-api';
 import {
   clearStoredUpstreamSession,
   readStoredUpstreamSession,
   type StoredUpstreamSession,
   writeStoredUpstreamSession,
 } from '../infrastructure/upstream-session-storage';
+
+import {
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+} from './upstream-error-feedback';
+import {
+  hasRollingUpstreamSessionResult,
+  type RollingUpstreamSessionResult,
+} from './upstream-session-rolling';
 
 export type UpstreamAccountIdentity = {
   accountId: number;
@@ -19,9 +31,19 @@ type RollingUpstreamSessionInput = {
   upstreamSessionToken: string;
 };
 
+export type UpstreamSessionKeepAliveFailure = {
+  message: string;
+  upstreamLoginId: string | null;
+};
+
 type UseUpstreamSessionOptions = {
   account: UpstreamAccountIdentity | null;
+  keepAlive?: boolean;
+  refreshLeadTimeMs?: number;
 };
+
+const DEFAULT_REFRESH_LEAD_TIME_MS = 2 * 60 * 1000;
+const MIN_REFRESH_DELAY_MS = 1000;
 
 function persistUpstreamSession(
   session: StoredUpstreamSession,
@@ -65,6 +87,10 @@ function clearUpstreamSessionState() {
 
 export function useUpstreamSession(options: UseUpstreamSessionOptions) {
   const [, setStorageRevision] = useState(0);
+  const [keepAliveFailure, setKeepAliveFailure] = useState<UpstreamSessionKeepAliveFailure | null>(
+    null,
+  );
+  const refreshPromiseRef = useRef<Promise<StoredUpstreamSession> | null>(null);
   const accountId = options.account?.accountId ?? null;
   const session = accountId ? readStoredUpstreamSession(accountId) : null;
   const refreshStoredSession = useCallback(() => {
@@ -81,8 +107,24 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
     [refreshStoredSession],
   );
 
+  const persistSessionFromResult = useCallback(
+    (currentSession: StoredUpstreamSession, result: RollingUpstreamSessionResult) => {
+      if (!hasRollingUpstreamSessionResult(result)) {
+        return currentSession;
+      }
+
+      return persistRollingSession(currentSession, {
+        expiresAt: result.expiresAt,
+        upstreamLoginId: result.upstreamLoginId,
+        upstreamSessionToken: result.upstreamSessionToken,
+      });
+    },
+    [persistRollingSession],
+  );
+
   const clear = useCallback(() => {
     clearUpstreamSessionState();
+    setKeepAliveFailure(null);
     refreshStoredSession();
   }, [refreshStoredSession]);
 
@@ -113,15 +155,80 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
       });
 
       commitSession(nextSession);
+      setKeepAliveFailure(null);
       return nextSession;
     },
     [accountId, commitSession],
   );
 
+  const refreshSession = useCallback(
+    async (currentSession: StoredUpstreamSession = session as StoredUpstreamSession) => {
+      if (!currentSession) {
+        throw new Error('尚未建立 upstream 会话。');
+      }
+
+      if (refreshPromiseRef.current) {
+        return refreshPromiseRef.current;
+      }
+
+      refreshPromiseRef.current = (async () => {
+        try {
+          const result = await requestUpstreamSessionRefresh({
+            sessionToken: currentSession.upstreamSessionToken,
+          });
+          const nextSession = persistSessionFromResult(currentSession, result);
+
+          setKeepAliveFailure(null);
+          return nextSession;
+        } catch (error) {
+          clearUpstreamSessionState();
+          setKeepAliveFailure({
+            message: isExpiredUpstreamSessionError(error)
+              ? 'upstream 会话已失效，请重新登录后继续。'
+              : resolveUpstreamErrorMessage(error, 'upstream 会话刷新失败，请重新登录后继续。'),
+            upstreamLoginId: currentSession.upstreamLoginId,
+          });
+          refreshStoredSession();
+          throw error;
+        } finally {
+          refreshPromiseRef.current = null;
+        }
+      })();
+
+      return refreshPromiseRef.current;
+    },
+    [persistSessionFromResult, refreshStoredSession, session],
+  );
+
+  useEffect(() => {
+    if (!options.keepAlive || !session?.expiresAt) {
+      return undefined;
+    }
+
+    const expiresAtTimestamp = new Date(session.expiresAt).getTime();
+
+    if (Number.isNaN(expiresAtTimestamp)) {
+      return undefined;
+    }
+
+    const leadTime = options.refreshLeadTimeMs ?? DEFAULT_REFRESH_LEAD_TIME_MS;
+    const delay = Math.max(expiresAtTimestamp - Date.now() - leadTime, MIN_REFRESH_DELAY_MS);
+    const timeoutId = window.setTimeout(() => {
+      refreshSession(session).catch(() => undefined);
+    }, delay);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [options.keepAlive, options.refreshLeadTimeMs, refreshSession, session]);
+
   return {
     clear,
+    keepAliveFailure,
     login,
+    persistSessionFromResult,
     persistRollingSession,
+    refreshSession,
     session,
   };
 }

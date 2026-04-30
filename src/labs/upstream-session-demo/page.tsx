@@ -481,11 +481,13 @@ export function UpstreamSessionDemoLabPage() {
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
   const {
     clear,
+    keepAliveFailure,
     login: loginUpstream,
-    persistRollingSession,
+    persistSessionFromResult,
     session: storedSession,
   } = useUpstreamSession({
     account: currentAccount,
+    keepAlive: true,
   });
   const personalCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.personal);
   const personalClassNameOptions = getUniqueValues(
@@ -548,6 +550,23 @@ export function UpstreamSessionDemoLabPage() {
     },
     [clear],
   );
+
+  useEffect(() => {
+    if (!keepAliveFailure) {
+      return;
+    }
+
+    clearCurrentSession({
+      panel: activePanelKey,
+      message: keepAliveFailure.message,
+    });
+    setLoginError(keepAliveFailure.message);
+    form.setFieldsValue({
+      password: '',
+      userId: keepAliveFailure.upstreamLoginId ?? '',
+    });
+    setIsLoginModalOpen(true);
+  }, [activePanelKey, clearCurrentSession, form, keepAliveFailure]);
 
   const loadLectureJournalTeachingClassSamples = useCallback(async () => {
     const semesterId = lectureJournalForm.getFieldValue('semesterId') as number | undefined;
@@ -624,10 +643,7 @@ export function UpstreamSessionDemoLabPage() {
           sessionToken: session.upstreamSessionToken,
         });
 
-        persistRollingSession(session, {
-          expiresAt: result.expiresAt,
-          upstreamSessionToken: result.upstreamSessionToken,
-        });
+        persistSessionFromResult(session, result);
         setCurriculumPlanDetailResult((current) => ({
           ...current,
           [scope]: {
@@ -668,7 +684,7 @@ export function UpstreamSessionDemoLabPage() {
         }));
       }
     },
-    [clearCurrentSession, form, persistRollingSession],
+    [clearCurrentSession, form, persistSessionFromResult],
   );
 
   const performAction = useCallback(
@@ -681,10 +697,7 @@ export function UpstreamSessionDemoLabPage() {
               sessionToken: session.upstreamSessionToken,
             });
 
-            persistRollingSession(session, {
-              expiresAt: result.expiresAt,
-              upstreamSessionToken: result.upstreamSessionToken,
-            });
+            persistSessionFromResult(session, result);
             setDirectoryResult(result);
             return;
           }
@@ -695,10 +708,7 @@ export function UpstreamSessionDemoLabPage() {
               teachingClassId: action.teachingClassId,
             });
 
-            persistRollingSession(session, {
-              expiresAt: result.expiresAt,
-              upstreamSessionToken: result.upstreamSessionToken,
-            });
+            persistSessionFromResult(session, result);
             setLectureJournalResult(result);
             return;
           }
@@ -708,11 +718,7 @@ export function UpstreamSessionDemoLabPage() {
               sessionToken: session.upstreamSessionToken,
             });
 
-            persistRollingSession(session, {
-              expiresAt: result.expiresAt,
-              upstreamLoginId: result.upstreamLoginId,
-              upstreamSessionToken: result.upstreamSessionToken,
-            });
+            persistSessionFromResult(session, result);
             setVerifiedIdentityResult(result);
             return;
           }
@@ -736,10 +742,7 @@ export function UpstreamSessionDemoLabPage() {
                     sessionToken: session.upstreamSessionToken,
                   });
 
-            persistRollingSession(session, {
-              expiresAt: result.expiresAt,
-              upstreamSessionToken: result.upstreamSessionToken,
-            });
+            persistSessionFromResult(session, result);
             setCurriculumPlanResult((current) => ({
               ...current,
               [action.scope]: result,
@@ -818,7 +821,7 @@ export function UpstreamSessionDemoLabPage() {
     },
     [
       activePanelKey,
-      persistRollingSession,
+      persistSessionFromResult,
       clearCurrentSession,
       form,
       storedSession?.upstreamLoginId,

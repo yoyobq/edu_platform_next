@@ -1373,11 +1373,13 @@ export function LectureJournalReconciliationLabPage() {
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
   const {
     clear,
+    keepAliveFailure,
     login: loginUpstream,
-    persistRollingSession,
+    persistSessionFromResult,
     session: storedSession,
   } = useUpstreamSession({
     account: loaderData?.upstreamAccount ?? null,
+    keepAlive: true,
   });
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
@@ -1439,6 +1441,21 @@ export function LectureJournalReconciliationLabPage() {
     });
     setIsLoginModalOpen(true);
   }, [loginForm, storedSession?.upstreamLoginId]);
+
+  useEffect(() => {
+    if (!keepAliveFailure) {
+      return;
+    }
+
+    clearCurrentSession();
+    setPendingAction(null);
+    setLoginError(keepAliveFailure.message);
+    loginForm.setFieldsValue({
+      password: '',
+      userId: keepAliveFailure.upstreamLoginId ?? '',
+    });
+    setIsLoginModalOpen(true);
+  }, [clearCurrentSession, keepAliveFailure, loginForm]);
 
   useEffect(() => {
     const savedCardCollapseAnimationFrames = savedCardCollapseAnimationFramesRef.current;
@@ -1796,7 +1813,7 @@ export function LectureJournalReconciliationLabPage() {
         const { result } = await runLectureJournalSaveWorkflow({
           draft,
           item,
-          persistRollingSession,
+          persistSessionFromResult,
           session,
         });
 
@@ -1844,7 +1861,7 @@ export function LectureJournalReconciliationLabPage() {
       applyLocalSaveSuccess,
       clearCurrentSession,
       openLoginModal,
-      persistRollingSession,
+      persistSessionFromResult,
       activeResultViewScope,
       startSavedCardCollapse,
       storedSession,
@@ -1867,10 +1884,7 @@ export function LectureJournalReconciliationLabPage() {
     try {
       const result = await requestTeacherDirectoryWithSession(session);
 
-      persistRollingSession(session, {
-        expiresAt: result.expiresAt,
-        upstreamSessionToken: result.upstreamSessionToken,
-      });
+      persistSessionFromResult(session, result);
       setDirectoryResult(result);
     } catch (error) {
       if (isExpiredUpstreamSessionError(error)) {
@@ -1926,7 +1940,7 @@ export function LectureJournalReconciliationLabPage() {
         onPrefillStart: () => {
           dispatchQueryState({ type: 'prefillStarted' });
         },
-        persistRollingSession,
+        persistSessionFromResult,
         schoolYear: String(selectedSemester.schoolYear),
         semester: String(selectedSemester.termNumber),
         semesterId: selectedSemester.id,

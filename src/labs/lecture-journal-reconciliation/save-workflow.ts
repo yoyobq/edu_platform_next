@@ -1,4 +1,7 @@
-import type { StoredUpstreamSession } from '@/entities/upstream-session';
+import type {
+  PersistUpstreamSessionFromResult,
+  StoredUpstreamSession,
+} from '@/entities/upstream-session';
 
 import {
   type AcademicTeachingLogSaveResult,
@@ -9,14 +12,6 @@ import {
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import { DEFAULT_INTEGRATED_SHIFT, type JournalDraft } from './journal-draft-policy';
 import { isFutureTeachingDate } from './teaching-date';
-
-type PersistRollingSession = (
-  currentSession: StoredUpstreamSession,
-  input: {
-    expiresAt?: string | null;
-    upstreamSessionToken: string;
-  },
-) => StoredUpstreamSession;
 
 export type LectureJournalSaveWorkflowItem = {
   blockingIssue: string | null;
@@ -40,7 +35,7 @@ export type LectureJournalSaveWorkflowItem = {
 type LectureJournalSaveWorkflowParams = {
   draft: JournalDraft;
   item: LectureJournalSaveWorkflowItem;
-  persistRollingSession: PersistRollingSession;
+  persistSessionFromResult: PersistUpstreamSessionFromResult;
   session: StoredUpstreamSession;
 };
 
@@ -223,10 +218,7 @@ export async function runLectureJournalSaveWorkflow(
     throw new Error(result.msg || '上游未保存成功。');
   }
 
-  params.persistRollingSession(params.session, {
-    expiresAt: result.expiresAt,
-    upstreamSessionToken: result.upstreamSessionToken,
-  });
+  params.persistSessionFromResult(params.session, result);
 
   return {
     result,

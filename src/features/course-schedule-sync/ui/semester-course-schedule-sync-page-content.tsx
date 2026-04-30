@@ -167,11 +167,13 @@ export function SemesterCourseScheduleSyncPageContent({
   const [pendingSyncValues, setPendingSyncValues] = useState<SyncFormValues | null>(null);
   const {
     clear,
+    keepAliveFailure,
     login: loginUpstream,
-    persistRollingSession,
+    persistSessionFromResult,
     session: storedSession,
   } = useUpstreamSession({
     account: currentAccount,
+    keepAlive: true,
   });
   const hasNoDepartmentOptions =
     !isLoadingOptions && !departmentOptionsError && departmentOptions.length === 0;
@@ -180,6 +182,20 @@ export function SemesterCourseScheduleSyncPageContent({
     clear();
     setPendingSyncValues(null);
   }, [clear]);
+
+  useEffect(() => {
+    if (!keepAliveFailure) {
+      return;
+    }
+
+    clearCurrentSession();
+    setLoginError(keepAliveFailure.message);
+    loginForm.setFieldsValue({
+      password: '',
+      userId: keepAliveFailure.upstreamLoginId ?? '',
+    });
+    setIsLoginModalOpen(true);
+  }, [clearCurrentSession, keepAliveFailure, loginForm]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues) => {
@@ -198,10 +214,7 @@ export function SemesterCourseScheduleSyncPageContent({
           upstreamSessionToken: session.upstreamSessionToken,
         });
 
-        persistRollingSession(session, {
-          expiresAt: syncResult.expiresAt,
-          upstreamSessionToken: syncResult.upstreamSessionToken,
-        });
+        persistSessionFromResult(session, syncResult);
         setResult(syncResult);
         setPendingSyncValues(null);
       } catch (error) {
@@ -223,7 +236,7 @@ export function SemesterCourseScheduleSyncPageContent({
         setIsSyncing(false);
       }
     },
-    [clearCurrentSession, loginForm, persistRollingSession],
+    [clearCurrentSession, loginForm, persistSessionFromResult],
   );
 
   const handleRunSync = useCallback(async () => {

@@ -4,8 +4,22 @@ export {
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
 } from './application/upstream-error-feedback';
-export type { UpstreamAccountIdentity } from './application/upstream-session-controller';
+export type {
+  UpstreamAccountIdentity,
+  UpstreamSessionKeepAliveFailure,
+} from './application/upstream-session-controller';
 export { useUpstreamSession } from './application/upstream-session-controller';
-export type { UpstreamLoginSessionResult } from './infrastructure/upstream-session-api';
-export { requestUpstreamLoginSession } from './infrastructure/upstream-session-api';
+export type {
+  PersistUpstreamSessionFromResult,
+  RollingUpstreamSessionResult,
+} from './application/upstream-session-rolling';
+export { hasRollingUpstreamSessionResult } from './application/upstream-session-rolling';
+export type {
+  UpstreamLoginSessionResult,
+  UpstreamSessionRefreshResult,
+} from './infrastructure/upstream-session-api';
+export {
+  requestUpstreamLoginSession,
+  requestUpstreamSessionRefresh,
+} from './infrastructure/upstream-session-api';
 export type { StoredUpstreamSession } from './infrastructure/upstream-session-storage';
