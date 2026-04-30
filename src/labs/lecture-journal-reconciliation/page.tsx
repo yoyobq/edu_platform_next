@@ -39,7 +39,6 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 
 import { lectureJournalReconciliationLabAccess } from './access';
 import {
-  type AcademicIntegratedTeachingLogPrefillPreview,
   type AcademicTeachingLogSaveResult,
   fetchLectureJournalDepartmentOptions,
   fetchTeacherDirectory,
@@ -52,6 +51,11 @@ import {
   type TeacherDirectoryResult,
 } from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
+import {
+  buildEditableCardItemFromIntegratedPreview,
+  buildEditableCardItemFromReconciliation,
+  type JournalEditableCardItem,
+} from './editable-item-mapper';
 import {
   buildJournalDrafts,
   DEFAULT_DISCIPLINE_SITUATION,
@@ -69,6 +73,19 @@ import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './q
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 import { resolveSaveValidationError, runLectureJournalSaveWorkflow } from './save-workflow';
 import { isFutureTeachingDate } from './teaching-date';
+import {
+  buildCourseCategoryFilterOptions,
+  buildResultViewScopeOptions,
+  type CourseCategoryFilter,
+  filterItemsByCourseCategory,
+  filterItemsByFutureCourseVisibility,
+  type FutureCourseVisibility,
+  pickJournalItemsByResultViewScope,
+  resolveCourseCategoryFilter,
+  resolveResultViewScope,
+  resolveResultViewScopeTitle,
+  type ResultViewScope,
+} from './view-filter-policy';
 
 import './page.css';
 
@@ -88,20 +105,11 @@ type UpstreamLoginFormValues = {
 };
 
 type PendingAction = 'directory' | 'query' | null;
-type ResultViewScope = 'complete' | 'missing' | 'unmatched';
-type CourseCategoryFilter = 'ALL' | '1' | '2' | '3';
-type FutureCourseVisibility = 'hide' | 'show';
-type ResultViewScopeOption = {
-  count: number;
-  label: string;
-  value: ResultViewScope;
-};
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
-const COURSE_CATEGORY_TAB_ORDER = ['1', '2', '3'];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
 const COURSE_CATEGORY_META = {
   '1': {
@@ -124,59 +132,6 @@ const COURSE_CATEGORY_META = {
 type DepartmentOption = {
   id: string;
   label: string;
-};
-
-type JournalEditableCardItem = {
-  blockingIssue: string | null;
-  canFill: boolean;
-  completeAndSummary: string | null;
-  courseCategory: string | null;
-  courseContent: string | null;
-  courseId: string | null;
-  courseName: string | null;
-  dayOfWeek: number | null;
-  disciplineSituation: string | null;
-  homework: string | null;
-  expectedOccurrences: LectureJournalExpectedOccurrence[];
-  journal: LectureJournalReconciliationItem['journal'];
-  key: string;
-  learningSessionContent: string | null;
-  learningSessionNo: number | null;
-  learningSessionTarget: string | null;
-  learningTaskName: string | null;
-  learningTaskNo: number | null;
-  learningTaskText: string | null;
-  lecturePlanDetailId: string | null;
-  lecturePlanId: string | null;
-  lessonHours: number | null;
-  matchedLectureJournalDetailId: string | null;
-  problemAndSolve: string | null;
-  schoolYear: string | null;
-  sectionId: string | null;
-  sectionName: string | null;
-  securityAndMaintain: string | null;
-  semester: string | null;
-  shift: string | null;
-  shiftName: string | null;
-  status: LectureJournalReconciliationItem['status'];
-  teacherId: string | null;
-  teacherName: string | null;
-  teachingClassId: string | null;
-  teachingClassName: string | null;
-  teachingDate: string | null;
-  teachingUnitAchievement: string | null;
-  teachingUnitContent: string | null;
-  teachingUnitName: string | null;
-  teachingUnitNo: number | null;
-  teachingUnitTarget: string | null;
-  teachingUnitText: string | null;
-  warnings: string[];
-  weekNumber: number | null;
-  practiceDemonstrationHours: number | null;
-  practiceLectureHours: number | null;
-  practicePracticeHours: number | null;
-  practiceTeachingChapterContent: string | null;
-  practiceTopicName: string | null;
 };
 
 type JournalDraftPatch = Partial<
@@ -210,15 +165,6 @@ type SaveFeedback = {
   tone: 'error' | 'success';
 };
 type SaveFeedbackMap = Record<string, SaveFeedback | undefined>;
-
-const reconciliationEditableItemCache = new WeakMap<
-  LectureJournalReconciliationItem,
-  JournalEditableCardItem
->();
-const integratedPreviewEditableItemCache = new WeakMap<
-  AcademicIntegratedTeachingLogPrefillPreview,
-  JournalEditableCardItem
->();
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -378,20 +324,6 @@ function buildDepartmentOptionLabel(department: LectureJournalDepartmentOption) 
   return `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`;
 }
 
-function buildItemKey(item: {
-  lecturePlanDetailId: string | null;
-  lecturePlanId: string | null;
-  matchKey?: string | null;
-  reason?: string | null;
-}) {
-  return [
-    item.lecturePlanDetailId || 'detail',
-    item.lecturePlanId || 'plan',
-    item.matchKey || 'match',
-    item.reason || 'reason',
-  ].join('-');
-}
-
 function renderFieldLabel(label: string, config: FieldTipConfig) {
   return (
     <span className="lecture-journal-field-label">
@@ -472,134 +404,6 @@ function resolveCourseCategoryMeta(courseCategory: string | null) {
   return COURSE_CATEGORY_META[courseCategory as keyof typeof COURSE_CATEGORY_META] ?? null;
 }
 
-function buildCourseCategoryFilterOptions(items: JournalEditableCardItem[]) {
-  const nonEmptyOptions = COURSE_CATEGORY_TAB_ORDER.map((courseCategory) => {
-    const courseCategoryMeta = resolveCourseCategoryMeta(courseCategory);
-
-    return {
-      count: items.filter((item) => item.courseCategory === courseCategory).length,
-      key: courseCategory as CourseCategoryFilter,
-      label: courseCategoryMeta?.label || courseCategory,
-    };
-  }).filter((option) => option.count > 0);
-
-  if (nonEmptyOptions.length <= 1) {
-    return nonEmptyOptions;
-  }
-
-  return [
-    {
-      count: items.length,
-      key: 'ALL' as const,
-      label: '所有类型',
-    },
-    ...nonEmptyOptions,
-  ];
-}
-
-function resolveCourseCategoryFilter(
-  options: Array<{ key: CourseCategoryFilter }>,
-  activeCourseCategory: CourseCategoryFilter,
-) {
-  if (options.length <= 1) {
-    return 'ALL';
-  }
-
-  if (options.some((option) => option.key === activeCourseCategory)) {
-    return activeCourseCategory;
-  }
-
-  return 'ALL';
-}
-
-function filterItemsByCourseCategory(
-  items: JournalEditableCardItem[],
-  courseCategory: CourseCategoryFilter,
-) {
-  if (courseCategory === 'ALL') {
-    return items;
-  }
-
-  return items.filter((item) => item.courseCategory === courseCategory);
-}
-
-function resolveResultViewScopeLabel(scope: ResultViewScope) {
-  if (scope === 'missing') {
-    return '待补日志';
-  }
-
-  if (scope === 'unmatched') {
-    return '需核对';
-  }
-
-  return '全部';
-}
-
-function resolveResultViewScopeTitle(scope: ResultViewScope) {
-  if (scope === 'missing') {
-    return '待补日志的课次';
-  }
-
-  if (scope === 'unmatched') {
-    return '需要人工核对的课次';
-  }
-
-  return '全部课次';
-}
-
-function buildResultViewScopeOptions(counts: {
-  complete: number;
-  missing: number;
-  unmatched: number;
-}): ResultViewScopeOption[] {
-  return [
-    {
-      count: counts.complete,
-      label: resolveResultViewScopeLabel('complete'),
-      value: 'complete' as const,
-    },
-    {
-      count: counts.missing,
-      label: resolveResultViewScopeLabel('missing'),
-      value: 'missing' as const,
-    },
-    {
-      count: counts.unmatched,
-      label: resolveResultViewScopeLabel('unmatched'),
-      value: 'unmatched' as const,
-    },
-  ].filter((option) => option.count > 0);
-}
-
-function resolveResultViewScope(options: ResultViewScopeOption[], activeScope: ResultViewScope) {
-  if (options.some((option) => option.value === activeScope)) {
-    return activeScope;
-  }
-
-  if (options.some((option) => option.value === 'missing')) {
-    return 'missing';
-  }
-
-  return 'complete';
-}
-
-function pickJournalItemsByResultViewScope(params: {
-  editableItems: JournalEditableCardItem[];
-  presentedMissingEditableItems: JournalEditableCardItem[];
-  resultViewScope: ResultViewScope;
-  unmatchedEditableItems: JournalEditableCardItem[];
-}) {
-  if (params.resultViewScope === 'missing') {
-    return params.presentedMissingEditableItems;
-  }
-
-  if (params.resultViewScope === 'unmatched') {
-    return params.unmatchedEditableItems;
-  }
-
-  return params.editableItems;
-}
-
 function resolveOptionalCountLabel(value: number | null | undefined, fallback: string) {
   return value === null || value === undefined ? fallback : String(value);
 }
@@ -622,173 +426,6 @@ function resolveIntegratedTeachingUnitText(item: JournalEditableCardItem) {
   return (
     item.teachingUnitText || [item.teachingUnitNo, item.teachingUnitName].filter(Boolean).join(' ')
   );
-}
-
-function buildPracticePlanFields(item: {
-  courseCategory: string | null;
-  courseContent: string | null;
-  demonstrationHours?: number | null;
-  lectureHours?: number | null;
-  practiceHours?: number | null;
-  teachingChapterContent?: string | null;
-  topicName?: string | null;
-}) {
-  if (!isPracticeCourseCategory(item.courseCategory)) {
-    return {
-      practiceDemonstrationHours: null,
-      practiceLectureHours: null,
-      practicePracticeHours: null,
-      practiceTeachingChapterContent: null,
-      practiceTopicName: null,
-    };
-  }
-
-  return {
-    practiceDemonstrationHours: item.demonstrationHours ?? null,
-    practiceLectureHours: item.lectureHours ?? null,
-    practicePracticeHours: item.practiceHours ?? null,
-    practiceTeachingChapterContent: item.teachingChapterContent ?? null,
-    practiceTopicName: item.topicName ?? null,
-  };
-}
-
-function buildEditableCardItemFromReconciliation(
-  item: LectureJournalReconciliationItem,
-): JournalEditableCardItem {
-  const cachedItem = reconciliationEditableItemCache.get(item);
-
-  if (cachedItem) {
-    return cachedItem;
-  }
-
-  const practicePlanFields = buildPracticePlanFields(item);
-
-  const editableItem = {
-    blockingIssue: item.blockingIssue,
-    canFill: item.canFill,
-    completeAndSummary: null,
-    courseCategory: item.courseCategory,
-    courseContent: item.courseContent,
-    courseId: item.courseId,
-    courseName: item.courseName,
-    dayOfWeek: item.dayOfWeek,
-    disciplineSituation: null,
-    expectedOccurrences: item.expectedOccurrences,
-    homework: item.homework,
-    journal: item.journal,
-    key: buildItemKey(item),
-    learningSessionContent: null,
-    learningSessionNo: null,
-    learningSessionTarget: null,
-    learningTaskName: null,
-    learningTaskNo: null,
-    learningTaskText: null,
-    lecturePlanDetailId: item.lecturePlanDetailId,
-    lecturePlanId: item.lecturePlanId,
-    lessonHours: item.lessonHours,
-    matchedLectureJournalDetailId: item.journal?.lectureJournalDetailId ?? null,
-    problemAndSolve: null,
-    schoolYear: item.schoolYear,
-    sectionId: item.sectionId,
-    sectionName: item.sectionName,
-    securityAndMaintain: null,
-    semester: item.semester,
-    shift: null,
-    shiftName: null,
-    status: item.status,
-    teacherId: item.teacherId,
-    teacherName: item.teacherName,
-    teachingClassId: item.teachingClassId,
-    teachingClassName: item.teachingClassName,
-    teachingDate: item.teachingDate,
-    teachingUnitAchievement: null,
-    teachingUnitContent: null,
-    teachingUnitName: null,
-    teachingUnitNo: null,
-    teachingUnitTarget: null,
-    teachingUnitText: null,
-    warnings: item.warnings,
-    weekNumber: item.weekNumber,
-    ...practicePlanFields,
-  };
-
-  reconciliationEditableItemCache.set(item, editableItem);
-
-  return editableItem;
-}
-
-function buildEditableCardItemFromIntegratedPreview(
-  item: AcademicIntegratedTeachingLogPrefillPreview,
-): JournalEditableCardItem {
-  const cachedItem = integratedPreviewEditableItemCache.get(item);
-
-  if (cachedItem) {
-    return cachedItem;
-  }
-
-  const resolvedShift = item.shift || DEFAULT_INTEGRATED_SHIFT;
-
-  const editableItem = {
-    blockingIssue: item.blockingIssue,
-    canFill: item.canFill,
-    completeAndSummary: item.completeAndSummary,
-    courseCategory: '3',
-    courseContent: null,
-    courseId: null,
-    courseName: item.courseName,
-    dayOfWeek: item.dayOfWeek,
-    disciplineSituation: item.disciplineSituation,
-    expectedOccurrences: item.expectedOccurrences,
-    homework: null,
-    journal: null,
-    key: buildItemKey({
-      lecturePlanDetailId: item.lecturePlanDetailId,
-      lecturePlanId: item.lecturePlanId,
-      matchKey: `integrated-preview-${item.status}`,
-      reason: item.blockingIssue,
-    }),
-    learningSessionContent: item.learningSessionContent,
-    learningSessionNo: item.learningSessionNo,
-    learningSessionTarget: item.learningSessionTarget,
-    learningTaskName: item.learningTaskName,
-    learningTaskNo: item.learningTaskNo,
-    learningTaskText: item.learningTaskText,
-    lecturePlanDetailId: item.lecturePlanDetailId,
-    lecturePlanId: item.lecturePlanId,
-    lessonHours: item.lessonHours,
-    matchedLectureJournalDetailId: item.matchedLectureJournalDetailId,
-    practiceDemonstrationHours: null,
-    practiceLectureHours: null,
-    practicePracticeHours: null,
-    practiceTeachingChapterContent: null,
-    practiceTopicName: null,
-    problemAndSolve: item.problemAndSolve,
-    schoolYear: null,
-    sectionId: null,
-    sectionName: null,
-    securityAndMaintain: item.securityAndMaintain,
-    semester: null,
-    shift: item.shift,
-    shiftName: resolveShiftName(resolvedShift) || DEFAULT_INTEGRATED_SHIFT_NAME,
-    status: item.status,
-    teacherId: null,
-    teacherName: null,
-    teachingClassId: item.teachingClassId,
-    teachingClassName: item.teachingClassName,
-    teachingDate: item.teachingDate,
-    teachingUnitAchievement: item.teachingUnitAchievement,
-    teachingUnitContent: item.teachingUnitContent,
-    teachingUnitName: item.teachingUnitName,
-    teachingUnitNo: item.teachingUnitNo,
-    teachingUnitTarget: item.teachingUnitTarget,
-    teachingUnitText: item.teachingUnitText,
-    warnings: item.warnings,
-    weekNumber: item.weekNumber,
-  };
-
-  integratedPreviewEditableItemCache.set(item, editableItem);
-
-  return editableItem;
 }
 
 function renderIntegratedExpectedOccurrences(
@@ -1996,25 +1633,16 @@ export function LectureJournalReconciliationLabPage() {
     [editableItems],
   );
   const dateVisibleEditableItems = useMemo(() => {
-    if (futureCourseVisibility === 'show') {
-      return editableItems;
-    }
-
-    return editableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+    return filterItemsByFutureCourseVisibility(editableItems, futureCourseVisibility);
   }, [editableItems, futureCourseVisibility]);
   const dateVisiblePresentedMissingEditableItems = useMemo(() => {
-    if (futureCourseVisibility === 'show') {
-      return presentedMissingEditableItems;
-    }
-
-    return presentedMissingEditableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+    return filterItemsByFutureCourseVisibility(
+      presentedMissingEditableItems,
+      futureCourseVisibility,
+    );
   }, [futureCourseVisibility, presentedMissingEditableItems]);
   const dateVisibleUnmatchedEditableItems = useMemo(() => {
-    if (futureCourseVisibility === 'show') {
-      return unmatchedEditableItems;
-    }
-
-    return unmatchedEditableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+    return filterItemsByFutureCourseVisibility(unmatchedEditableItems, futureCourseVisibility);
   }, [futureCourseVisibility, unmatchedEditableItems]);
   const resultViewOptions = useMemo(
     () =>
@@ -2047,11 +1675,7 @@ export function LectureJournalReconciliationLabPage() {
   );
   const shouldRenderFutureCourseSwitch = futureScopedJournalItems.length > 0;
   const scopedJournalItems = useMemo(() => {
-    if (futureCourseVisibility === 'show') {
-      return rawScopedJournalItems;
-    }
-
-    return rawScopedJournalItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+    return filterItemsByFutureCourseVisibility(rawScopedJournalItems, futureCourseVisibility);
   }, [futureCourseVisibility, rawScopedJournalItems]);
   const courseCategoryOptions = useMemo(
     () => buildCourseCategoryFilterOptions(scopedJournalItems),
