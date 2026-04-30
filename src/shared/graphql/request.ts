@@ -1,5 +1,5 @@
 import { type FetchPolicy, gql, type OperationVariables } from '@apollo/client';
-import { getOperationAST } from 'graphql';
+import { type DocumentNode, getOperationAST, type OperationDefinitionNode } from 'graphql';
 
 import { getGraphQLClient, getGraphQLRuntimeConfig } from './client';
 import { GraphQLIngressError, toGraphQLIngressError } from './errors';
@@ -12,6 +12,34 @@ type ExecuteGraphQLOptions = {
   authMode?: GraphQLAuthMode;
   fetchPolicy?: FetchPolicy;
 };
+
+type ParsedGraphQLDocument = {
+  document: DocumentNode;
+  operation: OperationDefinitionNode | null;
+  operationName: string | undefined;
+};
+
+const parsedDocumentCache = new Map<string, ParsedGraphQLDocument>();
+
+function parseGraphQLDocument(query: string): ParsedGraphQLDocument {
+  const cachedDocument = parsedDocumentCache.get(query);
+
+  if (cachedDocument) {
+    return cachedDocument;
+  }
+
+  const document = gql(query);
+  const operation = getOperationAST(document, undefined) ?? null;
+  const parsedDocument = {
+    document,
+    operation,
+    operationName: operation?.name?.value,
+  };
+
+  parsedDocumentCache.set(query, parsedDocument);
+
+  return parsedDocument;
+}
 
 function buildOperationContext(options: ExecuteGraphQLOptions) {
   if (options.authMode === 'none') {
@@ -37,9 +65,7 @@ async function dispatchGraphQLRequest<TData, TVariables extends OperationVariabl
   variables: TVariables,
   options: ExecuteGraphQLOptions,
 ): Promise<TData> {
-  const document = gql(query);
-  const operation = getOperationAST(document, undefined);
-  const operationName = operation?.name?.value;
+  const { document, operation, operationName } = parseGraphQLDocument(query);
   const client = getGraphQLClient();
   const context = buildOperationContext(options);
 
@@ -82,7 +108,7 @@ async function dispatchGraphQLRequest<TData, TVariables extends OperationVariabl
 
 function tryExtractOperationName(query: string): string | undefined {
   try {
-    return getOperationAST(gql(query), undefined)?.name?.value;
+    return parseGraphQLDocument(query).operationName;
   } catch {
     return undefined;
   }

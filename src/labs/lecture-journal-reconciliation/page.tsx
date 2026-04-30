@@ -240,6 +240,18 @@ function formatTeachingDate(value: string | null | undefined) {
   }).format(date);
 }
 
+function waitForNextPaint() {
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve) => {
+    window.requestAnimationFrame(() => {
+      window.setTimeout(resolve, 0);
+    });
+  });
+}
+
 function resolveCampusSubmitStatusDotTone(statusText: string) {
   const normalizedStatus = statusText.trim();
 
@@ -2024,6 +2036,12 @@ export function LectureJournalReconciliationLabPage() {
     setCollapsingSavedItemHeights({});
 
     try {
+      await waitForNextPaint();
+
+      if (activeQueryRequestIdRef.current !== requestId) {
+        return;
+      }
+
       const result = await runLectureJournalReconciliationQueryWorkflow({
         departmentId: normalizedDepartmentId || undefined,
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
