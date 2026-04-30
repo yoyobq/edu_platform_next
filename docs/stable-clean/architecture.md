@@ -78,6 +78,47 @@
 - 若它只是通用 UI 结构、样式组合或无业务语义的工具，按 `widgets` 或 `shared` 处理
 - 只要“保留业务语义”成立，就应评估第二维；“可复用”只是增强信号
 
+### 4. Reducer / State Machine 的使用边界
+
+Reducer 不是默认状态管理方案，也不等同于第二维分层。只有当一组状态已经形成“流程状态机”时，才应引入 reducer 或显式 state machine。
+
+Reducer 的判断单位是状态组，不是页面。一个页面可以只把查询流程放进 reducer，同时继续用 `useState` 管理 tab、modal、输入值或动画状态；不同流程也不应为了“统一”而塞进同一个 reducer。
+
+同时满足以下两个条件时，应使用 reducer / state machine，而不是继续堆多个 `useState`：
+
+1. 这些状态共同描述同一个业务流程或交互流程，而不是彼此独立的 UI 小状态。
+2. 存在不合法状态组合，或多个状态必须随同一个事件原子更新。
+
+典型进入信号：
+
+- 一个流程存在明确阶段，例如 `idle` / `loading` / `partialSuccess` / `success` / `failed` / `expired`。
+- 同一个事件需要同时修改多个状态，例如“开始查询”必须同时清空旧结果、清空错误、进入 loading、递增 requestId。
+- 某些状态组合不应该出现，例如：
+  - `loading === false` 但请求仍被 in-flight 锁住
+  - 有补充结果错误但没有主结果
+  - 新查询开始后旧的保存反馈仍显示
+  - stale request 返回后覆盖了当前结果
+- 异步流程会分阶段返回结果，例如主查询先返回，补充数据随后返回。
+- 流程需要统一处理竞态、重复提交、session 过期、retry、rollback 或局部成功。
+- 页面中多个 `useState` 的更新总是成组出现，且这些状态字段共同表达同一个流程。
+
+不进入 reducer 的情况：
+
+- 单个输入值、modal open、当前 tab、hover、简单展开折叠、纯动画状态。
+- 多个状态虽然在同一组件里，但彼此没有流程不变量。
+- 只是为了减少 `useState` 数量，或为了让代码看起来更工程化。
+- 状态变化没有事件语义，只是简单展示派生值。
+
+归属规则：
+
+- 若 reducer 描述的是纯 UI lifecycle，例如表单草稿、卡片展开、动画过渡，留在 `ui` 内。
+- 若 reducer 描述的是业务 use case / query / command / workflow 的状态转换，进入 `feature/application`。
+- 若只是业务对象本身的纯规则，不使用 React reducer，优先进入 `entity/domain` 的纯函数或 policy。
+
+一句话判断：
+
+如果这些状态需要靠开发者记住“哪些字段必须一起改、哪些组合不能出现”，就应使用 reducer / state machine 把规则写进事件转换里。
+
 ## 推荐映射
 
 在当前仓库中，推荐这样理解两套结构的关系：

@@ -108,6 +108,7 @@ src/features/project-catalog/
 职责：
 
 - `application/`：use case、query、command、workflow、port
+- `application/` 可以包含 reducer / state machine，但仅限描述 use case、query、command 或 workflow 的流程状态；纯 UI lifecycle reducer 留在 `ui`
 - `infrastructure/`：外部技术边界与 adapter
 - `ui/`：feature 自己的交互入口与展示适配
 - `index.ts`：模块公开出口
