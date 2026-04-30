@@ -11,13 +11,27 @@ export type LectureJournalQueryState = {
 
 export type LectureJournalQueryAction =
   | { type: 'failed'; message: string }
-  | { prefillResult: AcademicTeachingLogPrefillResult | null; type: 'prefillResultUpdated' }
+  | {
+      completeAndSummary: string;
+      disciplineSituation: string;
+      lectureJournalDetailId: string | null;
+      lecturePlanDetailId: string | null;
+      lecturePlanId: string | null;
+      problemAndSolve: string;
+      securityAndMaintain: string;
+      shift: string;
+      type: 'integratedSaveApplied';
+    }
+  | {
+      courseContent: string;
+      homeworkAssignment: string;
+      itemKey: string;
+      lectureJournalDetailId: string | null;
+      topicRecord: string;
+      type: 'reconciliationSaveApplied';
+    }
   | { type: 'prefillStarted' }
   | { result: LectureJournalReconciliationResult; type: 'reconciliationLoaded' }
-  | {
-      reconciliationResult: LectureJournalReconciliationResult | null;
-      type: 'reconciliationResultUpdated';
-    }
   | { type: 'settled' }
   | { type: 'started' }
   | {
@@ -35,6 +49,20 @@ export const initialLectureJournalQueryState: LectureJournalQueryState = {
   queryError: null,
   reconciliationResult: null,
 };
+
+function buildReconciliationItemKey(item: {
+  lecturePlanDetailId: string | null;
+  lecturePlanId: string | null;
+  matchKey?: string | null;
+  reason?: string | null;
+}) {
+  return [
+    item.lecturePlanDetailId || 'detail',
+    item.lecturePlanId || 'plan',
+    item.matchKey || 'match',
+    item.reason || 'reason',
+  ].join('-');
+}
 
 export function lectureJournalQueryReducer(
   state: LectureJournalQueryState,
@@ -62,17 +90,73 @@ export function lectureJournalQueryReducer(
     };
   }
 
-  if (action.type === 'prefillResultUpdated') {
+  if (action.type === 'integratedSaveApplied') {
+    if (!state.prefillResult) {
+      return state;
+    }
+
     return {
       ...state,
-      prefillResult: action.prefillResult,
+      prefillResult: {
+        ...state.prefillResult,
+        integratedPreviews: state.prefillResult.integratedPreviews.map((preview) => {
+          const isTargetPreview =
+            preview.lecturePlanDetailId === action.lecturePlanDetailId &&
+            preview.lecturePlanId === action.lecturePlanId;
+
+          if (!isTargetPreview) {
+            return preview;
+          }
+
+          return {
+            ...preview,
+            completeAndSummary: action.completeAndSummary,
+            disciplineSituation: action.disciplineSituation,
+            matchedLectureJournalDetailId:
+              action.lectureJournalDetailId || preview.matchedLectureJournalDetailId,
+            problemAndSolve: action.problemAndSolve,
+            securityAndMaintain: action.securityAndMaintain,
+            shift: action.shift,
+            status: 'FILLED',
+          };
+        }),
+      },
     };
   }
 
-  if (action.type === 'reconciliationResultUpdated') {
+  if (action.type === 'reconciliationSaveApplied') {
+    if (!state.reconciliationResult) {
+      return state;
+    }
+
     return {
       ...state,
-      reconciliationResult: action.reconciliationResult,
+      reconciliationResult: {
+        ...state.reconciliationResult,
+        items: state.reconciliationResult.items.map((currentItem) => {
+          if (buildReconciliationItemKey(currentItem) !== action.itemKey) {
+            return currentItem;
+          }
+
+          return {
+            ...currentItem,
+            journal: {
+              courseContent: action.courseContent,
+              homeworkAssignment: action.homeworkAssignment,
+              lectureJournalDetailId:
+                action.lectureJournalDetailId ||
+                currentItem.journal?.lectureJournalDetailId ||
+                null,
+              lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
+              rawJournal: currentItem.journal?.rawJournal ?? null,
+              statusCode: currentItem.journal?.statusCode ?? null,
+              statusName: currentItem.journal?.statusName ?? null,
+              topicRecord: action.topicRecord || currentItem.journal?.topicRecord || null,
+            },
+            status: 'FILLED',
+          };
+        }),
+      },
     };
   }
 

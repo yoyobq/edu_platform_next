@@ -24,6 +24,7 @@ import {
   Segmented,
   Select,
   Skeleton,
+  Switch,
   Tag,
   Tooltip,
   Typography,
@@ -80,6 +81,11 @@ type PendingAction = 'directory' | 'query' | null;
 type ResultViewScope = 'complete' | 'missing' | 'unmatched';
 type CourseCategoryFilter = 'ALL' | '1' | '2' | '3';
 type FutureCourseVisibility = 'hide' | 'show';
+type ResultViewScopeOption = {
+  count: number;
+  label: string;
+  value: ResultViewScope;
+};
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -94,7 +100,7 @@ const DEFAULT_INTEGRATED_SHIFT_NAME = SHIFT_NAME_BY_VALUE[DEFAULT_INTEGRATED_SHI
 const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
-const COURSE_CATEGORY_TAB_ORDER = ['3', '1', '2'];
+const COURSE_CATEGORY_TAB_ORDER = ['1', '2', '3'];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
 const COURSE_CATEGORY_META = {
   '1': {
@@ -560,21 +566,27 @@ function resolveCourseCategoryMeta(courseCategory: string | null) {
 }
 
 function buildCourseCategoryFilterOptions(items: JournalEditableCardItem[]) {
+  const nonEmptyOptions = COURSE_CATEGORY_TAB_ORDER.map((courseCategory) => {
+    const courseCategoryMeta = resolveCourseCategoryMeta(courseCategory);
+
+    return {
+      count: items.filter((item) => item.courseCategory === courseCategory).length,
+      key: courseCategory as CourseCategoryFilter,
+      label: courseCategoryMeta?.label || courseCategory,
+    };
+  }).filter((option) => option.count > 0);
+
+  if (nonEmptyOptions.length <= 1) {
+    return nonEmptyOptions;
+  }
+
   return [
     {
       count: items.length,
       key: 'ALL' as const,
-      label: '全部',
+      label: '所有类型',
     },
-    ...COURSE_CATEGORY_TAB_ORDER.map((courseCategory) => {
-      const courseCategoryMeta = resolveCourseCategoryMeta(courseCategory);
-
-      return {
-        count: items.filter((item) => item.courseCategory === courseCategory).length,
-        key: courseCategory as CourseCategoryFilter,
-        label: courseCategoryMeta?.label || courseCategory,
-      };
-    }),
+    ...nonEmptyOptions,
   ];
 }
 
@@ -582,6 +594,10 @@ function resolveCourseCategoryFilter(
   options: Array<{ key: CourseCategoryFilter }>,
   activeCourseCategory: CourseCategoryFilter,
 ) {
+  if (options.length <= 1) {
+    return 'ALL';
+  }
+
   if (options.some((option) => option.key === activeCourseCategory)) {
     return activeCourseCategory;
   }
@@ -602,14 +618,79 @@ function filterItemsByCourseCategory(
 
 function resolveResultViewScopeLabel(scope: ResultViewScope) {
   if (scope === 'missing') {
-    return '疑似未填';
+    return '待补日志';
   }
 
   if (scope === 'unmatched') {
-    return '无法对账';
+    return '需核对';
   }
 
-  return '完整对账';
+  return '全部';
+}
+
+function resolveResultViewScopeTitle(scope: ResultViewScope) {
+  if (scope === 'missing') {
+    return '待补日志的课次';
+  }
+
+  if (scope === 'unmatched') {
+    return '需要人工核对的课次';
+  }
+
+  return '全部课次';
+}
+
+function buildResultViewScopeOptions(counts: {
+  complete: number;
+  missing: number;
+  unmatched: number;
+}): ResultViewScopeOption[] {
+  return [
+    {
+      count: counts.complete,
+      label: resolveResultViewScopeLabel('complete'),
+      value: 'complete' as const,
+    },
+    {
+      count: counts.missing,
+      label: resolveResultViewScopeLabel('missing'),
+      value: 'missing' as const,
+    },
+    {
+      count: counts.unmatched,
+      label: resolveResultViewScopeLabel('unmatched'),
+      value: 'unmatched' as const,
+    },
+  ].filter((option) => option.count > 0);
+}
+
+function resolveResultViewScope(options: ResultViewScopeOption[], activeScope: ResultViewScope) {
+  if (options.some((option) => option.value === activeScope)) {
+    return activeScope;
+  }
+
+  if (options.some((option) => option.value === 'missing')) {
+    return 'missing';
+  }
+
+  return 'complete';
+}
+
+function pickJournalItemsByResultViewScope(params: {
+  editableItems: JournalEditableCardItem[];
+  presentedMissingEditableItems: JournalEditableCardItem[];
+  resultViewScope: ResultViewScope;
+  unmatchedEditableItems: JournalEditableCardItem[];
+}) {
+  if (params.resultViewScope === 'missing') {
+    return params.presentedMissingEditableItems;
+  }
+
+  if (params.resultViewScope === 'unmatched') {
+    return params.unmatchedEditableItems;
+  }
+
+  return params.editableItems;
 }
 
 function resolveOptionalCountLabel(value: number | null | undefined, fallback: string) {
@@ -1278,7 +1359,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     item.canFill &&
     !item.blockingIssue &&
     Boolean(normalizeOptionalString(item.lecturePlanDetailId || ''));
-  const isIntegratedEditable = isIntegratedSaveCandidate;
+  const isIntegratedEditable = !isFutureCourse && isIntegratedSaveCandidate;
   const hasCompleteAndSummaryEdited =
     normalizeOptionalString(draft.completeAndSummary) !==
     normalizeOptionalString(initialDraft.completeAndSummary);
@@ -1344,6 +1425,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     isPracticeCard && item.lessonHours !== null && practiceHoursTotal !== item.lessonHours;
   const saveValidationError = resolveSaveValidationError(item, draft);
   const showRestoreButton =
+    !isFutureCourse &&
     (!isFilled || isIntegratedEditable) &&
     (isIntegratedCard
       ? hasIntegratedPlanMismatch
@@ -1380,6 +1462,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
         'lecture-journal-record',
         `lecture-journal-record-${statusTone}`,
         isCollapsing ? 'lecture-journal-record-collapsing' : '',
+        isFutureCourse ? 'lecture-journal-record-future' : '',
         shouldRenderSaveAction ? 'lecture-journal-record-has-save-action' : '',
         isIntegratedCard ? 'lecture-journal-record-integrated' : '',
       ]
@@ -1524,559 +1607,582 @@ const JournalDraftCard = memo(function JournalDraftCard({
         </div>
       ) : null}
 
-      <div className="lecture-journal-editor">
-        <div
-          className={[
-            'lecture-journal-editor-grid',
-            isPracticeCard ? 'lecture-journal-editor-grid-practice' : '',
-            isIntegratedCard ? 'lecture-journal-editor-grid-integrated' : '',
-          ]
-            .filter(Boolean)
-            .join(' ')}
-        >
-          {isPracticeCard ? (
-            <>
-              <label className="lecture-journal-card-field lecture-journal-card-field-content">
-                {renderFieldLabel('课程内容', {
-                  fields: ['course_content', 'topicName', 'TOPIC_NAME'],
-                  note: '计划侧 topicName 对应上游 TOPIC_NAME，并映射到日志侧 course_content',
-                })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input placeholder="未填写" readOnly size="large" value={draft.courseContent} />
-                  </span>
-                ) : (
-                  <Input
-                    placeholder="请输入课程内容"
-                    size="large"
-                    value={draft.courseContent}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { courseContent: event.target.value });
-                    }}
-                  />
-                )}
-              </label>
+      {isFutureCourse && !isFilled ? (
+        <div className="lecture-journal-integrated-state">
+          <Alert message="课程尚未开始，暂不开放填写。" showIcon type="info" />
+        </div>
+      ) : null}
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-production-title">
-                {renderFieldLabel('生产实习课题名称及加工内容', {
-                  fields: [
-                    'production_project_title',
-                    'teachingChapterContent',
-                    'TEACHING_CHAPTER_CONTENT',
-                  ],
-                  note: '计划侧 teachingChapterContent 对应上游 TEACHING_CHAPTER_CONTENT，并映射到日志侧 production_project_title',
-                  required: false,
-                })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
+      {isFutureCourse && !isFilled ? null : (
+        <div className="lecture-journal-editor">
+          <div
+            className={[
+              'lecture-journal-editor-grid',
+              isPracticeCard ? 'lecture-journal-editor-grid-practice' : '',
+              isIntegratedCard ? 'lecture-journal-editor-grid-integrated' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
+          >
+            {isPracticeCard ? (
+              <>
+                <label className="lecture-journal-card-field lecture-journal-card-field-content">
+                  {renderFieldLabel('课程内容', {
+                    fields: ['course_content', 'topicName', 'TOPIC_NAME'],
+                    note: '计划侧 topicName 对应上游 TOPIC_NAME，并映射到日志侧 course_content',
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input
+                        placeholder="未填写"
+                        readOnly
+                        size="large"
+                        value={draft.courseContent}
+                      />
+                    </span>
+                  ) : (
                     <Input
-                      placeholder="未填写"
-                      readOnly
+                      placeholder="请输入课程内容"
+                      size="large"
+                      value={draft.courseContent}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { courseContent: event.target.value });
+                      }}
+                    />
+                  )}
+                </label>
+
+                <label className="lecture-journal-card-field lecture-journal-card-field-production-title">
+                  {renderFieldLabel('生产实习课题名称及加工内容', {
+                    fields: [
+                      'production_project_title',
+                      'teachingChapterContent',
+                      'TEACHING_CHAPTER_CONTENT',
+                    ],
+                    note: '计划侧 teachingChapterContent 对应上游 TEACHING_CHAPTER_CONTENT，并映射到日志侧 production_project_title',
+                    required: false,
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input
+                        placeholder="未填写"
+                        readOnly
+                        size="large"
+                        value={draft.productionProjectTitle}
+                      />
+                    </span>
+                  ) : (
+                    <Input
+                      placeholder="请输入生产实习课题名称及加工内容"
                       size="large"
                       value={draft.productionProjectTitle}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, {
+                          productionProjectTitle: event.target.value,
+                        });
+                      }}
                     />
-                  </span>
-                ) : (
-                  <Input
-                    placeholder="请输入生产实习课题名称及加工内容"
-                    size="large"
-                    value={draft.productionProjectTitle}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, {
-                        productionProjectTitle: event.target.value,
-                      });
-                    }}
-                  />
-                )}
-              </label>
+                  )}
+                </label>
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-homework lecture-journal-card-field-practice-homework">
-                {renderFieldLabel('作业布置情况', {
-                  fields: ['homework_assignment', 'HOMEWORK', 'homework'],
-                  note: '日志保存字段名为 homework_assignment；计划侧 HOMEWORK 空值按空字符串处理',
-                })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
+                <label className="lecture-journal-card-field lecture-journal-card-field-homework lecture-journal-card-field-practice-homework">
+                  {renderFieldLabel('作业布置情况', {
+                    fields: ['homework_assignment', 'HOMEWORK', 'homework'],
+                    note: '日志保存字段名为 homework_assignment；计划侧 HOMEWORK 空值按空字符串处理',
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input
+                        placeholder="未填写"
+                        readOnly
+                        size="large"
+                        value={draft.homeworkAssignment}
+                      />
+                    </span>
+                  ) : (
                     <Input
-                      placeholder="未填写"
-                      readOnly
+                      placeholder="请输入作业布置情况"
                       size="large"
                       value={draft.homeworkAssignment}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
+                      }}
                     />
-                  </span>
-                ) : (
-                  <Input
-                    placeholder="请输入作业布置情况"
-                    size="large"
-                    value={draft.homeworkAssignment}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
-                    }}
-                  />
-                )}
-              </label>
+                  )}
+                </label>
 
-              <div className="lecture-journal-practice-secondary-row">
-                <div className="lecture-journal-practice-notes-inline">
-                  <label className="lecture-journal-card-field lecture-journal-card-field-practice-note">
-                    {renderFieldLabel('遵章守纪情况', {
-                      fields: ['disciplineSituation', 'discipline_situation'],
-                      note: '该字段属于日志侧补充信息，不来自计划侧',
-                      required: false,
-                    })}
-                    {isFilled ? (
-                      <span className="lecture-journal-readonly-input">
+                <div className="lecture-journal-practice-secondary-row">
+                  <div className="lecture-journal-practice-notes-inline">
+                    <label className="lecture-journal-card-field lecture-journal-card-field-practice-note">
+                      {renderFieldLabel('遵章守纪情况', {
+                        fields: ['disciplineSituation', 'discipline_situation'],
+                        note: '该字段属于日志侧补充信息，不来自计划侧',
+                        required: false,
+                      })}
+                      {isFilled ? (
+                        <span className="lecture-journal-readonly-input">
+                          <Input
+                            placeholder="未填写"
+                            readOnly
+                            size="large"
+                            value={draft.disciplineSituation}
+                          />
+                        </span>
+                      ) : (
                         <Input
-                          placeholder="未填写"
-                          readOnly
+                          placeholder="请输入遵章守纪情况"
                           size="large"
                           value={draft.disciplineSituation}
+                          onChange={(event) => {
+                            onUpdateDraft(item.key, {
+                              disciplineSituation: event.target.value,
+                            });
+                          }}
                         />
-                      </span>
-                    ) : (
-                      <Input
-                        placeholder="请输入遵章守纪情况"
-                        size="large"
-                        value={draft.disciplineSituation}
-                        onChange={(event) => {
-                          onUpdateDraft(item.key, {
-                            disciplineSituation: event.target.value,
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
+                      )}
+                    </label>
 
-                  <label className="lecture-journal-card-field lecture-journal-card-field-practice-note">
-                    {renderFieldLabel('文明安全及设备保养记载', {
-                      fields: ['securityAndMaintain', 'security_and_maintain'],
-                      note: '该字段属于日志侧补充信息，不来自计划侧',
-                      required: false,
-                    })}
-                    {isFilled ? (
-                      <span className="lecture-journal-readonly-input">
+                    <label className="lecture-journal-card-field lecture-journal-card-field-practice-note">
+                      {renderFieldLabel('文明安全及设备保养记载', {
+                        fields: ['securityAndMaintain', 'security_and_maintain'],
+                        note: '该字段属于日志侧补充信息，不来自计划侧',
+                        required: false,
+                      })}
+                      {isFilled ? (
+                        <span className="lecture-journal-readonly-input">
+                          <Input
+                            placeholder="未填写"
+                            readOnly
+                            size="large"
+                            value={draft.securityAndMaintain}
+                          />
+                        </span>
+                      ) : (
                         <Input
-                          placeholder="未填写"
-                          readOnly
+                          placeholder="请输入文明安全及设备保养记载"
                           size="large"
                           value={draft.securityAndMaintain}
+                          onChange={(event) => {
+                            onUpdateDraft(item.key, {
+                              securityAndMaintain: event.target.value,
+                            });
+                          }}
                         />
-                      </span>
-                    ) : (
-                      <Input
-                        placeholder="请输入文明安全及设备保养记载"
-                        size="large"
-                        value={draft.securityAndMaintain}
-                        onChange={(event) => {
-                          onUpdateDraft(item.key, {
-                            securityAndMaintain: event.target.value,
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
+                      )}
+                    </label>
+                  </div>
+
+                  <div className="lecture-journal-practice-hours-inline">
+                    <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
+                      {renderFieldLabel('讲课时数', {
+                        fields: ['lecture_lessons', 'lectureHours', 'LECTURE_HOURS'],
+                        note: '计划侧 lectureHours 对应上游 LECTURE_HOURS',
+                        required: false,
+                      })}
+                      {isFilled ? (
+                        <span className="lecture-journal-readonly-input">
+                          <Input
+                            placeholder="未填写"
+                            readOnly
+                            size="large"
+                            value={resolveOptionalCountLabel(draft.lectureHours, '未填写')}
+                          />
+                        </span>
+                      ) : (
+                        <InputNumber
+                          min={0}
+                          placeholder="讲课时数"
+                          precision={0}
+                          size="large"
+                          step={1}
+                          value={draft.lectureHours ?? undefined}
+                          onChange={(value) => {
+                            onUpdateDraft(item.key, {
+                              lectureHours: typeof value === 'number' ? value : null,
+                            });
+                          }}
+                        />
+                      )}
+                    </label>
+
+                    <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
+                      {renderFieldLabel('实作时数', {
+                        fields: ['training_lessons', 'practiceHours', 'PRACTICE_HOURS'],
+                        note: '计划侧 practiceHours 对应上游 PRACTICE_HOURS',
+                        required: false,
+                      })}
+                      {isFilled ? (
+                        <span className="lecture-journal-readonly-input">
+                          <Input
+                            placeholder="未填写"
+                            readOnly
+                            size="large"
+                            value={resolveOptionalCountLabel(draft.practiceHours, '未填写')}
+                          />
+                        </span>
+                      ) : (
+                        <InputNumber
+                          min={0}
+                          placeholder="实作时数"
+                          precision={0}
+                          size="large"
+                          step={1}
+                          value={draft.practiceHours ?? undefined}
+                          onChange={(value) => {
+                            onUpdateDraft(item.key, {
+                              practiceHours: typeof value === 'number' ? value : null,
+                            });
+                          }}
+                        />
+                      )}
+                    </label>
+
+                    <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
+                      {renderFieldLabel('示范时数', {
+                        fields: ['example_lessons', 'demonstrationHours', 'DEMONSTRATION_HOURS'],
+                        note: '计划侧 demonstrationHours 对应上游 DEMONSTRATION_HOURS',
+                        required: false,
+                      })}
+                      {isFilled ? (
+                        <span className="lecture-journal-readonly-input">
+                          <Input
+                            placeholder="未填写"
+                            readOnly
+                            size="large"
+                            value={resolveOptionalCountLabel(draft.demonstrationHours, '未填写')}
+                          />
+                        </span>
+                      ) : (
+                        <InputNumber
+                          min={0}
+                          placeholder="示范时数"
+                          precision={0}
+                          size="large"
+                          step={1}
+                          value={draft.demonstrationHours ?? undefined}
+                          onChange={(value) => {
+                            onUpdateDraft(item.key, {
+                              demonstrationHours: typeof value === 'number' ? value : null,
+                            });
+                          }}
+                        />
+                      )}
+                    </label>
+                  </div>
                 </div>
 
-                <div className="lecture-journal-practice-hours-inline">
-                  <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
-                    {renderFieldLabel('讲课时数', {
-                      fields: ['lecture_lessons', 'lectureHours', 'LECTURE_HOURS'],
-                      note: '计划侧 lectureHours 对应上游 LECTURE_HOURS',
-                      required: false,
-                    })}
-                    {isFilled ? (
-                      <span className="lecture-journal-readonly-input">
-                        <Input
-                          placeholder="未填写"
-                          readOnly
-                          size="large"
-                          value={resolveOptionalCountLabel(draft.lectureHours, '未填写')}
-                        />
-                      </span>
-                    ) : (
-                      <InputNumber
-                        min={0}
-                        placeholder="讲课时数"
-                        precision={0}
-                        size="large"
-                        step={1}
-                        value={draft.lectureHours ?? undefined}
-                        onChange={(value) => {
-                          onUpdateDraft(item.key, {
-                            lectureHours: typeof value === 'number' ? value : null,
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
-
-                  <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
-                    {renderFieldLabel('实作时数', {
-                      fields: ['training_lessons', 'practiceHours', 'PRACTICE_HOURS'],
-                      note: '计划侧 practiceHours 对应上游 PRACTICE_HOURS',
-                      required: false,
-                    })}
-                    {isFilled ? (
-                      <span className="lecture-journal-readonly-input">
-                        <Input
-                          placeholder="未填写"
-                          readOnly
-                          size="large"
-                          value={resolveOptionalCountLabel(draft.practiceHours, '未填写')}
-                        />
-                      </span>
-                    ) : (
-                      <InputNumber
-                        min={0}
-                        placeholder="实作时数"
-                        precision={0}
-                        size="large"
-                        step={1}
-                        value={draft.practiceHours ?? undefined}
-                        onChange={(value) => {
-                          onUpdateDraft(item.key, {
-                            practiceHours: typeof value === 'number' ? value : null,
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
-
-                  <label className="lecture-journal-card-field lecture-journal-card-field-practice-hour">
-                    {renderFieldLabel('示范时数', {
-                      fields: ['example_lessons', 'demonstrationHours', 'DEMONSTRATION_HOURS'],
-                      note: '计划侧 demonstrationHours 对应上游 DEMONSTRATION_HOURS',
-                      required: false,
-                    })}
-                    {isFilled ? (
-                      <span className="lecture-journal-readonly-input">
-                        <Input
-                          placeholder="未填写"
-                          readOnly
-                          size="large"
-                          value={resolveOptionalCountLabel(draft.demonstrationHours, '未填写')}
-                        />
-                      </span>
-                    ) : (
-                      <InputNumber
-                        min={0}
-                        placeholder="示范时数"
-                        precision={0}
-                        size="large"
-                        step={1}
-                        value={draft.demonstrationHours ?? undefined}
-                        onChange={(value) => {
-                          onUpdateDraft(item.key, {
-                            demonstrationHours: typeof value === 'number' ? value : null,
-                          });
-                        }}
-                      />
-                    )}
-                  </label>
-                </div>
-              </div>
-
-              {hasPracticeHoursTotalMismatch ? (
-                <div className="lecture-journal-practice-hours-warning">
-                  <Typography.Text type="warning">
-                    讲课时数、实作时数、示范时数之和为 {practiceHoursTotal}，与标题中的课时数{' '}
-                    {lessonHoursLabel} 不一致。
-                  </Typography.Text>
-                </div>
-              ) : null}
-            </>
-          ) : isIntegratedCard ? (
-            <>
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-shift">
-                {renderFieldLabel('班次', {
-                  fields: ['shift'],
-                  note: '前端按 shift 映射展示：1=早班、2=中班、3=常日班',
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input readOnly size="large" value={resolveShiftDisplayLabel(draft.shift)} />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-task">
-                {renderFieldLabel('教学任务序号及名称', {
-                  fields: ['learningTaskText', 'learningTaskNo', 'learningTaskName'],
-                  note: '优先来自 integratedPreviews.learningTaskText',
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={resolveIntegratedLearningTaskText(item)}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-session">
-                {renderFieldLabel('学习环节序号及名称', {
-                  fields: ['learningSessionNo', 'learningSessionContent'],
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={resolveIntegratedLearningSessionText(item)}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
-                {renderFieldLabel('教学单元序号及名称', {
-                  fields: ['teachingUnitText', 'teachingUnitNo', 'teachingUnitName', 'SSS002NAME'],
-                  note: '优先来自 integratedPreviews.teachingUnitText',
-                  required: false,
-                })}
-                <span className="lecture-journal-readonly-input">
-                  <Input
-                    placeholder="未填写"
-                    readOnly
-                    size="large"
-                    value={resolveIntegratedTeachingUnitText(item)}
-                  />
-                </span>
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-summary">
-                {renderFieldLabel('完成情况及教学小结', {
-                  fields: ['completeAndSummary'],
-                  required: false,
-                })}
-                {isIntegratedEditable ? (
-                  <Input.TextArea
-                    placeholder="请输入完成情况及教学小结"
-                    size="large"
-                    value={draft.completeAndSummary}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { completeAndSummary: event.target.value });
-                    }}
-                  />
-                ) : (
+                {hasPracticeHoursTotalMismatch ? (
+                  <div className="lecture-journal-practice-hours-warning">
+                    <Typography.Text type="warning">
+                      讲课时数、实作时数、示范时数之和为 {practiceHoursTotal}，与标题中的课时数{' '}
+                      {lessonHoursLabel} 不一致。
+                    </Typography.Text>
+                  </div>
+                ) : null}
+              </>
+            ) : isIntegratedCard ? (
+              <>
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-shift">
+                  {renderFieldLabel('班次', {
+                    fields: ['shift'],
+                    note: '前端按 shift 映射展示：1=早班、2=中班、3=常日班',
+                    required: false,
+                  })}
                   <span className="lecture-journal-readonly-input">
-                    <Input.TextArea readOnly size="large" value={draft.completeAndSummary} />
+                    <Input readOnly size="large" value={resolveShiftDisplayLabel(draft.shift)} />
                   </span>
-                )}
-              </label>
+                </label>
 
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-problem">
-                {renderFieldLabel('发现问题及解决方法', {
-                  fields: ['problemAndSolve'],
-                  required: false,
-                })}
-                {isIntegratedEditable ? (
-                  <Input
-                    placeholder="请输入发现问题及解决方法"
-                    size="large"
-                    value={draft.problemAndSolve}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { problemAndSolve: event.target.value });
-                    }}
-                  />
-                ) : (
-                  <span className="lecture-journal-readonly-input">
-                    <Input readOnly size="large" value={draft.problemAndSolve} />
-                  </span>
-                )}
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-discipline">
-                {renderFieldLabel('遵章守纪情况', {
-                  fields: ['disciplineSituation'],
-                  required: false,
-                })}
-                {isIntegratedEditable ? (
-                  <Input
-                    placeholder="请输入遵章守纪情况"
-                    size="large"
-                    value={draft.disciplineSituation}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { disciplineSituation: event.target.value });
-                    }}
-                  />
-                ) : (
-                  <span className="lecture-journal-readonly-input">
-                    <Input readOnly size="large" value={draft.disciplineSituation} />
-                  </span>
-                )}
-              </label>
-
-              <label className="lecture-journal-card-field lecture-journal-integrated-field-security">
-                {renderFieldLabel('文明安全及设备保养记录', {
-                  fields: ['securityAndMaintain'],
-                  required: false,
-                })}
-                {isIntegratedEditable ? (
-                  <Input.TextArea
-                    autoSize={{ minRows: 1, maxRows: 3 }}
-                    placeholder="请输入文明安全及设备保养记录"
-                    size="large"
-                    value={draft.securityAndMaintain}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { securityAndMaintain: event.target.value });
-                    }}
-                  />
-                ) : (
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-task">
+                  {renderFieldLabel('教学任务序号及名称', {
+                    fields: ['learningTaskText', 'learningTaskNo', 'learningTaskName'],
+                    note: '优先来自 integratedPreviews.learningTaskText',
+                    required: false,
+                  })}
                   <span className="lecture-journal-readonly-input">
                     <Input.TextArea
                       autoSize={{ minRows: 1, maxRows: 3 }}
+                      placeholder="未填写"
                       readOnly
                       size="large"
-                      value={draft.securityAndMaintain}
+                      value={resolveIntegratedLearningTaskText(item)}
                     />
                   </span>
-                )}
-              </label>
-            </>
-          ) : (
-            <>
-              <label className="lecture-journal-card-field lecture-journal-card-field-content">
-                {renderFieldLabel('课程内容', {
-                  fields: ['journal.courseContent', 'courseContent'],
-                  note: '前者为日志侧，后者为计划侧参考',
-                })}
-                {isFilled ? (
-                  <span className="lecture-journal-readonly-input">
-                    <Input placeholder="未填写" readOnly size="large" value={draft.courseContent} />
-                  </span>
-                ) : (
-                  <Input
-                    placeholder="请输入课程内容"
-                    size="large"
-                    value={draft.courseContent}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { courseContent: event.target.value });
-                    }}
-                  />
-                )}
-              </label>
+                </label>
 
-              <label className="lecture-journal-card-field lecture-journal-card-field-homework">
-                {renderFieldLabel('作业布置情况', {
-                  fields: ['journal.homeworkAssignment', 'homework'],
-                  note: '前者为日志侧，后者为计划侧参考',
-                })}
-                {isFilled ? (
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-session">
+                  {renderFieldLabel('学习环节序号及名称', {
+                    fields: ['learningSessionNo', 'learningSessionContent'],
+                    required: false,
+                  })}
                   <span className="lecture-journal-readonly-input">
                     <Input
                       placeholder="未填写"
                       readOnly
                       size="large"
-                      value={draft.homeworkAssignment}
+                      value={resolveIntegratedLearningSessionText(item)}
                     />
                   </span>
-                ) : (
-                  <Input
-                    placeholder="请输入作业布置情况"
-                    size="large"
-                    value={draft.homeworkAssignment}
-                    onChange={(event) => {
-                      onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
-                    }}
-                  />
-                )}
-              </label>
+                </label>
 
-              <div className="lecture-journal-card-field lecture-journal-card-field-topic">
-                {renderFieldLabel('课堂情况记录', {
-                  fields: ['journal.topicRecord'],
-                })}
-                {isFilled ? (
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-unit">
+                  {renderFieldLabel('教学单元序号及名称', {
+                    fields: [
+                      'teachingUnitText',
+                      'teachingUnitNo',
+                      'teachingUnitName',
+                      'SSS002NAME',
+                    ],
+                    note: '优先来自 integratedPreviews.teachingUnitText',
+                    required: false,
+                  })}
                   <span className="lecture-journal-readonly-input">
-                    <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
+                    <Input
+                      placeholder="未填写"
+                      readOnly
+                      size="large"
+                      value={resolveIntegratedTeachingUnitText(item)}
+                    />
                   </span>
-                ) : (
-                  <div className="lecture-journal-topic-record-control">
-                    <div className="lecture-journal-topic-record-segmented">
-                      <Segmented
-                        onChange={(value) => {
-                          onUpdateDraft(item.key, { topicRecord: String(value) });
-                        }}
-                        options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
-                        size="large"
-                        value={topicRecordControlValue}
-                      />
-                    </div>
-                    <span className="lecture-journal-topic-record-reset-slot">
-                      {showRestoreButton ? (
-                        <span className="lecture-journal-topic-record-reset">
-                          <Button
-                            onClick={() => {
-                              onUpdateDraft(item.key, {
-                                courseContent: item.courseContent || '',
-                                homeworkAssignment: item.homework || '',
-                              });
-                            }}
-                            size="small"
-                            type="text"
-                          >
-                            恢复
-                          </Button>
-                        </span>
-                      ) : null}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
+                </label>
 
-          {showRestoreButton ? (
-            <div className="lecture-journal-editor-actions">
-              <Button
-                onClick={() => {
-                  onUpdateDraft(item.key, {
-                    courseContent: isIntegratedCard
-                      ? ''
-                      : isPracticeCard
-                        ? item.practiceTopicName || ''
-                        : item.courseContent || '',
-                    demonstrationHours: isPracticeCard ? item.practiceDemonstrationHours : null,
-                    disciplineSituation: isIntegratedCard
-                      ? item.disciplineSituation || ''
-                      : isPracticeCard
-                        ? DEFAULT_DISCIPLINE_SITUATION
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-summary">
+                  {renderFieldLabel('完成情况及教学小结', {
+                    fields: ['completeAndSummary'],
+                    required: false,
+                  })}
+                  {isIntegratedEditable ? (
+                    <Input.TextArea
+                      placeholder="请输入完成情况及教学小结"
+                      size="large"
+                      value={draft.completeAndSummary}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { completeAndSummary: event.target.value });
+                      }}
+                    />
+                  ) : (
+                    <span className="lecture-journal-readonly-input">
+                      <Input.TextArea readOnly size="large" value={draft.completeAndSummary} />
+                    </span>
+                  )}
+                </label>
+
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-problem">
+                  {renderFieldLabel('发现问题及解决方法', {
+                    fields: ['problemAndSolve'],
+                    required: false,
+                  })}
+                  {isIntegratedEditable ? (
+                    <Input
+                      placeholder="请输入发现问题及解决方法"
+                      size="large"
+                      value={draft.problemAndSolve}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { problemAndSolve: event.target.value });
+                      }}
+                    />
+                  ) : (
+                    <span className="lecture-journal-readonly-input">
+                      <Input readOnly size="large" value={draft.problemAndSolve} />
+                    </span>
+                  )}
+                </label>
+
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-discipline">
+                  {renderFieldLabel('遵章守纪情况', {
+                    fields: ['disciplineSituation'],
+                    required: false,
+                  })}
+                  {isIntegratedEditable ? (
+                    <Input
+                      placeholder="请输入遵章守纪情况"
+                      size="large"
+                      value={draft.disciplineSituation}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { disciplineSituation: event.target.value });
+                      }}
+                    />
+                  ) : (
+                    <span className="lecture-journal-readonly-input">
+                      <Input readOnly size="large" value={draft.disciplineSituation} />
+                    </span>
+                  )}
+                </label>
+
+                <label className="lecture-journal-card-field lecture-journal-integrated-field-security">
+                  {renderFieldLabel('文明安全及设备保养记录', {
+                    fields: ['securityAndMaintain'],
+                    required: false,
+                  })}
+                  {isIntegratedEditable ? (
+                    <Input.TextArea
+                      autoSize={{ minRows: 1, maxRows: 3 }}
+                      placeholder="请输入文明安全及设备保养记录"
+                      size="large"
+                      value={draft.securityAndMaintain}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { securityAndMaintain: event.target.value });
+                      }}
+                    />
+                  ) : (
+                    <span className="lecture-journal-readonly-input">
+                      <Input.TextArea
+                        autoSize={{ minRows: 1, maxRows: 3 }}
+                        readOnly
+                        size="large"
+                        value={draft.securityAndMaintain}
+                      />
+                    </span>
+                  )}
+                </label>
+              </>
+            ) : (
+              <>
+                <label className="lecture-journal-card-field lecture-journal-card-field-content">
+                  {renderFieldLabel('课程内容', {
+                    fields: ['journal.courseContent', 'courseContent'],
+                    note: '前者为日志侧，后者为计划侧参考',
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input
+                        placeholder="未填写"
+                        readOnly
+                        size="large"
+                        value={draft.courseContent}
+                      />
+                    </span>
+                  ) : (
+                    <Input
+                      placeholder="请输入课程内容"
+                      size="large"
+                      value={draft.courseContent}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { courseContent: event.target.value });
+                      }}
+                    />
+                  )}
+                </label>
+
+                <label className="lecture-journal-card-field lecture-journal-card-field-homework">
+                  {renderFieldLabel('作业布置情况', {
+                    fields: ['journal.homeworkAssignment', 'homework'],
+                    note: '前者为日志侧，后者为计划侧参考',
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input
+                        placeholder="未填写"
+                        readOnly
+                        size="large"
+                        value={draft.homeworkAssignment}
+                      />
+                    </span>
+                  ) : (
+                    <Input
+                      placeholder="请输入作业布置情况"
+                      size="large"
+                      value={draft.homeworkAssignment}
+                      onChange={(event) => {
+                        onUpdateDraft(item.key, { homeworkAssignment: event.target.value });
+                      }}
+                    />
+                  )}
+                </label>
+
+                <div className="lecture-journal-card-field lecture-journal-card-field-topic">
+                  {renderFieldLabel('课堂情况记录', {
+                    fields: ['journal.topicRecord'],
+                  })}
+                  {isFilled ? (
+                    <span className="lecture-journal-readonly-input">
+                      <Input placeholder="未填写" readOnly size="large" value={draft.topicRecord} />
+                    </span>
+                  ) : (
+                    <div className="lecture-journal-topic-record-control">
+                      <div className="lecture-journal-topic-record-segmented">
+                        <Segmented
+                          onChange={(value) => {
+                            onUpdateDraft(item.key, { topicRecord: String(value) });
+                          }}
+                          options={TOPIC_RECORD_OPTIONS.map((value) => ({ label: value, value }))}
+                          size="large"
+                          value={topicRecordControlValue}
+                        />
+                      </div>
+                      <span className="lecture-journal-topic-record-reset-slot">
+                        {showRestoreButton ? (
+                          <span className="lecture-journal-topic-record-reset">
+                            <Button
+                              onClick={() => {
+                                onUpdateDraft(item.key, {
+                                  courseContent: item.courseContent || '',
+                                  homeworkAssignment: item.homework || '',
+                                });
+                              }}
+                              size="small"
+                              type="text"
+                            >
+                              恢复
+                            </Button>
+                          </span>
+                        ) : null}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+
+            {showRestoreButton ? (
+              <div className="lecture-journal-editor-actions">
+                <Button
+                  onClick={() => {
+                    onUpdateDraft(item.key, {
+                      courseContent: isIntegratedCard
+                        ? ''
+                        : isPracticeCard
+                          ? item.practiceTopicName || ''
+                          : item.courseContent || '',
+                      demonstrationHours: isPracticeCard ? item.practiceDemonstrationHours : null,
+                      disciplineSituation: isIntegratedCard
+                        ? item.disciplineSituation || ''
+                        : isPracticeCard
+                          ? DEFAULT_DISCIPLINE_SITUATION
+                          : '',
+                      homeworkAssignment: isIntegratedCard ? '' : item.homework || '',
+                      lectureHours: isPracticeCard ? item.practiceLectureHours : null,
+                      learningObjective: '',
+                      completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
+                      problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
+                      practiceHours: isPracticeCard ? item.practicePracticeHours : null,
+                      productionProjectTitle: isIntegratedCard
+                        ? ''
+                        : isPracticeCard
+                          ? item.practiceTeachingChapterContent || ''
+                          : draft.productionProjectTitle,
+                      securityAndMaintain: isIntegratedCard
+                        ? item.securityAndMaintain || ''
+                        : isPracticeCard
+                          ? DEFAULT_SECURITY_AND_MAINTAIN
+                          : '',
+                      shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
+                      shiftName: isIntegratedCard
+                        ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
+                          DEFAULT_INTEGRATED_SHIFT_NAME
                         : '',
-                    homeworkAssignment: isIntegratedCard ? '' : item.homework || '',
-                    lectureHours: isPracticeCard ? item.practiceLectureHours : null,
-                    learningObjective: '',
-                    completeAndSummary: isIntegratedCard ? item.completeAndSummary || '' : '',
-                    problemAndSolve: isIntegratedCard ? item.problemAndSolve || '' : '',
-                    practiceHours: isPracticeCard ? item.practicePracticeHours : null,
-                    productionProjectTitle: isIntegratedCard
-                      ? ''
-                      : isPracticeCard
-                        ? item.practiceTeachingChapterContent || ''
-                        : draft.productionProjectTitle,
-                    securityAndMaintain: isIntegratedCard
-                      ? item.securityAndMaintain || ''
-                      : isPracticeCard
-                        ? DEFAULT_SECURITY_AND_MAINTAIN
-                        : '',
-                    shift: isIntegratedCard ? item.shift || DEFAULT_INTEGRATED_SHIFT : '',
-                    shiftName: isIntegratedCard
-                      ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) ||
-                        DEFAULT_INTEGRATED_SHIFT_NAME
-                      : '',
-                  });
-                }}
-                size="small"
-                type="text"
-              >
-                恢复
-              </Button>
-            </div>
-          ) : null}
+                    });
+                  }}
+                  size="small"
+                  type="text"
+                >
+                  恢复
+                </Button>
+              </div>
+            ) : null}
+          </div>
         </div>
-      </div>
+      )}
     </article>
   );
 });
@@ -2112,7 +2218,7 @@ export function LectureJournalReconciliationLabPage() {
     queryError,
     reconciliationResult,
   } = queryState;
-  const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('complete');
+  const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('missing');
   const [courseCategoryFilter, setCourseCategoryFilter] = useState<CourseCategoryFilter>('ALL');
   const [futureCourseVisibility, setFutureCourseVisibility] =
     useState<FutureCourseVisibility>('hide');
@@ -2347,39 +2453,80 @@ export function LectureJournalReconciliationLabPage() {
     () => editableItems.filter((item) => item.status === 'UNMATCHED'),
     [editableItems],
   );
-  const scopedJournalItems = useMemo(() => {
-    if (resultViewScope === 'missing') {
+  const dateVisibleEditableItems = useMemo(() => {
+    if (futureCourseVisibility === 'show') {
+      return editableItems;
+    }
+
+    return editableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+  }, [editableItems, futureCourseVisibility]);
+  const dateVisiblePresentedMissingEditableItems = useMemo(() => {
+    if (futureCourseVisibility === 'show') {
       return presentedMissingEditableItems;
     }
 
-    if (resultViewScope === 'unmatched') {
+    return presentedMissingEditableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+  }, [futureCourseVisibility, presentedMissingEditableItems]);
+  const dateVisibleUnmatchedEditableItems = useMemo(() => {
+    if (futureCourseVisibility === 'show') {
       return unmatchedEditableItems;
     }
 
-    return editableItems;
-  }, [editableItems, presentedMissingEditableItems, resultViewScope, unmatchedEditableItems]);
-  const futureScopedJournalItems = useMemo(
-    () => scopedJournalItems.filter((item) => isFutureTeachingDate(item.teachingDate)),
-    [scopedJournalItems],
+    return unmatchedEditableItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+  }, [futureCourseVisibility, unmatchedEditableItems]);
+  const resultViewOptions = useMemo(
+    () =>
+      buildResultViewScopeOptions({
+        complete: dateVisibleEditableItems.length,
+        missing: dateVisiblePresentedMissingEditableItems.length,
+        unmatched: dateVisibleUnmatchedEditableItems.length,
+      }),
+    [
+      dateVisibleEditableItems.length,
+      dateVisiblePresentedMissingEditableItems.length,
+      dateVisibleUnmatchedEditableItems.length,
+    ],
   );
-  const dateVisibleJournalItems = useMemo(() => {
+  const shouldRenderResultViewFilter = resultViewOptions.length > 1;
+  const activeResultViewScope = resolveResultViewScope(resultViewOptions, resultViewScope);
+  const rawScopedJournalItems = useMemo(
+    () =>
+      pickJournalItemsByResultViewScope({
+        editableItems,
+        presentedMissingEditableItems,
+        resultViewScope: activeResultViewScope,
+        unmatchedEditableItems,
+      }),
+    [activeResultViewScope, editableItems, presentedMissingEditableItems, unmatchedEditableItems],
+  );
+  const futureScopedJournalItems = useMemo(
+    () => rawScopedJournalItems.filter((item) => isFutureTeachingDate(item.teachingDate)),
+    [rawScopedJournalItems],
+  );
+  const shouldRenderFutureCourseSwitch = futureScopedJournalItems.length > 0;
+  const scopedJournalItems = useMemo(() => {
     if (futureCourseVisibility === 'show') {
-      return scopedJournalItems;
+      return rawScopedJournalItems;
     }
 
-    return scopedJournalItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
-  }, [futureCourseVisibility, scopedJournalItems]);
+    return rawScopedJournalItems.filter((item) => !isFutureTeachingDate(item.teachingDate));
+  }, [futureCourseVisibility, rawScopedJournalItems]);
   const courseCategoryOptions = useMemo(
-    () => buildCourseCategoryFilterOptions(dateVisibleJournalItems),
-    [dateVisibleJournalItems],
+    () => buildCourseCategoryFilterOptions(scopedJournalItems),
+    [scopedJournalItems],
   );
+  const shouldRenderCourseCategoryFilter = courseCategoryOptions.length > 1;
+  const shouldRenderViewFilters =
+    shouldRenderResultViewFilter ||
+    shouldRenderFutureCourseSwitch ||
+    shouldRenderCourseCategoryFilter;
   const activeCourseCategoryFilter = resolveCourseCategoryFilter(
     courseCategoryOptions,
     courseCategoryFilter,
   );
   const visibleJournalItems = useMemo(
-    () => filterItemsByCourseCategory(dateVisibleJournalItems, activeCourseCategoryFilter),
-    [activeCourseCategoryFilter, dateVisibleJournalItems],
+    () => filterItemsByCourseCategory(scopedJournalItems, activeCourseCategoryFilter),
+    [activeCourseCategoryFilter, scopedJournalItems],
   );
   const currentResultCount = visibleJournalItems.length;
   const currentCourseCategoryLabel =
@@ -2416,71 +2563,30 @@ export function LectureJournalReconciliationLabPage() {
     (item: JournalEditableCardItem, draft: JournalDraft, result: AcademicTeachingLogSaveResult) => {
       if (isIntegratedCourseCategory(item.courseCategory)) {
         dispatchQueryState({
-          prefillResult: prefillResult
-            ? {
-                ...prefillResult,
-                integratedPreviews: prefillResult.integratedPreviews.map((preview) => {
-                  const isTargetPreview =
-                    preview.lecturePlanDetailId === item.lecturePlanDetailId &&
-                    preview.lecturePlanId === item.lecturePlanId;
-
-                  if (!isTargetPreview) {
-                    return preview;
-                  }
-
-                  return {
-                    ...preview,
-                    completeAndSummary: draft.completeAndSummary,
-                    disciplineSituation: draft.disciplineSituation,
-                    matchedLectureJournalDetailId:
-                      result.lectureJournalDetailId || preview.matchedLectureJournalDetailId,
-                    problemAndSolve: draft.problemAndSolve,
-                    securityAndMaintain: draft.securityAndMaintain,
-                    shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
-                    status: 'FILLED',
-                  };
-                }),
-              }
-            : prefillResult,
-          type: 'prefillResultUpdated',
+          completeAndSummary: draft.completeAndSummary,
+          disciplineSituation: draft.disciplineSituation,
+          lectureJournalDetailId: result.lectureJournalDetailId,
+          lecturePlanDetailId: item.lecturePlanDetailId,
+          lecturePlanId: item.lecturePlanId,
+          problemAndSolve: draft.problemAndSolve,
+          securityAndMaintain: draft.securityAndMaintain,
+          shift: draft.shift || item.shift || DEFAULT_INTEGRATED_SHIFT,
+          type: 'integratedSaveApplied',
         });
 
         return;
       }
 
       dispatchQueryState({
-        reconciliationResult: reconciliationResult
-          ? {
-              ...reconciliationResult,
-              items: reconciliationResult.items.map((currentItem) => {
-                if (buildItemKey(currentItem) !== item.key) {
-                  return currentItem;
-                }
-
-                return {
-                  ...currentItem,
-                  journal: {
-                    courseContent: draft.courseContent,
-                    homeworkAssignment: draft.homeworkAssignment,
-                    lectureJournalDetailId:
-                      result.lectureJournalDetailId ||
-                      currentItem.journal?.lectureJournalDetailId ||
-                      null,
-                    lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
-                    rawJournal: currentItem.journal?.rawJournal ?? null,
-                    statusCode: currentItem.journal?.statusCode ?? null,
-                    statusName: currentItem.journal?.statusName ?? null,
-                    topicRecord: draft.topicRecord || currentItem.journal?.topicRecord || null,
-                  },
-                  status: 'FILLED',
-                };
-              }),
-            }
-          : reconciliationResult,
-        type: 'reconciliationResultUpdated',
+        courseContent: draft.courseContent,
+        homeworkAssignment: draft.homeworkAssignment,
+        itemKey: item.key,
+        lectureJournalDetailId: result.lectureJournalDetailId,
+        topicRecord: draft.topicRecord,
+        type: 'reconciliationSaveApplied',
       });
     },
-    [prefillResult, reconciliationResult],
+    [],
   );
 
   const handleSaveToCampus = useCallback(
@@ -2580,7 +2686,7 @@ export function LectureJournalReconciliationLabPage() {
 
         applyLocalSaveSuccess(item, draft, result);
 
-        if (item.status === 'MISSING' && resultViewScope === 'missing') {
+        if (item.status === 'MISSING' && activeResultViewScope === 'missing') {
           startSavedCardCollapse(item.key);
         }
 
@@ -2623,7 +2729,7 @@ export function LectureJournalReconciliationLabPage() {
       clearCurrentSession,
       openLoginModal,
       persistRollingSession,
-      resultViewScope,
+      activeResultViewScope,
       startSavedCardCollapse,
       storedSession,
     ],
@@ -2787,7 +2893,7 @@ export function LectureJournalReconciliationLabPage() {
           const isMeasured =
             settlingSavedItemKeys.includes(item.key) || collapsingSavedItemKeys.includes(item.key);
           const isCollapsing =
-            resultViewScope === 'missing' && collapsingSavedItemKeys.includes(item.key);
+            activeResultViewScope === 'missing' && collapsingSavedItemKeys.includes(item.key);
           const collapseHeight = collapsingSavedItemHeights[item.key];
           const collapseStyle =
             isMeasured && collapseHeight
@@ -3020,169 +3126,140 @@ export function LectureJournalReconciliationLabPage() {
       {isLoadingReconciliation ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!isLoadingReconciliation && reconciliationResult ? (
-        <div className="flex flex-col gap-6">
-          <div className="lecture-journal-view-shell">
-            <section className="lecture-journal-view-controls">
-              <div className="lecture-journal-view-controls-head">
-                <div className="lecture-journal-view-controls-copy">
-                  <Typography.Text strong>结果视图</Typography.Text>
-                  <Typography.Text type="secondary">
-                    状态、未到日期与课程类型是三组平级筛选，下面始终只有一个结果列表。
-                  </Typography.Text>
-                </div>
-                <div className="lecture-journal-view-current">
-                  <Typography.Text type="secondary">当前展示</Typography.Text>
-                  <Typography.Text strong>{currentResultCount}</Typography.Text>
-                  <Typography.Text type="secondary">条</Typography.Text>
-                </div>
+        <div className="lecture-journal-view-shell">
+          <section className="lecture-journal-toolbar" aria-label="课次筛选">
+            <header className="lecture-journal-toolbar-head">
+              <div className="lecture-journal-toolbar-heading">
+                <h3 className="lecture-journal-toolbar-title">
+                  {resolveResultViewScopeTitle(activeResultViewScope)}
+                </h3>
+                <p className="lecture-journal-toolbar-summary">
+                  当前显示
+                  <strong className="lecture-journal-toolbar-summary-count">
+                    {currentResultCount}
+                  </strong>
+                  个课次
+                  {activeCourseCategoryFilter === 'ALL'
+                    ? null
+                    : `，仅 ${currentCourseCategoryLabel}`}
+                  {shouldRenderFutureCourseSwitch && futureCourseVisibility === 'hide'
+                    ? '，已隐藏未开课'
+                    : null}
+                </p>
               </div>
 
-              <div className="lecture-journal-view-filter-grid">
-                <div className="lecture-journal-view-filter-block">
-                  <div className="lecture-journal-view-filter-label">
-                    <Typography.Text strong>状态视图</Typography.Text>
-                  </div>
-                  <div className="lecture-journal-view-segmented">
+              {shouldRenderFutureCourseSwitch ? (
+                <div
+                  className="lecture-journal-toolbar-future"
+                  onClick={() => {
+                    setFutureCourseVisibility(futureCourseVisibility === 'show' ? 'hide' : 'show');
+                  }}
+                >
+                  <span className="lecture-journal-toolbar-future-copy">
+                    <span className="lecture-journal-toolbar-future-label">包含未开课</span>
+                    <span className="lecture-journal-toolbar-future-hint">
+                      共 {futureScopedJournalItems.length} 节尚未开始
+                    </span>
+                  </span>
+                  <Switch
+                    checked={futureCourseVisibility === 'show'}
+                    size="small"
+                    onChange={(checked) => {
+                      setFutureCourseVisibility(checked ? 'show' : 'hide');
+                    }}
+                    onClick={(_, event) => {
+                      event.stopPropagation();
+                    }}
+                  />
+                </div>
+              ) : null}
+            </header>
+
+            {shouldRenderViewFilters ? (
+              <div className="lecture-journal-toolbar-filters">
+                {shouldRenderResultViewFilter ? (
+                  <div className="lecture-journal-toolbar-scope">
                     <Segmented
                       block
-                      options={[
-                        {
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>完整对账</span>
-                              <strong>{editableItems.length}</strong>
+                      options={resultViewOptions.map((option) => ({
+                        label: (
+                          <span
+                            className={`lecture-journal-toolbar-pill lecture-journal-toolbar-pill-${option.value}`}
+                          >
+                            <span className="lecture-journal-toolbar-pill-text">
+                              {option.label}
                             </span>
-                          ),
-                          value: 'complete',
-                        },
-                        {
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>疑似未填</span>
-                              <strong>{presentedMissingEditableItems.length}</strong>
+                            <span
+                              className={`lecture-journal-toolbar-pill-count lecture-journal-toolbar-pill-count-${option.value}`}
+                            >
+                              {option.count}
                             </span>
-                          ),
-                          value: 'missing',
-                        },
-                        {
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>无法对账</span>
-                              <strong>{unmatchedEditableItems.length}</strong>
-                            </span>
-                          ),
-                          value: 'unmatched',
-                        },
-                      ]}
+                          </span>
+                        ),
+                        value: option.value,
+                      }))}
                       size="large"
-                      value={resultViewScope}
+                      value={activeResultViewScope}
                       onChange={(value) => {
                         setResultViewScope(value as ResultViewScope);
                       }}
                     />
                   </div>
-                </div>
+                ) : null}
 
-                <div className="lecture-journal-view-filter-block">
-                  <div className="lecture-journal-view-filter-label">
-                    <Typography.Text strong>未到日期</Typography.Text>
-                  </div>
-                  <div className="lecture-journal-view-segmented">
-                    <Segmented
-                      block
-                      options={[
-                        {
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>隐藏未到</span>
-                              <strong>{futureScopedJournalItems.length}</strong>
-                            </span>
-                          ),
-                          value: 'hide',
-                        },
-                        {
-                          label: (
-                            <span className="lecture-journal-view-option">
-                              <span>显示未到</span>
-                              <strong>{futureScopedJournalItems.length}</strong>
-                            </span>
-                          ),
-                          value: 'show',
-                        },
-                      ]}
-                      size="large"
-                      value={futureCourseVisibility}
-                      onChange={(value) => {
-                        setFutureCourseVisibility(value as FutureCourseVisibility);
-                      }}
-                    />
-                  </div>
-                </div>
+                {shouldRenderCourseCategoryFilter ? (
+                  <div
+                    className="lecture-journal-toolbar-categories"
+                    role="group"
+                    aria-label="课程类别"
+                  >
+                    {courseCategoryOptions.map((option) => {
+                      const isActive = activeCourseCategoryFilter === option.key;
+                      const accentClassName =
+                        option.key === 'ALL'
+                          ? 'lecture-journal-toolbar-chip-all'
+                          : resolveCourseCategoryMeta(option.key)?.accentClassName || '';
 
-                <div className="lecture-journal-view-filter-block">
-                  <div className="lecture-journal-view-filter-label">
-                    <Typography.Text strong>课程类型</Typography.Text>
+                      return (
+                        <button
+                          key={option.key}
+                          type="button"
+                          aria-pressed={isActive}
+                          className={`lecture-journal-toolbar-chip ${accentClassName} ${
+                            isActive ? 'lecture-journal-toolbar-chip-active' : ''
+                          }`.trim()}
+                          onClick={() => {
+                            setCourseCategoryFilter(option.key);
+                          }}
+                        >
+                          <span className="lecture-journal-toolbar-chip-dot" aria-hidden />
+                          <span className="lecture-journal-toolbar-chip-label">{option.label}</span>
+                          <span className="lecture-journal-toolbar-chip-count">{option.count}</span>
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="lecture-journal-view-segmented lecture-journal-view-segmented-category">
-                    <Segmented
-                      block
-                      options={courseCategoryOptions.map((option) => ({
-                        label: (
-                          <span className="lecture-journal-view-option">
-                            <span>{option.label}</span>
-                            <strong>{option.count}</strong>
-                          </span>
-                        ),
-                        value: option.key,
-                      }))}
-                      size="large"
-                      value={activeCourseCategoryFilter}
-                      onChange={(value) => {
-                        setCourseCategoryFilter(value as CourseCategoryFilter);
-                      }}
-                    />
-                  </div>
-                </div>
+                ) : null}
               </div>
-            </section>
+            ) : null}
+          </section>
 
-            <section className="lecture-journal-view-stage">
-              <div className="lecture-journal-view-stage-header">
-                <div className="lecture-journal-view-stage-copy">
-                  <Typography.Title level={5} style={{ margin: 0 }}>
-                    {resolveResultViewScopeLabel(resultViewScope)}
-                  </Typography.Title>
-                  <Typography.Text type="secondary">
-                    {`当前按 ${currentCourseCategoryLabel} 查看${resolveResultViewScopeLabel(resultViewScope)}课次${
-                      futureCourseVisibility === 'hide' ? '，已隐藏未到日期课次' : ''
-                    }。`}
-                  </Typography.Text>
-                </div>
-                <div className="lecture-journal-view-stage-tags">
-                  <Tag bordered={false}>{resolveResultViewScopeLabel(resultViewScope)}</Tag>
-                  <Tag bordered={false}>
-                    {futureCourseVisibility === 'hide' ? '隐藏未到日期' : '显示未到日期'}
-                  </Tag>
-                  <Tag bordered={false}>{currentCourseCategoryLabel}</Tag>
-                </div>
-              </div>
-
-              {visibleJournalItems.length === 0 ? (
-                <Empty
-                  description={
-                    resultViewScope === 'missing'
-                      ? '当前筛选下没有疑似未填课次。'
-                      : resultViewScope === 'unmatched'
-                        ? '当前筛选下没有无法对账课次。'
-                        : '当前筛选下没有可展示课次。'
-                  }
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                />
-              ) : (
-                renderJournalCardList(visibleJournalItems)
-              )}
-            </section>
-          </div>
+          {visibleJournalItems.length === 0 ? (
+            <div className="lecture-journal-view-empty">
+              <Empty
+                description={
+                  activeResultViewScope === 'missing'
+                    ? '当前筛选下没有需要补填的课次。'
+                    : activeResultViewScope === 'unmatched'
+                      ? '当前筛选下没有需要核对的课次。'
+                      : '当前筛选下没有课次。'
+                }
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+              />
+            </div>
+          ) : (
+            renderJournalCardList(visibleJournalItems)
+          )}
         </div>
       ) : null}
 
