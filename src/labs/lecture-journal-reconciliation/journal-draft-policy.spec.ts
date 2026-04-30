@@ -22,11 +22,16 @@ function buildItem(overrides: Partial<JournalDraftSourceItem>): JournalDraftSour
 
 function buildJournal(overrides: Partial<NonNullable<JournalDraftSourceItem['journal']>>) {
   return {
+    completeAndSummary: null,
     courseContent: null,
+    disciplineSituation: null,
     homeworkAssignment: null,
     lectureJournalDetailId: null,
     lectureJournalId: null,
+    problemAndSolve: null,
     rawJournal: null,
+    securityAndMaintain: null,
+    shift: null,
     statusCode: null,
     statusName: null,
     topicRecord: null,

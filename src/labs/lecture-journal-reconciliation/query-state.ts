@@ -1,12 +1,9 @@
-import type { AcademicTeachingLogPrefillResult, LectureJournalReconciliationResult } from './api';
+import type { AcademicTeachingLogPrefillResult } from './api';
 
 export type LectureJournalQueryState = {
-  isLoadingPrefill: boolean;
   isLoadingReconciliation: boolean;
-  prefillError: string | null;
   prefillResult: AcademicTeachingLogPrefillResult | null;
   queryError: string | null;
-  reconciliationResult: LectureJournalReconciliationResult | null;
 };
 
 export type LectureJournalQueryAction =
@@ -30,24 +27,17 @@ export type LectureJournalQueryAction =
       topicRecord: string;
       type: 'reconciliationSaveApplied';
     }
-  | { type: 'prefillStarted' }
-  | { result: LectureJournalReconciliationResult; type: 'reconciliationLoaded' }
   | { type: 'settled' }
   | { type: 'started' }
   | {
-      prefillError: string | null;
-      prefillResult: AcademicTeachingLogPrefillResult | null;
-      reconciliationResult: LectureJournalReconciliationResult;
+      prefillResult: AcademicTeachingLogPrefillResult;
       type: 'succeeded';
     };
 
 export const initialLectureJournalQueryState: LectureJournalQueryState = {
-  isLoadingPrefill: false,
   isLoadingReconciliation: false,
-  prefillError: null,
   prefillResult: null,
   queryError: null,
-  reconciliationResult: null,
 };
 
 function buildReconciliationItemKey(item: {
@@ -72,21 +62,6 @@ export function lectureJournalQueryReducer(
     return {
       ...initialLectureJournalQueryState,
       isLoadingReconciliation: true,
-    };
-  }
-
-  if (action.type === 'reconciliationLoaded') {
-    return {
-      ...state,
-      isLoadingReconciliation: false,
-      reconciliationResult: action.result,
-    };
-  }
-
-  if (action.type === 'prefillStarted') {
-    return {
-      ...state,
-      isLoadingPrefill: true,
     };
   }
 
@@ -125,37 +100,45 @@ export function lectureJournalQueryReducer(
   }
 
   if (action.type === 'reconciliationSaveApplied') {
-    if (!state.reconciliationResult) {
+    if (!state.prefillResult?.reconciliation) {
       return state;
     }
 
     return {
       ...state,
-      reconciliationResult: {
-        ...state.reconciliationResult,
-        items: state.reconciliationResult.items.map((currentItem) => {
-          if (buildReconciliationItemKey(currentItem) !== action.itemKey) {
-            return currentItem;
-          }
+      prefillResult: {
+        ...state.prefillResult,
+        reconciliation: {
+          ...state.prefillResult.reconciliation,
+          items: state.prefillResult.reconciliation.items.map((currentItem) => {
+            if (buildReconciliationItemKey(currentItem) !== action.itemKey) {
+              return currentItem;
+            }
 
-          return {
-            ...currentItem,
-            journal: {
-              courseContent: action.courseContent,
-              homeworkAssignment: action.homeworkAssignment,
-              lectureJournalDetailId:
-                action.lectureJournalDetailId ||
-                currentItem.journal?.lectureJournalDetailId ||
-                null,
-              lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
-              rawJournal: currentItem.journal?.rawJournal ?? null,
-              statusCode: currentItem.journal?.statusCode ?? null,
-              statusName: currentItem.journal?.statusName ?? null,
-              topicRecord: action.topicRecord || currentItem.journal?.topicRecord || null,
-            },
-            status: 'FILLED',
-          };
-        }),
+            return {
+              ...currentItem,
+              journal: {
+                completeAndSummary: currentItem.journal?.completeAndSummary ?? null,
+                courseContent: action.courseContent,
+                disciplineSituation: currentItem.journal?.disciplineSituation ?? null,
+                homeworkAssignment: action.homeworkAssignment,
+                lectureJournalDetailId:
+                  action.lectureJournalDetailId ||
+                  currentItem.journal?.lectureJournalDetailId ||
+                  null,
+                lectureJournalId: currentItem.journal?.lectureJournalId ?? null,
+                problemAndSolve: currentItem.journal?.problemAndSolve ?? null,
+                rawJournal: currentItem.journal?.rawJournal ?? null,
+                securityAndMaintain: currentItem.journal?.securityAndMaintain ?? null,
+                shift: currentItem.journal?.shift ?? null,
+                statusCode: currentItem.journal?.statusCode ?? null,
+                statusName: currentItem.journal?.statusName ?? null,
+                topicRecord: action.topicRecord || currentItem.journal?.topicRecord || null,
+              },
+              status: 'FILLED',
+            };
+          }),
+        },
       },
     };
   }
@@ -163,19 +146,15 @@ export function lectureJournalQueryReducer(
   if (action.type === 'succeeded') {
     return {
       ...state,
-      isLoadingPrefill: false,
       isLoadingReconciliation: false,
-      prefillError: action.prefillError,
       prefillResult: action.prefillResult,
       queryError: null,
-      reconciliationResult: action.reconciliationResult,
     };
   }
 
   if (action.type === 'failed') {
     return {
       ...state,
-      isLoadingPrefill: false,
       isLoadingReconciliation: false,
       queryError: action.message,
     };
@@ -184,7 +163,6 @@ export function lectureJournalQueryReducer(
   if (action.type === 'settled') {
     return {
       ...state,
-      isLoadingPrefill: false,
       isLoadingReconciliation: false,
     };
   }

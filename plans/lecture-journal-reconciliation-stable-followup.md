@@ -6,14 +6,14 @@
 
 ## 已收束
 
-- 查询流程已归并到 `query-workflow`：页面只负责 UI 状态，业务流程负责对账、session 续期、一体化预填分支和预填失败降级。
-- 一体化预填只在对账结果存在一体化课程时触发；没有一体化课的教师不请求预填。
+- 查询流程已归并到 `query-workflow`：页面只负责 UI 状态，业务流程只调用一次教学日志 prefill 读取，并从 `prefill.reconciliation` 获取对账结果。
+- 一体化预填由同一次 prefill 读取返回；没有一体化课时 `integratedPreviews` 为空数组。
 - 课程类别判断已收束到 lab 内共享 helper，避免页面和流程编排分别硬编码类别值。
-- 页面已拆出轻量预填 loading 状态；主对账结果可先展示，预填阶段继续锁住查询按钮并给出按钮状态。
+- 页面读取状态已收敛为单次查询 loading，不再拆成对账读取和一体化预填两个阶段。
 - 教学日志草稿默认值、已填日志回显、邻近已填日志模板复用与一体化预填字段映射已收束到 `journal-draft-policy`，避免 UI 改动破坏实训课默认“遵章守纪”等业务预填规则。
 - 保存流程已归并到 `save-workflow`：页面保留保存反馈、登录弹窗、卡片折叠和本地展示 patch；workflow 负责保存前校验、课程类型分支、保存 payload 构造、API 调用与 session 续期。
 - 结果视图筛选规则已收束到 `view-filter-policy`：隐藏未开课计数、0 项隐藏、单类别隐藏、active fallback 和课程类别筛选都由纯函数覆盖。
-- 对账结果和一体化预填结果到卡片 item 的映射已收束到 `editable-item-mapper`，页面不再内联拼装卡片数据结构。
+- `prefill.reconciliation.items` 和 `prefill.integratedPreviews` 到卡片 item 的映射已收束到 `editable-item-mapper`，页面不再内联拼装卡片数据结构。
 
 ## Stable 前再评估
 
@@ -26,9 +26,9 @@
 
 ## 当前验证重点
 
-- `query-workflow` 单测需要覆盖：无教师不预填、无一体化课不预填、预填失败不覆盖主结果、rolling token 顺序、过期 session 外抛、页面协作回调与 stale request 防护。
+- `query-workflow` 单测需要覆盖：单次 prefill 请求参数、rolling token 持久化、过期 session 外抛、stale request 防护。
 - `journal-draft-policy` 单测需要覆盖：实训课默认遵章守纪与安全保养、已填日志不被默认值覆盖、一体化默认班次和预填字段映射、未填课次复用邻近已填日志模板。
 - `save-workflow` 单测需要覆盖：理论课、实训课、一体化三类 payload，未来课程拦截，实训课课时合计校验，保存错误外抛，保存成功后 session 续期。
 - `view-filter-policy` 单测需要覆盖：隐藏未开课后的范围计数、范围 fallback、类别筛选隐藏规则和类别过滤。
 - `editable-item-mapper` 单测需要覆盖：实训计划字段映射、一体化预填字段映射和 mapper 缓存引用复用。
-- 页面回归重点：主对账结果先展示；预填期间按钮仍处于忙碌状态；预填失败只显示 warning，不清空主对账结果。
+- 页面回归重点：查询按钮只触发一次 prefill 请求；对账结果来自 `prefill.reconciliation`；一体化预估来自 `prefill.integratedPreviews`。

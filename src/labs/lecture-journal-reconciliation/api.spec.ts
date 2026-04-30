@@ -18,7 +18,6 @@ vi.mock('@/shared/graphql', () => ({
 import {
   fetchAcademicTeachingLogPrefillItems,
   fetchLectureJournalDepartmentOptions,
-  fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
@@ -90,105 +89,7 @@ describe('lecture-journal-reconciliation api', () => {
     );
   });
 
-  it('requests reconciliation with trimmed teacher filters', async () => {
-    const payload = {
-      expiresAt: '2026-04-25T12:00:00.000Z',
-      items: [],
-      journalCount: 8,
-      planCount: 1,
-      planDetailCount: 10,
-      upstreamSessionToken: 'rolling-token-003',
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      fetchLectureJournalReconciliation: payload,
-    });
-
-    await expect(
-      fetchLectureJournalReconciliation({
-        departmentId: ' ORG0302 ',
-        schoolYear: ' 2025 ',
-        semester: ' 2 ',
-        sessionToken: 'rolling-token-002',
-        staffId: ' STAFF-001 ',
-      }),
-    ).resolves.toEqual(payload);
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('fetchLectureJournalReconciliation'),
-      {
-        departmentId: 'ORG0302',
-        schoolYear: '2025',
-        semester: '2',
-        sessionToken: 'rolling-token-002',
-        staffId: 'STAFF-001',
-      },
-    );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('missingItems');
-  });
-
-  it('allows semester-level reconciliation without teacher filters', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
-      fetchLectureJournalReconciliation: {
-        expiresAt: '2026-04-25T12:00:00.000Z',
-        items: [],
-        journalCount: 0,
-        planCount: 0,
-        planDetailCount: 0,
-        upstreamSessionToken: 'rolling-token-004',
-      },
-    });
-
-    await fetchLectureJournalReconciliation({
-      departmentId: ' ',
-      schoolYear: '2025',
-      semester: '1',
-      sessionToken: 'rolling-token-003',
-      staffId: ' ',
-    });
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('fetchLectureJournalReconciliation'),
-      {
-        departmentId: undefined,
-        schoolYear: '2025',
-        semester: '1',
-        sessionToken: 'rolling-token-003',
-        staffId: undefined,
-      },
-    );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('missingItems');
-  });
-
-  it('rejects when departmentId and staffId are not paired', async () => {
-    await expect(
-      fetchLectureJournalReconciliation({
-        departmentId: 'ORG0302',
-        schoolYear: '2025',
-        semester: '2',
-        sessionToken: 'rolling-token-002',
-      }),
-    ).rejects.toThrow('departmentId 和 staffId 需要同时传入，或同时留空。');
-
-    expect(executeGraphQLMock).not.toHaveBeenCalled();
-  });
-
-  it('rethrows expired upstream session errors for relogin handling', async () => {
-    const expiredError = new Error('expired');
-
-    executeGraphQLMock.mockRejectedValueOnce(expiredError);
-    isExpiredUpstreamSessionErrorMock.mockReturnValueOnce(true);
-
-    await expect(
-      fetchLectureJournalReconciliation({
-        schoolYear: '2025',
-        semester: '2',
-        sessionToken: 'rolling-token-002',
-      }),
-    ).rejects.toBe(expiredError);
-  });
-
-  it('requests integrated teaching log prefill items with date window and plan fields', async () => {
+  it('requests teaching log prefill with reconciliation and integrated preview fields', async () => {
     const payload = {
       blockingIssue: null,
       canFill: true,
@@ -229,6 +130,33 @@ describe('lecture-journal-reconciliation api', () => {
           weekNumber: 10,
         },
       ],
+      items: [
+        {
+          calcEffect: {},
+          classroomName: 'A101',
+          courseCategory: '3',
+          courseName: '一体化课程',
+          date: '2026-04-30',
+          isEffective: true,
+          periodEnd: 4,
+          periodStart: 1,
+          scheduleId: 1,
+          semesterId: 202601,
+          slotId: 2,
+          staffId: 'STAFF-003',
+          teachingClassName: '一体化 1 班',
+        },
+      ],
+      reconciliation: {
+        filledCount: 1,
+        items: [],
+        journalCount: 1,
+        missingCount: 0,
+        planCount: 1,
+        planDetailCount: 1,
+        unmatchedPlanItemCount: 0,
+        unmatchedPlanItems: [],
+      },
       upstreamSessionToken: 'rolling-token-005',
       warnings: [],
     };
@@ -267,9 +195,19 @@ describe('lecture-journal-reconciliation api', () => {
       expect.stringContaining('teachingUnitAchievement'),
       expect.any(Object),
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('courseContent');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('homeworkAssignment');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('topicRecord');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('reconciliation');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('unmatchedPlanItems');
+  });
+
+  it('rejects prefill loading without staffId', async () => {
+    await expect(
+      fetchAcademicTeachingLogPrefillItems({
+        semesterId: 202601,
+        staffId: ' ',
+      }),
+    ).rejects.toThrow('staffId 为必填。');
+
+    expect(executeGraphQLMock).not.toHaveBeenCalled();
   });
 
   it('saves theory logs with sectionId only', async () => {

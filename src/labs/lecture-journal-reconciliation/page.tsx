@@ -39,6 +39,7 @@ import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstr
 
 import { lectureJournalReconciliationLabAccess } from './access';
 import {
+  type AcademicTeachingLogPrefillResult,
   type AcademicTeachingLogSaveResult,
   fetchLectureJournalDepartmentOptions,
   fetchTeacherDirectory,
@@ -111,6 +112,7 @@ const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '�
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
+const INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH = 'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH';
 const COURSE_CATEGORY_META = {
   '1': {
     accentClassName: 'lecture-journal-course-category-theory',
@@ -324,6 +326,75 @@ function buildDepartmentOptionLabel(department: LectureJournalDepartmentOption) 
   return `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`;
 }
 
+function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
+  return Boolean(value?.includes(INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH));
+}
+
+function hasIntegratedOccurrenceMismatchIssue(item: JournalEditableCardItem) {
+  return (
+    isIntegratedCourseCategory(item.courseCategory) &&
+    (isIntegratedOccurrenceMismatchText(item.blockingIssue) ||
+      item.warnings.some((warning) => isIntegratedOccurrenceMismatchText(warning)))
+  );
+}
+
+function resolveVisibleWarnings(item: JournalEditableCardItem, resultViewScope: ResultViewScope) {
+  if (resultViewScope === 'unmatched') {
+    return item.warnings;
+  }
+
+  return item.warnings.filter((warning) => !isIntegratedOccurrenceMismatchText(warning));
+}
+
+function resolveVisibleBlockingIssue(
+  item: JournalEditableCardItem,
+  resultViewScope: ResultViewScope,
+) {
+  if (resultViewScope === 'unmatched') {
+    return item.blockingIssue;
+  }
+
+  return isIntegratedOccurrenceMismatchText(item.blockingIssue) ? null : item.blockingIssue;
+}
+
+function resolvePageLevelPrefillWarnings(warnings: string[]) {
+  return warnings.filter((warning) => !isIntegratedOccurrenceMismatchText(warning));
+}
+
+function resolvePageLevelPrefillBlockingIssue(blockingIssue: string | null) {
+  return isIntegratedOccurrenceMismatchText(blockingIssue) ? null : blockingIssue;
+}
+
+function resolveFillAvailabilityIssue(
+  prefillResult: AcademicTeachingLogPrefillResult | null,
+  pageLevelBlockingIssue: string | null,
+  pageLevelWarnings: string[],
+) {
+  if (!prefillResult) {
+    return null;
+  }
+
+  if (pageLevelBlockingIssue) {
+    return pageLevelBlockingIssue;
+  }
+
+  const hasOnlyOccurrenceMismatchWarnings =
+    prefillResult.warnings.length > 0 && pageLevelWarnings.length === 0;
+  const hasOnlyOccurrenceMismatchBlockingIssue =
+    Boolean(prefillResult.blockingIssue) && !pageLevelBlockingIssue;
+
+  if (
+    !prefillResult.canFill &&
+    !hasOnlyOccurrenceMismatchWarnings &&
+    !hasOnlyOccurrenceMismatchBlockingIssue &&
+    (pageLevelWarnings.length > 0 || prefillResult.warnings.length === 0)
+  ) {
+    return '当前填写前检查未通过。';
+  }
+
+  return null;
+}
+
 function renderFieldLabel(label: string, config: FieldTipConfig) {
   return (
     <span className="lecture-journal-field-label">
@@ -499,6 +570,7 @@ function renderIntegratedCoverage(expectedOccurrences: LectureJournalExpectedOcc
 }
 
 type JournalDraftCardProps = {
+  fillAvailabilityIssue?: string | null;
   initialDraft: JournalDraft;
   isCollapsing?: boolean;
   item: JournalEditableCardItem;
@@ -507,9 +579,12 @@ type JournalDraftCardProps = {
   onUpdateDraft: (key: string, patch: JournalDraftPatch) => void;
   draft: JournalDraft;
   saveFeedback?: SaveFeedback;
+  visibleBlockingIssue?: string | null;
+  visibleWarnings?: string[];
 };
 
 const JournalDraftCard = memo(function JournalDraftCard({
+  fillAvailabilityIssue,
   initialDraft,
   isCollapsing = false,
   isSaving,
@@ -518,6 +593,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
   onUpdateDraft,
   draft,
   saveFeedback,
+  visibleBlockingIssue = item.blockingIssue,
+  visibleWarnings = item.warnings,
 }: JournalDraftCardProps) {
   const statusTone = resolveStatusTone(item.status);
   const sectionLabel = resolveSectionLabel(item.sectionName, item.sectionId);
@@ -537,6 +614,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     item.status === 'MISSING' &&
     item.canFill &&
     !item.blockingIssue &&
+    !hasIntegratedOccurrenceMismatchIssue(item) &&
     Boolean(normalizeOptionalString(item.lecturePlanDetailId || ''));
   const isIntegratedEditable = !isFutureCourse && isIntegratedSaveCandidate;
   const hasCompleteAndSummaryEdited =
@@ -602,7 +680,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
     (draft.lectureHours || 0) + (draft.practiceHours || 0) + (draft.demonstrationHours || 0);
   const hasPracticeHoursTotalMismatch =
     isPracticeCard && item.lessonHours !== null && practiceHoursTotal !== item.lessonHours;
-  const saveValidationError = resolveSaveValidationError(item, draft);
+  const saveValidationError = fillAvailabilityIssue ?? resolveSaveValidationError(item, draft);
   const showRestoreButton =
     !isFutureCourse &&
     (!isFilled || isIntegratedEditable) &&
@@ -628,8 +706,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
   const isSaveDisabled = Boolean(saveValidationError) || isSaving;
   const saveButtonTooltip = saveValidationError
     ? `不可保存：${saveValidationError}`
-    : item.warnings.length > 0
-      ? `可保存；提示：${item.warnings.join('；')}`
+    : visibleWarnings.length > 0
+      ? `可保存；提示：${visibleWarnings.join('；')}`
       : '保存至校园网。';
   const shouldRenderSaveAction = isIntegratedCard
     ? !isFutureCourse && isIntegratedSaveCandidate
@@ -762,16 +840,18 @@ const JournalDraftCard = memo(function JournalDraftCard({
       </div>
 
       {isIntegratedCard &&
-      (item.blockingIssue || item.warnings.length > 0 || item.expectedOccurrences.length > 0) ? (
+      (visibleBlockingIssue ||
+        visibleWarnings.length > 0 ||
+        item.expectedOccurrences.length > 0) ? (
         <div className="lecture-journal-integrated-state">
-          {item.blockingIssue ? (
-            <Alert message={`阻塞原因：${item.blockingIssue}`} showIcon type="error" />
+          {visibleBlockingIssue ? (
+            <Alert message={`阻塞原因：${visibleBlockingIssue}`} showIcon type="error" />
           ) : null}
-          {item.warnings.length > 0 ? (
+          {visibleWarnings.length > 0 ? (
             <Alert
               message={
                 <span className="lecture-journal-integrated-warning-text">
-                  {item.warnings.map((warning) => (
+                  {visibleWarnings.map((warning) => (
                     <Tag color="warning" key={warning}>
                       {warning}
                     </Tag>
@@ -1391,14 +1471,8 @@ export function LectureJournalReconciliationLabPage() {
     lectureJournalQueryReducer,
     initialLectureJournalQueryState,
   );
-  const {
-    isLoadingPrefill,
-    isLoadingReconciliation,
-    prefillError,
-    prefillResult,
-    queryError,
-    reconciliationResult,
-  } = queryState;
+  const { isLoadingReconciliation, prefillResult, queryError } = queryState;
+  const reconciliationResult = prefillResult?.reconciliation ?? null;
   const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('missing');
   const [courseCategoryFilter, setCourseCategoryFilter] = useState<CourseCategoryFilter>('ALL');
   const [futureCourseVisibility, setFutureCourseVisibility] =
@@ -1600,7 +1674,7 @@ export function LectureJournalReconciliationLabPage() {
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
   const normalizedDepartmentId = normalizeOptionalString(departmentId);
   const normalizedStaffId = normalizeOptionalString(staffId);
-  const hasFilterPairMismatch = Boolean(normalizedDepartmentId) !== Boolean(normalizedStaffId);
+  const hasMissingStaffFilter = !normalizedStaffId;
   const hasNoDepartmentOptions =
     !isLoadingDepartmentOptions && !departmentOptionsError && departmentOptions.length === 0;
   const teacherOptions = (directoryResult?.teachers ?? []).map((teacher) => ({
@@ -1629,7 +1703,10 @@ export function LectureJournalReconciliationLabPage() {
     ];
   }, [prefillIntegratedItems, reconciliationResult?.items]);
   const missingEditableItems = useMemo(
-    () => editableItems.filter((item) => item.status === 'MISSING'),
+    () =>
+      editableItems.filter(
+        (item) => item.status === 'MISSING' && !hasIntegratedOccurrenceMismatchIssue(item),
+      ),
     [editableItems],
   );
   const presentedMissingEditableItems = useMemo(() => {
@@ -1642,11 +1719,16 @@ export function LectureJournalReconciliationLabPage() {
     const transitionSavedItemKeySet = new Set(transitionSavedItemKeys);
 
     return editableItems.filter(
-      (item) => item.status === 'MISSING' || transitionSavedItemKeySet.has(item.key),
+      (item) =>
+        (item.status === 'MISSING' && !hasIntegratedOccurrenceMismatchIssue(item)) ||
+        transitionSavedItemKeySet.has(item.key),
     );
   }, [collapsingSavedItemKeys, editableItems, missingEditableItems, settlingSavedItemKeys]);
   const unmatchedEditableItems = useMemo(
-    () => editableItems.filter((item) => item.status === 'UNMATCHED'),
+    () =>
+      editableItems.filter(
+        (item) => item.status === 'UNMATCHED' || hasIntegratedOccurrenceMismatchIssue(item),
+      ),
     [editableItems],
   );
   const dateVisibleEditableItems = useMemo(() => {
@@ -1727,6 +1809,17 @@ export function LectureJournalReconciliationLabPage() {
 
     return reusedDrafts;
   }, [editableItems]);
+  const pageLevelPrefillWarnings = prefillResult
+    ? resolvePageLevelPrefillWarnings(prefillResult.warnings)
+    : [];
+  const pageLevelPrefillBlockingIssue = prefillResult
+    ? resolvePageLevelPrefillBlockingIssue(prefillResult.blockingIssue)
+    : null;
+  const fillAvailabilityIssue = resolveFillAvailabilityIssue(
+    prefillResult,
+    pageLevelPrefillBlockingIssue,
+    pageLevelPrefillWarnings,
+  );
 
   const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
     setJournalDrafts((current) => ({
@@ -1911,7 +2004,7 @@ export function LectureJournalReconciliationLabPage() {
       return;
     }
 
-    if (!selectedSemester) {
+    if (!selectedSemester || !normalizedStaffId) {
       return;
     }
 
@@ -1934,18 +2027,10 @@ export function LectureJournalReconciliationLabPage() {
       const result = await runLectureJournalReconciliationQueryWorkflow({
         departmentId: normalizedDepartmentId || undefined,
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
-        onReconciliationResult: (nextReconciliationResult) => {
-          dispatchQueryState({ result: nextReconciliationResult, type: 'reconciliationLoaded' });
-        },
-        onPrefillStart: () => {
-          dispatchQueryState({ type: 'prefillStarted' });
-        },
         persistSessionFromResult,
-        schoolYear: String(selectedSemester.schoolYear),
-        semester: String(selectedSemester.termNumber),
         semesterId: selectedSemester.id,
         session,
-        staffId: normalizedStaffId || undefined,
+        staffId: normalizedStaffId,
       });
 
       if (activeQueryRequestIdRef.current !== requestId) {
@@ -1953,9 +2038,7 @@ export function LectureJournalReconciliationLabPage() {
       }
 
       dispatchQueryState({
-        prefillError: result.prefillError,
         prefillResult: result.prefillResult,
-        reconciliationResult: result.reconciliationResult,
         type: 'succeeded',
       });
     } catch (error) {
@@ -2051,6 +2134,7 @@ export function LectureJournalReconciliationLabPage() {
                 draft={
                   journalDrafts[item.key] ?? initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT
                 }
+                fillAvailabilityIssue={fillAvailabilityIssue}
                 initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
                 isCollapsing={isCollapsing}
                 isSaving={savingItemKey === item.key}
@@ -2058,6 +2142,8 @@ export function LectureJournalReconciliationLabPage() {
                 onSave={handleSaveToCampus}
                 onUpdateDraft={updateJournalDraft}
                 saveFeedback={saveFeedbackByKey[item.key]}
+                visibleBlockingIssue={resolveVisibleBlockingIssue(item, activeResultViewScope)}
+                visibleWarnings={resolveVisibleWarnings(item, activeResultViewScope)}
               />
             </div>
           );
@@ -2078,7 +2164,7 @@ export function LectureJournalReconciliationLabPage() {
       </div>
 
       <Alert
-        description="查询时只要求学期。若要按教师过滤，departmentId 和 staffId 必须同时传入；两者都留空则按整学期全量对账。"
+        description="查询时需要选择学期并填写教师 staffId。departmentId 仅用于院系范围过滤；对账结果来自同一次教学日志 prefill 读取。"
         message="接口口径"
         showIcon
         type="info"
@@ -2180,12 +2266,8 @@ export function LectureJournalReconciliationLabPage() {
               <Alert message={departmentOptionsError} showIcon type="error" />
             ) : null}
             {directoryError ? <Alert message={directoryError} showIcon type="error" /> : null}
-            {hasFilterPairMismatch ? (
-              <Alert
-                message="按教师过滤时，departmentId 和 staffId 需要同时填写。"
-                showIcon
-                type="warning"
-              />
+            {hasMissingStaffFilter ? (
+              <Alert message="查询教学日志对账需要填写教师 staffId。" showIcon type="warning" />
             ) : null}
 
             <div className="flex flex-wrap gap-3">
@@ -2199,18 +2281,13 @@ export function LectureJournalReconciliationLabPage() {
               </Button>
               <Button
                 type="primary"
-                disabled={
-                  !selectedSemester ||
-                  hasFilterPairMismatch ||
-                  isLoadingReconciliation ||
-                  isLoadingPrefill
-                }
-                loading={isLoadingReconciliation || isLoadingPrefill}
+                disabled={!selectedSemester || hasMissingStaffFilter || isLoadingReconciliation}
+                loading={isLoadingReconciliation}
                 onClick={() => {
                   void runQueryAction();
                 }}
               >
-                {isLoadingPrefill ? '补充预填中' : '查询对账'}
+                查询对账
               </Button>
               <Button
                 disabled={!normalizedDepartmentId && !normalizedStaffId}
@@ -2244,15 +2321,20 @@ export function LectureJournalReconciliationLabPage() {
       </div>
 
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
-      {prefillError ? (
+      {pageLevelPrefillBlockingIssue ? (
+        <Alert message={pageLevelPrefillBlockingIssue} showIcon type="error" />
+      ) : null}
+      {prefillResult && !pageLevelPrefillBlockingIssue && fillAvailabilityIssue ? (
+        <Alert message="当前填写前检查未通过。" showIcon type="error" />
+      ) : null}
+      {pageLevelPrefillWarnings.length ? (
         <Alert
-          description="主对账结果已经返回；当前只缺少一体化教学日志的补充预填信息。"
-          message={prefillError}
+          description={pageLevelPrefillWarnings.join('；')}
+          message="填写前检查提示"
           showIcon
           type="warning"
         />
       ) : null}
-
       {isLoadingReconciliation ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!isLoadingReconciliation && reconciliationResult ? (

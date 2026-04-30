@@ -1,35 +1,35 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AcademicTeachingLogPrefillResult, LectureJournalReconciliationResult } from './api';
+import type { AcademicTeachingLogPrefillResult } from './api';
 import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
 
 describe('lecture-journal-reconciliation query state', () => {
-  const reconciliationResult = {
-    expiresAt: '2026-04-30T13:00:00.000Z',
-    items: [],
-    journalCount: 5,
-    planCount: 4,
-    planDetailCount: 10,
-    upstreamSessionToken: 'token-002',
-  };
   const prefillResult = {
     blockingIssue: null,
     canFill: true,
     expiresAt: '2026-04-30T13:30:00.000Z',
     integratedPreviews: [],
+    items: [],
+    reconciliation: {
+      filledCount: 0,
+      items: [],
+      journalCount: 0,
+      missingCount: 0,
+      planCount: 0,
+      planDetailCount: 0,
+      unmatchedPlanItemCount: 0,
+      unmatchedPlanItems: [],
+    },
     upstreamSessionToken: 'token-003',
     warnings: [],
-  };
+  } satisfies AcademicTeachingLogPrefillResult;
 
   it('resets stale query data when a new query starts', () => {
     const state = lectureJournalQueryReducer(
       {
-        isLoadingPrefill: true,
         isLoadingReconciliation: false,
-        prefillError: '旧预填错误',
         prefillResult,
         queryError: '旧查询错误',
-        reconciliationResult,
       },
       { type: 'started' },
     );
@@ -40,38 +40,15 @@ describe('lecture-journal-reconciliation query state', () => {
     });
   });
 
-  it('keeps the main reconciliation result visible while prefill keeps loading', () => {
-    const loadedState = lectureJournalQueryReducer(initialLectureJournalQueryState, {
-      result: reconciliationResult,
-      type: 'reconciliationLoaded',
-    });
-    const prefillLoadingState = lectureJournalQueryReducer(loadedState, {
-      type: 'prefillStarted',
-    });
-
-    expect(prefillLoadingState).toEqual({
-      ...initialLectureJournalQueryState,
-      isLoadingPrefill: true,
-      reconciliationResult,
-    });
-  });
-
-  it('keeps the main reconciliation result when prefill loading fails', () => {
-    const loadedState = lectureJournalQueryReducer(initialLectureJournalQueryState, {
-      result: reconciliationResult,
-      type: 'reconciliationLoaded',
-    });
-    const finalState = lectureJournalQueryReducer(loadedState, {
-      prefillError: '暂时无法加载一体化预填结果。',
-      prefillResult: null,
-      reconciliationResult,
+  it('stores prefill and reconciliation from the single query result', () => {
+    const state = lectureJournalQueryReducer(initialLectureJournalQueryState, {
+      prefillResult,
       type: 'succeeded',
     });
 
-    expect(finalState).toEqual({
+    expect(state).toEqual({
       ...initialLectureJournalQueryState,
-      prefillError: '暂时无法加载一体化预填结果。',
-      reconciliationResult,
+      prefillResult,
     });
   });
 
@@ -80,9 +57,7 @@ describe('lecture-journal-reconciliation query state', () => {
       {
         ...initialLectureJournalQueryState,
         prefillResult: {
-          blockingIssue: null,
-          canFill: true,
-          expiresAt: null,
+          ...prefillResult,
           integratedPreviews: [
             {
               lecturePlanDetailId: 'PLAN-DETAIL-001',
@@ -90,8 +65,6 @@ describe('lecture-journal-reconciliation query state', () => {
               matchedLectureJournalDetailId: null,
             },
           ],
-          upstreamSessionToken: null,
-          warnings: [],
         } as unknown as AcademicTeachingLogPrefillResult,
       },
       {
@@ -116,27 +89,26 @@ describe('lecture-journal-reconciliation query state', () => {
     );
   });
 
-  it('applies reconciliation save results by the same item key used by cards', () => {
+  it('applies reconciliation save results inside prefill.reconciliation', () => {
     const state = lectureJournalQueryReducer(
       {
         ...initialLectureJournalQueryState,
-        reconciliationResult: {
-          expiresAt: '2026-04-30T13:00:00.000Z',
-          items: [
-            {
-              journal: null,
-              lecturePlanDetailId: 'PLAN-DETAIL-001',
-              lecturePlanId: 'PLAN-001',
-              matchKey: 'MATCH-001',
-              reason: null,
-              status: 'MISSING',
-            },
-          ],
-          journalCount: 0,
-          planCount: 1,
-          planDetailCount: 1,
-          upstreamSessionToken: 'token-002',
-        } as unknown as LectureJournalReconciliationResult,
+        prefillResult: {
+          ...prefillResult,
+          reconciliation: {
+            ...prefillResult.reconciliation,
+            items: [
+              {
+                journal: null,
+                lecturePlanDetailId: 'PLAN-DETAIL-001',
+                lecturePlanId: 'PLAN-001',
+                matchKey: 'MATCH-001',
+                reason: null,
+                status: 'MISSING',
+              },
+            ],
+          },
+        } as unknown as AcademicTeachingLogPrefillResult,
       },
       {
         courseContent: '课程内容',
@@ -148,7 +120,7 @@ describe('lecture-journal-reconciliation query state', () => {
       },
     );
 
-    expect(state.reconciliationResult?.items[0]).toEqual(
+    expect(state.prefillResult?.reconciliation?.items[0]).toEqual(
       expect.objectContaining({
         journal: expect.objectContaining({
           courseContent: '课程内容',

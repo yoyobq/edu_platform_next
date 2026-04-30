@@ -17,10 +17,6 @@ type DepartmentOptionsResponse = {
   departments: LectureJournalDepartmentOption[];
 };
 
-type LectureJournalReconciliationResponse = {
-  fetchLectureJournalReconciliation: LectureJournalReconciliationResult;
-};
-
 type AcademicTeachingLogPrefillResponse = {
   listAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
 };
@@ -61,11 +57,16 @@ export type TeacherDirectoryResult = {
 export type LectureJournalReconciliationStatus = 'FILLED' | 'MISSING' | 'UNMATCHED';
 
 export type MatchedLectureJournalSummary = {
+  completeAndSummary: string | null;
   courseContent: string | null;
+  disciplineSituation: string | null;
   homeworkAssignment: string | null;
   lectureJournalDetailId: string | null;
   lectureJournalId: string | null;
+  problemAndSolve: string | null;
   rawJournal: unknown;
+  securityAndMaintain: string | null;
+  shift: string | null;
   statusCode: string | null;
   statusName: string | null;
   topicRecord: string | null;
@@ -118,26 +119,37 @@ export type AcademicIntegratedTeachingLogPrefillPreview = {
 export type LectureJournalReconciliationItem = {
   blockingIssue: string | null;
   canFill: boolean;
+  completeAndSummary: string | null;
   courseCategory: string | null;
   courseContent: string | null;
   courseId: string | null;
   courseName: string | null;
   dayOfWeek: number | null;
   demonstrationHours: number | null;
+  disciplineSituation: string | null;
   expectedOccurrences: LectureJournalExpectedOccurrence[];
   homework: string | null;
   journal: MatchedLectureJournalSummary | null;
+  learningSessionContent: string | null;
+  learningSessionNo: number | null;
+  learningSessionTarget: string | null;
+  learningTaskName: string | null;
+  learningTaskNo: number | null;
+  learningTaskText: string | null;
   lectureHours: number | null;
   lecturePlanDetailId: string | null;
   lecturePlanId: string | null;
   lessonHours: number | null;
   matchKey: string | null;
   practiceHours: number | null;
+  problemAndSolve: string | null;
   reason: string | null;
   schoolYear: string | null;
   sectionId: string | null;
   sectionName: string | null;
+  securityAndMaintain: string | null;
   semester: string | null;
+  shift: string | null;
   status: LectureJournalReconciliationStatus;
   teacherId: string | null;
   teacherName: string | null;
@@ -145,18 +157,51 @@ export type LectureJournalReconciliationItem = {
   teachingClassId: string | null;
   teachingClassName: string | null;
   teachingDate: string | null;
+  teachingUnitAchievement: string | null;
+  teachingUnitContent: string | null;
+  teachingUnitName: string | null;
+  teachingUnitNo: number | null;
+  teachingUnitTarget: string | null;
+  teachingUnitText: string | null;
   topicName: string | null;
   warnings: string[];
   weekNumber: number | null;
 };
 
+export type UnmatchedLectureJournalPlanItem = {
+  lecturePlanDetailId: string | null;
+  lecturePlanId: string | null;
+  rawPlan: unknown;
+  rawPlanDetail: unknown;
+  reason: string;
+  teachingClassId: string | null;
+};
+
 export type LectureJournalReconciliationResult = {
-  expiresAt: string;
+  filledCount: number;
   items: LectureJournalReconciliationItem[];
   journalCount: number;
+  missingCount: number;
   planCount: number;
   planDetailCount: number;
-  upstreamSessionToken: string;
+  unmatchedPlanItemCount: number;
+  unmatchedPlanItems: UnmatchedLectureJournalPlanItem[];
+};
+
+export type AcademicTeachingLogPrefillItem = {
+  calcEffect: unknown;
+  classroomName: string | null;
+  courseCategory: string | null;
+  courseName: string | null;
+  date: string;
+  isEffective: boolean;
+  periodEnd: number;
+  periodStart: number;
+  scheduleId: number;
+  semesterId: number;
+  slotId: number;
+  staffId: string;
+  teachingClassName: string;
 };
 
 export type AcademicTeachingLogPrefillResult = {
@@ -164,16 +209,10 @@ export type AcademicTeachingLogPrefillResult = {
   canFill: boolean;
   expiresAt: string | null;
   integratedPreviews: AcademicIntegratedTeachingLogPrefillPreview[];
+  items: AcademicTeachingLogPrefillItem[];
+  reconciliation: LectureJournalReconciliationResult | null;
   upstreamSessionToken: string | null;
   warnings: string[];
-};
-
-export type FetchLectureJournalReconciliationInput = {
-  departmentId?: string;
-  schoolYear: string;
-  semester: string;
-  sessionToken: string;
-  staffId?: string;
 };
 
 export type FetchAcademicTeachingLogPrefillInput = {
@@ -287,80 +326,6 @@ const DEPARTMENTS_QUERY = `
   }
 `;
 
-const FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY = `
-  query FetchLectureJournalReconciliation(
-    $departmentId: String
-    $schoolYear: String!
-    $semester: String!
-    $sessionToken: String!
-    $staffId: String
-  ) {
-    fetchLectureJournalReconciliation(
-      departmentId: $departmentId
-      schoolYear: $schoolYear
-      semester: $semester
-      sessionToken: $sessionToken
-      staffId: $staffId
-    ) {
-      expiresAt
-      items {
-        blockingIssue
-        canFill
-        courseCategory
-        courseContent
-        courseId
-        courseName
-        dayOfWeek
-        demonstrationHours
-        expectedOccurrences {
-          date
-          dayOfWeek
-          lessonHours
-          periodEnd
-          periodStart
-          weekNumber
-        }
-        homework
-        journal {
-          courseContent
-          homeworkAssignment
-          lectureJournalDetailId
-          lectureJournalId
-          rawJournal
-          statusCode
-          statusName
-          topicRecord
-        }
-        lectureHours
-        lecturePlanDetailId
-        lecturePlanId
-        lessonHours
-        matchKey
-        practiceHours
-        reason
-        schoolYear
-        sectionId
-        sectionName
-        semester
-        status
-        teacherId
-        teacherName
-        teachingChapterContent
-        teachingClassId
-        teachingClassName
-        teachingDate
-        topicName
-        warnings
-        weekNumber
-      }
-      journalCount
-      planCount
-      planDetailCount
-      upstreamSessionToken
-    }
-  }
-`;
-
 const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
   query ListAcademicTeachingLogPrefillItems(
     $departmentId: String
@@ -421,6 +386,109 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
         teachingUnitText
         warnings
         weekNumber
+      }
+      items {
+        calcEffect
+        classroomName
+        courseCategory
+        courseName
+        date
+        isEffective
+        periodEnd
+        periodStart
+        scheduleId
+        semesterId
+        slotId
+        staffId
+        teachingClassName
+      }
+      reconciliation {
+        filledCount
+        items {
+          blockingIssue
+          canFill
+          completeAndSummary
+          courseCategory
+          courseContent
+          courseId
+          courseName
+          dayOfWeek
+          demonstrationHours
+          disciplineSituation
+          expectedOccurrences {
+            date
+            dayOfWeek
+            lessonHours
+            periodEnd
+            periodStart
+            weekNumber
+          }
+          homework
+          journal {
+            completeAndSummary
+            courseContent
+            disciplineSituation
+            homeworkAssignment
+            lectureJournalDetailId
+            lectureJournalId
+            problemAndSolve
+            rawJournal
+            securityAndMaintain
+            shift
+            statusCode
+            statusName
+            topicRecord
+          }
+          learningSessionContent
+          learningSessionNo
+          learningSessionTarget
+          learningTaskName
+          learningTaskNo
+          learningTaskText
+          lectureHours
+          lecturePlanDetailId
+          lecturePlanId
+          lessonHours
+          matchKey
+          practiceHours
+          problemAndSolve
+          reason
+          schoolYear
+          sectionId
+          sectionName
+          securityAndMaintain
+          semester
+          shift
+          status
+          teacherId
+          teacherName
+          teachingChapterContent
+          teachingClassId
+          teachingClassName
+          teachingDate
+          teachingUnitAchievement
+          teachingUnitContent
+          teachingUnitName
+          teachingUnitNo
+          teachingUnitTarget
+          teachingUnitText
+          topicName
+          warnings
+          weekNumber
+        }
+        journalCount
+        missingCount
+        planCount
+        planDetailCount
+        unmatchedPlanItemCount
+        unmatchedPlanItems {
+          lecturePlanDetailId
+          lecturePlanId
+          rawPlan
+          rawPlanDetail
+          reason
+          teachingClassId
+        }
       }
       upstreamSessionToken
       warnings
@@ -492,25 +560,6 @@ function normalizeRequiredString(value: string, fieldName: string) {
 
 function normalizeOptionalNumber(value?: number) {
   return typeof value === 'number' ? value : undefined;
-}
-
-function normalizeFetchLectureJournalReconciliationInput(
-  input: FetchLectureJournalReconciliationInput,
-) {
-  const departmentId = normalizeOptionalString(input.departmentId);
-  const staffId = normalizeOptionalString(input.staffId);
-
-  if ((departmentId && !staffId) || (!departmentId && staffId)) {
-    throw new Error('departmentId 和 staffId 需要同时传入，或同时留空。');
-  }
-
-  return {
-    departmentId,
-    schoolYear: String(input.schoolYear || '').trim(),
-    semester: String(input.semester || '').trim(),
-    sessionToken: input.sessionToken,
-    staffId,
-  };
 }
 
 function normalizeFetchAcademicTeachingLogPrefillInput(
@@ -648,31 +697,6 @@ export async function fetchLectureJournalDepartmentOptions() {
     return response.departments;
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载院系列表。'));
-  }
-}
-
-export async function fetchLectureJournalReconciliation(
-  input: FetchLectureJournalReconciliationInput,
-) {
-  try {
-    const response = await requestGraphQL<
-      LectureJournalReconciliationResponse,
-      FetchLectureJournalReconciliationInput & {
-        departmentId?: string;
-        staffId?: string;
-      }
-    >(
-      FETCH_LECTURE_JOURNAL_RECONCILIATION_QUERY,
-      normalizeFetchLectureJournalReconciliationInput(input),
-    );
-
-    return response.fetchLectureJournalReconciliation;
-  } catch (error) {
-    if (isExpiredUpstreamSessionError(error)) {
-      throw error;
-    }
-
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
   }
 }
 
