@@ -19,6 +19,8 @@ type PersistRollingSession = (
 
 type QueryWorkflowParams = {
   departmentId?: string;
+  isCurrent?: () => boolean;
+  onReconciliationResult?: (result: LectureJournalReconciliationResult) => void;
   persistRollingSession: PersistRollingSession;
   schoolYear: string;
   semester: string;
@@ -33,6 +35,10 @@ type QueryWorkflowOutcome = {
   reconciliationResult: LectureJournalReconciliationResult;
 };
 
+function hasIntegratedReconciliationItems(result: LectureJournalReconciliationResult) {
+  return result.items.some((item) => item.courseCategory === '3');
+}
+
 export async function runLectureJournalReconciliationQueryWorkflow(
   params: QueryWorkflowParams,
 ): Promise<QueryWorkflowOutcome> {
@@ -43,12 +49,23 @@ export async function runLectureJournalReconciliationQueryWorkflow(
     sessionToken: params.session.upstreamSessionToken,
     staffId: params.staffId,
   });
+
+  if (params.isCurrent && !params.isCurrent()) {
+    return {
+      prefillError: null,
+      prefillResult: null,
+      reconciliationResult,
+    };
+  }
+
   const nextSession = params.persistRollingSession(params.session, {
     expiresAt: reconciliationResult.expiresAt,
     upstreamSessionToken: reconciliationResult.upstreamSessionToken,
   });
 
-  if (!params.staffId) {
+  params.onReconciliationResult?.(reconciliationResult);
+
+  if (!params.staffId || !hasIntegratedReconciliationItems(reconciliationResult)) {
     return {
       prefillError: null,
       prefillResult: null,
@@ -63,6 +80,14 @@ export async function runLectureJournalReconciliationQueryWorkflow(
       staffId: params.staffId,
       upstreamSessionToken: reconciliationResult.upstreamSessionToken,
     });
+
+    if (params.isCurrent && !params.isCurrent()) {
+      return {
+        prefillError: null,
+        prefillResult: null,
+        reconciliationResult,
+      };
+    }
 
     if (prefillResult.upstreamSessionToken && prefillResult.expiresAt) {
       params.persistRollingSession(nextSession, {

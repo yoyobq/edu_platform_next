@@ -32,9 +32,7 @@ import {
   type AcademicIntegratedTeachingLogPrefillPreview,
   type AcademicTeachingLogPrefillResult,
   type AcademicTeachingLogSaveResult,
-  fetchAcademicTeachingLogPrefillItems,
   fetchLectureJournalDepartmentOptions,
-  fetchLectureJournalReconciliation,
   fetchTeacherDirectory,
   isExpiredUpstreamSessionError,
   type LectureJournalDepartmentOption,
@@ -49,6 +47,7 @@ import {
   type TeacherDirectoryResult,
 } from './api';
 import { lectureJournalReconciliationLabMeta } from './meta';
+import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 
 import './page.css';
 
@@ -2141,11 +2140,14 @@ export function LectureJournalReconciliationLabPage() {
   }, [loginForm, storedSession?.upstreamLoginId]);
 
   useEffect(() => {
+    const savedCardCollapseAnimationFrames = savedCardCollapseAnimationFramesRef.current;
+    const savedCardCollapseTimeouts = savedCardCollapseTimeoutsRef.current;
+
     return () => {
-      Object.values(savedCardCollapseAnimationFramesRef.current).forEach((frameId) => {
+      Object.values(savedCardCollapseAnimationFrames).forEach((frameId) => {
         window.cancelAnimationFrame(frameId);
       });
-      Object.values(savedCardCollapseTimeoutsRef.current).forEach((timeoutId) => {
+      Object.values(savedCardCollapseTimeouts).forEach((timeoutId) => {
         window.clearTimeout(timeoutId);
       });
     };
@@ -2673,11 +2675,18 @@ export function LectureJournalReconciliationLabPage() {
     setPrefillResult(null);
 
     try {
-      const result = await fetchLectureJournalReconciliation({
+      const result = await runLectureJournalReconciliationQueryWorkflow({
         departmentId: normalizedDepartmentId || undefined,
+        isCurrent: () => activeQueryRequestIdRef.current === requestId,
+        onReconciliationResult: (nextReconciliationResult) => {
+          setReconciliationResult(nextReconciliationResult);
+          setIsLoadingReconciliation(false);
+        },
+        persistRollingSession,
         schoolYear: String(selectedSemester.schoolYear),
         semester: String(selectedSemester.termNumber),
-        sessionToken: session.upstreamSessionToken,
+        semesterId: selectedSemester.id,
+        session,
         staffId: normalizedStaffId || undefined,
       });
 
@@ -2685,57 +2694,10 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
-      const nextSession = persistRollingSession(session, {
-        expiresAt: result.expiresAt,
-        upstreamSessionToken: result.upstreamSessionToken,
-      });
-
-      setReconciliationResult(result);
+      setReconciliationResult(result.reconciliationResult);
+      setPrefillResult(result.prefillResult);
+      setPrefillError(result.prefillError);
       setIsLoadingReconciliation(false);
-
-      if (!normalizedStaffId) {
-        return;
-      }
-
-      const hasIntegratedItems = result.items.some((item) =>
-        isIntegratedCourseCategory(item.courseCategory),
-      );
-
-      if (!hasIntegratedItems) {
-        return;
-      }
-
-      try {
-        const nextPrefillResult = await fetchAcademicTeachingLogPrefillItems({
-          departmentId: normalizedDepartmentId || undefined,
-          semesterId: selectedSemester.id,
-          staffId: normalizedStaffId,
-          upstreamSessionToken: result.upstreamSessionToken,
-        });
-
-        if (activeQueryRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        if (nextPrefillResult.upstreamSessionToken && nextPrefillResult.expiresAt) {
-          persistRollingSession(nextSession, {
-            expiresAt: nextPrefillResult.expiresAt,
-            upstreamSessionToken: nextPrefillResult.upstreamSessionToken,
-          });
-        }
-
-        setPrefillResult(nextPrefillResult);
-      } catch (error) {
-        if (activeQueryRequestIdRef.current !== requestId) {
-          return;
-        }
-
-        if (isExpiredUpstreamSessionError(error)) {
-          throw error;
-        }
-
-        setPrefillError(resolveUpstreamErrorMessage(error, '暂时无法加载一体化预填结果。'));
-      }
     } catch (error) {
       if (activeQueryRequestIdRef.current !== requestId) {
         return;

@@ -80,7 +80,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
   it('keeps the main reconciliation result when prefill loading fails', async () => {
     const reconciliationResult = {
       expiresAt: '2026-04-30T13:00:00.000Z',
-      items: [{ courseName: '理论课' }],
+      items: [{ courseCategory: '3', courseName: '一体化' }],
       journalCount: 5,
       planCount: 4,
       planDetailCount: 10,
@@ -111,10 +111,42 @@ describe('lecture-journal-reconciliation query workflow', () => {
     expect(persistRollingSession).toHaveBeenCalledTimes(1);
   });
 
+  it('skips prefill loading when the staff has no integrated courses', async () => {
+    const reconciliationResult = {
+      expiresAt: '2026-04-30T13:00:00.000Z',
+      items: [{ courseCategory: '1', courseName: '理论课' }],
+      journalCount: 5,
+      planCount: 4,
+      planDetailCount: 10,
+      upstreamSessionToken: 'token-002',
+    };
+
+    fetchLectureJournalReconciliationMock.mockResolvedValueOnce(reconciliationResult);
+
+    await expect(
+      runLectureJournalReconciliationQueryWorkflow({
+        departmentId: 'ORG0302',
+        persistRollingSession,
+        schoolYear: '2025',
+        semester: '2',
+        semesterId: 202502,
+        session,
+        staffId: 'STAFF-001',
+      }),
+    ).resolves.toEqual({
+      prefillError: null,
+      prefillResult: null,
+      reconciliationResult,
+    });
+
+    expect(fetchAcademicTeachingLogPrefillItemsMock).not.toHaveBeenCalled();
+    expect(persistRollingSession).toHaveBeenCalledTimes(1);
+  });
+
   it('persists the latest rolling token when prefill succeeds', async () => {
     const reconciliationResult = {
       expiresAt: '2026-04-30T13:00:00.000Z',
-      items: [],
+      items: [{ courseCategory: '3', courseName: '一体化' }],
       journalCount: 5,
       planCount: 4,
       planDetailCount: 10,
@@ -169,7 +201,7 @@ describe('lecture-journal-reconciliation query workflow', () => {
   it('rethrows expired upstream session errors from prefill loading', async () => {
     const reconciliationResult = {
       expiresAt: '2026-04-30T13:00:00.000Z',
-      items: [],
+      items: [{ courseCategory: '3', courseName: '一体化' }],
       journalCount: 5,
       planCount: 4,
       planDetailCount: 10,
