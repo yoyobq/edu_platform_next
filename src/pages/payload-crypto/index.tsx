@@ -1,7 +1,14 @@
 import { useLoaderData } from 'react-router';
 
 import { Error403 } from '@/features/error-feedback';
-import { PayloadCryptoPageContent } from '@/features/payload-crypto';
+import {
+  clearPayloadCryptoHistory,
+  PayloadCryptoPageContent,
+  readPayloadCryptoHistory,
+  requestPayloadDecryption,
+  requestPayloadEncryption,
+  writePayloadCryptoHistory,
+} from '@/features/payload-crypto';
 
 export function PayloadCryptoPage() {
   const loaderData = useLoaderData() as { accountId?: number; isForbidden?: boolean } | null;
@@ -10,5 +17,14 @@ export function PayloadCryptoPage() {
     return <Error403 />;
   }
 
-  return <PayloadCryptoPageContent currentAccountId={loaderData?.accountId ?? null} />;
+  return (
+    <PayloadCryptoPageContent
+      clearHistory={clearPayloadCryptoHistory}
+      currentAccountId={loaderData?.accountId ?? null}
+      decryptPayload={requestPayloadDecryption}
+      encryptPayload={requestPayloadEncryption}
+      readHistory={readPayloadCryptoHistory}
+      writeHistory={writePayloadCryptoHistory}
+    />
+  );
 }

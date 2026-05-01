@@ -26,15 +26,6 @@ import {
   type PayloadCryptoHistoryItem,
   upsertPayloadCryptoHistoryItem,
 } from '../application/history';
-import {
-  requestPayloadDecryption,
-  requestPayloadEncryption,
-} from '../infrastructure/payload-crypto-api';
-import {
-  clearPayloadCryptoHistory,
-  readPayloadCryptoHistory,
-  writePayloadCryptoHistory,
-} from '../infrastructure/payload-crypto-history-storage';
 
 const PAYLOAD_CRYPTO_APP_ENVS = ['dev', 'prod'] as const;
 const PAYLOAD_CRYPTO_ACCESS_LEVELS = ['admin'] as const;
@@ -88,15 +79,25 @@ function getHistoryDisplayName(item: PayloadCryptoHistoryItem) {
 }
 
 type PayloadCryptoPageContentProps = {
+  clearHistory: () => void;
   currentAccountId: number | null;
+  decryptPayload: (payload: string) => Promise<string>;
+  encryptPayload: (payload: string) => Promise<string>;
+  readHistory: () => PayloadCryptoHistoryItem[];
+  writeHistory: (items: readonly PayloadCryptoHistoryItem[]) => void;
 };
 
-export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPageContentProps) {
+export function PayloadCryptoPageContent({
+  clearHistory,
+  currentAccountId,
+  decryptPayload,
+  encryptPayload,
+  readHistory,
+  writeHistory,
+}: PayloadCryptoPageContentProps) {
   const [input, setInput] = useState('');
   const [result, setResult] = useState('');
-  const [historyItems, setHistoryItems] = useState<PayloadCryptoHistoryItem[]>(() =>
-    readPayloadCryptoHistory(),
-  );
+  const [historyItems, setHistoryItems] = useState<PayloadCryptoHistoryItem[]>(() => readHistory());
   const [renamingHistoryItem, setRenamingHistoryItem] = useState<PayloadCryptoHistoryItem | null>(
     null,
   );
@@ -153,20 +154,23 @@ export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPage
     };
   }, []);
 
-  const saveHistoryItem = useCallback((payload: string) => {
-    setHistoryItems((currentItems) => {
-      const nextItem = buildPayloadCryptoHistoryItem({
-        existingItem: currentItems.find(
-          (item) => item.id === `${getPayloadOperation(payload)}:${payload}`,
-        ),
-        payload,
-      });
-      const nextItems = upsertPayloadCryptoHistoryItem(currentItems, nextItem);
+  const saveHistoryItem = useCallback(
+    (payload: string) => {
+      setHistoryItems((currentItems) => {
+        const nextItem = buildPayloadCryptoHistoryItem({
+          existingItem: currentItems.find(
+            (item) => item.id === `${getPayloadOperation(payload)}:${payload}`,
+          ),
+          payload,
+        });
+        const nextItems = upsertPayloadCryptoHistoryItem(currentItems, nextItem);
 
-      writePayloadCryptoHistory(nextItems);
-      return nextItems;
-    });
-  }, []);
+        writeHistory(nextItems);
+        return nextItems;
+      });
+    },
+    [writeHistory],
+  );
 
   const processPayload = useCallback(
     async (rawInput: string) => {
@@ -180,8 +184,8 @@ export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPage
       try {
         const nextResult =
           getPayloadOperation(normalizedPayload) === 'encrypt'
-            ? await requestPayloadEncryption(normalizedPayload)
-            : await requestPayloadDecryption(normalizedPayload);
+            ? await encryptPayload(normalizedPayload)
+            : await decryptPayload(normalizedPayload);
 
         setResult(nextResult);
         saveHistoryItem(normalizedPayload);
@@ -189,7 +193,7 @@ export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPage
         setLoading(false);
       }
     },
-    [saveHistoryItem],
+    [decryptPayload, encryptPayload, saveHistoryItem],
   );
 
   const handleProcess = useCallback(async () => {
@@ -266,31 +270,34 @@ export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPage
           : currentItem,
       );
 
-      writePayloadCryptoHistory(nextItems);
+      writeHistory(nextItems);
       return nextItems;
     });
     setRenamingHistoryItem(null);
     setRenameDraft('');
-  }, [renameDraft, renamingHistoryItem]);
+  }, [renameDraft, renamingHistoryItem, writeHistory]);
 
   const handleCancelRenameHistoryItem = useCallback(() => {
     setRenamingHistoryItem(null);
     setRenameDraft('');
   }, []);
 
-  const handleDeleteHistoryItem = useCallback((item: PayloadCryptoHistoryItem) => {
-    setHistoryItems((currentItems) => {
-      const nextItems = currentItems.filter((currentItem) => currentItem.id !== item.id);
+  const handleDeleteHistoryItem = useCallback(
+    (item: PayloadCryptoHistoryItem) => {
+      setHistoryItems((currentItems) => {
+        const nextItems = currentItems.filter((currentItem) => currentItem.id !== item.id);
 
-      writePayloadCryptoHistory(nextItems);
-      return nextItems;
-    });
-  }, []);
+        writeHistory(nextItems);
+        return nextItems;
+      });
+    },
+    [writeHistory],
+  );
 
   const handleClearHistory = useCallback(() => {
     setHistoryItems([]);
-    clearPayloadCryptoHistory();
-  }, []);
+    clearHistory();
+  }, [clearHistory]);
 
   const handleUseHistoryItem = useCallback(
     async (historyInput: string) => {
@@ -406,7 +413,7 @@ export function PayloadCryptoPageContent({ currentAccountId }: PayloadCryptoPage
                       <div className="flex flex-col items-center gap-2 text-center">
                         <button
                           aria-label="点击粘贴载荷"
-                          className="flex flex-col items-center gap-2 text-left text-(--ant-color-text-tertiary) transition hover:text-text-secondary"
+                          className="flex flex-col items-center gap-2 text-left text-sidebar-affordance-ink transition hover:text-text-secondary"
                           type="button"
                           onClick={() => void handlePasteInput()}
                         >
