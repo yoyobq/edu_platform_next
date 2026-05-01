@@ -60,7 +60,7 @@ export const SHIFT_NAME_BY_VALUE = {
   '3': '常日班',
 } as const;
 export const DEFAULT_INTEGRATED_SHIFT_NAME = SHIFT_NAME_BY_VALUE[DEFAULT_INTEGRATED_SHIFT];
-export const DEFAULT_SECURITY_AND_MAINTAIN = '注意安全，已保养';
+export const DEFAULT_SECURITY_AND_MAINTAIN = '正常';
 
 export const EMPTY_JOURNAL_DRAFT: JournalDraft = {
   completeAndSummary: '',

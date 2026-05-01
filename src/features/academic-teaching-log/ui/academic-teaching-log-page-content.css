@@ -136,7 +136,20 @@
 }
 
 .lecture-journal-filter-control-teacher {
-  width: 140px;
+  flex: 0 0 132px;
+  width: 132px;
+}
+
+.lecture-journal-filter-control-teacher .ant-select {
+  width: 132px;
+}
+
+.lecture-journal-filter-control-teacher .ant-select-selector {
+  min-width: 132px;
+}
+
+.lecture-journal-teacher-autocomplete-popup {
+  min-width: 220px;
 }
 
 .lecture-journal-filter-teacher-control {
@@ -190,13 +203,38 @@
 
 .lecture-journal-prequery-state {
   align-items: center;
-  background: var(--ant-color-bg-container);
-  border: 1px dashed var(--ant-color-border);
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--ant-color-primary) 4%, var(--ant-color-bg-container)) 0%,
+    var(--ant-color-bg-container) 48%,
+    color-mix(in srgb, var(--ant-color-warning) 5%, var(--ant-color-bg-container)) 100%
+  );
+  border: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, black 3%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 60%, transparent);
   display: flex;
   gap: 20px;
   justify-content: space-between;
+  overflow: hidden;
   padding: 18px 20px;
+  position: relative;
+}
+
+.lecture-journal-prequery-state::before {
+  background: linear-gradient(
+    180deg,
+    var(--ant-color-primary) 0%,
+    var(--ant-color-warning) 58%,
+    var(--ant-color-error) 100%
+  );
+  border-radius: 999px;
+  content: '';
+  inset-block: 18px;
+  inset-inline-start: 0;
+  position: absolute;
+  width: 3px;
 }
 
 .lecture-journal-prequery-state-copy {
@@ -210,18 +248,47 @@
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 6px;
   justify-content: flex-end;
 }
 
 .lecture-journal-prequery-state-steps span {
-  background: var(--ant-color-fill-quaternary);
-  border: 1px solid var(--ant-color-border-secondary);
+  align-items: center;
+  background: color-mix(in srgb, var(--ant-color-bg-container) 72%, var(--ant-color-fill-tertiary));
+  border: 1px solid color-mix(in srgb, var(--ant-color-primary) 10%, var(--ant-color-border));
   border-radius: 999px;
-  color: var(--ant-color-text-secondary);
+  box-shadow: 0 1px 1px color-mix(in srgb, black 3%, transparent);
+  color: var(--ant-color-text);
+  display: inline-flex;
   font-size: 12px;
-  line-height: 20px;
-  padding: 2px 10px;
+  font-weight: 500;
+  gap: 6px;
+  line-height: 22px;
+  padding: 3px 10px 3px 8px;
+}
+
+.lecture-journal-prequery-state-steps span:nth-child(2) {
+  border-color: color-mix(in srgb, var(--ant-color-warning) 18%, var(--ant-color-border));
+}
+
+.lecture-journal-prequery-state-steps span:nth-child(3) {
+  border-color: color-mix(in srgb, var(--ant-color-error) 14%, var(--ant-color-border));
+}
+
+.lecture-journal-prequery-state-steps i {
+  background: var(--ant-color-primary);
+  border-radius: 999px;
+  display: inline-block;
+  height: 7px;
+  width: 7px;
+}
+
+.lecture-journal-prequery-state-steps span:nth-child(2) i {
+  background: var(--ant-color-warning);
+}
+
+.lecture-journal-prequery-state-steps span:nth-child(3) i {
+  background: var(--ant-color-error);
 }
 
 .lecture-journal-view-shell {
@@ -1197,10 +1264,17 @@
 }
 
 .lecture-journal-topic-record-segmented .ant-segmented {
-  background: color-mix(in srgb, var(--ant-color-bg-container) 82%, var(--ant-color-fill-tertiary));
+  background: color-mix(in srgb, var(--ant-color-primary) 5%, var(--ant-color-fill-tertiary));
   border-radius: 10px;
   max-width: 100%;
+  padding: 3px;
   width: auto;
+}
+
+.lecture-journal-topic-record-segmented .ant-segmented-thumb {
+  background: color-mix(in srgb, var(--ant-color-primary) 12%, var(--ant-color-bg-container));
+  border: 1px solid var(--ant-color-primary-border);
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--ant-color-primary) 18%, transparent);
 }
 
 .lecture-journal-topic-record-segmented .ant-segmented-item-label {
@@ -1211,7 +1285,10 @@
 }
 
 .lecture-journal-topic-record-segmented .ant-segmented-item-selected {
-  box-shadow: 0 1px 4px color-mix(in srgb, black 8%, transparent);
+  background: color-mix(in srgb, var(--ant-color-primary) 12%, var(--ant-color-bg-container));
+  box-shadow: 0 2px 6px color-mix(in srgb, var(--ant-color-primary) 18%, transparent);
+  color: var(--ant-color-primary-text-active);
+  font-weight: 600;
 }
 
 .lecture-journal-topic-record-reset-slot {

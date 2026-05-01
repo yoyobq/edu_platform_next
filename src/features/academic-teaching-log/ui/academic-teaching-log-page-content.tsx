@@ -915,7 +915,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                   })}
                   {isFilled ? (
                     <span className="lecture-journal-readonly-input">
-                      <Input
+                      <Input.TextArea
+                        autoSize={{ minRows: 1, maxRows: 4 }}
                         placeholder="未填写"
                         readOnly
                         size="large"
@@ -923,7 +924,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                       />
                     </span>
                   ) : (
-                    <Input
+                    <Input.TextArea
+                      autoSize={{ minRows: 1, maxRows: 4 }}
                       placeholder="请输入课程内容"
                       size="large"
                       value={draft.courseContent}
@@ -946,7 +948,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                   })}
                   {isFilled ? (
                     <span className="lecture-journal-readonly-input">
-                      <Input
+                      <Input.TextArea
+                        autoSize={{ minRows: 1, maxRows: 4 }}
                         placeholder="未填写"
                         readOnly
                         size="large"
@@ -1335,7 +1338,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                       />
                     </span>
                   ) : (
-                    <Input
+                    <Input.TextArea
+                      autoSize={{ minRows: 1, maxRows: 4 }}
                       placeholder="请输入课程内容"
                       size="large"
                       value={draft.courseContent}
@@ -2540,6 +2544,8 @@ export function AcademicTeachingLogPageContent() {
                       variant="borderless"
                       notFoundContent={isLoadingStaffDirectory ? '读取中' : undefined}
                       options={teacherOptions}
+                      popupClassName="lecture-journal-teacher-autocomplete-popup"
+                      popupMatchSelectWidth={220}
                       placeholder={liveDefaultStaffId || '输入 ID 或姓名'}
                       value={staffId}
                       onChange={setStaffId}
@@ -2803,9 +2809,18 @@ export function AcademicTeachingLogPageContent() {
             </Typography.Text>
           </div>
           <div className="lecture-journal-prequery-state-steps" aria-label="查询结果内容">
-            <span>课次状态</span>
-            <span>补填草稿</span>
-            <span>异常核对</span>
+            <span>
+              <i aria-hidden />
+              课次状态
+            </span>
+            <span>
+              <i aria-hidden />
+              补填草稿
+            </span>
+            <span>
+              <i aria-hidden />
+              异常核对
+            </span>
           </div>
         </section>
       ) : null}
