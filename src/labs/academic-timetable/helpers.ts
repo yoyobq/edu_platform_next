@@ -1,5 +1,15 @@
 import type { AcademicTimetableGridItem } from './api';
 
+export const MAX_TIMETABLE_PERIOD_COUNT = 12;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const MILLISECONDS_PER_WEEK = 7 * MILLISECONDS_PER_DAY;
+
+type TeachingWeekSemester = {
+  endDate: string;
+  firstTeachingDate: string;
+  startDate: string;
+};
+
 type TimetableSlotGroup<TItem extends AcademicTimetableGridItem> = {
   dayOfWeek: number;
   items: TItem[];
@@ -49,6 +59,42 @@ const COURSE_CATEGORY_META = {
   实践课: PRACTICE_COURSE_CATEGORY_META,
   理论课: THEORY_COURSE_CATEGORY_META,
 } as const;
+
+function parseIsoDateOnly(value: string) {
+  const [datePart] = value.split('T');
+  const [yearText, monthText, dayText] = datePart.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const day = Number(dayText);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return date;
+}
+
+function normalizeDateOnly(value: Date) {
+  return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+}
+
+function startOfTeachingWeek(value: Date) {
+  const dayOfWeek = value.getUTCDay();
+  const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+
+  return new Date(value.getTime() - daysFromMonday * MILLISECONDS_PER_DAY);
+}
 
 function sortTimetableItems<TItem extends AcademicTimetableGridItem>(
   items: TItem[],
@@ -167,6 +213,46 @@ export function buildTimetableSlotPlacements<TItem extends AcademicTimetableGrid
   }
 
   return placements;
+}
+
+export function resolveTimetablePeriodCount<TItem extends AcademicTimetableGridItem>(
+  items: TItem[],
+) {
+  const maxPeriodEnd = items.reduce((currentMax, item) => Math.max(currentMax, item.periodEnd), 1);
+
+  return Math.min(MAX_TIMETABLE_PERIOD_COUNT, maxPeriodEnd);
+}
+
+export function resolveCurrentTeachingWeekIndex(
+  semester: TeachingWeekSemester,
+  options: { today?: Date } = {},
+) {
+  const semesterStart = parseIsoDateOnly(semester.startDate);
+  const semesterEnd = parseIsoDateOnly(semester.endDate);
+  const firstTeachingDate = parseIsoDateOnly(semester.firstTeachingDate);
+
+  if (!semesterStart || !semesterEnd || !firstTeachingDate) {
+    return null;
+  }
+
+  const today = normalizeDateOnly(options.today ?? new Date());
+
+  if (today < semesterStart || today > semesterEnd) {
+    return null;
+  }
+
+  const firstTeachingWeekStart = startOfTeachingWeek(firstTeachingDate);
+
+  if (today < firstTeachingWeekStart) {
+    return 1;
+  }
+
+  return (
+    Math.floor(
+      (startOfTeachingWeek(today).getTime() - firstTeachingWeekStart.getTime()) /
+        MILLISECONDS_PER_WEEK,
+    ) + 1
+  );
 }
 
 export function resolveCourseCategoryMeta(courseCategory: string | null | undefined) {

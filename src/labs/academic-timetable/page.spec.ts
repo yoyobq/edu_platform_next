@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildTimetableSlotPlacements, resolveCourseCategoryMeta } from './helpers';
+import {
+  buildTimetableSlotPlacements,
+  resolveCourseCategoryMeta,
+  resolveCurrentTeachingWeekIndex,
+  resolveTimetablePeriodCount,
+} from './helpers';
 
 describe('academic-timetable page helpers', () => {
   it('maps course category enums and passthrough values to the shared Chinese labels', () => {
@@ -123,5 +128,63 @@ describe('academic-timetable page helpers', () => {
         periodStart: 3,
       }),
     );
+  });
+
+  it('scales visible periods to the latest occupied period while capping at 12', () => {
+    expect(
+      resolveTimetablePeriodCount([
+        { dayOfWeek: 1, periodEnd: 2, periodStart: 1, slotId: 'a' },
+        { dayOfWeek: 3, periodEnd: 7, periodStart: 5, slotId: 'b' },
+      ]),
+    ).toBe(7);
+
+    expect(
+      resolveTimetablePeriodCount([
+        { dayOfWeek: 1, periodEnd: 13, periodStart: 11, slotId: 'late' },
+      ]),
+    ).toBe(12);
+  });
+
+  it('resolves the current teaching week from the selected semester calendar', () => {
+    const semester = {
+      endDate: '2026-07-17',
+      firstTeachingDate: '2026-03-02',
+      startDate: '2026-02-23',
+    };
+
+    expect(
+      resolveCurrentTeachingWeekIndex(semester, {
+        today: new Date(2026, 2, 2),
+      }),
+    ).toBe(1);
+    expect(
+      resolveCurrentTeachingWeekIndex(semester, {
+        today: new Date(2026, 2, 11),
+      }),
+    ).toBe(2);
+    expect(
+      resolveCurrentTeachingWeekIndex(semester, {
+        today: new Date(2026, 1, 25),
+      }),
+    ).toBe(1);
+  });
+
+  it('does not resolve a teaching week outside the selected semester range', () => {
+    const semester = {
+      endDate: '2026-07-17',
+      firstTeachingDate: '2026-03-02',
+      startDate: '2026-02-23',
+    };
+
+    expect(
+      resolveCurrentTeachingWeekIndex(semester, {
+        today: new Date(2026, 1, 22),
+      }),
+    ).toBeNull();
+    expect(
+      resolveCurrentTeachingWeekIndex(semester, {
+        today: new Date(2026, 6, 18),
+      }),
+    ).toBeNull();
   });
 });

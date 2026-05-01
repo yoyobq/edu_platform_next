@@ -1,50 +1,66 @@
 .academic-timetable-grid {
   --academic-timetable-course-category-theory-color: #1d4ed8;
-  --academic-timetable-course-category-theory-bg: #dbeafe;
+  --academic-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
   --academic-timetable-course-category-practice-color: #0f766e;
-  --academic-timetable-course-category-practice-bg: #ccfbf1;
+  --academic-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
   --academic-timetable-course-category-integrated-color: #b45309;
-  --academic-timetable-course-category-integrated-bg: #ffedd5;
+  --academic-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
+  background: var(--ant-color-bg-container);
   display: grid;
   position: relative;
+}
+
+.academic-timetable-shell {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--radius-block);
 }
 
 .academic-timetable-header-cell,
 .academic-timetable-period-cell,
 .academic-timetable-base-cell {
-  border-right: 1px solid var(--ant-color-border-secondary);
-  border-bottom: 1px solid var(--ant-color-border-secondary);
+  border-block-end: 1px solid var(--ant-color-border-secondary);
+  border-inline-end: 1px solid var(--ant-color-border-secondary);
 }
 
 .academic-timetable-header-cell,
 .academic-timetable-period-cell {
   align-items: center;
-  background: linear-gradient(
-    180deg,
-    var(--ant-color-fill-tertiary) 0%,
-    var(--ant-color-bg-container) 100%
-  );
   color: var(--ant-color-text-secondary);
   display: flex;
   font-size: 12px;
   font-weight: 600;
+  gap: 6px;
   justify-content: center;
 }
 
+.academic-timetable-header-cell {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-timetable-period-cell {
+  background: var(--ant-color-bg-container);
+}
+
 .academic-timetable-header-corner {
-  background: linear-gradient(
-    180deg,
-    var(--ant-color-fill-secondary) 0%,
-    var(--ant-color-fill-tertiary) 100%
-  );
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-timetable-header-date {
+  color: var(--ant-color-text-tertiary);
+  font-weight: 500;
 }
 
 .academic-timetable-base-cell {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.7) 0%,
-    var(--ant-color-fill-quaternary) 100%
-  );
+  background: var(--ant-color-bg-container);
+}
+
+.academic-timetable-weekend-cell {
+  background: var(--ant-color-warning-bg);
+}
+
+.academic-timetable-header-cell.academic-timetable-weekend-cell {
+  color: var(--ant-color-warning-text);
 }
 
 .academic-timetable-slot-group {
@@ -70,33 +86,40 @@
 
 .academic-timetable-entry {
   --academic-timetable-entry-accent-color: var(--ant-color-primary);
-  --academic-timetable-entry-accent-bg: color-mix(in srgb, var(--ant-color-primary-bg) 88%, white);
+  --academic-timetable-entry-accent-bg: color-mix(
+    in srgb,
+    var(--ant-color-primary-bg) 66%,
+    transparent
+  );
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 58%, white) 0%,
-    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 94%, white) 100%
+    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 72%, transparent) 0%,
+    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 92%, transparent) 100%
   );
-  border: 1px solid color-mix(in srgb, var(--academic-timetable-entry-accent-color) 24%, white);
-  border-radius: 12px;
-  box-shadow: 0 8px 20px rgba(9, 30, 66, 0.08);
+  border: 1px solid
+    color-mix(in srgb, var(--academic-timetable-entry-accent-color) 20%, transparent);
+  border-radius: var(--ant-border-radius-sm);
+  box-shadow: none;
   color: var(--ant-color-text);
   display: flex;
   flex: 1;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+  justify-content: flex-start;
   min-height: 0;
-  padding: 8px 10px;
+  padding: 9px 10px;
+  position: relative;
   text-align: left;
 }
 
 .academic-timetable-entry-inactive {
-  background: linear-gradient(180deg, rgba(140, 140, 140, 0.08) 0%, rgba(140, 140, 140, 0.14) 100%);
+  background: linear-gradient(180deg, rgba(140, 140, 140, 0.14) 0%, rgba(140, 140, 140, 0.2) 100%);
   border-color: var(--ant-color-border);
   box-shadow: none;
 }
 
 .academic-timetable-entry-semester {
-  box-shadow: 0 8px 20px rgba(9, 30, 66, 0.08);
+  box-shadow: none;
 }
 
 .academic-timetable-slot-group-stacked {
@@ -113,9 +136,9 @@
 }
 
 .academic-timetable-entry-title {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 1.4;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
   margin: 0;
 }
 
@@ -158,10 +181,10 @@
 .academic-timetable-course-category-badge {
   border-radius: 999px;
   display: inline-flex;
-  font-size: 10px;
+  font-size: 0.8125rem;
   font-weight: 700;
   line-height: 1;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   white-space: nowrap;
 }
 
@@ -179,35 +202,29 @@
 
 .academic-timetable-entry-status-row {
   align-items: center;
+  bottom: 8px;
   display: flex;
   gap: 8px;
-  justify-content: space-between;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  position: absolute;
+  right: 10px;
 }
 
-.academic-timetable-entry-pill-row {
+.academic-timetable-entry-badge-cluster {
   align-items: center;
-  display: flex;
-  gap: 8px;
-  justify-content: space-between;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
 }
 
 .academic-timetable-entry-status {
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 0.8125rem;
   font-weight: 600;
   line-height: 1;
-  padding: 4px 8px;
-  white-space: nowrap;
-}
-
-.academic-timetable-entry-pill {
-  background: rgba(19, 194, 194, 0.14);
-  border-radius: 999px;
-  color: var(--ant-color-info);
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1;
-  padding: 4px 8px;
+  padding: 0.25rem 0.5rem;
   white-space: nowrap;
 }
 
@@ -228,7 +245,7 @@
 
 .academic-timetable-entry-date {
   color: var(--ant-color-text-tertiary);
-  font-size: 10px;
+  font-size: 0.8125rem;
   line-height: 1.2;
   white-space: nowrap;
 }
@@ -239,13 +256,40 @@
   text-overflow: ellipsis;
 }
 
+.academic-timetable-entry-main-group,
+.academic-timetable-entry-center-group,
+.academic-timetable-entry-footer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.academic-timetable-entry-center-group {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.academic-timetable-entry-footer-group {
+  margin-top: auto;
+}
+
 .academic-timetable-entry-subtitle,
-.academic-timetable-entry-meta,
-.academic-timetable-entry-foot {
-  color: var(--ant-color-text-secondary);
-  font-size: 11px;
-  line-height: 1.45;
+.academic-timetable-entry-meta {
+  font-size: 0.8125rem;
+  line-height: 1.4;
   margin: 0;
+}
+
+.academic-timetable-entry-subtitle {
+  color: var(--ant-color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.academic-timetable-entry-meta {
+  color: var(--ant-color-text-secondary);
+  font-weight: 500;
 }
 
 @media (max-width: 768px) {
