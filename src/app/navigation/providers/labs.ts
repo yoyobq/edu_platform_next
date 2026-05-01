@@ -10,18 +10,6 @@ function hasStaffNavigationAccess(input: { accessGroup?: readonly AuthAccessGrou
   return input.accessGroup?.includes('STAFF') ?? false;
 }
 
-export function hasPayloadCryptoNavigationAccess(input: {
-  accountId?: number;
-  accessGroup?: readonly AuthAccessGroup[];
-}) {
-  const isSpecificAdmin = input.accountId === 1 || input.accountId === 2;
-  const hasAdminAccess = hasAdminNavigationAccess({
-    accessGroup: input.accessGroup,
-  });
-
-  return isSpecificAdmin && hasAdminAccess;
-}
-
 function hasLabNavigationAccess(
   allowedAccessLevels: readonly ('admin' | 'staff' | 'guest')[],
   filter: Parameters<NavigationItemsProvider>[0],
@@ -45,22 +33,6 @@ function hasLabNavigationAccess(
 
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
   const children = [
-    ...(hasPayloadCryptoNavigationAccess({
-      accountId: filter.accountId,
-      accessGroup: filter.accessGroup,
-    })
-      ? [
-          {
-            iconKey: 'LockOutlined',
-            key: '/labs/payload-crypto',
-            label: '载荷加解密',
-            navMode: 'rail' as const,
-            path: '/labs/payload-crypto',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasLabNavigationAccess(['admin'], filter)
       ? [
           {

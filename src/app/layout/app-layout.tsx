@@ -35,11 +35,7 @@ import {
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-router';
 
-import {
-  getNavigationItems,
-  hasPayloadCryptoNavigationAccess,
-  resolveNavMode,
-} from '@/app/navigation';
+import { getNavigationItems, resolveNavMode } from '@/app/navigation';
 import {
   AuthRefreshFeedbackBridge,
   CollaborationSessionProvider,
@@ -323,17 +319,6 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           key: getBaseURL('/', search),
           label: <Link to={getBaseURL('/', search)}>首页</Link>,
         },
-        ...(hasPayloadCryptoNavigationAccess({
-          accountId: activeSnapshot?.accountId,
-          accessGroup: activeSnapshot?.userInfo.accessGroup,
-        })
-          ? [
-              {
-                key: getBaseURL('/labs/payload-crypto', search),
-                label: <Link to={getBaseURL('/labs/payload-crypto', search)}>载荷加解密</Link>,
-              },
-            ]
-          : []),
         ...(currentAppEnv === 'dev' || currentAppEnv === 'test'
           ? [
               {

@@ -448,7 +448,7 @@ test('普通 protected 请求收到 UNAUTHENTICATED 后触发一次 refresh 并�
     await route.fallback();
   });
 
-  await page.goto(routes.labsPayloadCrypto);
+  await page.goto(routes.systemPayloadCrypto);
   await page.getByRole('textbox').first().fill('{"value":"demo"}');
   await page.getByRole('button', { name: '查看结果' }).click();
 
@@ -517,12 +517,12 @@ test('普通 protected 请求收到 UNAUTHENTICATED 后 refresh 失败应触发 
     await route.fallback();
   });
 
-  await page.goto(routes.labsPayloadCrypto);
+  await page.goto(routes.systemPayloadCrypto);
   await page.getByRole('textbox').first().fill('{"value":"demo"}');
   await page.getByRole('button', { name: '查看结果' }).click();
 
   await expect(page).toHaveURL(
-    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsPayloadCrypto)}$`),
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.systemPayloadCrypto)}$`),
   );
 });
 

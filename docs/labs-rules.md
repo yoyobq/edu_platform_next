@@ -106,8 +106,6 @@ export const demoLabMeta = {
 
 - `/labs/demo`
   - 用于第三工作区跳层 demo
-- `/labs/payload-crypto`
-  - 用于载荷加解密调试
 - `/labs/invite-issuer`
   - 用于临时调用 `inviteStaff` / `inviteStudent` 生成联调 invite link
   - 属于实验性联调工具，不承担正式管理后台职责

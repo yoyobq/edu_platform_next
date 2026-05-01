@@ -52,7 +52,7 @@ function resolveIcon(iconKey: string): React.ReactNode {
   return IconComponent ? <IconComponent /> : null;
 }
 
-function toMenuItems(items: NavigationMetaItem[], collapsed: boolean): ItemType[] {
+function toMenuItems(items: readonly NavigationMetaItem[], collapsed: boolean): ItemType[] {
   return items.map((item) => {
     if (isNavigationGroupItem(item)) {
       return {
@@ -74,7 +74,7 @@ function toMenuItems(items: NavigationMetaItem[], collapsed: boolean): ItemType[
 }
 
 /** Collect all leaf paths (including from children) for route matching. */
-function flattenPaths(items: NavigationMetaItem[]): NavigationLeafItem[] {
+function flattenPaths(items: readonly NavigationMetaItem[]): NavigationLeafItem[] {
   const result: NavigationLeafItem[] = [];
 
   for (const item of items) {
@@ -89,7 +89,7 @@ function flattenPaths(items: NavigationMetaItem[]): NavigationLeafItem[] {
 }
 
 /** Find which top-level group key should be open for the current route. */
-function findOpenGroupKeys(items: NavigationMetaItem[], pathname: string): string[] {
+function findOpenGroupKeys(items: readonly NavigationMetaItem[], pathname: string): string[] {
   for (const item of items) {
     if (!isNavigationGroupItem(item)) continue;
 

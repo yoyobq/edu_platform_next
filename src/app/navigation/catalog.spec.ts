@@ -50,7 +50,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
@@ -60,6 +59,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
       '/admin/users',
+      '/system/payload-crypto',
       '/errors/preview',
     ]);
   });
@@ -88,6 +88,9 @@ describe('navigation catalog', () => {
       '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
+    expect(
+      findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
+    ).toEqual(['/admin/users', '/errors/preview']);
   });
 
   it('shows the shared staff labs while keeping admin-only labs hidden', () => {
@@ -162,7 +165,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
-      '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
@@ -170,6 +172,7 @@ describe('navigation catalog', () => {
       '/labs/academic-workload',
       '/sandbox/playground',
       '/admin/users',
+      '/system/payload-crypto',
       '/errors/preview',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([

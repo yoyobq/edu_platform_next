@@ -35,9 +35,9 @@
 
 - `home`：首页 `/`
 - `academic-affairs`：`教务管理` 当前包含 `/academic-affairs/academic-calendar`、`/academic-affairs/semester-course-schedule-sync`；`校历课表` 当前包含 `/academic-affairs/semester-calendar`；`教务助手` 当前包含 `/academic-affairs/my-teaching-logs`
-- `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`
+- `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
-- `labs`：`/labs/payload-crypto`、`/labs/invite-issuer`
+- `labs`：`/labs/change-login-email`、`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/academic-timetable`、`/labs/academic-workload`
 - `sandbox`：`/sandbox/playground`
 
 补充约束：
@@ -174,7 +174,7 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 
 当前已确认的特殊规则包括：
 
-- `payload-crypto`：只对特定 admin 账号开放
+- `payload-crypto`：稳定页位于 `/system/payload-crypto`，只对特定 admin 账号开放
 - `sandbox/playground`：只在 `dev / test` 暴露
 
 这些特殊规则应继续跟随业务域 provider 归属，不回流到 layout 层。

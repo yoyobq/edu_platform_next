@@ -2,7 +2,6 @@ export {
   canAccessNavigationPath,
   getNavigationItems,
   getNavigationLeafItems,
-  hasPayloadCryptoNavigationAccess,
   resolveNavMode,
 } from './catalog';
 export type {

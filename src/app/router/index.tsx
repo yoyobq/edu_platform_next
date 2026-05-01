@@ -23,6 +23,7 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
+import { PayloadCryptoPage } from '@/pages/payload-crypto';
 import { ProfilePage } from '@/pages/profile';
 import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
@@ -48,6 +49,7 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
+import { canAccessPayloadCrypto } from '@/features/payload-crypto';
 
 import {
   hasAcademicTeachingLogAccess,
@@ -69,7 +71,6 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -365,44 +366,23 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function payloadCryptoLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(payloadCryptoLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
+async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(payloadCryptoLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
+    return null;
   }
 
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
+  if (!canAccessPayloadCrypto(snapshot)) {
+    return {
+      isForbidden: true,
+    };
   }
 
-  // 硬编码验证：只有 (accountId 是 1 或者 2) 且 (accessGroup 里有 ADMIN 项) 的用户才可以进入
-  const hasSpecificAccess =
-    (snapshot.accountId === 1 || snapshot.accountId === 2) && hasAdminAccess(snapshot);
-
-  if (!hasSpecificAccess) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return {
+    accountId: snapshot.accountId,
+    isForbidden: false,
+  };
 }
 
 async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
@@ -837,17 +817,17 @@ const router = createBrowserRouter([
         loader: () => redirect('/errors/preview'),
       },
       {
+        path: '/system/payload-crypto',
+        loader: payloadCryptoPageLoader,
+        Component: PayloadCryptoPage,
+      },
+      {
         path: '/labs',
         children: [
           {
             path: 'demo',
             loader: demoLabLoader,
             lazy: loadDemoLabRouteModule,
-          },
-          {
-            path: 'payload-crypto',
-            loader: payloadCryptoLabLoader,
-            lazy: loadPayloadCryptoLabRouteModule,
           },
           {
             path: 'invite-issuer',

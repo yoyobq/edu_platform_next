@@ -24,7 +24,7 @@ export type NavigationLeafItem = NavigationBaseItem & {
 
 export type NavigationGroupItem = NavigationBaseItem & {
   allowedAccessGroups: readonly AuthAccessGroup[];
-  children: NavigationLeafItem[];
+  children: readonly NavigationLeafItem[];
 };
 
 export type NavigationMetaItem = NavigationGroupItem | NavigationLeafItem;

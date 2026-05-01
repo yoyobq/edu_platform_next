@@ -3,6 +3,5 @@ export {
   canAccessNavigationPath,
   getNavigationItems,
   getNavigationLeafItems,
-  hasPayloadCryptoNavigationAccess,
   resolveNavMode,
 } from '@/app/navigation';

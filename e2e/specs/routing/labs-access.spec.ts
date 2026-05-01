@@ -838,12 +838,88 @@ test('仅工号 1/2 的管理员会在正式导航中看到载荷加解密入口
   await page.goto(routes.home);
 
   await page.getByRole('button', { name: '展开导航菜单' }).click();
-  await page.getByText('Labs').click();
+  await page.getByText('系统管理').click();
   await expect(page.getByText('载荷加解密')).toBeVisible();
   await page.getByText('载荷加解密').click();
 
-  await expect(page).toHaveURL(new RegExp(`${routes.labsPayloadCrypto}$`));
+  await expect(page).toHaveURL(new RegExp(`${routes.systemPayloadCrypto}$`));
   await expect(page.getByRole('heading', { name: '载荷加解密工具' })).toBeVisible();
+});
+
+test('载荷加解密应在本地记录历史，并允许调用历史输入载荷', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      accountId: 1,
+      displayName: 'root-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: Record<string, unknown> }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query DebugEncryptSstsPayload')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            debugEncryptSstsPayload: {
+              encryptedData: 'encrypted-history-demo',
+              operation: 'encrypt',
+              plainTextData: { value: 'history-demo' },
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.systemPayloadCrypto);
+
+  await expect(page.getByRole('heading', { name: '载荷加解密工具' })).toBeVisible();
+  await expect(page.getByText('当前 ID：1')).toBeVisible();
+  await expect(page.getByText('仅 ID 1 / 2 可访问')).toBeVisible();
+  await page.getByRole('textbox').fill('{"value":"history-demo"}');
+  await page.getByRole('button', { name: '查看结果' }).click();
+
+  await expect(page.getByText('encrypted-history-demo')).toBeVisible();
+  await expect(page.getByText('加解密历史')).toBeVisible();
+  await expect(page.getByText('加密', { exact: true })).toBeVisible();
+  await expect(page.getByTitle('{"value":"history-demo"}')).toBeVisible();
+
+  await page.getByRole('button', { name: '重命名历史 1' }).click();
+  await page.getByPlaceholder('输入历史名称').fill('登录接口样例');
+  await page.getByPlaceholder('输入历史名称').press('Enter');
+  await expect(page.getByText('登录接口样例')).toBeVisible();
+  await expect(page.getByTitle('{"value":"history-demo"}')).toHaveCount(0);
+
+  await page.getByRole('button', { name: '清空输入载荷' }).click();
+  await expect(page.getByRole('textbox')).toHaveValue('');
+  await page.getByTestId('payload-history-use-0').click();
+  await expect(page.getByRole('textbox')).toHaveValue('{"value":"history-demo"}');
+  await expect(page.getByText('encrypted-history-demo')).toBeVisible();
+
+  await page.getByRole('button', { name: '清空', exact: true }).click();
+  await expect(page.getByText('清空全部加解密历史？')).toBeVisible();
+  await page.locator('.ant-popover').getByRole('button').first().click();
+  await expect(page.getByText('登录接口样例')).toBeVisible();
+
+  await page.getByRole('button', { name: '删除历史 1' }).click();
+  await expect(page.getByText('删除历史“登录接口样例”？')).toBeVisible();
+  await page.locator('.ant-popover').getByRole('button').last().click();
+  await expect(page.getByText('登录接口样例')).toHaveCount(0);
 });
 
 test('其他管理员不应在正式导航中看到载荷加解密入口，且直接访问仍会返回 403', async ({ page }) => {
@@ -864,16 +940,16 @@ test('其他管理员不应在正式导航中看到载荷加解密入口，且�
   await page.goto(routes.home);
 
   await page.getByRole('button', { name: '展开导航菜单' }).click();
-  await page.getByText('Labs').click();
+  await page.getByText('系统管理').click();
   await expect(page.getByText('载荷加解密')).toHaveCount(0);
 
-  await page.goto(routes.labsPayloadCrypto);
+  await page.goto(routes.systemPayloadCrypto);
 
   await expect(page.getByRole('banner')).toBeVisible();
   await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
 });
 
-test('guest 直接访问受限 labs 链接时，应保留 app layout 并显示 dark 模式下的 403', async ({
+test('guest 直接访问载荷加解密稳定路径时，应保留 app layout 并显示 dark 模式下的 403', async ({
   page,
 }) => {
   await page.addInitScript(() => {
@@ -897,11 +973,31 @@ test('guest 直接访问受限 labs 链接时，应保留 app layout 并显示 d
     primaryAccessGroup: 'GUEST',
   });
 
-  await page.goto(routes.labsPayloadCrypto);
+  await page.goto(routes.systemPayloadCrypto);
 
   await expect(page.getByRole('banner')).toBeVisible();
   await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
   await expect(page.getByRole('button', { name: '切换浅色模式' })).toBeVisible();
+});
+
+test('旧 labs 载荷加解密路径应返回 404', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      accountId: 1,
+      displayName: 'root-admin',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    accountId: 1,
+    displayName: 'root-admin',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto(routes.labsPayloadCrypto);
+
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });
 
 test('待补全会话直接访问载荷加解密页时，应优先进入 /welcome 而不是 404', async ({ page }) => {
@@ -927,11 +1023,11 @@ test('待补全会话直接访问载荷加解密页时，应优先进入 /welcom
     primaryAccessGroup: 'REGISTRANT',
   });
 
-  await page.goto(`${routes.labsPayloadCrypto}?source=direct`);
+  await page.goto(`${routes.systemPayloadCrypto}?source=direct`);
 
   await expect(page).toHaveURL(
     new RegExp(
-      `/welcome\\?redirect=${encodeURIComponent(`${routes.labsPayloadCrypto}?source=direct`)}$`,
+      `/welcome\\?redirect=${encodeURIComponent(`${routes.systemPayloadCrypto}?source=direct`)}$`,
     ),
   );
   await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();

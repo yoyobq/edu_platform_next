@@ -18,6 +18,7 @@ export const routes = {
   resetPasswordWithTokenQuery: (verificationCode = 'reset-password-001') =>
     `/reset-password?token=${verificationCode}`,
   sandboxPlayground: '/sandbox/playground',
+  systemPayloadCrypto: '/system/payload-crypto',
   verifyEmail: (verificationCode = 'verify-email-001') => `/verify/email/${verificationCode}`,
   welcome: '/welcome',
 } as const;
