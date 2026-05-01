@@ -17,6 +17,7 @@ import {
   SendOutlined,
   SettingOutlined,
   SyncOutlined,
+  TableOutlined,
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
@@ -45,6 +46,7 @@ const ICON_MAP: Record<string, React.ComponentType> = {
   SyncOutlined,
   SendOutlined,
   SettingOutlined,
+  TableOutlined,
   TeamOutlined,
   WarningOutlined,
 };

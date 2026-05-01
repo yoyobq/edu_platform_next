@@ -44,8 +44,14 @@ describe('navigation catalog', () => {
       '/academic-affairs/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
-      '/academic-affairs/semester-calendar',
+      '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/semester-timetable',
     ]);
+    expect(
+      findGroup(items, 'calendar-schedule')?.children.find(
+        (item) => item.key === '/calendar-schedule/semester-timetable',
+      )?.iconKey,
+    ).toBe('TableOutlined');
     expect(findGroup(items, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
     ]);
@@ -77,7 +83,7 @@ describe('navigation catalog', () => {
     );
     expect(
       findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
-    ).toEqual(['/academic-affairs/semester-calendar']);
+    ).toEqual(['/calendar-schedule/semester-calendar', '/calendar-schedule/semester-timetable']);
     expect(
       findGroup(prodAdminItems, 'academic-assistant')?.children.map((item) => item.key),
     ).toEqual(['/academic-affairs/my-teaching-logs']);
@@ -102,7 +108,14 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(staffItems.map((item) => item.key)).toEqual(['academic-assistant', 'labs']);
+    expect(staffItems.map((item) => item.key)).toEqual([
+      'calendar-schedule',
+      'academic-assistant',
+      'labs',
+    ]);
+    expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
+      '/calendar-schedule/semester-timetable',
+    ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
     ]);
@@ -134,7 +147,8 @@ describe('navigation catalog', () => {
       '/academic-affairs/semester-course-schedule-sync',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
-      '/academic-affairs/semester-calendar',
+      '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/semester-timetable',
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
@@ -154,6 +168,15 @@ describe('navigation catalog', () => {
 
     expect(canAccessNavigationPath('/errors/preview', guestFilter)).toBe(true);
     expect(canAccessNavigationPath('/admin/users', guestFilter)).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/calendar-schedule/semester-timetable',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('continues exposing navigation leaf items for the local entry catalog', () => {
@@ -161,7 +184,8 @@ describe('navigation catalog', () => {
 
     expect(leaves.map((item) => item.key)).toEqual([
       '/',
-      '/academic-affairs/semester-calendar',
+      '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/semester-timetable',
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',

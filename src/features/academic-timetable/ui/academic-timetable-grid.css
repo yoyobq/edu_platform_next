@@ -1,0 +1,308 @@
+.academic-timetable-grid {
+  --academic-timetable-course-category-theory-color: #1d4ed8;
+  --academic-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
+  --academic-timetable-course-category-practice-color: #0f766e;
+  --academic-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
+  --academic-timetable-course-category-integrated-color: #b45309;
+  --academic-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
+  background: var(--ant-color-bg-container);
+  display: grid;
+  position: relative;
+}
+
+.academic-timetable-shell {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--radius-block);
+}
+
+.academic-timetable-header-cell,
+.academic-timetable-period-cell,
+.academic-timetable-base-cell {
+  border-block-end: 1px solid var(--ant-color-border-secondary);
+  border-inline-end: 1px solid var(--ant-color-border-secondary);
+}
+
+.academic-timetable-header-cell,
+.academic-timetable-period-cell {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  font-size: 12px;
+  font-weight: 600;
+  gap: 6px;
+  justify-content: center;
+}
+
+.academic-timetable-header-cell {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-timetable-period-cell {
+  background: var(--ant-color-bg-container);
+}
+
+.academic-timetable-header-corner {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-timetable-header-date {
+  color: var(--ant-color-text-tertiary);
+  font-weight: 500;
+}
+
+.academic-timetable-base-cell {
+  background: var(--ant-color-bg-container);
+}
+
+.academic-timetable-weekend-cell {
+  background: var(--ant-color-warning-bg);
+}
+
+.academic-timetable-header-cell.academic-timetable-weekend-cell {
+  color: var(--ant-color-warning-text);
+}
+
+.academic-timetable-slot-group {
+  z-index: var(--academic-timetable-slot-layer, 1);
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 4px;
+  min-height: calc(100% - 8px);
+  position: relative;
+}
+
+.academic-timetable-slot-group-item {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.academic-timetable-slot-group-item > .academic-timetable-entry {
+  flex: 1 1 auto;
+}
+
+.academic-timetable-entry {
+  --academic-timetable-entry-accent-color: var(--ant-color-primary);
+  --academic-timetable-entry-accent-bg: color-mix(
+    in srgb,
+    var(--ant-color-primary-bg) 66%,
+    transparent
+  );
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 72%, transparent) 0%,
+    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 92%, transparent) 100%
+  );
+  border: 1px solid
+    color-mix(in srgb, var(--academic-timetable-entry-accent-color) 20%, transparent);
+  border-radius: var(--ant-border-radius-sm);
+  box-shadow: none;
+  color: var(--ant-color-text);
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  justify-content: flex-start;
+  min-height: 0;
+  padding: 9px 10px;
+  position: relative;
+  text-align: left;
+}
+
+.academic-timetable-entry-inactive {
+  background: linear-gradient(180deg, rgba(140, 140, 140, 0.14) 0%, rgba(140, 140, 140, 0.2) 100%);
+  border-color: var(--ant-color-border);
+  box-shadow: none;
+}
+
+.academic-timetable-entry-semester {
+  box-shadow: none;
+}
+
+.academic-timetable-slot-group-stacked {
+  align-self: start;
+  min-height: auto;
+}
+
+.academic-timetable-slot-group-stacked .academic-timetable-slot-group-item {
+  flex: 0 0 auto;
+}
+
+.academic-timetable-slot-group-stacked .academic-timetable-entry {
+  flex: 0 0 auto;
+}
+
+.academic-timetable-entry-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.academic-timetable-entry-title-wrap {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.academic-timetable-course-category-theory {
+  color: var(--academic-timetable-course-category-theory-color);
+}
+
+.academic-timetable-course-surface-theory {
+  --academic-timetable-entry-accent-color: var(--academic-timetable-course-category-theory-color);
+  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-theory-bg);
+}
+
+.academic-timetable-course-category-practice {
+  color: var(--academic-timetable-course-category-practice-color);
+}
+
+.academic-timetable-course-surface-practice {
+  --academic-timetable-entry-accent-color: var(--academic-timetable-course-category-practice-color);
+  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-practice-bg);
+}
+
+.academic-timetable-course-category-integrated {
+  color: var(--academic-timetable-course-category-integrated-color);
+}
+
+.academic-timetable-course-surface-integrated {
+  --academic-timetable-entry-accent-color: var(
+    --academic-timetable-course-category-integrated-color
+  );
+  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-integrated-bg);
+}
+
+.academic-timetable-course-category-badge {
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
+.academic-timetable-course-category-badge.academic-timetable-course-category-theory {
+  background: var(--academic-timetable-course-category-theory-bg);
+}
+
+.academic-timetable-course-category-badge.academic-timetable-course-category-practice {
+  background: var(--academic-timetable-course-category-practice-bg);
+}
+
+.academic-timetable-course-category-badge.academic-timetable-course-category-integrated {
+  background: var(--academic-timetable-course-category-integrated-bg);
+}
+
+.academic-timetable-entry-status-row {
+  align-items: center;
+  bottom: 8px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  position: absolute;
+  right: 10px;
+}
+
+.academic-timetable-entry-badge-cluster {
+  align-items: center;
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
+.academic-timetable-entry-status {
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  white-space: nowrap;
+}
+
+.academic-timetable-entry-status-default {
+  background: rgba(22, 119, 255, 0.12);
+  color: var(--ant-color-primary);
+}
+
+.academic-timetable-entry-status-active {
+  background: rgba(82, 196, 26, 0.14);
+  color: #3f8600;
+}
+
+.academic-timetable-entry-status-inactive {
+  background: rgba(140, 140, 140, 0.14);
+  color: var(--ant-color-text-secondary);
+}
+
+.academic-timetable-entry-date {
+  color: var(--ant-color-text-tertiary);
+  font-size: 0.8125rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.academic-timetable-entry-week-pattern {
+  overflow: hidden;
+  text-align: right;
+  text-overflow: ellipsis;
+}
+
+.academic-timetable-entry-main-group,
+.academic-timetable-entry-center-group,
+.academic-timetable-entry-footer-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+}
+
+.academic-timetable-entry-center-group {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.academic-timetable-entry-footer-group {
+  margin-top: auto;
+}
+
+.academic-timetable-entry-subtitle,
+.academic-timetable-entry-meta {
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.academic-timetable-entry-subtitle {
+  color: var(--ant-color-text);
+  font-size: 0.875rem;
+  font-weight: 700;
+}
+
+.academic-timetable-entry-meta {
+  color: var(--ant-color-text-secondary);
+  font-weight: 500;
+}
+
+@media (max-width: 768px) {
+  .academic-timetable-slot-group {
+    margin: 3px;
+  }
+
+  .academic-timetable-entry-title-wrap {
+    gap: 6px;
+  }
+
+  .academic-timetable-entry {
+    border-radius: 10px;
+    padding: 8px 10px;
+  }
+}

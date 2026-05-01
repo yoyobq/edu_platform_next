@@ -1,0 +1,83 @@
+.semester-timetable-query-panel {
+  align-items: stretch;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  overflow: hidden;
+}
+
+.semester-timetable-summary {
+  display: flex;
+  flex: 1 1 420px;
+  flex-direction: column;
+  gap: 24px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 24px;
+}
+
+.semester-timetable-summary-heading {
+  min-width: 0;
+}
+
+.semester-timetable-summary-eyebrow {
+  color: var(--ant-color-text-tertiary);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.semester-timetable-summary-title {
+  color: var(--ant-color-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 8px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.semester-timetable-summary-meta {
+  border-top: 1px solid var(--ant-color-border-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  padding-top: 16px;
+}
+
+.semester-timetable-summary-meta-item {
+  flex: 0 1 160px;
+  min-width: 128px;
+}
+
+.semester-timetable-summary-meta-item span {
+  color: var(--ant-color-text-tertiary);
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.semester-timetable-summary-meta-item strong {
+  color: var(--ant-color-text);
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.semester-timetable-controls {
+  background: var(--ant-color-fill-quaternary);
+  border-inline-start: 1px solid var(--ant-color-border-secondary);
+  display: flex;
+  flex: 0 1 340px;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 280px;
+  padding: 24px;
+}

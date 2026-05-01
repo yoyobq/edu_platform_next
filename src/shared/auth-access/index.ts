@@ -30,6 +30,12 @@ export function hasAcademicTeachingLogAccess(input: { accessGroup?: readonly Aut
   return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
 }
 
+export function hasAcademicTimetableAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
 export function hasAcademicTeachingLogManagerAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

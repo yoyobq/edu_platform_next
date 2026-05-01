@@ -1,5 +1,6 @@
 import {
   hasAcademicTeachingLogAccess,
+  hasAcademicTimetableAccess,
   hasAdminOrAcademicOfficerAccess,
 } from '@/shared/auth-access';
 
@@ -47,11 +48,27 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'ScheduleOutlined',
-            key: '/academic-affairs/semester-calendar',
+            key: '/calendar-schedule/semester-calendar',
             label: '学期校历',
             navMode: 'rail' as const,
-            path: '/academic-affairs/semester-calendar',
+            path: '/calendar-schedule/semester-calendar',
             primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicTimetableAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'TableOutlined',
+            key: '/calendar-schedule/semester-timetable',
+            label: '学期课表',
+            navMode: 'rail' as const,
+            path: '/calendar-schedule/semester-timetable',
+            primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
         ]

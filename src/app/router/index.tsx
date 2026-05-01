@@ -27,6 +27,7 @@ import { PayloadCryptoPage } from '@/pages/payload-crypto';
 import { ProfilePage } from '@/pages/profile';
 import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
+import { SemesterTimetablePage } from '@/pages/semester-timetable';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -54,6 +55,7 @@ import { canAccessPayloadCrypto } from '@/features/payload-crypto';
 import {
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
+  hasAcademicTimetableAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
@@ -307,11 +309,34 @@ async function academicCalendarPageLoader(args: LoaderFunctionArgs) {
 }
 
 async function semesterCalendarPageLoader(args: LoaderFunctionArgs) {
-  return navigationPageLoader(args, '/academic-affairs/semester-calendar');
+  return navigationPageLoader(args, '/calendar-schedule/semester-calendar');
 }
 
 async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/academic-affairs/semester-course-schedule-sync');
+}
+
+async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  if (
+    !hasAcademicTimetableAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    isForbidden: false,
+  };
 }
 
 async function welcomeLoader({ request }: LoaderFunctionArgs) {
@@ -799,8 +824,17 @@ const router = createBrowserRouter([
       },
       {
         path: '/academic-affairs/semester-calendar',
+        loader: () => redirect('/calendar-schedule/semester-calendar'),
+      },
+      {
+        path: '/calendar-schedule/semester-calendar',
         loader: semesterCalendarPageLoader,
         Component: SemesterCalendarPage,
+      },
+      {
+        path: '/calendar-schedule/semester-timetable',
+        loader: semesterTimetablePageLoader,
+        Component: SemesterTimetablePage,
       },
       {
         path: '/academic-affairs/semester-course-schedule-sync',
