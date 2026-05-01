@@ -20,6 +20,13 @@ function cloneNavigationItem(item: NavigationMetaItem): NavigationMetaItem {
     : cloneNavigationLeafItem(item);
 }
 
+function mergeAllowedAccessGroups(
+  current: readonly NavigationFilter['accessGroup'][number][],
+  next: readonly NavigationFilter['accessGroup'][number][],
+) {
+  return Array.from(new Set([...current, ...next]));
+}
+
 function canAccessByGroup(item: NavigationMetaItem, filter: NavigationFilter) {
   const allowedAccessGroups = isNavigationGroupItem(item)
     ? item.allowedAccessGroups
@@ -100,7 +107,10 @@ function mergeNavigationItem(
   if (isNavigationGroupItem(current) && isNavigationGroupItem(next)) {
     return {
       ...current,
-      allowedAccessGroups: current.allowedAccessGroups,
+      allowedAccessGroups: mergeAllowedAccessGroups(
+        current.allowedAccessGroups,
+        next.allowedAccessGroups,
+      ),
       children: mergeNavigationItems([
         ...current.children,
         ...next.children,

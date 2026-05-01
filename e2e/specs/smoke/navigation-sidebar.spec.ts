@@ -35,6 +35,7 @@ test('guest 用户组可见 sidebar，并可进入首页与异常预览页', asy
   await page.getByRole('button', { name: '展开导航菜单' }).click();
 
   await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible();
+  await page.getByRole('menuitem', { name: '系统管理' }).click();
   await expect(page.getByRole('menuitem', { name: '异常预览' })).toBeVisible();
 
   await page.getByRole('menuitem', { name: '异常预览' }).click();

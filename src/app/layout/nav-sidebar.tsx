@@ -13,6 +13,7 @@ import {
   ReadOutlined,
   RightOutlined,
   SendOutlined,
+  SettingOutlined,
   SyncOutlined,
   TeamOutlined,
   WarningOutlined,
@@ -39,6 +40,7 @@ const ICON_MAP: Record<string, React.ComponentType> = {
   ReadOutlined,
   SyncOutlined,
   SendOutlined,
+  SettingOutlined,
   TeamOutlined,
   WarningOutlined,
 };

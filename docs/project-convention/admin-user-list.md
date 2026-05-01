@@ -18,7 +18,7 @@
 
 ## 导航
 
-- admin 导航中保留“用户管理”正式入口
+- admin 导航中保留“系统管理 > 用户管理”正式入口
 - 该入口直达 `/admin/users`
 - 当前仍由集中 `navigation-meta` registry 承载
 

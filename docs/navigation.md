@@ -34,14 +34,14 @@
 当前已落地的 provider 归属为：
 
 - `home`：首页 `/`
-- `admin`：`/admin/users`
-- `errors`：`/errors/preview`
+- `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`
+- `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：`/labs/payload-crypto`、`/labs/invite-issuer`
 - `sandbox`：`/sandbox/playground`
 
 补充约束：
 
-- `admin user detail` 当前不是一级导航项，仍通过列表页进入
+- `admin user detail` 当前不是导航叶子项，仍通过列表页进入
 - `src/app/layout/navigation-meta.ts` 当前只作为兼容 shim，不再承载真实导航数据
 - 新导航项应优先落到对应业务域 provider，而不是回填到 `layout`
 

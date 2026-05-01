@@ -14,11 +14,11 @@ import {
 
 const NAVIGATION_PROVIDERS = [
   getHomeNavigationItems,
-  getAdminNavigationItems,
   getAcademicAffairsNavigationItems,
-  getErrorNavigationItems,
   getLabsNavigationItems,
   getSandboxNavigationItems,
+  getAdminNavigationItems,
+  getErrorNavigationItems,
 ] as const;
 
 function collectNavigationItems(filter: NavigationFilter) {

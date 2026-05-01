@@ -33,10 +33,9 @@ describe('navigation catalog', () => {
 
     expect(items.map((item) => item.key)).toEqual([
       '/',
-      '/admin/users',
       'academic-affairs',
-      '/errors/preview',
       'labs',
+      'system-management',
     ]);
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
@@ -52,6 +51,10 @@ describe('navigation catalog', () => {
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/sandbox/playground',
+    ]);
+    expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
+      '/admin/users',
+      '/errors/preview',
     ]);
   });
 
@@ -139,12 +142,10 @@ describe('navigation catalog', () => {
 
     expect(leaves.map((item) => item.key)).toEqual([
       '/',
-      '/admin/users',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/my-teaching-logs',
-      '/errors/preview',
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',
@@ -152,11 +153,13 @@ describe('navigation catalog', () => {
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/sandbox/playground',
+      '/admin/users',
+      '/errors/preview',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([
       '/',
-      '/errors/preview',
       '/sandbox/playground',
+      '/errors/preview',
     ]);
   });
 
