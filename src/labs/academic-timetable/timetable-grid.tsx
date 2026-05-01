@@ -283,14 +283,11 @@ export function WeeklyTimetableGrid(props: {
               </div>
             </div>
             <div className="academic-timetable-entry-center-group">
-              <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
+              <p className="academic-timetable-entry-class">{item.teachingClassName}</p>
             </div>
             <div className="academic-timetable-entry-footer-group">
               <p className="academic-timetable-entry-meta">
                 {item.classroomName?.trim() || '待定教室'}
-              </p>
-              <p className="academic-timetable-entry-meta">
-                {item.staffName?.trim() || '待定教师'}
               </p>
             </div>
             {statusLabel ? (
@@ -346,13 +343,12 @@ export function SemesterTimetableGrid(props: {
               </p>
             </div>
             <div className="academic-timetable-entry-center-group">
-              <p className="academic-timetable-entry-subtitle">{item.teachingClassName}</p>
+              <p className="academic-timetable-entry-class">{item.teachingClassName}</p>
             </div>
             <div className="academic-timetable-entry-footer-group">
               <p className="academic-timetable-entry-meta">
                 {item.classroomName?.trim() || '待定教室'}
               </p>
-              <p className="academic-timetable-entry-meta">{item.staffName.trim() || '待定教师'}</p>
             </div>
           </article>
         );
