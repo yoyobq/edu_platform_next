@@ -36,16 +36,15 @@ import {
 } from '@/entities/academic-semester';
 import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
 
+import { type StaffDirectoryEntry, type StaffDirectoryResult } from '@/shared/upstream';
+
 import {
   type AcademicTeachingLogPrefillResult,
   type AcademicTeachingLogSaveResult,
-  fetchTeacherDirectory,
   isExpiredUpstreamSessionError,
   type LectureJournalExpectedOccurrence,
   type LectureJournalReconciliationItem,
   resolveUpstreamErrorMessage,
-  type TeacherDirectoryEntry,
-  type TeacherDirectoryResult,
 } from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import {
@@ -68,6 +67,7 @@ import {
 import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 import { resolveSaveValidationError, runLectureJournalSaveWorkflow } from './save-workflow';
+import { resolveLectureJournalStaffDirectory } from './staff-directory-cache-workflow';
 import { isFutureTeachingDate } from './teaching-date';
 import {
   buildCourseCategoryFilterOptions,
@@ -100,7 +100,7 @@ type UpstreamLoginFormValues = {
   userId: string;
 };
 
-type PendingAction = 'directory' | 'query' | null;
+type PendingAction = 'query' | null;
 
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
@@ -325,10 +325,8 @@ function resolveStatusTone(status: JournalEditableCardItem['status']) {
   return 'default';
 }
 
-function buildTeacherOptionLabel(teacher: TeacherDirectoryEntry) {
-  const normalizedCode = teacher.code.trim();
-
-  return normalizedCode ? `${teacher.name} (${normalizedCode})` : teacher.name;
+function buildTeacherOptionLabel(teacher: StaffDirectoryEntry) {
+  return `${teacher.staffId} ${teacher.name}`;
 }
 
 function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
@@ -411,12 +409,6 @@ function renderFieldLabel(label: string, config: FieldTipConfig) {
       <span className="lecture-journal-field-label-text">{label}</span>
     </span>
   );
-}
-
-async function requestTeacherDirectoryWithSession(session: StoredUpstreamSession) {
-  return fetchTeacherDirectory({
-    sessionToken: session.upstreamSessionToken,
-  });
 }
 
 function resolveSectionLabel(sectionName: string | null, sectionId: string | null) {
@@ -1466,13 +1458,24 @@ export function LectureJournalReconciliationLabPage() {
     account: loaderData?.upstreamAccount ?? null,
     keepAlive: true,
   });
+  const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
+  const storedSessionDirectoryKey = storedSession
+    ? [
+        storedSession.accountId,
+        storedSession.expiresAt,
+        storedSession.upstreamLoginId,
+        storedSession.upstreamSessionToken,
+      ].join(':')
+    : 'none';
   const viewerRole = loaderData?.viewerRole ?? 'authenticated';
   const isAdminViewer = viewerRole === 'admin';
   const isStaffViewer = viewerRole === 'staff';
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
-  const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
+  const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
+    null,
+  );
   const [queryState, dispatchQueryState] = useReducer(
     lectureJournalQueryReducer,
     initialLectureJournalQueryState,
@@ -1484,11 +1487,11 @@ export function LectureJournalReconciliationLabPage() {
   const [futureCourseVisibility, setFutureCourseVisibility] =
     useState<FutureCourseVisibility>('hide');
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
-  const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [isLoadingStaffDirectory, setIsLoadingStaffDirectory] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
-  const [directoryError, setDirectoryError] = useState<string | null>(null);
+  const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
   const [journalDrafts, setJournalDrafts] = useState<JournalDraftMap>({});
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -1500,6 +1503,7 @@ export function LectureJournalReconciliationLabPage() {
     Record<string, number>
   >({});
   const activeQueryRequestIdRef = useRef(0);
+  const activeStaffDirectoryRequestIdRef = useRef(0);
   const initialJournalDraftsRef = useRef<JournalDraftMap>({});
   const isQueryInFlightRef = useRef(false);
   const cardItemElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
@@ -1508,7 +1512,6 @@ export function LectureJournalReconciliationLabPage() {
 
   const clearCurrentSession = useCallback(() => {
     clear();
-    setDirectoryResult(null);
   }, [clear]);
 
   const openLoginModal = useCallback(() => {
@@ -1519,6 +1522,10 @@ export function LectureJournalReconciliationLabPage() {
     });
     setIsLoginModalOpen(true);
   }, [loginForm, storedSession?.upstreamLoginId]);
+
+  useEffect(() => {
+    storedSessionRef.current = storedSession;
+  }, [storedSession]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -1648,12 +1655,75 @@ export function LectureJournalReconciliationLabPage() {
     }
   }, [isStaffViewer, loaderData?.defaultStaffId, staffId]);
 
+  const loadStaffDirectoryForAdmin = useCallback(
+    async (session: StoredUpstreamSession | null) => {
+      if (!isAdminViewer) {
+        return null;
+      }
+
+      const requestId = activeStaffDirectoryRequestIdRef.current + 1;
+
+      activeStaffDirectoryRequestIdRef.current = requestId;
+      setIsLoadingStaffDirectory(true);
+      setStaffDirectoryError(null);
+
+      try {
+        const outcome = await resolveLectureJournalStaffDirectory({
+          currentDirectory: staffDirectoryResult,
+          persistSessionFromResult,
+          session,
+          viewerRole,
+        });
+
+        if (activeStaffDirectoryRequestIdRef.current !== requestId) {
+          return outcome;
+        }
+
+        setStaffDirectoryResult(outcome.directory);
+        return outcome;
+      } catch (error) {
+        if (activeStaffDirectoryRequestIdRef.current === requestId) {
+          setStaffDirectoryError(resolveUpstreamErrorMessage(error, '暂时无法加载教师目录。'));
+        }
+
+        return null;
+      } finally {
+        if (activeStaffDirectoryRequestIdRef.current === requestId) {
+          setIsLoadingStaffDirectory(false);
+        }
+      }
+    },
+    [isAdminViewer, persistSessionFromResult, staffDirectoryResult, viewerRole],
+  );
+
+  const ensureStaffDirectoryForAdmin = useCallback(
+    async (session: StoredUpstreamSession) => {
+      if (!isAdminViewer) {
+        return;
+      }
+
+      await loadStaffDirectoryForAdmin(session);
+    },
+    [isAdminViewer, loadStaffDirectoryForAdmin],
+  );
+
+  useEffect(() => {
+    if (!isAdminViewer) {
+      setStaffDirectoryResult(null);
+      setStaffDirectoryError(null);
+      setIsLoadingStaffDirectory(false);
+      return;
+    }
+
+    void loadStaffDirectoryForAdmin(storedSessionRef.current);
+  }, [isAdminViewer, loadStaffDirectoryForAdmin, storedSessionDirectoryKey]);
+
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
   const normalizedStaffId = normalizeOptionalString(staffId);
   const hasMissingStaffFilter = !normalizedStaffId;
-  const teacherOptions = (directoryResult?.teachers ?? []).map((teacher) => ({
+  const teacherOptions = (staffDirectoryResult?.teachers ?? []).map((teacher) => ({
     label: buildTeacherOptionLabel(teacher),
-    value: teacher.value,
+    value: teacher.staffId,
   }));
   const prefillIntegratedItems = useMemo(
     () =>
@@ -1935,39 +2005,6 @@ export function LectureJournalReconciliationLabPage() {
     ],
   );
 
-  async function runDirectoryAction(sessionOverride?: StoredUpstreamSession) {
-    const session = sessionOverride ?? storedSession;
-
-    if (!session) {
-      setPendingAction('directory');
-      setLoginError(null);
-      setIsLoginModalOpen(true);
-      return;
-    }
-
-    setIsLoadingDirectory(true);
-    setDirectoryError(null);
-
-    try {
-      const result = await requestTeacherDirectoryWithSession(session);
-
-      persistSessionFromResult(session, result);
-      setDirectoryResult(result);
-    } catch (error) {
-      if (isExpiredUpstreamSessionError(error)) {
-        clearCurrentSession();
-        setPendingAction('directory');
-        setLoginError('教务系统连接已失效，请重新连接后继续。');
-        openLoginModal();
-        return;
-      }
-
-      setDirectoryError(resolveUpstreamErrorMessage(error, '暂时无法同步教师列表。'));
-    } finally {
-      setIsLoadingDirectory(false);
-    }
-  }
-
   async function runQueryAction(sessionOverride?: StoredUpstreamSession) {
     const session = sessionOverride ?? storedSession;
 
@@ -1999,6 +2036,12 @@ export function LectureJournalReconciliationLabPage() {
 
     try {
       await waitForNextPaint();
+
+      if (activeQueryRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      await ensureStaffDirectoryForAdmin(session);
 
       if (activeQueryRequestIdRef.current !== requestId) {
         return;
@@ -2063,10 +2106,6 @@ export function LectureJournalReconciliationLabPage() {
 
       setPendingAction(null);
       loginForm.resetFields();
-
-      if (nextPendingAction === 'directory') {
-        await runDirectoryAction(nextSession);
-      }
 
       if (nextPendingAction === 'query') {
         await runQueryAction(nextSession);
@@ -2235,10 +2274,9 @@ export function LectureJournalReconciliationLabPage() {
                 <Typography.Text strong>教师</Typography.Text>
                 {isAdminViewer ? (
                   <AutoComplete
+                    notFoundContent={isLoadingStaffDirectory ? '正在读取教师目录' : undefined}
                     options={teacherOptions}
-                    placeholder={
-                      loaderData?.defaultStaffId || '输入教师 ID，或同步教师列表后搜索姓名'
-                    }
+                    placeholder={loaderData?.defaultStaffId || '输入教师 ID，或使用缓存搜索姓名'}
                     value={staffId}
                     onChange={setStaffId}
                     filterOption={(inputValue, option) =>
@@ -2257,7 +2295,9 @@ export function LectureJournalReconciliationLabPage() {
             </div>
 
             {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-            {directoryError ? <Alert message={directoryError} showIcon type="error" /> : null}
+            {staffDirectoryError ? (
+              <Alert message={staffDirectoryError} showIcon type="warning" />
+            ) : null}
             {hasMissingStaffFilter ? (
               <Alert
                 message={
@@ -2271,16 +2311,6 @@ export function LectureJournalReconciliationLabPage() {
             ) : null}
 
             <div className="lecture-journal-control-actions">
-              {isAdminViewer ? (
-                <Button
-                  loading={isLoadingDirectory}
-                  onClick={() => {
-                    void runDirectoryAction();
-                  }}
-                >
-                  同步教师列表
-                </Button>
-              ) : null}
               <Button
                 type="primary"
                 disabled={!selectedSemester || hasMissingStaffFilter || isLoadingReconciliation}

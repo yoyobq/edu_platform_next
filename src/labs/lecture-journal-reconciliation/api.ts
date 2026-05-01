@@ -9,14 +9,6 @@ import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
-type TeacherDirectoryResponse = {
-  fetchTeacherDirectory: TeacherDirectoryResult;
-};
-
-type DepartmentOptionsResponse = {
-  departments: LectureJournalDepartmentOption[];
-};
-
 type AcademicTeachingLogPrefillResponse = {
   listAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
 };
@@ -31,27 +23,6 @@ type SaveAcademicPracticeTeachingLogResponse = {
 
 type SaveAcademicIntegratedTeachingLogResponse = {
   saveAcademicIntegratedTeachingLog: AcademicTeachingLogSaveResult;
-};
-
-export type LectureJournalDepartmentOption = {
-  departmentName: string;
-  id: string;
-  isEnabled: boolean;
-  shortName: string | null;
-};
-
-export type TeacherDirectoryEntry = {
-  code: string;
-  image: string;
-  name: string;
-  text: string;
-  value: string;
-};
-
-export type TeacherDirectoryResult = {
-  expiresAt: string;
-  teachers: TeacherDirectoryEntry[];
-  upstreamSessionToken: string;
 };
 
 export type LectureJournalReconciliationStatus = 'FILLED' | 'MISSING' | 'UNMATCHED';
@@ -216,7 +187,6 @@ export type AcademicTeachingLogPrefillResult = {
 };
 
 export type FetchAcademicTeachingLogPrefillInput = {
-  departmentId?: string;
   endDate?: string;
   semesterId: number;
   staffId: string;
@@ -299,36 +269,8 @@ export type SaveAcademicIntegratedTeachingLogInput = {
   weekNumber: string;
 };
 
-const FETCH_TEACHER_DIRECTORY_QUERY = `
-  query FetchTeacherDirectory($sessionToken: String!) {
-    fetchTeacherDirectory(sessionToken: $sessionToken) {
-      expiresAt
-      teachers {
-        code
-        image
-        name
-        text
-        value
-      }
-      upstreamSessionToken
-    }
-  }
-`;
-
-const DEPARTMENTS_QUERY = `
-  query LectureJournalReconciliationDepartments($isEnabled: Boolean, $limit: Int) {
-    departments(isEnabled: $isEnabled, limit: $limit) {
-      departmentName
-      id
-      isEnabled
-      shortName
-    }
-  }
-`;
-
 const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
   query ListAcademicTeachingLogPrefillItems(
-    $departmentId: String
     $endDate: String
     $semesterId: Int!
     $staffId: String!
@@ -336,7 +278,6 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
     $upstreamSessionToken: String
   ) {
     listAcademicTeachingLogPrefillItems(
-      departmentId: $departmentId
       endDate: $endDate
       semesterId: $semesterId
       staffId: $staffId
@@ -565,7 +506,6 @@ function normalizeOptionalNumber(value?: number) {
 function normalizeFetchAcademicTeachingLogPrefillInput(
   input: FetchAcademicTeachingLogPrefillInput,
 ) {
-  const departmentId = normalizeOptionalString(input.departmentId);
   const endDate = normalizeOptionalString(input.endDate);
   const staffId = String(input.staffId || '').trim();
   const startDate = normalizeOptionalString(input.startDate);
@@ -576,7 +516,6 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
   }
 
   return {
-    departmentId,
     endDate,
     semesterId: input.semesterId,
     staffId,
@@ -668,38 +607,6 @@ function normalizeSaveAcademicIntegratedTeachingLogInput(
   };
 }
 
-export async function fetchTeacherDirectory(input: { sessionToken: string }) {
-  const response = await requestGraphQL<
-    TeacherDirectoryResponse,
-    {
-      sessionToken: string;
-    }
-  >(FETCH_TEACHER_DIRECTORY_QUERY, {
-    sessionToken: input.sessionToken,
-  });
-
-  return response.fetchTeacherDirectory;
-}
-
-export async function fetchLectureJournalDepartmentOptions() {
-  try {
-    const response = await requestGraphQL<
-      DepartmentOptionsResponse,
-      {
-        isEnabled: boolean;
-        limit: number;
-      }
-    >(DEPARTMENTS_QUERY, {
-      isEnabled: true,
-      limit: 500,
-    });
-
-    return response.departments;
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载院系列表。'));
-  }
-}
-
 export async function fetchAcademicTeachingLogPrefillItems(
   input: FetchAcademicTeachingLogPrefillInput,
 ) {
@@ -707,7 +614,6 @@ export async function fetchAcademicTeachingLogPrefillItems(
     const response = await requestGraphQL<
       AcademicTeachingLogPrefillResponse,
       FetchAcademicTeachingLogPrefillInput & {
-        departmentId?: string;
         endDate?: string;
         startDate?: string;
         upstreamSessionToken?: string;

@@ -68,7 +68,6 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
-        departmentId: 'ORG0302',
         persistSessionFromResult,
         semesterId: 202502,
         session,
@@ -79,7 +78,6 @@ describe('lecture-journal-reconciliation query workflow', () => {
     });
 
     expect(fetchAcademicTeachingLogPrefillItemsMock).toHaveBeenCalledWith({
-      departmentId: 'ORG0302',
       semesterId: 202502,
       staffId: 'STAFF-001',
       upstreamSessionToken: 'token-001',
@@ -93,7 +91,6 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
-        departmentId: 'ORG0302',
         isCurrent: () => false,
         persistSessionFromResult,
         semesterId: 202502,
@@ -115,7 +112,6 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
-        departmentId: 'ORG0302',
         persistSessionFromResult,
         semesterId: 202502,
         session,
@@ -129,7 +125,6 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
-        departmentId: 'ORG0302',
         persistSessionFromResult,
         semesterId: 202502,
         session,

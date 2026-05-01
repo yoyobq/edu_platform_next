@@ -311,7 +311,7 @@ export default defineConfig([
             },
             {
               from: { type: 'shared' },
-              allow: [{ to: { type: 'shared', captured: { moduleName: '{{from.moduleName}}' } } }],
+              allow: [{ to: { type: 'shared' } }],
             },
             {
               from: { type: 'labs' },

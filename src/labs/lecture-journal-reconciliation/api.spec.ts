@@ -17,8 +17,6 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   fetchAcademicTeachingLogPrefillItems,
-  fetchLectureJournalDepartmentOptions,
-  fetchTeacherDirectory,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
   saveAcademicTheoryTeachingLog,
@@ -29,64 +27,6 @@ describe('lecture-journal-reconciliation api', () => {
     executeGraphQLMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReturnValue(false);
-  });
-
-  it('requests teacher directory with the current session token', async () => {
-    const payload = {
-      expiresAt: '2026-04-25T12:00:00.000Z',
-      teachers: [
-        {
-          code: 'T-001',
-          image: '',
-          name: '张老师',
-          text: '张老师 / T-001',
-          value: 'STAFF-001',
-        },
-      ],
-      upstreamSessionToken: 'rolling-token-002',
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      fetchTeacherDirectory: payload,
-    });
-
-    await expect(
-      fetchTeacherDirectory({
-        sessionToken: 'rolling-token-001',
-      }),
-    ).resolves.toEqual(payload);
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('fetchTeacherDirectory'),
-      {
-        sessionToken: 'rolling-token-001',
-      },
-    );
-  });
-
-  it('requests enabled department options for the department selector', async () => {
-    const payload = [
-      {
-        departmentName: '人工智能系',
-        id: 'ORG0302',
-        isEnabled: true,
-        shortName: 'AI',
-      },
-    ];
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      departments: payload,
-    });
-
-    await expect(fetchLectureJournalDepartmentOptions()).resolves.toEqual(payload);
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('LectureJournalReconciliationDepartments'),
-      {
-        isEnabled: true,
-        limit: 500,
-      },
-    );
   });
 
   it('requests teaching log prefill with reconciliation and integrated preview fields', async () => {
@@ -167,7 +107,6 @@ describe('lecture-journal-reconciliation api', () => {
 
     await expect(
       fetchAcademicTeachingLogPrefillItems({
-        departmentId: ' ORG0302 ',
         endDate: ' 2026-05-01 ',
         semesterId: 202601,
         staffId: ' STAFF-003 ',
@@ -179,7 +118,6 @@ describe('lecture-journal-reconciliation api', () => {
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitContent'),
       {
-        departmentId: 'ORG0302',
         endDate: '2026-05-01',
         semesterId: 202601,
         staffId: 'STAFF-003',

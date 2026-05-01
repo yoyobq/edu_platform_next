@@ -12,7 +12,6 @@ import {
 } from './api';
 
 type QueryWorkflowParams = {
-  departmentId?: string;
   isCurrent?: () => boolean;
   persistSessionFromResult: PersistUpstreamSessionFromResult;
   semesterId: number;
@@ -29,7 +28,6 @@ export async function runLectureJournalReconciliationQueryWorkflow(
 ): Promise<QueryWorkflowOutcome> {
   try {
     const prefillResult = await fetchAcademicTeachingLogPrefillItems({
-      departmentId: params.departmentId,
       semesterId: params.semesterId,
       staffId: params.staffId,
       upstreamSessionToken: params.session.upstreamSessionToken,
