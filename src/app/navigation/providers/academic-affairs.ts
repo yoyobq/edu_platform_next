@@ -14,7 +14,7 @@ function hasAcademicAffairsNavigationAccess(filter: Parameters<NavigationItemsPr
 }
 
 export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filter) => {
-  const children: NavigationLeafItem[] = [
+  const academicAffairsChildren: NavigationLeafItem[] = [
     ...(hasAcademicAffairsNavigationAccess(filter)
       ? [
           {
@@ -24,16 +24,6 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '学期与校历事件',
             navMode: 'rail' as const,
             path: '/academic-affairs/academic-calendar',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
-            key: '/academic-affairs/semester-calendar',
-            label: '学期校历',
-            navMode: 'rail' as const,
-            path: '/academic-affairs/semester-calendar',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
@@ -49,6 +39,26 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
+  ];
+
+  const calendarScheduleChildren: NavigationLeafItem[] = [
+    ...(hasAcademicAffairsNavigationAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CalendarOutlined',
+            key: '/academic-affairs/semester-calendar',
+            label: '学期校历',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/semester-calendar',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+  ];
+
+  const academicAssistantChildren: NavigationLeafItem[] = [
     ...(hasAcademicTeachingLogAccess({
       accessGroup: filter.accessGroup,
     })
@@ -67,18 +77,42 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       : []),
   ];
 
-  if (children.length === 0) {
-    return [];
-  }
-
   return [
-    {
-      allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-      children,
-      iconKey: 'ReadOutlined',
-      key: 'academic-affairs',
-      label: '教务管理',
-      navMode: 'rail',
-    },
+    ...(calendarScheduleChildren.length > 0
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            children: calendarScheduleChildren,
+            iconKey: 'CalendarOutlined',
+            key: 'calendar-schedule',
+            label: '校历课表',
+            navMode: 'rail' as const,
+          },
+        ]
+      : []),
+    ...(academicAssistantChildren.length > 0
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            children: academicAssistantChildren,
+            iconKey: 'FormOutlined',
+            key: 'academic-assistant',
+            label: '教务助手',
+            navMode: 'rail' as const,
+          },
+        ]
+      : []),
+    ...(academicAffairsChildren.length > 0
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            children: academicAffairsChildren,
+            iconKey: 'ReadOutlined',
+            key: 'academic-affairs',
+            label: '教务管理',
+            navMode: 'rail' as const,
+          },
+        ]
+      : []),
   ];
 };

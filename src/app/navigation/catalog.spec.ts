@@ -33,14 +33,20 @@ describe('navigation catalog', () => {
 
     expect(items.map((item) => item.key)).toEqual([
       '/',
+      'calendar-schedule',
+      'academic-assistant',
       'academic-affairs',
       'labs',
       'system-management',
     ]);
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
-      '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+    ]);
+    expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/semester-calendar',
+    ]);
+    expect(findGroup(items, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
@@ -67,13 +73,14 @@ describe('navigation catalog', () => {
     );
 
     expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
-      [
-        '/academic-affairs/academic-calendar',
-        '/academic-affairs/semester-calendar',
-        '/academic-affairs/semester-course-schedule-sync',
-        '/academic-affairs/my-teaching-logs',
-      ],
+      ['/academic-affairs/academic-calendar', '/academic-affairs/semester-course-schedule-sync'],
     );
+    expect(
+      findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
+    ).toEqual(['/academic-affairs/semester-calendar']);
+    expect(
+      findGroup(prodAdminItems, 'academic-assistant')?.children.map((item) => item.key),
+    ).toEqual(['/academic-affairs/my-teaching-logs']);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
@@ -92,8 +99,8 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(staffItems.map((item) => item.key)).toEqual(['academic-affairs', 'labs']);
-    expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
+    expect(staffItems.map((item) => item.key)).toEqual(['academic-assistant', 'labs']);
+    expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
@@ -113,11 +120,20 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(staffItems.map((item) => item.key)).toEqual(['academic-affairs', 'labs']);
+    expect(staffItems.map((item) => item.key)).toEqual([
+      'calendar-schedule',
+      'academic-assistant',
+      'academic-affairs',
+      'labs',
+    ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
-      '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+    ]);
+    expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/semester-calendar',
+    ]);
+    expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
@@ -142,10 +158,10 @@ describe('navigation catalog', () => {
 
     expect(leaves.map((item) => item.key)).toEqual([
       '/',
-      '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-calendar',
-      '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/academic-calendar',
+      '/academic-affairs/semester-course-schedule-sync',
       '/labs/payload-crypto',
       '/labs/change-login-email',
       '/labs/invite-issuer',

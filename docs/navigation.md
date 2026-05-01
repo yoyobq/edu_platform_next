@@ -34,6 +34,7 @@
 当前已落地的 provider 归属为：
 
 - `home`：首页 `/`
+- `academic-affairs`：`教务管理` 当前包含 `/academic-affairs/academic-calendar`、`/academic-affairs/semester-course-schedule-sync`；`校历课表` 当前包含 `/academic-affairs/semester-calendar`；`教务助手` 当前包含 `/academic-affairs/my-teaching-logs`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：`/labs/payload-crypto`、`/labs/invite-issuer`
