@@ -1,17 +1,24 @@
+.semester-timetable-query-state {
+  padding: 24px;
+}
+
+.semester-timetable-query-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.semester-timetable-query-alert {
+  padding: 24px 24px 0;
+}
+
 .semester-timetable-query-panel {
   align-items: stretch;
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--radius-card);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0;
-  overflow: hidden;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
 }
 
 .semester-timetable-summary {
   display: flex;
-  flex: 1 1 420px;
   flex-direction: column;
   gap: 24px;
   justify-content: space-between;
@@ -44,15 +51,14 @@
 
 .semester-timetable-summary-meta {
   border-top: 1px solid var(--ant-color-border-secondary);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 24px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   padding-top: 16px;
 }
 
 .semester-timetable-summary-meta-item {
-  flex: 0 1 160px;
-  min-width: 128px;
+  min-width: 0;
 }
 
 .semester-timetable-summary-meta-item span {
@@ -69,15 +75,38 @@
   font-weight: 600;
   line-height: 1.4;
   margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .semester-timetable-controls {
   background: var(--ant-color-fill-quaternary);
-  border-inline-start: 1px solid var(--ant-color-border-secondary);
   display: flex;
-  flex: 0 1 340px;
   flex-direction: column;
   gap: 16px;
   min-width: 280px;
   padding: 24px;
+}
+
+.semester-timetable-control-field {
+  min-width: 0;
+}
+
+.semester-timetable-control-action {
+  margin-top: auto;
+}
+
+@media (max-width: 860px) {
+  .semester-timetable-query-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .semester-timetable-summary {
+    padding: 24px;
+  }
+
+  .semester-timetable-summary-meta {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  }
 }

@@ -3,6 +3,8 @@ import { Alert, Button, Card, Empty, Input, Select, Skeleton, Typography } from 
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
+import { resolveStaffDirectoryEntries } from '@/shared/upstream';
+
 import type {
   AcademicTeacherSemesterScheduleItem,
   AcademicTeacherSemesterScheduleQueryFilters,
@@ -86,12 +88,17 @@ export function SemesterTimetablePageContent({
   >([]);
   const [semesterScheduleItemsError, setSemesterScheduleItemsError] = useState<string | null>(null);
   const [semesterScheduleItemsLoading, setSemesterScheduleItemsLoading] = useState(false);
-  const latestFiltersRef = useRef(filters);
+  const [resolvedStaffName, setResolvedStaffName] = useState<string | null>(null);
+  const [staffNameLoading, setStaffNameLoading] = useState(false);
+  const submittedFiltersRef = useRef<SemesterTimetableFilters>({ staffId: loaderDefaultStaffId });
+  const activeStaffNameRequestIdRef = useRef(0);
+  const [submittedStaffId, setSubmittedStaffId] = useState(loaderDefaultStaffId);
 
-  const hasSemesterQueryId = useMemo(
-    () => Boolean(normalizeStringFilter(filters.staffId)),
+  const normalizedStaffId = useMemo(
+    () => normalizeStringFilter(filters.staffId) ?? '',
     [filters.staffId],
   );
+  const hasSemesterQueryId = useMemo(() => Boolean(normalizedStaffId), [normalizedStaffId]);
   const selectedSemester = useMemo(
     () => semesters.find((record) => record.id === selectedSemesterId) ?? null,
     [semesters, selectedSemesterId],
@@ -115,21 +122,22 @@ export function SemesterTimetablePageContent({
 
   const loadSemesterScheduleItems = useCallback(
     async (semesterId: number, currentFilters: SemesterTimetableFilters) => {
-      const normalizedStaffId = normalizeStringFilter(currentFilters.staffId);
+      const normalizedQueryStaffId = normalizeStringFilter(currentFilters.staffId);
 
-      if (!normalizedStaffId) {
+      if (!normalizedQueryStaffId) {
         setSemesterScheduleItemsError(null);
         setSemesterScheduleItems([]);
         return;
       }
 
+      setSubmittedStaffId(normalizedQueryStaffId);
       setSemesterScheduleItemsLoading(true);
       setSemesterScheduleItemsError(null);
 
       try {
         const result = await listAcademicTeacherSemesterScheduleItems({
           semesterId,
-          staffId: normalizedStaffId,
+          staffId: normalizedQueryStaffId,
         });
 
         setSemesterScheduleItems(result);
@@ -148,10 +156,6 @@ export function SemesterTimetablePageContent({
   useEffect(() => {
     void loadSemesters();
   }, [loadSemesters]);
-
-  useEffect(() => {
-    latestFiltersRef.current = filters;
-  }, [filters]);
 
   useEffect(() => {
     if (!loaderDefaultStaffId) {
@@ -176,37 +180,82 @@ export function SemesterTimetablePageContent({
       return;
     }
 
-    void loadSemesterScheduleItems(selectedSemesterId, latestFiltersRef.current);
+    void loadSemesterScheduleItems(selectedSemesterId, submittedFiltersRef.current);
   }, [loadSemesterScheduleItems, selectedSemesterId]);
+
+  useEffect(() => {
+    if (!submittedStaffId) {
+      activeStaffNameRequestIdRef.current += 1;
+      setResolvedStaffName(null);
+      setStaffNameLoading(false);
+      return;
+    }
+
+    const requestId = activeStaffNameRequestIdRef.current + 1;
+    activeStaffNameRequestIdRef.current = requestId;
+    setStaffNameLoading(true);
+
+    resolveStaffDirectoryEntries([submittedStaffId])
+      .then((result) => {
+        if (activeStaffNameRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        const matchedEntry = result.entries.find((entry) => entry.staffId === submittedStaffId);
+        setResolvedStaffName(matchedEntry?.name.trim() || null);
+      })
+      .catch(() => {
+        if (activeStaffNameRequestIdRef.current === requestId) {
+          setResolvedStaffName(null);
+        }
+      })
+      .finally(() => {
+        if (activeStaffNameRequestIdRef.current === requestId) {
+          setStaffNameLoading(false);
+        }
+      });
+  }, [submittedStaffId]);
 
   function renderQueryControls() {
     if (semesterError) {
       return (
-        <Alert
-          action={
-            <Button size="small" type="primary" onClick={() => void loadSemesters()}>
-              重试
-            </Button>
-          }
-          showIcon
-          title={semesterError}
-          type="error"
-        />
+        <div className="semester-timetable-query-state">
+          <Alert
+            action={
+              <Button size="small" type="primary" onClick={() => void loadSemesters()}>
+                重试
+              </Button>
+            }
+            showIcon
+            title={semesterError}
+            type="error"
+          />
+        </div>
       );
     }
 
     if (semestersLoading) {
-      return <Skeleton active paragraph={{ rows: 1 }} title={false} />;
+      return (
+        <div className="semester-timetable-query-state">
+          <Skeleton active paragraph={{ rows: 1 }} title={false} />
+        </div>
+      );
     }
 
     if (!semesters.length) {
-      return <Empty description="当前还没有可用学期" image={Empty.PRESENTED_IMAGE_SIMPLE} />;
+      return (
+        <div className="semester-timetable-query-state">
+          <Empty description="当前还没有可用学期" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+        </div>
+      );
     }
 
     return (
-      <div className="flex flex-col gap-4">
+      <div className="semester-timetable-query-content">
         {!hasSemesterQueryId ? (
-          <Alert showIcon title={REQUIRED_STAFF_ID_FILTER_MESSAGE} type="warning" />
+          <div className="semester-timetable-query-alert">
+            <Alert showIcon title={REQUIRED_STAFF_ID_FILTER_MESSAGE} type="warning" />
+          </div>
         ) : null}
 
         <div className="semester-timetable-query-panel">
@@ -218,6 +267,14 @@ export function SemesterTimetablePageContent({
                   <p className="semester-timetable-summary-title">{selectedSemester.name}</p>
                 </div>
                 <div className="semester-timetable-summary-meta">
+                  <div className="semester-timetable-summary-meta-item">
+                    <span>教师姓名</span>
+                    <strong>
+                      {staffNameLoading
+                        ? '读取中'
+                        : resolvedStaffName || submittedStaffId || '未填写'}
+                    </strong>
+                  </div>
                   <div className="semester-timetable-summary-meta-item">
                     <span>教学开始</span>
                     <strong>{formatSemesterDate(selectedSemester.firstTeachingDate)}</strong>
@@ -232,7 +289,7 @@ export function SemesterTimetablePageContent({
           </div>
 
           <div className="semester-timetable-controls">
-            <div>
+            <div className="semester-timetable-control-field">
               <Typography.Text strong>学期</Typography.Text>
               <Select
                 style={{ marginTop: 8, width: '100%' }}
@@ -245,7 +302,7 @@ export function SemesterTimetablePageContent({
               />
             </div>
 
-            <div>
+            <div className="semester-timetable-control-field">
               <Typography.Text strong>教师 ID</Typography.Text>
               <Input
                 style={{ marginTop: 8 }}
@@ -260,21 +317,26 @@ export function SemesterTimetablePageContent({
               />
             </div>
 
-            <Button
-              block
-              type="primary"
-              loading={semesterScheduleItemsLoading}
-              disabled={selectedSemesterId === null || !hasSemesterQueryId}
-              onClick={() => {
-                if (selectedSemesterId === null) {
-                  return;
-                }
+            <div className="semester-timetable-control-action">
+              <Button
+                block
+                type="primary"
+                loading={semesterScheduleItemsLoading}
+                disabled={selectedSemesterId === null || !hasSemesterQueryId}
+                onClick={() => {
+                  if (selectedSemesterId === null) {
+                    return;
+                  }
 
-                void loadSemesterScheduleItems(selectedSemesterId, filters);
-              }}
-            >
-              查询学期课表
-            </Button>
+                  const submittedFilters = { staffId: filters.staffId };
+
+                  submittedFiltersRef.current = submittedFilters;
+                  void loadSemesterScheduleItems(selectedSemesterId, submittedFilters);
+                }}
+              >
+                查询学期课表
+              </Button>
+            </div>
           </div>
         </div>
       </div>
@@ -285,12 +347,18 @@ export function SemesterTimetablePageContent({
     <div className="flex flex-col gap-6">
       <Card>
         <div className="flex flex-col gap-4">
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            学期课表
-          </Typography.Title>
-          {renderQueryControls()}
+          <div className="flex flex-col gap-1">
+            <Typography.Title level={3} style={{ marginBottom: 0 }}>
+              学期课表
+            </Typography.Title>
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              按教师和学期查看排课分布
+            </Typography.Paragraph>
+          </div>
         </div>
       </Card>
+
+      <Card styles={{ body: { overflow: 'hidden', padding: 0 } }}>{renderQueryControls()}</Card>
 
       <div className="flex flex-col gap-4">
         {semesterScheduleItemsError ? (
