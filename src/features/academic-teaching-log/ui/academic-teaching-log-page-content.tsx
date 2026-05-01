@@ -55,19 +55,14 @@ import {
 } from '@/shared/upstream';
 
 import {
-  type AcademicTeachingLogPrefillResult,
-  type AcademicTeachingLogSaveResult,
-  isExpiredUpstreamSessionError,
-  type LectureJournalExpectedOccurrence,
-  type LectureJournalReconciliationItem,
-  resolveUpstreamErrorMessage,
-} from './api';
-import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
+  isIntegratedCourseCategory,
+  isPracticeCourseCategory,
+} from '../application/course-category';
 import {
   buildEditableCardItemFromIntegratedPreview,
   buildEditableCardItemFromReconciliation,
   type JournalEditableCardItem,
-} from './editable-item-mapper';
+} from '../application/editable-item-mapper';
 import {
   buildJournalDrafts,
   DEFAULT_DISCIPLINE_SITUATION,
@@ -79,12 +74,24 @@ import {
   type JournalDraftMap,
   resolveShiftName,
   reuseJournalDraftMapReferences,
-} from './journal-draft-policy';
-import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
-import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
-import { resolveSaveValidationError, runLectureJournalSaveWorkflow } from './save-workflow';
-import { resolveLectureJournalStaffDirectory } from './staff-directory-cache-workflow';
-import { isFutureTeachingDate } from './teaching-date';
+} from '../application/journal-draft-policy';
+import {
+  initialLectureJournalQueryState,
+  lectureJournalQueryReducer,
+} from '../application/query-state';
+import { runLectureJournalReconciliationQueryWorkflow } from '../application/query-workflow';
+import {
+  resolveSaveValidationError,
+  runLectureJournalSaveWorkflow,
+} from '../application/save-workflow';
+import { resolveLectureJournalStaffDirectory } from '../application/staff-directory-cache-workflow';
+import { isFutureTeachingDate } from '../application/teaching-date';
+import {
+  type AcademicTeachingLogPrefillResult,
+  type AcademicTeachingLogSaveResult,
+  type LectureJournalExpectedOccurrence,
+  type LectureJournalReconciliationItem,
+} from '../application/types';
 import {
   buildCourseCategoryFilterOptions,
   buildResultViewScopeOptions,
@@ -97,18 +104,25 @@ import {
   resolveResultViewScope,
   resolveResultViewScopeTitle,
   type ResultViewScope,
-} from './view-filter-policy';
+} from '../application/view-filter-policy';
+import {
+  fetchAcademicTeachingLogPrefillItems,
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+  saveAcademicIntegratedTeachingLog,
+  saveAcademicPracticeTeachingLog,
+  saveAcademicTheoryTeachingLog,
+} from '../infrastructure/academic-teaching-log-api';
 
-import './page.css';
+import './academic-teaching-log-page-content.css';
 
-type LectureJournalReconciliationLabLoaderData = {
+export type AcademicTeachingLogPageLoaderData = {
   defaultStaffId?: string | null;
   upstreamAccount?: {
     accountId: number;
     displayName: string;
   } | null;
   viewerRole?: 'admin' | 'authenticated' | 'staff';
-  viewerKind?: 'authenticated' | 'internal';
 } | null;
 
 type PendingAction = 'query' | null;
@@ -1457,9 +1471,9 @@ const JournalDraftCard = memo(function JournalDraftCard({
 
 JournalDraftCard.displayName = 'JournalDraftCard';
 
-export function LectureJournalReconciliationLabPage() {
+export function AcademicTeachingLogPageContent() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
+  const loaderData = useLoaderData() as AcademicTeachingLogPageLoaderData;
   const liveUpstreamAccount = loaderData?.upstreamAccount ?? null;
   const liveDefaultStaffId = loaderData?.defaultStaffId ?? null;
   const viewerRole = loaderData?.viewerRole ?? 'authenticated';
@@ -1581,10 +1595,12 @@ export function LectureJournalReconciliationLabPage() {
       };
     }
 
+    const activeSession = session;
+
     async function loadUpstreamIdentity() {
       try {
         const identity = await readVerifiedStaffIdentity({
-          sessionToken: session.upstreamSessionToken,
+          sessionToken: activeSession.upstreamSessionToken,
         });
 
         if (cancelled) {
@@ -1592,7 +1608,7 @@ export function LectureJournalReconciliationLabPage() {
         }
 
         setUpstreamIdentity(identity);
-        persistSessionFromVerifiedIdentity(session, identity);
+        persistSessionFromVerifiedIdentity(activeSession, identity);
       } catch (error) {
         if (cancelled) {
           return;
@@ -2206,6 +2222,9 @@ export function LectureJournalReconciliationLabPage() {
           draft,
           item,
           persistSessionFromResult,
+          saveAcademicIntegratedTeachingLog,
+          saveAcademicPracticeTeachingLog,
+          saveAcademicTheoryTeachingLog,
           session: scopedSessionResult.session,
         });
 
@@ -2317,8 +2336,11 @@ export function LectureJournalReconciliationLabPage() {
       }
 
       const result = await runLectureJournalReconciliationQueryWorkflow({
+        fetchAcademicTeachingLogPrefillItems,
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
+        isExpiredUpstreamSessionError,
         persistSessionFromResult,
+        resolveUpstreamErrorMessage,
         semesterId: selectedSemester.id,
         session: scopedSessionResult.session,
         staffId: normalizedStaffId,

@@ -1,5 +1,5 @@
-import type { LectureJournalReconciliationItem } from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
+import type { LectureJournalReconciliationItem } from './types';
 
 export type JournalDraft = {
   completeAndSummary: string;

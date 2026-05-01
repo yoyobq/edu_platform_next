@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AcademicTeachingLogPrefillResult } from './api';
 import { initialLectureJournalQueryState, lectureJournalQueryReducer } from './query-state';
+import type { AcademicTeachingLogPrefillResult } from './types';
 
-describe('lecture-journal-reconciliation query state', () => {
+describe('academic-teaching-log query state', () => {
   const prefillResult = {
     blockingIssue: null,
     canFill: true,

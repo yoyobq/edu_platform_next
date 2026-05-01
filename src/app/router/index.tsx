@@ -22,6 +22,7 @@ import { ErrorPreviewPage } from '@/pages/error-preview';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
+import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
 import { ProfilePage } from '@/pages/profile';
 import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
@@ -48,6 +49,10 @@ import {
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
+import {
+  hasAcademicTeachingLogAccess,
+  hasAcademicTeachingLogManagerAccess,
+} from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import {
@@ -64,10 +69,6 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  lectureJournalReconciliationLabAccess,
-  loadLectureJournalReconciliationLabRouteModule,
-} from '@/labs/lecture-journal-reconciliation';
 import { loadPayloadCryptoLabRouteModule, payloadCryptoLabAccess } from '@/labs/payload-crypto';
 import {
   loadUpstreamSessionDemoLabRouteModule,
@@ -602,20 +603,12 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
-async function lectureJournalReconciliationLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(lectureJournalReconciliationLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
+async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasGuestLabAccess(lectureJournalReconciliationLabAccess)) {
-      return { viewerKind: 'authenticated', viewerRole: 'authenticated' };
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -623,12 +616,20 @@ async function lectureJournalReconciliationLabLoader({ request }: LoaderFunction
     throw redirect(buildWelcomeRedirectURL(request));
   }
 
-  if (!hasLabAccess(lectureJournalReconciliationLabAccess)) {
+  if (
+    !hasAcademicTeachingLogAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
     throw new Response('Forbidden', { status: 403 });
   }
 
   const accessGroup = snapshot.userInfo.accessGroup;
-  const viewerRole = accessGroup.includes('ADMIN')
+  const hasManagerAccess = hasAcademicTeachingLogManagerAccess({
+    accessGroup,
+    slotGroup: snapshot.slotGroup,
+  });
+  const viewerRole = hasManagerAccess
     ? 'admin'
     : snapshot.identity?.kind === 'STAFF'
       ? 'staff'
@@ -641,8 +642,6 @@ async function lectureJournalReconciliationLabLoader({ request }: LoaderFunction
       displayName: snapshot.displayName,
     },
     viewerRole,
-    viewerKind:
-      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
 }
 
@@ -829,6 +828,11 @@ const router = createBrowserRouter([
         Component: SemesterCourseScheduleSyncPage,
       },
       {
+        path: '/academic-affairs/my-teaching-logs',
+        loader: myTeachingLogsPageLoader,
+        Component: MyTeachingLogsPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -869,11 +873,6 @@ const router = createBrowserRouter([
             path: 'academic-workload',
             loader: academicWorkloadLabLoader,
             lazy: loadAcademicWorkloadLabRouteModule,
-          },
-          {
-            path: 'lecture-journal-reconciliation',
-            loader: lectureJournalReconciliationLabLoader,
-            lazy: loadLectureJournalReconciliationLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

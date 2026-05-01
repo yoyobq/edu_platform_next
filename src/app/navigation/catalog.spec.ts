@@ -42,6 +42,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+      '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/payload-crypto',
@@ -50,7 +51,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/lecture-journal-reconciliation',
       '/sandbox/playground',
     ]);
   });
@@ -68,6 +68,7 @@ describe('navigation catalog', () => {
         '/academic-affairs/academic-calendar',
         '/academic-affairs/semester-calendar',
         '/academic-affairs/semester-course-schedule-sync',
+        '/academic-affairs/my-teaching-logs',
       ],
     );
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
@@ -76,7 +77,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -89,12 +89,14 @@ describe('navigation catalog', () => {
       }),
     );
 
-    expect(staffItems.map((item) => item.key)).toEqual(['labs']);
+    expect(staffItems.map((item) => item.key)).toEqual(['academic-affairs', 'labs']);
+    expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/my-teaching-logs',
+    ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -113,12 +115,12 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+      '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/lecture-journal-reconciliation',
     ]);
   });
 
@@ -141,6 +143,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+      '/academic-affairs/my-teaching-logs',
       '/errors/preview',
       '/labs/payload-crypto',
       '/labs/change-login-email',
@@ -148,7 +151,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/lecture-journal-reconciliation',
       '/sandbox/playground',
     ]);
     expect(leaves.filter((item) => item.localEntry).map((item) => item.key)).toEqual([

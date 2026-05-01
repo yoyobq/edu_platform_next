@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { resolveLectureJournalStaffDirectory } from './staff-directory-cache-workflow';
 
-describe('lecture-journal-reconciliation staff directory cache workflow', () => {
+describe('academic-teaching-log staff directory cache workflow', () => {
   const session = {
     accountId: 1,
     expiresAt: '2026-05-01T12:00:00.000Z',

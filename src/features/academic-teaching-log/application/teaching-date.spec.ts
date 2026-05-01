@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { formatLocalBusinessDate, isFutureTeachingDate } from './teaching-date';
 
-describe('lecture-journal-reconciliation teaching date policy', () => {
+describe('academic-teaching-log teaching date policy', () => {
   it('formats local business dates without UTC conversion', () => {
     expect(formatLocalBusinessDate(new Date(2026, 3, 30, 23, 59, 59))).toBe('2026-04-30');
   });

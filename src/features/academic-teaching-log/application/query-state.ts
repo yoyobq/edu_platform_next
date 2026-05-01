@@ -1,4 +1,4 @@
-import type { AcademicTeachingLogPrefillResult } from './api';
+import type { AcademicTeachingLogPrefillResult } from './types';
 
 export type LectureJournalQueryState = {
   isLoadingReconciliation: boolean;

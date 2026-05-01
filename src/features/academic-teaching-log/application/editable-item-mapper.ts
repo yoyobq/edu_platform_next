@@ -1,14 +1,14 @@
-import type {
-  AcademicIntegratedTeachingLogPrefillPreview,
-  LectureJournalExpectedOccurrence,
-  LectureJournalReconciliationItem,
-} from './api';
 import { isPracticeCourseCategory } from './course-category';
 import {
   DEFAULT_INTEGRATED_SHIFT,
   DEFAULT_INTEGRATED_SHIFT_NAME,
   resolveShiftName,
 } from './journal-draft-policy';
+import type {
+  AcademicIntegratedTeachingLogPrefillPreview,
+  LectureJournalExpectedOccurrence,
+  LectureJournalReconciliationItem,
+} from './types';
 
 export type JournalEditableCardItem = {
   blockingIssue: string | null;

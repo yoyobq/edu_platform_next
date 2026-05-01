@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  AcademicIntegratedTeachingLogPrefillPreview,
-  LectureJournalReconciliationItem,
-} from './api';
 import {
   buildEditableCardItemFromIntegratedPreview,
   buildEditableCardItemFromReconciliation,
 } from './editable-item-mapper';
+import type {
+  AcademicIntegratedTeachingLogPrefillPreview,
+  LectureJournalReconciliationItem,
+} from './types';
 
 function buildReconciliationItem(
   overrides: Partial<LectureJournalReconciliationItem>,

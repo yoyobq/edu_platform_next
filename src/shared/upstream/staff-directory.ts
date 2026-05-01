@@ -1,3 +1,5 @@
+import type { OperationVariables } from '@apollo/client';
+
 import { executeGraphQL } from '@/shared/graphql';
 
 export type StaffDirectoryCacheStatus = 'FRESH' | 'MISS' | 'STALE';
@@ -140,7 +142,10 @@ function normalizeStaffIds(staffIds: string[]) {
 }
 
 export async function readStaffDirectory() {
-  const response = await executeGraphQL<StaffDirectoryResponse>(STAFF_DIRECTORY_QUERY);
+  const response = await executeGraphQL<StaffDirectoryResponse, OperationVariables>(
+    STAFF_DIRECTORY_QUERY,
+    {},
+  );
 
   return response.staffDirectory;
 }

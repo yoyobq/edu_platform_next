@@ -37,6 +37,7 @@ describe('staff directory shared api', () => {
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('query StaffDirectory'),
+      {},
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('teacherCount');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('teachers');

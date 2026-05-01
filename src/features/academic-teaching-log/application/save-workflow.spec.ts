@@ -10,12 +10,6 @@ const {
   saveAcademicTheoryTeachingLogMock: vi.fn(),
 }));
 
-vi.mock('./api', () => ({
-  saveAcademicIntegratedTeachingLog: saveAcademicIntegratedTeachingLogMock,
-  saveAcademicPracticeTeachingLog: saveAcademicPracticeTeachingLogMock,
-  saveAcademicTheoryTeachingLog: saveAcademicTheoryTeachingLogMock,
-}));
-
 import { EMPTY_JOURNAL_DRAFT, type JournalDraft } from './journal-draft-policy';
 import {
   type LectureJournalSaveWorkflowItem,
@@ -46,6 +40,12 @@ describe('lecture journal save workflow', () => {
     expiresAt: input.expiresAt ?? currentSession.expiresAt,
     upstreamSessionToken: input.upstreamSessionToken,
   }));
+
+  const savePorts = {
+    saveAcademicIntegratedTeachingLog: saveAcademicIntegratedTeachingLogMock,
+    saveAcademicPracticeTeachingLog: saveAcademicPracticeTeachingLogMock,
+    saveAcademicTheoryTeachingLog: saveAcademicTheoryTeachingLogMock,
+  };
 
   function buildItem(overrides: Partial<LectureJournalSaveWorkflowItem>) {
     return {
@@ -94,6 +94,7 @@ describe('lecture journal save workflow', () => {
         draft: buildDraft({ topicRecord: '良' }),
         item: buildItem({ sectionId: 'section-03' }),
         persistSessionFromResult,
+        ...savePorts,
         session,
       }),
     ).resolves.toEqual({
@@ -140,6 +141,7 @@ describe('lecture journal save workflow', () => {
         matchedLectureJournalDetailId: 'matched-detail-001',
       }),
       persistSessionFromResult,
+      ...savePorts,
       session,
     });
 
@@ -183,6 +185,7 @@ describe('lecture journal save workflow', () => {
         shift: '2',
       }),
       persistSessionFromResult,
+      ...savePorts,
       session,
     });
 
@@ -213,6 +216,7 @@ describe('lecture journal save workflow', () => {
         draft,
         item,
         persistSessionFromResult,
+        ...savePorts,
         session,
       }),
     ).rejects.toThrow('课程尚未开始，不能填写教学日志。');
@@ -234,6 +238,7 @@ describe('lecture journal save workflow', () => {
           lessonHours: 4,
         }),
         persistSessionFromResult,
+        ...savePorts,
         session,
       }),
     ).rejects.toThrow(
@@ -254,6 +259,7 @@ describe('lecture journal save workflow', () => {
         draft: buildDraft({}),
         item: buildItem({}),
         persistSessionFromResult,
+        ...savePorts,
         session,
       }),
     ).rejects.toBe(expiredError);

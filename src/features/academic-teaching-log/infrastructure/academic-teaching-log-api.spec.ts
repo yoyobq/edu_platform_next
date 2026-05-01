@@ -20,9 +20,9 @@ import {
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
   saveAcademicTheoryTeachingLog,
-} from './api';
+} from './academic-teaching-log-api';
 
-describe('lecture-journal-reconciliation api', () => {
+describe('academic-teaching-log api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReset();

@@ -3,15 +3,15 @@ import type {
   StoredUpstreamSession,
 } from '@/entities/upstream-session';
 
-import {
-  type AcademicTeachingLogSaveResult,
-  saveAcademicIntegratedTeachingLog,
-  saveAcademicPracticeTeachingLog,
-  saveAcademicTheoryTeachingLog,
-} from './api';
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import { DEFAULT_INTEGRATED_SHIFT, type JournalDraft } from './journal-draft-policy';
 import { isFutureTeachingDate } from './teaching-date';
+import type {
+  AcademicTeachingLogSaveResult,
+  SaveAcademicIntegratedTeachingLogInput,
+  SaveAcademicPracticeTeachingLogInput,
+  SaveAcademicTheoryTeachingLogInput,
+} from './types';
 
 export type LectureJournalSaveWorkflowItem = {
   blockingIssue: string | null;
@@ -32,7 +32,19 @@ export type LectureJournalSaveWorkflowItem = {
   weekNumber: number | null;
 };
 
-type LectureJournalSaveWorkflowParams = {
+type LectureJournalSaveWorkflowPorts = {
+  saveAcademicIntegratedTeachingLog: (
+    input: SaveAcademicIntegratedTeachingLogInput,
+  ) => Promise<AcademicTeachingLogSaveResult>;
+  saveAcademicPracticeTeachingLog: (
+    input: SaveAcademicPracticeTeachingLogInput,
+  ) => Promise<AcademicTeachingLogSaveResult>;
+  saveAcademicTheoryTeachingLog: (
+    input: SaveAcademicTheoryTeachingLogInput,
+  ) => Promise<AcademicTeachingLogSaveResult>;
+};
+
+type LectureJournalSaveWorkflowParams = LectureJournalSaveWorkflowPorts & {
   draft: JournalDraft;
   item: LectureJournalSaveWorkflowItem;
   persistSessionFromResult: PersistUpstreamSessionFromResult;
@@ -176,7 +188,7 @@ export async function runLectureJournalSaveWorkflow(
 
   const result =
     saveKind === 'integrated'
-      ? await saveAcademicIntegratedTeachingLog({
+      ? await params.saveAcademicIntegratedTeachingLog({
           ...commonInput,
           completeAndSummary: params.draft.completeAndSummary,
           disciplineSituation: params.draft.disciplineSituation,
@@ -187,7 +199,7 @@ export async function runLectureJournalSaveWorkflow(
           shift: params.draft.shift || params.item.shift || DEFAULT_INTEGRATED_SHIFT,
         })
       : saveKind === 'practice'
-        ? await saveAcademicPracticeTeachingLog({
+        ? await params.saveAcademicPracticeTeachingLog({
             ...commonInput,
             courseContent: params.draft.courseContent,
             disciplineSituation: params.draft.disciplineSituation,
@@ -203,7 +215,7 @@ export async function runLectureJournalSaveWorkflow(
             topicRecord: params.draft.topicRecord || undefined,
             trainingLessons: params.draft.practiceHours ?? 0,
           })
-        : await saveAcademicTheoryTeachingLog({
+        : await params.saveAcademicTheoryTeachingLog({
             ...commonInput,
             courseContent: params.draft.courseContent,
             homeworkAssignment: params.draft.homeworkAssignment,

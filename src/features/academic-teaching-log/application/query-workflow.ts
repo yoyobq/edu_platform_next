@@ -4,14 +4,20 @@ import {
   type PersistUpstreamSessionFromResult,
 } from '@/entities/upstream-session';
 
-import {
-  type AcademicTeachingLogPrefillResult,
-  fetchAcademicTeachingLogPrefillItems,
-  isExpiredUpstreamSessionError,
-  resolveUpstreamErrorMessage,
-} from './api';
+import type {
+  AcademicTeachingLogPrefillResult,
+  FetchAcademicTeachingLogPrefillInput,
+} from './types';
 
-type QueryWorkflowParams = {
+type QueryWorkflowPorts = {
+  fetchAcademicTeachingLogPrefillItems: (
+    input: FetchAcademicTeachingLogPrefillInput,
+  ) => Promise<AcademicTeachingLogPrefillResult>;
+  isExpiredUpstreamSessionError: (error: unknown) => boolean;
+  resolveUpstreamErrorMessage: (error: unknown, fallback: string) => string;
+};
+
+type QueryWorkflowParams = QueryWorkflowPorts & {
   isCurrent?: () => boolean;
   persistSessionFromResult: PersistUpstreamSessionFromResult;
   semesterId: number;
@@ -27,7 +33,7 @@ export async function runLectureJournalReconciliationQueryWorkflow(
   params: QueryWorkflowParams,
 ): Promise<QueryWorkflowOutcome> {
   try {
-    const prefillResult = await fetchAcademicTeachingLogPrefillItems({
+    const prefillResult = await params.fetchAcademicTeachingLogPrefillItems({
       semesterId: params.semesterId,
       staffId: params.staffId,
       upstreamSessionToken: params.session.upstreamSessionToken,
@@ -47,10 +53,10 @@ export async function runLectureJournalReconciliationQueryWorkflow(
       prefillResult,
     };
   } catch (error) {
-    if (isExpiredUpstreamSessionError(error)) {
+    if (params.isExpiredUpstreamSessionError(error)) {
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
+    throw new Error(params.resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'));
   }
 }

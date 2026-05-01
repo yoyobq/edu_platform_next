@@ -12,15 +12,9 @@ const {
   ),
 }));
 
-vi.mock('./api', () => ({
-  fetchAcademicTeachingLogPrefillItems: fetchAcademicTeachingLogPrefillItemsMock,
-  isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
-  resolveUpstreamErrorMessage: resolveUpstreamErrorMessageMock,
-}));
-
 import { runLectureJournalReconciliationQueryWorkflow } from './query-workflow';
 
-describe('lecture-journal-reconciliation query workflow', () => {
+describe('academic-teaching-log query workflow', () => {
   const session = {
     accountId: 1,
     expiresAt: '2026-04-30T12:00:00.000Z',
@@ -68,7 +62,10 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
+        fetchAcademicTeachingLogPrefillItems: fetchAcademicTeachingLogPrefillItemsMock,
+        isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
         persistSessionFromResult,
+        resolveUpstreamErrorMessage: resolveUpstreamErrorMessageMock,
         semesterId: 202502,
         session,
         staffId: 'STAFF-001',
@@ -91,8 +88,11 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
+        fetchAcademicTeachingLogPrefillItems: fetchAcademicTeachingLogPrefillItemsMock,
         isCurrent: () => false,
+        isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
         persistSessionFromResult,
+        resolveUpstreamErrorMessage: resolveUpstreamErrorMessageMock,
         semesterId: 202502,
         session,
         staffId: 'STAFF-001',
@@ -112,7 +112,10 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
+        fetchAcademicTeachingLogPrefillItems: fetchAcademicTeachingLogPrefillItemsMock,
+        isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
         persistSessionFromResult,
+        resolveUpstreamErrorMessage: resolveUpstreamErrorMessageMock,
         semesterId: 202502,
         session,
         staffId: 'STAFF-001',
@@ -125,7 +128,10 @@ describe('lecture-journal-reconciliation query workflow', () => {
 
     await expect(
       runLectureJournalReconciliationQueryWorkflow({
+        fetchAcademicTeachingLogPrefillItems: fetchAcademicTeachingLogPrefillItemsMock,
+        isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
         persistSessionFromResult,
+        resolveUpstreamErrorMessage: resolveUpstreamErrorMessageMock,
         semesterId: 202502,
         session,
         staffId: 'STAFF-001',

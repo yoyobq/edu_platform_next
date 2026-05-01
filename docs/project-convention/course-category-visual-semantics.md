@@ -26,6 +26,6 @@
 
 ## 当前落点
 
-- 教学日志对账实验页：`src/labs/lecture-journal-reconciliation/page.tsx`
-  - 当前共享判断：`src/labs/lecture-journal-reconciliation/course-category.ts`
+- My 教学日志：`src/features/academic-teaching-log/ui/academic-teaching-log-page-content.tsx`
+  - 当前共享判断：`src/features/academic-teaching-log/application/course-category.ts`
 - 周课表 / 学期课表实验页：`src/labs/academic-timetable/page.tsx`

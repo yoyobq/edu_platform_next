@@ -47,7 +47,9 @@
 当前前端已接入并使用的 upstream contract 包括：
 
 - `loginUpstreamSession(input: { userId, password })`
-- `fetchTeacherDirectory(sessionToken)`
+- `fetchVerifiedStaffIdentity({ sessionToken })`
+- 业务页面自己的 upstream 代理接口，例如教学日志对账查询/保存
+- shared Staff Directory Cache 的显式填充接口 `populateStaffDirectory`
 
 当前 schema 中，公开的 upstream 会话返回值只有一个：
 
@@ -91,6 +93,8 @@
 - 后端代查 upstream
 - 前端按后端返回结果滚动更新 token
 
+稳定业务页不应继续把旧 `fetchTeacherDirectory(sessionToken)` 当作教师姓名常用入口。`staffId -> 教师姓名` 的前端约定见 [staff-directory-cache.md](./staff-directory-cache.md)。
+
 当前不演示：
 
 - 多 token 协作
@@ -118,5 +122,6 @@
 - 不要把 upstream token 混进本站 auth session
 - 不要假设存在独立 upstream refresh token，除非后端 contract 已明确新增
 - 若业务请求成功返回新的 `upstreamSessionToken`，前端应覆盖本地旧值
+- `fetchVerifiedStaffIdentity` 成功返回相同 token 是正常结果，不应触发重复刷新或重试
 - 若本地 upstream token 与当前本站账号不匹配，必须立即清空
 - 若某个页面只是消费 upstream 数据，它应复用“前端持 token、后端代查”的模式，而不是重新发明另一套会话真相
