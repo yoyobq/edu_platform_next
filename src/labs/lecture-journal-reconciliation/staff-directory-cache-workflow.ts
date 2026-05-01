@@ -26,6 +26,7 @@ type ResolveStaffDirectoryParams = StaffDirectoryWorkflowDeps & {
 type ResolveStaffDirectoryOutcome = {
   directory: StaffDirectoryResult | null;
   didPopulate: boolean;
+  session: StoredUpstreamSession | null;
 };
 
 export async function resolveLectureJournalStaffDirectory(
@@ -35,6 +36,7 @@ export async function resolveLectureJournalStaffDirectory(
     return {
       didPopulate: false,
       directory: params.currentDirectory ?? null,
+      session: params.session ?? null,
     };
   }
 
@@ -46,6 +48,7 @@ export async function resolveLectureJournalStaffDirectory(
     return {
       didPopulate: false,
       directory: currentDirectory,
+      session: params.session ?? null,
     };
   }
 
@@ -53,10 +56,11 @@ export async function resolveLectureJournalStaffDirectory(
     sessionToken: params.session.upstreamSessionToken,
   });
 
-  params.persistSessionFromResult(params.session, populateResult);
+  const nextSession = params.persistSessionFromResult(params.session, populateResult);
 
   return {
     didPopulate: true,
     directory: populateResult,
+    session: nextSession,
   };
 }

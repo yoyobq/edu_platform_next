@@ -37,7 +37,11 @@ describe('lecture-journal-reconciliation staff directory cache workflow', () => 
     upstreamSessionToken: 'token-002',
   };
 
-  const persistSessionFromResult = vi.fn();
+  const persistSessionFromResult = vi.fn((currentSession, result) => ({
+    ...currentSession,
+    expiresAt: result.expiresAt ?? currentSession.expiresAt,
+    upstreamSessionToken: result.upstreamSessionToken ?? currentSession.upstreamSessionToken,
+  }));
   const populateStaffDirectoryFn = vi.fn();
   const readStaffDirectoryFn = vi.fn();
 
@@ -60,6 +64,7 @@ describe('lecture-journal-reconciliation staff directory cache workflow', () => 
     ).resolves.toEqual({
       didPopulate: false,
       directory: freshDirectory,
+      session,
     });
 
     expect(readStaffDirectoryFn).not.toHaveBeenCalled();
@@ -82,6 +87,11 @@ describe('lecture-journal-reconciliation staff directory cache workflow', () => 
     ).resolves.toEqual({
       didPopulate: true,
       directory: populatedDirectory,
+      session: {
+        ...session,
+        expiresAt: '2026-05-01T12:30:00.000Z',
+        upstreamSessionToken: 'token-002',
+      },
     });
 
     expect(readStaffDirectoryFn).toHaveBeenCalledTimes(1);
@@ -105,6 +115,7 @@ describe('lecture-journal-reconciliation staff directory cache workflow', () => 
     ).resolves.toEqual({
       didPopulate: false,
       directory: missDirectory,
+      session: null,
     });
 
     expect(populateStaffDirectoryFn).not.toHaveBeenCalled();
@@ -124,6 +135,7 @@ describe('lecture-journal-reconciliation staff directory cache workflow', () => 
     ).resolves.toEqual({
       didPopulate: false,
       directory: missDirectory,
+      session,
     });
 
     expect(readStaffDirectoryFn).not.toHaveBeenCalled();

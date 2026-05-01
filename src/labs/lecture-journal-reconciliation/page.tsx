@@ -36,7 +36,11 @@ import {
 } from '@/entities/academic-semester';
 import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
 
-import { type StaffDirectoryEntry, type StaffDirectoryResult } from '@/shared/upstream';
+import {
+  readVerifiedStaffIdentity,
+  type StaffDirectoryEntry,
+  type StaffDirectoryResult,
+} from '@/shared/upstream';
 
 import {
   type AcademicTeachingLogPrefillResult,
@@ -107,6 +111,8 @@ const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
 const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
 const INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH = 'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH';
+const UPSTREAM_STAFF_SCOPE_MISMATCH = 'UPSTREAM_STAFF_SCOPE_MISMATCH';
+const UPSTREAM_SESSION_STAFF_MISMATCH = 'UPSTREAM_SESSION_STAFF_MISMATCH';
 const COURSE_CATEGORY_META = {
   '1': {
     accentClassName: 'lecture-journal-course-category-theory',
@@ -333,6 +339,18 @@ function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
   return Boolean(value?.includes(INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH));
 }
 
+function resolveLectureJournalIssueMessage(value: string | null) {
+  if (value === UPSTREAM_STAFF_SCOPE_MISMATCH) {
+    return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
+  }
+
+  if (value === UPSTREAM_SESSION_STAFF_MISMATCH) {
+    return '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。';
+  }
+
+  return value;
+}
+
 function hasIntegratedOccurrenceMismatchIssue(item: JournalEditableCardItem) {
   return (
     isIntegratedCourseCategory(item.courseCategory) &&
@@ -354,18 +372,24 @@ function resolveVisibleBlockingIssue(
   resultViewScope: ResultViewScope,
 ) {
   if (resultViewScope === 'unmatched') {
-    return item.blockingIssue;
+    return resolveLectureJournalIssueMessage(item.blockingIssue);
   }
 
-  return isIntegratedOccurrenceMismatchText(item.blockingIssue) ? null : item.blockingIssue;
+  return isIntegratedOccurrenceMismatchText(item.blockingIssue)
+    ? null
+    : resolveLectureJournalIssueMessage(item.blockingIssue);
 }
 
 function resolvePageLevelPrefillWarnings(warnings: string[]) {
-  return warnings.filter((warning) => !isIntegratedOccurrenceMismatchText(warning));
+  return warnings
+    .filter((warning) => !isIntegratedOccurrenceMismatchText(warning))
+    .map((warning) => resolveLectureJournalIssueMessage(warning) ?? warning);
 }
 
 function resolvePageLevelPrefillBlockingIssue(blockingIssue: string | null) {
-  return isIntegratedOccurrenceMismatchText(blockingIssue) ? null : blockingIssue;
+  return isIntegratedOccurrenceMismatchText(blockingIssue)
+    ? null
+    : resolveLectureJournalIssueMessage(blockingIssue);
 }
 
 function resolveFillAvailabilityIssue(
@@ -1489,9 +1513,15 @@ export function LectureJournalReconciliationLabPage() {
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
   const [isLoadingStaffDirectory, setIsLoadingStaffDirectory] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
+  const [isRestoringDefaultStaffId, setIsRestoringDefaultStaffId] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
+  const [upstreamIdentityWarning, setUpstreamIdentityWarning] = useState<string | null>(null);
+  const [
+    hasAcknowledgedSessionStaffMismatchWarning,
+    setHasAcknowledgedSessionStaffMismatchWarning,
+  ] = useState(false);
   const [journalDrafts, setJournalDrafts] = useState<JournalDraftMap>({});
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction>(null);
@@ -1655,6 +1685,11 @@ export function LectureJournalReconciliationLabPage() {
     }
   }, [isStaffViewer, loaderData?.defaultStaffId, staffId]);
 
+  useEffect(() => {
+    setUpstreamIdentityWarning(null);
+    setHasAcknowledgedSessionStaffMismatchWarning(false);
+  }, [staffId, storedSessionDirectoryKey]);
+
   const loadStaffDirectoryForAdmin = useCallback(
     async (session: StoredUpstreamSession | null) => {
       if (!isAdminViewer) {
@@ -1699,13 +1734,115 @@ export function LectureJournalReconciliationLabPage() {
   const ensureStaffDirectoryForAdmin = useCallback(
     async (session: StoredUpstreamSession) => {
       if (!isAdminViewer) {
-        return;
+        return session;
       }
 
-      await loadStaffDirectoryForAdmin(session);
+      const outcome = await loadStaffDirectoryForAdmin(session);
+
+      return outcome?.session ?? session;
     },
     [isAdminViewer, loadStaffDirectoryForAdmin],
   );
+
+  const ensureSelectedStaffUpstreamSession = useCallback(
+    async (
+      session: StoredUpstreamSession,
+      selectedStaffId: string,
+      options: { action: 'query' | 'save' },
+    ) => {
+      const identity = await readVerifiedStaffIdentity({
+        sessionToken: session.upstreamSessionToken,
+      });
+      const nextSession = persistSessionFromResult(session, identity);
+      const upstreamStaffId = identity.personId.trim();
+
+      if (upstreamStaffId && upstreamStaffId !== selectedStaffId) {
+        const selectedTeacher = staffDirectoryResult?.teachers.find(
+          (teacher) => teacher.staffId === selectedStaffId,
+        );
+        const selectedTeacherLabel = selectedTeacher
+          ? `${selectedTeacher.staffId} ${selectedTeacher.name}`
+          : selectedStaffId;
+        const message = `当前校园网登录用户是 ${identity.personId} ${identity.personName}，与选择的教师 ${selectedTeacherLabel} 不一致。`;
+
+        if (isStaffViewer) {
+          setPendingAction(options.action === 'query' ? 'query' : null);
+          setLoginError(`${message}请重新连接本人校园网账号后继续。`);
+          openLoginModal();
+          return null;
+        }
+
+        setUpstreamIdentityWarning(`${message}管理员可继续查询和保存，请确认这是预期操作。`);
+        return {
+          isMismatch: true,
+          session: nextSession,
+        };
+      }
+
+      setUpstreamIdentityWarning(null);
+      return {
+        isMismatch: false,
+        session: nextSession,
+      };
+    },
+    [isStaffViewer, openLoginModal, persistSessionFromResult, staffDirectoryResult?.teachers],
+  );
+
+  const restoreDefaultStaffId = useCallback(async () => {
+    if (!isAdminViewer) {
+      return;
+    }
+
+    if (isRestoringDefaultStaffId) {
+      return;
+    }
+
+    const profileStaffId = loaderData?.defaultStaffId ?? '';
+    const session = storedSessionRef.current;
+
+    if (!session) {
+      setStaffId(profileStaffId);
+      return;
+    }
+
+    setIsRestoringDefaultStaffId(true);
+    setStaffDirectoryError(null);
+
+    try {
+      const identity = await readVerifiedStaffIdentity({
+        sessionToken: session.upstreamSessionToken,
+      });
+      persistSessionFromResult(session, identity);
+
+      const upstreamStaffId = normalizeOptionalString(identity.personId);
+
+      if (upstreamStaffId) {
+        setStaffId(upstreamStaffId);
+        return;
+      }
+
+      setStaffId(profileStaffId);
+    } catch (error) {
+      if (isExpiredUpstreamSessionError(error)) {
+        clearCurrentSession();
+        setStaffId(profileStaffId);
+        setUpstreamIdentityWarning('教务系统连接已失效，已恢复为当前登录账号资料中的教师 ID。');
+        return;
+      }
+
+      setStaffDirectoryError(
+        resolveUpstreamErrorMessage(error, '暂时无法读取校园网登录用户身份。'),
+      );
+    } finally {
+      setIsRestoringDefaultStaffId(false);
+    }
+  }, [
+    clearCurrentSession,
+    isAdminViewer,
+    isRestoringDefaultStaffId,
+    loaderData?.defaultStaffId,
+    persistSessionFromResult,
+  ]);
 
   useEffect(() => {
     if (!isAdminViewer) {
@@ -1721,6 +1858,7 @@ export function LectureJournalReconciliationLabPage() {
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
   const normalizedStaffId = normalizeOptionalString(staffId);
   const hasMissingStaffFilter = !normalizedStaffId;
+  const canRestoreDefaultStaffId = Boolean(storedSession || loaderData?.defaultStaffId);
   const teacherOptions = (staffDirectoryResult?.teachers ?? []).map((teacher) => ({
     label: buildTeacherOptionLabel(teacher),
     value: teacher.staffId,
@@ -1856,6 +1994,9 @@ export function LectureJournalReconciliationLabPage() {
   const pageLevelPrefillWarnings = prefillResult
     ? resolvePageLevelPrefillWarnings(prefillResult.warnings)
     : [];
+  const hasSessionStaffMismatchWarning = Boolean(
+    prefillResult?.warnings.includes(UPSTREAM_SESSION_STAFF_MISMATCH),
+  );
   const pageLevelPrefillBlockingIssue = prefillResult
     ? resolvePageLevelPrefillBlockingIssue(prefillResult.blockingIssue)
     : null;
@@ -1864,6 +2005,12 @@ export function LectureJournalReconciliationLabPage() {
     pageLevelPrefillBlockingIssue,
     pageLevelPrefillWarnings,
   );
+  const sessionStaffMismatchAcknowledgementIssue =
+    hasSessionStaffMismatchWarning && !hasAcknowledgedSessionStaffMismatchWarning
+      ? '请先确认当前校园网登录用户与查询教师不一致的提示。'
+      : null;
+  const cardFillAvailabilityIssue =
+    fillAvailabilityIssue ?? sessionStaffMismatchAcknowledgementIssue;
 
   const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
     setJournalDrafts((current) => ({
@@ -1927,6 +2074,17 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
+      if (cardFillAvailabilityIssue) {
+        setSaveFeedbackByKey((current) => ({
+          ...current,
+          [item.key]: {
+            text: cardFillAvailabilityIssue,
+            tone: 'error',
+          },
+        }));
+        return;
+      }
+
       const validationError = resolveSaveValidationError(item, draft);
 
       if (validationError) {
@@ -1947,11 +2105,28 @@ export function LectureJournalReconciliationLabPage() {
       }));
 
       try {
+        const scopedSessionResult = await ensureSelectedStaffUpstreamSession(
+          session,
+          normalizeOptionalString(item.teacherId || normalizedStaffId),
+          { action: 'save' },
+        );
+
+        if (!scopedSessionResult) {
+          setSaveFeedbackByKey((current) => ({
+            ...current,
+            [item.key]: {
+              text: '校园网登录用户与当前教师不一致，请重新连接后再保存。',
+              tone: 'error',
+            },
+          }));
+          return;
+        }
+
         const { result } = await runLectureJournalSaveWorkflow({
           draft,
           item,
           persistSessionFromResult,
-          session,
+          session: scopedSessionResult.session,
         });
 
         applyLocalSaveSuccess(item, draft, result);
@@ -2000,8 +2175,11 @@ export function LectureJournalReconciliationLabPage() {
       openLoginModal,
       persistSessionFromResult,
       activeResultViewScope,
+      cardFillAvailabilityIssue,
       startSavedCardCollapse,
       storedSession,
+      ensureSelectedStaffUpstreamSession,
+      normalizedStaffId,
     ],
   );
 
@@ -2028,6 +2206,7 @@ export function LectureJournalReconciliationLabPage() {
     activeQueryRequestIdRef.current = requestId;
     isQueryInFlightRef.current = true;
     dispatchQueryState({ type: 'started' });
+    setHasAcknowledgedSessionStaffMismatchWarning(false);
     setJournalDrafts({});
     setSaveFeedbackByKey({});
     setSettlingSavedItemKeys([]);
@@ -2041,9 +2220,19 @@ export function LectureJournalReconciliationLabPage() {
         return;
       }
 
-      await ensureStaffDirectoryForAdmin(session);
+      const directorySession = await ensureStaffDirectoryForAdmin(session);
 
       if (activeQueryRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      const scopedSessionResult = await ensureSelectedStaffUpstreamSession(
+        directorySession,
+        normalizedStaffId,
+        { action: 'query' },
+      );
+
+      if (!scopedSessionResult || activeQueryRequestIdRef.current !== requestId) {
         return;
       }
 
@@ -2051,7 +2240,7 @@ export function LectureJournalReconciliationLabPage() {
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
         persistSessionFromResult,
         semesterId: selectedSemester.id,
-        session,
+        session: scopedSessionResult.session,
         staffId: normalizedStaffId,
       });
 
@@ -2152,7 +2341,7 @@ export function LectureJournalReconciliationLabPage() {
                 draft={
                   journalDrafts[item.key] ?? initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT
                 }
-                fillAvailabilityIssue={fillAvailabilityIssue}
+                fillAvailabilityIssue={cardFillAvailabilityIssue}
                 initialDraft={initialJournalDrafts[item.key] ?? EMPTY_JOURNAL_DRAFT}
                 isCollapsing={isCollapsing}
                 isSaving={savingItemKey === item.key}
@@ -2298,6 +2487,9 @@ export function LectureJournalReconciliationLabPage() {
             {staffDirectoryError ? (
               <Alert message={staffDirectoryError} showIcon type="warning" />
             ) : null}
+            {upstreamIdentityWarning ? (
+              <Alert message={upstreamIdentityWarning} showIcon type="warning" />
+            ) : null}
             {hasMissingStaffFilter ? (
               <Alert
                 message={
@@ -2323,9 +2515,10 @@ export function LectureJournalReconciliationLabPage() {
               </Button>
               {isAdminViewer ? (
                 <Button
-                  disabled={!normalizedStaffId}
+                  disabled={!canRestoreDefaultStaffId || isRestoringDefaultStaffId}
+                  loading={isRestoringDefaultStaffId}
                   onClick={() => {
-                    setStaffId(loaderData?.defaultStaffId ?? '');
+                    void restoreDefaultStaffId();
                   }}
                 >
                   恢复默认教师
@@ -2345,6 +2538,20 @@ export function LectureJournalReconciliationLabPage() {
       ) : null}
       {pageLevelPrefillWarnings.length ? (
         <Alert
+          action={
+            hasSessionStaffMismatchWarning ? (
+              <Button
+                disabled={hasAcknowledgedSessionStaffMismatchWarning}
+                size="small"
+                type={hasAcknowledgedSessionStaffMismatchWarning ? 'default' : 'primary'}
+                onClick={() => {
+                  setHasAcknowledgedSessionStaffMismatchWarning(true);
+                }}
+              >
+                {hasAcknowledgedSessionStaffMismatchWarning ? '已知晓' : '我已知晓'}
+              </Button>
+            ) : undefined
+          }
           description={pageLevelPrefillWarnings.join('；')}
           message="填写前检查提示"
           showIcon

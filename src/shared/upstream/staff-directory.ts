@@ -28,6 +28,17 @@ export type PopulateStaffDirectoryResult = StaffDirectoryResult & {
   upstreamSessionToken: string | null;
 };
 
+export type VerifiedStaffIdentityResult = {
+  departmentName: string | null;
+  expiresAt: string;
+  identityKind: string;
+  orgId: string | null;
+  personId: string;
+  personName: string;
+  upstreamLoginId: string;
+  upstreamSessionToken: string;
+};
+
 type StaffDirectoryResponse = {
   staffDirectory: StaffDirectoryResult;
 };
@@ -38,6 +49,10 @@ type StaffDirectoryEntriesResponse = {
 
 type PopulateStaffDirectoryResponse = {
   populateStaffDirectory: PopulateStaffDirectoryResult;
+};
+
+type VerifiedStaffIdentityResponse = {
+  fetchVerifiedStaffIdentity: VerifiedStaffIdentityResult;
 };
 
 const STAFF_DIRECTORY_QUERY = `
@@ -83,6 +98,21 @@ const POPULATE_STAFF_DIRECTORY_MUTATION = `
       }
       upstreamSessionToken
       expiresAt
+    }
+  }
+`;
+
+const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
+  query FetchVerifiedStaffIdentity($sessionToken: String!) {
+    fetchVerifiedStaffIdentity(sessionToken: $sessionToken) {
+      departmentName
+      expiresAt
+      identityKind
+      orgId
+      personId
+      personName
+      upstreamLoginId
+      upstreamSessionToken
     }
   }
 `;
@@ -148,4 +178,17 @@ export async function populateStaffDirectory(input: {
   });
 
   return response.populateStaffDirectory;
+}
+
+export async function readVerifiedStaffIdentity(input: { sessionToken: string }) {
+  const response = await executeGraphQL<
+    VerifiedStaffIdentityResponse,
+    {
+      sessionToken: string;
+    }
+  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
+    sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
+  });
+
+  return response.fetchVerifiedStaffIdentity;
 }

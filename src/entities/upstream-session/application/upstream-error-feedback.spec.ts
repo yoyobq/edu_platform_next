@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import { GraphQLIngressError } from '@/shared/graphql';
 
-import { isExpiredUpstreamSessionError } from './upstream-error-feedback';
+import {
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+} from './upstream-error-feedback';
 
 function buildGraphQLError(extensions: Record<string, unknown>): GraphQLFormattedError {
   return {
@@ -49,5 +52,37 @@ describe('upstream error feedback', () => {
     });
 
     expect(isExpiredUpstreamSessionError(error)).toBe(true);
+  });
+
+  it('maps upstream staff scope mismatch to a user-facing teaching plan ownership message', () => {
+    const error = new GraphQLIngressError({
+      graphqlErrors: [
+        buildGraphQLError({
+          errorCode: 'UPSTREAM_STAFF_SCOPE_MISMATCH',
+        }),
+      ],
+      message: 'UPSTREAM_STAFF_SCOPE_MISMATCH',
+      type: 'graphql',
+    });
+
+    expect(resolveUpstreamErrorMessage(error, 'fallback')).toBe(
+      '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。',
+    );
+  });
+
+  it('maps upstream session staff mismatch to a non-blocking ownership warning message', () => {
+    const error = new GraphQLIngressError({
+      graphqlErrors: [
+        buildGraphQLError({
+          errorCode: 'UPSTREAM_SESSION_STAFF_MISMATCH',
+        }),
+      ],
+      message: 'UPSTREAM_SESSION_STAFF_MISMATCH',
+      type: 'graphql',
+    });
+
+    expect(resolveUpstreamErrorMessage(error, 'fallback')).toBe(
+      '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。',
+    );
   });
 });

@@ -11,6 +11,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   populateStaffDirectory,
   readStaffDirectory,
+  readVerifiedStaffIdentity,
   resolveStaffDirectoryEntries,
 } from './staff-directory';
 
@@ -104,5 +105,35 @@ describe('staff directory shared api', () => {
     ).rejects.toThrow('staffIds 最多支持 800 项。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('reads verified staff identity with the current upstream session token', async () => {
+    const payload = {
+      departmentName: '人工智能系',
+      expiresAt: '2026-05-01T12:00:00.000Z',
+      identityKind: 'STAFF',
+      orgId: 'ORG0302',
+      personId: '3664',
+      personName: '龚晶晶',
+      upstreamLoginId: 'teacher001',
+      upstreamSessionToken: 'rolling-token-002',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      fetchVerifiedStaffIdentity: payload,
+    });
+
+    await expect(
+      readVerifiedStaffIdentity({
+        sessionToken: ' rolling-token-001 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query FetchVerifiedStaffIdentity'),
+      {
+        sessionToken: 'rolling-token-001',
+      },
+    );
   });
 });

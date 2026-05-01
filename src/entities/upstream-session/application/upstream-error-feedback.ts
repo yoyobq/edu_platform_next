@@ -22,6 +22,18 @@ function getReadableGraphQLMessage(detail: UpstreamGraphQLErrorDetail | null): s
   return detail.message;
 }
 
+function getKnownUpstreamErrorMessage(detail: UpstreamGraphQLErrorDetail | null): string | null {
+  if (hasErrorCode(detail, ['UPSTREAM_STAFF_SCOPE_MISMATCH'])) {
+    return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
+  }
+
+  if (hasErrorCode(detail, ['UPSTREAM_SESSION_STAFF_MISMATCH'])) {
+    return '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。';
+  }
+
+  return null;
+}
+
 function includesAnyPattern(value: string | null, patterns: readonly string[]): boolean {
   if (!value) {
     return false;
@@ -95,6 +107,12 @@ export function isExpiredUpstreamSessionError(error: unknown): boolean {
 
 export function resolveUpstreamErrorMessage(error: unknown, fallback: string): string {
   const detail = readUpstreamGraphQLErrorDetail(error);
+  const knownMessage = getKnownUpstreamErrorMessage(detail);
+
+  if (knownMessage) {
+    return knownMessage;
+  }
+
   const graphQLMessage = getReadableGraphQLMessage(detail);
 
   if (graphQLMessage) {

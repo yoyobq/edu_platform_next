@@ -133,6 +133,8 @@ describe('lecture-journal-reconciliation api', () => {
       expect.stringContaining('teachingUnitAchievement'),
       expect.any(Object),
     );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('departmentId');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('\n      canFill\n      expiresAt');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('reconciliation');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('unmatchedPlanItems');
   });
