@@ -11,15 +11,111 @@
   --lecture-journal-course-category-integrated-bg: #ffedd5;
 }
 
+.lecture-journal-page-head {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.lecture-journal-control-card > .ant-card {
+  border-color: var(--ant-color-border-secondary);
+  box-shadow: 0 1px 2px color-mix(in srgb, black 4%, transparent);
+}
+
 .lecture-journal-control-card > .ant-card > .ant-card-body {
   padding: 24px;
 }
 
-.lecture-journal-lab-meta {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
+.lecture-journal-control-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.lecture-journal-control-panel-head {
+  align-items: flex-start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.lecture-journal-control-panel-head .ant-tag {
+  flex: 0 0 auto;
+  margin-inline-end: 0;
+  margin-top: 2px;
+}
+
+.lecture-journal-session-strip {
+  align-items: center;
+  background: color-mix(in srgb, var(--ant-color-success-bg) 62%, var(--ant-color-bg-container));
+  border: 1px solid color-mix(in srgb, var(--ant-color-success) 18%, var(--ant-color-border));
   border-radius: 8px;
-  padding: 12px 16px;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 14px;
+}
+
+.lecture-journal-session-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lecture-journal-session-actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+.lecture-journal-query-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.lecture-journal-control-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.lecture-journal-prequery-state {
+  align-items: center;
+  background: var(--ant-color-bg-container);
+  border: 1px dashed var(--ant-color-border);
+  border-radius: 10px;
+  display: flex;
+  gap: 20px;
+  justify-content: space-between;
+  padding: 18px 20px;
+}
+
+.lecture-journal-prequery-state-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.lecture-journal-prequery-state-steps {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.lecture-journal-prequery-state-steps span {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 999px;
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 20px;
+  padding: 2px 10px;
 }
 
 .lecture-journal-view-shell {
@@ -1111,6 +1207,26 @@
 @media (max-width: 768px) {
   .lecture-journal-control-card > .ant-card > .ant-card-body {
     padding: 16px;
+  }
+
+  .lecture-journal-control-panel-head,
+  .lecture-journal-session-strip,
+  .lecture-journal-prequery-state {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .lecture-journal-control-panel-head .ant-tag {
+    align-self: flex-start;
+  }
+
+  .lecture-journal-session-actions,
+  .lecture-journal-prequery-state-steps {
+    justify-content: flex-start;
+  }
+
+  .lecture-journal-query-grid {
+    grid-template-columns: 1fr;
   }
 
   .lecture-journal-toolbar {

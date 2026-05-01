@@ -621,7 +621,7 @@ async function lectureJournalReconciliationLabLoader({ request }: LoaderFunction
     }
 
     if (hasGuestLabAccess(lectureJournalReconciliationLabAccess)) {
-      return { viewerKind: 'authenticated' };
+      return { viewerKind: 'authenticated', viewerRole: 'authenticated' };
     }
 
     throw redirect(buildLoginRedirectURL(request));
@@ -636,15 +636,19 @@ async function lectureJournalReconciliationLabLoader({ request }: LoaderFunction
   }
 
   const accessGroup = snapshot.userInfo.accessGroup;
+  const viewerRole = accessGroup.includes('ADMIN')
+    ? 'admin'
+    : snapshot.identity?.kind === 'STAFF'
+      ? 'staff'
+      : 'authenticated';
 
   return {
-    defaultDepartmentId:
-      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
+    viewerRole,
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
