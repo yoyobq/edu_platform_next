@@ -607,19 +607,11 @@ async function lectureJournalReconciliationLabLoader({ request }: LoaderFunction
     throw new Response('Not Found', { status: 404 });
   }
 
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
+  await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
     if (hasGuestLabAccess(lectureJournalReconciliationLabAccess)) {
       return { viewerKind: 'authenticated', viewerRole: 'authenticated' };
     }

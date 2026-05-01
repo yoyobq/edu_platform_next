@@ -531,6 +531,17 @@ export function UpstreamSessionDemoLabPage() {
   const departmentMatchedCurriculumPlan =
     departmentMatchingCurriculumPlans.length === 1 ? departmentMatchingCurriculumPlans[0] : null;
 
+  const persistSessionFromVerifiedIdentity = useCallback(
+    (session: StoredUpstreamSession, result: VerifiedStaffIdentityResult) => {
+      if (result.upstreamSessionToken === session.upstreamSessionToken) {
+        return session;
+      }
+
+      return persistSessionFromResult(session, result);
+    },
+    [persistSessionFromResult],
+  );
+
   const clearCurrentSession = useCallback(
     (error?: UpstreamActionError) => {
       clear();
@@ -718,7 +729,7 @@ export function UpstreamSessionDemoLabPage() {
               sessionToken: session.upstreamSessionToken,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromVerifiedIdentity(session, result);
             setVerifiedIdentityResult(result);
             return;
           }
@@ -822,6 +833,7 @@ export function UpstreamSessionDemoLabPage() {
     [
       activePanelKey,
       persistSessionFromResult,
+      persistSessionFromVerifiedIdentity,
       clearCurrentSession,
       form,
       storedSession?.upstreamLoginId,

@@ -69,7 +69,7 @@ export function login(input: AuthLoginInput) {
   return runLogin(authPorts, input);
 }
 
-export function restoreSession(options?: { background?: boolean }) {
+export function restoreSession(options?: { background?: boolean; waitForPending?: boolean }) {
   return runRestoreSession(authPorts, options);
 }
 

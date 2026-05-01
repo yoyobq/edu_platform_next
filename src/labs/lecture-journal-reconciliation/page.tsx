@@ -9,16 +9,22 @@ import {
   useState,
 } from 'react';
 import {
+  CheckOutlined,
+  FormOutlined,
+  SearchOutlined,
+  SwapOutlined,
+  UserOutlined,
+  UserSwitchOutlined,
+} from '@ant-design/icons';
+import {
   Alert,
   AutoComplete,
   Button,
-  Card,
   Collapse,
   Empty,
   Form,
   Input,
   InputNumber,
-  Modal,
   Popover,
   Segmented,
   Select,
@@ -34,12 +40,18 @@ import {
   type AcademicSemesterRecord,
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
-import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
+import {
+  type StoredUpstreamSession,
+  type UpstreamLoginFormValues,
+  UpstreamLoginModal,
+  useUpstreamSession,
+} from '@/entities/upstream-session';
 
 import {
   readVerifiedStaffIdentity,
   type StaffDirectoryEntry,
   type StaffDirectoryResult,
+  type VerifiedStaffIdentityResult,
 } from '@/shared/upstream';
 
 import {
@@ -98,11 +110,6 @@ type LectureJournalReconciliationLabLoaderData = {
   viewerRole?: 'admin' | 'authenticated' | 'staff';
   viewerKind?: 'authenticated' | 'internal';
 } | null;
-
-type UpstreamLoginFormValues = {
-  password: string;
-  userId: string;
-};
 
 type PendingAction = 'query' | null;
 
@@ -201,28 +208,6 @@ function normalizeOptionalString(value: string) {
   const normalizedValue = value.trim();
 
   return normalizedValue ? normalizedValue : '';
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return '未返回';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
 }
 
 function formatTeachingDate(value: string | null | undefined) {
@@ -726,7 +711,9 @@ const JournalDraftCard = memo(function JournalDraftCard({
       hasSecurityAndMaintainEdited);
   const isSaveDisabled = Boolean(saveValidationError) || isSaving;
   const saveButtonTooltip = saveValidationError
-    ? `不可保存：${saveValidationError}`
+    ? saveValidationError.startsWith('不可保存')
+      ? saveValidationError
+      : `不可保存：${saveValidationError}`
     : visibleWarnings.length > 0
       ? `可保存；提示：${visibleWarnings.join('；')}`
       : '保存至校园网。';
@@ -767,6 +754,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
               <span className="lecture-journal-save-action">
                 <Button
                   disabled={isSaveDisabled}
+                  icon={<FormOutlined />}
                   loading={isSaving}
                   onClick={() => {
                     onSave(item, draft);
@@ -848,7 +836,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
                 <span className="lecture-journal-record-meta-value">{teachingDateLabel}</span>
               </span>
             ) : null}
-            <span className="lecture-journal-record-meta-item">
+            <span className="lecture-journal-record-meta-item lecture-journal-record-meta-item-hours">
               <span className="lecture-journal-record-meta-label">
                 {isIntegratedCard ? '总课时数：' : '课时数：'}
               </span>
@@ -1472,6 +1460,11 @@ JournalDraftCard.displayName = 'JournalDraftCard';
 export function LectureJournalReconciliationLabPage() {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const loaderData = useLoaderData() as LectureJournalReconciliationLabLoaderData;
+  const liveUpstreamAccount = loaderData?.upstreamAccount ?? null;
+  const liveDefaultStaffId = loaderData?.defaultStaffId ?? null;
+  const viewerRole = loaderData?.viewerRole ?? 'authenticated';
+  const isAdminViewer = viewerRole === 'admin';
+  const isStaffViewer = viewerRole === 'staff';
   const {
     clear,
     keepAliveFailure,
@@ -1479,7 +1472,7 @@ export function LectureJournalReconciliationLabPage() {
     persistSessionFromResult,
     session: storedSession,
   } = useUpstreamSession({
-    account: loaderData?.upstreamAccount ?? null,
+    account: liveUpstreamAccount,
     keepAlive: true,
   });
   const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
@@ -1491,12 +1484,12 @@ export function LectureJournalReconciliationLabPage() {
         storedSession.upstreamSessionToken,
       ].join(':')
     : 'none';
-  const viewerRole = loaderData?.viewerRole ?? 'authenticated';
-  const isAdminViewer = viewerRole === 'admin';
-  const isStaffViewer = viewerRole === 'staff';
+  const storedSessionIdentityKey = storedSession
+    ? [storedSession.accountId, storedSession.upstreamLoginId || 'unknown'].join(':')
+    : 'none';
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
+  const [staffId, setStaffId] = useState(liveDefaultStaffId ?? '');
   const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
     null,
   );
@@ -1517,6 +1510,9 @@ export function LectureJournalReconciliationLabPage() {
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
+  const [upstreamIdentity, setUpstreamIdentity] = useState<VerifiedStaffIdentityResult | null>(
+    null,
+  );
   const [upstreamIdentityWarning, setUpstreamIdentityWarning] = useState<string | null>(null);
   const [
     hasAcknowledgedSessionStaffMismatchWarning,
@@ -1545,17 +1541,77 @@ export function LectureJournalReconciliationLabPage() {
   }, [clear]);
 
   const openLoginModal = useCallback(() => {
+    if (!liveUpstreamAccount) {
+      return;
+    }
+
     setLoginError(null);
     loginForm.setFieldsValue({
       password: '',
       userId: storedSession?.upstreamLoginId ?? '',
     });
     setIsLoginModalOpen(true);
-  }, [loginForm, storedSession?.upstreamLoginId]);
+  }, [liveUpstreamAccount, loginForm, storedSession?.upstreamLoginId]);
 
   useEffect(() => {
     storedSessionRef.current = storedSession;
   }, [storedSession]);
+
+  const persistSessionFromVerifiedIdentity = useCallback(
+    (session: StoredUpstreamSession, identity: VerifiedStaffIdentityResult) => {
+      if (identity.upstreamSessionToken === session.upstreamSessionToken) {
+        return session;
+      }
+
+      return persistSessionFromResult(session, identity);
+    },
+    [persistSessionFromResult],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+
+    setUpstreamIdentity(null);
+
+    const session = storedSessionRef.current;
+
+    if (!session) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    async function loadUpstreamIdentity() {
+      try {
+        const identity = await readVerifiedStaffIdentity({
+          sessionToken: session.upstreamSessionToken,
+        });
+
+        if (cancelled) {
+          return;
+        }
+
+        setUpstreamIdentity(identity);
+        persistSessionFromVerifiedIdentity(session, identity);
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setUpstreamIdentity(null);
+
+        if (isExpiredUpstreamSessionError(error)) {
+          clearCurrentSession();
+        }
+      }
+    }
+
+    void loadUpstreamIdentity();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clearCurrentSession, persistSessionFromVerifiedIdentity, storedSessionIdentityKey]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -1671,7 +1727,7 @@ export function LectureJournalReconciliationLabPage() {
 
   useEffect(() => {
     if (isStaffViewer) {
-      const fixedStaffId = loaderData?.defaultStaffId ?? '';
+      const fixedStaffId = liveDefaultStaffId ?? '';
 
       if (staffId !== fixedStaffId) {
         setStaffId(fixedStaffId);
@@ -1680,10 +1736,10 @@ export function LectureJournalReconciliationLabPage() {
       return;
     }
 
-    if (!staffId && loaderData?.defaultStaffId) {
-      setStaffId(loaderData.defaultStaffId);
+    if (!staffId && liveDefaultStaffId) {
+      setStaffId(liveDefaultStaffId);
     }
-  }, [isStaffViewer, loaderData?.defaultStaffId, staffId]);
+  }, [isStaffViewer, liveDefaultStaffId, staffId]);
 
   useEffect(() => {
     setUpstreamIdentityWarning(null);
@@ -1753,7 +1809,8 @@ export function LectureJournalReconciliationLabPage() {
       const identity = await readVerifiedStaffIdentity({
         sessionToken: session.upstreamSessionToken,
       });
-      const nextSession = persistSessionFromResult(session, identity);
+      setUpstreamIdentity(identity);
+      const nextSession = persistSessionFromVerifiedIdentity(session, identity);
       const upstreamStaffId = identity.personId.trim();
 
       if (upstreamStaffId && upstreamStaffId !== selectedStaffId) {
@@ -1785,7 +1842,12 @@ export function LectureJournalReconciliationLabPage() {
         session: nextSession,
       };
     },
-    [isStaffViewer, openLoginModal, persistSessionFromResult, staffDirectoryResult?.teachers],
+    [
+      isStaffViewer,
+      openLoginModal,
+      persistSessionFromVerifiedIdentity,
+      staffDirectoryResult?.teachers,
+    ],
   );
 
   const restoreDefaultStaffId = useCallback(async () => {
@@ -1797,7 +1859,7 @@ export function LectureJournalReconciliationLabPage() {
       return;
     }
 
-    const profileStaffId = loaderData?.defaultStaffId ?? '';
+    const profileStaffId = liveDefaultStaffId ?? '';
     const session = storedSessionRef.current;
 
     if (!session) {
@@ -1812,7 +1874,8 @@ export function LectureJournalReconciliationLabPage() {
       const identity = await readVerifiedStaffIdentity({
         sessionToken: session.upstreamSessionToken,
       });
-      persistSessionFromResult(session, identity);
+      setUpstreamIdentity(identity);
+      persistSessionFromVerifiedIdentity(session, identity);
 
       const upstreamStaffId = normalizeOptionalString(identity.personId);
 
@@ -1840,8 +1903,8 @@ export function LectureJournalReconciliationLabPage() {
     clearCurrentSession,
     isAdminViewer,
     isRestoringDefaultStaffId,
-    loaderData?.defaultStaffId,
-    persistSessionFromResult,
+    liveDefaultStaffId,
+    persistSessionFromVerifiedIdentity,
   ]);
 
   useEffect(() => {
@@ -1858,7 +1921,13 @@ export function LectureJournalReconciliationLabPage() {
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
   const normalizedStaffId = normalizeOptionalString(staffId);
   const hasMissingStaffFilter = !normalizedStaffId;
-  const canRestoreDefaultStaffId = Boolean(storedSession || loaderData?.defaultStaffId);
+  const isLocalAccountReady = Boolean(liveUpstreamAccount);
+  const canRestoreDefaultStaffId = Boolean(storedSession || liveDefaultStaffId);
+  const upstreamIdentityLabel = upstreamIdentity
+    ? upstreamIdentity.personName || '未命名'
+    : storedSession
+      ? '正在确认校园网身份'
+      : '未连接校园网';
   const teacherOptions = (staffDirectoryResult?.teachers ?? []).map((teacher) => ({
     label: buildTeacherOptionLabel(teacher),
     value: teacher.staffId,
@@ -1994,9 +2063,19 @@ export function LectureJournalReconciliationLabPage() {
   const pageLevelPrefillWarnings = prefillResult
     ? resolvePageLevelPrefillWarnings(prefillResult.warnings)
     : [];
+  const visiblePageLevelPrefillWarnings = prefillResult
+    ? resolvePageLevelPrefillWarnings(
+        prefillResult.warnings.filter((warning) => warning !== UPSTREAM_SESSION_STAFF_MISMATCH),
+      )
+    : [];
   const hasSessionStaffMismatchWarning = Boolean(
     prefillResult?.warnings.includes(UPSTREAM_SESSION_STAFF_MISMATCH),
   );
+  const sessionStaffMismatchWarningMessage =
+    upstreamIdentityWarning ||
+    (hasSessionStaffMismatchWarning
+      ? resolveLectureJournalIssueMessage(UPSTREAM_SESSION_STAFF_MISMATCH)
+      : null);
   const pageLevelPrefillBlockingIssue = prefillResult
     ? resolvePageLevelPrefillBlockingIssue(prefillResult.blockingIssue)
     : null;
@@ -2007,10 +2086,11 @@ export function LectureJournalReconciliationLabPage() {
   );
   const sessionStaffMismatchAcknowledgementIssue =
     hasSessionStaffMismatchWarning && !hasAcknowledgedSessionStaffMismatchWarning
-      ? '请先确认当前校园网登录用户与查询教师不一致的提示。'
+      ? '不可保存，点击上方警告信息中的我已知晓按钮解锁'
       : null;
   const cardFillAvailabilityIssue =
     fillAvailabilityIssue ?? sessionStaffMismatchAcknowledgementIssue;
+  const hasControlAlerts = Boolean(semesterError || staffDirectoryError || hasMissingStaffFilter);
 
   const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
     setJournalDrafts((current) => ({
@@ -2064,7 +2144,7 @@ export function LectureJournalReconciliationLabPage() {
         setSaveFeedbackByKey((current) => ({
           ...current,
           [item.key]: {
-            text: '请先连接教务系统后再保存。',
+            text: '请先登录校园网后再保存。',
             tone: 'error',
           },
         }));
@@ -2189,7 +2269,7 @@ export function LectureJournalReconciliationLabPage() {
     if (!session) {
       setPendingAction('query');
       setLoginError(null);
-      setIsLoginModalOpen(true);
+      openLoginModal();
       return;
     }
 
@@ -2279,8 +2359,8 @@ export function LectureJournalReconciliationLabPage() {
   }
 
   async function handleLogin(values: UpstreamLoginFormValues) {
-    if (!loaderData?.upstreamAccount) {
-      setLoginError('当前登录账号尚未就绪，请稍后再试。');
+    if (!liveUpstreamAccount) {
+      setIsLoginModalOpen(false);
       return;
     }
 
@@ -2300,7 +2380,7 @@ export function LectureJournalReconciliationLabPage() {
         await runQueryAction(nextSession);
       }
     } catch (error) {
-      setLoginError(resolveUpstreamErrorMessage(error, '暂时无法连接教务系统。'));
+      setLoginError(resolveUpstreamErrorMessage(error, '暂时无法登录校园网。'));
     } finally {
       setIsSubmittingLogin(false);
     }
@@ -2361,173 +2441,155 @@ export function LectureJournalReconciliationLabPage() {
 
   return (
     <div className="lecture-journal-page flex flex-col gap-6">
-      <div className="lecture-journal-page-head">
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          教学日志填写对账
-        </Typography.Title>
-        <Typography.Paragraph style={{ margin: 0 }} type="secondary">
-          按学期和教师核对教学计划与日志填写情况，集中处理待补填课次和需要人工确认的异常项。
-        </Typography.Paragraph>
-      </div>
+      <div className="lecture-journal-page-header">
+        <div className="lecture-journal-header-main">
+          <div className="lecture-journal-header-title-row">
+            <Typography.Title level={3} style={{ margin: 0 }}>
+              My 教学日志
+            </Typography.Title>
+          </div>
+          <div className="lecture-journal-header-subtitle">
+            <Typography.Text type="secondary">对照教学计划，补齐待填日志</Typography.Text>
+          </div>
+        </div>
 
-      <div className="lecture-journal-control-card">
-        <Card>
-          <div className="lecture-journal-control-panel">
-            <div className="lecture-journal-control-panel-head">
-              <div>
-                <Typography.Title level={4} style={{ margin: 0 }}>
-                  查询条件
-                </Typography.Title>
-                <Typography.Paragraph style={{ margin: '4px 0 0' }} type="secondary">
-                  {isAdminViewer
-                    ? '选择需要核对的学期和教师后开始查询。'
-                    : '当前账号会使用自己的教师 ID 和当前学期进行查询。'}
-                </Typography.Paragraph>
-              </div>
-              <Tag color={storedSession ? 'success' : 'warning'}>
-                {storedSession ? '教务系统已连接' : '待连接教务系统'}
-              </Tag>
+        <div className="lecture-journal-query-area">
+          {storedSession ? (
+            <div className="lecture-journal-current-identity">
+              <UserOutlined />
+              <span>校园网当前身份：{upstreamIdentityLabel}</span>
+              {isAdminViewer ? (
+                <>
+                  <span className="lecture-journal-inline-separator" aria-hidden />
+                  <div className="lecture-journal-current-identity-actions">
+                    <Button
+                      icon={<SwapOutlined />}
+                      size="small"
+                      type="link"
+                      disabled={!isLocalAccountReady}
+                      style={{ padding: 0 }}
+                      onClick={() => {
+                        setPendingAction(null);
+                        openLoginModal();
+                      }}
+                    >
+                      切换账号
+                    </Button>
+                  </div>
+                </>
+              ) : null}
             </div>
+          ) : null}
 
-            {!storedSession ? (
-              <Alert
-                action={
-                  <Button
-                    size="small"
-                    type="primary"
-                    onClick={() => {
-                      setPendingAction(null);
-                      openLoginModal();
-                    }}
-                  >
-                    连接教务系统
-                  </Button>
-                }
-                description="查询和保存教学日志前需要完成一次教务系统登录。连接成功后会自动继续当前操作。"
-                message="需要连接教务系统"
-                showIcon
-                type="warning"
-              />
-            ) : (
-              <div className="lecture-journal-session-strip">
-                <div className="lecture-journal-session-copy">
-                  <Typography.Text strong>教务系统连接可用</Typography.Text>
-                  <Typography.Text type="secondary">
-                    账号 {storedSession.upstreamLoginId || '未记录'}，有效至{' '}
-                    {formatDateTime(storedSession.expiresAt)}
-                  </Typography.Text>
-                </div>
-                <div className="lecture-journal-session-actions">
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      setPendingAction(null);
-                      openLoginModal();
-                    }}
-                  >
-                    重新连接
-                  </Button>
-                  <Button
-                    size="small"
-                    onClick={() => {
-                      clearCurrentSession();
-                    }}
-                  >
-                    断开
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            <div className="lecture-journal-query-grid">
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>学期</Typography.Text>
-                {isLoadingSemesters ? (
-                  <Skeleton.Button active block />
-                ) : !isAdminViewer ? (
-                  <Input disabled value={selectedSemester?.name ?? '当前学期待加载'} />
-                ) : (
+          <div className="lecture-journal-filter-bar">
+            <div className="lecture-journal-filter-item">
+              <span className="lecture-journal-filter-label">学期:</span>
+              {isLoadingSemesters ? (
+                <span className="lecture-journal-filter-skeleton">
+                  <Skeleton.Button active size="small" />
+                </span>
+              ) : !isAdminViewer ? (
+                <span className="lecture-journal-filter-value">
+                  {selectedSemester?.name ?? '待加载'}
+                </span>
+              ) : (
+                <span className="lecture-journal-filter-control lecture-journal-filter-control-semester">
                   <Select
+                    variant="borderless"
                     options={semesters.map((semester) => ({
                       label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
                       value: semester.id,
                     }))}
-                    placeholder="请选择学期"
                     value={selectedSemesterId ?? undefined}
                     onChange={(value) => setSelectedSemesterId(value)}
                   />
-                )}
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>教师</Typography.Text>
-                {isAdminViewer ? (
-                  <AutoComplete
-                    notFoundContent={isLoadingStaffDirectory ? '正在读取教师目录' : undefined}
-                    options={teacherOptions}
-                    placeholder={loaderData?.defaultStaffId || '输入教师 ID，或使用缓存搜索姓名'}
-                    value={staffId}
-                    onChange={setStaffId}
-                    filterOption={(inputValue, option) =>
-                      String(option?.label || '')
-                        .toLowerCase()
-                        .includes(inputValue.trim().toLowerCase()) ||
-                      String(option?.value || '')
-                        .toLowerCase()
-                        .includes(inputValue.trim().toLowerCase())
-                    }
-                  />
-                ) : (
-                  <Input disabled placeholder="当前账号未绑定教师 ID" value={staffId} />
-                )}
-              </label>
+                </span>
+              )}
             </div>
 
-            {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-            {staffDirectoryError ? (
-              <Alert message={staffDirectoryError} showIcon type="warning" />
-            ) : null}
-            {upstreamIdentityWarning ? (
-              <Alert message={upstreamIdentityWarning} showIcon type="warning" />
-            ) : null}
-            {hasMissingStaffFilter ? (
-              <Alert
-                message={
-                  isStaffViewer
-                    ? '当前账号没有可用的教师 ID，无法查询教学日志对账。'
-                    : '请选择或输入教师后再查询对账。'
-                }
-                showIcon
-                type="warning"
-              />
-            ) : null}
+            <span className="lecture-journal-filter-separator" aria-hidden />
 
-            <div className="lecture-journal-control-actions">
+            <div className="lecture-journal-filter-item">
+              <span className="lecture-journal-filter-label">教师:</span>
+              {isAdminViewer ? (
+                <div className="lecture-journal-filter-teacher-control">
+                  <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
+                    <AutoComplete
+                      variant="borderless"
+                      notFoundContent={isLoadingStaffDirectory ? '读取中' : undefined}
+                      options={teacherOptions}
+                      placeholder={liveDefaultStaffId || '输入 ID 或姓名'}
+                      value={staffId}
+                      onChange={setStaffId}
+                      filterOption={(inputValue, option) =>
+                        String(option?.label || '')
+                          .toLowerCase()
+                          .includes(inputValue.trim().toLowerCase()) ||
+                        String(option?.value || '')
+                          .toLowerCase()
+                          .includes(inputValue.trim().toLowerCase())
+                      }
+                    />
+                  </span>
+                  <Button
+                    disabled={!canRestoreDefaultStaffId || isRestoringDefaultStaffId}
+                    icon={<UserSwitchOutlined />}
+                    loading={isRestoringDefaultStaffId}
+                    size="small"
+                    type="text"
+                    title="恢复默认教师"
+                    onClick={() => void restoreDefaultStaffId()}
+                  />
+                </div>
+              ) : (
+                <span
+                  className="lecture-journal-filter-value lecture-journal-filter-value-truncated"
+                  title={staffId || '未绑定 ID'}
+                >
+                  {staffId || '未绑定教师 ID'}
+                </span>
+              )}
+            </div>
+
+            <span className="lecture-journal-primary-action">
               <Button
                 type="primary"
-                disabled={!selectedSemester || hasMissingStaffFilter || isLoadingReconciliation}
+                icon={<SearchOutlined />}
+                disabled={
+                  !selectedSemester ||
+                  hasMissingStaffFilter ||
+                  isLoadingReconciliation ||
+                  (!storedSession && !isLocalAccountReady)
+                }
                 loading={isLoadingReconciliation}
-                onClick={() => {
-                  void runQueryAction();
-                }}
+                onClick={() => void runQueryAction()}
               >
-                查询对账
+                查阅
               </Button>
-              {isAdminViewer ? (
-                <Button
-                  disabled={!canRestoreDefaultStaffId || isRestoringDefaultStaffId}
-                  loading={isRestoringDefaultStaffId}
-                  onClick={() => {
-                    void restoreDefaultStaffId();
-                  }}
-                >
-                  恢复默认教师
-                </Button>
-              ) : null}
-            </div>
+            </span>
           </div>
-        </Card>
+        </div>
       </div>
+
+      {hasControlAlerts ? (
+        <div className="lecture-journal-control-alerts">
+          {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+          {staffDirectoryError ? (
+            <Alert message={staffDirectoryError} showIcon type="warning" />
+          ) : null}
+          {hasMissingStaffFilter ? (
+            <Alert
+              message={
+                isStaffViewer
+                  ? '当前账号没有可用的教师 ID，无法查询教学日志对账。'
+                  : '请选择或输入教师后再查询对账。'
+              }
+              showIcon
+              type="warning"
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
       {pageLevelPrefillBlockingIssue ? (
@@ -2536,23 +2598,9 @@ export function LectureJournalReconciliationLabPage() {
       {prefillResult && !pageLevelPrefillBlockingIssue && fillAvailabilityIssue ? (
         <Alert message="当前填写前检查未通过。" showIcon type="error" />
       ) : null}
-      {pageLevelPrefillWarnings.length ? (
+      {visiblePageLevelPrefillWarnings.length ? (
         <Alert
-          action={
-            hasSessionStaffMismatchWarning ? (
-              <Button
-                disabled={hasAcknowledgedSessionStaffMismatchWarning}
-                size="small"
-                type={hasAcknowledgedSessionStaffMismatchWarning ? 'default' : 'primary'}
-                onClick={() => {
-                  setHasAcknowledgedSessionStaffMismatchWarning(true);
-                }}
-              >
-                {hasAcknowledgedSessionStaffMismatchWarning ? '已知晓' : '我已知晓'}
-              </Button>
-            ) : undefined
-          }
-          description={pageLevelPrefillWarnings.join('；')}
+          description={visiblePageLevelPrefillWarnings.join('；')}
           message="填写前检查提示"
           showIcon
           type="warning"
@@ -2679,6 +2727,32 @@ export function LectureJournalReconciliationLabPage() {
             ) : null}
           </section>
 
+          {sessionStaffMismatchWarningMessage ? (
+            <div className="lecture-journal-session-mismatch-alert">
+              <Alert
+                action={
+                  hasSessionStaffMismatchWarning ? (
+                    <span className="lecture-journal-warning-action">
+                      <Button
+                        disabled={hasAcknowledgedSessionStaffMismatchWarning}
+                        icon={<CheckOutlined />}
+                        type="default"
+                        onClick={() => {
+                          setHasAcknowledgedSessionStaffMismatchWarning(true);
+                        }}
+                      >
+                        {hasAcknowledgedSessionStaffMismatchWarning ? '已知晓' : '我已知晓'}
+                      </Button>
+                    </span>
+                  ) : undefined
+                }
+                message={sessionStaffMismatchWarningMessage}
+                showIcon
+                type="warning"
+              />
+            </div>
+          ) : null}
+
           {visibleJournalItems.length === 0 ? (
             <div className="lecture-journal-view-empty">
               <Empty
@@ -2714,56 +2788,19 @@ export function LectureJournalReconciliationLabPage() {
         </section>
       ) : null}
 
-      <Modal
-        destroyOnHidden
-        footer={null}
+      <UpstreamLoginModal
+        form={loginForm}
+        isSubmitting={isSubmittingLogin}
+        loginError={loginError}
         open={isLoginModalOpen}
-        title="连接教务系统"
+        title="登录校园网"
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingAction(null);
           setLoginError(null);
         }}
-      >
-        <div className="flex flex-col gap-4">
-          {loginError ? <Alert message={loginError} showIcon type="error" /> : null}
-          <Form<UpstreamLoginFormValues>
-            form={loginForm}
-            layout="vertical"
-            onFinish={(values) => {
-              void handleLogin(values);
-            }}
-          >
-            <Form.Item
-              label="教务系统账号"
-              name="userId"
-              rules={[{ required: true, message: '请输入教务系统账号' }]}
-            >
-              <Input autoComplete="username" placeholder="请输入教务系统账号" />
-            </Form.Item>
-            <Form.Item
-              label="教务系统密码"
-              name="password"
-              rules={[{ required: true, message: '请输入教务系统密码' }]}
-            >
-              <Input.Password autoComplete="current-password" placeholder="请输入教务系统密码" />
-            </Form.Item>
-
-            <div className="flex justify-end gap-3">
-              <Button
-                onClick={() => {
-                  setIsLoginModalOpen(false);
-                }}
-              >
-                取消
-              </Button>
-              <Button htmlType="submit" loading={isSubmittingLogin} type="primary">
-                连接并继续
-              </Button>
-            </div>
-          </Form>
-        </div>
-      </Modal>
+        onFinish={handleLogin}
+      />
     </div>
   );
 }

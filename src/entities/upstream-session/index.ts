@@ -23,3 +23,4 @@ export {
   requestUpstreamSessionRefresh,
 } from './infrastructure/upstream-session-api';
 export type { StoredUpstreamSession } from './infrastructure/upstream-session-storage';
+export { type UpstreamLoginFormValues, UpstreamLoginModal } from './ui/upstream-login-modal';

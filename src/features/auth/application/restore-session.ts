@@ -28,9 +28,14 @@ function queueAuthFailureFlash(content: string) {
 
 let restorePromise: Promise<AuthSessionSnapshot | null> | null = null;
 
+type RestoreSessionOptions = {
+  background?: boolean;
+  waitForPending?: boolean;
+};
+
 export async function restoreSession(
   ports: AuthPorts,
-  options?: { background?: boolean },
+  options?: RestoreSessionOptions,
 ): Promise<AuthSessionSnapshot | null> {
   if (getAuthSessionState().status === 'authenticated') {
     return getAuthSessionState().snapshot;
@@ -77,5 +82,7 @@ export async function restoreSession(
     restorePromise = null;
   });
 
-  return options?.background || isAuthPendingSession(snapshot) ? null : restorePromise;
+  return options?.background || (isAuthPendingSession(snapshot) && !options?.waitForPending)
+    ? null
+    : restorePromise;
 }
