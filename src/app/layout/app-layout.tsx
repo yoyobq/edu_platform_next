@@ -549,7 +549,10 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                 <NavSidebar items={navItems} />
               </Layout.Sider>
             )}
-            <Layout.Content style={{ padding: '16px 24px 32px', overflowY: 'auto' }}>
+            <Layout.Content
+              data-layout-scroll-container="main"
+              style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
+            >
               <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                 <Flex
                   vertical

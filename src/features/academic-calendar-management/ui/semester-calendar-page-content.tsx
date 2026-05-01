@@ -168,6 +168,31 @@ function resolveDayCellBackground(day: SemesterWeekDay, events: AcademicCalendar
   return 'var(--ant-color-bg-container)';
 }
 
+function findMainScrollContainer(element: HTMLElement) {
+  const mainScrollContainer = element.closest<HTMLElement>('[data-layout-scroll-container="main"]');
+
+  if (mainScrollContainer) {
+    return mainScrollContainer;
+  }
+
+  let parent = element.parentElement;
+
+  while (parent) {
+    const overflowY = window.getComputedStyle(parent).overflowY;
+
+    if (
+      (overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') &&
+      parent.scrollHeight - parent.clientHeight > 8
+    ) {
+      return parent;
+    }
+
+    parent = parent.parentElement;
+  }
+
+  return null;
+}
+
 export function SemesterCalendarPageContent({
   listAcademicCalendarEvents,
   listAcademicSemesters,
@@ -184,6 +209,8 @@ export function SemesterCalendarPageContent({
   );
   const [calendarScrollLeft, setCalendarScrollLeft] = useState(0);
   const calendarScrollRef = useRef<HTMLDivElement | null>(null);
+  const currentWeekAnchorRef = useRef<HTMLDivElement | null>(null);
+  const autoScrolledSemesterIdRef = useRef<number | null>(null);
   const eventRequestSequenceRef = useRef(createLatestRequestSequence());
 
   const loadSemesters = useCallback(async () => {
@@ -277,6 +304,7 @@ export function SemesterCalendarPageContent({
   const monthSpans = useMemo(() => buildWeekMonthSpans(weeks), [weeks]);
   const eventBuckets = useMemo(() => buildEventBuckets(events), [events]);
   const teachingWeekCount = useMemo(() => countTeachingWeeks(weeks), [weeks]);
+  const hasCurrentWeek = useMemo(() => weeks.some((week) => week.hasToday), [weeks]);
   const semesterSelectOptions = useMemo(
     () =>
       semesters.map((semester) => ({
@@ -297,6 +325,59 @@ export function SemesterCalendarPageContent({
       })),
     [semesters],
   );
+
+  useEffect(() => {
+    if (
+      !selectedSemester ||
+      eventsLoading ||
+      eventError ||
+      !hasCurrentWeek ||
+      autoScrolledSemesterIdRef.current === selectedSemester.id
+    ) {
+      return;
+    }
+
+    const currentWeekAnchor = currentWeekAnchorRef.current;
+
+    if (!currentWeekAnchor) {
+      return;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      const anchor = currentWeekAnchorRef.current;
+
+      if (!anchor) {
+        return;
+      }
+
+      const scrollableAncestor = findMainScrollContainer(anchor);
+
+      if (!scrollableAncestor) {
+        anchor.scrollIntoView({
+          behavior: 'smooth',
+          block: 'center',
+          inline: 'nearest',
+        });
+        autoScrolledSemesterIdRef.current = selectedSemester.id;
+        return;
+      }
+
+      const anchorRect = anchor.getBoundingClientRect();
+      const scrollableRect = scrollableAncestor.getBoundingClientRect();
+      const anchorTop =
+        anchorRect.top - scrollableRect.top + scrollableAncestor.scrollTop + anchorRect.height / 2;
+
+      scrollableAncestor.scrollTo({
+        behavior: 'smooth',
+        top: Math.max(0, anchorTop - scrollableAncestor.clientHeight * 0.36),
+      });
+      autoScrolledSemesterIdRef.current = selectedSemester.id;
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [eventError, eventsLoading, hasCurrentWeek, selectedSemester]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -379,7 +460,7 @@ export function SemesterCalendarPageContent({
           <div className="flex flex-col gap-4">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
               <div className="flex flex-wrap gap-2">
-                <Tag color="blue">教学周 {teachingWeekCount} 周（截至考试周前）</Tag>
+                <Tag color="blue">教学周 {teachingWeekCount} 周</Tag>
                 <Tag color="gold">教学开始：{selectedSemester.firstTeachingDate}</Tag>
                 <Tag color="purple">考试周开始：{selectedSemester.examStartDate}</Tag>
               </div>
@@ -459,6 +540,7 @@ export function SemesterCalendarPageContent({
                     return (
                       <Fragment key={week.key}>
                         <div
+                          ref={week.hasToday ? currentWeekAnchorRef : undefined}
                           className={`semester-calendar-axis-cell semester-calendar-week-cell ${
                             hasTeachingWeekNumber ? 'semester-calendar-week-cell-active' : ''
                           } ${week.hasToday ? 'semester-calendar-week-cell-current' : ''}`}

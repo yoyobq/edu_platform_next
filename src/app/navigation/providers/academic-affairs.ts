@@ -46,7 +46,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
+            iconKey: 'ScheduleOutlined',
             key: '/academic-affairs/semester-calendar',
             label: '学期校历',
             navMode: 'rail' as const,
