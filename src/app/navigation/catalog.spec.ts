@@ -58,7 +58,6 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
-      '/labs/account-switch',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
@@ -91,7 +90,6 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
-      '/labs/account-switch',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
@@ -122,7 +120,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/account-switch',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
@@ -157,7 +154,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/account-switch',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
@@ -195,7 +191,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/semester-course-schedule-sync',
       '/labs/change-login-email',
       '/labs/invite-issuer',
-      '/labs/account-switch',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',

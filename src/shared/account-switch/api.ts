@@ -352,7 +352,7 @@ function assertCanUseAccountSwitchLabSession(session: AccountSwitchLabSession) {
     return;
   }
 
-  throw new Error('账号切换 Lab 只允许添加 ADMIN 或 STAFF 账号。');
+  throw new Error('账号切换只允许添加 Admin 或 Staff 账号。');
 }
 
 export async function createAccountSwitchLabSession(input: {
