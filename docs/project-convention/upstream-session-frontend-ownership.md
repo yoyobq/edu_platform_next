@@ -63,6 +63,13 @@
 - 后续业务请求把该 token 回传给本站后端
 - 若后端在业务返回中携带滚动更新后的 `upstreamSessionToken`，前端立即覆盖本地旧值
 
+## 当前代码归属
+
+- `entities/upstream-session` 是 upstream 登录、存储、滚动 token 更新与错误反馈的唯一公共入口
+- 调用方只消费 entity 暴露的 hook、controller、UI 或 request adapter，不直接组合 storage 与 login mutation
+- `shared/graphql` 只保留 transport/runtime，不承载 `loginUpstreamSession` 这类业务 facade
+- `entities/academic-semester` 承接学期列表读取；`shared/graphql` 不再 re-export 业务查询 facade
+
 ## 当前示例页
 
 当前示例页路由为：
@@ -125,3 +132,4 @@
 - `fetchVerifiedStaffIdentity` 成功返回相同 token 是正常结果，不应触发重复刷新或重试
 - 若本地 upstream token 与当前本站账号不匹配，必须立即清空
 - 若某个页面只是消费 upstream 数据，它应复用“前端持 token、后端代查”的模式，而不是重新发明另一套会话真相
+- 若后端后续新增 upstream refresh token contract，应在 `entities/upstream-session` 内统一扩展，不下放到页面

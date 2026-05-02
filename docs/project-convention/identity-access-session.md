@@ -190,6 +190,12 @@
 - `identityHint`：后端账户侧提示字段，不是前端权威身份输入
 - `activeRole`：仅允许作为前端本地展示偏好，不参与授权
 
+在个人资料语义上：
+
+- `myProfileIdentity.slotGroup` 可以作为当前用户职责摘要展示
+- 该展示是只读信息，不承担授权判定
+- 完整任职事实仍应通过 `staffCurrentSlotPosts(accountId)` 单独读取，不从 `slotGroup` 反推
+
 在菜单语义上，当前进一步收口为：
 
 - `primaryAccessGroup` 决定正式一级菜单的主身份语义

@@ -18,8 +18,6 @@
 - 当前有哪些具体业务模块已经接入
 - 详细排期与实施顺序
 
-这些内容应继续留在单页 [workbench-entry-plan.md](../plans/workbench-entry-plan.md) 中。
-
 ## 适用范围
 
 - 本文件只约束 `workbench entry` 主题

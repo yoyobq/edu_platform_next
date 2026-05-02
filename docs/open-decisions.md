@@ -35,3 +35,34 @@
 
 - 默认依赖仍由 ESLint 自动拦截
 - 真实例外依赖靠人工确认与文档约束处理
+
+## 4. Identity / Session 后续收敛
+
+当前仍是条件触发项：
+
+- 若出现完整 onboarding，需要新增明确阶段字段，不继续扩张 `needsProfileCompletion`
+- 页面访问配置只有出现多租户差异、后台动态配置、不发版调整或审计需求时，才评估 DB 化
+- token 存储若要从 localStorage 收敛到 HttpOnly cookie，需要同时重新评估 refresh / me、CSRF、跨域和服务端吊销语义
+- `slotGroup` 正式进入更多页面消费后，再补 canonical 枚举与页面级正反路径 E2E
+
+## 5. Public Auth 后续项
+
+当前不默认推进：
+
+- 开放 `/register`
+- 非 `staff` 的 inviteType
+- 账户中心与资料编辑
+- magic-link 真实登录续接
+
+magic-link 只有拿到“验证成功后建立 session”的后端契约后，才从壳页升级为真实流程。
+
+## 6. Layout / Navigation 后续项
+
+当前不默认推进：
+
+- `rail -> drawer / flyout` 真实交互
+- Omni 从轻命令入口扩成复合中枢
+- 第三工作区正式 view state
+- 左栏 / Sidecar 自由拖拽调宽
+
+这些项需要真实业务使用模式或明确交互需求出现后再启动。

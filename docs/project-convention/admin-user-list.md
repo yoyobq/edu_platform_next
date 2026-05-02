@@ -4,7 +4,7 @@
 
 本文件定义当前 `admin` 用户列表与详情页的稳定前端约定。
 
-后端字段、筛选参数和返回结构，以 [../backend/admin-user-list-current.md](../backend/admin-user-list-current.md) 与 [../backend/schema.graphql](../backend/schema.graphql) 为准；本文件只收口前端已经落地的页面、分层和展示规则。
+后端字段、筛选参数和返回结构，以 [../backend/schema.graphql](../backend/schema.graphql) 为准；本文件只收口前端已经落地的页面、分层和展示规则。
 
 ## 路由与权限
 
@@ -20,7 +20,7 @@
 
 - admin 导航中保留“系统管理 > 用户管理”正式入口
 - 该入口直达 `/admin/users`
-- 当前仍由集中 `navigation-meta` registry 承载
+- 导航真相由 `src/app/navigation/` 的业务域 provider 聚合承载，不回填到 `layout`
 
 ## Feature 边界
 
@@ -153,6 +153,26 @@ src/features/admin-user-detail/
   - 请求失败后的重试
 - 不因为详情页已落地，就把扫读优先的细字段重新塞回列表
 - 列表与详情仍保持“列表扫读、详情承接细节”的分工
+
+## Staff Slot
+
+admin 用户详情页当前承接轻量 Staff Slot 管理：
+
+- 读取 `staff(accountId)` 与 `staffCurrentSlotPosts(accountId)`
+- 展示当前任职事实、scope、任职时间、任职性质与备注
+- 支持单条 `assignStaffSlot`
+- 支持单条 `endStaffSlot`
+- 新增任职按 slot 写入对应 scope：
+  - `ACADEMIC_OFFICER`、`STUDENT_AFFAIRS_OFFICER`：`departmentId`
+  - `CLASS_ADVISER`、`COUNSELOR`：`classId`
+  - `TEACHING_GROUP_LEADER`：`teachingGroupId`
+- `LEFT` staff 禁止新增 slot
+- `SUSPENDED` staff 允许新增，但页面提示 binding 会收敛为 `INACTIVE`
+
+当前边界：
+
+- 用户详情页只承接摘要与常用插拔，不做 reconcile UI
+- 批量插入、批量结束、dry-run reconcile、异常治理应进入未来 Staff Slot 工作台
 
 ## 页面结构与反馈
 

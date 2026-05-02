@@ -1,5 +1,9 @@
 # Staff Slot Management Plan
 
+稳定现状已落到 [../docs/project-convention/admin-user-list.md](../docs/project-convention/admin-user-list.md) 的 `Staff Slot` 小节。
+
+本文件只保留后续仍要推进的 Staff Slot 工作台事项。
+
 ## 决策
 
 - Staff slot 插/拔首版合并进 admin 用户详情页。
@@ -8,24 +12,20 @@
 - Staff Slot 工作台以列表和批量治理为中心；单 staff 只是筛选态，不是页面模型。
 - `TEACHER`、`CLASS_CADRE` 当前不进入 admin staff slot 写链路。
 
-## P1：用户详情轻量插/拔
+## 已落地：用户详情轻量插/拔
 
-- 在用户详情 staff 区块增加 Staff Slot 摘要。
-- 查询 `staffCurrentSlotPosts(accountId)` 展示当前任职事实。
-- 支持单条 `assignStaffSlot`。
-- 支持单条 `endStaffSlot`。
-- 按 slot 强制填写对应 scope：
-  - `ACADEMIC_OFFICER`：`departmentId`
-  - `STUDENT_AFFAIRS_OFFICER`：`departmentId`
-  - `CLASS_ADVISER`：`classId`
-  - `COUNSELOR`：`classId`
+- 用户详情 staff 区块已增加 Staff Slot 摘要。
+- 已查询 `staffCurrentSlotPosts(accountId)` 展示当前任职事实。
+- 已支持单条 `assignStaffSlot` 与 `endStaffSlot`。
+- 已按 slot 写入对应 scope：
+  - `ACADEMIC_OFFICER`、`STUDENT_AFFAIRS_OFFICER`：`departmentId`
+  - `CLASS_ADVISER`、`COUNSELOR`：`classId`
   - `TEACHING_GROUP_LEADER`：`teachingGroupId`
-- `LEFT` staff 禁止新增 slot。
-- `SUSPENDED` staff 允许新增，但提示 binding 会是 `INACTIVE`。
-- 不做 reconcile UI。
-- 不做批量操作。
+- `LEFT` staff 已禁止新增 slot。
+- `SUSPENDED` staff 已提示 binding 会是 `INACTIVE`。
+- 当前不做 reconcile UI，不做批量操作。
 
-## P2：Staff Slot 工作台
+## P1：Staff Slot 工作台
 
 - 新增独立 Staff Slot 工作台页面。
 - 工作台主对象是“任职事实行 + binding 对齐状态”。
@@ -40,9 +40,12 @@
 
 ## 后端前提
 
-- P1 当前 schema 已基本支持。
-- P2 不依赖前端用 `adminUsers + N 次 staffCurrentSlotPosts` 拼批量治理。
-- P2 前应补后端分页聚合查询与批量 mutation。
+- 当前 schema 已支持：
+  - `assignStaffSlot(input)`：可写 `departmentId / classId / teachingGroupId`
+  - `endStaffSlot(input)`：可按 `departmentId / classId / teachingGroupId` 结束
+  - `reconcileStaffSlotBindings(input: { accountId, dryRun })`：按单账户预览或执行 binding 收敛
+- 工作台不应依赖前端用 `adminUsers + N 次 staffCurrentSlotPosts` 拼批量治理。
+- 工作台前仍缺后端分页聚合查询与批量 mutation。
 - 建议后端补：
   - `staffSlotPosts(...)`
   - `batchAssignStaffSlot(...)`

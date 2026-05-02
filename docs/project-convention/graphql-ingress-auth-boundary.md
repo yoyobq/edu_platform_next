@@ -295,4 +295,3 @@ public 白名单当前包括：
 - [graphql-error-model.md](./graphql-error-model.md)
 - [identity-access-session.md](./identity-access-session.md)
 - [../dependency-rules.md](../dependency-rules.md)
-- [../../plans/graphql-ingress-followup.md](../../plans/graphql-ingress-followup.md)

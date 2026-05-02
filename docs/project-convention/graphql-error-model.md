@@ -234,4 +234,3 @@ type GraphQLIngressErrorContext = {
 
 - [graphql-ingress-auth-boundary.md](./graphql-ingress-auth-boundary.md)
 - [identity-access-session.md](./identity-access-session.md)
-- [../../plans/graphql-error-model-followup.md](../../plans/graphql-error-model-followup.md)

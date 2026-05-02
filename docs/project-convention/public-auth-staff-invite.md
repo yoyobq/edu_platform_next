@@ -4,9 +4,8 @@
 
 本文件只描述前端当前 `staff invite` 链路的页面语义、交互边界与实现约定。
 
-后端 contract、schema 与 resolver 真相不在这里维护，统一以下列文档为准：
+后端 contract、schema 与 resolver 真相不在这里维护，统一以后端 schema 为准：
 
-- [Invite Register Current Contract](/var/www/platform_next/docs/backend/invite-register-current.md)
 - [schema.graphql](/var/www/platform_next/docs/backend/schema.graphql)
 
 ## 适用范围
