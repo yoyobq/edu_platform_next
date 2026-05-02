@@ -10,8 +10,10 @@ import {
   useState,
 } from 'react';
 import {
+  LayoutOutlined,
   LogoutOutlined,
   MoonOutlined,
+  RightOutlined,
   SearchOutlined,
   SunOutlined,
   UserOutlined,
@@ -20,7 +22,6 @@ import {
   Button,
   Card,
   ConfigProvider,
-  Divider,
   Dropdown,
   Flex,
   Layout,
@@ -77,6 +78,8 @@ type AppLayoutProps = {
 type MainFrameStyle = CSSProperties & {
   '--layout-main-width': string;
 };
+
+const NAV_RAIL_CONTROL_SIZE = 40;
 
 function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
@@ -341,6 +344,197 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     '--layout-main-width': `${Math.round(mainWidth)}px`,
     ...frameShiftStyle,
   };
+  const renderAccountMenuContent = () => (
+    <div
+      style={{
+        background: 'var(--ant-color-bg-elevated)',
+        borderRadius: 'var(--ant-border-radius-lg)',
+        boxShadow: 'var(--ant-box-shadow-secondary)',
+        minWidth: 280,
+        overflow: 'hidden',
+        padding: 8,
+      }}
+    >
+      {activeSnapshot ? (
+        <div className="px-1 pb-3 pt-1">
+          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
+            <HexAvatar
+              accountId={activeSnapshot.accountId}
+              avatarUrl={activeSnapshot.userInfo.avatarUrl}
+              size={44}
+            />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-semibold">{activeSnapshot.displayName}</div>
+              <div className="truncate text-xs text-text-secondary">{currentIdentity}</div>
+            </div>
+            <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+          </div>
+        </div>
+      ) : null}
+
+      <div className="px-1 py-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
+        {activeSnapshot ? (
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+            onClick={() => navigate('/profile')}
+          >
+            <UserOutlined />
+            <span className="min-w-0 flex-1 text-left">个人资料</span>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+          onClick={() => setIsDark((v) => !v)}
+        >
+          {isDark ? <SunOutlined /> : <MoonOutlined />}
+          <span className="min-w-0 flex-1 text-left">
+            {isDark ? '切换浅色模式' : '切换深色模式'}
+          </span>
+        </button>
+        <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm">
+          <span className="text-text-secondary">字号</span>
+          <Segmented
+            size="small"
+            value={fontScale}
+            options={FONT_SCALE_OPTIONS}
+            onChange={(v) => setFontScale(v as FontScale)}
+          />
+        </div>
+      </div>
+
+      <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
+        {activeSnapshot ? (
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+            onClick={() => {
+              logoutModal.confirm({
+                title: '结束会话',
+                content: '且将公事付清风，他日相逢再续行',
+                okText: '江湖再见',
+                cancelText: '不累',
+                onOk: () => {
+                  logout();
+                  navigate('/login', { replace: true });
+                },
+              });
+            }}
+          >
+            <LogoutOutlined />
+            <span className="min-w-0 flex-1 text-left">退出账户</span>
+            <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+  const sidebarFooter = hasSidebar ? (
+    <div className="flex flex-col gap-2">
+      {activeSnapshot ? (
+        <Dropdown placement="topLeft" trigger={['click']} popupRender={renderAccountMenuContent}>
+          <Tooltip title="账户菜单" placement="right">
+            <button
+              type="button"
+              className={
+                navMode === 'full'
+                  ? 'flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left transition-colors hover:bg-bg-layout'
+                  : 'mx-auto flex items-center justify-center rounded-lg transition-colors hover:bg-bg-layout'
+              }
+              style={
+                navMode === 'full'
+                  ? undefined
+                  : {
+                      height: NAV_RAIL_CONTROL_SIZE,
+                      width: NAV_RAIL_CONTROL_SIZE,
+                    }
+              }
+              aria-label="用户菜单"
+            >
+              <HexAvatar
+                accountId={activeSnapshot.accountId}
+                avatarUrl={activeSnapshot.userInfo.avatarUrl}
+                size={navMode === 'full' ? 28 : 24}
+              />
+              {navMode === 'full' ? (
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{activeSnapshot.displayName}</div>
+                  <div className="truncate text-xs text-text-secondary">{currentIdentity}</div>
+                </div>
+              ) : null}
+            </button>
+          </Tooltip>
+        </Dropdown>
+      ) : null}
+    </div>
+  ) : null;
+  const navToggleButton = hasSidebar ? (
+    <Tooltip title={navMode === 'full' ? '收起菜单' : '展开菜单'} placement="right">
+      <button
+        type="button"
+        className={
+          navMode === 'full'
+            ? 'flex shrink-0 items-center justify-center rounded-lg text-text-quaternary transition-colors duration-150 hover:bg-bg-layout hover:text-text-tertiary'
+            : 'flex shrink-0 items-center justify-center rounded-lg text-text transition-colors duration-150 hover:bg-fill-hover'
+        }
+        style={{
+          height: NAV_RAIL_CONTROL_SIZE,
+          width: NAV_RAIL_CONTROL_SIZE,
+        }}
+        aria-label={navMode === 'full' ? '收起导航菜单' : '展开导航菜单'}
+        onClick={navMode === 'full' ? () => setNavMode('rail') : () => setNavMode('full')}
+      >
+        <LayoutOutlined />
+      </button>
+    </Tooltip>
+  ) : null;
+  const sidebarHeader = hasSidebar ? (
+    navMode === 'full' ? (
+      <div className="flex h-full w-full min-w-0 items-center justify-between gap-3 pb-2">
+        <div className="flex min-w-0 items-center">
+          <BrandLockup logoSize={28} logoSlotSize={NAV_RAIL_CONTROL_SIZE} variant="header" />
+        </div>
+        {navToggleButton}
+      </div>
+    ) : (
+      <div className="grid h-full w-full min-w-0 grid-rows-[40px_40px]">
+        <div className="flex items-center justify-center">
+          <div
+            className="flex items-center justify-center"
+            style={{
+              height: NAV_RAIL_CONTROL_SIZE,
+              width: NAV_RAIL_CONTROL_SIZE,
+            }}
+          >
+            <BrandLockup
+              compact
+              logoSize={24}
+              logoSlotSize={NAV_RAIL_CONTROL_SIZE}
+              variant="header"
+            />
+          </div>
+        </div>
+        <div className="flex items-center justify-center">{navToggleButton}</div>
+      </div>
+    )
+  ) : null;
+  const mainToolbar = (
+    <div className="flex items-center justify-end gap-3 px-6 py-3">
+      <Tooltip title="全局搜索与命令 (预留)">
+        <Button
+          type="text"
+          shape="circle"
+          icon={<SearchOutlined />}
+          data-layout-slot="omni-bar-trigger"
+          aria-label="全局搜索与命令"
+        />
+      </Tooltip>
+      <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+        {currentAppEnv}
+      </div>
+    </div>
+  );
 
   return (
     <ConfigProvider
@@ -367,176 +561,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       <AuthRefreshFeedbackBridge />
       {logoutModalContextHolder}
       <div className="h-screen overflow-hidden bg-bg-layout text-text">
-        <Layout style={{ height: '100%', background: 'transparent' }}>
-          <Layout.Header
-            style={{
-              background: 'var(--color-bg-container)',
-              borderBottom: '1px solid var(--ant-color-border-secondary)',
-              paddingInline: 0,
-              height: 'auto',
-              lineHeight: 'normal',
-              flexShrink: 0,
-            }}
-          >
-            <div className="flex items-center justify-between gap-4 py-3" style={frameShiftStyle}>
-              <div
-                className="flex min-w-0 shrink-0 items-center"
-                style={{
-                  width: hasSidebar
-                    ? navMode === 'full'
-                      ? NAV_FULL_WIDTH
-                      : NAV_RAIL_WIDTH
-                    : undefined,
-                  paddingLeft: hasSidebar ? 20 : 24,
-                }}
-              >
-                <BrandLockup variant="header" />
-              </div>
-
-              {menuItems.length > 0 && (
-                <div className="hidden min-w-0 flex-1 lg:block">
-                  <Menu
-                    mode="horizontal"
-                    selectedKeys={[getBaseURL(location.pathname, search)]}
-                    items={menuItems}
-                    style={{
-                      justifyContent: 'center',
-                      borderBottom: 'none',
-                      background: 'transparent',
-                    }}
-                  />
-                </div>
-              )}
-
-              <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
-                <Segmented
-                  size="small"
-                  value={fontScale}
-                  options={FONT_SCALE_OPTIONS}
-                  onChange={(v) => setFontScale(v as FontScale)}
-                />
-                <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
-                  <Button
-                    type="text"
-                    shape="circle"
-                    icon={isDark ? <SunOutlined /> : <MoonOutlined />}
-                    aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
-                    onClick={() => setIsDark((v) => !v)}
-                  />
-                </Tooltip>
-                <Tooltip title="全局搜索与命令 (预留)">
-                  <Button
-                    type="text"
-                    shape="circle"
-                    icon={<SearchOutlined />}
-                    data-layout-slot="omni-bar-trigger"
-                    aria-label="全局搜索与命令"
-                  />
-                </Tooltip>
-                <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
-                  {currentAppEnv}
-                </div>
-                {authSession.status === 'authenticated' && activeSnapshot ? (
-                  <Dropdown
-                    placement="bottomRight"
-                    trigger={['click']}
-                    popupRender={() => (
-                      <div
-                        style={{
-                          background: 'var(--ant-color-bg-elevated)',
-                          borderRadius: 'var(--ant-border-radius-lg)',
-                          boxShadow: 'var(--ant-box-shadow-secondary)',
-                          overflow: 'hidden',
-                          minWidth: 220,
-                        }}
-                      >
-                        <div className="flex items-center gap-3 px-4 py-3">
-                          <HexAvatar
-                            accountId={activeSnapshot.accountId}
-                            avatarUrl={activeSnapshot.userInfo.avatarUrl}
-                            size={44}
-                          />
-                          <div className="min-w-0 flex-1">
-                            <div className="truncate text-sm font-semibold">
-                              {activeSnapshot.displayName}
-                            </div>
-                            <div className="truncate text-xs text-text-secondary">
-                              {currentIdentity}
-                            </div>
-                          </div>
-                        </div>
-                        <Divider style={{ margin: 0 }} />
-                        <div className="px-1 py-1">
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"
-                            onClick={() => navigate('/profile')}
-                          >
-                            <UserOutlined />
-                            个人资料
-                          </button>
-                          <button
-                            type="button"
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-bg-layout"
-                            onClick={() => {
-                              logoutModal.confirm({
-                                title: '结束会话',
-                                content: '且将公事付清风，他日相逢再续行',
-                                okText: '江湖再见',
-                                cancelText: '不累',
-                                onOk: () => {
-                                  logout();
-                                  navigate('/login', { replace: true });
-                                },
-                              });
-                            }}
-                          >
-                            <LogoutOutlined />
-                            退出账户
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  >
-                    <button
-                      type="button"
-                      className="flex cursor-pointer items-center rounded-full border-2 border-transparent p-0.5 transition-all hover:border-border-secondary"
-                      aria-label="用户菜单"
-                    >
-                      <HexAvatar
-                        accountId={activeSnapshot.accountId}
-                        avatarUrl={activeSnapshot.userInfo.avatarUrl}
-                        size={32}
-                      />
-                    </button>
-                  </Dropdown>
-                ) : isSessionResolving ? (
-                  <>
-                    <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
-                      正在同步账户信息
-                    </div>
-                    <Button
-                      type="text"
-                      size="small"
-                      onClick={() => {
-                        logout();
-                        navigate('/login', { replace: true });
-                      }}
-                    >
-                      取消登录
-                    </Button>
-                  </>
-                ) : (
-                  <Button type="primary" size="small" onClick={() => navigate('/login')}>
-                    登录
-                  </Button>
-                )}
-              </div>
-            </div>
-          </Layout.Header>
-
-          <Layout style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            {hasSidebar && (
+        {hasSidebar ? (
+          <Layout style={{ height: '100%', background: 'transparent' }}>
+            <Layout style={{ background: 'transparent', minHeight: 0, overflow: 'hidden' }}>
               <Layout.Sider
                 width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
                 style={{
@@ -546,49 +573,197 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   position: 'relative',
                 }}
               >
-                <NavSidebar items={navItems} />
+                <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
               </Layout.Sider>
-            )}
-            <Layout.Content
-              data-layout-scroll-container="main"
-              style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
-            >
-              <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
-                <Flex
-                  vertical
-                  gap={mainWidthBand === 'compact' ? 16 : 24}
-                  data-layout-slot="main-content-column"
-                  className="mx-auto max-w-7xl transition-[gap]"
+              <Layout style={{ background: 'transparent', minWidth: 0 }}>
+                {mainToolbar}
+                <Layout.Content
+                  data-layout-scroll-container="main"
+                  style={{ padding: '0 24px 32px', overflowY: 'auto' }}
                 >
-                  {isLabsRoute ? (
-                    <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
-                      <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                        `labs` 路由需要通过当前登录会话的访问控制规则。
-                      </Typography.Paragraph>
-                    </div>
-                  ) : null}
-                  {isHydrating && !hasExplicitChildren ? (
-                    <Card>
-                      <Flex vertical gap={20}>
-                        <div className="flex flex-col gap-2">
-                          <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                            正在同步账户信息
-                          </Typography.Title>
+                  <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
+                    <Flex
+                      vertical
+                      gap={mainWidthBand === 'compact' ? 16 : 24}
+                      data-layout-slot="main-content-column"
+                      className="mx-auto max-w-7xl transition-[gap]"
+                    >
+                      {isLabsRoute ? (
+                        <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
                           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                            已建立登录会话，正在补齐当前账号的身份与权限信息。
+                            `labs` 路由需要通过当前登录会话的访问控制规则。
                           </Typography.Paragraph>
                         </div>
-                        <Skeleton active paragraph={{ rows: 6 }} />
-                      </Flex>
-                    </Card>
-                  ) : (
-                    (children ?? <Outlet />)
-                  )}
-                </Flex>
-              </div>
-            </Layout.Content>
+                      ) : null}
+                      {isHydrating && !hasExplicitChildren ? (
+                        <Card>
+                          <Flex vertical gap={20}>
+                            <div className="flex flex-col gap-2">
+                              <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                                正在同步账户信息
+                              </Typography.Title>
+                              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                                已建立登录会话，正在补齐当前账号的身份与权限信息。
+                              </Typography.Paragraph>
+                            </div>
+                            <Skeleton active paragraph={{ rows: 6 }} />
+                          </Flex>
+                        </Card>
+                      ) : (
+                        (children ?? <Outlet />)
+                      )}
+                    </Flex>
+                  </div>
+                </Layout.Content>
+              </Layout>
+            </Layout>
           </Layout>
-        </Layout>
+        ) : (
+          <Layout style={{ height: '100%', background: 'transparent' }}>
+            <Layout.Header
+              style={{
+                background: 'var(--color-bg-container)',
+                borderBottom: '1px solid var(--ant-color-border-secondary)',
+                paddingInline: 0,
+                height: 'auto',
+                lineHeight: 'normal',
+                flexShrink: 0,
+              }}
+            >
+              <div className="flex items-center justify-between gap-4 py-3" style={frameShiftStyle}>
+                <div
+                  className="flex min-w-0 shrink-0 items-center"
+                  style={{
+                    paddingLeft: 24,
+                  }}
+                >
+                  <BrandLockup variant="header" />
+                </div>
+
+                {menuItems.length > 0 && (
+                  <div className="hidden min-w-0 flex-1 lg:block">
+                    <Menu
+                      mode="horizontal"
+                      selectedKeys={[getBaseURL(location.pathname, search)]}
+                      items={menuItems}
+                      style={{
+                        justifyContent: 'center',
+                        borderBottom: 'none',
+                        background: 'transparent',
+                      }}
+                    />
+                  </div>
+                )}
+
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
+                  {mainToolbar}
+                  <Segmented
+                    size="small"
+                    value={fontScale}
+                    options={FONT_SCALE_OPTIONS}
+                    onChange={(v) => setFontScale(v as FontScale)}
+                  />
+                  <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
+                    <Button
+                      type="text"
+                      shape="circle"
+                      icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+                      aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
+                      onClick={() => setIsDark((v) => !v)}
+                    />
+                  </Tooltip>
+
+                  {authSession.status === 'authenticated' && activeSnapshot ? (
+                    <Dropdown
+                      placement="bottomRight"
+                      trigger={['click']}
+                      popupRender={renderAccountMenuContent}
+                    >
+                      <button
+                        type="button"
+                        className="flex cursor-pointer items-center rounded-full border-2 border-transparent p-0.5 transition-all hover:border-border-secondary"
+                        aria-label="用户菜单"
+                      >
+                        <HexAvatar
+                          accountId={activeSnapshot.accountId}
+                          avatarUrl={activeSnapshot.userInfo.avatarUrl}
+                          size={32}
+                        />
+                      </button>
+                    </Dropdown>
+                  ) : null}
+
+                  {isSessionResolving ? (
+                    <>
+                      <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                        正在同步账户信息
+                      </div>
+                      <Button
+                        type="text"
+                        size="small"
+                        onClick={() => {
+                          logout();
+                          navigate('/login', { replace: true });
+                        }}
+                      >
+                        取消登录
+                      </Button>
+                    </>
+                  ) : null}
+
+                  {authSession.status !== 'authenticated' && !isSessionResolving ? (
+                    <Button type="primary" size="small" onClick={() => navigate('/login')}>
+                      登录
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            </Layout.Header>
+
+            <Layout
+              style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}
+            >
+              <Layout.Content
+                data-layout-scroll-container="main"
+                style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
+              >
+                <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
+                  <Flex
+                    vertical
+                    gap={mainWidthBand === 'compact' ? 16 : 24}
+                    data-layout-slot="main-content-column"
+                    className="mx-auto max-w-7xl transition-[gap]"
+                  >
+                    {isLabsRoute ? (
+                      <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
+                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                          `labs` 路由需要通过当前登录会话的访问控制规则。
+                        </Typography.Paragraph>
+                      </div>
+                    ) : null}
+                    {isHydrating && !hasExplicitChildren ? (
+                      <Card>
+                        <Flex vertical gap={20}>
+                          <div className="flex flex-col gap-2">
+                            <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                              正在同步账户信息
+                            </Typography.Title>
+                            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                              已建立登录会话，正在补齐当前账号的身份与权限信息。
+                            </Typography.Paragraph>
+                          </div>
+                          <Skeleton active paragraph={{ rows: 6 }} />
+                        </Flex>
+                      </Card>
+                    ) : (
+                      (children ?? <Outlet />)
+                    )}
+                  </Flex>
+                </div>
+              </Layout.Content>
+            </Layout>
+          </Layout>
+        )}
 
         <div data-layout-layer="third-workspace-root" aria-hidden="true">
           <div data-workspace-mount="artifacts-canvas" />

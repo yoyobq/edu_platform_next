@@ -9,6 +9,8 @@
   --color-primary: var(--ant-color-primary);
   --color-text: var(--ant-color-text);
   --color-text-secondary: var(--ant-color-text-secondary);
+  --color-text-tertiary: var(--ant-color-text-tertiary);
+  --color-text-quaternary: var(--ant-color-text-quaternary);
   --color-border: var(--ant-color-border);
   --color-bg-layout: var(--ant-color-bg-layout);
   --color-bg-container: var(--ant-color-bg-container);
@@ -361,14 +363,6 @@ html.disable-motion *::after {
   .ant-menu-sub.ant-menu-inline
   .ant-menu-submenu-title {
   padding-inline-start: 40px !important;
-}
-
-.app-nav-menu-shell > .ant-menu.ant-menu-inline-collapsed > .ant-menu-item,
-.app-nav-menu-shell
-  > .ant-menu.ant-menu-inline-collapsed
-  > .ant-menu-submenu
-  > .ant-menu-submenu-title {
-  padding-inline: 20px !important;
 }
 
 .app-nav-menu-shell > .ant-menu.ant-menu-inline-collapsed > .ant-menu-item .ant-menu-item-icon,

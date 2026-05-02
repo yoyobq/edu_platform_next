@@ -198,7 +198,7 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 
 代码常量位于 `src/app/providers/nav-capability.ts`：
 
-- `NAV_RAIL_WIDTH = 64`
+- `NAV_RAIL_WIDTH = 80`
 - `NAV_FULL_WIDTH = 240`
 - `NAV_MAIN_MIN_WIDTH_WITH_FULL = 480`
 - `NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL = 680`

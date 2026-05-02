@@ -2,53 +2,70 @@ import { Flex, Typography } from 'antd';
 
 type BrandLockupVariant = 'header' | 'public-entry';
 
-export function BrandLockup({ variant }: { variant: BrandLockupVariant }) {
+export function BrandLockup({
+  compact = false,
+  logoSize,
+  logoSlotSize,
+  variant,
+}: {
+  compact?: boolean;
+  logoSize?: number;
+  logoSlotSize?: number;
+  variant: BrandLockupVariant;
+}) {
   const isHeader = variant === 'header';
+  const resolvedLogoSize = logoSize ?? (isHeader ? 24 : 32);
+  const logoImage = (
+    <img
+      alt=""
+      aria-hidden="true"
+      src="/logo.svg"
+      style={{ display: 'block', height: resolvedLogoSize, width: 'auto', flexShrink: 0 }}
+    />
+  );
 
   return (
     <Flex align="center" gap={12} style={isHeader ? { flexShrink: 0 } : undefined}>
-      {isHeader ? (
-        <img
-          alt=""
+      {logoSlotSize ? (
+        <span
           aria-hidden="true"
-          src="/logo.svg"
-          style={{ display: 'block', height: 24, width: 'auto', flexShrink: 0 }}
-        />
+          className="flex shrink-0 items-center justify-center"
+          style={{ height: logoSlotSize, width: logoSlotSize }}
+        >
+          {logoImage}
+        </span>
       ) : (
-        <img
-          alt=""
-          aria-hidden="true"
-          src="/logo.svg"
-          style={{ display: 'block', height: 32, width: 'auto', flexShrink: 0 }}
-        />
+        logoImage
       )}
 
-      <Flex
-        vertical
-        gap={2}
-        style={isHeader ? { flexShrink: 0, minWidth: 'max-content' } : undefined}
-      >
-        <Typography.Text
-          type="secondary"
-          style={
-            isHeader
-              ? {
-                  fontSize: 'var(--ant-font-size)',
-                  lineHeight: 1.2,
-                  marginBottom: 0,
-                  whiteSpace: 'nowrap',
-                }
-              : { fontSize: 'var(--ant-font-size-sm)', letterSpacing: '0.04em' }
-          }
+      {compact ? null : (
+        <Flex
+          vertical
+          gap={2}
+          style={isHeader ? { flexShrink: 0, minWidth: 'max-content' } : undefined}
         >
-          aigc-friendly-frontend
-        </Typography.Text>
-        {isHeader ? (
-          <Typography.Text type="secondary" style={{ whiteSpace: 'nowrap' }}>
-            主内容优先，入口协作增强。
+          <Typography.Text
+            style={
+              isHeader
+                ? {
+                    color: 'var(--ant-color-text)',
+                    fontSize: 'var(--ant-font-size-lg)',
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                    marginBottom: 0,
+                    whiteSpace: 'nowrap',
+                  }
+                : {
+                    color: 'var(--ant-color-text-secondary)',
+                    fontSize: 'var(--ant-font-size-sm)',
+                    letterSpacing: '0.04em',
+                  }
+            }
+          >
+            {isHeader ? 'EDU Platform' : 'aigc-friendly-frontend'}
           </Typography.Text>
-        ) : null}
-      </Flex>
+        </Flex>
+      )}
     </Flex>
   );
 }

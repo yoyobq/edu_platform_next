@@ -1,6 +1,6 @@
 // src/app/layout/nav-sidebar.tsx
 
-import { useMemo } from 'react';
+import { type ReactNode, useMemo } from 'react';
 import {
   ApiOutlined,
   CalendarOutlined,
@@ -8,11 +8,9 @@ import {
   ExperimentOutlined,
   FormOutlined,
   HomeOutlined,
-  LeftOutlined,
   LockOutlined,
   MailOutlined,
   ReadOutlined,
-  RightOutlined,
   ScheduleOutlined,
   SendOutlined,
   SettingOutlined,
@@ -21,7 +19,7 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Menu, Tooltip } from 'antd';
+import { Menu } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -108,11 +106,13 @@ function findOpenGroupKeys(items: readonly NavigationMetaItem[], pathname: strin
 }
 
 type NavSidebarProps = {
+  footer?: ReactNode;
+  header?: ReactNode;
   items: NavigationMetaItem[];
 };
 
-export function NavSidebar({ items }: NavSidebarProps) {
-  const { mode, pinToFull, setMode } = useNavCapability();
+export function NavSidebar({ footer, header, items }: NavSidebarProps) {
+  const { mode } = useNavCapability();
   const location = useLocation();
   const navigate = useNavigate();
   const collapsed = mode === 'rail';
@@ -151,9 +151,18 @@ export function NavSidebar({ items }: NavSidebarProps) {
 
   return (
     <div className="relative flex h-full flex-col">
+      {header ? (
+        <div
+          className="flex shrink-0 items-center px-3 py-1"
+          style={{ height: 88, width: sidebarWidth }}
+        >
+          {header}
+        </div>
+      ) : null}
+
       {/* Menu area - full height with scroll */}
       <div
-        className="app-nav-menu-shell flex-1 overflow-y-auto overflow-x-hidden py-2"
+        className="app-nav-menu-shell min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-0"
         style={{ width: sidebarWidth }}
       >
         <Menu
@@ -173,21 +182,14 @@ export function NavSidebar({ items }: NavSidebarProps) {
         />
       </div>
 
-      <Tooltip title={collapsed ? '展开菜单' : '收起菜单'} placement="right">
-        <button
-          type="button"
-          className="app-nav-sidebar-toggle absolute flex h-5 w-5 items-center justify-center rounded-full bg-sidebar-affordance text-sidebar-affordance-ink transition-colors hover:bg-sidebar-affordance-hover hover:text-text"
-          style={{ left: sidebarWidth - 10, top: 45 }}
-          aria-label={collapsed ? '展开导航菜单' : '收起导航菜单'}
-          onClick={collapsed ? pinToFull : () => setMode('rail')}
+      {footer ? (
+        <div
+          className="flex shrink-0 flex-col gap-1 px-2 pb-2 pt-3"
+          style={{ width: sidebarWidth }}
         >
-          {collapsed ? (
-            <RightOutlined style={{ fontSize: 8 }} />
-          ) : (
-            <LeftOutlined style={{ fontSize: 8 }} />
-          )}
-        </button>
-      </Tooltip>
+          {footer}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -5,15 +5,19 @@ import { createContext, useContext } from 'react';
 /**
  * Nav sidebar capability modes.
  * - none: no left sidebar, keeps current light navigation
- * - rail: 64px icon column; click/focus triggers drawer flyout
+ * - rail: 80px icon column; click/focus triggers drawer flyout
  * - full: full-width sidebar, entered after user explicitly pins
  *
  * drawer/flyout is a transient UI state within rail, not an independent mode.
  */
 export type NavMode = 'none' | 'rail' | 'full';
 
-/** Width constants referenced by layout and documentation. */
-export const NAV_RAIL_WIDTH = 64;
+/**
+ * Width constants referenced by layout and documentation.
+ * NAV_RAIL_WIDTH = 80 matches antd's default collapsed menu width (controlHeightLG × 2 = 40 × 2),
+ * so rail icons align with logo / toggle / avatar slots without any CSS overrides.
+ */
+export const NAV_RAIL_WIDTH = 80;
 export const NAV_FULL_WIDTH = 240;
 
 /**
