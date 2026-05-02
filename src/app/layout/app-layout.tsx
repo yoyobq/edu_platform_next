@@ -30,7 +30,9 @@ import {
   Input,
   Layout,
   Menu,
+  message,
   Modal,
+  Popconfirm,
   Popover,
   Segmented,
   Skeleton,
@@ -97,9 +99,16 @@ type MainFrameStyle = CSSProperties & {
 };
 
 const NAV_RAIL_CONTROL_SIZE = 40;
+const ACCOUNT_SWITCH_LIMIT = 2;
 
 function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
+}
+
+function formatAccessGroupLabel(value: string) {
+  const normalizedValue = value.toLowerCase();
+
+  return normalizedValue.charAt(0).toUpperCase() + normalizedValue.slice(1);
 }
 
 function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
@@ -126,6 +135,8 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const [switchingAccountId, setSwitchingAccountId] = useState<number | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
+  const [messageApi, messageContextHolder] = message.useMessage();
+  const [modalApi, modalContextHolder] = Modal.useModal();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
@@ -334,7 +345,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const search = location.search;
   const currentIdentity = isSessionResolving
     ? '同步中'
-    : activeSnapshot?.primaryAccessGroup.toLowerCase() || 'guest';
+    : activeSnapshot
+      ? formatAccessGroupLabel(activeSnapshot.primaryAccessGroup)
+      : 'Guest';
   const hasSidebar =
     authSession.status === 'authenticated' && navMode !== 'none' && navItems.length > 0;
 
@@ -388,18 +401,23 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
     return sessions;
   }, [accountRecords, activeSnapshot]);
+  const hasReachedAccountSwitchLimit = accountSessions.length >= ACCOUNT_SWITCH_LIMIT;
 
   function commitAccountRecords(nextRecords: AccountSwitchLabRecord[]) {
     writeAccountSwitchLabRecords(nextRecords);
     setAccountRecords(nextRecords);
   }
 
-  function getAccountLoginName(session: AccountSwitchLabSession) {
-    return session.account.loginName || session.displayName || `#${session.accountId}`;
+  function getAccountDisplayName(session: AccountSwitchLabSession) {
+    return session.userInfo.nickname || session.displayName || `#${session.accountId}`;
   }
 
   function getAccountLoginEmail(session: AccountSwitchLabSession) {
     return session.account.loginEmail || session.userInfo.email || '未设置邮箱';
+  }
+
+  function getFallbackSessionAfterLogout(session: AccountSwitchLabSession) {
+    return accountSessions.find((candidate) => candidate.accountId !== session.accountId) ?? null;
   }
 
   async function switchToSession(session: AccountSwitchLabSession) {
@@ -419,6 +437,11 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   }
 
   async function handleAddAccount() {
+    if (hasReachedAccountSwitchLimit) {
+      setAddAccountError('只允许最多两个用户。');
+      return;
+    }
+
     const values = await addAccountForm.validateFields();
 
     setAddAccountSubmitting(true);
@@ -432,11 +455,29 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       const baseRecords = activeSnapshot
         ? upsertAccountSwitchLabRecord(accountRecords, activeSnapshot)
         : accountRecords;
+
+      if (accountSessions.some((candidate) => candidate.accountId === session.accountId)) {
+        const nextRecords = upsertAccountSwitchLabRecord(baseRecords, session);
+
+        commitAccountRecords(nextRecords);
+        setAddAccountModalOpen(false);
+        addAccountForm.resetFields();
+        messageApi.info('这个账号已经在列表里，请用另一个账号登录。');
+        return;
+      }
+
       const nextRecords = upsertAccountSwitchLabRecord(baseRecords, session);
 
       commitAccountRecords(nextRecords);
       setAddAccountModalOpen(false);
       addAccountForm.resetFields();
+      modalApi.confirm({
+        title: '切换到新账号？',
+        content: `已添加 ${getAccountDisplayName(session)}，现在切换过去吗？`,
+        okText: '切换过去',
+        cancelText: '先不切换',
+        onOk: () => switchToSession(session),
+      });
     } catch (error) {
       setAddAccountError(error instanceof Error ? error.message : '添加账号失败。');
     } finally {
@@ -448,10 +489,19 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     const nextRecords = accountRecords.filter(
       (record) => record.session.accountId !== session.accountId,
     );
+    const isActiveAccount = activeSnapshot?.accountId === session.accountId;
+    const fallbackSession = isActiveAccount ? getFallbackSessionAfterLogout(session) : null;
 
     commitAccountRecords(nextRecords);
 
-    if (activeSnapshot?.accountId === session.accountId) {
+    if (isActiveAccount && fallbackSession) {
+      await getGraphQLClient().clearStore();
+      writeCurrentAuthSession(fallbackSession);
+      window.location.reload();
+      return;
+    }
+
+    if (isActiveAccount) {
       await getGraphQLClient().clearStore();
       logout();
       navigate('/login', { replace: true });
@@ -493,7 +543,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">
-                      {getAccountLoginName(session)}
+                      {getAccountDisplayName(session)}
                     </div>
                     <div className="truncate text-xs text-text-secondary">
                       {getAccountLoginEmail(session)}
@@ -508,11 +558,24 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
-            onClick={() => setAddAccountModalOpen(true)}
+            className={
+              hasReachedAccountSwitchLimit
+                ? 'flex w-full cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-text-tertiary'
+                : 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout'
+            }
+            disabled={hasReachedAccountSwitchLimit}
+            onClick={() => {
+              if (hasReachedAccountSwitchLimit) {
+                return;
+              }
+
+              setAddAccountModalOpen(true);
+            }}
           >
             <PlusOutlined />
-            <span className="min-w-0 flex-1 text-left">增加另一个账号</span>
+            <span className="min-w-0 flex-1 text-left">
+              {hasReachedAccountSwitchLimit ? '只允许最多两个用户' : '增加另一个账号'}
+            </span>
           </button>
         </div>
       </div>
@@ -521,26 +584,61 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       <div style={surfaceStyle}>
         <div className="px-1 pb-2">
           <div className="flex flex-col gap-1">
-            {accountSessions.map((session) => (
-              <button
-                key={session.accountId}
-                type="button"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-layout"
-                onClick={() => void logoutAccount(session)}
-              >
-                <HexAvatar
-                  accountId={session.accountId}
-                  avatarUrl={session.userInfo.avatarUrl}
-                  size={36}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">{getAccountLoginName(session)}</div>
-                  <div className="truncate text-xs text-text-secondary">
-                    {getAccountLoginEmail(session)}
-                  </div>
-                </div>
-              </button>
-            ))}
+            {accountSessions.map((session) => {
+              const isActiveAccount = activeSnapshot?.accountId === session.accountId;
+              const fallbackSession = isActiveAccount
+                ? getFallbackSessionAfterLogout(session)
+                : null;
+              const confirmTitle = isActiveAccount
+                ? fallbackSession
+                  ? '换到另一个账号？'
+                  : '结束会话'
+                : '不再保留这个账号？';
+              const confirmDescription = isActiveAccount
+                ? fallbackSession
+                  ? `${getAccountDisplayName(session)} 会退出，随后切换到 ${getAccountDisplayName(
+                      fallbackSession,
+                    )}。`
+                  : '且将公事付清风，他日相逢再续行'
+                : `${getAccountDisplayName(session)} 会从这个列表里移除。`;
+
+              return (
+                <Popconfirm
+                  key={session.accountId}
+                  title={confirmTitle}
+                  description={confirmDescription}
+                  okText={
+                    isActiveAccount && fallbackSession
+                      ? '切换过去'
+                      : isActiveAccount
+                        ? '江湖再见'
+                        : '确认'
+                  }
+                  cancelText={isActiveAccount && !fallbackSession ? '不累' : '取消'}
+                  placement="right"
+                  onConfirm={() => void logoutAccount(session)}
+                >
+                  <button
+                    type="button"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-layout"
+                  >
+                    <HexAvatar
+                      accountId={session.accountId}
+                      avatarUrl={session.userInfo.avatarUrl}
+                      size={36}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm font-medium">
+                        {getAccountDisplayName(session)}
+                      </div>
+                      <div className="truncate text-xs text-text-secondary">
+                        {getAccountLoginEmail(session)}
+                      </div>
+                    </div>
+                  </button>
+                </Popconfirm>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -592,9 +690,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
             onClick={() => setIsDark((v) => !v)}
           >
             {isDark ? <SunOutlined /> : <MoonOutlined />}
-            <span className="min-w-0 flex-1 text-left">
-              {isDark ? '切换浅色模式' : '切换深色模式'}
-            </span>
+            <span className="min-w-0 flex-1 text-left">{isDark ? '浅色模式' : '深色模式'}</span>
           </button>
           <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm">
             <span className="text-text-secondary">字号</span>
@@ -609,21 +705,40 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
         <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
           {activeSnapshot ? (
-            <Popover
-              placement="rightBottom"
-              trigger="click"
-              content={logoutAccountMenu}
-              overlayInnerStyle={{ padding: 0 }}
-            >
-              <button
-                type="button"
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+            accountSessions.length > 1 ? (
+              <Popover
+                placement="rightBottom"
+                trigger="click"
+                content={logoutAccountMenu}
+                overlayInnerStyle={{ padding: 0 }}
               >
-                <LogoutOutlined />
-                <span className="min-w-0 flex-1 text-left">退出账户</span>
-                <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
-              </button>
-            </Popover>
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+                >
+                  <LogoutOutlined />
+                  <span className="min-w-0 flex-1 text-left">退出账户</span>
+                  <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+                </button>
+              </Popover>
+            ) : (
+              <Popconfirm
+                title="结束会话"
+                description="且将公事付清风，他日相逢再续行"
+                okText="江湖再见"
+                cancelText="不累"
+                placement="right"
+                onConfirm={() => void logoutAccount(activeSnapshot)}
+              >
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+                >
+                  <LogoutOutlined />
+                  <span className="min-w-0 flex-1 text-left">退出账户</span>
+                </button>
+              </Popconfirm>
+            )
           ) : null}
         </div>
       </div>
@@ -763,6 +878,8 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       }}
     >
       <AuthRefreshFeedbackBridge />
+      {messageContextHolder}
+      {modalContextHolder}
       <div className="h-screen overflow-hidden bg-bg-layout text-text">
         {hasSidebar ? (
           <Layout style={{ height: '100%', background: 'transparent' }}>
@@ -982,6 +1099,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           okText="添加账号"
           cancelText="取消"
           confirmLoading={addAccountSubmitting}
+          okButtonProps={{ disabled: hasReachedAccountSwitchLimit }}
           onCancel={() => {
             setAddAccountModalOpen(false);
             setAddAccountError(null);
