@@ -169,7 +169,7 @@ export function AccountMenu({
         commitAccountRecords(nextRecords);
         setAddAccountModalOpen(false);
         addAccountForm.resetFields();
-        messageApi.info('这个账号已经在列表里，已顺便刷新登录状态。');
+        messageApi.info('这个账号已经在列表里，请换个账号添加。');
         return;
       }
 

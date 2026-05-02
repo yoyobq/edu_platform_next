@@ -25,6 +25,7 @@ import {
   Select,
   Skeleton,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 
@@ -63,10 +64,18 @@ import './semester-calendar-page-content.css';
 const WEEKDAY_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 
 const DAY_PERIOD_LABELS: Record<AcademicCalendarEventDayPeriod, string> = {
+  AFTERNOON: '下',
+  ALL_DAY: '全',
+  MORNING: '上',
+};
+
+const DAY_PERIOD_LABELS_FULL: Record<AcademicCalendarEventDayPeriod, string> = {
   AFTERNOON: '下午',
   ALL_DAY: '全天',
   MORNING: '上午',
 };
+
+const TOOLTIP_EVENT_LIMIT = 5;
 
 const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   ACTIVITY: '活动',
@@ -105,6 +114,22 @@ type SemesterCalendarPageContentProps = {
   ) => Promise<AcademicCalendarEventRecord[]>;
   listAcademicSemesters: (input: ListAcademicSemestersInput) => Promise<AcademicSemesterRecord[]>;
 };
+
+function buildDayCellTooltipLines(events: AcademicCalendarEventRecord[]) {
+  const visible = events.slice(0, TOOLTIP_EVENT_LIMIT);
+  const lines = visible.map((event) => {
+    const period = DAY_PERIOD_LABELS_FULL[event.dayPeriod];
+    const topic = resolveEventDisplayTopic(event);
+
+    return `${period} ${topic}`;
+  });
+
+  if (events.length > TOOLTIP_EVENT_LIMIT) {
+    lines.push(`…还有 ${events.length - TOOLTIP_EVENT_LIMIT} 项`);
+  }
+
+  return lines.join('\n');
+}
 
 function resolveEventMarkerClassName(event: AcademicCalendarEventRecord) {
   const parts = ['semester-calendar-event-line'];
@@ -149,20 +174,24 @@ function resolveDayCellBackground(day: SemesterWeekDay, events: AcademicCalendar
   const hasHoliday =
     isWeekendDate(day.date) || events.some((event) => event.eventType === 'HOLIDAY');
 
+  if (day.isExamPeriod || events.some((event) => event.eventType === 'EXAM')) {
+    return 'var(--ant-color-error-bg)';
+  }
+
+  if (events.some((event) => event.eventType === 'SPORTS_MEET')) {
+    return 'var(--ant-purple-1, var(--ant-color-success-bg))';
+  }
+
+  if (events.some((event) => event.eventType === 'ACTIVITY')) {
+    return 'var(--ant-color-primary-bg)';
+  }
+
   if (hasWorkdayOverride) {
     return 'var(--ant-color-bg-container)';
   }
 
   if (hasHoliday) {
     return 'var(--ant-color-warning-bg)';
-  }
-
-  if (day.isExamPeriod || events.some((event) => event.eventType === 'EXAM')) {
-    return 'var(--ant-color-error-bg)';
-  }
-
-  if (events.some((event) => event.eventType === 'SPORTS_MEET')) {
-    return 'var(--ant-color-success-bg)';
   }
 
   return 'var(--ant-color-bg-container)';
@@ -305,26 +334,73 @@ export function SemesterCalendarPageContent({
   const eventBuckets = useMemo(() => buildEventBuckets(events), [events]);
   const teachingWeekCount = useMemo(() => countTeachingWeeks(weeks), [weeks]);
   const hasCurrentWeek = useMemo(() => weeks.some((week) => week.hasToday), [weeks]);
-  const semesterSelectOptions = useMemo(
-    () =>
-      semesters.map((semester) => ({
-        value: semester.id,
-        plainLabel: semester.name,
-        label: (
-          <div className="flex items-center gap-2">
-            <span>{semester.name}</span>
-            {semester.isCurrent ? (
-              <span
-                aria-label="当前学期"
-                title="当前学期"
-                className="semester-calendar-current-dot"
-              />
-            ) : null}
-          </div>
-        ),
-      })),
-    [semesters],
-  );
+  const semesterSelectOptions = useMemo(() => {
+    const groups = new Map<number, AcademicSemesterRecord[]>();
+
+    for (const semester of semesters) {
+      const existing = groups.get(semester.schoolYear) ?? [];
+      existing.push(semester);
+      groups.set(semester.schoolYear, existing);
+    }
+
+    const options: {
+      label: React.ReactNode;
+      options: { value: number; plainLabel: string; label: React.ReactNode }[];
+    }[] = [];
+
+    for (const [schoolYear, groupSemesters] of groups) {
+      options.push({
+        label: `${schoolYear}-${schoolYear + 1} 学年`,
+        options: groupSemesters.map((semester) => ({
+          value: semester.id,
+          plainLabel: semester.name,
+          label: (
+            <div className="flex items-center gap-2">
+              <span>{semester.name}</span>
+              {semester.isCurrent ? (
+                <span
+                  aria-label="当前学期"
+                  title="当前学期"
+                  className="semester-calendar-current-dot"
+                />
+              ) : null}
+            </div>
+          ),
+        })),
+      });
+    }
+
+    return options;
+  }, [semesters]);
+
+  const scrollToCurrentWeek = useCallback(() => {
+    const anchor = currentWeekAnchorRef.current;
+
+    if (!anchor) {
+      return;
+    }
+
+    const scrollableAncestor = findMainScrollContainer(anchor);
+
+    if (!scrollableAncestor) {
+      anchor.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+        inline: 'nearest',
+      });
+      return;
+    }
+
+    const anchorRect = anchor.getBoundingClientRect();
+    const scrollableRect = scrollableAncestor.getBoundingClientRect();
+    const anchorTop =
+      anchorRect.top - scrollableRect.top + scrollableAncestor.scrollTop + anchorRect.height / 2;
+
+    scrollableAncestor.scrollTo({
+      behavior: 'smooth',
+      top: Math.max(0, anchorTop - scrollableAncestor.clientHeight * 0.36),
+    });
+  }, []);
 
   useEffect(() => {
     if (
@@ -337,47 +413,15 @@ export function SemesterCalendarPageContent({
       return;
     }
 
-    const currentWeekAnchor = currentWeekAnchorRef.current;
-
-    if (!currentWeekAnchor) {
-      return;
-    }
-
     const frameId = window.requestAnimationFrame(() => {
-      const anchor = currentWeekAnchorRef.current;
-
-      if (!anchor) {
-        return;
-      }
-
-      const scrollableAncestor = findMainScrollContainer(anchor);
-
-      if (!scrollableAncestor) {
-        anchor.scrollIntoView({
-          behavior: 'smooth',
-          block: 'center',
-          inline: 'nearest',
-        });
-        autoScrolledSemesterIdRef.current = selectedSemester.id;
-        return;
-      }
-
-      const anchorRect = anchor.getBoundingClientRect();
-      const scrollableRect = scrollableAncestor.getBoundingClientRect();
-      const anchorTop =
-        anchorRect.top - scrollableRect.top + scrollableAncestor.scrollTop + anchorRect.height / 2;
-
-      scrollableAncestor.scrollTo({
-        behavior: 'smooth',
-        top: Math.max(0, anchorTop - scrollableAncestor.clientHeight * 0.36),
-      });
+      scrollToCurrentWeek();
       autoScrolledSemesterIdRef.current = selectedSemester.id;
     });
 
     return () => {
       window.cancelAnimationFrame(frameId);
     };
-  }, [eventError, eventsLoading, hasCurrentWeek, selectedSemester]);
+  }, [eventError, eventsLoading, hasCurrentWeek, scrollToCurrentWeek, selectedSemester]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -414,7 +458,7 @@ export function SemesterCalendarPageContent({
         </div>
       </section>
 
-      <Card title={selectedSemester ? selectedSemester.name : '学期周视图'}>
+      <Card>
         {semesterError ? (
           <Alert
             action={
@@ -474,6 +518,14 @@ export function SemesterCalendarPageContent({
                   考试
                 </span>
                 <span className="semester-calendar-legend-item">
+                  <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-activity" />
+                  活动
+                </span>
+                <span className="semester-calendar-legend-item">
+                  <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-sports-meet" />
+                  运动会
+                </span>
+                <span className="semester-calendar-legend-item">
                   <span className="semester-calendar-legend-swatch semester-calendar-legend-swatch-current" />
                   本周
                 </span>
@@ -485,9 +537,6 @@ export function SemesterCalendarPageContent({
             </div>
 
             <div className="flex flex-col">
-              <div className="semester-calendar-table-toolbar">
-                <Typography.Text type="secondary">横向滚动可查看完整星期。</Typography.Text>
-              </div>
               <div className="semester-calendar-sticky-head-shell">
                 <div
                   className="semester-calendar-sticky-head grid min-w-230"
@@ -568,105 +617,111 @@ export function SemesterCalendarPageContent({
                           };
 
                           return (
-                            <button
+                            <Tooltip
                               key={day.dateKey}
-                              type="button"
-                              aria-label={
-                                hasDayEvents
-                                  ? `${formatDisplayDate(day.dateKey)}，${dayEvents.length} 项事件`
-                                  : `${formatDisplayDate(day.dateKey)}，无事件`
-                              }
-                              aria-disabled={!hasDayEvents}
-                              className={`semester-calendar-day-cell relative min-h-23 overflow-hidden p-2 ${
-                                hasDayEvents ? 'semester-calendar-day-cell-clickable' : ''
-                              } ${
-                                highlightCurrentWeekDay
-                                  ? 'semester-calendar-day-cell-current-week'
-                                  : ''
-                              } ${day.isToday ? 'semester-calendar-day-cell-today' : ''}`}
-                              data-clickable={hasDayEvents ? 'true' : 'false'}
-                              style={dayCellStyle}
-                              tabIndex={hasDayEvents ? undefined : -1}
-                              onClick={() => {
-                                if (!hasDayEvents) {
-                                  return;
-                                }
-
-                                setSelectedDayEvents({
-                                  dateKey: day.dateKey,
-                                  events: dayEvents,
-                                });
-                              }}
+                              title={hasDayEvents ? buildDayCellTooltipLines(dayEvents) : undefined}
+                              placement="right"
                             >
-                              <div className="mb-1.5 flex min-h-5 items-start justify-between gap-1.5">
-                                <div className="flex items-baseline gap-1">
-                                  <span
-                                    className={`semester-calendar-day-number ${
-                                      day.isToday ? 'semester-calendar-day-number-today' : ''
-                                    } ${
-                                      !day.isOutsideSemester || isFirstDayOfMonth || day.isToday
-                                        ? 'font-semibold'
-                                        : ''
-                                    } ${
-                                      day.isToday
-                                        ? ''
-                                        : day.isOutsideSemester
-                                          ? 'text-text-tertiary'
-                                          : !week.hasToday
-                                            ? 'text-text-secondary'
-                                            : 'text-text'
-                                    }`}
-                                  >
-                                    {dayNum}
-                                  </span>
+                              <button
+                                type="button"
+                                aria-label={
+                                  hasDayEvents
+                                    ? `${formatDisplayDate(day.dateKey)}，${dayEvents.length} 项事件`
+                                    : `${formatDisplayDate(day.dateKey)}，无事件`
+                                }
+                                aria-disabled={!hasDayEvents}
+                                className={`semester-calendar-day-cell relative min-h-23 overflow-hidden p-2 ${
+                                  hasDayEvents ? 'semester-calendar-day-cell-clickable' : ''
+                                } ${
+                                  highlightCurrentWeekDay
+                                    ? 'semester-calendar-day-cell-current-week'
+                                    : ''
+                                } ${day.isToday ? 'semester-calendar-day-cell-today' : ''}`}
+                                data-clickable={hasDayEvents ? 'true' : 'false'}
+                                style={dayCellStyle}
+                                tabIndex={hasDayEvents ? undefined : -1}
+                                onClick={() => {
+                                  if (!hasDayEvents) {
+                                    return;
+                                  }
+
+                                  setSelectedDayEvents({
+                                    dateKey: day.dateKey,
+                                    events: dayEvents,
+                                  });
+                                }}
+                              >
+                                <div className="mb-1.5 flex min-h-5 items-start justify-between gap-1.5">
+                                  <div className="flex items-baseline gap-1">
+                                    <span
+                                      className={`semester-calendar-day-number ${
+                                        day.isToday ? 'semester-calendar-day-number-today' : ''
+                                      } ${
+                                        !day.isOutsideSemester || isFirstDayOfMonth || day.isToday
+                                          ? 'font-semibold'
+                                          : ''
+                                      } ${
+                                        day.isToday
+                                          ? ''
+                                          : day.isOutsideSemester
+                                            ? 'text-text-tertiary'
+                                            : !week.hasToday
+                                              ? 'text-text-secondary'
+                                              : 'text-text'
+                                      }`}
+                                    >
+                                      {dayNum}
+                                    </span>
+                                  </div>
+
+                                  {day.isSemesterStart || day.isSemesterEnd ? (
+                                    <span className="semester-calendar-day-note semester-calendar-day-note-primary">
+                                      {day.isSemesterStart ? '学期开始' : '学期结束'}
+                                    </span>
+                                  ) : day.isFirstTeachingDate ? (
+                                    <span className="semester-calendar-day-note semester-calendar-day-note-info">
+                                      教学开始
+                                    </span>
+                                  ) : day.isExamStart && day.isExamPeriod ? (
+                                    <span className="semester-calendar-day-note semester-calendar-day-note-error">
+                                      考试周
+                                    </span>
+                                  ) : null}
                                 </div>
 
-                                {day.isSemesterStart || day.isSemesterEnd ? (
-                                  <span className="semester-calendar-day-note semester-calendar-day-note-primary">
-                                    {day.isSemesterStart ? '学期开始' : '学期结束'}
-                                  </span>
-                                ) : day.isFirstTeachingDate ? (
-                                  <span className="semester-calendar-day-note semester-calendar-day-note-info">
-                                    教学开始
-                                  </span>
-                                ) : day.isExamStart && day.isExamPeriod ? (
-                                  <span className="semester-calendar-day-note semester-calendar-day-note-error">
-                                    考试周
-                                  </span>
-                                ) : null}
-                              </div>
+                                <div className="flex flex-col gap-1">
+                                  {dayEvents.map((event) => {
+                                    const isExpired = event.recordStatus === 'EXPIRED';
 
-                              <div className="flex flex-col gap-1">
-                                {dayEvents.map((event) => {
-                                  const isExpired = event.recordStatus === 'EXPIRED';
-
-                                  return (
-                                    <div
-                                      key={event.id}
-                                      className={resolveEventMarkerClassName(event)}
-                                    >
-                                      <span aria-hidden className="semester-calendar-event-icon">
-                                        {renderEventTypeIcon(event.eventType)}
-                                      </span>
-                                      {event.dayPeriod === 'ALL_DAY' ? null : (
-                                        <span className="semester-calendar-event-period">
-                                          {DAY_PERIOD_LABELS[event.dayPeriod]}
-                                        </span>
-                                      )}
-                                      <span
-                                        className={
-                                          isExpired
-                                            ? 'semester-calendar-event-title semester-calendar-event-title-expired'
-                                            : 'semester-calendar-event-title'
-                                        }
+                                    return (
+                                      <div
+                                        key={event.id}
+                                        className={resolveEventMarkerClassName(event)}
+                                        title={resolveEventDisplayTopic(event)}
                                       >
-                                        {resolveEventDisplayTopic(event)}
-                                      </span>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </button>
+                                        <span aria-hidden className="semester-calendar-event-icon">
+                                          {renderEventTypeIcon(event.eventType)}
+                                        </span>
+                                        {event.dayPeriod === 'ALL_DAY' ? null : (
+                                          <span className="semester-calendar-event-period">
+                                            {DAY_PERIOD_LABELS[event.dayPeriod]}
+                                          </span>
+                                        )}
+                                        <span
+                                          className={
+                                            isExpired
+                                              ? 'semester-calendar-event-title semester-calendar-event-title-expired'
+                                              : 'semester-calendar-event-title'
+                                          }
+                                        >
+                                          {resolveEventDisplayTopic(event)}
+                                        </span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </button>
+                            </Tooltip>
                           );
                         })}
                       </Fragment>
@@ -711,7 +766,7 @@ export function SemesterCalendarPageContent({
                     >
                       {resolveEventDisplayTopic(event)}
                     </Typography.Text>
-                    <Tag>{DAY_PERIOD_LABELS[event.dayPeriod]}</Tag>
+                    <Tag>{DAY_PERIOD_LABELS_FULL[event.dayPeriod]}</Tag>
                     <Tag color="blue">{EVENT_TYPE_LABELS[event.eventType]}</Tag>
                     <Tag>{RECORD_STATUS_LABELS[event.recordStatus]}</Tag>
                   </div>

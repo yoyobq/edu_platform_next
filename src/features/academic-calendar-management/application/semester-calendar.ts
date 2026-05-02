@@ -259,5 +259,5 @@ export function isWeekendDate(date: Date) {
 }
 
 export function shouldHighlightCurrentWeekDay(day: SemesterWeekDay) {
-  return !day.isOutsideSemester && !isWeekendDate(day.date);
+  return !day.isOutsideSemester;
 }

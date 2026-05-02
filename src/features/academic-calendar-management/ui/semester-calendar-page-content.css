@@ -46,9 +46,19 @@
   background: var(--ant-color-error-bg);
 }
 
+.semester-calendar-legend-swatch-activity {
+  background: var(--ant-color-primary-bg);
+  border-color: var(--ant-color-primary-border);
+}
+
 .semester-calendar-legend-swatch-current {
   background: var(--ant-color-success-bg);
   border-color: var(--ant-color-success-border);
+}
+
+.semester-calendar-legend-swatch-sports-meet {
+  background: var(--ant-purple-1, var(--ant-color-success-bg));
+  border-color: var(--ant-purple-3, var(--ant-color-success-border));
 }
 
 .semester-calendar-table-toolbar {
@@ -118,7 +128,7 @@
 }
 
 .semester-calendar-week-cell-active {
-  color: var(--ant-color-primary-text);
+  color: var(--ant-color-primary);
 }
 
 .semester-calendar-week-cell-active::before {
@@ -133,7 +143,7 @@
 
 .semester-calendar-week-cell-current {
   background: var(--ant-color-success-bg);
-  color: var(--ant-color-success-text);
+  color: var(--ant-color-success);
 }
 
 .semester-calendar-week-cell-current::before {
@@ -243,15 +253,15 @@ button.semester-calendar-day-cell {
 }
 
 .semester-calendar-day-note-primary {
-  color: var(--ant-color-primary-text);
+  color: var(--ant-color-primary);
 }
 
 .semester-calendar-day-note-info {
-  color: var(--ant-color-info-text);
+  color: var(--ant-color-info);
 }
 
 .semester-calendar-day-note-error {
-  color: var(--ant-color-error-text);
+  color: var(--ant-color-error);
 }
 
 .semester-calendar-event-line {
@@ -266,22 +276,25 @@ button.semester-calendar-day-cell {
   min-width: 0;
 }
 
-.semester-calendar-event-line-activity,
+.semester-calendar-event-line-activity {
+  --semester-calendar-event-accent: var(--ant-blue-6, var(--ant-color-primary));
+}
+
 .semester-calendar-event-line-holiday-makeup,
 .semester-calendar-event-line-weekday-swap {
-  --semester-calendar-event-accent: var(--ant-color-primary-text);
+  --semester-calendar-event-accent: var(--ant-geekblue-6, var(--ant-color-primary));
 }
 
 .semester-calendar-event-line-exam {
-  --semester-calendar-event-accent: var(--ant-color-error-text);
+  --semester-calendar-event-accent: var(--ant-color-error);
 }
 
 .semester-calendar-event-line-holiday {
-  --semester-calendar-event-accent: var(--ant-color-warning-text);
+  --semester-calendar-event-accent: var(--ant-color-warning);
 }
 
 .semester-calendar-event-line-sports-meet {
-  --semester-calendar-event-accent: var(--ant-color-success-text);
+  --semester-calendar-event-accent: var(--ant-purple-6, var(--ant-color-success));
 }
 
 .semester-calendar-event-period {
