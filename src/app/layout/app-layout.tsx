@@ -26,7 +26,7 @@ import {
   Flex,
   Layout,
   Menu,
-  Modal,
+  Popconfirm,
   Segmented,
   Skeleton,
   theme as antdTheme,
@@ -101,7 +101,6 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   );
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
-  const [logoutModal, logoutModalContextHolder] = Modal.useModal();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const isHydrating = authSession.status === 'hydrating';
@@ -406,26 +405,26 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
       <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
         {activeSnapshot ? (
-          <button
-            type="button"
-            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
-            onClick={() => {
-              logoutModal.confirm({
-                title: '结束会话',
-                content: '且将公事付清风，他日相逢再续行',
-                okText: '江湖再见',
-                cancelText: '不累',
-                onOk: () => {
-                  logout();
-                  navigate('/login', { replace: true });
-                },
-              });
+          <Popconfirm
+            title="结束会话"
+            description="且将公事付清风，他日相逢再续行"
+            okText="江湖再见"
+            cancelText="不累"
+            placement="right"
+            onConfirm={() => {
+              logout();
+              navigate('/login', { replace: true });
             }}
           >
-            <LogoutOutlined />
-            <span className="min-w-0 flex-1 text-left">退出账户</span>
-            <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
-          </button>
+            <button
+              type="button"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+            >
+              <LogoutOutlined />
+              <span className="min-w-0 flex-1 text-left">退出账户</span>
+              <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+            </button>
+          </Popconfirm>
         ) : null}
       </div>
     </div>
@@ -493,7 +492,12 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     navMode === 'full' ? (
       <div className="flex h-full w-full min-w-0 items-center justify-between gap-3 pb-2">
         <div className="flex min-w-0 items-center">
-          <BrandLockup logoSize={28} logoSlotSize={NAV_RAIL_CONTROL_SIZE} variant="header" />
+          <BrandLockup
+            compact
+            logoSize={28}
+            logoSlotSize={NAV_RAIL_CONTROL_SIZE}
+            variant="header"
+          />
         </div>
         {navToggleButton}
       </div>
@@ -559,7 +563,6 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       }}
     >
       <AuthRefreshFeedbackBridge />
-      {logoutModalContextHolder}
       <div className="h-screen overflow-hidden bg-bg-layout text-text">
         {hasSidebar ? (
           <Layout style={{ height: '100%', background: 'transparent' }}>

@@ -4,10 +4,10 @@ export const FONT_SCALE_CONFIG: Record<
   FontScale,
   { antdFontSize: number; htmlFontSize: string; label: string }
 > = {
-  compact: { antdFontSize: 13, htmlFontSize: '15px', label: '小' },
-  standard: { antdFontSize: 14, htmlFontSize: '16px', label: '标' },
-  comfortable: { antdFontSize: 16, htmlFontSize: '18px', label: '大' },
-  xlarge: { antdFontSize: 18, htmlFontSize: '20px', label: '巨' },
+  compact: { antdFontSize: 14, htmlFontSize: '16px', label: '小' },
+  standard: { antdFontSize: 16, htmlFontSize: '18px', label: '标' },
+  comfortable: { antdFontSize: 18, htmlFontSize: '20px', label: '大' },
+  xlarge: { antdFontSize: 20, htmlFontSize: '22px', label: '巨' },
 };
 
 export const FONT_SCALE_OPTIONS: { label: string; value: FontScale }[] = [
