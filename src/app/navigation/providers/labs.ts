@@ -63,6 +63,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'SyncOutlined',
+            key: '/labs/account-switch',
+            label: '账号切换',
+            navMode: 'rail' as const,
+            path: '/labs/account-switch',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'ApiOutlined',
             key: '/labs/upstream-session-demo',
             label: 'Upstream 会话示例',
