@@ -2,14 +2,13 @@ import type { Page } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
 import {
+  AUTH_STORAGE_KEY,
   mockApiHealth,
   mockAuthGraphQL,
   seedAuthSession,
   type SeedAuthSessionOptions,
 } from '../../helpers/app';
 import { expect, test } from '../../test';
-
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
 function layoutBanner(page: Page) {
   return page.getByRole('banner');
@@ -239,7 +238,7 @@ test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ pa
   await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
   await expect(
-    page.evaluate(() => window.localStorage.getItem('aigc-friendly-frontend.auth.session.v2')),
+    page.evaluate((storageKey) => window.localStorage.getItem(storageKey), AUTH_STORAGE_KEY),
   ).resolves.toBeNull();
 
   await page.goto(routes.labsDemo);

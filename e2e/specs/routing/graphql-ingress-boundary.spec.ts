@@ -1,10 +1,9 @@
 import type { Page, Route } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
-import { mockApiHealth } from '../../helpers/app';
+import { AUTH_STORAGE_KEY, mockApiHealth } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 const DEFAULT_TIMESTAMP = '2026-04-03T00:00:00.000Z';
 
 type SessionSeed = {

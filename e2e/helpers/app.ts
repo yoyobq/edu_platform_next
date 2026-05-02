@@ -1,5 +1,6 @@
 import { expect, type Page, type Route } from '@playwright/test';
 
+import { AUTH_SESSION_STORAGE_KEY } from '../../src/shared/auth-session';
 import { routes } from '../fixtures/routes';
 
 type AuthAccessGroup = 'ADMIN' | 'GUEST' | 'REGISTRANT' | 'STAFF' | 'STUDENT';
@@ -66,7 +67,7 @@ type MockAuthGraphQLOptions = {
   refreshSession?: SeedAuthSessionOptions;
 };
 
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
+export const AUTH_STORAGE_KEY = AUTH_SESSION_STORAGE_KEY;
 const DEFAULT_TIMESTAMP = '2026-04-03T00:00:00.000Z';
 
 type AdminUserListSeed = {

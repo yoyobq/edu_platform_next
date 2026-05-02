@@ -67,7 +67,6 @@ import {
   academicWorkloadLabAccess,
   loadAcademicWorkloadLabRouteModule,
 } from '@/labs/academic-workload';
-import { accountSwitchLabAccess, loadAccountSwitchLabRouteModule } from '@/labs/account-switch';
 import {
   changeLoginEmailLabAccess,
   loadChangeLoginEmailLabRouteModule,
@@ -519,38 +518,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function accountSwitchLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(accountSwitchLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(accountSwitchLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
-}
-
 async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(academicTimetableLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -910,11 +877,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'account-switch',
-            loader: accountSwitchLabLoader,
-            lazy: loadAccountSwitchLabRouteModule,
           },
           {
             path: 'academic-timetable',

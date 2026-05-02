@@ -1,5 +1,5 @@
 import { routes } from '../../fixtures/routes';
-import { mockApiHealth, seedAuthSession } from '../../helpers/app';
+import { AUTH_STORAGE_KEY, mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 const verificationCases = [
@@ -138,7 +138,7 @@ test('邮箱验证页应先展示确认信息，确认后更新 loginEmail 并�
 
   const storedSession = await page.evaluate((storageKey) => {
     return window.localStorage.getItem(storageKey);
-  }, 'aigc-friendly-frontend.auth.session.v2');
+  }, AUTH_STORAGE_KEY);
 
   expect(storedSession).toBeNull();
 });

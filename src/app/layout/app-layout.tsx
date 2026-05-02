@@ -13,20 +13,25 @@ import {
   LayoutOutlined,
   LogoutOutlined,
   MoonOutlined,
+  PlusOutlined,
   RightOutlined,
   SearchOutlined,
   SunOutlined,
   UserOutlined,
 } from '@ant-design/icons';
 import {
+  Alert,
   Button,
   Card,
   ConfigProvider,
   Dropdown,
   Flex,
+  Form,
+  Input,
   Layout,
   Menu,
-  Popconfirm,
+  Modal,
+  Popover,
   Segmented,
   Skeleton,
   theme as antdTheme,
@@ -58,6 +63,18 @@ import {
 
 import { logout, useAuthSessionState } from '@/features/auth';
 
+import {
+  type AccountSwitchLabSession,
+  createAccountSwitchLabSession,
+} from '@/shared/account-switch/api';
+import {
+  type AccountSwitchLabRecord,
+  readAccountSwitchLabRecords,
+  upsertAccountSwitchLabRecord,
+  writeAccountSwitchLabRecords,
+  writeCurrentAuthSession,
+} from '@/shared/account-switch/storage';
+import { getGraphQLClient } from '@/shared/graphql';
 import { HexAvatar } from '@/shared/hex-avatar';
 import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 import { BrandLockup } from '@/shared/ui/brand';
@@ -99,6 +116,14 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
+  const [addAccountModalOpen, setAddAccountModalOpen] = useState(false);
+  const [addAccountForm] = Form.useForm<{ loginName: string; loginPassword: string }>();
+  const [accountRecords, setAccountRecords] = useState<AccountSwitchLabRecord[]>(() =>
+    readAccountSwitchLabRecords(),
+  );
+  const [addAccountSubmitting, setAddAccountSubmitting] = useState(false);
+  const [addAccountError, setAddAccountError] = useState<string | null>(null);
+  const [switchingAccountId, setSwitchingAccountId] = useState<number | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
@@ -343,92 +368,267 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     '--layout-main-width': `${Math.round(mainWidth)}px`,
     ...frameShiftStyle,
   };
-  const renderAccountMenuContent = () => (
-    <div
-      style={{
-        background: 'var(--ant-color-bg-elevated)',
-        borderRadius: 'var(--ant-border-radius-lg)',
-        boxShadow: 'var(--ant-box-shadow-secondary)',
-        minWidth: 280,
-        overflow: 'hidden',
-        padding: 8,
-      }}
-    >
-      {activeSnapshot ? (
-        <div className="px-1 pb-3 pt-1">
-          <div className="flex items-center gap-3 rounded-lg px-3 py-2.5">
-            <HexAvatar
-              accountId={activeSnapshot.accountId}
-              avatarUrl={activeSnapshot.userInfo.avatarUrl}
-              size={44}
-            />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{activeSnapshot.displayName}</div>
-              <div className="truncate text-xs text-text-secondary">{currentIdentity}</div>
-            </div>
-            <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+  const accountSessions = useMemo(() => {
+    const sessions: AccountSwitchLabSession[] = [];
+    const seenAccountIds = new Set<number>();
+
+    if (activeSnapshot) {
+      sessions.push(activeSnapshot);
+      seenAccountIds.add(activeSnapshot.accountId);
+    }
+
+    for (const record of accountRecords) {
+      if (seenAccountIds.has(record.session.accountId)) {
+        continue;
+      }
+
+      sessions.push(record.session);
+      seenAccountIds.add(record.session.accountId);
+    }
+
+    return sessions;
+  }, [accountRecords, activeSnapshot]);
+
+  function commitAccountRecords(nextRecords: AccountSwitchLabRecord[]) {
+    writeAccountSwitchLabRecords(nextRecords);
+    setAccountRecords(nextRecords);
+  }
+
+  function getAccountLoginName(session: AccountSwitchLabSession) {
+    return session.account.loginName || session.displayName || `#${session.accountId}`;
+  }
+
+  function getAccountLoginEmail(session: AccountSwitchLabSession) {
+    return session.account.loginEmail || session.userInfo.email || '未设置邮箱';
+  }
+
+  async function switchToSession(session: AccountSwitchLabSession) {
+    if (activeSnapshot?.accountId === session.accountId) {
+      return;
+    }
+
+    setSwitchingAccountId(session.accountId);
+
+    try {
+      await getGraphQLClient().clearStore();
+      writeCurrentAuthSession(session);
+      window.location.reload();
+    } finally {
+      setSwitchingAccountId(null);
+    }
+  }
+
+  async function handleAddAccount() {
+    const values = await addAccountForm.validateFields();
+
+    setAddAccountSubmitting(true);
+    setAddAccountError(null);
+
+    try {
+      const session = await createAccountSwitchLabSession({
+        loginName: values.loginName,
+        loginPassword: values.loginPassword,
+      });
+      const baseRecords = activeSnapshot
+        ? upsertAccountSwitchLabRecord(accountRecords, activeSnapshot)
+        : accountRecords;
+      const nextRecords = upsertAccountSwitchLabRecord(baseRecords, session);
+
+      commitAccountRecords(nextRecords);
+      setAddAccountModalOpen(false);
+      addAccountForm.resetFields();
+    } catch (error) {
+      setAddAccountError(error instanceof Error ? error.message : '添加账号失败。');
+    } finally {
+      setAddAccountSubmitting(false);
+    }
+  }
+
+  async function logoutAccount(session: AccountSwitchLabSession) {
+    const nextRecords = accountRecords.filter(
+      (record) => record.session.accountId !== session.accountId,
+    );
+
+    commitAccountRecords(nextRecords);
+
+    if (activeSnapshot?.accountId === session.accountId) {
+      await getGraphQLClient().clearStore();
+      logout();
+      navigate('/login', { replace: true });
+    }
+  }
+
+  const renderAccountMenuContent = () => {
+    const surfaceStyle: CSSProperties = {
+      background: 'var(--ant-color-bg-elevated)',
+      borderRadius: 'var(--ant-border-radius-lg)',
+      boxShadow: 'var(--ant-box-shadow-secondary)',
+      minWidth: 280,
+      overflow: 'hidden',
+      padding: 8,
+    };
+    const accountListMenu = (
+      <div style={surfaceStyle}>
+        <div className="px-1 pb-2">
+          <div className="flex flex-col gap-1">
+            {accountSessions.map((session) => {
+              const isActiveAccount = activeSnapshot?.accountId === session.accountId;
+
+              return (
+                <button
+                  key={session.accountId}
+                  type="button"
+                  className={
+                    isActiveAccount
+                      ? 'flex w-full items-center gap-3 rounded-lg bg-fill-hover px-3 py-2.5 text-left'
+                      : 'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-layout'
+                  }
+                  disabled={isActiveAccount || switchingAccountId === session.accountId}
+                  onClick={() => void switchToSession(session)}
+                >
+                  <HexAvatar
+                    accountId={session.accountId}
+                    avatarUrl={session.userInfo.avatarUrl}
+                    size={36}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium">
+                      {getAccountLoginName(session)}
+                    </div>
+                    <div className="truncate text-xs text-text-secondary">
+                      {getAccountLoginEmail(session)}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
-      ) : null}
 
-      <div className="px-1 py-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
-        {activeSnapshot ? (
+        <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
           <button
             type="button"
             className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
-            onClick={() => navigate('/profile')}
+            onClick={() => setAddAccountModalOpen(true)}
           >
-            <UserOutlined />
-            <span className="min-w-0 flex-1 text-left">个人资料</span>
+            <PlusOutlined />
+            <span className="min-w-0 flex-1 text-left">增加另一个账号</span>
           </button>
-        ) : null}
-        <button
-          type="button"
-          className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
-          onClick={() => setIsDark((v) => !v)}
-        >
-          {isDark ? <SunOutlined /> : <MoonOutlined />}
-          <span className="min-w-0 flex-1 text-left">
-            {isDark ? '切换浅色模式' : '切换深色模式'}
-          </span>
-        </button>
-        <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm">
-          <span className="text-text-secondary">字号</span>
-          <Segmented
-            size="small"
-            value={fontScale}
-            options={FONT_SCALE_OPTIONS}
-            onChange={(v) => setFontScale(v as FontScale)}
-          />
         </div>
       </div>
+    );
+    const logoutAccountMenu = (
+      <div style={surfaceStyle}>
+        <div className="px-1 pb-2">
+          <div className="flex flex-col gap-1">
+            {accountSessions.map((session) => (
+              <button
+                key={session.accountId}
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-layout"
+                onClick={() => void logoutAccount(session)}
+              >
+                <HexAvatar
+                  accountId={session.accountId}
+                  avatarUrl={session.userInfo.avatarUrl}
+                  size={36}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">{getAccountLoginName(session)}</div>
+                  <div className="truncate text-xs text-text-secondary">
+                    {getAccountLoginEmail(session)}
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
 
-      <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
+    return (
+      <div style={surfaceStyle}>
         {activeSnapshot ? (
-          <Popconfirm
-            title="结束会话"
-            description="且将公事付清风，他日相逢再续行"
-            okText="江湖再见"
-            cancelText="不累"
-            placement="right"
-            onConfirm={() => {
-              logout();
-              navigate('/login', { replace: true });
-            }}
-          >
+          <div className="px-1 pb-3 pt-1">
+            <Popover
+              placement="rightTop"
+              trigger="click"
+              content={accountListMenu}
+              overlayInnerStyle={{ padding: 0 }}
+            >
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors hover:bg-bg-layout"
+              >
+                <HexAvatar
+                  accountId={activeSnapshot.accountId}
+                  avatarUrl={activeSnapshot.userInfo.avatarUrl}
+                  size={44}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold">{activeSnapshot.displayName}</div>
+                  <div className="truncate text-xs text-text-secondary">{currentIdentity}</div>
+                </div>
+                <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+              </button>
+            </Popover>
+          </div>
+        ) : null}
+
+        <div className="px-1 py-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
+          {activeSnapshot ? (
             <button
               type="button"
               className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+              onClick={() => navigate('/profile')}
             >
-              <LogoutOutlined />
-              <span className="min-w-0 flex-1 text-left">退出账户</span>
-              <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+              <UserOutlined />
+              <span className="min-w-0 flex-1 text-left">个人资料</span>
             </button>
-          </Popconfirm>
-        ) : null}
+          ) : null}
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+            onClick={() => setIsDark((v) => !v)}
+          >
+            {isDark ? <SunOutlined /> : <MoonOutlined />}
+            <span className="min-w-0 flex-1 text-left">
+              {isDark ? '切换浅色模式' : '切换深色模式'}
+            </span>
+          </button>
+          <div className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 text-sm">
+            <span className="text-text-secondary">字号</span>
+            <Segmented
+              size="small"
+              value={fontScale}
+              options={FONT_SCALE_OPTIONS}
+              onChange={(v) => setFontScale(v as FontScale)}
+            />
+          </div>
+        </div>
+
+        <div className="px-1 pt-2" style={{ borderTop: '1px solid var(--ant-color-split)' }}>
+          {activeSnapshot ? (
+            <Popover
+              placement="rightBottom"
+              trigger="click"
+              content={logoutAccountMenu}
+              overlayInnerStyle={{ padding: 0 }}
+            >
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition-colors hover:bg-bg-layout"
+              >
+                <LogoutOutlined />
+                <span className="min-w-0 flex-1 text-left">退出账户</span>
+                <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+              </button>
+            </Popover>
+          ) : null}
+        </div>
       </div>
-    </div>
-  );
+    );
+  };
   const sidebarFooter = hasSidebar ? (
     <div className="flex flex-col gap-2">
       {activeSnapshot ? (
@@ -775,6 +975,52 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         <ThirdWorkspaceDemoHost />
 
         <EntrySidecar />
+
+        <Modal
+          title="增加另一个账号"
+          open={addAccountModalOpen}
+          okText="添加账号"
+          cancelText="取消"
+          confirmLoading={addAccountSubmitting}
+          onCancel={() => {
+            setAddAccountModalOpen(false);
+            setAddAccountError(null);
+            addAccountForm.resetFields();
+          }}
+          onOk={() => void handleAddAccount()}
+        >
+          {addAccountError ? (
+            <Alert
+              type="error"
+              showIcon
+              message={addAccountError}
+              style={{ marginBottom: 16, marginTop: 8 }}
+            />
+          ) : null}
+          <Form
+            form={addAccountForm}
+            layout="vertical"
+            requiredMark={false}
+            autoComplete="on"
+            style={{ paddingTop: 8 }}
+          >
+            <Form.Item
+              label="登录名或邮箱"
+              name="loginName"
+              rules={[{ required: true, message: '请输入登录名或邮箱。' }]}
+            >
+              <Input autoComplete="username" />
+            </Form.Item>
+            <Form.Item
+              label="密码"
+              name="loginPassword"
+              rules={[{ required: true, message: '请输入密码。' }]}
+              style={{ marginBottom: 0 }}
+            >
+              <Input.Password autoComplete="new-password" />
+            </Form.Item>
+          </Form>
+        </Modal>
 
         <div data-layout-layer="global-overlay-root" aria-hidden="true">
           <div data-overlay-mount="cross-region-visual" />

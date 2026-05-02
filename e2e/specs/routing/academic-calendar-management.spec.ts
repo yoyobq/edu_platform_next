@@ -2,14 +2,13 @@ import type { Locator, Page } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
 import {
+  AUTH_STORAGE_KEY,
   mockApiHealth,
   mockAuthGraphQL,
   seedAuthSession,
   type SeedAuthSessionOptions,
 } from '../../helpers/app';
 import { expect, test } from '../../test';
-
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
 type AcademicSemesterSeed = {
   createdAt: string;

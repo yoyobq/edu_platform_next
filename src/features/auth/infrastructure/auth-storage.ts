@@ -1,10 +1,10 @@
 // src/features/auth/infrastructure/auth-storage.ts
 
+import { AUTH_SESSION_STORAGE_KEY } from '@/shared/auth-session';
+
 import type { AuthStoragePort } from '../application/ports';
 
 import { deserializeStoredSession, serializeStoredSession } from './mapper';
-
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
 function canUseStorage() {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
@@ -16,14 +16,14 @@ export const authStorage: AuthStoragePort = {
       return;
     }
 
-    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+    window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
   },
   readSession() {
     if (!canUseStorage()) {
       return null;
     }
 
-    const rawValue = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    const rawValue = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
 
     if (!rawValue) {
       return null;
@@ -32,7 +32,7 @@ export const authStorage: AuthStoragePort = {
     const snapshot = deserializeStoredSession(rawValue);
 
     if (!snapshot) {
-      window.localStorage.removeItem(AUTH_STORAGE_KEY);
+      window.localStorage.removeItem(AUTH_SESSION_STORAGE_KEY);
     }
 
     return snapshot;
@@ -42,6 +42,6 @@ export const authStorage: AuthStoragePort = {
       return;
     }
 
-    window.localStorage.setItem(AUTH_STORAGE_KEY, serializeStoredSession(session));
+    window.localStorage.setItem(AUTH_SESSION_STORAGE_KEY, serializeStoredSession(session));
   },
 };

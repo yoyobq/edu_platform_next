@@ -1,3 +1,5 @@
+import { AUTH_SESSION_STORAGE_KEY } from '@/shared/auth-session';
+
 import { type AccountSwitchLabSession, canUseAccountSwitchLabSession } from './api';
 
 export type AccountSwitchLabRecord = {
@@ -6,7 +8,6 @@ export type AccountSwitchLabRecord = {
 };
 
 const ACCOUNT_SWITCH_LAB_STORAGE_KEY = 'aigc-friendly-frontend.labs.account-switch.v1';
-const AUTH_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 const ACCOUNT_SWITCH_LAB_LIMIT = 2;
 
 function canUseStorage() {
@@ -129,7 +130,7 @@ export function readCurrentAuthSession(): AccountSwitchLabSession | null {
     return null;
   }
 
-  const rawValue = window.localStorage.getItem(AUTH_STORAGE_KEY);
+  const rawValue = window.localStorage.getItem(AUTH_SESSION_STORAGE_KEY);
 
   if (!rawValue) {
     return null;
@@ -161,7 +162,7 @@ export function writeCurrentAuthSession(session: AccountSwitchLabSession) {
   }
 
   window.localStorage.setItem(
-    AUTH_STORAGE_KEY,
+    AUTH_SESSION_STORAGE_KEY,
     JSON.stringify({
       accessToken: session.accessToken,
       account: session.account,
