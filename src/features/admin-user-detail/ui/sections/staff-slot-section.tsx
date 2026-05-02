@@ -27,21 +27,25 @@ import type { DetailSection } from '../model';
 export type StaffSlotPost = AdminUserDetail['staffSlotPosts'][number];
 
 export type AssignStaffSlotFormValues = {
+  classId?: string;
   departmentId?: string;
   endAt?: string;
   isTemporary?: boolean;
   remarks?: string;
   slotCode?: AdminUserDetailAssignableStaffSlotCode;
   startAt?: string;
+  teachingGroupId?: string;
 };
 
 export type AssignStaffSlotCommand = {
-  departmentId: string;
+  classId?: string;
+  departmentId?: string;
   endAt?: string;
   isTemporary: boolean;
   remarks?: string;
   slotCode: AdminUserDetailAssignableStaffSlotCode;
   startAt?: string;
+  teachingGroupId?: string;
 };
 
 function getPostStatusTagColor(status: AdminUserDetailIdentityPostStatus) {
@@ -100,6 +104,44 @@ function getSlotCodeOptions() {
 
 function getStaffSlotTypeLabel(post: StaffSlotPost) {
   return post.isTemporary ? '临时任职' : '正式任职';
+}
+
+function getScopeFieldName(slotCode: AdminUserDetailAssignableStaffSlotCode | undefined) {
+  switch (slotCode) {
+    case 'CLASS_ADVISER':
+    case 'COUNSELOR':
+      return 'classId';
+    case 'TEACHING_GROUP_LEADER':
+      return 'teachingGroupId';
+    case 'ACADEMIC_OFFICER':
+    case 'STUDENT_AFFAIRS_OFFICER':
+    default:
+      return 'departmentId';
+  }
+}
+
+function getScopeLabel(slotCode: AdminUserDetailAssignableStaffSlotCode | undefined) {
+  switch (getScopeFieldName(slotCode)) {
+    case 'classId':
+      return <BilingualLabel compact title="班级 ID" subtitle="Class ID" />;
+    case 'teachingGroupId':
+      return <BilingualLabel compact title="教学组 ID" subtitle="Teaching Group ID" />;
+    case 'departmentId':
+    default:
+      return <BilingualLabel compact title="系部" subtitle="Department" />;
+  }
+}
+
+function getScopePlaceholder(slotCode: AdminUserDetailAssignableStaffSlotCode | undefined) {
+  switch (getScopeFieldName(slotCode)) {
+    case 'classId':
+      return '请输入班级 ID';
+    case 'teachingGroupId':
+      return '请输入教学组 ID';
+    case 'departmentId':
+    default:
+      return '请选择系部';
+  }
 }
 
 function StaffSlotViewerBlock({
@@ -242,26 +284,47 @@ export function StaffSlotSection({
   onEnd: (post: StaffSlotPost) => Promise<void>;
 }) {
   const [form] = Form.useForm<AssignStaffSlotFormValues>();
+  const selectedSlotCode = Form.useWatch('slotCode', form);
   const [adding, setAdding] = useState(false);
   const selectableDepartments = useMemo(
     () => departmentOptions.filter((department) => department.id && department.isEnabled),
     [departmentOptions],
   );
   const isLeftStaff = detail.staff.employmentStatus === 'LEFT';
-  const addDisabled = isLeftStaff || Boolean(departmentLoadErrorMessage);
+  const addDisabled = isLeftStaff;
+  const scopeFieldName = getScopeFieldName(selectedSlotCode);
 
   async function handleAssign(values: AssignStaffSlotFormValues) {
-    if (!values.slotCode || !values.departmentId) {
+    if (!values.slotCode) {
+      return;
+    }
+
+    const classId = normalizeOptionalTextValue(values.classId);
+    const departmentId = normalizeOptionalTextValue(values.departmentId);
+    const teachingGroupId = normalizeOptionalTextValue(values.teachingGroupId);
+
+    if (scopeFieldName === 'classId' && !classId) {
+      return;
+    }
+
+    if (scopeFieldName === 'departmentId' && !departmentId) {
+      return;
+    }
+
+    if (scopeFieldName === 'teachingGroupId' && !teachingGroupId) {
       return;
     }
 
     await onAssign({
-      departmentId: values.departmentId,
+      classId: scopeFieldName === 'classId' ? (classId ?? undefined) : undefined,
+      departmentId: scopeFieldName === 'departmentId' ? (departmentId ?? undefined) : undefined,
       endAt: normalizeDateTimeLocalValue(values.endAt),
       isTemporary: values.isTemporary === true,
       remarks: normalizeOptionalTextValue(values.remarks) ?? undefined,
       slotCode: values.slotCode,
       startAt: normalizeDateTimeLocalValue(values.startAt),
+      teachingGroupId:
+        scopeFieldName === 'teachingGroupId' ? (teachingGroupId ?? undefined) : undefined,
     });
     form.resetFields();
     setAdding(false);
@@ -320,6 +383,15 @@ export function StaffSlotSection({
             requiredMark={false}
             initialValues={{ isTemporary: false }}
             onFinish={handleAssign}
+            onValuesChange={(changedValues) => {
+              if ('slotCode' in changedValues) {
+                form.setFieldsValue({
+                  classId: undefined,
+                  departmentId: undefined,
+                  teachingGroupId: undefined,
+                });
+              }
+            }}
             disabled={assigning}
           >
             <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
@@ -339,21 +411,29 @@ export function StaffSlotSection({
               </EditableFormCard>
               <EditableFormCard>
                 <Form.Item<AssignStaffSlotFormValues>
-                  label={<BilingualLabel compact title="服务对象" subtitle="Assignment Scope" />}
-                  name="departmentId"
-                  rules={[{ required: true, message: '请选择服务对象。' }]}
+                  label={getScopeLabel(selectedSlotCode)}
+                  name={scopeFieldName}
+                  rules={[{ required: true, message: '请填写服务对象。' }]}
                   style={{ marginBottom: 0 }}
                 >
-                  <Select
-                    data-testid="staff-slot-department-select"
-                    showSearch
-                    optionFilterProp="label"
-                    placeholder="请选择服务对象"
-                    options={selectableDepartments.map((department) => ({
-                      label: department.departmentName,
-                      value: department.id,
-                    }))}
-                  />
+                  {scopeFieldName === 'departmentId' ? (
+                    <Select
+                      data-testid="staff-slot-department-select"
+                      showSearch
+                      optionFilterProp="label"
+                      placeholder={getScopePlaceholder(selectedSlotCode)}
+                      disabled={Boolean(departmentLoadErrorMessage)}
+                      options={selectableDepartments.map((department) => ({
+                        label: department.departmentName,
+                        value: department.id,
+                      }))}
+                    />
+                  ) : (
+                    <Input
+                      data-testid={`staff-slot-${scopeFieldName}-input`}
+                      placeholder={getScopePlaceholder(selectedSlotCode)}
+                    />
+                  )}
                 </Form.Item>
               </EditableFormCard>
               <EditableFormCard>

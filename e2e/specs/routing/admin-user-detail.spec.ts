@@ -213,7 +213,7 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
   const accountId = 1011;
   const detailPayload = buildAdminUserDetailPayload(accountId);
   const staffPayload = buildAdminUserStaffPayload(accountId);
-  let assignInput: Record<string, unknown> | null = null;
+  const assignInputs: Record<string, unknown>[] = [];
   let endInput: Record<string, unknown> | null = null;
 
   await mockApiHealth(page);
@@ -254,18 +254,21 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
       const payload = route.request().postDataJSON() as
         | { variables?: { input?: Record<string, unknown> } }
         | undefined;
-      assignInput = payload?.variables?.input ?? null;
+      const input = payload?.variables?.input ?? {};
+      const slotCode =
+        typeof input.slotCode === 'string' ? input.slotCode : 'STUDENT_AFFAIRS_OFFICER';
+      assignInputs.push(input);
       staffPayload.staffCurrentSlotPosts.push({
         endAt: null,
-        id: 7003,
+        id: 7000 + staffPayload.staffCurrentSlotPosts.length + 1,
         isTemporary: false,
         remarks: null,
         scope: {
-          classId: null,
-          departmentId: 'd-math',
-          teachingGroupId: null,
+          classId: typeof input.classId === 'string' ? input.classId : null,
+          departmentId: typeof input.departmentId === 'string' ? input.departmentId : null,
+          teachingGroupId: typeof input.teachingGroupId === 'string' ? input.teachingGroupId : null,
         },
-        slotCode: 'STUDENT_AFFAIRS_OFFICER',
+        slotCode,
         staffId: `staff-${accountId}`,
         startAt: null,
         status: 'ACTIVE',
@@ -275,7 +278,7 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
         data: {
           assignStaffSlot: {
             binding: {
-              slotCode: 'STUDENT_AFFAIRS_OFFICER',
+              slotCode,
               status: 'ACTIVE',
             },
             changed: true,
@@ -327,11 +330,25 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
 
   await expect(page.getByText('学工员').last()).toBeVisible();
   await expect(page.getByText('STUDENT_AFFAIRS_OFFICER')).toHaveCount(1);
-  expect(assignInput).toMatchObject({
+  expect(assignInputs[0]).toMatchObject({
     accountId,
     departmentId: 'd-math',
     isTemporary: false,
     slotCode: 'STUDENT_AFFAIRS_OFFICER',
+  });
+
+  await page.getByTestId('staff-slot-add-button').click();
+  await page.getByTestId('staff-slot-code-select').locator('input').click();
+  await page.getByTitle('班主任').click();
+  await page.getByTestId('staff-slot-classId-input').fill('class-2026-2');
+  await page.getByRole('button', { name: '保存任职' }).click();
+
+  await expect(page.getByText('班级 ID：class-2026-2')).toBeVisible();
+  expect(assignInputs[1]).toMatchObject({
+    accountId,
+    classId: 'class-2026-2',
+    isTemporary: false,
+    slotCode: 'CLASS_ADVISER',
   });
 
   await page.getByRole('button', { name: '结束 7001' }).click();

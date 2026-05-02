@@ -535,12 +535,73 @@ describe('requestAdminUserDetail', () => {
       {
         input: {
           accountId: 1001,
+          classId: undefined,
           departmentId: 'd-alpha',
           endAt: undefined,
           isTemporary: true,
           remarks: '临时协助',
           slotCode: 'ACADEMIC_OFFICER',
           startAt: undefined,
+          teachingGroupId: undefined,
+        },
+      },
+    );
+  });
+
+  it('assigns a class scoped staff slot', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      assignStaffSlot: {
+        binding: {
+          slotCode: 'CLASS_ADVISER',
+          status: 'ACTIVE',
+        },
+        changed: true,
+        post: {
+          endAt: null,
+          id: 7004,
+          isTemporary: false,
+          remarks: null,
+          scope: {
+            classId: 'class-2026-1',
+            departmentId: null,
+            teachingGroupId: null,
+          },
+          slotCode: 'CLASS_ADVISER',
+          staffId: 'staff-1001',
+          startAt: null,
+          status: 'ACTIVE',
+        },
+      },
+    });
+
+    await expect(
+      requestAdminUserDetailStaffSlotAssign({
+        accountId: 1001,
+        classId: ' class-2026-1 ',
+        isTemporary: false,
+        slotCode: 'CLASS_ADVISER',
+      }),
+    ).resolves.toMatchObject({
+      binding: {
+        slotCode: 'CLASS_ADVISER',
+        status: 'ACTIVE',
+      },
+      changed: true,
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation AssignStaffSlot'),
+      {
+        input: {
+          accountId: 1001,
+          classId: 'class-2026-1',
+          departmentId: undefined,
+          endAt: undefined,
+          isTemporary: false,
+          remarks: undefined,
+          slotCode: 'CLASS_ADVISER',
+          startAt: undefined,
+          teachingGroupId: undefined,
         },
       },
     );

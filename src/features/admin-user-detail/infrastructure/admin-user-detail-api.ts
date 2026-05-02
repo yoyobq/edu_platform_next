@@ -126,12 +126,14 @@ type StaffSlotMutationResultDTO = {
 type AssignStaffSlotVariables = {
   input: {
     accountId: number;
-    departmentId: string;
+    classId?: string;
+    departmentId?: string;
     endAt?: string;
     isTemporary: boolean;
     remarks?: string;
     slotCode: AdminUserDetailAssignableStaffSlotCode;
     startAt?: string;
+    teachingGroupId?: string;
   };
 };
 
@@ -741,24 +743,28 @@ export async function requestAdminUserDetailStaffSectionUpdate(
 
 export async function requestAdminUserDetailStaffSlotAssign(input: {
   accountId: number;
-  departmentId: string;
+  classId?: string;
+  departmentId?: string;
   endAt?: string;
   isTemporary: boolean;
   remarks?: string;
   slotCode: AdminUserDetailAssignableStaffSlotCode;
   startAt?: string;
+  teachingGroupId?: string;
 }): Promise<StaffSlotMutationResultDTO> {
   const response = await executeGraphQL<StaffSlotMutationResponse, AssignStaffSlotVariables>(
     ASSIGN_STAFF_SLOT_MUTATION,
     {
       input: {
         accountId: input.accountId,
-        departmentId: input.departmentId,
+        classId: normalizeOptionalTextValue(input.classId) ?? undefined,
+        departmentId: normalizeOptionalTextValue(input.departmentId) ?? undefined,
         endAt: input.endAt,
         isTemporary: input.isTemporary,
         remarks: normalizeOptionalTextValue(input.remarks) ?? undefined,
         slotCode: input.slotCode,
         startAt: input.startAt,
+        teachingGroupId: normalizeOptionalTextValue(input.teachingGroupId) ?? undefined,
       },
     },
   );
