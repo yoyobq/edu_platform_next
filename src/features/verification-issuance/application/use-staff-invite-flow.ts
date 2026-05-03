@@ -74,7 +74,15 @@ export function useStaffInviteFlow(input: {
 }) {
   const { onFeedback } = input;
   const [account, setAccount] = useState<VerificationIssuanceCurrentAccount | null>(null);
-  const { clear, keepAliveFailure, login, persistSessionFromResult, session } = useUpstreamSession({
+  const {
+    clear,
+    clearRememberedCredentials,
+    keepAliveFailure,
+    login,
+    persistSessionFromResult,
+    rememberedCredentials,
+    session,
+  } = useUpstreamSession({
     account,
     keepAlive: true,
   });
@@ -347,8 +355,10 @@ export function useStaffInviteFlow(input: {
     isSubmittingLogin,
     loginError,
     openUpstreamLogin,
+    clearRememberedCredentials,
     refreshDirectoryFromAction,
     requiresUpstreamSession,
+    rememberedCredentials,
     resolveTeacherByStaffIdValue,
     resolveTeacherByStaffNameValue,
     selectTeacherOption,

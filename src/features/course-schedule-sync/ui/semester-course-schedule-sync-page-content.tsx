@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -14,6 +14,8 @@ import {
 } from 'antd';
 
 import {
+  buildUpstreamLoginCredentialsInitialValues,
+  canUseRememberedUpstreamLoginCredentials,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -63,6 +65,8 @@ type SemesterCourseScheduleSyncCurrentAccount = {
 type SemesterCourseScheduleSyncPageContentProps = {
   currentAccount: SemesterCourseScheduleSyncCurrentAccount | null;
   isAuthenticating: boolean;
+  lockedUpstreamLoginUserId?: string | null;
+  lockedUpstreamLoginUserIdHelp?: ReactNode;
 };
 
 const REVIEW_STATUS_OPTIONS: Array<{
@@ -148,6 +152,8 @@ function formatFailureDetails(value: unknown) {
 export function SemesterCourseScheduleSyncPageContent({
   currentAccount,
   isAuthenticating,
+  lockedUpstreamLoginUserId = null,
+  lockedUpstreamLoginUserIdHelp,
 }: SemesterCourseScheduleSyncPageContentProps) {
   const [syncForm] = Form.useForm<SyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
@@ -166,13 +172,19 @@ export function SemesterCourseScheduleSyncPageContent({
   const [pendingSyncValues, setPendingSyncValues] = useState<SyncFormValues | null>(null);
   const {
     clear,
+    clearRememberedCredentials,
     keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
+    rememberedCredentials,
     session: storedSession,
   } = useUpstreamSession({
     account: currentAccount,
     keepAlive: true,
+  });
+  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
+    rememberedCredentials,
   });
   const hasNoDepartmentOptions =
     !isLoadingOptions && !departmentOptionsError && departmentOptions.length === 0;
@@ -189,12 +201,21 @@ export function SemesterCourseScheduleSyncPageContent({
 
     clearCurrentSession();
     setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue({
-      password: '',
-      userId: keepAliveFailure.upstreamLoginId ?? '',
-    });
+    loginForm.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        fallbackUserId: keepAliveFailure.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
+        rememberedCredentials,
+      }),
+    );
     setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm]);
+  }, [
+    clearCurrentSession,
+    keepAliveFailure,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    rememberedCredentials,
+  ]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues) => {
@@ -222,10 +243,13 @@ export function SemesterCourseScheduleSyncPageContent({
           setPendingSyncValues(values);
           setLoginError('upstream 会话已失效，请重新登录后继续同步。');
           setIsLoginModalOpen(true);
-          loginForm.setFieldsValue({
-            password: '',
-            userId: session.upstreamLoginId ?? '',
-          });
+          loginForm.setFieldsValue(
+            buildUpstreamLoginCredentialsInitialValues({
+              fallbackUserId: session.upstreamLoginId,
+              lockedUserId: lockedUpstreamLoginUserId,
+              rememberedCredentials,
+            }),
+          );
           return;
         }
 
@@ -235,7 +259,13 @@ export function SemesterCourseScheduleSyncPageContent({
         setIsSyncing(false);
       }
     },
-    [clearCurrentSession, loginForm, persistSessionFromResult],
+    [
+      clearCurrentSession,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      persistSessionFromResult,
+      rememberedCredentials,
+    ],
   );
 
   const handleRunSync = useCallback(async () => {
@@ -252,15 +282,25 @@ export function SemesterCourseScheduleSyncPageContent({
     if (!storedSession) {
       setPendingSyncValues(values);
       setIsLoginModalOpen(true);
-      loginForm.setFieldsValue({
-        password: '',
-        userId: '',
-      });
+      loginForm.setFieldsValue(
+        buildUpstreamLoginCredentialsInitialValues({
+          lockedUserId: lockedUpstreamLoginUserId,
+          rememberedCredentials,
+        }),
+      );
       return;
     }
 
     await performSync(storedSession, values);
-  }, [currentAccount, loginForm, performSync, storedSession, syncForm]);
+  }, [
+    currentAccount,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    performSync,
+    rememberedCredentials,
+    storedSession,
+    syncForm,
+  ]);
 
   useEffect(() => {
     if (!isAuthenticating && !currentAccount) {
@@ -364,10 +404,7 @@ export function SemesterCourseScheduleSyncPageContent({
       setLoginError(null);
 
       try {
-        const nextStoredSession = await loginUpstream({
-          password: values.password,
-          userId: values.userId,
-        });
+        const nextStoredSession = await loginUpstream(values);
         const nextPendingSyncValues = pendingSyncValues;
 
         setPendingSyncValues(null);
@@ -589,10 +626,13 @@ export function SemesterCourseScheduleSyncPageContent({
               onClick={() => {
                 setIsLoginModalOpen(true);
                 setLoginError(null);
-                loginForm.setFieldsValue({
-                  password: '',
-                  userId: storedSession?.upstreamLoginId ?? '',
-                });
+                loginForm.setFieldsValue(
+                  buildUpstreamLoginCredentialsInitialValues({
+                    fallbackUserId: storedSession?.upstreamLoginId,
+                    lockedUserId: lockedUpstreamLoginUserId,
+                    rememberedCredentials,
+                  }),
+                );
               }}
             >
               重新登录 upstream
@@ -694,10 +734,14 @@ export function SemesterCourseScheduleSyncPageContent({
 
       <UpstreamLoginModal
         form={loginForm}
+        hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
+        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         open={isLoginModalOpen}
         title="登录校园网"
+        onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingSyncValues(null);

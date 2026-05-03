@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   memo,
+  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -34,13 +35,14 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 import {
+  buildUpstreamLoginCredentialsInitialValues,
+  canUseRememberedUpstreamLoginCredentials,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -124,6 +126,17 @@ export type AcademicTeachingLogPageLoaderData = {
   } | null;
   viewerRole?: 'admin' | 'authenticated' | 'staff';
 } | null;
+
+type AcademicTeachingLogPageContentProps = {
+  defaultStaffId?: string | null;
+  lockedUpstreamLoginUserId?: string | null;
+  lockedUpstreamLoginUserIdHelp?: ReactNode;
+  upstreamAccount?: {
+    accountId: number;
+    displayName: string;
+  } | null;
+  viewerRole?: 'admin' | 'authenticated' | 'staff';
+};
 
 type PendingAction = 'query' | null;
 
@@ -1475,25 +1488,35 @@ const JournalDraftCard = memo(function JournalDraftCard({
 
 JournalDraftCard.displayName = 'JournalDraftCard';
 
-export function AcademicTeachingLogPageContent() {
+export function AcademicTeachingLogPageContent({
+  defaultStaffId = null,
+  lockedUpstreamLoginUserId = null,
+  lockedUpstreamLoginUserIdHelp,
+  upstreamAccount = null,
+  viewerRole = 'authenticated',
+}: AcademicTeachingLogPageContentProps = {}) {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const loaderData = useLoaderData() as AcademicTeachingLogPageLoaderData;
-  const liveUpstreamAccount = loaderData?.upstreamAccount ?? null;
-  const liveDefaultStaffId = loaderData?.defaultStaffId ?? null;
-  const viewerRole = loaderData?.viewerRole ?? 'authenticated';
+  const liveUpstreamAccount = upstreamAccount;
+  const liveDefaultStaffId = defaultStaffId;
   const isAdminViewer = viewerRole === 'admin';
   const isStaffViewer = viewerRole === 'staff';
   const {
     clear,
+    clearRememberedCredentials,
     keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
+    rememberedCredentials,
     session: storedSession,
   } = useUpstreamSession({
     account: liveUpstreamAccount,
     keepAlive: true,
   });
   const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
+  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
+    rememberedCredentials,
+  });
   const storedSessionDirectoryKey = storedSession
     ? [
         storedSession.accountId,
@@ -1564,12 +1587,21 @@ export function AcademicTeachingLogPageContent() {
     }
 
     setLoginError(null);
-    loginForm.setFieldsValue({
-      password: '',
-      userId: storedSession?.upstreamLoginId ?? '',
-    });
+    loginForm.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        fallbackUserId: storedSession?.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
+        rememberedCredentials,
+      }),
+    );
     setIsLoginModalOpen(true);
-  }, [liveUpstreamAccount, loginForm, storedSession?.upstreamLoginId]);
+  }, [
+    liveUpstreamAccount,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    rememberedCredentials,
+    storedSession?.upstreamLoginId,
+  ]);
 
   useEffect(() => {
     storedSessionRef.current = storedSession;
@@ -1641,12 +1673,21 @@ export function AcademicTeachingLogPageContent() {
     clearCurrentSession();
     setPendingAction(null);
     setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue({
-      password: '',
-      userId: keepAliveFailure.upstreamLoginId ?? '',
-    });
+    loginForm.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        fallbackUserId: keepAliveFailure.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
+        rememberedCredentials,
+      }),
+    );
     setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm]);
+  }, [
+    clearCurrentSession,
+    keepAliveFailure,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    rememberedCredentials,
+  ]);
 
   useEffect(() => {
     const savedCardCollapseAnimationFrames = savedCardCollapseAnimationFramesRef.current;
@@ -2827,10 +2868,14 @@ export function AcademicTeachingLogPageContent() {
 
       <UpstreamLoginModal
         form={loginForm}
+        hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
+        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         open={isLoginModalOpen}
         title="登录校园网"
+        onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingAction(null);

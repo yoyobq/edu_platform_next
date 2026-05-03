@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  clearRememberedUpstreamLoginCredentials,
   clearStoredUpstreamSession,
+  readRememberedUpstreamLoginCredentials,
   readStoredUpstreamSession,
+  writeRememberedUpstreamLoginCredentials,
   writeStoredUpstreamSession,
 } from './upstream-session-storage';
 
 const UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.upstream.session.v2';
 const LEGACY_UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.labs.upstream-session-demo.v1';
+const UPSTREAM_LOGIN_CREDENTIALS_STORAGE_KEY_PREFIX =
+  'aigc-friendly-frontend.upstream.login-credentials.v1';
+
+function getUpstreamLoginCredentialsStorageKey(accountId: number) {
+  return `${UPSTREAM_LOGIN_CREDENTIALS_STORAGE_KEY_PREFIX}.${accountId}`;
+}
 
 class MemoryStorage {
   readonly values = new Map<string, string>();
@@ -124,5 +133,81 @@ describe('upstream-session-storage', () => {
 
     expect(storage.getItem(UPSTREAM_SESSION_STORAGE_KEY)).toBeNull();
     expect(storage.getItem(LEGACY_UPSTREAM_SESSION_STORAGE_KEY)).toBeNull();
+  });
+
+  it('stores remembered upstream login credentials under an account-scoped key', () => {
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1001,
+      password: 'secret-password',
+      userId: ' teacher.alice ',
+    });
+
+    expect(readRememberedUpstreamLoginCredentials(1001)).toEqual({
+      password: 'secret-password',
+      rememberCredentials: true,
+      userId: 'teacher.alice',
+    });
+    expect(storage.getItem(getUpstreamLoginCredentialsStorageKey(1001))).not.toBeNull();
+  });
+
+  it('keeps remembered credentials isolated by account id', () => {
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1001,
+      password: 'alice-password',
+      userId: 'teacher.alice',
+    });
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1002,
+      password: 'bob-password',
+      userId: 'teacher.bob',
+    });
+
+    expect(readRememberedUpstreamLoginCredentials(1001)).toEqual({
+      password: 'alice-password',
+      rememberCredentials: true,
+      userId: 'teacher.alice',
+    });
+    expect(readRememberedUpstreamLoginCredentials(1002)).toEqual({
+      password: 'bob-password',
+      rememberCredentials: true,
+      userId: 'teacher.bob',
+    });
+  });
+
+  it('does not remove another account credentials when reading a missing account', () => {
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1001,
+      password: 'alice-password',
+      userId: 'teacher.alice',
+    });
+
+    expect(readRememberedUpstreamLoginCredentials(1002)).toBeNull();
+    expect(readRememberedUpstreamLoginCredentials(1001)).toEqual({
+      password: 'alice-password',
+      rememberCredentials: true,
+      userId: 'teacher.alice',
+    });
+  });
+
+  it('clears remembered credentials explicitly for one account only', () => {
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1001,
+      password: 'alice-password',
+      userId: 'teacher.alice',
+    });
+    writeRememberedUpstreamLoginCredentials({
+      accountId: 1002,
+      password: 'bob-password',
+      userId: 'teacher.bob',
+    });
+
+    clearRememberedUpstreamLoginCredentials(1002);
+
+    expect(readRememberedUpstreamLoginCredentials(1001)).toEqual({
+      password: 'alice-password',
+      rememberCredentials: true,
+      userId: 'teacher.alice',
+    });
+    expect(readRememberedUpstreamLoginCredentials(1002)).toBeNull();
   });
 });

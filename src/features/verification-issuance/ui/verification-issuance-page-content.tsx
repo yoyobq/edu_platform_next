@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import {
   Alert,
   AutoComplete,
@@ -12,7 +12,12 @@ import {
   Typography,
 } from 'antd';
 
-import { type UpstreamLoginFormValues, UpstreamLoginModal } from '@/entities/upstream-session';
+import {
+  buildUpstreamLoginCredentialsInitialValues,
+  canUseRememberedUpstreamLoginCredentials,
+  type UpstreamLoginFormValues,
+  UpstreamLoginModal,
+} from '@/entities/upstream-session';
 
 import {
   type ChangeLoginEmailIssuanceFormValues,
@@ -54,8 +59,12 @@ function formatDateTime(value: string | null) {
 }
 
 function StaffInvitePanel({
+  lockedUpstreamLoginUserId,
+  lockedUpstreamLoginUserIdHelp,
   onFeedback,
 }: {
+  lockedUpstreamLoginUserId?: string | null;
+  lockedUpstreamLoginUserIdHelp?: ReactNode;
   onFeedback: (feedback: VerificationIssuanceFeedback) => void;
 }) {
   const [form] = Form.useForm<StaffInviteFormValues>();
@@ -74,9 +83,11 @@ function StaffInvitePanel({
     isRefreshingDirectory,
     isSubmittingLogin,
     loginError,
+    clearRememberedCredentials,
     openUpstreamLogin,
     refreshDirectoryFromAction,
     requiresUpstreamSession,
+    rememberedCredentials,
     resolveTeacherByStaffIdValue,
     resolveTeacherByStaffNameValue,
     selectTeacherOption,
@@ -89,6 +100,10 @@ function StaffInvitePanel({
     submitUpstreamLogin,
     issueStaffInvite,
   } = staffInviteFlow;
+  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
+    rememberedCredentials,
+  });
 
   function applySelectedTeacher(teacher: { name: string; staffId: string }) {
     form.setFieldsValue({
@@ -134,11 +149,20 @@ function StaffInvitePanel({
       return;
     }
 
-    loginForm.setFieldsValue({
-      password: '',
-      userId: suggestedUpstreamLoginId,
-    });
-  }, [isLoginOpen, loginForm, suggestedUpstreamLoginId]);
+    loginForm.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        fallbackUserId: suggestedUpstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
+        rememberedCredentials,
+      }),
+    );
+  }, [
+    isLoginOpen,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    rememberedCredentials,
+    suggestedUpstreamLoginId,
+  ]);
 
   return (
     <div>
@@ -270,11 +294,15 @@ function StaffInvitePanel({
 
       <UpstreamLoginModal
         form={loginForm}
+        hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
+        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         okText="登录并拉取教师字典"
         open={isLoginOpen}
         title="登录校园网"
+        onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => setIsLoginOpen(false)}
         onFinish={submitUpstreamLogin}
       />
@@ -456,7 +484,13 @@ function ChangeLoginEmailPanel({
   );
 }
 
-export function VerificationIssuancePageContent() {
+export function VerificationIssuancePageContent({
+  lockedUpstreamLoginUserId = null,
+  lockedUpstreamLoginUserIdHelp,
+}: {
+  lockedUpstreamLoginUserId?: string | null;
+  lockedUpstreamLoginUserIdHelp?: ReactNode;
+}) {
   const [activeTab, setActiveTab] = useState('staff');
   const [feedback, setFeedback] = useState<VerificationIssuanceFeedback>(null);
 
@@ -502,7 +536,11 @@ export function VerificationIssuancePageContent() {
         }}
       >
         {activeTab === 'staff' ? (
-          <StaffInvitePanel onFeedback={setFeedback} />
+          <StaffInvitePanel
+            lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
+            lockedUpstreamLoginUserIdHelp={lockedUpstreamLoginUserIdHelp}
+            onFeedback={setFeedback}
+          />
         ) : activeTab === 'welcome-back' ? (
           <WelcomeBackPanel onFeedback={setFeedback} />
         ) : (

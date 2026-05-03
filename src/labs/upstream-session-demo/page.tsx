@@ -18,6 +18,8 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 import {
+  buildUpstreamLoginCredentialsInitialValues,
+  canUseRememberedUpstreamLoginCredentials,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -93,6 +95,7 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
+const STAFF_LOCKED_UPSTREAM_LOGIN_HELP = '当前非管理员教职工只能使用本人 staffId 登录校园网。';
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
   department: 'department-curriculum-plan',
@@ -427,6 +430,9 @@ export function UpstreamSessionDemoLabPage() {
   );
   const [activePanelKey, setActivePanelKey] = useState<UpstreamPanelKey>('introduction');
   const [currentAccount, setCurrentAccount] = useState<CurrentUpstreamDemoAccount | null>(null);
+  const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
+  const lockedUpstreamLoginUserId =
+    !isAdminAccount && currentAccount?.staffId ? currentAccount.staffId : null;
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -480,13 +486,19 @@ export function UpstreamSessionDemoLabPage() {
   const [pendingAction, setPendingAction] = useState<PendingUpstreamAction | null>(null);
   const {
     clear,
+    clearRememberedCredentials,
     keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
+    rememberedCredentials,
     session: storedSession,
   } = useUpstreamSession({
     account: currentAccount,
     keepAlive: true,
+  });
+  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
+    rememberedCredentials,
   });
   const personalCurriculumPlanRecords = getCurriculumPlanRecords(curriculumPlanResult.personal);
   const personalClassNameOptions = getUniqueValues(
@@ -571,12 +583,22 @@ export function UpstreamSessionDemoLabPage() {
       message: keepAliveFailure.message,
     });
     setLoginError(keepAliveFailure.message);
-    form.setFieldsValue({
-      password: '',
-      userId: keepAliveFailure.upstreamLoginId ?? '',
-    });
+    form.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        fallbackUserId: keepAliveFailure.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
+        rememberedCredentials,
+      }),
+    );
     setIsLoginModalOpen(true);
-  }, [activePanelKey, clearCurrentSession, form, keepAliveFailure]);
+  }, [
+    activePanelKey,
+    clearCurrentSession,
+    form,
+    keepAliveFailure,
+    lockedUpstreamLoginUserId,
+    rememberedCredentials,
+  ]);
 
   const loadLectureJournalTeachingClassSamples = useCallback(async () => {
     const semesterId = lectureJournalForm.getFieldValue('semesterId') as number | undefined;
@@ -666,10 +688,13 @@ export function UpstreamSessionDemoLabPage() {
           clearCurrentSession();
           setLoginError('upstream 会话已失效，请重新登录后继续。');
           setIsLoginModalOpen(true);
-          form.setFieldsValue({
-            password: '',
-            userId: session.upstreamLoginId ?? '',
-          });
+          form.setFieldsValue(
+            buildUpstreamLoginCredentialsInitialValues({
+              fallbackUserId: session.upstreamLoginId,
+              lockedUserId: lockedUpstreamLoginUserId,
+              rememberedCredentials,
+            }),
+          );
           return;
         }
 
@@ -694,7 +719,13 @@ export function UpstreamSessionDemoLabPage() {
         }));
       }
     },
-    [clearCurrentSession, form, persistSessionFromResult],
+    [
+      clearCurrentSession,
+      form,
+      lockedUpstreamLoginUserId,
+      persistSessionFromResult,
+      rememberedCredentials,
+    ],
   );
 
   const performAction = useCallback(
@@ -766,10 +797,13 @@ export function UpstreamSessionDemoLabPage() {
           setPendingAction(action);
           setLoginError('upstream 会话已失效，请重新登录后继续。');
           setIsLoginModalOpen(true);
-          form.setFieldsValue({
-            password: '',
-            userId: storedSession?.upstreamLoginId ?? '',
-          });
+          form.setFieldsValue(
+            buildUpstreamLoginCredentialsInitialValues({
+              fallbackUserId: storedSession?.upstreamLoginId,
+              lockedUserId: lockedUpstreamLoginUserId,
+              rememberedCredentials,
+            }),
+          );
           return;
         }
 
@@ -835,6 +869,8 @@ export function UpstreamSessionDemoLabPage() {
       persistSessionFromVerifiedIdentity,
       clearCurrentSession,
       form,
+      lockedUpstreamLoginUserId,
+      rememberedCredentials,
       storedSession?.upstreamLoginId,
     ],
   );
@@ -847,16 +883,18 @@ export function UpstreamSessionDemoLabPage() {
       if (!storedSession) {
         setPendingAction(action);
         setIsLoginModalOpen(true);
-        form.setFieldsValue({
-          password: '',
-          userId: '',
-        });
+        form.setFieldsValue(
+          buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
+            rememberedCredentials,
+          }),
+        );
         return;
       }
 
       await performAction(storedSession, action);
     },
-    [storedSession, performAction, form],
+    [storedSession, performAction, form, lockedUpstreamLoginUserId, rememberedCredentials],
   );
 
   useEffect(() => {
@@ -2089,11 +2127,15 @@ export function UpstreamSessionDemoLabPage() {
           pendingAction,
         )}。`}
         form={form}
+        hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
+        lockedUserIdHelp={lockedUpstreamLoginUserId ? STAFF_LOCKED_UPSTREAM_LOGIN_HELP : undefined}
         okText="登录并继续"
         open={isLoginModalOpen}
         title={`${getPendingActionLabel(pendingAction)}前登录 upstream`}
+        onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingAction(null);
@@ -2110,10 +2152,7 @@ export function UpstreamSessionDemoLabPage() {
           setActionError(null);
 
           try {
-            const nextStoredSession = await loginUpstream({
-              password: values.password,
-              userId: values.userId,
-            });
+            const nextStoredSession = await loginUpstream(values);
             const nextPendingAction = pendingAction;
 
             setCurriculumPlanResult({

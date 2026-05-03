@@ -5,9 +5,12 @@ import {
   requestUpstreamSessionRefresh,
 } from '../infrastructure/upstream-session-api';
 import {
+  clearRememberedUpstreamLoginCredentials,
   clearStoredUpstreamSession,
+  readRememberedUpstreamLoginCredentials,
   readStoredUpstreamSession,
   type StoredUpstreamSession,
+  writeRememberedUpstreamLoginCredentials,
   writeStoredUpstreamSession,
 } from '../infrastructure/upstream-session-storage';
 
@@ -15,6 +18,7 @@ import {
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from './upstream-error-feedback';
+import type { UpstreamLoginCredentials } from './upstream-login-credentials';
 import {
   hasRollingUpstreamSessionResult,
   type RollingUpstreamSessionResult,
@@ -93,6 +97,9 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
   const refreshPromiseRef = useRef<Promise<StoredUpstreamSession> | null>(null);
   const accountId = options.account?.accountId ?? null;
   const session = accountId ? readStoredUpstreamSession(accountId) : null;
+  const rememberedCredentials = accountId
+    ? readRememberedUpstreamLoginCredentials(accountId)
+    : null;
   const refreshStoredSession = useCallback(() => {
     setStorageRevision((revision) => revision + 1);
   }, []);
@@ -128,6 +135,15 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
     refreshStoredSession();
   }, [refreshStoredSession]);
 
+  const clearRememberedCredentials = useCallback(() => {
+    if (!accountId) {
+      return;
+    }
+
+    clearRememberedUpstreamLoginCredentials(accountId);
+    refreshStoredSession();
+  }, [accountId, refreshStoredSession]);
+
   const commitSession = useCallback(
     (nextSession: StoredUpstreamSession) => {
       writeStoredUpstreamSession(nextSession);
@@ -137,7 +153,7 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
   );
 
   const login = useCallback(
-    async (input: { password: string; userId: string }) => {
+    async (input: UpstreamLoginCredentials) => {
       if (!accountId) {
         throw new Error('当前登录账号尚未就绪，请稍后再试。');
       }
@@ -153,6 +169,16 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
         upstreamLoginId: normalizedUserId || null,
         upstreamSessionToken: upstreamSession.upstreamSessionToken,
       });
+
+      if (input.rememberCredentials) {
+        writeRememberedUpstreamLoginCredentials({
+          accountId,
+          password: input.password,
+          userId: normalizedUserId,
+        });
+      } else {
+        clearRememberedUpstreamLoginCredentials(accountId);
+      }
 
       commitSession(nextSession);
       setKeepAliveFailure(null);
@@ -224,10 +250,12 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
 
   return {
     clear,
+    clearRememberedCredentials,
     keepAliveFailure,
     login,
     persistSessionFromResult,
     persistRollingSession,
+    rememberedCredentials,
     refreshSession,
     session,
   };

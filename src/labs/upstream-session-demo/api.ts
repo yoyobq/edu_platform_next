@@ -12,7 +12,18 @@ export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 type CurrentAccountResponse = {
   me: {
     accountId: number;
+    identity:
+      | {
+          __typename: 'StaffType';
+          id: string;
+        }
+      | {
+          __typename: 'StudentType';
+          id: string;
+        }
+      | null;
     userInfo: {
+      accessGroup: string[];
       nickname: string | null;
     };
   };
@@ -49,8 +60,10 @@ type LectureJournalTeachingClassSamplesResponse = {
 };
 
 export type CurrentUpstreamDemoAccount = {
+  accessGroup: string[];
   accountId: number;
   displayName: string;
+  staffId: string | null;
 };
 
 export type TeacherDirectoryResult = {
@@ -232,7 +245,17 @@ const CURRENT_ACCOUNT_QUERY = `
     me {
       accountId
       userInfo {
+        accessGroup
         nickname
+      }
+      identity {
+        __typename
+        ... on StaffType {
+          id
+        }
+        ... on StudentType {
+          id
+        }
       }
     }
   }
@@ -253,8 +276,10 @@ export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstream
     );
 
     return {
+      accessGroup: response.me.userInfo.accessGroup,
       accountId: response.me.accountId,
       displayName: response.me.userInfo.nickname?.trim() || `account-${response.me.accountId}`,
+      staffId: response.me.identity?.__typename === 'StaffType' ? response.me.identity.id : null,
     };
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
