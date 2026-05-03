@@ -57,6 +57,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
+      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
@@ -89,6 +90,7 @@ describe('navigation catalog', () => {
     ).toEqual(['/academic-affairs/my-teaching-logs']);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
+      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
@@ -190,6 +192,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/labs/change-login-email',
+      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',

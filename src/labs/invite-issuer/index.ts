@@ -7,3 +7,11 @@ export async function loadInviteIssuerLabRouteModule() {
     Component: InviteIssuerLabPage,
   };
 }
+
+export async function loadIssueMailLabRouteModule() {
+  const { IssueMailLabPage } = await import('./issue-mail-page');
+
+  return {
+    Component: IssueMailLabPage,
+  };
+}

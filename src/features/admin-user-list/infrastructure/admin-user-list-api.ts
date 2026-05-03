@@ -252,7 +252,7 @@ const adminUserListPort: AdminUserListPort = {
       {
         accessGroups: input.accessGroups,
         hasStaff: input.hasStaff,
-        limit: input.limit ?? 10,
+        limit: input.limit ?? 50,
         page: input.page ?? 1,
         query: input.query,
         sortBy: input.sortBy ?? 'createdAt',

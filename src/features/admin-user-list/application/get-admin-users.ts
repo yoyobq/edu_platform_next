@@ -88,7 +88,7 @@ export const DEFAULT_ADMIN_USER_LIST_QUERY: Required<
   Pick<AdminUserListQuery, 'hasStaff' | 'limit' | 'page' | 'sortBy' | 'sortOrder'>
 > = {
   hasStaff: true,
-  limit: 10,
+  limit: 50,
   page: 1,
   sortBy: 'id',
   sortOrder: 'DESC',

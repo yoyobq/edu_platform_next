@@ -73,7 +73,11 @@ import {
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
-import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import {
+  inviteIssuerLabAccess,
+  loadInviteIssuerLabRouteModule,
+  loadIssueMailLabRouteModule,
+} from '@/labs/invite-issuer';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -877,6 +881,11 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
+          },
+          {
+            path: 'issue-mail',
+            loader: inviteIssuerLabLoader,
+            lazy: loadIssueMailLabRouteModule,
           },
           {
             path: 'change-login-email',

@@ -9,6 +9,7 @@ export const routes = {
     `/invite/${inviteType}/${verificationCode}`,
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
+  labsIssueMail: '/labs/issue-mail',
   labsPayloadCrypto: '/labs/payload-crypto',
   labsSemesterCalendar: '/labs/semester-calendar',
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',

@@ -50,6 +50,19 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             iconKey: 'SendOutlined',
+            key: '/labs/issue-mail',
+            label: '认证码签发',
+            navMode: 'rail' as const,
+            path: '/labs/issue-mail',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasLabNavigationAccess(['admin'], filter)
+      ? [
+          {
+            iconKey: 'SendOutlined',
             key: '/labs/invite-issuer',
             label: '邀请管理',
             navMode: 'rail' as const,
