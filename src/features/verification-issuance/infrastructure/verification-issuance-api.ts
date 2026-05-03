@@ -1,5 +1,3 @@
-import type { OperationVariables } from '@apollo/client';
-
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 type IssueInviteResponse = {
@@ -16,7 +14,7 @@ type AdminRequestPasswordResetEmailResponse = {
   success: boolean;
 };
 
-type IssueInviteResult = {
+export type IssueInviteResult = {
   expiresAt: string | null;
   message: string | null;
   recordId: number | null;
@@ -24,27 +22,28 @@ type IssueInviteResult = {
   type: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
 };
 
-type AdminRequestPasswordResetEmailResult = {
+export type AdminRequestPasswordResetEmailResult = {
   message: string | null;
   success: boolean;
+};
+
+export type VerificationIssuanceCurrentAccount = {
+  accountId: number;
+  displayName: string;
+};
+
+type CurrentAccountResponse = {
+  me: {
+    accountId: number;
+    userInfo: {
+      nickname: string | null;
+    };
+  } | null;
 };
 
 const INVITE_STAFF_MUTATION = `
   mutation InviteStaff($input: InviteStaffInput!) {
     inviteStaff(input: $input) {
-      expiresAt
-      message
-      recordId
-      success
-      token
-      type
-    }
-  }
-`;
-
-const INVITE_STUDENT_MUTATION = `
-  mutation InviteStudent($input: InviteStudentInput!) {
-    inviteStudent(input: $input) {
       expiresAt
       message
       recordId
@@ -64,12 +63,16 @@ const ADMIN_REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
   }
 `;
 
-async function requestGraphQL<TData, TVariables extends OperationVariables>(
-  query: string,
-  variables: TVariables,
-): Promise<TData> {
-  return executeGraphQL(query, variables);
-}
+const CURRENT_ACCOUNT_QUERY = `
+  query Me {
+    me {
+      accountId
+      userInfo {
+        nickname
+      }
+    }
+  }
+`;
 
 function normalizeIssueInviteResult(result: IssueInviteResponse): IssueInviteResult {
   return {
@@ -90,7 +93,7 @@ function normalizeAdminRequestPasswordResetEmailResult(
   };
 }
 
-function resolveErrorMessage(error: unknown, fallback: string) {
+export function resolveVerificationIssuanceErrorMessage(error: unknown, fallback: string) {
   if (isGraphQLIngressError(error)) {
     const firstError = error.graphqlErrors?.[0];
     const extensions = (firstError?.extensions as Record<string, unknown> | undefined) || {};
@@ -105,16 +108,19 @@ function resolveErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-export async function issueStaffInvite(input: { invitedEmail: string; staffId?: string }) {
+export async function issueVerificationStaffInvite(input: {
+  invitedEmail: string;
+  staffId: string;
+}) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeGraphQL<
       {
         inviteStaff: IssueInviteResponse;
       },
       {
         input: {
           invitedEmail: string;
-          staffId?: string;
+          staffId: string;
         };
       }
     >(INVITE_STAFF_MUTATION, {
@@ -127,39 +133,13 @@ export async function issueStaffInvite(input: { invitedEmail: string; staffId?: 
 
     return normalizeIssueInviteResult(response.inviteStaff);
   } catch (error) {
-    throw new Error(resolveErrorMessage(error, '暂时无法签发教职工邀请。'));
+    throw new Error(resolveVerificationIssuanceErrorMessage(error, '暂时无法签发教职工邀请。'));
   }
 }
 
-export async function issueStudentInvite(input: { invitedEmail: string; studentId?: string }) {
+export async function adminRequestVerificationPasswordResetEmail(input: { accountId: number }) {
   try {
-    const response = await requestGraphQL<
-      {
-        inviteStudent: IssueInviteResponse;
-      },
-      {
-        input: {
-          invitedEmail: string;
-          studentId?: string;
-        };
-      }
-    >(INVITE_STUDENT_MUTATION, {
-      input,
-    });
-
-    if (!response.inviteStudent.success) {
-      throw new Error(response.inviteStudent.message || '暂时无法签发学生邀请。');
-    }
-
-    return normalizeIssueInviteResult(response.inviteStudent);
-  } catch (error) {
-    throw new Error(resolveErrorMessage(error, '暂时无法签发学生邀请。'));
-  }
-}
-
-export async function adminRequestPasswordResetEmail(input: { accountId: number }) {
-  try {
-    const response = await requestGraphQL<
+    const response = await executeGraphQL<
       {
         adminRequestPasswordResetEmail: AdminRequestPasswordResetEmailResponse;
       },
@@ -182,6 +162,31 @@ export async function adminRequestPasswordResetEmail(input: { accountId: number 
 
     return result;
   } catch (error) {
-    throw new Error(resolveErrorMessage(error, '暂时无法为指定账号发送老用户回归密码设置邮件。'));
+    throw new Error(
+      resolveVerificationIssuanceErrorMessage(
+        error,
+        '暂时无法为指定账号发送老用户回归密码设置邮件。',
+      ),
+    );
+  }
+}
+
+export async function fetchVerificationIssuanceCurrentAccount(): Promise<VerificationIssuanceCurrentAccount> {
+  try {
+    const response = await executeGraphQL<CurrentAccountResponse, Record<string, never>>(
+      CURRENT_ACCOUNT_QUERY,
+      {},
+    );
+
+    if (!response.me) {
+      throw new Error('当前登录账号尚未就绪。');
+    }
+
+    return {
+      accountId: response.me.accountId,
+      displayName: response.me.userInfo.nickname || `account-${response.me.accountId}`,
+    };
+  } catch (error) {
+    throw new Error(resolveVerificationIssuanceErrorMessage(error, '暂时无法读取当前账号。'));
   }
 }

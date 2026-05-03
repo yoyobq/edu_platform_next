@@ -16,4 +16,5 @@ export {
   DEFAULT_ADMIN_USER_LIST_QUERY,
   getAdminUsers,
   normalizeAdminUserListQuery,
-} from '@/entities/admin-user';
+} from './application/get-admin-users';
+export { requestAdminUsers } from './infrastructure/admin-user-api';

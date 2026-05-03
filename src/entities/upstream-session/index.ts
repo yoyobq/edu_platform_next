@@ -4,6 +4,7 @@ export {
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
 } from './application/upstream-error-feedback';
+export type { UpstreamLoginCredentials } from './application/upstream-login-credentials';
 export type {
   UpstreamAccountIdentity,
   UpstreamSessionKeepAliveFailure,

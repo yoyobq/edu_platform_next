@@ -187,11 +187,11 @@ test('未登录访问 labs invite issuer 时，应先跳登录并保留原目标
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
 
-test('未登录访问 labs 认证码签发时，应先跳登录并保留原目标', async ({ page }) => {
-  await page.goto(routes.labsIssueMail);
+test('未登录访问 admin 认证码签发时，应先跳登录并保留原目标', async ({ page }) => {
+  await page.goto(routes.adminVerificationIssuance);
 
   await expect(page).toHaveURL(
-    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsIssueMail)}$`),
+    new RegExp(`/login\\?redirect=${encodeURIComponent(routes.adminVerificationIssuance)}$`),
   );
   await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
 });
@@ -242,6 +242,24 @@ test('已登录但不具备 admin 权限时，应继续拦截 labs 示例页', a
   await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
 });
 
+test('已登录但不具备 admin 权限时，应拦截 admin 认证码签发', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'staff-user',
+      primaryAccessGroup: 'STAFF',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'staff-user',
+    primaryAccessGroup: 'STAFF',
+  });
+
+  await page.goto(routes.adminVerificationIssuance);
+
+  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+});
+
 test('具备 admin 权限的已登录会话，应允许进入 labs 示例页', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
@@ -279,7 +297,7 @@ test('具备 admin 权限的已登录会话，应允许进入 labs invite issuer
   await expect(page.getByRole('button', { name: '签发邀请' })).toBeVisible();
 });
 
-test('具备 admin 权限的已登录会话，应允许进入 labs 认证码签发', async ({ page }) => {
+test('具备 admin 权限的已登录会话，应允许进入 admin 认证码签发', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -318,14 +336,32 @@ test('具备 admin 权限的已登录会话，应允许进入 labs 认证码签�
     await route.fallback();
   });
 
-  await page.goto(routes.labsIssueMail);
+  await page.goto(routes.adminVerificationIssuance);
 
   await expect(page.getByRole('heading', { name: '认证码签发' })).toBeVisible();
   await expect(page.getByRole('tab', { name: '教职工邀请' })).toBeVisible();
   await expect(page.getByRole('tab', { name: '老用户回归' })).toBeVisible();
 });
 
-test('labs 认证码签发在教师字典不可用且无 upstream 会话时，应提示使用现有登录能力', async ({
+test('旧 labs 认证码签发路径应不再可访问', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.goto('/labs/issue-mail');
+
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+});
+
+test('admin 认证码签发在教师字典不可用且无 upstream 会话时，应提示使用现有登录能力', async ({
   page,
 }) => {
   await mockApiHealth(page);
@@ -366,7 +402,7 @@ test('labs 认证码签发在教师字典不可用且无 upstream 会话时，�
     await route.fallback();
   });
 
-  await page.goto(routes.labsIssueMail);
+  await page.goto(routes.adminVerificationIssuance);
 
   await expect(page.getByText('需要先登录校园网')).toBeVisible();
   await expect(page.getByRole('dialog', { name: /登录校园网/ })).toHaveCount(0);
@@ -860,7 +896,7 @@ test('labs change login email 可通过 adminRequestChangeLoginEmail 为指定�
   });
 });
 
-test('labs 认证码签发可从教师字典选择教师并发送邀请', async ({ page }) => {
+test('admin 认证码签发可从教师字典选择教师并发送邀请', async ({ page }) => {
   let requestInput: { invitedEmail?: string; staffId?: string } | null = null;
 
   await mockApiHealth(page);
@@ -932,7 +968,7 @@ test('labs 认证码签发可从教师字典选择教师并发送邀请', async 
     await route.fallback();
   });
 
-  await page.goto(routes.labsIssueMail);
+  await page.goto(routes.adminVerificationIssuance);
 
   await page.getByLabel('教师姓名').fill('张');
   await page.getByText('张老师 (T001)').click();
@@ -947,7 +983,83 @@ test('labs 认证码签发可从教师字典选择教师并发送邀请', async 
   });
 });
 
-test('labs 认证码签发可从 ADMIN/STAFF 用户列表发送回归改密邮件', async ({ page }) => {
+test('admin 认证码签发的教职工邀请失败时，应在教师区域展示友好错误', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query StaffDirectory')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            staffDirectory: {
+              cacheExpiresAt: '2026-05-04T12:00:00.000Z',
+              cacheStatus: 'FRESH',
+              fetchedAt: '2026-05-04T10:00:00.000Z',
+              teacherCount: 1,
+              teachers: [{ name: '张老师', staffId: 'T001' }],
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation InviteStaff')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            inviteStaff: {
+              expiresAt: null,
+              message: 'staffId 已被使用',
+              recordId: null,
+              success: false,
+              token: null,
+              type: null,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.adminVerificationIssuance);
+
+  await page.getByLabel('教师姓名').fill('张');
+  await page.getByText('张老师 (T001)').click();
+  await page.getByLabel('被邀请邮箱').fill('staff-invite@example.com');
+  await page.getByRole('button', { name: '发送教职工邀请' }).click();
+
+  await expect(
+    page.getByText('张老师（T001）已绑定或已被邀请，请确认是否选错教师。'),
+  ).toBeVisible();
+  await expect(page.getByText('发送失败')).toHaveCount(0);
+});
+
+test('admin 认证码签发可从 ADMIN/STAFF 用户列表发送回归改密邮件', async ({ page }) => {
   let requestInput: { accountId?: number } | null = null;
 
   await mockApiHealth(page);
@@ -1033,7 +1145,7 @@ test('labs 认证码签发可从 ADMIN/STAFF 用户列表发送回归改密邮�
     await route.fallback();
   });
 
-  await page.goto(routes.labsIssueMail);
+  await page.goto(routes.adminVerificationIssuance);
   await page.getByRole('tab', { name: '老用户回归' }).click();
   await page
     .getByRole('row', { name: /legacy@example\.com/ })
@@ -1045,6 +1157,136 @@ test('labs 认证码签发可从 ADMIN/STAFF 用户列表发送回归改密邮�
   expect(requestInput).toEqual({
     accountId: 9527,
   });
+});
+
+test('admin 认证码签发批量回归改密部分失败时，只保留失败项选中', async ({ page }) => {
+  const requestAccountIds: number[] = [];
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+    adminUsersItems: [
+      {
+        account: {
+          createdAt: '2026-05-01T00:00:00.000Z',
+          id: 9527,
+          identityHint: 'ADMIN',
+          loginEmail: 'legacy-success@example.com',
+          loginName: 'legacy-success',
+          status: 'ACTIVE',
+        },
+        staff: null,
+        slotGroups: [],
+        userInfo: {
+          accessGroup: ['ADMIN'],
+          avatarUrl: null,
+          nickname: '成功用户',
+          phone: null,
+          userState: 'ACTIVE',
+        },
+      },
+      {
+        account: {
+          createdAt: '2026-05-01T00:00:00.000Z',
+          id: 9528,
+          identityHint: 'STAFF',
+          loginEmail: 'legacy-failed@example.com',
+          loginName: 'legacy-failed',
+          status: 'ACTIVE',
+        },
+        staff: null,
+        slotGroups: [],
+        userInfo: {
+          accessGroup: ['STAFF'],
+          avatarUrl: null,
+          nickname: '失败用户',
+          phone: null,
+          userState: 'ACTIVE',
+        },
+      },
+    ],
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: {
+            input?: { accountId?: number };
+          };
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query StaffDirectory')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            staffDirectory: {
+              cacheExpiresAt: null,
+              cacheStatus: 'MISS',
+              fetchedAt: null,
+              teacherCount: 0,
+              teachers: [],
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation AdminRequestPasswordResetEmail')) {
+      const accountId = payload?.variables?.input?.accountId;
+
+      if (typeof accountId === 'number') {
+        requestAccountIds.push(accountId);
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            adminRequestPasswordResetEmail: {
+              message: accountId === 9528 ? '目标账号没有注册邮箱' : '回归改密邮件已发送',
+              success: accountId !== 9528,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.adminVerificationIssuance);
+  await page.getByRole('tab', { name: '老用户回归' }).click();
+  const successCheckbox = page
+    .getByRole('row', { name: /legacy-success@example\.com/ })
+    .getByRole('checkbox');
+  const failedCheckbox = page
+    .getByRole('row', { name: /legacy-failed@example\.com/ })
+    .getByRole('checkbox');
+
+  await successCheckbox.check();
+  await failedCheckbox.check();
+  await page.getByRole('button', { name: '发送回归改密邮件' }).click();
+
+  await expect(page.getByText('部分发送失败')).toBeVisible();
+  await expect(page.getByText('已完成 1 封，失败 1 封。')).toBeVisible();
+  await expect(successCheckbox).not.toBeChecked();
+  await expect(failedCheckbox).toBeChecked();
+  expect(requestAccountIds).toEqual([9528, 9527]);
 });
 
 test('具备 admin 权限但 access token 临近过期时，进入 labs 示例页不应触发前置续期', async ({

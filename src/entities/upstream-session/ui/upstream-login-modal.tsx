@@ -1,12 +1,11 @@
 import type { FormInstance } from 'antd';
 import { Alert, Button, Form, Input, Modal } from 'antd';
 
+import type { UpstreamLoginCredentials } from '../application/upstream-login-credentials';
+
 import './upstream-login-modal.css';
 
-export type UpstreamLoginFormValues = {
-  password: string;
-  userId: string;
-};
+export type UpstreamLoginFormValues = UpstreamLoginCredentials;
 
 type UpstreamLoginModalProps = {
   form: FormInstance<UpstreamLoginFormValues>;

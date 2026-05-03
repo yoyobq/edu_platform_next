@@ -102,7 +102,7 @@ function buildWelcomeBackResetPasswordPageCopy(
   return {
     ...WELCOME_BACK_RESET_PASSWORD_PAGE_COPY,
     title: nickname
-      ? `欢迎回来 ${nickname} 老师，请设置新密码`
+      ? `${nickname} 老师，欢迎回来，请设置新密码`
       : WELCOME_BACK_RESET_PASSWORD_PAGE_COPY.title,
   };
 }

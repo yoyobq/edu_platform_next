@@ -12,6 +12,16 @@ const USER_MANAGEMENT_NAVIGATION_ITEM = {
   slotGroup: null,
 } as const;
 
+const VERIFICATION_ISSUANCE_NAVIGATION_ITEM = {
+  iconKey: 'SendOutlined',
+  key: '/admin/verification-issuance',
+  label: '认证码签发',
+  navMode: 'rail',
+  path: '/admin/verification-issuance',
+  primaryAccessGroup: 'ADMIN',
+  slotGroup: null,
+} as const;
+
 const PAYLOAD_CRYPTO_NAVIGATION_ITEM = {
   iconKey: 'LockOutlined',
   key: '/system/payload-crypto',
@@ -25,6 +35,7 @@ const PAYLOAD_CRYPTO_NAVIGATION_ITEM = {
 export const getAdminNavigationItems: NavigationItemsProvider = (filter) => {
   const children = [
     USER_MANAGEMENT_NAVIGATION_ITEM,
+    VERIFICATION_ISSUANCE_NAVIGATION_ITEM,
     ...(canAccessPayloadCrypto({
       accountId: filter.accountId,
       userInfo: {

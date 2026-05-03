@@ -20,9 +20,7 @@ import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
 
 import {
-  ADMIN_USER_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_ACCOUNT_STATUSES,
-  ADMIN_USER_EMPLOYMENT_STATUS_LABELS,
   ADMIN_USER_EMPLOYMENT_STATUSES,
   ADMIN_USER_SORT_FIELDS,
   type AdminUserAccountStatus,
@@ -45,6 +43,10 @@ import type {
 import { type AdminUserListLoader, useAdminUserList } from '../application/use-admin-user-list';
 
 import { AccountStatusQuickSwitch } from './account-status-quick-switch';
+import {
+  ADMIN_USER_ACCOUNT_STATUS_LABELS,
+  ADMIN_USER_EMPLOYMENT_STATUS_LABELS,
+} from './admin-user-labels';
 import { StaffEmploymentStatusQuickSwitch } from './staff-employment-status-quick-switch';
 
 type HasStaffFilterValue = 'true' | 'false';

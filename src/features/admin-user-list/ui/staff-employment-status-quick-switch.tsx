@@ -3,10 +3,11 @@ import { CaretDownOutlined } from '@ant-design/icons';
 import { Button, Popover, Tag, Typography } from 'antd';
 
 import {
-  ADMIN_USER_EMPLOYMENT_STATUS_LABELS,
   ADMIN_USER_EMPLOYMENT_STATUSES,
   type AdminUserEmploymentStatus,
 } from '../application/get-admin-users';
+
+import { ADMIN_USER_EMPLOYMENT_STATUS_LABELS } from './admin-user-labels';
 
 type StaffEmploymentStatusQuickSwitchProps = {
   accountId: number;

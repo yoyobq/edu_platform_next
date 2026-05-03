@@ -1,6 +1,7 @@
 export const routes = {
   academicCalendar: '/academic-affairs/academic-calendar',
   semesterCalendar: '/academic-affairs/semester-calendar',
+  adminVerificationIssuance: '/admin/verification-issuance',
   adminUsers: '/admin/users',
   forgotPassword: '/forgot-password',
   home: '/',
@@ -9,7 +10,6 @@ export const routes = {
     `/invite/${inviteType}/${verificationCode}`,
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
-  labsIssueMail: '/labs/issue-mail',
   labsPayloadCrypto: '/labs/payload-crypto',
   labsSemesterCalendar: '/labs/semester-calendar',
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',

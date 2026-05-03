@@ -57,7 +57,6 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
-      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
@@ -66,6 +65,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
       '/admin/users',
+      '/admin/verification-issuance',
       '/system/payload-crypto',
       '/errors/preview',
     ]);
@@ -90,7 +90,6 @@ describe('navigation catalog', () => {
     ).toEqual(['/academic-affairs/my-teaching-logs']);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
-      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
@@ -98,7 +97,7 @@ describe('navigation catalog', () => {
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
-    ).toEqual(['/admin/users', '/errors/preview']);
+    ).toEqual(['/admin/users', '/admin/verification-issuance', '/errors/preview']);
   });
 
   it('shows the shared staff labs while keeping admin-only labs hidden', () => {
@@ -170,6 +169,8 @@ describe('navigation catalog', () => {
 
     expect(canAccessNavigationPath('/errors/preview', guestFilter)).toBe(true);
     expect(canAccessNavigationPath('/admin/users', guestFilter)).toBe(false);
+    expect(canAccessNavigationPath('/admin/verification-issuance', guestFilter)).toBe(false);
+    expect(canAccessNavigationPath('/admin/verification-issuance', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath(
         '/calendar-schedule/semester-timetable',
@@ -192,13 +193,13 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/labs/change-login-email',
-      '/labs/issue-mail',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/sandbox/playground',
       '/admin/users',
+      '/admin/verification-issuance',
       '/system/payload-crypto',
       '/errors/preview',
     ]);

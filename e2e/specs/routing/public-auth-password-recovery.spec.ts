@@ -467,7 +467,7 @@ test('legacy user password reset payload 应展示老用户回归文案', async 
 
   await page.goto(routes.resetPassword('legacy-reset-token-active'));
 
-  await expect(page.getByRole('heading', { name: '欢迎回来老用户，请设置新密码' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '老朋友，欢迎回来，请设置新密码' })).toBeVisible();
   await expect(page.getByText('欢迎回来。我们更新了密码策略')).toBeVisible();
   await expect(page.getByText('le***@example.com')).toBeVisible();
   await expect(page.getByText('修改完成后，就可以返回登录页继续使用。')).toBeVisible();
