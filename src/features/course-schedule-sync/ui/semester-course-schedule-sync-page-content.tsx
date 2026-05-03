@@ -6,7 +6,6 @@ import {
   Descriptions,
   Form,
   Input,
-  Modal,
   Select,
   Spin,
   Table,
@@ -14,7 +13,12 @@ import {
   Typography,
 } from 'antd';
 
-import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
+import {
+  type StoredUpstreamSession,
+  type UpstreamLoginFormValues,
+  UpstreamLoginModal,
+  useUpstreamSession,
+} from '@/entities/upstream-session';
 
 import {
   type CourseScheduleSyncDepartmentOption,
@@ -29,11 +33,6 @@ import {
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
 } from '../api';
-
-type UpstreamLoginFormValues = {
-  password: string;
-  userId: string;
-};
 
 type SyncFormValues = {
   departmentId: string;
@@ -693,49 +692,19 @@ export function SemesterCourseScheduleSyncPageContent({
         )}
       </Card>
 
-      <Modal
-        destroyOnHidden
-        footer={null}
+      <UpstreamLoginModal
+        form={loginForm}
+        isSubmitting={isSubmittingLogin}
+        loginError={loginError}
+        open={isLoginModalOpen}
+        title="登录校园网"
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingSyncValues(null);
+          setLoginError(null);
         }}
-        open={isLoginModalOpen}
-        title="登录 upstream"
-      >
-        <div className="flex flex-col gap-4">
-          {loginError ? <Alert showIcon message={loginError} type="error" /> : null}
-
-          <Form
-            form={loginForm}
-            layout="vertical"
-            onFinish={(values) => void handleLoginFinish(values)}
-          >
-            <Form.Item
-              label="上游账号"
-              name="userId"
-              rules={[{ required: true, message: '请输入上游账号' }]}
-            >
-              <Input autoComplete="username" placeholder="输入上游账号" />
-            </Form.Item>
-
-            <Form.Item
-              label="上游密码"
-              name="password"
-              rules={[{ required: true, message: '请输入上游密码' }]}
-            >
-              <Input.Password autoComplete="current-password" placeholder="输入上游密码" />
-            </Form.Item>
-
-            <div className="flex justify-end gap-3">
-              <Button onClick={() => setIsLoginModalOpen(false)}>取消</Button>
-              <Button htmlType="submit" loading={isSubmittingLogin} type="primary">
-                登录并继续
-              </Button>
-            </div>
-          </Form>
-        </div>
-      </Modal>
+        onFinish={handleLoginFinish}
+      />
     </div>
   );
 }

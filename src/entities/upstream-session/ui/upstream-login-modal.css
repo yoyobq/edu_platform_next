@@ -4,6 +4,10 @@
   gap: 16px;
 }
 
+.upstream-login-modal-description {
+  color: var(--ant-color-text-secondary);
+}
+
 .upstream-login-modal-actions {
   display: flex;
   justify-content: flex-end;

@@ -1,5 +1,6 @@
 import type { FormInstance } from 'antd';
 import { Alert, Button, Form, Input, Modal } from 'antd';
+import type { ReactNode } from 'react';
 
 import type { UpstreamLoginCredentials } from '../application/upstream-login-credentials';
 
@@ -8,6 +9,7 @@ import './upstream-login-modal.css';
 export type UpstreamLoginFormValues = UpstreamLoginCredentials;
 
 type UpstreamLoginModalProps = {
+  description?: ReactNode;
   form: FormInstance<UpstreamLoginFormValues>;
   isSubmitting?: boolean;
   loginError?: string | null;
@@ -19,6 +21,7 @@ type UpstreamLoginModalProps = {
 };
 
 export function UpstreamLoginModal({
+  description,
   form,
   isSubmitting = false,
   loginError,
@@ -31,6 +34,7 @@ export function UpstreamLoginModal({
   return (
     <Modal destroyOnHidden footer={null} open={open} title={title} onCancel={onCancel}>
       <div className="upstream-login-modal">
+        {description ? <div className="upstream-login-modal-description">{description}</div> : null}
         {loginError ? <Alert message={loginError} showIcon type="error" /> : null}
         <Form<UpstreamLoginFormValues>
           form={form}

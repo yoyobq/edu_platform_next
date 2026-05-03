@@ -6,7 +6,6 @@ import {
   Descriptions,
   Form,
   Input,
-  Modal,
   Select,
   Tabs,
   Tag,
@@ -18,7 +17,12 @@ import {
   type AcademicSemesterRecord,
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
-import { type StoredUpstreamSession, useUpstreamSession } from '@/entities/upstream-session';
+import {
+  type StoredUpstreamSession,
+  type UpstreamLoginFormValues,
+  UpstreamLoginModal,
+  useUpstreamSession,
+} from '@/entities/upstream-session';
 
 import { upstreamSessionDemoLabAccess } from './access';
 import {
@@ -42,11 +46,6 @@ import {
   type VerifiedStaffIdentityResult,
 } from './api';
 import { upstreamSessionDemoLabMeta } from './meta';
-
-type UpstreamLoginFormValues = {
-  password: string;
-  userId: string;
-};
 
 type PersonalCurriculumPlanFormValues = {
   className?: string;
@@ -2085,94 +2084,63 @@ export function UpstreamSessionDemoLabPage() {
         </div>
       </div>
 
-      <Modal
-        destroyOnHidden
+      <UpstreamLoginModal
+        description={`当前操作需要有效的 upstream token。登录成功后，页面会自动继续${getPendingActionLabel(
+          pendingAction,
+        )}。`}
+        form={form}
+        isSubmitting={isSubmittingLogin}
+        loginError={loginError}
+        okText="登录并继续"
         open={isLoginModalOpen}
         title={`${getPendingActionLabel(pendingAction)}前登录 upstream`}
-        okText="登录并继续"
-        cancelText="取消"
-        confirmLoading={isSubmittingLogin}
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingAction(null);
           setLoginError(null);
           form.resetFields(['password']);
         }}
-        onOk={() => {
-          void form.submit();
+        onFinish={async (values) => {
+          if (!currentAccount) {
+            return;
+          }
+
+          setIsSubmittingLogin(true);
+          setLoginError(null);
+          setActionError(null);
+
+          try {
+            const nextStoredSession = await loginUpstream({
+              password: values.password,
+              userId: values.userId,
+            });
+            const nextPendingAction = pendingAction;
+
+            setCurriculumPlanResult({
+              personal: null,
+              department: null,
+            });
+            setDirectoryResult(null);
+            setVerifiedIdentityResult(null);
+            setIsLoginModalOpen(false);
+            setPendingAction(null);
+            form.setFieldsValue({
+              password: '',
+              userId: nextStoredSession.upstreamLoginId ?? '',
+            });
+
+            if (nextPendingAction) {
+              await performAction(nextStoredSession, nextPendingAction);
+            }
+          } catch (error) {
+            setLoginError(
+              resolveUpstreamErrorMessage(error, '暂时无法登录 upstream，请稍后重试。'),
+            );
+          } finally {
+            setIsSubmittingLogin(false);
+          }
         }}
-      >
-        <div className="flex flex-col gap-4 pt-2">
-          <Typography.Text type="secondary">
-            当前操作需要有效的 upstream token。登录成功后，页面会自动继续
-            {getPendingActionLabel(pendingAction)}。
-          </Typography.Text>
-
-          {loginError ? <Alert type="error" showIcon title={loginError} /> : null}
-
-          <Form<UpstreamLoginFormValues>
-            form={form}
-            layout="vertical"
-            requiredMark={false}
-            onFinish={async (values) => {
-              if (!currentAccount) {
-                return;
-              }
-
-              setIsSubmittingLogin(true);
-              setLoginError(null);
-              setActionError(null);
-
-              try {
-                const nextStoredSession = await loginUpstream({
-                  password: values.password,
-                  userId: values.userId,
-                });
-                const nextPendingAction = pendingAction;
-
-                setCurriculumPlanResult({
-                  personal: null,
-                  department: null,
-                });
-                setDirectoryResult(null);
-                setVerifiedIdentityResult(null);
-                setIsLoginModalOpen(false);
-                setPendingAction(null);
-                form.setFieldsValue({
-                  password: '',
-                  userId: nextStoredSession.upstreamLoginId ?? '',
-                });
-
-                if (nextPendingAction) {
-                  await performAction(nextStoredSession, nextPendingAction);
-                }
-              } catch (error) {
-                setLoginError(
-                  resolveUpstreamErrorMessage(error, '暂时无法登录 upstream，请稍后重试。'),
-                );
-              } finally {
-                setIsSubmittingLogin(false);
-              }
-            }}
-          >
-            <Form.Item
-              label="Upstream 用户名"
-              name="userId"
-              rules={[{ required: true, message: '请输入 upstream 用户名。' }]}
-            >
-              <Input placeholder="请输入 upstream 用户名" autoComplete="username" />
-            </Form.Item>
-
-            <Form.Item
-              label="Upstream 密码"
-              name="password"
-              rules={[{ required: true, message: '请输入 upstream 密码。' }]}
-            >
-              <Input.Password placeholder="请输入 upstream 密码" autoComplete="current-password" />
-            </Form.Item>
-          </Form>
-        </div>
-      </Modal>
+      />
     </div>
   );
 }
