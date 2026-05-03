@@ -1,9 +1,17 @@
 export type VerificationFailureReason = 'invalid' | 'expired' | 'used' | 'unknown';
 
+export type PasswordResetIntentKind = 'legacy-user-password-reset' | 'password-reset';
+
+export type PasswordResetPreview = {
+  kind: PasswordResetIntentKind;
+  loginEmailMasked: string | null;
+  nickname: string | null;
+};
+
 export type StaffInviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
 
 export type VerificationIntentResult =
-  | { status: 'valid' }
+  | { passwordResetPreview?: PasswordResetPreview; status: 'valid' }
   | { status: 'invalid'; reason: VerificationFailureReason }
   | { status: 'expired'; reason: VerificationFailureReason }
   | { status: 'used'; reason: VerificationFailureReason };

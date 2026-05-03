@@ -101,7 +101,10 @@ async function mockForgotPasswordTransportError(
 async function mockResetPasswordFlow(
   page: Page,
   status: ResetIntentStatus,
-  options?: { resetPasswordFailureReason?: VerificationRecordFailureReason },
+  options?: {
+    publicPayload?: unknown;
+    resetPasswordFailureReason?: VerificationRecordFailureReason;
+  },
 ) {
   await page.route('**/graphql', async (route) => {
     const payload = getGraphQLPayload(route);
@@ -119,6 +122,7 @@ async function mockResetPasswordFlow(
               reason: null,
               record: {
                 notBefore: null,
+                publicPayload: options?.publicPayload ?? null,
                 status: 'ACTIVE',
               },
               success: true,
@@ -445,6 +449,29 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
 
   await expect(page.getByText('密码已更新')).toBeVisible();
   await expect(page.getByRole('button', { name: '前往登录' })).toBeVisible();
+});
+
+test('legacy user password reset payload 应展示老用户回归文案', async ({ page }) => {
+  await mockResetPasswordFlow(page, 'active', {
+    publicPayload: {
+      flowId: 'password-reset',
+      preview: {
+        kind: 'legacy-user-password-reset',
+        loginEmailMasked: 'le***@example.com',
+        nickname: '老用户',
+      },
+      title: '密码重置',
+      description: '请确认是否继续重置密码。',
+    },
+  });
+
+  await page.goto(routes.resetPassword('legacy-reset-token-active'));
+
+  await expect(page.getByRole('heading', { name: '欢迎回来老用户，请设置新密码' })).toBeVisible();
+  await expect(page.getByText('欢迎回来。我们更新了密码策略')).toBeVisible();
+  await expect(page.getByText('le***@example.com')).toBeVisible();
+  await expect(page.getByText('修改完成后，就可以返回登录页继续使用。')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '设置你的新登录密码' })).toBeVisible();
 });
 
 test('reset-password 返回登录时，不应触发 restore -> me', async ({ page }) => {

@@ -11,12 +11,22 @@ type IssueInviteResponse = {
   type?: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
 };
 
+type AdminRequestPasswordResetEmailResponse = {
+  message?: string | null;
+  success: boolean;
+};
+
 type IssueInviteResult = {
   expiresAt: string | null;
   message: string | null;
   recordId: number | null;
   token: string | null;
   type: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
+};
+
+type AdminRequestPasswordResetEmailResult = {
+  message: string | null;
+  success: boolean;
 };
 
 const INVITE_STAFF_MUTATION = `
@@ -45,6 +55,15 @@ const INVITE_STUDENT_MUTATION = `
   }
 `;
 
+const ADMIN_REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
+  mutation AdminRequestPasswordResetEmail($input: AdminRequestPasswordResetEmailInput!) {
+    adminRequestPasswordResetEmail(input: $input) {
+      message
+      success
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -59,6 +78,15 @@ function normalizeIssueInviteResult(result: IssueInviteResponse): IssueInviteRes
     recordId: result.recordId ?? null,
     token: result.token || null,
     type: result.type || null,
+  };
+}
+
+function normalizeAdminRequestPasswordResetEmailResult(
+  result: AdminRequestPasswordResetEmailResponse,
+): AdminRequestPasswordResetEmailResult {
+  return {
+    message: result.message || null,
+    success: result.success,
   };
 }
 
@@ -126,5 +154,34 @@ export async function issueStudentInvite(input: { invitedEmail: string; studentI
     return normalizeIssueInviteResult(response.inviteStudent);
   } catch (error) {
     throw new Error(resolveErrorMessage(error, '暂时无法签发学生邀请。'));
+  }
+}
+
+export async function adminRequestPasswordResetEmail(input: { accountId: number }) {
+  try {
+    const response = await requestGraphQL<
+      {
+        adminRequestPasswordResetEmail: AdminRequestPasswordResetEmailResponse;
+      },
+      {
+        input: {
+          accountId: number;
+        };
+      }
+    >(ADMIN_REQUEST_PASSWORD_RESET_EMAIL_MUTATION, {
+      input,
+    });
+
+    const result = normalizeAdminRequestPasswordResetEmailResult(
+      response.adminRequestPasswordResetEmail,
+    );
+
+    if (!result.success) {
+      throw new Error(result.message || '暂时无法为指定账号发送老用户回归密码设置邮件。');
+    }
+
+    return result;
+  } catch (error) {
+    throw new Error(resolveErrorMessage(error, '暂时无法为指定账号发送老用户回归密码设置邮件。'));
   }
 }

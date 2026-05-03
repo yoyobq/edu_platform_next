@@ -8,6 +8,8 @@ export type { PublicAuthApiPort, PublicAuthPorts } from './application/ports';
 export type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  PasswordResetIntentKind,
+  PasswordResetPreview,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -19,6 +21,7 @@ export type {
 } from './application/types';
 export { ForgotPasswordForm } from './ui/forgot-password-form';
 export { ResetPasswordForm } from './ui/reset-password-form';
+export type { ResetPasswordIntentPanelCopy } from './ui/reset-password-intent-panel';
 export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 export { StaffInviteIntentPanel } from './ui/staff-invite-intent-panel';
 export { VerifyEmailIntentPanel } from './ui/verify-email-intent-panel';

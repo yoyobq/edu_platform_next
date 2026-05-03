@@ -33,6 +33,7 @@ import {
   MagicLinkIntentPage,
   ResetPasswordIntentPage,
   VerifyEmailIntentPage,
+  WelcomeBackResetPasswordIntentPage,
 } from '@/pages/verification-intent';
 import { WelcomePage } from '@/pages/welcome';
 import {
@@ -85,6 +86,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/magic-link/',
   '/reset-password',
+  '/welcome-back/reset-password',
   '/verify/',
 ];
 
@@ -770,6 +772,14 @@ const router = createBrowserRouter([
       {
         path: '/reset-password/:verificationCode',
         Component: ResetPasswordIntentPage,
+      },
+      {
+        path: '/welcome-back/reset-password',
+        Component: WelcomeBackResetPasswordIntentPage,
+      },
+      {
+        path: '/welcome-back/reset-password/:verificationCode',
+        Component: WelcomeBackResetPasswordIntentPage,
       },
       {
         path: '/magic-link/:verificationCode',

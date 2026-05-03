@@ -13,6 +13,7 @@ import type { PublicAuthApiPort } from '../application/ports';
 import type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  PasswordResetPreview,
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
@@ -125,6 +126,7 @@ const FIND_PASSWORD_RESET_RECORD_QUERY = `
       success
       record {
         notBefore
+        publicPayload
         status
       }
     }
@@ -273,7 +275,16 @@ async function findResetPasswordIntent(
   const result = response.findVerificationRecord;
 
   if (result.success && result.record) {
-    return mapVerificationRecordToIntentResult(result.record);
+    const intentResult = mapVerificationRecordToIntentResult(result.record);
+
+    if (intentResult.status === 'valid') {
+      return {
+        ...intentResult,
+        passwordResetPreview: extractPasswordResetPreview(result.record.publicPayload),
+      };
+    }
+
+    return intentResult;
   }
 
   const reason = mapVerificationFailureReason(result.reason);
@@ -308,6 +319,27 @@ function normalizeOptionalStringValue(value: unknown): string | null {
 
 function toRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : null;
+}
+
+function extractPasswordResetPreview(publicPayload: unknown): PasswordResetPreview | undefined {
+  const payload = toRecord(publicPayload);
+  const preview = toRecord(payload?.preview);
+
+  if (!preview) {
+    return undefined;
+  }
+
+  const kind = preview.kind;
+
+  if (kind !== 'legacy-user-password-reset' && kind !== 'password-reset') {
+    return undefined;
+  }
+
+  return {
+    kind,
+    loginEmailMasked: normalizeOptionalStringValue(preview.loginEmailMasked),
+    nickname: normalizeOptionalStringValue(preview.nickname),
+  };
 }
 
 function extractChangeLoginEmailPreview(publicPayload: unknown): {

@@ -7,12 +7,26 @@ import {
   type ResetPasswordIntentWorkflowState,
   submitResetPasswordIntent,
 } from '../application/reset-password-intent-workflow';
-import type { VerificationFailureReason } from '../application/types';
+import type { PasswordResetPreview, VerificationFailureReason } from '../application/types';
 import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 import { ResetPasswordForm } from './reset-password-form';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
+
+export type ResetPasswordIntentPanelCopy = {
+  readyDescription: string;
+  readyTitle: string;
+  successDescription: string;
+  successTitle: string;
+};
+
+const DEFAULT_RESET_PASSWORD_COPY: ResetPasswordIntentPanelCopy = {
+  readyDescription: '输入过程中会即时检查密码规则，确认通过后即可完成更新。',
+  readyTitle: '输入新密码',
+  successDescription: '你现在可以使用新密码重新登录。',
+  successTitle: '密码已更新',
+};
 
 function resolveResetFailureTitle(reason: VerificationFailureReason) {
   if (reason === 'expired') {
@@ -65,7 +79,15 @@ const publicAuthPorts = {
   api: publicAuthApi,
 };
 
-export function ResetPasswordIntentPanel({ verificationCode }: { verificationCode: string }) {
+export function ResetPasswordIntentPanel({
+  copy = DEFAULT_RESET_PASSWORD_COPY,
+  onIntentPreviewChange,
+  verificationCode,
+}: {
+  copy?: ResetPasswordIntentPanelCopy;
+  onIntentPreviewChange?: (preview: PasswordResetPreview | null) => void;
+  verificationCode: string;
+}) {
   const navigate = useNavigate();
   const [state, setState] = useState<ResetPasswordIntentWorkflowState>({ status: 'loading' });
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -87,6 +109,9 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
       }
 
       setState(nextState);
+      onIntentPreviewChange?.(
+        nextState.status === 'ready' ? (nextState.passwordResetPreview ?? null) : null,
+      );
     }
 
     void runWorkflow();
@@ -94,7 +119,7 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
     return () => {
       isActive = false;
     };
-  }, [verificationCode]);
+  }, [onIntentPreviewChange, verificationCode]);
 
   if (state.status === 'loading') {
     return (
@@ -110,10 +135,10 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
       <Flex vertical gap={16}>
         <div>
           <Typography.Title level={4} style={{ marginBottom: 8 }}>
-            输入新密码
+            {copy.readyTitle}
           </Typography.Title>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            输入过程中会即时检查密码规则，确认通过后即可完成更新。
+            {copy.readyDescription}
           </Typography.Paragraph>
         </div>
 
@@ -159,8 +184,8 @@ export function ResetPasswordIntentPanel({ verificationCode }: { verificationCod
         <Alert
           type="success"
           showIcon
-          title="密码已更新"
-          description="你现在可以使用新密码重新登录。"
+          title={copy.successTitle}
+          description={copy.successDescription}
         />
         <Button type="primary" onClick={() => navigate(PUBLIC_AUTH_RETURN_LOGIN_URL)}>
           前往登录
