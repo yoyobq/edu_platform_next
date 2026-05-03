@@ -14,6 +14,11 @@ type AdminRequestPasswordResetEmailResponse = {
   success: boolean;
 };
 
+type AdminRequestChangeLoginEmailResponse = {
+  message?: string | null;
+  success: boolean;
+};
+
 export type IssueInviteResult = {
   expiresAt: string | null;
   message: string | null;
@@ -23,6 +28,11 @@ export type IssueInviteResult = {
 };
 
 export type AdminRequestPasswordResetEmailResult = {
+  message: string | null;
+  success: boolean;
+};
+
+export type AdminRequestChangeLoginEmailResult = {
   message: string | null;
   success: boolean;
 };
@@ -63,6 +73,15 @@ const ADMIN_REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
   }
 `;
 
+const ADMIN_REQUEST_CHANGE_LOGIN_EMAIL_MUTATION = `
+  mutation AdminRequestChangeLoginEmail($input: AdminRequestChangeLoginEmailInput!) {
+    adminRequestChangeLoginEmail(input: $input) {
+      message
+      success
+    }
+  }
+`;
+
 const CURRENT_ACCOUNT_QUERY = `
   query Me {
     me {
@@ -87,6 +106,15 @@ function normalizeIssueInviteResult(result: IssueInviteResponse): IssueInviteRes
 function normalizeAdminRequestPasswordResetEmailResult(
   result: AdminRequestPasswordResetEmailResponse,
 ): AdminRequestPasswordResetEmailResult {
+  return {
+    message: result.message || null,
+    success: result.success,
+  };
+}
+
+function normalizeAdminRequestChangeLoginEmailResult(
+  result: AdminRequestChangeLoginEmailResponse,
+): AdminRequestChangeLoginEmailResult {
   return {
     message: result.message || null,
     success: result.success,
@@ -166,6 +194,44 @@ export async function adminRequestVerificationPasswordResetEmail(input: { accoun
       resolveVerificationIssuanceErrorMessage(
         error,
         '暂时无法为指定账号发送老用户回归密码设置邮件。',
+      ),
+    );
+  }
+}
+
+export async function adminRequestVerificationChangeLoginEmail(input: {
+  accountId: number;
+  newLoginEmail: string;
+}) {
+  try {
+    const response = await executeGraphQL<
+      {
+        adminRequestChangeLoginEmail: AdminRequestChangeLoginEmailResponse;
+      },
+      {
+        input: {
+          accountId: number;
+          newLoginEmail: string;
+        };
+      }
+    >(ADMIN_REQUEST_CHANGE_LOGIN_EMAIL_MUTATION, {
+      input,
+    });
+
+    const result = normalizeAdminRequestChangeLoginEmailResult(
+      response.adminRequestChangeLoginEmail,
+    );
+
+    if (!result.success) {
+      throw new Error(result.message || '暂时无法为指定账号发送登录邮箱变更验证邮件。');
+    }
+
+    return result;
+  } catch (error) {
+    throw new Error(
+      resolveVerificationIssuanceErrorMessage(
+        error,
+        '暂时无法为指定账号发送登录邮箱变更验证邮件。',
       ),
     );
   }

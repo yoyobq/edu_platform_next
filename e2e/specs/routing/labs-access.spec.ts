@@ -1159,6 +1159,118 @@ test('admin 认证码签发可从 ADMIN/STAFF 用户列表发送回归改密邮�
   });
 });
 
+test('admin 认证码签发可从用户列表发送登录邮箱变更验证邮件', async ({ page }) => {
+  let adminUsersVariables: Record<string, unknown> | null = null;
+  let requestInput: { accountId?: number; newLoginEmail?: string } | null = null;
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+    adminUsersItems: [
+      {
+        account: {
+          createdAt: '2026-05-01T00:00:00.000Z',
+          id: 7001,
+          identityHint: 'STUDENT',
+          loginEmail: 'target@example.com',
+          loginName: 'target-login',
+          status: 'ACTIVE',
+        },
+        staff: null,
+        slotGroups: [],
+        userInfo: {
+          accessGroup: ['STUDENT'],
+          avatarUrl: null,
+          nickname: '目标用户',
+          phone: null,
+          userState: 'ACTIVE',
+        },
+      },
+    ],
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: {
+            input?: { accountId?: number; newLoginEmail?: string };
+          } & Record<string, unknown>;
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query StaffDirectory')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            staffDirectory: {
+              cacheExpiresAt: null,
+              cacheStatus: 'MISS',
+              fetchedAt: null,
+              teacherCount: 0,
+              teachers: [],
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('query AdminUsers')) {
+      adminUsersVariables = payload?.variables ?? null;
+      await route.fallback();
+      return;
+    }
+
+    if (query.includes('mutation AdminRequestChangeLoginEmail')) {
+      requestInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            adminRequestChangeLoginEmail: {
+              message: '登录邮箱变更验证邮件已发送',
+              success: true,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.adminVerificationIssuance);
+  await page.getByRole('tab', { name: '登录邮箱变更' }).click();
+  await page
+    .getByRole('row', { name: /target@example\.com/ })
+    .getByRole('radio')
+    .check();
+  await page.getByRole('button', { name: '发送邮箱变更验证' }).click();
+  await page.getByLabel('新的登录邮箱').fill('changed@example.com');
+  await page.getByRole('button', { name: '发送验证邮件' }).click();
+
+  await expect(page.getByText('登录邮箱变更验证已发送').first()).toBeVisible();
+  expect(adminUsersVariables?.accessGroups).toBeUndefined();
+  expect(adminUsersVariables?.limit).toBe(10);
+  expect(requestInput).toEqual({
+    accountId: 7001,
+    newLoginEmail: 'changed@example.com',
+  });
+});
+
 test('admin 认证码签发批量回归改密部分失败时，只保留失败项选中', async ({ page }) => {
   const requestAccountIds: number[] = [];
 

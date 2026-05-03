@@ -2,7 +2,7 @@ export type VerificationIssuanceFeedback = {
   detail: string;
   message: string;
   title: string;
-  type: 'staff-invite' | 'welcome-back';
+  type: 'change-login-email' | 'staff-invite' | 'welcome-back';
 } | null;
 
 export function resolveResultMessage(error: unknown, fallback: string) {

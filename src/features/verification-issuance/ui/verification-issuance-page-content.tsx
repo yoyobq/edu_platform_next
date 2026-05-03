@@ -1,22 +1,24 @@
-import { type Key, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   AutoComplete,
   Button,
   Card,
-  Empty,
   Flex,
   Form,
   Input,
+  Modal,
   Space,
-  Table,
-  Tag,
   Typography,
 } from 'antd';
 
-import type { AdminUserListItem } from '@/entities/admin-user';
 import { type UpstreamLoginFormValues, UpstreamLoginModal } from '@/entities/upstream-session';
 
+import {
+  type ChangeLoginEmailIssuanceFormValues,
+  getAdminUserDisplayName,
+  useChangeLoginEmailIssuance,
+} from '../application/use-change-login-email-issuance';
 import {
   type StaffInviteFormValues,
   type TeacherSearchOption,
@@ -27,6 +29,8 @@ import {
   useWelcomeBackIssuance,
 } from '../application/use-welcome-back-issuance';
 import type { VerificationIssuanceFeedback } from '../application/verification-issuance-feedback';
+
+import { VerificationAccountPickerTable } from './verification-account-picker-table';
 
 function formatDateTime(value: string | null) {
   if (!value) {
@@ -47,30 +51,6 @@ function formatDateTime(value: string | null) {
     second: '2-digit',
     year: 'numeric',
   });
-}
-
-function renderOptionalText(value: string | null | undefined) {
-  return value ? value : <span className="text-text-quaternary">—</span>;
-}
-
-function getStatusTagColor(status: string) {
-  if (status === 'ACTIVE') {
-    return 'green';
-  }
-
-  if (status === 'PENDING') {
-    return 'gold';
-  }
-
-  if (status === 'SUSPENDED' || status === 'INACTIVE') {
-    return 'orange';
-  }
-
-  if (status === 'BANNED' || status === 'DELETED') {
-    return 'red';
-  }
-
-  return 'blue';
 }
 
 function StaffInvitePanel({
@@ -326,158 +306,152 @@ function WelcomeBackPanel({
     totalCount,
   } = welcomeBackIssuance;
 
-  const columns = useMemo(
-    () => [
-      {
-        dataIndex: ['account', 'id'],
-        key: 'id',
-        render: (value: number) => <span className="font-mono text-sm">#{value}</span>,
-        title: '账号 ID',
-        width: 110,
-      },
-      {
-        dataIndex: ['account', 'loginEmail'],
-        key: 'loginEmail',
-        render: (value: string | null) => (
-          <Typography.Text copyable={Boolean(value)}>{renderOptionalText(value)}</Typography.Text>
-        ),
-        title: '登陆邮箱',
-        width: 240,
-      },
-      {
-        dataIndex: ['userInfo', 'nickname'],
-        key: 'nickname',
-        render: (value: string | null) => (
-          <span className="font-medium">{renderOptionalText(value)}</span>
-        ),
-        title: 'nickname',
-        width: 180,
-      },
-      {
-        dataIndex: ['account', 'loginName'],
-        key: 'loginName',
-        render: (value: string | null) => (
-          <span className="font-mono text-sm text-text-secondary">{renderOptionalText(value)}</span>
-        ),
-        title: 'loginName',
-        width: 180,
-      },
-      {
-        dataIndex: ['userInfo', 'accessGroup'],
-        key: 'accessGroup',
-        render: (_value: readonly string[], record: AdminUserListItem) => (
-          <Space wrap size={4}>
-            {getWelcomeBackUserIdentityTags(record).map((group) => (
-              <Tag key={group} color={group === 'ADMIN' ? 'purple' : 'blue'} style={{ margin: 0 }}>
-                {group}
-              </Tag>
-            ))}
-          </Space>
-        ),
-        title: '访问组',
-        width: 160,
-      },
-      {
-        dataIndex: ['account', 'status'],
-        key: 'status',
-        render: (value: string) => (
-          <Tag color={getStatusTagColor(value)} style={{ margin: 0 }}>
-            {value}
-          </Tag>
-        ),
-        title: '状态',
-        width: 120,
-      },
-    ],
-    [],
+  return (
+    <VerificationAccountPickerTable
+      action={
+        <Button
+          disabled={selectedRecords.length === 0}
+          loading={isSending}
+          type="primary"
+          onClick={sendWelcomeBackEmails}
+        >
+          发送回归改密邮件
+        </Button>
+      }
+      currentList={currentList}
+      currentPage={currentPage}
+      emptyDescription="暂无 ADMIN / STAFF 用户"
+      errorMessage={errorMessage}
+      getIdentityTags={getWelcomeBackUserIdentityTags}
+      isLoading={isLoading}
+      pageSize={pageSize}
+      query={query}
+      searchPlaceholder="搜索登陆邮箱、nickname、loginName 或账号 ID"
+      selectedAccountIds={selectedAccountIds}
+      selectedSummary={`已选择 ${selectedRecords.length} / 共 ${totalCount} 位 ADMIN / STAFF 用户`}
+      selectionMode="multiple"
+      totalCount={totalCount}
+      onPageChange={changePage}
+      onQueryChange={setQuery}
+      onSearch={searchUsers}
+      onSelectionChange={selectAccountIds}
+    />
   );
+}
 
-  const rowSelection = useMemo(
-    () => ({
-      selectedRowKeys: [...selectedAccountIds],
-      onChange: (nextSelectedRowKeys: Key[]) => {
-        selectAccountIds(nextSelectedRowKeys);
-      },
-    }),
-    [selectAccountIds, selectedAccountIds],
-  );
+function ChangeLoginEmailPanel({
+  onFeedback,
+}: {
+  onFeedback: (feedback: VerificationIssuanceFeedback) => void;
+}) {
+  const [form] = Form.useForm<ChangeLoginEmailIssuanceFormValues>();
+  const changeLoginEmailIssuance = useChangeLoginEmailIssuance({ onFeedback });
+  const {
+    changePage,
+    closeModal,
+    currentList,
+    currentPage,
+    errorMessage,
+    isLoading,
+    isModalOpen,
+    isSending,
+    openModal,
+    pageSize,
+    query,
+    searchUsers,
+    selectAccountIds,
+    selectedAccountIds,
+    selectedRecord,
+    sendChangeLoginEmail,
+    setQuery,
+    submitError,
+  } = changeLoginEmailIssuance;
+
+  function handleCloseModal() {
+    closeModal();
+    form.resetFields();
+  }
+
+  async function handleSubmit(values: ChangeLoginEmailIssuanceFormValues) {
+    const isSuccess = await sendChangeLoginEmail(values);
+
+    if (isSuccess) {
+      form.resetFields();
+    }
+  }
 
   return (
-    <Flex vertical gap={16}>
-      <Flex gap={12} justify="space-between" wrap>
-        <Input.Search
-          allowClear
-          enterButton="搜索"
-          placeholder="搜索登陆邮箱、nickname、loginName 或账号 ID"
-          style={{ maxWidth: 420 }}
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          onSearch={searchUsers}
-        />
-        <Space wrap>
-          <Typography.Text type="secondary">
-            已选择 {selectedRecords.length} / 共 {totalCount} 位 ADMIN / STAFF 用户
-          </Typography.Text>
-          <Button
-            type="primary"
-            disabled={selectedRecords.length === 0}
-            loading={isSending}
-            onClick={sendWelcomeBackEmails}
-          >
-            发送回归改密邮件
+    <>
+      <VerificationAccountPickerTable
+        action={
+          <Button disabled={!selectedRecord} loading={isSending} type="primary" onClick={openModal}>
+            发送邮箱变更验证
           </Button>
-        </Space>
-      </Flex>
-
-      {errorMessage ? <Alert showIcon type="error" title={errorMessage} /> : null}
-
-      <div className="verification-issuance-user-table">
-        <Table<AdminUserListItem>
-          rowKey={(record) => record.account.id}
-          columns={columns}
-          dataSource={[...currentList]}
-          loading={isLoading}
-          rowSelection={rowSelection}
-          scroll={{ x: 980 }}
-          pagination={{
-            current: currentPage,
-            className: 'px-4 py-3 m-0',
-            pageSize,
-            placement: ['bottomCenter'],
-            pageSizeOptions: [10, 20, 50, 100],
-            showSizeChanger: true,
-            size: 'small',
-            total: totalCount,
-          }}
-          locale={{
-            emptyText: (
-              <Empty description="暂无 ADMIN / STAFF 用户" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-            ),
-          }}
-          onChange={(pagination) => {
-            changePage(pagination.current ?? 1, pagination.pageSize ?? pageSize);
-          }}
-        />
-      </div>
-
-      <style>{`
-        .verification-issuance-user-table .ant-table-thead > tr > th {
-          background: transparent;
-          color: var(--ant-color-text-secondary);
-          font-size: var(--ant-font-size-sm);
-          font-weight: 600;
-          padding: 12px 16px;
         }
+        currentList={currentList}
+        currentPage={currentPage}
+        emptyDescription="暂无用户"
+        errorMessage={errorMessage}
+        isLoading={isLoading}
+        pageSize={pageSize}
+        query={query}
+        searchPlaceholder="搜索登陆邮箱、nickname、loginName 或账号 ID"
+        selectedAccountIds={selectedAccountIds}
+        selectionMode="single"
+        totalCount={changeLoginEmailIssuance.totalCount}
+        onPageChange={changePage}
+        onQueryChange={setQuery}
+        onSearch={searchUsers}
+        onSelectionChange={selectAccountIds}
+      />
 
-        .verification-issuance-user-table .ant-table-tbody > tr > td {
-          padding: 12px 16px;
-        }
+      <Modal
+        destroyOnHidden
+        footer={null}
+        open={isModalOpen}
+        title="发送登录邮箱变更验证"
+        onCancel={handleCloseModal}
+      >
+        <Flex vertical gap={16}>
+          {selectedRecord ? (
+            <Alert
+              showIcon
+              type="info"
+              title={getAdminUserDisplayName(selectedRecord)}
+              description={
+                <Space orientation="vertical" size={2}>
+                  <span>账号 ID：{selectedRecord.account.id}</span>
+                  <span>当前登陆邮箱：{selectedRecord.account.loginEmail || '暂无'}</span>
+                  <span>loginName：{selectedRecord.account.loginName || '暂无'}</span>
+                </Space>
+              }
+            />
+          ) : null}
 
-        .verification-issuance-user-table .ant-table-row:hover > td {
-          background-color: var(--ant-color-fill-tertiary) !important;
-        }
-      `}</style>
-    </Flex>
+          {submitError ? <Alert showIcon type="error" title={submitError} /> : null}
+
+          <Form form={form} layout="vertical" requiredMark={false} onFinish={handleSubmit}>
+            <Form.Item
+              label="新的登录邮箱"
+              name="newLoginEmail"
+              rules={[
+                { required: true, message: '请输入新的登录邮箱。' },
+                { type: 'email', message: '请输入有效邮箱地址。' },
+              ]}
+            >
+              <Input autoComplete="email" placeholder="new-email@example.com" />
+            </Form.Item>
+
+            <Flex justify="flex-end" gap={8}>
+              <Button onClick={handleCloseModal}>取消</Button>
+              <Button htmlType="submit" loading={isSending} type="primary">
+                发送验证邮件
+              </Button>
+            </Flex>
+          </Form>
+        </Flex>
+      </Modal>
+    </>
   );
 }
 
@@ -494,7 +468,7 @@ export function VerificationIssuancePageContent() {
               认证码签发
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              为教职工邀请和老用户回归签发验证邮件。
+              为教职工邀请、老用户回归和登录邮箱变更签发验证邮件。
             </Typography.Paragraph>
           </div>
         </Flex>
@@ -518,6 +492,7 @@ export function VerificationIssuancePageContent() {
         tabList={[
           { key: 'staff', tab: '教职工邀请' },
           { key: 'welcome-back', tab: '老用户回归' },
+          { key: 'change-login-email', tab: '登录邮箱变更' },
         ]}
         activeTabKey={activeTab}
         onTabChange={(key) => {
@@ -527,8 +502,10 @@ export function VerificationIssuancePageContent() {
       >
         {activeTab === 'staff' ? (
           <StaffInvitePanel onFeedback={setFeedback} />
-        ) : (
+        ) : activeTab === 'welcome-back' ? (
           <WelcomeBackPanel onFeedback={setFeedback} />
+        ) : (
+          <ChangeLoginEmailPanel onFeedback={setFeedback} />
         )}
       </Card>
     </div>
