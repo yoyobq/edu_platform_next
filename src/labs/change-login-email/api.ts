@@ -59,7 +59,10 @@ function normalizeResult(result: RequestChangeLoginEmailResponse): RequestChange
   };
 }
 
-export async function requestChangeLoginEmail(input: { newLoginEmail: string }) {
+export async function requestChangeLoginEmail(input: {
+  currentLoginPassword: string;
+  newLoginEmail: string;
+}) {
   try {
     const response = await requestGraphQL<
       {
@@ -67,6 +70,7 @@ export async function requestChangeLoginEmail(input: { newLoginEmail: string }) 
       },
       {
         input: {
+          currentLoginPassword: string;
           newLoginEmail: string;
         };
       }

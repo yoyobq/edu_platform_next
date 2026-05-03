@@ -330,13 +330,16 @@ type SuccessResponse = {
   success: boolean;
 };
 
-export async function requestChangeLoginEmailSelf(newLoginEmail: string) {
+export async function requestChangeLoginEmailSelf(input: {
+  currentLoginPassword: string;
+  newLoginEmail: string;
+}) {
   try {
     const response = await requestGraphQL<
       { requestChangeLoginEmail: SuccessResponse },
-      { input: { newLoginEmail: string } }
+      { input: { currentLoginPassword: string; newLoginEmail: string } }
     >(REQUEST_CHANGE_LOGIN_EMAIL_MUTATION, {
-      input: { newLoginEmail },
+      input,
     });
 
     const result = response.requestChangeLoginEmail;

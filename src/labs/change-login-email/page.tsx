@@ -6,6 +6,7 @@ import { adminRequestChangeLoginEmail, requestChangeLoginEmail } from './api';
 import { changeLoginEmailLabMeta } from './meta';
 
 type ChangeLoginEmailFormValues = {
+  currentLoginPassword?: string;
   newLoginEmail: string;
   targetAccountId?: string;
 };
@@ -119,7 +120,20 @@ export function ChangeLoginEmailLabPage() {
                     newLoginEmail,
                   });
                 } else {
+                  const currentLoginPassword = values.currentLoginPassword ?? '';
+
+                  if (!currentLoginPassword) {
+                    form.setFields([
+                      {
+                        name: 'currentLoginPassword',
+                        errors: ['请输入当前登录密码。'],
+                      },
+                    ]);
+                    return;
+                  }
+
                   response = await requestChangeLoginEmail({
+                    currentLoginPassword,
                     newLoginEmail,
                   });
                 }
@@ -181,6 +195,14 @@ export function ChangeLoginEmailLabPage() {
               ]}
             >
               <Input placeholder="请输入目标账号 ID" inputMode="numeric" />
+            </Form.Item>
+
+            <Form.Item
+              label="当前登录密码"
+              name="currentLoginPassword"
+              extra="仅在给自己发送验证邮件时必填。"
+            >
+              <Input.Password autoComplete="current-password" placeholder="请输入当前登录密码" />
             </Form.Item>
 
             <Form.Item style={{ marginBottom: 0 }}>

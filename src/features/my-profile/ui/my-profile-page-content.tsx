@@ -57,6 +57,11 @@ const STUDENT_STATUS_LABELS: Record<string, string> = {
   SUSPENDED: '休学',
 };
 
+type ChangeEmailFormValues = {
+  currentLoginPassword: string;
+  newLoginEmail: string;
+};
+
 function getAccessGroupTagColor(group: string) {
   switch (group) {
     case 'ADMIN':
@@ -701,19 +706,22 @@ function ChangeEmailCard({
   currentLoginEmail: string | null;
   disabled?: boolean;
 }) {
-  const [form] = Form.useForm<{ newLoginEmail: string }>();
+  const [form] = Form.useForm<ChangeEmailFormValues>();
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const handleSubmit = useCallback(
-    async (values: { newLoginEmail: string }) => {
+    async (values: ChangeEmailFormValues) => {
       setSubmitting(true);
       setSubmitError(null);
       setSuccess(null);
 
       try {
-        const result = await requestChangeLoginEmailSelf(values.newLoginEmail.trim());
+        const result = await requestChangeLoginEmailSelf({
+          currentLoginPassword: values.currentLoginPassword,
+          newLoginEmail: values.newLoginEmail.trim(),
+        });
 
         setSuccess(result.message || '验证邮件已发送，请前往新邮箱查收并完成验证。');
         form.resetFields();
@@ -765,7 +773,7 @@ function ChangeEmailCard({
         />
       ) : null}
 
-      <Form<{ newLoginEmail: string }>
+      <Form<ChangeEmailFormValues>
         form={form}
         disabled={disabled}
         layout="vertical"
@@ -781,6 +789,15 @@ function ChangeEmailCard({
           ]}
         >
           <Input placeholder="name@example.com" autoComplete="email" />
+        </Form.Item>
+
+        <Form.Item
+          label="当前登录密码"
+          name="currentLoginPassword"
+          extra="为确认是本人操作，发送验证邮件前需要再次输入当前登录密码。"
+          rules={[{ required: true, message: '请输入当前登录密码。' }]}
+        >
+          <Input.Password autoComplete="current-password" placeholder="请输入当前登录密码" />
         </Form.Item>
 
         <Form.Item style={{ marginBottom: 0 }}>

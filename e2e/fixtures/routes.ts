@@ -15,6 +15,7 @@ export const routes = {
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',
   login: '/login',
   magicLink: (verificationCode = 'magic-link-001') => `/magic-link/${verificationCode}`,
+  profile: '/profile',
   resetPassword: (verificationCode = 'reset-password-001') => `/reset-password/${verificationCode}`,
   resetPasswordWithTokenQuery: (verificationCode = 'reset-password-001') =>
     `/reset-password?token=${verificationCode}`,

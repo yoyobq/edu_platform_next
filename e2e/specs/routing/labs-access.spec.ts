@@ -784,6 +784,8 @@ test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({
 test('labs change login email 可发起 requestChangeLoginEmail 并展示前端验证路由模板', async ({
   page,
 }) => {
+  let requestInput: { currentLoginPassword?: string; newLoginEmail?: string } | null = null;
+
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -800,11 +802,15 @@ test('labs change login email 可发起 requestChangeLoginEmail 并展示前端�
     const payload = route.request().postDataJSON() as
       | {
           query?: string;
+          variables?: {
+            input?: { currentLoginPassword?: string; newLoginEmail?: string };
+          };
         }
       | undefined;
     const query = typeof payload?.query === 'string' ? payload.query : '';
 
     if (query.includes('mutation RequestChangeLoginEmail')) {
+      requestInput = payload?.variables?.input ?? null;
       await route.fulfill({
         body: JSON.stringify({
           data: {
@@ -826,11 +832,16 @@ test('labs change login email 可发起 requestChangeLoginEmail 并展示前端�
   await page.goto(routes.labsChangeLoginEmail);
 
   await page.getByLabel('新的登录邮箱').fill('new-login@example.com');
+  await page.getByLabel('当前登录密码').fill('current-password');
   await page.getByRole('button', { name: '给自己发送验证邮件' }).click();
 
   await expect(page.getByText('验证邮件已请求发送')).toBeVisible();
   await expect(page.locator('text=new-login@example.com').first()).toBeVisible();
   await expect(page.locator('text=/verify/email/\\{verificationCode\\}/').first()).toBeVisible();
+  expect(requestInput).toEqual({
+    currentLoginPassword: 'current-password',
+    newLoginEmail: 'new-login@example.com',
+  });
 });
 
 test('labs change login email 可通过 adminRequestChangeLoginEmail 为指定账号发起验证邮件', async ({
