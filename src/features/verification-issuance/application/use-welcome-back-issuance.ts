@@ -33,7 +33,7 @@ export function useWelcomeBackIssuance(input: {
     accessGroups: WELCOME_BACK_ACCESS_GROUPS,
     loadErrorFallback: '暂时无法加载已有用户列表。',
   });
-  const { selectedRecords, setSelectedAccountIds } = accountPicker;
+  const { clearSelection, selectAccountIdsById, selectedRecords } = accountPicker;
   const [isSending, setIsSending] = useState(false);
 
   const sendWelcomeBackEmails = useCallback(async () => {
@@ -65,7 +65,7 @@ export function useWelcomeBackIssuance(input: {
       }
 
       if (failures.length > 0) {
-        setSelectedAccountIds(failedAccountIds);
+        selectAccountIdsById(failedAccountIds);
         onFeedback({
           detail: failures.join('；'),
           message: `已完成 ${selectedRecords.length - failures.length} 封，失败 ${failures.length} 封。`,
@@ -86,11 +86,11 @@ export function useWelcomeBackIssuance(input: {
         title: '回归改密邮件已发送',
         type: 'welcome-back',
       });
-      setSelectedAccountIds([]);
+      clearSelection();
     } finally {
       setIsSending(false);
     }
-  }, [onFeedback, selectedRecords, setSelectedAccountIds]);
+  }, [clearSelection, onFeedback, selectAccountIdsById, selectedRecords]);
 
   return {
     isSending,

@@ -365,6 +365,7 @@ function ChangeLoginEmailPanel({
     sendChangeLoginEmail,
     setQuery,
     submitError,
+    totalCount,
   } = changeLoginEmailIssuance;
 
   function handleCloseModal() {
@@ -398,7 +399,7 @@ function ChangeLoginEmailPanel({
         searchPlaceholder="搜索登陆邮箱、nickname、loginName 或账号 ID"
         selectedAccountIds={selectedAccountIds}
         selectionMode="single"
-        totalCount={changeLoginEmailIssuance.totalCount}
+        totalCount={totalCount}
         onPageChange={changePage}
         onQueryChange={setQuery}
         onSearch={searchUsers}

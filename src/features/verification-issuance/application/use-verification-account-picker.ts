@@ -85,9 +85,17 @@ export function useVerificationAccountPicker(input: {
     setSelectedAccountIds(nextSelectedRowKeys.map((key) => Number(key)));
   }, []);
 
+  const selectAccountIdsById = useCallback((nextSelectedAccountIds: readonly number[]) => {
+    setSelectedAccountIds(nextSelectedAccountIds);
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedAccountIds([]);
+  }, []);
+
   const changePage = useCallback(
     (nextPage: number, nextPageSize: number) => {
-      setSelectedAccountIds([]);
+      clearSelection();
 
       if (nextPageSize !== pageSize) {
         setPageSize(nextPageSize);
@@ -97,11 +105,12 @@ export function useVerificationAccountPicker(input: {
 
       setPage(nextPage);
     },
-    [pageSize],
+    [clearSelection, pageSize],
   );
 
   return {
     changePage,
+    clearSelection,
     currentList,
     currentPage,
     errorMessage,
@@ -110,10 +119,10 @@ export function useVerificationAccountPicker(input: {
     query,
     searchUsers,
     selectAccountIds,
+    selectAccountIdsById,
     selectedAccountIds,
     selectedRecords,
     setQuery,
-    setSelectedAccountIds,
     totalCount,
   };
 }

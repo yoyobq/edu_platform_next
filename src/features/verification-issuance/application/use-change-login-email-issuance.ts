@@ -31,7 +31,7 @@ export function useChangeLoginEmailIssuance(input: {
     initialPageSize: 10,
     loadErrorFallback: '暂时无法加载用户列表。',
   });
-  const { selectedRecords, setSelectedAccountIds } = accountPicker;
+  const { clearSelection, selectedRecords } = accountPicker;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function useChangeLoginEmailIssuance(input: {
           title: '登录邮箱变更验证已发送',
           type: 'change-login-email',
         });
-        setSelectedAccountIds([]);
+        clearSelection();
         setIsModalOpen(false);
         return true;
       } catch (error) {
@@ -86,7 +86,7 @@ export function useChangeLoginEmailIssuance(input: {
         setIsSending(false);
       }
     },
-    [onFeedback, selectedRecord, setSelectedAccountIds],
+    [clearSelection, onFeedback, selectedRecord],
   );
 
   return {
