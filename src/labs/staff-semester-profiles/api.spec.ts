@@ -10,7 +10,11 @@ vi.mock('@/shared/graphql', () => ({
   isGraphQLIngressError: isGraphQLIngressErrorMock,
 }));
 
-import { requestStaffSemesterProfiles } from './api';
+import {
+  requestStaffSemesterProfileOptionRecords,
+  requestStaffSemesterProfiles,
+  updateStaffSemesterProfile,
+} from './api';
 
 describe('staff-semester-profiles api', () => {
   beforeEach(() => {
@@ -108,5 +112,125 @@ describe('staff-semester-profiles api', () => {
       teachingGroupId: undefined,
       workloadDepartmentId: undefined,
     });
+  });
+
+  it('loads option records across staff semester profile pages', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      staffSemesterProfiles: {
+        current: 1,
+        list: [
+          {
+            remarks: null,
+            semesterId: 202601,
+            staffId: 'STAFF-001',
+            staffName: '张老师',
+            teacherEngagementType: 'FULL_TIME_TEACHER',
+            teachingGroupId: 'TG-01',
+            teachingGroupName: '软件工程教研组',
+            updatedAt: '2026-05-02T00:00:00.000Z',
+            workloadDepartmentId: 'D-01',
+            workloadDepartmentName: '计算机系',
+          },
+        ],
+        pageSize: 100,
+        total: 2,
+      },
+    });
+    executeGraphQLMock.mockResolvedValueOnce({
+      staffSemesterProfiles: {
+        current: 2,
+        list: [
+          {
+            remarks: null,
+            semesterId: 202601,
+            staffId: 'STAFF-002',
+            staffName: '李老师',
+            teacherEngagementType: 'ADMINISTRATIVE_TEACHING',
+            teachingGroupId: 'TG-02',
+            teachingGroupName: '人工智能教研组',
+            updatedAt: '2026-05-03T00:00:00.000Z',
+            workloadDepartmentId: 'D-02',
+            workloadDepartmentName: '人工智能系',
+          },
+        ],
+        pageSize: 100,
+        total: 2,
+      },
+    });
+
+    await expect(requestStaffSemesterProfileOptionRecords({ semesterId: 202601 })).resolves.toEqual(
+      [
+        expect.objectContaining({
+          staffId: 'STAFF-001',
+        }),
+        expect.objectContaining({
+          staffId: 'STAFF-002',
+        }),
+      ],
+    );
+
+    expect(executeGraphQLMock).toHaveBeenNthCalledWith(1, expect.any(String), {
+      keyword: undefined,
+      limit: 100,
+      page: 1,
+      semesterId: 202601,
+      sortBy: 'staffId',
+      sortOrder: 'ASC',
+      staffId: undefined,
+      teacherEngagementType: undefined,
+      teachingGroupId: undefined,
+      workloadDepartmentId: undefined,
+    });
+    expect(executeGraphQLMock).toHaveBeenNthCalledWith(2, expect.any(String), {
+      keyword: undefined,
+      limit: 100,
+      page: 2,
+      semesterId: 202601,
+      sortBy: 'staffId',
+      sortOrder: 'ASC',
+      staffId: undefined,
+      teacherEngagementType: undefined,
+      teachingGroupId: undefined,
+      workloadDepartmentId: undefined,
+    });
+  });
+
+  it('updates changed staff semester profile fields and preserves null clearing', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      updateStaffSemesterProfile: {
+        createdAt: '2026-05-01T00:00:00.000Z',
+        remarks: null,
+        semesterId: 202601,
+        staffId: 'STAFF-001',
+        staffName: '张老师',
+        teacherEngagementType: 'ADMINISTRATIVE_TEACHING',
+        teachingGroupId: null,
+        teachingGroupName: null,
+        updatedAt: '2026-05-02T00:00:00.000Z',
+        workloadDepartmentId: 'D-02',
+        workloadDepartmentName: '人工智能系',
+      },
+    });
+
+    await updateStaffSemesterProfile({
+      semesterId: 202601,
+      staffId: ' STAFF-001 ',
+      teacherEngagementType: 'ADMINISTRATIVE_TEACHING',
+      teachingGroupId: null,
+      workloadDepartmentId: ' D-02 ',
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('updateStaffSemesterProfile'),
+      {
+        input: {
+          semesterId: 202601,
+          staffId: 'STAFF-001',
+          teacherEngagementType: 'ADMINISTRATIVE_TEACHING',
+          teachingGroupId: null,
+          workloadDepartmentId: 'D-02',
+        },
+      },
+    );
   });
 });

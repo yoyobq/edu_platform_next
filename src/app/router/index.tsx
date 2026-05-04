@@ -655,7 +655,18 @@ async function staffSemesterProfilesLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Forbidden', { status: 403 });
   }
 
-  return null;
+  const accessGroup = snapshot.userInfo.accessGroup;
+  const slotGroup = snapshot.slotGroup;
+
+  return {
+    defaultDepartmentId:
+      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
+    viewerRole: accessGroup.includes('ADMIN')
+      ? 'admin'
+      : slotGroup.includes('ACADEMIC_OFFICER')
+        ? 'academicOfficer'
+        : 'teachingGroupLeader',
+  };
 }
 
 async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {

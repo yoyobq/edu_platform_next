@@ -45,8 +45,26 @@ export type RequestStaffSemesterProfilesInput = {
   workloadDepartmentId?: string;
 };
 
+export type RequestStaffSemesterProfileOptionRecordsInput = {
+  semesterId: number;
+};
+
+export type UpdateStaffSemesterProfileInput = {
+  semesterId: number;
+  staffId: string;
+  teacherEngagementType?: AcademicTeacherEngagementType;
+  teachingGroupId?: string | null;
+  workloadDepartmentId?: string | null;
+};
+
 type StaffSemesterProfilesResponse = {
   staffSemesterProfiles: StaffSemesterProfileListResponse;
+};
+
+type UpdateStaffSemesterProfileResponse = {
+  updateStaffSemesterProfile: StaffSemesterProfile & {
+    createdAt: string;
+  };
 };
 
 const STAFF_SEMESTER_PROFILES_QUERY = `
@@ -93,10 +111,36 @@ const STAFF_SEMESTER_PROFILES_QUERY = `
   }
 `;
 
+const UPDATE_STAFF_SEMESTER_PROFILE_MUTATION = `
+  mutation UpdateStaffSemesterProfile($input: UpdateStaffSemesterProfileInput!) {
+    updateStaffSemesterProfile(input: $input) {
+      staffId
+      semesterId
+      staffName
+      teacherEngagementType
+      teachingGroupId
+      teachingGroupName
+      workloadDepartmentId
+      workloadDepartmentName
+      remarks
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
   return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizeNullableStringInput(value: string | null | undefined) {
+  if (value === null) {
+    return null;
+  }
+
+  return normalizeStringFilter(value);
 }
 
 function normalizePositiveInteger(value: number | undefined, fallback: number, max?: number) {
@@ -104,6 +148,22 @@ function normalizePositiveInteger(value: number | undefined, fallback: number, m
   const positiveValue = normalizedValue > 0 ? normalizedValue : fallback;
 
   return max ? Math.min(positiveValue, max) : positiveValue;
+}
+
+function normalizeUpdateInput(input: UpdateStaffSemesterProfileInput) {
+  return {
+    semesterId: input.semesterId,
+    staffId: input.staffId.trim(),
+    teacherEngagementType: input.teacherEngagementType,
+    teachingGroupId:
+      input.teachingGroupId === undefined
+        ? undefined
+        : normalizeNullableStringInput(input.teachingGroupId),
+    workloadDepartmentId:
+      input.workloadDepartmentId === undefined
+        ? undefined
+        : normalizeNullableStringInput(input.workloadDepartmentId),
+  };
 }
 
 function normalizeRequestInput(input: RequestStaffSemesterProfilesInput) {
@@ -146,5 +206,49 @@ export async function requestStaffSemesterProfiles(input: RequestStaffSemesterPr
     return response.staffSemesterProfiles;
   } catch (error) {
     throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法加载教师学期归属。'));
+  }
+}
+
+export async function requestStaffSemesterProfileOptionRecords(
+  input: RequestStaffSemesterProfileOptionRecordsInput,
+) {
+  const records: StaffSemesterProfile[] = [];
+  let page = 1;
+  let total = Number.POSITIVE_INFINITY;
+
+  while (records.length < total) {
+    const response = await requestStaffSemesterProfiles({
+      limit: 100,
+      page,
+      semesterId: input.semesterId,
+      sortBy: 'staffId',
+      sortOrder: 'ASC',
+    });
+
+    records.push(...response.list);
+    total = response.total;
+
+    if (response.list.length === 0) {
+      break;
+    }
+
+    page += 1;
+  }
+
+  return records;
+}
+
+export async function updateStaffSemesterProfile(input: UpdateStaffSemesterProfileInput) {
+  try {
+    const response = await executeGraphQL<
+      UpdateStaffSemesterProfileResponse,
+      {
+        input: ReturnType<typeof normalizeUpdateInput>;
+      }
+    >(UPDATE_STAFF_SEMESTER_PROFILE_MUTATION, { input: normalizeUpdateInput(input) });
+
+    return response.updateStaffSemesterProfile;
+  } catch (error) {
+    throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法修改教师学期归属。'));
   }
 }
