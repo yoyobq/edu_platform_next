@@ -95,7 +95,6 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
-const STAFF_LOCKED_UPSTREAM_LOGIN_HELP = '当前非管理员教职工只能使用本人 staffId 登录校园网。';
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
   department: 'department-curriculum-plan',
@@ -2131,7 +2130,6 @@ export function UpstreamSessionDemoLabPage() {
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
         lockedUserId={lockedUpstreamLoginUserId}
-        lockedUserIdHelp={lockedUpstreamLoginUserId ? STAFF_LOCKED_UPSTREAM_LOGIN_HELP : undefined}
         okText="登录并继续"
         open={isLoginModalOpen}
         title={`${getPendingActionLabel(pendingAction)}前登录 upstream`}

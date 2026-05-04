@@ -1,4 +1,4 @@
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   AutoComplete,
@@ -60,11 +60,9 @@ function formatDateTime(value: string | null) {
 
 function StaffInvitePanel({
   lockedUpstreamLoginUserId,
-  lockedUpstreamLoginUserIdHelp,
   onFeedback,
 }: {
   lockedUpstreamLoginUserId?: string | null;
-  lockedUpstreamLoginUserIdHelp?: ReactNode;
   onFeedback: (feedback: VerificationIssuanceFeedback) => void;
 }) {
   const [form] = Form.useForm<StaffInviteFormValues>();
@@ -298,10 +296,8 @@ function StaffInvitePanel({
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
         lockedUserId={lockedUpstreamLoginUserId}
-        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         okText="登录并拉取教师字典"
         open={isLoginOpen}
-        title="登录校园网"
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => setIsLoginOpen(false)}
         onFinish={submitUpstreamLogin}
@@ -486,10 +482,8 @@ function ChangeLoginEmailPanel({
 
 export function VerificationIssuancePageContent({
   lockedUpstreamLoginUserId = null,
-  lockedUpstreamLoginUserIdHelp,
 }: {
   lockedUpstreamLoginUserId?: string | null;
-  lockedUpstreamLoginUserIdHelp?: ReactNode;
 }) {
   const [activeTab, setActiveTab] = useState('staff');
   const [feedback, setFeedback] = useState<VerificationIssuanceFeedback>(null);
@@ -538,7 +532,6 @@ export function VerificationIssuancePageContent({
         {activeTab === 'staff' ? (
           <StaffInvitePanel
             lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
-            lockedUpstreamLoginUserIdHelp={lockedUpstreamLoginUserIdHelp}
             onFeedback={setFeedback}
           />
         ) : activeTab === 'welcome-back' ? (

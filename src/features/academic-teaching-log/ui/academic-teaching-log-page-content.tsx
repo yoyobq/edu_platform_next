@@ -1,7 +1,6 @@
 import {
   type CSSProperties,
   memo,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -130,7 +129,6 @@ export type AcademicTeachingLogPageLoaderData = {
 type AcademicTeachingLogPageContentProps = {
   defaultStaffId?: string | null;
   lockedUpstreamLoginUserId?: string | null;
-  lockedUpstreamLoginUserIdHelp?: ReactNode;
   upstreamAccount?: {
     accountId: number;
     displayName: string;
@@ -1491,7 +1489,6 @@ JournalDraftCard.displayName = 'JournalDraftCard';
 export function AcademicTeachingLogPageContent({
   defaultStaffId = null,
   lockedUpstreamLoginUserId = null,
-  lockedUpstreamLoginUserIdHelp,
   upstreamAccount = null,
   viewerRole = 'authenticated',
 }: AcademicTeachingLogPageContentProps = {}) {
@@ -2872,9 +2869,7 @@ export function AcademicTeachingLogPageContent({
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
         lockedUserId={lockedUpstreamLoginUserId}
-        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         open={isLoginModalOpen}
-        title="登录校园网"
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);

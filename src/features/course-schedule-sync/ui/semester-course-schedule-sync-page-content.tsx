@@ -1,4 +1,4 @@
-import { type ReactNode, useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
   Button,
@@ -66,7 +66,6 @@ type SemesterCourseScheduleSyncPageContentProps = {
   currentAccount: SemesterCourseScheduleSyncCurrentAccount | null;
   isAuthenticating: boolean;
   lockedUpstreamLoginUserId?: string | null;
-  lockedUpstreamLoginUserIdHelp?: ReactNode;
 };
 
 const REVIEW_STATUS_OPTIONS: Array<{
@@ -153,7 +152,6 @@ export function SemesterCourseScheduleSyncPageContent({
   currentAccount,
   isAuthenticating,
   lockedUpstreamLoginUserId = null,
-  lockedUpstreamLoginUserIdHelp,
 }: SemesterCourseScheduleSyncPageContentProps) {
   const [syncForm] = Form.useForm<SyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
@@ -738,9 +736,7 @@ export function SemesterCourseScheduleSyncPageContent({
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
         lockedUserId={lockedUpstreamLoginUserId}
-        lockedUserIdHelp={lockedUpstreamLoginUserIdHelp}
         open={isLoginModalOpen}
-        title="登录校园网"
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);

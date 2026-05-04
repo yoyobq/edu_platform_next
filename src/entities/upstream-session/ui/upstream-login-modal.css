@@ -1,0 +1,12 @@
+.upstream-login-modal-compact-radius .ant-modal-content,
+.upstream-login-modal-compact-radius .ant-input,
+.upstream-login-modal-compact-radius .ant-input-affix-wrapper,
+.upstream-login-modal-compact-radius .ant-btn,
+.upstream-login-modal-compact-radius .ant-checkbox-inner {
+  border-radius: 4px;
+  border-radius: var(--upstream-login-modal-border-radius);
+}
+
+.upstream-login-modal-compact-radius .ant-modal-content {
+  overflow: hidden;
+}

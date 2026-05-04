@@ -4,8 +4,6 @@ import { useAuthSessionState } from '@/features/auth';
 import { Error403 } from '@/features/error-feedback';
 import { VerificationIssuancePageContent } from '@/features/verification-issuance';
 
-const STAFF_LOCKED_UPSTREAM_LOGIN_HELP = '当前非管理员教职工只能使用本人 staffId 登录校园网。';
-
 export function VerificationIssuancePage() {
   const authSession = useAuthSessionState();
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
@@ -18,12 +16,5 @@ export function VerificationIssuancePage() {
     return <Error403 />;
   }
 
-  return (
-    <VerificationIssuancePageContent
-      lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
-      lockedUpstreamLoginUserIdHelp={
-        lockedUpstreamLoginUserId ? STAFF_LOCKED_UPSTREAM_LOGIN_HELP : undefined
-      }
-    />
-  );
+  return <VerificationIssuancePageContent lockedUpstreamLoginUserId={lockedUpstreamLoginUserId} />;
 }
