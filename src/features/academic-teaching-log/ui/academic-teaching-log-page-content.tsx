@@ -14,7 +14,6 @@ import {
   SearchOutlined,
   SwapOutlined,
   UserOutlined,
-  UserSwitchOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -1544,7 +1543,6 @@ export function AcademicTeachingLogPageContent({
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(true);
   const [isLoadingStaffDirectory, setIsLoadingStaffDirectory] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isRestoringDefaultStaffId, setIsRestoringDefaultStaffId] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
@@ -1908,63 +1906,6 @@ export function AcademicTeachingLogPageContent({
     ],
   );
 
-  const restoreDefaultStaffId = useCallback(async () => {
-    if (!isAdminViewer) {
-      return;
-    }
-
-    if (isRestoringDefaultStaffId) {
-      return;
-    }
-
-    const profileStaffId = liveDefaultStaffId ?? '';
-    const session = storedSessionRef.current;
-
-    if (!session) {
-      setStaffId(profileStaffId);
-      return;
-    }
-
-    setIsRestoringDefaultStaffId(true);
-    setStaffDirectoryError(null);
-
-    try {
-      const identity = await readVerifiedStaffIdentity({
-        sessionToken: session.upstreamSessionToken,
-      });
-      setUpstreamIdentity(identity);
-      persistSessionFromVerifiedIdentity(session, identity);
-
-      const upstreamStaffId = normalizeOptionalString(identity.personId);
-
-      if (upstreamStaffId) {
-        setStaffId(upstreamStaffId);
-        return;
-      }
-
-      setStaffId(profileStaffId);
-    } catch (error) {
-      if (isExpiredUpstreamSessionError(error)) {
-        clearCurrentSession();
-        setStaffId(profileStaffId);
-        setUpstreamIdentityWarning('教务系统连接已失效，已恢复为当前登录账号资料中的教师 ID。');
-        return;
-      }
-
-      setStaffDirectoryError(
-        resolveUpstreamErrorMessage(error, '暂时无法读取校园网登录用户身份。'),
-      );
-    } finally {
-      setIsRestoringDefaultStaffId(false);
-    }
-  }, [
-    clearCurrentSession,
-    isAdminViewer,
-    isRestoringDefaultStaffId,
-    liveDefaultStaffId,
-    persistSessionFromVerifiedIdentity,
-  ]);
-
   useEffect(() => {
     if (!isAdminViewer) {
       setStaffDirectoryResult(null);
@@ -1980,7 +1921,6 @@ export function AcademicTeachingLogPageContent({
   const normalizedStaffId = normalizeOptionalString(staffId);
   const hasMissingStaffFilter = !normalizedStaffId;
   const isLocalAccountReady = Boolean(liveUpstreamAccount);
-  const canRestoreDefaultStaffId = Boolean(storedSession || liveDefaultStaffId);
   const upstreamIdentityLabel = upstreamIdentity
     ? upstreamIdentity.personName || '未命名'
     : storedSession
@@ -2148,7 +2088,10 @@ export function AcademicTeachingLogPageContent({
       : null;
   const cardFillAvailabilityIssue =
     fillAvailabilityIssue ?? sessionStaffMismatchAcknowledgementIssue;
-  const hasControlAlerts = Boolean(semesterError || staffDirectoryError || hasMissingStaffFilter);
+  const hasControlAlerts = Boolean(semesterError || staffDirectoryError);
+  const missingStaffFilterMessage = isStaffViewer
+    ? '当前账号没有可用的教师 ID，无法查询教学日志对账。'
+    : '请选择或输入教师后再查询对账。';
 
   const updateJournalDraft = useCallback((key: string, patch: JournalDraftPatch) => {
     setJournalDrafts((current) => ({
@@ -2547,7 +2490,7 @@ export function AcademicTeachingLogPageContent({
 
           <div className="lecture-journal-filter-bar">
             <div className="lecture-journal-filter-item">
-              <span className="lecture-journal-filter-label">学期:</span>
+              <span className="lecture-journal-filter-label">学期</span>
               {isLoadingSemesters ? (
                 <span className="lecture-journal-filter-skeleton">
                   <Skeleton.Button active size="small" />
@@ -2574,39 +2517,28 @@ export function AcademicTeachingLogPageContent({
             <span className="lecture-journal-filter-separator" aria-hidden />
 
             <div className="lecture-journal-filter-item">
-              <span className="lecture-journal-filter-label">教师:</span>
+              <span className="lecture-journal-filter-label">教师</span>
               {isAdminViewer ? (
-                <div className="lecture-journal-filter-teacher-control">
-                  <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
-                    <AutoComplete
-                      variant="borderless"
-                      notFoundContent={isLoadingStaffDirectory ? '读取中' : undefined}
-                      options={teacherOptions}
-                      popupClassName="lecture-journal-teacher-autocomplete-popup"
-                      popupMatchSelectWidth={220}
-                      placeholder={liveDefaultStaffId || '输入 ID 或姓名'}
-                      value={staffId}
-                      onChange={setStaffId}
-                      filterOption={(inputValue, option) =>
-                        String(option?.label || '')
-                          .toLowerCase()
-                          .includes(inputValue.trim().toLowerCase()) ||
-                        String(option?.value || '')
-                          .toLowerCase()
-                          .includes(inputValue.trim().toLowerCase())
-                      }
-                    />
-                  </span>
-                  <Button
-                    disabled={!canRestoreDefaultStaffId || isRestoringDefaultStaffId}
-                    icon={<UserSwitchOutlined />}
-                    loading={isRestoringDefaultStaffId}
-                    size="small"
-                    type="text"
-                    title="恢复默认教师"
-                    onClick={() => void restoreDefaultStaffId()}
+                <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
+                  <AutoComplete
+                    variant="borderless"
+                    notFoundContent={isLoadingStaffDirectory ? '读取中' : undefined}
+                    options={teacherOptions}
+                    popupClassName="lecture-journal-teacher-autocomplete-popup"
+                    popupMatchSelectWidth={220}
+                    placeholder={liveDefaultStaffId || 'ID 或姓名'}
+                    value={staffId}
+                    onChange={setStaffId}
+                    filterOption={(inputValue, option) =>
+                      String(option?.label || '')
+                        .toLowerCase()
+                        .includes(inputValue.trim().toLowerCase()) ||
+                      String(option?.value || '')
+                        .toLowerCase()
+                        .includes(inputValue.trim().toLowerCase())
+                    }
                   />
-                </div>
+                </span>
               ) : (
                 <span
                   className="lecture-journal-filter-value lecture-journal-filter-value-truncated"
@@ -2630,10 +2562,15 @@ export function AcademicTeachingLogPageContent({
                 loading={isLoadingReconciliation}
                 onClick={() => void runQueryAction()}
               >
-                查阅
+                比对查询
               </Button>
             </span>
           </div>
+          {hasMissingStaffFilter ? (
+            <div className="lecture-journal-filter-alert">
+              <Alert message={missingStaffFilterMessage} showIcon type="warning" />
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -2642,17 +2579,6 @@ export function AcademicTeachingLogPageContent({
           {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
           {staffDirectoryError ? (
             <Alert message={staffDirectoryError} showIcon type="warning" />
-          ) : null}
-          {hasMissingStaffFilter ? (
-            <Alert
-              message={
-                isStaffViewer
-                  ? '当前账号没有可用的教师 ID，无法查询教学日志对账。'
-                  : '请选择或输入教师后再查询对账。'
-              }
-              showIcon
-              type="warning"
-            />
           ) : null}
         </div>
       ) : null}
@@ -2841,10 +2767,19 @@ export function AcademicTeachingLogPageContent({
       {!isLoadingReconciliation && !reconciliationResult && selectedSemester ? (
         <section className="lecture-journal-prequery-state">
           <div className="lecture-journal-prequery-state-copy">
-            <Typography.Text strong>等待查询</Typography.Text>
-            <Typography.Text type="secondary">
-              查询后会按课次展示已填写、待补填和需要人工核对的教学日志。
-            </Typography.Text>
+            <span className="lecture-journal-prequery-state-icon">
+              <SearchOutlined />
+            </span>
+            <div className="lecture-journal-prequery-state-text">
+              <span className="lecture-journal-prequery-state-title">
+                <Typography.Text strong>等待查询</Typography.Text>
+              </span>
+              <span className="lecture-journal-prequery-state-description">
+                <Typography.Text type="secondary">
+                  查询后会按课次展示已填写、待补填和需要人工核对的教学日志。
+                </Typography.Text>
+              </span>
+            </div>
           </div>
           <div className="lecture-journal-prequery-state-steps" aria-label="查询结果内容">
             <span>

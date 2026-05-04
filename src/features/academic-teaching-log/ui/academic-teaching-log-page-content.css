@@ -152,17 +152,6 @@
   min-width: 220px;
 }
 
-.lecture-journal-filter-teacher-control {
-  align-items: center;
-  display: flex;
-  gap: 4px;
-}
-
-.lecture-journal-filter-teacher-control .ant-btn {
-  color: var(--ant-color-text-secondary);
-  margin-inline-end: -6px;
-}
-
 .lecture-journal-filter-skeleton {
   display: inline-block;
   width: 120px;
@@ -201,54 +190,82 @@
   gap: 12px;
 }
 
+.lecture-journal-filter-alert {
+  align-self: flex-end;
+  max-width: 360px;
+}
+
+.lecture-journal-filter-alert .ant-alert {
+  padding: 6px 10px;
+}
+
+.lecture-journal-filter-alert .ant-alert-message {
+  font-size: 13px;
+  line-height: 20px;
+}
+
 .lecture-journal-prequery-state {
   align-items: center;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--ant-color-primary) 4%, var(--ant-color-bg-container)) 0%,
-    var(--ant-color-bg-container) 48%,
-    color-mix(in srgb, var(--ant-color-warning) 5%, var(--ant-color-bg-container)) 100%
+  background: color-mix(
+    in srgb,
+    var(--ant-color-bg-container) 88%,
+    var(--ant-color-fill-quaternary)
   );
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 10px;
   box-shadow:
     0 1px 2px color-mix(in srgb, black 3%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, white 60%, transparent);
+    inset 0 1px 0 color-mix(in srgb, white 54%, transparent);
   display: flex;
-  gap: 20px;
+  gap: 24px;
   justify-content: space-between;
   overflow: hidden;
-  padding: 18px 20px;
+  padding: 16px 18px;
   position: relative;
 }
 
-.lecture-journal-prequery-state::before {
-  background: linear-gradient(
-    180deg,
-    var(--ant-color-primary) 0%,
-    var(--ant-color-warning) 58%,
-    var(--ant-color-error) 100%
-  );
-  border-radius: 999px;
-  content: '';
-  inset-block: 18px;
-  inset-inline-start: 0;
-  position: absolute;
-  width: 3px;
-}
-
 .lecture-journal-prequery-state-copy {
+  align-items: center;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  flex: 1 1 auto;
+  gap: 12px;
   min-width: 0;
 }
 
+.lecture-journal-prequery-state-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.lecture-journal-prequery-state-title {
+  line-height: 22px;
+}
+
+.lecture-journal-prequery-state-description {
+  line-height: 20px;
+}
+
+.lecture-journal-prequery-state-icon {
+  align-items: center;
+  background: color-mix(in srgb, var(--ant-color-primary) 9%, var(--ant-color-bg-container));
+  border: 1px solid color-mix(in srgb, var(--ant-color-primary) 16%, var(--ant-color-border));
+  border-radius: 8px;
+  color: var(--ant-color-primary);
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+
 .lecture-journal-prequery-state-steps {
+  align-items: center;
   display: flex;
   flex: 0 0 auto;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   justify-content: flex-end;
 }
 
@@ -262,9 +279,9 @@
   display: inline-flex;
   font-size: 12px;
   font-weight: 500;
-  gap: 6px;
-  line-height: 22px;
-  padding: 3px 10px 3px 8px;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 11px 0 9px;
 }
 
 .lecture-journal-prequery-state-steps span:nth-child(2) {
@@ -279,8 +296,8 @@
   background: var(--ant-color-primary);
   border-radius: 999px;
   display: inline-block;
-  height: 7px;
-  width: 7px;
+  height: 6px;
+  width: 6px;
 }
 
 .lecture-journal-prequery-state-steps span:nth-child(2) i {
@@ -1451,6 +1468,11 @@
     padding: 4px 8px;
   }
 
+  .lecture-journal-filter-alert {
+    align-self: stretch;
+    max-width: none;
+  }
+
   .lecture-journal-filter-control-semester,
   .lecture-journal-filter-control-teacher {
     min-width: 160px;
@@ -1460,6 +1482,11 @@
   .lecture-journal-prequery-state {
     align-items: stretch;
     flex-direction: column;
+    gap: 14px;
+  }
+
+  .lecture-journal-prequery-state-copy {
+    align-items: flex-start;
   }
 
   .lecture-journal-prequery-state-steps {
