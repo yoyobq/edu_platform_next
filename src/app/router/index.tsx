@@ -58,6 +58,7 @@ import {
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
+  hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
@@ -75,6 +76,10 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import {
+  loadStaffSemesterProfilesLabRouteModule,
+  staffSemesterProfilesLabAccess,
+} from '@/labs/staff-semester-profiles';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -611,6 +616,48 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function staffSemesterProfilesLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(staffSemesterProfilesLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(staffSemesterProfilesLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasLabAccess(staffSemesterProfilesLabAccess) ||
+    !hasStaffSemesterProfilesAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
 
@@ -903,6 +950,11 @@ const router = createBrowserRouter([
             path: 'academic-workload',
             loader: academicWorkloadLabLoader,
             lazy: loadAcademicWorkloadLabRouteModule,
+          },
+          {
+            path: 'staff-semester-profiles',
+            loader: staffSemesterProfilesLabLoader,
+            lazy: loadStaffSemesterProfilesLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

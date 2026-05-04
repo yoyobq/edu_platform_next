@@ -12,6 +12,7 @@ export const routes = {
   labsInviteIssuer: '/labs/invite-issuer',
   labsPayloadCrypto: '/labs/payload-crypto',
   labsSemesterCalendar: '/labs/semester-calendar',
+  labsStaffSemesterProfiles: '/labs/staff-semester-profiles',
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',
   login: '/login',
   magicLink: (verificationCode = 'magic-link-001') => `/magic-link/${verificationCode}`,

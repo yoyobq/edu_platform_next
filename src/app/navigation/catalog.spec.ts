@@ -61,6 +61,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/staff-semester-profiles',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -94,6 +95,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/staff-semester-profiles',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -124,6 +126,24 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+    ]);
+  });
+
+  it('shows staff semester profiles to teaching group leaders', () => {
+    const staffItems = getNavigationItems(
+      buildFilter({
+        accountId: 1003,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    );
+
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/upstream-session-demo',
+      '/labs/academic-timetable',
+      '/labs/academic-workload',
+      '/labs/staff-semester-profiles',
     ]);
   });
 
@@ -158,6 +178,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/staff-semester-profiles',
     ]);
   });
 
@@ -197,6 +218,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
+      '/labs/staff-semester-profiles',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',
