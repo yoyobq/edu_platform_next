@@ -141,6 +141,15 @@
 .workbench-weekly-timetable-custom-cell {
   min-height: 44px;
   padding: 6px;
+  transition:
+    background-color 0.15s ease,
+    outline-color 0.15s ease;
+}
+
+.workbench-weekly-timetable-custom-cell-drop-enabled {
+  background: color-mix(in srgb, var(--ant-color-primary-bg) 42%, var(--ant-color-bg-container));
+  outline: 1px dashed var(--ant-color-primary-border);
+  outline-offset: -4px;
 }
 
 .workbench-weekly-timetable-custom-cell-content {
@@ -166,6 +175,7 @@
   background: color-mix(in srgb, var(--ant-color-primary-bg) 72%, transparent);
   border: 1px solid color-mix(in srgb, var(--ant-color-primary-border) 48%, transparent);
   color: var(--ant-color-text);
+  cursor: grab;
   display: flex;
   font-size: 12px;
   font-weight: 600;
@@ -175,6 +185,10 @@
   min-width: 0;
   padding: 5px 7px;
   width: 100%;
+}
+
+.workbench-weekly-timetable-custom-item:active {
+  cursor: grabbing;
 }
 
 .workbench-weekly-timetable-custom-item span {

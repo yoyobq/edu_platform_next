@@ -32,6 +32,7 @@ import {
 } from '@/shared/home-modules';
 import { requestOpenEntrySidecar } from '@/shared/workbench-events';
 
+import { WorkbenchCustomItemDragProvider } from './workbench-custom-item-dnd';
 import {
   resolveNicknameWorkbenchGreeting,
   resolveWorkbenchTimeGreeting,
@@ -394,33 +395,35 @@ function WorkbenchWeeklyTimetable({
   }
 
   return (
-    <div className="home-workbench-timetable-content">
-      <WorkbenchWeeklyTimetableGrid
-        currentWeekIndex={currentWeekIndex}
-        emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
-        isWeekNavigationLoading={isLoading}
-        items={items}
-        maxWeekIndex={maxWeekIndex}
-        selectedWeekIndex={selectedWeekIndex}
-        showCurrentTimeIndicator
-        onWeekChange={(weekIndex) => void changeWeek(weekIndex)}
-      />
-      <div className="home-workbench-secondary-row">
-        <section
-          className="home-workbench-secondary-panel"
-          aria-labelledby="home-workbench-other-representatives-title"
-        >
-          <h2 id="home-workbench-other-representatives-title">其他待办</h2>
-          <WorkbenchOtherTodos key={accountId ?? 'anonymous'} accountId={accountId} />
-        </section>
-        <section
-          className="home-workbench-secondary-panel"
-          aria-labelledby="home-workbench-quick-entry-title"
-        >
-          <h2 id="home-workbench-quick-entry-title">快捷入口</h2>
-        </section>
+    <WorkbenchCustomItemDragProvider>
+      <div className="home-workbench-timetable-content">
+        <WorkbenchWeeklyTimetableGrid
+          currentWeekIndex={currentWeekIndex}
+          emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
+          isWeekNavigationLoading={isLoading}
+          items={items}
+          maxWeekIndex={maxWeekIndex}
+          selectedWeekIndex={selectedWeekIndex}
+          showCurrentTimeIndicator
+          onWeekChange={(weekIndex) => void changeWeek(weekIndex)}
+        />
+        <div className="home-workbench-secondary-row">
+          <section
+            className="home-workbench-secondary-panel"
+            aria-labelledby="home-workbench-other-representatives-title"
+          >
+            <h2 id="home-workbench-other-representatives-title">其他待办</h2>
+            <WorkbenchOtherTodos key={accountId ?? 'anonymous'} accountId={accountId} />
+          </section>
+          <section
+            className="home-workbench-secondary-panel"
+            aria-labelledby="home-workbench-quick-entry-title"
+          >
+            <h2 id="home-workbench-quick-entry-title">快捷入口</h2>
+          </section>
+        </div>
       </div>
-    </div>
+    </WorkbenchCustomItemDragProvider>
   );
 }
 

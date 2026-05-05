@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 
+import { useWorkbenchCustomItemDrag } from './workbench-custom-item-dnd-context';
 import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
 import { DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR } from './workbench-custom-item-options';
 import {
@@ -26,6 +27,8 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
     DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
   );
   const [todoTitle, setTodoTitle] = useState('');
+  const { activePayload, clearDrag, startDrag } = useWorkbenchCustomItemDrag();
+  const canDropTimetableItem = activePayload?.source === 'timetable';
 
   function updateItems(nextItems: WorkbenchLocalCustomItem[]) {
     setItems(nextItems);
@@ -65,9 +68,46 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
     updateItems(items.filter((item) => item.id !== itemId));
   }
 
+  function moveDraggedItemToTodos() {
+    if (!activePayload || activePayload.source !== 'timetable') {
+      return;
+    }
+
+    updateItems([
+      ...items,
+      {
+        backgroundColor: activePayload.item.backgroundColor,
+        id: createWorkbenchLocalCustomItemId(),
+        title: activePayload.item.title,
+      },
+    ]);
+    activePayload.removeSource();
+    clearDrag();
+  }
+
   return (
     <>
-      <div className="home-workbench-todo-items">
+      <div
+        className={`home-workbench-todo-items ${
+          canDropTimetableItem ? 'home-workbench-todo-items-drop-enabled' : ''
+        }`}
+        onDragOver={(event) => {
+          if (!canDropTimetableItem) {
+            return;
+          }
+
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'move';
+        }}
+        onDrop={(event) => {
+          if (!canDropTimetableItem) {
+            return;
+          }
+
+          event.preventDefault();
+          moveDraggedItemToTodos();
+        }}
+      >
         <button
           aria-label="添加其他待办"
           className="home-workbench-todo-add"
@@ -79,6 +119,7 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
         </button>
         {items.map((item) => (
           <div
+            draggable
             className="home-workbench-todo-item"
             key={item.id}
             style={
@@ -89,6 +130,16 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
                   }
                 : undefined
             }
+            onDragEnd={clearDrag}
+            onDragStart={(event) => {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', item.title);
+              startDrag({
+                item,
+                removeSource: () => removeTodo(item.id),
+                source: 'todo',
+              });
+            }}
           >
             <span>{item.title}</span>
             <button

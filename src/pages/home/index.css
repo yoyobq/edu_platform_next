@@ -150,6 +150,15 @@
   gap: 8px;
   margin-block-start: 14px;
   min-width: 0;
+  transition:
+    background-color 0.15s ease,
+    outline-color 0.15s ease;
+}
+
+.home-workbench-todo-items-drop-enabled {
+  background: color-mix(in srgb, var(--ant-color-primary-bg) 38%, transparent);
+  outline: 1px dashed var(--ant-color-primary-border);
+  outline-offset: 6px;
 }
 
 .home-workbench-todo-add,
@@ -198,6 +207,7 @@
   background: var(--ant-color-primary-bg);
   border: 1px solid var(--ant-color-primary-border);
   color: var(--ant-color-text);
+  cursor: grab;
   display: inline-flex;
   font-size: 12px;
   font-weight: 600;
@@ -206,6 +216,10 @@
   max-width: 100%;
   min-width: 0;
   padding: 5px 7px;
+}
+
+.home-workbench-todo-item:active {
+  cursor: grabbing;
 }
 
 .home-workbench-todo-item span {

@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type DragEvent,
   type ReactNode,
   useCallback,
   useEffect,
@@ -18,6 +19,7 @@ import {
   resolveTimetablePeriodCount,
 } from '@/features/academic-timetable';
 
+import { useWorkbenchCustomItemDrag } from './workbench-custom-item-dnd-context';
 import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
 import {
   DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
@@ -421,6 +423,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
     DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
   );
   const [customItemTitle, setCustomItemTitle] = useState('');
+  const { activePayload, clearDrag, startDrag } = useWorkbenchCustomItemDrag();
   const slotPlacements = useMemo(
     () => buildTimetableSlotPlacements(props.items, props.getTieBreaker),
     [props.getTieBreaker, props.items],
@@ -753,6 +756,59 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
     updateCustomItems(customItems.filter((item) => item.id !== itemId));
   }
 
+  function moveDraggedCustomItemToCell(day: VisibleTimetableDay, row: TimetableDisplayRow) {
+    if (!activePayload) {
+      return;
+    }
+
+    if (
+      activePayload.source === 'timetable' &&
+      activePayload.sourceCell?.dayOfWeek === day.dayOfWeek &&
+      activePayload.sourceCell.rowKey === row.key
+    ) {
+      clearDrag();
+      return;
+    }
+
+    if (activePayload.source === 'timetable') {
+      updateCustomItems(
+        customItems.map((item) =>
+          item.id === activePayload.item.id
+            ? {
+                ...item,
+                dayOfWeek: day.dayOfWeek,
+                rowKey: row.key,
+              }
+            : item,
+        ),
+      );
+      clearDrag();
+      return;
+    }
+
+    updateCustomItems([
+      ...customItems,
+      {
+        backgroundColor: activePayload.item.backgroundColor,
+        dayOfWeek: day.dayOfWeek,
+        id: createCustomItemId(),
+        rowKey: row.key,
+        title: activePayload.item.title,
+      },
+    ]);
+    activePayload.removeSource();
+    clearDrag();
+  }
+
+  function handleCustomCellDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!activePayload) {
+      return;
+    }
+
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+  }
+
   return (
     <div className="flex flex-col gap-4">
       {displayWeekIndex || hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
@@ -898,6 +954,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
               const isBreakRow = row.kind === 'break';
               const isOccupied = isCellOccupied(day.dayOfWeek, row);
               const cellCustomItems = resolveCellCustomItems(day.dayOfWeek, row.key);
+              const canDropCustomItem = Boolean(activePayload && !isOccupied);
 
               return (
                 <div
@@ -906,11 +963,22 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                     isWeekendColumn ? 'workbench-weekly-timetable-weekend-cell' : ''
                   } ${isBreakRow ? 'workbench-weekly-timetable-break-cell' : ''} ${
                     !isOccupied ? 'workbench-weekly-timetable-custom-cell' : ''
+                  } ${
+                    canDropCustomItem ? 'workbench-weekly-timetable-custom-cell-drop-enabled' : ''
                   }`}
                   style={{
                     gridColumn: dayIndex + 2,
                     gridRow: rowIndex + 2,
                   }}
+                  onDragOver={canDropCustomItem ? handleCustomCellDragOver : undefined}
+                  onDrop={
+                    canDropCustomItem
+                      ? (event) => {
+                          event.preventDefault();
+                          moveDraggedCustomItemToCell(day, row);
+                        }
+                      : undefined
+                  }
                 >
                   {!isOccupied ? (
                     <div className="workbench-weekly-timetable-custom-cell-content">
@@ -918,6 +986,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                         <div className="workbench-weekly-timetable-custom-items">
                           {cellCustomItems.map((item) => (
                             <div
+                              draggable
                               className="workbench-weekly-timetable-custom-item"
                               key={item.id}
                               style={
@@ -928,6 +997,20 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                                     }
                                   : undefined
                               }
+                              onDragEnd={clearDrag}
+                              onDragStart={(event) => {
+                                event.dataTransfer.effectAllowed = 'move';
+                                event.dataTransfer.setData('text/plain', item.title);
+                                startDrag({
+                                  item,
+                                  removeSource: () => removeCustomItem(item.id),
+                                  source: 'timetable',
+                                  sourceCell: {
+                                    dayOfWeek: item.dayOfWeek,
+                                    rowKey: item.rowKey,
+                                  },
+                                });
+                              }}
                             >
                               <span>{item.title}</span>
                               <button
