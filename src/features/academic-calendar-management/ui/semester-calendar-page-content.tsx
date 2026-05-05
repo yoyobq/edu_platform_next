@@ -12,6 +12,7 @@ import {
   FlagOutlined,
   ReadOutlined,
   ReloadOutlined,
+  ScheduleOutlined,
   SwapOutlined,
   TrophyOutlined,
 } from '@ant-design/icons';
@@ -28,6 +29,8 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
+
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
   formatDateTime,
@@ -473,16 +476,11 @@ export function SemesterCalendarPageContent({
 
   return (
     <div className="flex flex-col gap-4">
-      <section className="rounded-card bg-bg-container p-4 shadow-card">
-        <div className="flex flex-col gap-1">
-          <Typography.Title level={3} style={{ marginBottom: 0 }}>
-            学期校历
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            按周排布的校历视图，点击含事件的日期查看详情
-          </Typography.Text>
-        </div>
-      </section>
+      <DecoratedPageHeader
+        description="按周排布的校历视图，点击含事件的日期查看详情"
+        icon={<ScheduleOutlined />}
+        title="学期校历"
+      />
 
       <Card title={renderSemesterCardToolbar()}>
         {semesterError ? (
