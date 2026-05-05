@@ -1,17 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Input,
-  Select,
-  Spin,
-  Table,
-  Tag,
-  Typography,
-} from 'antd';
+import { SyncOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Descriptions, Form, Input, Select, Spin } from 'antd';
 
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -22,10 +11,10 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+
 import {
   type CourseScheduleSyncDepartmentOption,
-  type CourseScheduleSyncFailure,
-  type CourseScheduleSyncItem,
   type CourseScheduleSyncResult,
   type CourseScheduleSyncSemesterOption,
   type DepartmentCurriculumPlanReviewStatus,
@@ -79,6 +68,22 @@ const REVIEW_STATUS_OPTIONS: Array<{
   { label: '审核不通过', value: 'REJECTED' },
 ];
 
+const DEFAULT_DEPARTMENT_ID = 'ORG0302';
+
+function ensureDefaultDepartmentOption(options: DepartmentOption[]) {
+  if (options.some((option) => option.id === DEFAULT_DEPARTMENT_ID)) {
+    return options;
+  }
+
+  return [
+    {
+      id: DEFAULT_DEPARTMENT_ID,
+      label: DEFAULT_DEPARTMENT_ID,
+    },
+    ...options,
+  ];
+}
+
 function sortSemesterOptions(options: SemesterOption[]) {
   return [...options].sort((left, right) => {
     if (left.isCurrent !== right.isCurrent) {
@@ -130,22 +135,6 @@ function formatDateTime(value: string | null) {
     minute: '2-digit',
     second: '2-digit',
   });
-}
-
-function formatFailureDetails(value: unknown) {
-  if (value === null || value === undefined) {
-    return '未返回 details';
-  }
-
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
 }
 
 export function SemesterCourseScheduleSyncPageContent({
@@ -339,15 +328,22 @@ export function SemesterCourseScheduleSyncPageContent({
                 })),
               )
             : [];
-        const nextDepartmentOptions =
+        const fetchedDepartmentOptions =
           departmentResult.status === 'fulfilled'
             ? departmentResult.value
-                .filter((department: CourseScheduleSyncDepartmentOption) => department.id !== '')
+                .filter(
+                  (department: CourseScheduleSyncDepartmentOption) =>
+                    department.id !== '' && department.isEnabled,
+                )
                 .map((department: CourseScheduleSyncDepartmentOption) => ({
                   id: department.id,
                   label: `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`,
                 }))
             : [];
+        const nextDepartmentOptions =
+          departmentResult.status === 'fulfilled'
+            ? ensureDefaultDepartmentOption(fetchedDepartmentOptions)
+            : fetchedDepartmentOptions;
         const nextSemesterOptionsError =
           semesterResult.status === 'rejected'
             ? semesterResult.reason instanceof Error
@@ -368,10 +364,13 @@ export function SemesterCourseScheduleSyncPageContent({
 
         const currentValues = syncForm.getFieldsValue();
         const preferredSemester = nextSemesterOptions[0];
-        const preferredDepartment = nextDepartmentOptions[0];
+        const preferredDepartment =
+          nextDepartmentOptions.find((option) => option.id === DEFAULT_DEPARTMENT_ID) ??
+          nextDepartmentOptions[0];
 
         syncForm.setFieldsValue({
-          departmentId: currentValues.departmentId || preferredDepartment?.id,
+          departmentId:
+            currentValues.departmentId || preferredDepartment?.id || DEFAULT_DEPARTMENT_ID,
           reviewStatus: currentValues.reviewStatus,
           schoolYear: currentValues.schoolYear || preferredSemester?.schoolYear,
           semester: currentValues.semester || preferredSemester?.semester,
@@ -421,53 +420,6 @@ export function SemesterCourseScheduleSyncPageContent({
     [currentAccount, loginForm, loginUpstream, pendingSyncValues, performSync],
   );
 
-  const syncItemsColumns = [
-    {
-      dataIndex: 'action',
-      key: 'action',
-      title: '动作',
-      render: (value: string) => <Tag color={value === 'created' ? 'green' : 'blue'}>{value}</Tag>,
-    },
-    {
-      dataIndex: 'scheduleId',
-      key: 'scheduleId',
-      title: '课程表 ID',
-    },
-    {
-      dataIndex: 'sstsCourseId',
-      key: 'sstsCourseId',
-      title: '上游课程 ID',
-    },
-    {
-      dataIndex: 'sstsTeachingClassId',
-      key: 'sstsTeachingClassId',
-      title: '上游教学班 ID',
-    },
-  ];
-
-  const syncFailuresColumns = [
-    {
-      dataIndex: 'code',
-      key: 'code',
-      title: '错误码',
-    },
-    {
-      dataIndex: 'message',
-      key: 'message',
-      title: '说明',
-    },
-    {
-      dataIndex: 'sstsCourseId',
-      key: 'sstsCourseId',
-      title: '上游课程 ID',
-    },
-    {
-      dataIndex: 'sstsTeachingClassId',
-      key: 'sstsTeachingClassId',
-      title: '上游教学班 ID',
-    },
-  ];
-
   if (isAuthenticating) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
@@ -488,39 +440,25 @@ export function SemesterCourseScheduleSyncPageContent({
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-      <Card>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              学期课表同步
-            </Typography.Title>
-            <Typography.Paragraph style={{ margin: 0 }} type="secondary">
-              通过当前账号绑定的 upstream
-              会话，按学年、学期和院系拉取教学计划并同步课程表。每次同步成功后，前端会覆盖本地旧
-              token；若接口部分成功，失败明细会单独展示。
-            </Typography.Paragraph>
-          </div>
+      <DecoratedPageHeader
+        description="按学年、学期和院系拉取教学计划并同步课程表到后台"
+        icon={<SyncOutlined />}
+        title="学期课表同步"
+      />
 
-          <Alert
-            showIcon
-            type="info"
-            message="当前链路"
-            description="先通过 loginUpstreamSession 建立 upstream 会话，再用返回的 upstreamSessionToken 触发同步。每次同步成功后，前端都要覆盖本地旧 token。该接口可能部分成功，failedCount 大于 0 不代表整次请求失败。"
-          />
-
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="当前账号">
-              {currentAccount?.displayName || '未恢复'}
-            </Descriptions.Item>
-            <Descriptions.Item label="能力归属">教务管理</Descriptions.Item>
-            <Descriptions.Item label="upstream token 过期时间">
-              {formatDateTime(storedSession?.expiresAt ?? null)}
-            </Descriptions.Item>
-            <Descriptions.Item label="upstream 登录名">
-              {storedSession?.upstreamLoginId || '未保存'}
-            </Descriptions.Item>
-          </Descriptions>
-        </div>
+      <Card title="当前状态">
+        <Descriptions bordered size="small" column={2}>
+          <Descriptions.Item label="当前账号">
+            {currentAccount?.displayName || '未恢复'}
+          </Descriptions.Item>
+          <Descriptions.Item label="能力归属">教务管理</Descriptions.Item>
+          <Descriptions.Item label="upstream token 过期时间">
+            {formatDateTime(storedSession?.expiresAt ?? null)}
+          </Descriptions.Item>
+          <Descriptions.Item label="upstream 登录名">
+            {storedSession?.upstreamLoginId || '未保存'}
+          </Descriptions.Item>
+        </Descriptions>
       </Card>
 
       <Card title="同步参数">
@@ -654,67 +592,12 @@ export function SemesterCourseScheduleSyncPageContent({
               </Descriptions.Item>
               <Descriptions.Item label="部分成功语义" span={2}>
                 {result.failedCount > 0
-                  ? '本次请求存在失败明细，但 GraphQL 请求整体成功。'
-                  : '本次请求未返回失败明细。'}
+                  ? '本次请求存在失败计数，但 GraphQL 请求整体成功。'
+                  : '本次请求未返回失败计数。'}
               </Descriptions.Item>
             </Descriptions>
 
             <div className="flex flex-col gap-3">
-              <Typography.Title level={5} style={{ margin: 0 }}>
-                成功明细 items
-              </Typography.Title>
-              <Table<CourseScheduleSyncItem>
-                columns={syncItemsColumns}
-                dataSource={result.items}
-                pagination={false}
-                rowKey={(record) => `${record.scheduleId}-${record.sstsTeachingClassId || 'none'}`}
-                size="small"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <Typography.Title level={5} style={{ margin: 0 }}>
-                失败明细 failures
-              </Typography.Title>
-              <Table<CourseScheduleSyncFailure>
-                columns={syncFailuresColumns}
-                dataSource={result.failures}
-                locale={{ emptyText: '当前没有失败明细' }}
-                pagination={false}
-                expandable={{
-                  expandedRowRender: (record) => (
-                    <div className="flex flex-col gap-3 py-1">
-                      <Descriptions bordered size="small" column={2}>
-                        <Descriptions.Item label="错误码">{record.code}</Descriptions.Item>
-                        <Descriptions.Item label="说明">{record.message}</Descriptions.Item>
-                        <Descriptions.Item label="上游课程 ID">
-                          {record.sstsCourseId || '未返回'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="上游教学班 ID">
-                          {record.sstsTeachingClassId || '未返回'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="details" span={2}>
-                          <pre className="overflow-x-auto rounded-xl border border-line-default bg-bg-layout p-4 text-sm leading-6 text-text">
-                            {formatFailureDetails(record.details)}
-                          </pre>
-                        </Descriptions.Item>
-                      </Descriptions>
-                    </div>
-                  ),
-                  rowExpandable: (record) =>
-                    record.details !== null && record.details !== undefined,
-                }}
-                rowKey={(record) =>
-                  `${record.code}-${record.sstsTeachingClassId || 'none'}-${record.sstsCourseId || 'none'}`
-                }
-                size="small"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <Typography.Title level={5} style={{ margin: 0 }}>
-                原始响应
-              </Typography.Title>
               <pre className="overflow-x-auto rounded-xl border border-line-default bg-bg-layout p-4 text-sm leading-6 text-text">
                 {JSON.stringify(result, null, 2)}
               </pre>
@@ -725,7 +608,7 @@ export function SemesterCourseScheduleSyncPageContent({
             showIcon
             type="warning"
             message="还没有同步结果"
-            description="填写参数并触发同步后，这里会展示同步摘要、成功明细、失败明细和原始响应。"
+            description="填写参数并触发同步后，这里会展示同步摘要和原始响应。"
           />
         )}
       </Card>

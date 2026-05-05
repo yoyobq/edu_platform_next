@@ -148,7 +148,7 @@ describe('navigation catalog', () => {
     ]);
   });
 
-  it('shows the academic calendar page to academic officers via slotGroup-aware filtering', () => {
+  it('shows academic calendar but keeps course schedule sync admin-only for academic officers', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1002,
@@ -167,7 +167,6 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
-      '/academic-affairs/semester-course-schedule-sync',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -182,6 +181,15 @@ describe('navigation catalog', () => {
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',
     ]);
+    expect(
+      canAccessNavigationPath('/academic-affairs/semester-course-schedule-sync', {
+        accountId: 1002,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+        appEnv: 'dev',
+      }),
+    ).toBe(false);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {

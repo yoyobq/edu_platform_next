@@ -28,8 +28,12 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+        ]
+      : []),
+    ...(filter.accessGroup.includes('ADMIN')
+      ? [
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'SyncOutlined',
             key: '/academic-affairs/semester-course-schedule-sync',
             label: '学期课表同步',

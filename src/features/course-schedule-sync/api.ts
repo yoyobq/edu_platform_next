@@ -99,8 +99,8 @@ const SYNC_COURSE_SCHEDULES_MUTATION = `
 `;
 
 const DEPARTMENTS_QUERY = `
-  query CourseScheduleSyncDepartments($isEnabled: Boolean, $limit: Int) {
-    departments(isEnabled: $isEnabled, limit: $limit) {
+  query CourseScheduleSyncDepartments($limit: Int) {
+    departments(limit: $limit) {
       departmentName
       id
       isEnabled
@@ -136,10 +136,9 @@ export async function fetchCourseScheduleSyncDepartmentOptions() {
     const response = await requestGraphQL<
       DepartmentOptionsResponse,
       {
-        isEnabled: boolean;
         limit: number;
       }
-    >(DEPARTMENTS_QUERY, { isEnabled: true, limit: 500 });
+    >(DEPARTMENTS_QUERY, { limit: 500 });
 
     return response.departments;
   } catch (error) {

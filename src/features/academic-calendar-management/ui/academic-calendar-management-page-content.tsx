@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { CalendarOutlined } from '@ant-design/icons';
 import {
   Alert,
   Badge,
@@ -18,6 +19,8 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
   buildAcademicCalendarEventQueryInput,
@@ -518,25 +521,11 @@ export function AcademicCalendarManagementPageContent({
     <div className="flex flex-col gap-6">
       {messageContextHolder}
 
-      <Card>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3">
-            <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              学期与校历事件管理
-            </Typography.Title>
-            <Typography.Paragraph style={{ marginBottom: 0 }}>
-              本页用于维护学期与校历事件。上方管理学期，下方按当前选中学期维护对应校历事件。
-            </Typography.Paragraph>
-          </div>
-
-          <Alert
-            description="先在上方选择学期，再在下方查看、筛选与编辑该学期下的校历事件。"
-            showIcon
-            title="使用说明"
-            type="info"
-          />
-        </div>
-      </Card>
+      <DecoratedPageHeader
+        description="本页用于维护学期与校历事件。上方管理学期，下方按当前选中学期维护对应校历事件。"
+        icon={<CalendarOutlined />}
+        title="学期与校历事件管理"
+      />
 
       <Card
         extra={
