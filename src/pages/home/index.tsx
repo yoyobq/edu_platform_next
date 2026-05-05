@@ -1,7 +1,8 @@
 // src/pages/home/index.tsx
 
 import { useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
+import { SwapOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Flex, Skeleton, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
@@ -22,6 +23,7 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
+import { HexAvatar } from '@/shared/hex-avatar';
 import {
   type HomeModuleAction,
   type HomeModuleSummaryTone,
@@ -30,7 +32,13 @@ import {
 } from '@/shared/home-modules';
 import { requestOpenEntrySidecar } from '@/shared/workbench-events';
 
+import {
+  resolveNicknameWorkbenchGreeting,
+  resolveWorkbenchTimeGreeting,
+} from './workbench-greeting';
 import { WorkbenchWeeklyTimetableGrid } from './workbench-weekly-timetable-grid';
+
+import './index.css';
 
 function formatUpdatedAt(value: string | null | undefined) {
   if (!value) {
@@ -60,6 +68,8 @@ function toTagColor(tone: HomeModuleSummaryTone | undefined) {
       return 'default';
   }
 }
+
+type WorkbenchNameMode = 'nickname' | 'staffName';
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -394,11 +404,53 @@ export function HomePage() {
   const navigate = useNavigate();
   const authSession = useAuthSessionState();
   const { isPending, module: statusOverviewModule, retry } = useApiHealthStatusHomeModule();
+  const [nameMode, setNameMode] = useState<WorkbenchNameMode>('staffName');
+  const identity = authSession.snapshot?.identity;
   const staffId = useMemo(() => {
-    const identity = authSession.snapshot?.identity;
-
     return identity?.kind === 'STAFF' ? identity.id : null;
-  }, [authSession.snapshot?.identity]);
+  }, [identity]);
+  const staffName = useMemo(() => {
+    return identity?.kind === 'STAFF' ? identity.name : null;
+  }, [identity]);
+  const nickname = authSession.snapshot?.userInfo.nickname?.trim() || null;
+  const fallbackDisplayName = authSession.snapshot?.displayName?.trim() || '欢迎回来';
+  const normalizedStaffName = staffName?.trim() || null;
+  const normalizedNickname =
+    nickname && nickname !== normalizedStaffName ? nickname : authSession.snapshot?.displayName;
+  const switchableNickname =
+    normalizedNickname?.trim() && normalizedNickname.trim() !== normalizedStaffName
+      ? normalizedNickname.trim()
+      : null;
+  const displayedWorkbenchName =
+    normalizedStaffName && nameMode === 'staffName'
+      ? normalizedStaffName
+      : switchableNickname || normalizedStaffName || fallbackDisplayName;
+  const shouldShowNameSwitch = Boolean(normalizedStaffName && switchableNickname);
+  const timeGreeting = resolveWorkbenchTimeGreeting();
+  const nicknameGreeting = resolveNicknameWorkbenchGreeting();
+  const profileTags = authSession.snapshot?.userInfo.tags ?? [];
+  const profileTagsTooltip =
+    profileTags.length > 0 ? (
+      <div className="home-workbench-profile-tag-tooltip">
+        {profileTags.map((tag) => (
+          <Tag key={tag}>{tag}</Tag>
+        ))}
+      </div>
+    ) : undefined;
+  const nameSwitchButton = shouldShowNameSwitch ? (
+    <span className="home-workbench-name-switch">
+      <Button
+        aria-label={nameMode === 'staffName' ? '切换为昵称显示' : '切换为教师姓名显示'}
+        icon={<SwapOutlined />}
+        size="small"
+        title={nameMode === 'staffName' ? '切换为昵称' : '切换为教师姓名'}
+        type="text"
+        onClick={() =>
+          setNameMode((current) => (current === 'staffName' ? 'nickname' : 'staffName'))
+        }
+      />
+    </span>
+  ) : null;
   const viewModel = buildHomePageViewModel({
     session: {
       accessGroup: authSession.snapshot?.userInfo.accessGroup,
@@ -433,22 +485,63 @@ export function HomePage() {
   return (
     <Flex vertical gap={24}>
       <Card>
-        <Flex vertical gap={12}>
-          <Flex align="center" gap={12} wrap>
-            <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              我的工作台
-            </Typography.Title>
-            {viewModel.contentKind === 'admin-modules' ? (
-              <Tag color="blue">登录后默认入口</Tag>
+        <div className="home-workbench-hero">
+          <div className="home-workbench-hero-main">
+            <div className="home-workbench-heading">
+              <div className="home-workbench-title-row">
+                <h1 className="home-workbench-eyebrow">我的工作台</h1>
+                {viewModel.contentKind === 'admin-modules' && viewModel.templateLabel ? (
+                  <span className="home-workbench-template-label">
+                    <Tag variant="filled">{viewModel.templateLabel}</Tag>
+                  </span>
+                ) : null}
+              </div>
+              <Typography.Title level={3} style={{ marginBottom: 0 }}>
+                {normalizedStaffName ? (
+                  nameMode === 'staffName' ? (
+                    <>
+                      尊敬的{' '}
+                      <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>{' '}
+                      老师，
+                      {timeGreeting.formalMessage ?? `${timeGreeting.label}好，您辛苦了`}
+                      {nameSwitchButton}
+                    </>
+                  ) : (
+                    <>
+                      <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>
+                      ，{nicknameGreeting}
+                      {nameSwitchButton}
+                    </>
+                  )
+                ) : (
+                  <>
+                    {displayedWorkbenchName}，{timeGreeting.label}好，您辛苦了
+                  </>
+                )}
+              </Typography.Title>
+            </div>
+            {viewModel.templateDescription ? (
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
+                {viewModel.templateDescription}
+              </Typography.Paragraph>
             ) : null}
-            {viewModel.templateLabel ? <Tag color="purple">{viewModel.templateLabel}</Tag> : null}
-          </Flex>
-          {viewModel.templateDescription ? (
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
-              {viewModel.templateDescription}
-            </Typography.Paragraph>
-          ) : null}
-        </Flex>
+          </div>
+          <div className="home-workbench-profile">
+            <Tooltip placement="bottom" title={profileTagsTooltip}>
+              <span className="home-workbench-profile-avatar">
+                <HexAvatar
+                  accountId={authSession.snapshot?.accountId}
+                  avatarUrl={authSession.snapshot?.userInfo.avatarUrl}
+                  size={88}
+                  style={{
+                    border: '3px solid var(--ant-color-bg-container)',
+                    boxShadow: '0 0 0 1px var(--ant-color-border-secondary), var(--shadow-card)',
+                  }}
+                />
+              </span>
+            </Tooltip>
+          </div>
+        </div>
       </Card>
 
       {viewModel.contentKind === 'weekly-timetable' ? (

@@ -47,6 +47,8 @@ function buildSessionSnapshot(overrides: Partial<AuthSessionSnapshot> = {}): Aut
       avatarUrl: null,
       email: 'staff@example.com',
       nickname: 'staff-user',
+      signature: null,
+      tags: [],
     },
     ...overrides,
   };

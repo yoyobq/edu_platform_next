@@ -55,6 +55,8 @@ type SessionQueryDTO = {
     avatarUrl: string | null;
     email: string | null;
     nickname: string | null;
+    signature: string | null;
+    tags: readonly string[] | null;
   };
 };
 
@@ -104,6 +106,8 @@ const ME_QUERY = `
         avatarUrl
         email
         nickname
+        signature
+        tags
       }
       identity {
         __typename

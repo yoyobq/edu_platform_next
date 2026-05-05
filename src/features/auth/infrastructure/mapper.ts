@@ -57,6 +57,8 @@ type AuthSessionResultDTO = {
     avatarUrl: unknown;
     email: unknown;
     nickname: unknown;
+    signature: unknown;
+    tags: unknown;
   };
 };
 
@@ -106,6 +108,18 @@ function normalizeSlotGroup(value: unknown): readonly AuthSlotGroup[] {
   return value.filter(
     (item): item is AuthSlotGroup => typeof item === 'string' && item.trim().length > 0,
   );
+}
+
+function normalizeStringList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()),
+    ),
+  ).filter((item) => item.length > 0);
 }
 
 function decodeBase64Url(value: string) {
@@ -236,6 +250,8 @@ export function mapSessionResultToSessionSnapshot(
       avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
       email: normalizeOptionalString(session.userInfo.email),
       nickname: nickname ?? primaryAccessGroup.toLowerCase(),
+      signature: normalizeOptionalString(session.userInfo.signature),
+      tags: normalizeStringList(session.userInfo.tags),
     },
   };
 }
@@ -363,6 +379,8 @@ export function deserializeStoredSession(rawValue: string): AuthStoredSession | 
               ? (value.identity as AuthSessionIdentity)
               : null,
         }).toLowerCase(),
+      signature: normalizeOptionalString(value.userInfo.signature),
+      tags: normalizeStringList(value.userInfo.tags),
     },
   };
 }

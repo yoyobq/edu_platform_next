@@ -45,6 +45,8 @@ export type AuthSessionUserInfo = {
   avatarUrl: string | null;
   email: string | null;
   nickname: string;
+  signature: string | null;
+  tags: readonly string[];
 };
 
 export type AuthStatus = 'restoring' | 'hydrating' | 'authenticated' | 'unauthenticated';

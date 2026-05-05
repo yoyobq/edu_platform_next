@@ -48,6 +48,8 @@ export type AccountSwitchLabSession = {
     avatarUrl: string | null;
     email: string | null;
     nickname: string;
+    signature: string | null;
+    tags: readonly string[];
   };
 };
 
@@ -96,6 +98,8 @@ type SessionQueryDTO = {
     avatarUrl: unknown;
     email: unknown;
     nickname: unknown;
+    signature: unknown;
+    tags: unknown;
   };
 };
 
@@ -141,6 +145,8 @@ const ME_QUERY = `
         avatarUrl
         email
         nickname
+        signature
+        tags
       }
       identity {
         __typename
@@ -189,6 +195,18 @@ function normalizeSlotGroup(value: unknown): readonly string[] {
   }
 
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function normalizeStringList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()),
+    ),
+  ).filter((item) => item.length > 0);
 }
 
 function decodeBase64Url(value: string) {
@@ -337,6 +355,8 @@ function mapSession(tokens: SessionTokensDTO, session: SessionQueryDTO): Account
       avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
       email: normalizeOptionalString(session.userInfo.email),
       nickname: nickname ?? primaryAccessGroup.toLowerCase(),
+      signature: normalizeOptionalString(session.userInfo.signature),
+      tags: normalizeStringList(session.userInfo.tags),
     },
   };
 }
