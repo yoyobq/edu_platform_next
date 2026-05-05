@@ -1,9 +1,15 @@
 // src/pages/home/index.tsx
 
+import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router';
 
+import {
+  type AcademicTimetableItem,
+  requestAcademicWeeklyTimetableItems,
+  resolveCurrentTeachingWeekIndex,
+} from '@/features/academic-timetable';
 import {
   API_HEALTH_STATUS_HOME_RETRY_ACTION_ID,
   useApiHealthStatusHomeModule,
@@ -12,12 +18,19 @@ import { useAuthSessionState } from '@/features/auth';
 import { buildHomePageViewModel, OPEN_ENTRY_SIDECAR_ACTION_ID } from '@/features/workbench-home';
 
 import {
+  type AcademicSemesterRecord,
+  requestAcademicSemesters,
+} from '@/entities/academic-semester';
+
+import {
   type HomeModuleAction,
   type HomeModuleSummaryTone,
   isVisibleHomeModule,
   type VisibleHomeModuleContract,
 } from '@/shared/home-modules';
 import { requestOpenEntrySidecar } from '@/shared/workbench-events';
+
+import { WorkbenchWeeklyTimetableGrid } from './workbench-weekly-timetable-grid';
 
 function formatUpdatedAt(value: string | null | undefined) {
   if (!value) {
@@ -46,6 +59,30 @@ function toTagColor(tone: HomeModuleSummaryTone | undefined) {
     default:
       return 'default';
   }
+}
+
+function sortSemesters(records: AcademicSemesterRecord[]) {
+  return [...records].sort((left, right) => {
+    if (left.isCurrent !== right.isCurrent) {
+      return left.isCurrent ? -1 : 1;
+    }
+
+    if (left.schoolYear !== right.schoolYear) {
+      return right.schoolYear - left.schoolYear;
+    }
+
+    if (left.termNumber !== right.termNumber) {
+      return right.termNumber - left.termNumber;
+    }
+
+    return right.id - left.id;
+  });
+}
+
+function pickWorkbenchSemester(records: AcademicSemesterRecord[]) {
+  const sortedRecords = sortSemesters(records);
+
+  return sortedRecords.find((record) => record.isCurrent) ?? sortedRecords[0] ?? null;
 }
 
 function HomeModuleCard({
@@ -174,10 +211,91 @@ function HomeModuleCard({
   );
 }
 
+function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [items, setItems] = useState<AcademicTimetableItem[]>([]);
+
+  useEffect(() => {
+    if (!staffId) {
+      setErrorMessage(null);
+      setIsLoading(false);
+      setItems([]);
+      return;
+    }
+
+    let isActive = true;
+    const resolvedStaffId = staffId;
+
+    async function loadWeeklyTimetable() {
+      setErrorMessage(null);
+      setIsLoading(true);
+
+      try {
+        const semester = pickWorkbenchSemester(await requestAcademicSemesters({ limit: 500 }));
+
+        if (!semester) {
+          if (isActive) {
+            setItems([]);
+          }
+          return;
+        }
+
+        const weekIndex = resolveCurrentTeachingWeekIndex(semester) ?? 1;
+        const result = await requestAcademicWeeklyTimetableItems({
+          semesterId: semester.id,
+          staffId: resolvedStaffId,
+          weekIndex,
+        });
+
+        if (isActive) {
+          setItems(result);
+        }
+      } catch (error) {
+        if (isActive) {
+          setErrorMessage(error instanceof Error ? error.message : '暂时无法加载周课表。');
+          setItems([]);
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false);
+        }
+      }
+    }
+
+    void loadWeeklyTimetable();
+
+    return () => {
+      isActive = false;
+    };
+  }, [staffId]);
+
+  if (errorMessage) {
+    return <Alert showIcon title={errorMessage} type="error" />;
+  }
+
+  if (isLoading) {
+    return <Skeleton active paragraph={{ rows: 10 }} title={false} />;
+  }
+
+  return (
+    <WorkbenchWeeklyTimetableGrid
+      emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
+      items={items}
+      showCurrentTimeIndicator
+    />
+  );
+}
+
 export function HomePage() {
   const navigate = useNavigate();
   const authSession = useAuthSessionState();
   const { isPending, module: statusOverviewModule, retry } = useApiHealthStatusHomeModule();
+  const staffId = useMemo(() => {
+    const identity = authSession.snapshot?.identity;
+
+    return identity?.kind === 'STAFF' ? identity.id : null;
+  }, [authSession.snapshot?.identity]);
   const viewModel = buildHomePageViewModel({
     session: {
       accessGroup: authSession.snapshot?.userInfo.accessGroup,
@@ -187,6 +305,7 @@ export function HomePage() {
     statusOverviewModule,
   });
   const visibleModules = viewModel.modules.filter(isVisibleHomeModule);
+  const shouldShowModuleSkeleton = viewModel.contentKind === 'admin-modules' && isPending;
 
   const handleAction = (action: HomeModuleAction) => {
     if (action.disabled) {
@@ -214,18 +333,24 @@ export function HomePage() {
         <Flex vertical gap={12}>
           <Flex align="center" gap={12} wrap>
             <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              默认工作台
+              我的工作台
             </Typography.Title>
-            <Tag color="blue">登录后默认入口</Tag>
-            <Tag color="purple">{viewModel.templateLabel}</Tag>
+            {viewModel.contentKind === 'admin-modules' ? (
+              <Tag color="blue">登录后默认入口</Tag>
+            ) : null}
+            {viewModel.templateLabel ? <Tag color="purple">{viewModel.templateLabel}</Tag> : null}
           </Flex>
-          <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
-            {viewModel.templateDescription}
-          </Typography.Paragraph>
+          {viewModel.templateDescription ? (
+            <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
+              {viewModel.templateDescription}
+            </Typography.Paragraph>
+          ) : null}
         </Flex>
       </Card>
 
-      {isPending ? (
+      {viewModel.contentKind === 'weekly-timetable' ? (
+        <WorkbenchWeeklyTimetable staffId={staffId} />
+      ) : shouldShowModuleSkeleton ? (
         <div className="grid gap-4 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, index) => (
             <Card key={`home-module-skeleton-${index}`}>

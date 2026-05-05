@@ -12,15 +12,17 @@ test('accessGroup 含 ADMIN 但主身份不是 ADMIN 时，也应显示 admin �
   await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
 });
 
-test('无 ADMIN 权限时，不应显示 admin 导航', async ({ page }) => {
+test('无 ADMIN 权限时，应显示首页导航但不显示 admin 导航', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
   await openHomeAs(page, {
     primaryAccessGroup: 'STUDENT',
   });
 
-  await expect(page.getByText('成员默认模板')).toBeVisible();
-  await expect(page.getByRole('button', { name: '展开导航菜单' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: '收起导航菜单' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '系统管理' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 });
 
 test('guest 用户组可见 sidebar，并可进入首页与异常预览页', async ({ page }) => {
@@ -52,7 +54,7 @@ test('管理员可在 rail 与 full 间切换，并在刷新后恢复 pinned ful
   await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 
   await page.reload();
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 
   await page.getByRole('button', { name: '收起导航菜单' }).click();

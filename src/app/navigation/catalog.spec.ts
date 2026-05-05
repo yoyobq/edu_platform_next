@@ -112,6 +112,7 @@ describe('navigation catalog', () => {
     );
 
     expect(staffItems.map((item) => item.key)).toEqual([
+      '/',
       'calendar-schedule',
       'academic-assistant',
       'labs',
@@ -158,6 +159,7 @@ describe('navigation catalog', () => {
     );
 
     expect(staffItems.map((item) => item.key)).toEqual([
+      '/',
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
@@ -187,7 +189,13 @@ describe('navigation catalog', () => {
       primaryAccessGroup: 'GUEST',
       accessGroup: ['GUEST'],
     });
+    const studentFilter = buildFilter({
+      primaryAccessGroup: 'STUDENT',
+      accessGroup: ['STUDENT'],
+    });
 
+    expect(canAccessNavigationPath('/', guestFilter)).toBe(true);
+    expect(canAccessNavigationPath('/', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/errors/preview', guestFilter)).toBe(true);
     expect(canAccessNavigationPath('/admin/users', guestFilter)).toBe(false);
     expect(canAccessNavigationPath('/admin/verification-issuance', guestFilter)).toBe(false);
@@ -242,6 +250,6 @@ describe('navigation catalog', () => {
           accountId: 2001,
         }),
       ),
-    ).toBe('none');
+    ).toBe('rail');
   });
 });

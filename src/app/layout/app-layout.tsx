@@ -371,12 +371,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     navMode === 'full' ? (
       <div className="flex h-full w-full min-w-0 items-center justify-between gap-3 pb-2">
         <div className="flex min-w-0 items-center">
-          <BrandLockup
-            compact
-            logoSize={28}
-            logoSlotSize={NAV_RAIL_CONTROL_SIZE}
-            variant="header"
-          />
+          <BrandLockup logoSize={28} logoSlotSize={NAV_RAIL_CONTROL_SIZE} variant="header" />
         </div>
         {navToggleButton}
       </div>

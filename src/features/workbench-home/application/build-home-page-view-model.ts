@@ -9,8 +9,10 @@ type HomePageSessionContext = {
 };
 
 type WorkbenchTemplateKey = 'admin-default' | 'member-default' | 'minimal-default';
+type HomePageContentKind = 'admin-modules' | 'weekly-timetable';
 
 export type HomePageViewModel = {
+  contentKind: HomePageContentKind;
   templateDescription: string;
   templateKey: WorkbenchTemplateKey;
   templateLabel: string;
@@ -168,16 +170,22 @@ export function buildHomePageViewModel({
   statusOverviewModule,
 }: BuildHomePageViewModelInput): HomePageViewModel {
   const templateKey = resolveTemplateKey(session);
+  const contentKind: HomePageContentKind =
+    templateKey === 'admin-default' ? 'admin-modules' : 'weekly-timetable';
+  const hasAdminModules = contentKind === 'admin-modules';
   const templateMeta = getTemplateMeta(templateKey);
 
   return {
-    templateDescription: templateMeta.description,
+    contentKind,
+    templateDescription: hasAdminModules ? templateMeta.description : '',
     templateKey,
-    templateLabel: templateMeta.label,
-    modules: [
-      statusOverviewModule,
-      createPrimaryEntryModule(session, templateKey),
-      createRecentContextModule(session),
-    ],
+    templateLabel: hasAdminModules ? templateMeta.label : '',
+    modules: hasAdminModules
+      ? [
+          statusOverviewModule,
+          createPrimaryEntryModule(session, templateKey),
+          createRecentContextModule(session),
+        ]
+      : [],
   };
 }

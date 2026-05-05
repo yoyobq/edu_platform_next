@@ -1,37 +1,38 @@
-.academic-timetable-grid {
-  --academic-timetable-course-category-theory-color: #1d4ed8;
-  --academic-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
-  --academic-timetable-course-category-practice-color: #0f766e;
-  --academic-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
-  --academic-timetable-course-category-integrated-color: #b45309;
-  --academic-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
+.workbench-weekly-timetable-grid {
+  --workbench-weekly-timetable-course-category-theory-color: #1d4ed8;
+  --workbench-weekly-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
+  --workbench-weekly-timetable-course-category-practice-color: #0f766e;
+  --workbench-weekly-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
+  --workbench-weekly-timetable-course-category-integrated-color: #b45309;
+  --workbench-weekly-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
   background: var(--ant-color-bg-container);
   display: grid;
   position: relative;
 }
 
-.academic-timetable-shell {
+.workbench-weekly-timetable-shell {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--radius-block);
+  overflow-y: hidden;
 }
 
-.academic-timetable-weekend-controls {
+.workbench-weekly-timetable-weekend-controls {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.academic-timetable-header-cell,
-.academic-timetable-period-cell,
-.academic-timetable-base-cell {
+.workbench-weekly-timetable-header-cell,
+.workbench-weekly-timetable-period-cell,
+.workbench-weekly-timetable-base-cell {
   border-block-end: 1px solid var(--ant-color-border-secondary);
   border-inline-end: 1px solid var(--ant-color-border-secondary);
 }
 
-.academic-timetable-header-cell,
-.academic-timetable-period-cell {
+.workbench-weekly-timetable-header-cell,
+.workbench-weekly-timetable-period-cell {
   align-items: center;
   color: var(--ant-color-text-secondary);
   display: flex;
@@ -41,39 +42,60 @@
   justify-content: center;
 }
 
-.academic-timetable-header-cell {
+.workbench-weekly-timetable-header-cell {
   background: var(--ant-color-fill-quaternary);
 }
 
-.academic-timetable-period-cell {
+.workbench-weekly-timetable-period-cell {
   background: var(--ant-color-bg-container);
 }
 
-.academic-timetable-break-cell {
+.workbench-weekly-timetable-break-cell {
   background: var(--ant-color-fill-quaternary);
   color: var(--ant-color-text-tertiary);
   min-height: 44px;
 }
 
-.academic-timetable-header-corner {
+.workbench-weekly-timetable-header-corner {
   background: var(--ant-color-fill-quaternary);
 }
 
-.academic-timetable-header-date {
+.workbench-weekly-timetable-header-date {
   color: var(--ant-color-text-tertiary);
   font-weight: 500;
 }
 
-.academic-timetable-base-cell {
+.workbench-weekly-timetable-base-cell {
   background: var(--ant-color-bg-container);
 }
 
-.academic-timetable-custom-cell {
+.workbench-weekly-timetable-now-line {
+  border-block-start: 1px dotted color-mix(in srgb, var(--color-ai-accent) 72%, transparent);
+  height: 0;
+  pointer-events: none;
+  position: absolute;
+  transform: translateY(-0.5px);
+  z-index: 5;
+}
+
+.workbench-weekly-timetable-now-line::before {
+  background: var(--color-ai-accent);
+  border: 2px solid var(--ant-color-bg-container);
+  border-radius: 999px;
+  content: '';
+  height: 7px;
+  inset-block-start: -4px;
+  inset-inline-start: -3px;
+  position: absolute;
+  width: 7px;
+}
+
+.workbench-weekly-timetable-custom-cell {
   min-height: 44px;
   padding: 6px;
 }
 
-.academic-timetable-custom-cell-content {
+.workbench-weekly-timetable-custom-cell-content {
   align-items: flex-start;
   display: flex;
   flex-direction: column;
@@ -82,7 +104,7 @@
   position: relative;
 }
 
-.academic-timetable-custom-items {
+.workbench-weekly-timetable-custom-items {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -91,7 +113,7 @@
   width: calc(100% - 30px);
 }
 
-.academic-timetable-custom-item {
+.workbench-weekly-timetable-custom-item {
   align-items: center;
   background: color-mix(in srgb, var(--ant-color-primary-bg) 72%, transparent);
   border: 1px solid color-mix(in srgb, var(--ant-color-primary-border) 48%, transparent);
@@ -107,15 +129,15 @@
   width: 100%;
 }
 
-.academic-timetable-custom-item span {
+.workbench-weekly-timetable-custom-item span {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.academic-timetable-custom-item-remove,
-.academic-timetable-custom-add {
+.workbench-weekly-timetable-custom-item-remove,
+.workbench-weekly-timetable-custom-add {
   align-items: center;
   background: transparent;
   border: 0;
@@ -127,13 +149,13 @@
   padding: 0;
 }
 
-.academic-timetable-custom-item-remove {
+.workbench-weekly-timetable-custom-item-remove {
   font-size: 10px;
   height: 18px;
   width: 18px;
 }
 
-.academic-timetable-custom-add {
+.workbench-weekly-timetable-custom-add {
   border: 1px dashed var(--ant-color-border);
   font-size: 12px;
   height: 22px;
@@ -148,46 +170,46 @@
   width: 22px;
 }
 
-.academic-timetable-custom-cell:hover .academic-timetable-custom-add,
-.academic-timetable-custom-add:focus-visible,
-.academic-timetable-custom-item-remove:focus-visible,
-.academic-timetable-custom-item-remove:hover {
+.workbench-weekly-timetable-custom-cell:hover .workbench-weekly-timetable-custom-add,
+.workbench-weekly-timetable-custom-add:focus-visible,
+.workbench-weekly-timetable-custom-item-remove:focus-visible,
+.workbench-weekly-timetable-custom-item-remove:hover {
   color: var(--ant-color-primary);
   opacity: 1;
 }
 
-.academic-timetable-custom-add:hover,
-.academic-timetable-custom-add:focus-visible {
+.workbench-weekly-timetable-custom-add:hover,
+.workbench-weekly-timetable-custom-add:focus-visible {
   border-color: var(--ant-color-primary);
 }
 
-.academic-timetable-custom-editor {
+.workbench-weekly-timetable-custom-editor {
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
-.academic-timetable-custom-editor-color {
+.workbench-weekly-timetable-custom-editor-color {
   align-items: flex-start;
   display: flex;
   gap: 12px;
   justify-content: space-between;
 }
 
-.academic-timetable-custom-editor-color span {
+.workbench-weekly-timetable-custom-editor-color span {
   color: var(--ant-color-text-secondary);
   font-size: 13px;
   font-weight: 600;
 }
 
-.academic-timetable-custom-color-options {
+.workbench-weekly-timetable-custom-color-options {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.academic-timetable-custom-color-option {
+.workbench-weekly-timetable-custom-color-option {
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--ant-color-border) 68%, transparent);
   cursor: pointer;
@@ -202,31 +224,31 @@
   width: 28px;
 }
 
-.academic-timetable-custom-color-option[aria-pressed='true'] {
+.workbench-weekly-timetable-custom-color-option[aria-pressed='true'] {
   border-color: var(--ant-color-text);
   box-shadow:
     0 0 0 2px var(--ant-color-bg-container),
     0 0 0 4px color-mix(in srgb, var(--ant-color-text) 28%, transparent);
 }
 
-.academic-timetable-custom-color-option:hover,
-.academic-timetable-custom-color-option:focus-visible {
+.workbench-weekly-timetable-custom-color-option:hover,
+.workbench-weekly-timetable-custom-color-option:focus-visible {
   border-color: var(--ant-color-primary);
   box-shadow:
     0 0 0 2px var(--ant-color-bg-container),
     0 0 0 4px color-mix(in srgb, var(--ant-color-primary) 22%, transparent);
 }
 
-.academic-timetable-weekend-cell {
+.workbench-weekly-timetable-weekend-cell {
   background: var(--ant-color-warning-bg);
 }
 
-.academic-timetable-header-cell.academic-timetable-weekend-cell {
+.workbench-weekly-timetable-header-cell.workbench-weekly-timetable-weekend-cell {
   color: var(--ant-color-warning-text);
 }
 
-.academic-timetable-slot-group {
-  z-index: var(--academic-timetable-slot-layer, 1);
+.workbench-weekly-timetable-slot-group {
+  z-index: var(--workbench-weekly-timetable-slot-layer, 1);
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -235,30 +257,30 @@
   position: relative;
 }
 
-.academic-timetable-slot-group-item {
+.workbench-weekly-timetable-slot-group-item {
   display: flex;
   flex: 1 1 auto;
   min-height: 0;
 }
 
-.academic-timetable-slot-group-item > .academic-timetable-entry {
+.workbench-weekly-timetable-slot-group-item > .workbench-weekly-timetable-entry {
   flex: 1 1 auto;
 }
 
-.academic-timetable-entry {
-  --academic-timetable-entry-accent-color: var(--ant-color-primary);
-  --academic-timetable-entry-accent-bg: color-mix(
+.workbench-weekly-timetable-entry {
+  --workbench-weekly-timetable-entry-accent-color: var(--ant-color-primary);
+  --workbench-weekly-timetable-entry-accent-bg: color-mix(
     in srgb,
     var(--ant-color-primary-bg) 66%,
     transparent
   );
   background: linear-gradient(
     180deg,
-    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 72%, transparent) 0%,
-    color-mix(in srgb, var(--academic-timetable-entry-accent-bg) 92%, transparent) 100%
+    color-mix(in srgb, var(--workbench-weekly-timetable-entry-accent-bg) 72%, transparent) 0%,
+    color-mix(in srgb, var(--workbench-weekly-timetable-entry-accent-bg) 92%, transparent) 100%
   );
   border: 1px solid
-    color-mix(in srgb, var(--academic-timetable-entry-accent-color) 20%, transparent);
+    color-mix(in srgb, var(--workbench-weekly-timetable-entry-accent-color) 20%, transparent);
   border-radius: 0;
   box-shadow: none;
   color: var(--ant-color-text);
@@ -278,7 +300,7 @@
   z-index: 0;
 }
 
-.academic-timetable-entry::after {
+.workbench-weekly-timetable-entry::after {
   background: color-mix(in srgb, var(--ant-color-bg-container) 26%, transparent);
   border-radius: var(--ant-border-radius-sm);
   content: '';
@@ -291,85 +313,95 @@
     transform 0.15s ease;
 }
 
-.academic-timetable-entry:hover {
+.workbench-weekly-timetable-entry:hover {
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
   z-index: 2;
 }
 
-.academic-timetable-entry:hover::after {
+.workbench-weekly-timetable-entry:hover::after {
   opacity: 1;
   transform: translateY(-1px);
 }
 
-.academic-timetable-entry-inactive {
+.workbench-weekly-timetable-entry-inactive {
   background: linear-gradient(180deg, rgba(140, 140, 140, 0.14) 0%, rgba(140, 140, 140, 0.2) 100%);
   border-color: var(--ant-color-border);
   box-shadow: none;
 }
 
-.academic-timetable-entry-semester {
+.workbench-weekly-timetable-entry-semester {
   box-shadow: none;
 }
 
-.academic-timetable-slot-group-stacked {
+.workbench-weekly-timetable-slot-group-stacked {
   align-self: start;
   min-height: auto;
   padding: 4px;
 }
 
-.academic-timetable-slot-group-stacked .academic-timetable-slot-group-item {
+.workbench-weekly-timetable-slot-group-stacked .workbench-weekly-timetable-slot-group-item {
   flex: 0 0 auto;
 }
 
-.academic-timetable-slot-group-stacked .academic-timetable-entry {
+.workbench-weekly-timetable-slot-group-stacked .workbench-weekly-timetable-entry {
   flex: 0 0 auto;
 }
 
-.academic-timetable-entry-title {
+.workbench-weekly-timetable-entry-title {
   font-size: 0.875rem;
   font-weight: 700;
   line-height: 1.35;
   margin: 0;
 }
 
-.academic-timetable-entry-title-wrap {
+.workbench-weekly-timetable-entry-title-wrap {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 
-.academic-timetable-course-category-theory {
-  color: var(--academic-timetable-course-category-theory-color);
+.workbench-weekly-timetable-course-category-theory {
+  color: var(--workbench-weekly-timetable-course-category-theory-color);
 }
 
-.academic-timetable-course-surface-theory {
-  --academic-timetable-entry-accent-color: var(--academic-timetable-course-category-theory-color);
-  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-theory-bg);
-}
-
-.academic-timetable-course-category-practice {
-  color: var(--academic-timetable-course-category-practice-color);
-}
-
-.academic-timetable-course-surface-practice {
-  --academic-timetable-entry-accent-color: var(--academic-timetable-course-category-practice-color);
-  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-practice-bg);
-}
-
-.academic-timetable-course-category-integrated {
-  color: var(--academic-timetable-course-category-integrated-color);
-}
-
-.academic-timetable-course-surface-integrated {
-  --academic-timetable-entry-accent-color: var(
-    --academic-timetable-course-category-integrated-color
+.workbench-weekly-timetable-course-surface-theory {
+  --workbench-weekly-timetable-entry-accent-color: var(
+    --workbench-weekly-timetable-course-category-theory-color
   );
-  --academic-timetable-entry-accent-bg: var(--academic-timetable-course-category-integrated-bg);
+  --workbench-weekly-timetable-entry-accent-bg: var(
+    --workbench-weekly-timetable-course-category-theory-bg
+  );
 }
 
-.academic-timetable-entry-status-row {
+.workbench-weekly-timetable-course-category-practice {
+  color: var(--workbench-weekly-timetable-course-category-practice-color);
+}
+
+.workbench-weekly-timetable-course-surface-practice {
+  --workbench-weekly-timetable-entry-accent-color: var(
+    --workbench-weekly-timetable-course-category-practice-color
+  );
+  --workbench-weekly-timetable-entry-accent-bg: var(
+    --workbench-weekly-timetable-course-category-practice-bg
+  );
+}
+
+.workbench-weekly-timetable-course-category-integrated {
+  color: var(--workbench-weekly-timetable-course-category-integrated-color);
+}
+
+.workbench-weekly-timetable-course-surface-integrated {
+  --workbench-weekly-timetable-entry-accent-color: var(
+    --workbench-weekly-timetable-course-category-integrated-color
+  );
+  --workbench-weekly-timetable-entry-accent-bg: var(
+    --workbench-weekly-timetable-course-category-integrated-bg
+  );
+}
+
+.workbench-weekly-timetable-entry-status-row {
   align-items: center;
   bottom: 8px;
   display: flex;
@@ -380,7 +412,7 @@
   right: 10px;
 }
 
-.academic-timetable-entry-badge-cluster {
+.workbench-weekly-timetable-entry-badge-cluster {
   align-items: center;
   display: inline-flex;
   flex-wrap: wrap;
@@ -388,7 +420,7 @@
   min-width: 0;
 }
 
-.academic-timetable-entry-status {
+.workbench-weekly-timetable-entry-status {
   border-radius: 999px;
   font-size: 0.8125rem;
   font-weight: 600;
@@ -397,59 +429,59 @@
   white-space: nowrap;
 }
 
-.academic-timetable-entry-status-default {
+.workbench-weekly-timetable-entry-status-default {
   background: rgba(22, 119, 255, 0.12);
   color: var(--ant-color-primary);
 }
 
-.academic-timetable-entry-status-active {
+.workbench-weekly-timetable-entry-status-active {
   background: rgba(82, 196, 26, 0.14);
   color: #3f8600;
 }
 
-.academic-timetable-entry-status-inactive {
+.workbench-weekly-timetable-entry-status-inactive {
   background: rgba(140, 140, 140, 0.14);
   color: var(--ant-color-text-secondary);
 }
 
-.academic-timetable-entry-date {
+.workbench-weekly-timetable-entry-date {
   color: var(--ant-color-text-tertiary);
   font-size: 0.8125rem;
   line-height: 1.2;
   white-space: nowrap;
 }
 
-.academic-timetable-entry-week-pattern {
+.workbench-weekly-timetable-entry-week-pattern {
   overflow: hidden;
   text-align: right;
   text-overflow: ellipsis;
 }
 
-.academic-timetable-entry-main-group,
-.academic-timetable-entry-center-group,
-.academic-timetable-entry-footer-group {
+.workbench-weekly-timetable-entry-main-group,
+.workbench-weekly-timetable-entry-center-group,
+.workbench-weekly-timetable-entry-footer-group {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-height: 0;
 }
 
-.academic-timetable-entry-center-group {
+.workbench-weekly-timetable-entry-center-group {
   flex: 1 1 auto;
   justify-content: center;
 }
 
-.academic-timetable-entry-footer-group {
+.workbench-weekly-timetable-entry-footer-group {
   margin-top: auto;
 }
 
-.academic-timetable-entry-class,
-.academic-timetable-entry-meta {
+.workbench-weekly-timetable-entry-class,
+.workbench-weekly-timetable-entry-meta {
   line-height: 1.4;
   margin: 0;
 }
 
-.academic-timetable-entry-class {
+.workbench-weekly-timetable-entry-class {
   color: var(--ant-color-text);
   font-size: 0.9375rem;
   font-weight: 700;
@@ -457,7 +489,7 @@
   text-overflow: ellipsis;
 }
 
-.academic-timetable-entry-meta {
+.workbench-weekly-timetable-entry-meta {
   color: var(--ant-color-text-secondary);
   font-size: 0.8125rem;
   font-weight: 500;
@@ -466,15 +498,15 @@
 }
 
 @media (max-width: 768px) {
-  .academic-timetable-slot-group {
+  .workbench-weekly-timetable-slot-group {
     gap: 3px;
   }
 
-  .academic-timetable-entry-title-wrap {
+  .workbench-weekly-timetable-entry-title-wrap {
     gap: 6px;
   }
 
-  .academic-timetable-entry {
+  .workbench-weekly-timetable-entry {
     padding: 8px 10px;
   }
 }

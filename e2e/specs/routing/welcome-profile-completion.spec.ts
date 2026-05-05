@@ -118,7 +118,7 @@ test('已完成补全的用户访问 /welcome 时，会被立即带离', async (
   await page.goto(routes.welcome);
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
 });
 
 test('已完成补全的用户访问带 login 回环 redirect 的 /welcome 时，应回退到首页', async ({
@@ -135,7 +135,7 @@ test('已完成补全的用户访问带 login 回环 redirect 的 /welcome 时�
   );
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
 });
 
 test('未登录访问 /welcome 时，会按受保护页规则跳到登录页', async ({ page }) => {

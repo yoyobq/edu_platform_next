@@ -945,7 +945,7 @@ export async function openHomeAs(
   await mockAuthGraphQL(page, { currentSession: sessionOptions });
   await seedAuthSession(page, sessionOptions);
   await page.goto(routes.home);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
 }
 
 export async function openHome(page: Page): Promise<void> {
@@ -961,7 +961,7 @@ export async function openHomeWithSearch(page: Page, search: string): Promise<vo
   await mockAuthGraphQL(page, { currentSession: { primaryAccessGroup: 'ADMIN' } });
   await seedAuthSession(page, { primaryAccessGroup: 'ADMIN' });
   await page.goto(`${routes.home}${search}`);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
 }
 
 export async function openEntrySidecar(page: Page): Promise<void> {

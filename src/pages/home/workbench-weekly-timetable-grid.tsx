@@ -1,22 +1,27 @@
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 import { Button, Empty, Input, Modal } from 'antd';
 
-import type {
-  AcademicTeacherSemesterScheduleItem,
-  AcademicTimetableGridItem,
-  AcademicTimetableItem,
-} from './api';
 import {
+  type AcademicTimetableGridItem,
+  type AcademicTimetableItem,
   buildTimetableSlotPlacements,
   resolveCourseCategoryMeta,
   resolveTimetablePeriodCount,
-} from './helpers';
+} from '@/features/academic-timetable';
 
-import './academic-timetable-grid.css';
+import './workbench-weekly-timetable-grid.css';
 
 type TimetableSlotGroupStyle = CSSProperties & {
-  '--academic-timetable-slot-layer'?: string;
+  '--workbench-weekly-timetable-slot-layer'?: string;
 };
 
 type TimetableViewKey = 'semester' | 'weekly';
@@ -47,6 +52,16 @@ type EditingCustomCell = {
   dayLabel: string;
   rowKey: string;
   rowLabel: string;
+};
+type CurrentTimeIndicatorStyle = {
+  left: number;
+  top: number;
+  width: number;
+};
+type TimetableTimeSegment = {
+  endMinute: number;
+  rowKey: string;
+  startMinute: number;
 };
 
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
@@ -85,6 +100,83 @@ const CUSTOM_ITEM_BACKGROUND_OPTIONS = [
     value: 'rgb(254 249 195 / 0.82)',
   },
 ] as const;
+
+const TIMETABLE_TIME_SEGMENTS: readonly TimetableTimeSegment[] = [
+  { endMinute: 8 * 60 + 15, rowKey: 'break-morning', startMinute: 8 * 60 },
+  { endMinute: 9 * 60 + 5, rowKey: 'period-1', startMinute: 8 * 60 + 25 },
+  { endMinute: 9 * 60 + 55, rowKey: 'period-2', startMinute: 9 * 60 + 15 },
+  { endMinute: 10 * 60 + 55, rowKey: 'period-3', startMinute: 10 * 60 + 15 },
+  { endMinute: 11 * 60 + 45, rowKey: 'period-4', startMinute: 11 * 60 + 5 },
+  { endMinute: 13 * 60 + 30, rowKey: 'break-lunch', startMinute: 11 * 60 + 45 },
+  { endMinute: 14 * 60 + 10, rowKey: 'period-5', startMinute: 13 * 60 + 30 },
+  { endMinute: 15 * 60, rowKey: 'period-6', startMinute: 14 * 60 + 20 },
+  { endMinute: 15 * 60 + 50, rowKey: 'period-7', startMinute: 15 * 60 + 10 },
+  { endMinute: 16 * 60 + 40, rowKey: 'period-8', startMinute: 16 * 60 },
+  { endMinute: 16 * 60 + 30, rowKey: 'break-after-school', startMinute: 15 * 60 },
+] as const;
+
+function formatLocalDatePart(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(
+    date.getDate(),
+  ).padStart(2, '0')}`;
+}
+
+function normalizeDatePart(value: string) {
+  const [datePart] = value.split('T');
+  const [year, month, day] = datePart.split('-');
+
+  if (year && month && day) {
+    return `${year.padStart(4, '0')}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return null;
+  }
+
+  return formatLocalDatePart(date);
+}
+
+function parseLocalDatePart(value: string) {
+  const [yearValue, monthValue, dayValue] = value.split('-').map(Number);
+
+  if (!yearValue || !monthValue || !dayValue) {
+    return null;
+  }
+
+  return new Date(yearValue, monthValue - 1, dayValue);
+}
+
+function addLocalDays(date: Date, offset: number) {
+  const nextDate = new Date(date);
+
+  nextDate.setDate(nextDate.getDate() + offset);
+
+  return nextDate;
+}
+
+function resolveMinuteOfDay(date: Date) {
+  return date.getHours() * 60 + date.getMinutes() + date.getSeconds() / 60;
+}
+
+function resolveEffectiveTimeSegments(periodCount: number) {
+  return TIMETABLE_TIME_SEGMENTS.filter((segment) => {
+    if (segment.rowKey.startsWith('period-')) {
+      return Number(segment.rowKey.replace('period-', '')) <= periodCount;
+    }
+
+    if (segment.rowKey === 'break-lunch') {
+      return periodCount >= 4;
+    }
+
+    if (segment.rowKey === 'break-after-school') {
+      return periodCount <= 6;
+    }
+
+    return true;
+  });
+}
 function formatHeaderDate(value: string) {
   const [datePart] = value.split('T');
   const [, month, day] = datePart.split('-');
@@ -105,6 +197,45 @@ function formatHeaderDate(value: string) {
   )}`;
 }
 
+function buildWeeklyDateByDayOfWeek(items: readonly AcademicTimetableItem[]) {
+  const nextDateByDayOfWeek = new Map<number, string>();
+  const anchors: Array<{ datePart: string; dayOfWeek: number }> = [];
+
+  for (const item of items) {
+    const datePart = normalizeDatePart(item.date);
+
+    if (!datePart) {
+      continue;
+    }
+
+    if (!nextDateByDayOfWeek.has(item.dayOfWeek)) {
+      nextDateByDayOfWeek.set(item.dayOfWeek, datePart);
+    }
+
+    anchors.push({ datePart, dayOfWeek: item.dayOfWeek });
+  }
+
+  const anchor = anchors[0];
+  const anchorDate = anchor ? parseLocalDatePart(anchor.datePart) : null;
+
+  if (!anchor || !anchorDate) {
+    return nextDateByDayOfWeek;
+  }
+
+  const mondayDate = addLocalDays(anchorDate, 1 - anchor.dayOfWeek);
+
+  for (let dayOfWeek = 1; dayOfWeek <= DAY_OF_WEEK_LABELS.length; dayOfWeek += 1) {
+    if (!nextDateByDayOfWeek.has(dayOfWeek)) {
+      nextDateByDayOfWeek.set(
+        dayOfWeek,
+        formatLocalDatePart(addLocalDays(mondayDate, dayOfWeek - 1)),
+      );
+    }
+  }
+
+  return nextDateByDayOfWeek;
+}
+
 function resolveOccurrenceStatusLabel(item: AcademicTimetableItem) {
   switch (item.calcEffect) {
     case 'CANCEL':
@@ -123,14 +254,14 @@ function resolveOccurrenceStatusLabel(item: AcademicTimetableItem) {
 
 function resolveOccurrenceStatusClassName(item: AcademicTimetableItem) {
   if (!item.isEffective) {
-    return 'academic-timetable-entry-status academic-timetable-entry-status-inactive';
+    return 'workbench-weekly-timetable-entry-status workbench-weekly-timetable-entry-status-inactive';
   }
 
   if (item.calcEffect === 'MAKEUP' || item.calcEffect === 'SWAP_IN') {
-    return 'academic-timetable-entry-status academic-timetable-entry-status-active';
+    return 'workbench-weekly-timetable-entry-status workbench-weekly-timetable-entry-status-active';
   }
 
-  return 'academic-timetable-entry-status academic-timetable-entry-status-default';
+  return 'workbench-weekly-timetable-entry-status workbench-weekly-timetable-entry-status-default';
 }
 
 function getWeeklyTimetableEntryKey(item: AcademicTimetableItem) {
@@ -141,19 +272,8 @@ function getWeeklyTimetableItemTieBreaker(item: AcademicTimetableItem) {
   return `${item.courseName}-${item.teachingClassName}-${item.date}`;
 }
 
-function getSemesterScheduleEntryKey(item: AcademicTeacherSemesterScheduleItem) {
-  return `${item.scheduleId}-${item.slotId}`;
-}
-
-function getSemesterScheduleItemTieBreaker(item: AcademicTeacherSemesterScheduleItem) {
-  return `${item.courseName}-${item.teachingClassName}-${item.weekPattern}`;
-}
-
-function resolveWeekPatternLabel(item: AcademicTeacherSemesterScheduleItem) {
-  const normalizedWeekRanges = item.weekRanges?.trim();
-  const normalizedWeekPattern = item.weekPattern.trim();
-
-  return normalizedWeekRanges || normalizedWeekPattern || '未标注周次';
+function toWorkbenchTimetableClassName(className: string) {
+  return className.replaceAll('academic-timetable-', 'workbench-weekly-timetable-');
 }
 
 function buildTimetableDisplayRows(periodCount: number): TimetableDisplayRow[] {
@@ -194,6 +314,7 @@ function buildVisibleTimetableDays<TItem extends AcademicTimetableGridItem>(
   items: TItem[],
   expandedWeekendDayOfWeeks: readonly number[],
   viewKey: TimetableViewKey,
+  forceVisibleDayOfWeek?: number | null,
 ): VisibleTimetableDay[] {
   const dayOfWeeksWithItems = new Set(items.map((item) => item.dayOfWeek));
   const expandedWeekendDayOfWeekSet = new Set(expandedWeekendDayOfWeeks);
@@ -208,7 +329,9 @@ function buildVisibleTimetableDays<TItem extends AcademicTimetableGridItem>(
 
     return (
       viewKey === 'weekly' &&
-      (dayOfWeeksWithItems.has(day.dayOfWeek) || expandedWeekendDayOfWeekSet.has(day.dayOfWeek))
+      (dayOfWeeksWithItems.has(day.dayOfWeek) ||
+        expandedWeekendDayOfWeekSet.has(day.dayOfWeek) ||
+        forceVisibleDayOfWeek === day.dayOfWeek)
     );
   });
 }
@@ -314,14 +437,20 @@ function createCustomItemId() {
 
 function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
   emptyDescription: string;
+  getDayDate?: (dayOfWeek: number) => string | null;
   getEntryKey: (item: TItem) => string;
   getTieBreaker: (item: TItem) => string;
   getDayHeaderSupplement?: (dayOfWeek: number) => string | null;
   items: TItem[];
   renderEntry: (item: TItem) => ReactNode;
+  showCurrentTimeIndicator?: boolean;
   viewKey: TimetableViewKey;
 }) {
+  const gridRef = useRef<HTMLDivElement | null>(null);
   const [expandedWeekendDayOfWeeks, setExpandedWeekendDayOfWeeks] = useState<readonly number[]>([]);
+  const [currentDatePart, setCurrentDatePart] = useState(() => formatLocalDatePart(new Date()));
+  const [currentTimeIndicatorStyle, setCurrentTimeIndicatorStyle] =
+    useState<CurrentTimeIndicatorStyle | null>(null);
   const [customItems, setCustomItems] = useState<TimetableCustomItem[]>([]);
   const [editingCustomCell, setEditingCustomCell] = useState<EditingCustomCell | null>(null);
   const [customItemBackgroundColor, setCustomItemBackgroundColor] = useState(
@@ -341,29 +470,50 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
     () => new Set(props.items.map((item) => item.dayOfWeek)),
     [props.items],
   );
+  const currentTimeIndicatorDayOfWeek = useMemo(() => {
+    if (!props.showCurrentTimeIndicator || !props.getDayDate) {
+      return null;
+    }
+
+    for (let dayOfWeek = 1; dayOfWeek <= DAY_OF_WEEK_LABELS.length; dayOfWeek += 1) {
+      if (props.getDayDate(dayOfWeek) === currentDatePart) {
+        return dayOfWeek;
+      }
+    }
+
+    return null;
+  }, [currentDatePart, props]);
   const hiddenWeekendDays = useMemo(
     () =>
       WEEKEND_DAY_OF_WEEKS.filter(
         (dayOfWeek) =>
           props.viewKey === 'weekly' &&
+          dayOfWeek !== currentTimeIndicatorDayOfWeek &&
           !dayOfWeeksWithItems.has(dayOfWeek) &&
           !expandedWeekendDayOfWeeks.includes(dayOfWeek),
       ),
-    [dayOfWeeksWithItems, expandedWeekendDayOfWeeks, props.viewKey],
+    [currentTimeIndicatorDayOfWeek, dayOfWeeksWithItems, expandedWeekendDayOfWeeks, props.viewKey],
   );
   const expandedEmptyWeekendDays = useMemo(
     () =>
       WEEKEND_DAY_OF_WEEKS.filter(
         (dayOfWeek) =>
           props.viewKey === 'weekly' &&
+          dayOfWeek !== currentTimeIndicatorDayOfWeek &&
           !dayOfWeeksWithItems.has(dayOfWeek) &&
           expandedWeekendDayOfWeeks.includes(dayOfWeek),
       ),
-    [dayOfWeeksWithItems, expandedWeekendDayOfWeeks, props.viewKey],
+    [currentTimeIndicatorDayOfWeek, dayOfWeeksWithItems, expandedWeekendDayOfWeeks, props.viewKey],
   );
   const visibleDays = useMemo(
-    () => buildVisibleTimetableDays(props.items, expandedWeekendDayOfWeeks, props.viewKey),
-    [expandedWeekendDayOfWeeks, props.items, props.viewKey],
+    () =>
+      buildVisibleTimetableDays(
+        props.items,
+        expandedWeekendDayOfWeeks,
+        props.viewKey,
+        currentTimeIndicatorDayOfWeek,
+      ),
+    [currentTimeIndicatorDayOfWeek, expandedWeekendDayOfWeeks, props.items, props.viewKey],
   );
   const visibleDayCount = visibleDays.length;
   const gridColumnByDayOfWeek = useMemo(() => {
@@ -392,6 +542,10 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
     [gridColumnByDayOfWeek, periodCount, slotPlacements],
   );
   const displayRows = useMemo(() => buildTimetableDisplayRows(periodCount), [periodCount]);
+  const effectiveTimeSegments = useMemo(
+    () => resolveEffectiveTimeSegments(periodCount),
+    [periodCount],
+  );
   const gridRowByPeriod = useMemo(() => {
     const nextGridRowByPeriod = new Map<number, number>();
 
@@ -407,6 +561,155 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
   useEffect(() => {
     setCustomItems(readCustomItems(customItemStorageKey));
   }, [customItemStorageKey]);
+
+  useEffect(() => {
+    if (!props.showCurrentTimeIndicator) {
+      return undefined;
+    }
+
+    const timerId = window.setInterval(() => {
+      setCurrentDatePart(formatLocalDatePart(new Date()));
+    }, 30_000);
+
+    return () => {
+      window.clearInterval(timerId);
+    };
+  }, [props.showCurrentTimeIndicator]);
+
+  const updateCurrentTimeIndicator = useCallback(() => {
+    if (!props.showCurrentTimeIndicator || currentTimeIndicatorDayOfWeek === null) {
+      setCurrentTimeIndicatorStyle(null);
+      return;
+    }
+
+    const gridElement = gridRef.current;
+
+    if (!gridElement) {
+      setCurrentTimeIndicatorStyle(null);
+      return;
+    }
+
+    const dayElement = gridElement.querySelector<HTMLElement>(
+      `[data-workbench-weekly-timetable-day="${currentTimeIndicatorDayOfWeek}"]`,
+    );
+    const measuredSegments = effectiveTimeSegments
+      .map((segment) => {
+        const rowElement = gridElement.querySelector<HTMLElement>(
+          `[data-workbench-weekly-timetable-row="${segment.rowKey}"]`,
+        );
+
+        return rowElement ? { rowElement, segment } : null;
+      })
+      .filter(
+        (item): item is { rowElement: HTMLElement; segment: TimetableTimeSegment } => item !== null,
+      );
+
+    if (!dayElement || measuredSegments.length === 0) {
+      setCurrentTimeIndicatorStyle(null);
+      return;
+    }
+
+    const gridRect = gridElement.getBoundingClientRect();
+    const dayRect = dayElement.getBoundingClientRect();
+    const nowMinute = resolveMinuteOfDay(new Date());
+    const firstSegment = measuredSegments[0];
+
+    if (nowMinute < firstSegment.segment.startMinute) {
+      setCurrentTimeIndicatorStyle(null);
+      return;
+    }
+
+    let top: number | null = null;
+
+    for (let index = 0; index < measuredSegments.length; index += 1) {
+      const measuredSegment = measuredSegments[index];
+      const rowRect = measuredSegment.rowElement.getBoundingClientRect();
+
+      if (
+        nowMinute >= measuredSegment.segment.startMinute &&
+        nowMinute <= measuredSegment.segment.endMinute
+      ) {
+        const duration = measuredSegment.segment.endMinute - measuredSegment.segment.startMinute;
+        const progress =
+          duration > 0 ? (nowMinute - measuredSegment.segment.startMinute) / duration : 0;
+
+        top = rowRect.top - gridRect.top + rowRect.height * progress;
+        break;
+      }
+
+      const nextMeasuredSegment = measuredSegments[index + 1];
+
+      if (
+        nextMeasuredSegment &&
+        nowMinute > measuredSegment.segment.endMinute &&
+        nowMinute < nextMeasuredSegment.segment.startMinute
+      ) {
+        const nextRowRect = nextMeasuredSegment.rowElement.getBoundingClientRect();
+        const gapDuration =
+          nextMeasuredSegment.segment.startMinute - measuredSegment.segment.endMinute;
+        const gapProgress =
+          gapDuration > 0 ? (nowMinute - measuredSegment.segment.endMinute) / gapDuration : 1;
+        const gapStart = rowRect.bottom - gridRect.top;
+        const gapEnd = nextRowRect.top - gridRect.top;
+
+        top = gapStart + (gapEnd - gapStart) * gapProgress;
+        break;
+      }
+    }
+
+    if (top === null) {
+      setCurrentTimeIndicatorStyle(null);
+      return;
+    }
+
+    const clampedTop = Math.max(0, Math.min(top, gridElement.clientHeight - 1));
+    const nextStyle = {
+      left: dayRect.left - gridRect.left,
+      top: clampedTop,
+      width: dayRect.width,
+    };
+
+    setCurrentTimeIndicatorStyle((currentStyle) => {
+      if (
+        currentStyle &&
+        Math.abs(currentStyle.left - nextStyle.left) < 0.5 &&
+        Math.abs(currentStyle.top - nextStyle.top) < 0.5 &&
+        Math.abs(currentStyle.width - nextStyle.width) < 0.5
+      ) {
+        return currentStyle;
+      }
+
+      return nextStyle;
+    });
+  }, [currentTimeIndicatorDayOfWeek, effectiveTimeSegments, props.showCurrentTimeIndicator]);
+
+  useEffect(() => {
+    if (!props.showCurrentTimeIndicator) {
+      setCurrentTimeIndicatorStyle(null);
+      return undefined;
+    }
+
+    updateCurrentTimeIndicator();
+
+    const timerId = window.setInterval(updateCurrentTimeIndicator, 30_000);
+    const gridElement = gridRef.current;
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver(() => updateCurrentTimeIndicator());
+
+    if (gridElement) {
+      resizeObserver?.observe(gridElement);
+    }
+
+    window.addEventListener('resize', updateCurrentTimeIndicator);
+
+    return () => {
+      window.clearInterval(timerId);
+      resizeObserver?.disconnect();
+      window.removeEventListener('resize', updateCurrentTimeIndicator);
+    };
+  }, [props.showCurrentTimeIndicator, updateCurrentTimeIndicator]);
 
   if (props.items.length === 0) {
     return <Empty description={props.emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
@@ -476,7 +779,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
   return (
     <div className="flex flex-col gap-4">
       {hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
-        <div className="academic-timetable-weekend-controls">
+        <div className="workbench-weekly-timetable-weekend-controls">
           {hiddenWeekendDays.map((dayOfWeek) => (
             <Button
               key={`show-weekend-${dayOfWeek}`}
@@ -505,9 +808,10 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
           ))}
         </div>
       ) : null}
-      <div className="academic-timetable-shell overflow-x-auto">
+      <div className="workbench-weekly-timetable-shell overflow-x-auto">
         <div
-          className="academic-timetable-grid"
+          ref={gridRef}
+          className="workbench-weekly-timetable-grid"
           style={{
             gridTemplateColumns: `72px repeat(${visibleDayCount}, minmax(156px, 1fr))`,
             gridTemplateRows: `44px ${displayRows
@@ -524,7 +828,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
             minWidth: 72 + visibleDayCount * 156,
           }}
         >
-          <div className="academic-timetable-header-cell academic-timetable-header-corner">
+          <div className="workbench-weekly-timetable-header-cell workbench-weekly-timetable-header-corner">
             节次
           </div>
 
@@ -534,12 +838,15 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
             return (
               <div
                 key={day.dayOfWeek}
-                className="academic-timetable-header-cell"
+                className="workbench-weekly-timetable-header-cell"
+                data-workbench-weekly-timetable-day={day.dayOfWeek}
                 style={{ gridColumn: index + 2, gridRow: 1 }}
               >
                 <span>{day.label}</span>
                 {dayHeaderSupplement ? (
-                  <span className="academic-timetable-header-date">{dayHeaderSupplement}</span>
+                  <span className="workbench-weekly-timetable-header-date">
+                    {dayHeaderSupplement}
+                  </span>
                 ) : null}
               </div>
             );
@@ -549,13 +856,14 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
             const label = row.kind === 'period' ? `第 ${row.period} 节` : row.label;
             const className =
               row.kind === 'period'
-                ? 'academic-timetable-period-cell'
-                : 'academic-timetable-period-cell academic-timetable-break-cell';
+                ? 'workbench-weekly-timetable-period-cell'
+                : 'workbench-weekly-timetable-period-cell workbench-weekly-timetable-break-cell';
 
             return (
               <div
                 key={row.key}
                 className={className}
+                data-workbench-weekly-timetable-row={row.key}
                 style={{ gridColumn: 1, gridRow: rowIndex + 2 }}
               >
                 {label}
@@ -573,10 +881,10 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
               return (
                 <div
                   key={`slot-${day.dayOfWeek}-${row.key}`}
-                  className={`academic-timetable-base-cell ${
-                    isWeekendColumn ? 'academic-timetable-weekend-cell' : ''
-                  } ${isBreakRow ? 'academic-timetable-break-cell' : ''} ${
-                    !isOccupied ? 'academic-timetable-custom-cell' : ''
+                  className={`workbench-weekly-timetable-base-cell ${
+                    isWeekendColumn ? 'workbench-weekly-timetable-weekend-cell' : ''
+                  } ${isBreakRow ? 'workbench-weekly-timetable-break-cell' : ''} ${
+                    !isOccupied ? 'workbench-weekly-timetable-custom-cell' : ''
                   }`}
                   style={{
                     gridColumn: dayIndex + 2,
@@ -584,12 +892,12 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                   }}
                 >
                   {!isOccupied ? (
-                    <div className="academic-timetable-custom-cell-content">
+                    <div className="workbench-weekly-timetable-custom-cell-content">
                       {cellCustomItems.length > 0 ? (
-                        <div className="academic-timetable-custom-items">
+                        <div className="workbench-weekly-timetable-custom-items">
                           {cellCustomItems.map((item) => (
                             <div
-                              className="academic-timetable-custom-item"
+                              className="workbench-weekly-timetable-custom-item"
                               key={item.id}
                               style={
                                 item.backgroundColor
@@ -603,7 +911,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                               <span>{item.title}</span>
                               <button
                                 aria-label={`删除事项 ${item.title}`}
-                                className="academic-timetable-custom-item-remove"
+                                className="workbench-weekly-timetable-custom-item-remove"
                                 type="button"
                                 onClick={() => removeCustomItem(item.id)}
                               >
@@ -615,7 +923,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                       ) : null}
                       <button
                         aria-label={`添加${day.label}${row.kind === 'period' ? `第 ${row.period} 节` : row.label}事项`}
-                        className="academic-timetable-custom-add"
+                        className="workbench-weekly-timetable-custom-add"
                         title="添加自定义事项"
                         type="button"
                         onClick={() => openCustomItemEditor(day, row)}
@@ -632,8 +940,8 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
           {visibleSlotPlacements.map((group) => (
             <div
               key={group.key}
-              className={`academic-timetable-slot-group ${
-                group.items.length > 1 ? 'academic-timetable-slot-group-stacked' : ''
+              className={`workbench-weekly-timetable-slot-group ${
+                group.items.length > 1 ? 'workbench-weekly-timetable-slot-group-stacked' : ''
               }`}
               style={
                 {
@@ -647,19 +955,33 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                       ? `calc(${(group.laneIndex * 100) / group.laneCount}% + 4px)`
                       : undefined,
                   width: group.laneCount > 1 ? `calc(${100 / group.laneCount}% - 8px)` : undefined,
-                  '--academic-timetable-slot-layer': String(
+                  '--workbench-weekly-timetable-slot-layer': String(
                     group.laneCount > 1 ? group.laneIndex + 1 : 1,
                   ),
                 } as TimetableSlotGroupStyle
               }
             >
               {group.items.map((item) => (
-                <div className="academic-timetable-slot-group-item" key={props.getEntryKey(item)}>
+                <div
+                  className="workbench-weekly-timetable-slot-group-item"
+                  key={props.getEntryKey(item)}
+                >
                   {props.renderEntry(item)}
                 </div>
               ))}
             </div>
           ))}
+          {props.showCurrentTimeIndicator && currentTimeIndicatorStyle ? (
+            <div
+              aria-hidden="true"
+              className="workbench-weekly-timetable-now-line"
+              style={{
+                left: currentTimeIndicatorStyle.left,
+                top: currentTimeIndicatorStyle.top,
+                width: currentTimeIndicatorStyle.width,
+              }}
+            />
+          ) : null}
         </div>
       </div>
       <Modal
@@ -675,7 +997,7 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
         onCancel={closeCustomItemEditor}
         onOk={addCustomItem}
       >
-        <div className="academic-timetable-custom-editor">
+        <div className="workbench-weekly-timetable-custom-editor">
           <Input
             autoFocus
             maxLength={40}
@@ -685,15 +1007,15 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
             onChange={(event) => setCustomItemTitle(event.target.value)}
             onPressEnter={addCustomItem}
           />
-          <div className="academic-timetable-custom-editor-color">
+          <div className="workbench-weekly-timetable-custom-editor-color">
             <span>背景颜色</span>
-            <div className="academic-timetable-custom-color-options">
+            <div className="workbench-weekly-timetable-custom-color-options">
               {CUSTOM_ITEM_BACKGROUND_OPTIONS.map((option) => (
                 <button
                   key={option.value}
                   aria-label={option.label}
                   aria-pressed={customItemBackgroundColor === option.value}
-                  className="academic-timetable-custom-color-option"
+                  className="workbench-weekly-timetable-custom-color-option"
                   style={{ backgroundColor: option.value }}
                   title={option.label}
                   type="button"
@@ -708,49 +1030,57 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
   );
 }
 
-export function WeeklyTimetableGrid(props: {
+export function WorkbenchWeeklyTimetableGrid(props: {
   emptyDescription: string;
   items: AcademicTimetableItem[];
+  showCurrentTimeIndicator?: boolean;
 }) {
+  const rawDateByDayOfWeek = useMemo(() => buildWeeklyDateByDayOfWeek(props.items), [props.items]);
   const dateByDayOfWeek = useMemo(() => {
     const nextDateByDayOfWeek = new Map<number, string>();
 
-    for (const item of props.items) {
-      if (!nextDateByDayOfWeek.has(item.dayOfWeek)) {
-        nextDateByDayOfWeek.set(item.dayOfWeek, formatHeaderDate(item.date));
-      }
-    }
+    rawDateByDayOfWeek.forEach((date, dayOfWeek) => {
+      nextDateByDayOfWeek.set(dayOfWeek, formatHeaderDate(date));
+    });
 
     return nextDateByDayOfWeek;
-  }, [props.items]);
+  }, [rawDateByDayOfWeek]);
 
   return (
     <BaseTimetableGrid
       emptyDescription={props.emptyDescription}
+      getDayDate={(dayOfWeek) => rawDateByDayOfWeek.get(dayOfWeek) ?? null}
       getEntryKey={getWeeklyTimetableEntryKey}
       getTieBreaker={getWeeklyTimetableItemTieBreaker}
       getDayHeaderSupplement={(dayOfWeek) => dateByDayOfWeek.get(dayOfWeek) ?? null}
       items={props.items}
       renderEntry={(item) => {
         const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
-        const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
-        const courseCategorySurfaceClassName = courseCategoryMeta?.surfaceClassName || '';
+        const courseCategoryAccentClassName = courseCategoryMeta
+          ? toWorkbenchTimetableClassName(courseCategoryMeta.accentClassName)
+          : '';
+        const courseCategorySurfaceClassName = courseCategoryMeta
+          ? toWorkbenchTimetableClassName(courseCategoryMeta.surfaceClassName)
+          : '';
         const statusLabel = resolveOccurrenceStatusLabel(item);
 
         return (
           <article
             className={[
-              'academic-timetable-entry',
+              'workbench-weekly-timetable-entry',
               courseCategorySurfaceClassName,
-              item.isEffective ? '' : 'academic-timetable-entry-inactive',
+              item.isEffective ? '' : 'workbench-weekly-timetable-entry-inactive',
             ]
               .filter(Boolean)
               .join(' ')}
           >
-            <div className="academic-timetable-entry-main-group">
-              <div className="academic-timetable-entry-title-wrap">
+            <div className="workbench-weekly-timetable-entry-main-group">
+              <div className="workbench-weekly-timetable-entry-title-wrap">
                 <p
-                  className={['academic-timetable-entry-title', courseCategoryAccentClassName]
+                  className={[
+                    'workbench-weekly-timetable-entry-title',
+                    courseCategoryAccentClassName,
+                  ]
                     .filter(Boolean)
                     .join(' ')}
                 >
@@ -758,78 +1088,24 @@ export function WeeklyTimetableGrid(props: {
                 </p>
               </div>
             </div>
-            <div className="academic-timetable-entry-center-group">
-              <p className="academic-timetable-entry-class">{item.teachingClassName}</p>
+            <div className="workbench-weekly-timetable-entry-center-group">
+              <p className="workbench-weekly-timetable-entry-class">{item.teachingClassName}</p>
             </div>
-            <div className="academic-timetable-entry-footer-group">
-              <p className="academic-timetable-entry-meta">
+            <div className="workbench-weekly-timetable-entry-footer-group">
+              <p className="workbench-weekly-timetable-entry-meta">
                 {item.classroomName?.trim() || '待定教室'}
               </p>
             </div>
             {statusLabel ? (
-              <div className="academic-timetable-entry-status-row">
+              <div className="workbench-weekly-timetable-entry-status-row">
                 <span className={resolveOccurrenceStatusClassName(item)}>{statusLabel}</span>
               </div>
             ) : null}
           </article>
         );
       }}
+      showCurrentTimeIndicator={props.showCurrentTimeIndicator}
       viewKey="weekly"
-    />
-  );
-}
-
-export function SemesterTimetableGrid(props: {
-  emptyDescription: string;
-  items: AcademicTeacherSemesterScheduleItem[];
-}) {
-  return (
-    <BaseTimetableGrid
-      emptyDescription={props.emptyDescription}
-      getEntryKey={getSemesterScheduleEntryKey}
-      getTieBreaker={getSemesterScheduleItemTieBreaker}
-      items={props.items}
-      renderEntry={(item) => {
-        const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
-        const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
-        const courseCategorySurfaceClassName = courseCategoryMeta?.surfaceClassName || '';
-
-        return (
-          <article
-            className={[
-              'academic-timetable-entry',
-              'academic-timetable-entry-semester',
-              courseCategorySurfaceClassName,
-            ]
-              .filter(Boolean)
-              .join(' ')}
-          >
-            <div className="academic-timetable-entry-main-group">
-              <div className="academic-timetable-entry-title-wrap">
-                <p
-                  className={['academic-timetable-entry-title', courseCategoryAccentClassName]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  {item.courseName}
-                </p>
-              </div>
-              <p className="academic-timetable-entry-date academic-timetable-entry-week-pattern">
-                {resolveWeekPatternLabel(item)}
-              </p>
-            </div>
-            <div className="academic-timetable-entry-center-group">
-              <p className="academic-timetable-entry-class">{item.teachingClassName}</p>
-            </div>
-            <div className="academic-timetable-entry-footer-group">
-              <p className="academic-timetable-entry-meta">
-                {item.classroomName?.trim() || '待定教室'}
-              </p>
-            </div>
-          </article>
-        );
-      }}
-      viewKey="semester"
     />
   );
 }

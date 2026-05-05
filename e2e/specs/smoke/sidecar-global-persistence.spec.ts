@@ -37,7 +37,7 @@ test('浏览器后退后，应保持入口面板状态与历史内容稳定', as
 
   await page.goBack();
 
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
   await expect(page.getByText('沙盒', { exact: true })).toBeVisible();
   await expect(page.getByText('先帮你找到 1 个和“沙盒”相关的入口，确认后即可进入。')).toBeVisible();

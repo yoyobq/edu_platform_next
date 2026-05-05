@@ -1,5 +1,7 @@
 import type { NavigationItemsProvider } from '../types';
 
+const HOME_ALLOWED_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'REGISTRANT', 'STAFF', 'STUDENT'] as const;
+
 const HOME_NAVIGATION_ITEMS = [
   {
     iconKey: 'HomeOutlined',
@@ -8,11 +10,11 @@ const HOME_NAVIGATION_ITEMS = [
     navMode: 'rail',
     path: '/',
     primaryAccessGroup: 'ADMIN',
-    allowedAccessGroups: ['ADMIN', 'GUEST'],
+    allowedAccessGroups: HOME_ALLOWED_ACCESS_GROUPS,
     slotGroup: null,
     localEntry: {
-      description: '返回当前默认工作台首页，查看状态概览、主动作入口与最近上下文。',
-      keywords: ['home', 'index', '默认工作台', '状态概览', '首页'],
+      description: '返回我的工作台首页，查看当前可用工作内容。',
+      keywords: ['home', 'index', '我的工作台', '周课表', '首页'],
     },
   },
 ] as const;

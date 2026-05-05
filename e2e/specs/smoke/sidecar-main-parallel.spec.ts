@@ -33,6 +33,6 @@ test('路由切换后，入口面板仍应保持可继续使用', async ({ page 
   const homeCard = page.locator('.sidecar-entry-card').filter({ hasText: '首页' });
   await expect(homeCard).toBeVisible();
   await homeCard.getByRole('button', { name: '进入' }).click();
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
 });

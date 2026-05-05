@@ -34,7 +34,7 @@ test('本地入口卡片跳回首页时，应清理 labs demo 专属 query', asy
 
   await expect(page).toHaveURL(/\/\?availability=degraded$/);
   await expect(page).not.toHaveURL(/workspaceDemo=/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
 });
 
 test('guest 用户组可通过本地入口卡片进入异常预览页', async ({ page }) => {

@@ -4,7 +4,7 @@ import { expect, test } from '../../test';
 test('首页应展示 API 状态面板，并支持重新检测', async ({ page }) => {
   await openHome(page);
 
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('管理默认模板')).toBeVisible();
   await expect(page.getByRole('heading', { name: '系统状态概览' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '主动作入口' })).toBeVisible();

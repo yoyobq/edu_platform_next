@@ -128,7 +128,7 @@ test('登录成功但 me 失败时，应保留已建立会话并停留在工作�
   await submitLogin(page);
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
@@ -180,7 +180,7 @@ test('refresh 成功后 me 再失败时，应保留当前工作台会话', async
   await page.goto(routes.home);
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expectAuthenticatedUserMenu(page, 'refreshed-admin');
 });
 
@@ -196,7 +196,7 @@ test('本地会话失效且 refresh 失败时，应保留现有工作台快照',
   await page.goto(routes.home);
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expectAuthenticatedUserMenu(page, 'expired-admin');
 });
 
@@ -258,7 +258,7 @@ test('redirect 指向站外地址时，登录后应回退到首页', async ({ pa
   await submitLogin(page);
 
   await expect(page).toHaveURL(/\/$/);
-  await expect(page.getByRole('heading', { name: '默认工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
