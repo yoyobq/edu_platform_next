@@ -259,6 +259,18 @@ function normalizeOptionalEditValue(value: string | null | undefined) {
   return normalizedValue ? normalizedValue : null;
 }
 
+function hasTeachingGroupInDepartment(
+  records: StaffSemesterProfile[],
+  teachingGroupId: string,
+  workloadDepartmentId: string,
+) {
+  return records.some(
+    (record) =>
+      record.teachingGroupId === teachingGroupId &&
+      record.workloadDepartmentId === workloadDepartmentId,
+  );
+}
+
 function applyUpdatedProfile(
   response: StaffSemesterProfileListResponse | null,
   updatedProfile: StaffSemesterProfile,
@@ -518,6 +530,26 @@ export function StaffSemesterProfilesLabPage() {
       nextTeacherEngagementType !== editingProfile.teacherEngagementType
     ) {
       input.teacherEngagementType = nextTeacherEngagementType;
+    }
+
+    if (viewerRole === 'academicOfficer' && nextWorkloadDepartmentId === null) {
+      void messageApi.warning('教务行政不能清空工作量归属系部。');
+      return;
+    }
+
+    if (
+      canEditWorkloadDepartment &&
+      nextWorkloadDepartmentId !== editingProfile.workloadDepartmentId &&
+      nextWorkloadDepartmentId !== null &&
+      nextTeachingGroupId !== null &&
+      !hasTeachingGroupInDepartment(
+        profileOptionRecords,
+        nextTeachingGroupId,
+        nextWorkloadDepartmentId,
+      )
+    ) {
+      void messageApi.warning('修改工作量归属系部时，请改选目标系部下的教研组，或清空教研组。');
+      return;
     }
 
     if (canEditTeachingGroup && nextTeachingGroupId !== editingProfile.teachingGroupId) {
@@ -921,7 +953,7 @@ export function StaffSemesterProfilesLabPage() {
                   name="workloadDepartmentId"
                 >
                   <Select
-                    allowClear
+                    allowClear={viewerRole !== 'academicOfficer'}
                     showSearch
                     loading={loadingProfileOptions}
                     optionFilterProp="label"
