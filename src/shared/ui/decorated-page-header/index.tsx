@@ -18,6 +18,7 @@ export type DecoratedPageHeaderProps = {
   icon?: ReactNode;
   iconPlacement?: 'eyebrow' | 'title';
   title: ReactNode;
+  titleHeadingLevel?: 1 | 2 | 3 | 4 | 5;
   titleLevel?: 1 | 2 | 3 | 4 | 5;
 };
 
@@ -98,6 +99,32 @@ function DecoratedPageHeaderIcon({ icon }: { icon: ReactNode }) {
   );
 }
 
+function DecoratedPageHeaderTitle({
+  level,
+  semanticLevel,
+  title,
+}: {
+  level: 1 | 2 | 3 | 4 | 5;
+  semanticLevel: 1 | 2 | 3 | 4 | 5;
+  title: ReactNode;
+}) {
+  const className = `decorated-page-header-title decorated-page-header-title-level-${level}`;
+
+  switch (semanticLevel) {
+    case 2:
+      return <h2 className={className}>{title}</h2>;
+    case 3:
+      return <h3 className={className}>{title}</h3>;
+    case 4:
+      return <h4 className={className}>{title}</h4>;
+    case 5:
+      return <h5 className={className}>{title}</h5>;
+    case 1:
+    default:
+      return <h1 className={className}>{title}</h1>;
+  }
+}
+
 export function DecoratedPageHeader({
   aside,
   badge,
@@ -107,7 +134,8 @@ export function DecoratedPageHeader({
   icon,
   iconPlacement = 'title',
   title,
-  titleLevel = 1,
+  titleHeadingLevel = 1,
+  titleLevel = 3,
 }: DecoratedPageHeaderProps) {
   return (
     <Card styles={{ body: { padding: 0 } }}>
@@ -129,9 +157,11 @@ export function DecoratedPageHeader({
           ) : null}
           <div className="decorated-page-header-title-row">
             {icon && iconPlacement === 'title' ? <DecoratedPageHeaderIcon icon={icon} /> : null}
-            <Typography.Title level={titleLevel} style={{ marginBottom: 0 }}>
-              {title}
-            </Typography.Title>
+            <DecoratedPageHeaderTitle
+              level={titleLevel}
+              semanticLevel={titleHeadingLevel}
+              title={title}
+            />
           </div>
           {description ? (
             <div className="decorated-page-header-description">

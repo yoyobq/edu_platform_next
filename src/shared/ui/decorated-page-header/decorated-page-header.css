@@ -69,10 +69,32 @@
   line-height: 1;
 }
 
-.decorated-page-header-title-row :where(.ant-typography) {
+.decorated-page-header-title {
   color: var(--ant-color-text);
   font-weight: 650;
   line-height: 1.25;
+  margin: 0;
+  min-width: 0;
+}
+
+.decorated-page-header-title-level-1 {
+  font-size: 30px;
+}
+
+.decorated-page-header-title-level-2 {
+  font-size: 26px;
+}
+
+.decorated-page-header-title-level-3 {
+  font-size: 24px;
+}
+
+.decorated-page-header-title-level-4 {
+  font-size: 20px;
+}
+
+.decorated-page-header-title-level-5 {
+  font-size: 16px;
 }
 
 .decorated-page-header-description {
@@ -112,6 +134,10 @@
     align-items: flex-start;
     flex-direction: column;
     padding: 20px;
+  }
+
+  .decorated-page-header-title-level-1 {
+    font-size: 26px;
   }
 
   .decorated-page-header-aside {

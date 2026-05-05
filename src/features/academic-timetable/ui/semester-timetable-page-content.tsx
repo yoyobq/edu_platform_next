@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CalendarOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, Input, Select, Skeleton, Typography } from 'antd';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { resolveStaffDirectoryEntries } from '@/shared/upstream';
 
 import type {
@@ -345,18 +347,11 @@ export function SemesterTimetablePageContent({
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-1">
-            <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              学期课表
-            </Typography.Title>
-            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              按教师和学期查看排课分布
-            </Typography.Paragraph>
-          </div>
-        </div>
-      </Card>
+      <DecoratedPageHeader
+        description="按教师和学期查看排课分布"
+        icon={<CalendarOutlined />}
+        title="学期课表"
+      />
 
       <Card styles={{ body: { overflow: 'hidden', padding: 0 } }}>{renderQueryControls()}</Card>
 

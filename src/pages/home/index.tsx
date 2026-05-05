@@ -586,6 +586,7 @@ export function HomePage() {
             </>
           )
         }
+        titleHeadingLevel={3}
         titleLevel={3}
         aside={
           <div className="home-workbench-profile">
