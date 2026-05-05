@@ -8,6 +8,7 @@
 - 需要弱化默认标题时，才使用 `eyebrow`；首页这种特殊场景可让 `eyebrowAsHeading` 承担 `h1`。
 - `titleLevel` 管视觉大小；`titleHeadingLevel` 管语义层级。不要把两者混在一起。
 - `icon` 必须与菜单栏同一页面的 `iconKey` 对齐，来源保持 `@ant-design/icons`。
+- 需要非默认色系时使用组件显式字段，例如 `colorScheme="purple"`；渐变、曲线和 icon 必须一起切换。
 - 普通业务页不要使用 AI 色。AI 色只进入明确 AI 场景。
 - 背景装饰由公共组件统一提供；页面不要各自复制曲线、渐变或装饰 SVG。
 

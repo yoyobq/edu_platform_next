@@ -1,10 +1,22 @@
 .decorated-page-header {
+  --decorated-page-header-accent: var(--ant-color-primary);
+  --decorated-page-header-bg-end: color-mix(
+    in srgb,
+    var(--ant-color-info-bg) 24%,
+    var(--ant-color-bg-container)
+  );
+  --decorated-page-header-bg-start: color-mix(
+    in srgb,
+    var(--ant-color-primary-bg) 34%,
+    var(--ant-color-bg-container)
+  );
+
   align-items: center;
   background: linear-gradient(
     135deg,
-    color-mix(in srgb, var(--ant-color-primary-bg) 34%, var(--ant-color-bg-container)) 0%,
+    var(--decorated-page-header-bg-start) 0%,
     var(--ant-color-bg-container) 48%,
-    color-mix(in srgb, var(--ant-color-info-bg) 24%, var(--ant-color-bg-container)) 100%
+    var(--decorated-page-header-bg-end) 100%
   );
   border-radius: 8px;
   display: flex;
@@ -17,8 +29,22 @@
   position: relative;
 }
 
+.decorated-page-header-color-scheme-purple {
+  --decorated-page-header-accent: var(--ant-purple-6, var(--ant-color-primary));
+  --decorated-page-header-bg-end: color-mix(
+    in srgb,
+    var(--ant-purple-2, var(--ant-color-primary-bg)) 20%,
+    var(--ant-color-bg-container)
+  );
+  --decorated-page-header-bg-start: color-mix(
+    in srgb,
+    var(--ant-purple-1, var(--ant-color-primary-bg)) 58%,
+    var(--ant-color-bg-container)
+  );
+}
+
 .decorated-page-header-decor {
-  color: var(--ant-color-primary);
+  color: var(--decorated-page-header-accent);
   height: 100%;
   inset: 0;
   pointer-events: none;
@@ -62,7 +88,7 @@
 }
 
 .decorated-page-header-icon {
-  color: var(--ant-color-primary);
+  color: var(--decorated-page-header-accent);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 1.25em;

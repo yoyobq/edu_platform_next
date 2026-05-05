@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import {
+  BookOutlined,
   CheckOutlined,
   FormOutlined,
   SearchOutlined,
@@ -47,6 +48,7 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   readVerifiedStaffIdentity,
   type StaffDirectoryEntry,
@@ -2448,18 +2450,14 @@ export function AcademicTeachingLogPageContent({
 
   return (
     <div className="lecture-journal-page flex flex-col gap-6">
-      <div className="lecture-journal-page-header">
-        <div className="lecture-journal-header-main">
-          <div className="lecture-journal-header-title-row">
-            <Typography.Title level={3} style={{ margin: 0 }}>
-              My 教学日志
-            </Typography.Title>
-          </div>
-          <div className="lecture-journal-header-subtitle">
-            <Typography.Text type="secondary">对照教学计划，补齐待填日志</Typography.Text>
-          </div>
-        </div>
+      <DecoratedPageHeader
+        colorScheme="purple"
+        description="对照教学计划，补齐待填日志"
+        icon={<BookOutlined />}
+        title="My 教学日志"
+      />
 
+      <div className="lecture-journal-query-shell">
         <div className="lecture-journal-query-area">
           {storedSession ? (
             <div className="lecture-journal-current-identity">

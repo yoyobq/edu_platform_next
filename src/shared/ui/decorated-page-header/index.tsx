@@ -9,9 +9,12 @@ type DecoratedPageHeaderCurve = {
   strokeWidth: number;
 };
 
+export type DecoratedPageHeaderColorScheme = 'default' | 'purple';
+
 export type DecoratedPageHeaderProps = {
   aside?: ReactNode;
   badge?: ReactNode;
+  colorScheme?: DecoratedPageHeaderColorScheme;
   description?: ReactNode;
   eyebrow?: ReactNode;
   eyebrowAsHeading?: boolean;
@@ -128,6 +131,7 @@ function DecoratedPageHeaderTitle({
 export function DecoratedPageHeader({
   aside,
   badge,
+  colorScheme = 'default',
   description,
   eyebrow,
   eyebrowAsHeading = false,
@@ -139,7 +143,7 @@ export function DecoratedPageHeader({
 }: DecoratedPageHeaderProps) {
   return (
     <Card styles={{ body: { padding: 0 } }}>
-      <div className="decorated-page-header">
+      <div className={`decorated-page-header decorated-page-header-color-scheme-${colorScheme}`}>
         <DecoratedPageHeaderDecor />
         <div className="decorated-page-header-main">
           {eyebrow || badge ? (
