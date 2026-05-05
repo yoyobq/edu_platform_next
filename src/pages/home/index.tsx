@@ -31,6 +31,7 @@ import {
   isVisibleHomeModule,
   type VisibleHomeModuleContract,
 } from '@/shared/home-modules';
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { requestOpenEntrySidecar } from '@/shared/workbench-events';
 
 import { WorkbenchCustomItemDragProvider } from './workbench-custom-item-dnd';
@@ -38,7 +39,6 @@ import {
   resolveNicknameWorkbenchGreeting,
   resolveWorkbenchTimeGreeting,
 } from './workbench-greeting';
-import { WorkbenchHeroDecor } from './workbench-hero-decor';
 import { WorkbenchOtherTodos } from './workbench-other-todos';
 import { WorkbenchWeeklyTimetableGrid } from './workbench-weekly-timetable-grid';
 
@@ -543,57 +543,51 @@ export function HomePage() {
 
   return (
     <Flex vertical gap={24}>
-      <Card styles={{ body: { padding: 0 } }}>
-        <div className="home-workbench-hero">
-          <WorkbenchHeroDecor />
-          <div className="home-workbench-hero-main">
-            <div className="home-workbench-heading">
-              <div className="home-workbench-title-row">
-                <span className="home-workbench-title-icon" aria-hidden="true">
-                  <HomeOutlined />
-                </span>
-                <h1 className="home-workbench-eyebrow">我的工作台</h1>
-                {viewModel.contentKind === 'admin-modules' && viewModel.templateLabel ? (
-                  <span className="home-workbench-template-label">
-                    <Tag variant="filled">{viewModel.templateLabel}</Tag>
-                  </span>
-                ) : null}
-              </div>
-              <Typography.Title level={3} style={{ marginBottom: 0 }}>
-                {normalizedStaffName ? (
-                  nameMode === 'staffName' ? (
-                    <>
-                      尊敬的{' '}
-                      <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>{' '}
-                      老师，
-                      {timeGreeting.formalMessage ?? `${timeGreeting.label}好，您辛苦了`}
-                      {nameSwitchButton}
-                    </>
-                  ) : (
-                    <>
-                      <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>
-                      ，{nicknameGreeting}
-                      {nameSwitchButton}
-                    </>
-                  )
-                ) : (
-                  <>
-                    {displayedWorkbenchName}，{timeGreeting.label}好，您辛苦了
-                  </>
-                )}
-              </Typography.Title>
-              <div className="home-workbench-signature">
-                <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                  合理安排，把握节奏，简明高效。
-                </Typography.Paragraph>
-              </div>
-            </div>
+      <DecoratedPageHeader
+        badge={
+          viewModel.contentKind === 'admin-modules' && viewModel.templateLabel ? (
+            <Tag variant="filled">{viewModel.templateLabel}</Tag>
+          ) : null
+        }
+        description={
+          <>
+            合理安排，把握节奏，简明高效。
             {viewModel.templateDescription ? (
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
+              <>
+                <br />
                 {viewModel.templateDescription}
-              </Typography.Paragraph>
+              </>
             ) : null}
-          </div>
+          </>
+        }
+        eyebrow="我的工作台"
+        eyebrowAsHeading
+        icon={<HomeOutlined />}
+        iconPlacement="eyebrow"
+        title={
+          normalizedStaffName ? (
+            nameMode === 'staffName' ? (
+              <>
+                尊敬的 <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>{' '}
+                老师，
+                {timeGreeting.formalMessage ?? `${timeGreeting.label}好，您辛苦了`}
+                {nameSwitchButton}
+              </>
+            ) : (
+              <>
+                <span className="home-workbench-welcome-name">{displayedWorkbenchName}</span>，
+                {nicknameGreeting}
+                {nameSwitchButton}
+              </>
+            )
+          ) : (
+            <>
+              {displayedWorkbenchName}，{timeGreeting.label}好，您辛苦了
+            </>
+          )
+        }
+        titleLevel={3}
+        aside={
           <div className="home-workbench-profile">
             <Tooltip placement="bottom" title={profileTagsTooltip}>
               <span className="home-workbench-profile-avatar">
@@ -609,8 +603,8 @@ export function HomePage() {
               </span>
             </Tooltip>
           </div>
-        </div>
-      </Card>
+        }
+      />
 
       {viewModel.contentKind === 'weekly-timetable' ? (
         <WorkbenchWeeklyTimetable
