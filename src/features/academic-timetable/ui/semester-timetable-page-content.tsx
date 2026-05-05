@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarOutlined } from '@ant-design/icons';
+import { TableOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, Input, Select, Skeleton, Typography } from 'antd';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
@@ -349,7 +349,7 @@ export function SemesterTimetablePageContent({
     <div className="flex flex-col gap-6">
       <DecoratedPageHeader
         description="按教师和学期查看排课分布"
-        icon={<CalendarOutlined />}
+        icon={<TableOutlined />}
         title="学期课表"
       />
 

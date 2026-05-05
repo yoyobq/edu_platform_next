@@ -423,53 +423,70 @@ export function SemesterCalendarPageContent({
     };
   }, [eventError, eventsLoading, hasCurrentWeek, scrollToCurrentWeek, selectedSemester]);
 
+  function renderSemesterCardToolbar() {
+    const canRenderToolbar =
+      Boolean(semesterError) ||
+      semestersLoading ||
+      semesters.length > 0 ||
+      Boolean(selectedSemester?.isCurrent);
+
+    if (!canRenderToolbar) {
+      return null;
+    }
+
+    return (
+      <div className="semester-calendar-card-toolbar">
+        <div className="semester-calendar-card-toolbar-control">
+          {semesterError ? (
+            <Button
+              icon={<ReloadOutlined />}
+              size="large"
+              type="primary"
+              onClick={() => void loadSemesters()}
+            >
+              重新加载学期
+            </Button>
+          ) : semestersLoading ? (
+            <Button loading size="large">
+              加载学期
+            </Button>
+          ) : semesters.length > 0 ? (
+            <Select
+              aria-label="选择学期"
+              optionLabelProp="plainLabel"
+              popupMatchSelectWidth={false}
+              size="large"
+              value={selectedSemesterId}
+              options={semesterSelectOptions}
+              onChange={(value) => setSelectedSemesterId(value)}
+            />
+          ) : null}
+          {selectedSemester?.isCurrent ? (
+            <Tag color="success" variant="filled">
+              当前
+            </Tag>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <section className="rounded-card bg-bg-container p-4 shadow-card">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-1">
-            <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              学期校历
-            </Typography.Title>
-            <Typography.Text type="secondary">
-              按周排布的校历视图，点击含事件的日期查看详情
-            </Typography.Text>
-          </div>
-
-          <div className="flex items-center gap-2 sm:min-w-80">
-            {semesterError ? (
-              <Button icon={<ReloadOutlined />} type="primary" onClick={() => void loadSemesters()}>
-                重新加载学期
-              </Button>
-            ) : semestersLoading ? (
-              <Button loading>加载学期</Button>
-            ) : semesters.length > 0 ? (
-              <Select
-                aria-label="选择学期"
-                optionLabelProp="plainLabel"
-                popupMatchSelectWidth={false}
-                value={selectedSemesterId}
-                options={semesterSelectOptions}
-                onChange={(value) => setSelectedSemesterId(value)}
-              />
-            ) : null}
-            {selectedSemester?.isCurrent ? <Tag color="success">当前</Tag> : null}
-          </div>
+        <div className="flex flex-col gap-1">
+          <Typography.Title level={3} style={{ marginBottom: 0 }}>
+            学期校历
+          </Typography.Title>
+          <Typography.Text type="secondary">
+            按周排布的校历视图，点击含事件的日期查看详情
+          </Typography.Text>
         </div>
       </section>
 
-      <Card>
+      <Card title={renderSemesterCardToolbar()}>
         {semesterError ? (
-          <Alert
-            action={
-              <Button size="small" type="primary" onClick={() => void loadSemesters()}>
-                重试
-              </Button>
-            }
-            showIcon
-            type="error"
-            title={semesterError}
-          />
+          <Alert showIcon type="error" title={semesterError} />
         ) : semestersLoading ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : semesters.length === 0 ? (
@@ -733,7 +750,6 @@ export function SemesterCalendarPageContent({
           </div>
         )}
       </Card>
-
       <Drawer
         destroyOnClose
         open={selectedDayEvents !== null}

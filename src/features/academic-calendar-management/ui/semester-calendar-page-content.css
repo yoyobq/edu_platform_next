@@ -14,6 +14,44 @@
   width: 6px;
 }
 
+.semester-calendar-card-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+  min-width: 0;
+  padding-block: 4px;
+  white-space: normal;
+  width: 100%;
+}
+
+.semester-calendar-card-toolbar-control {
+  align-items: center;
+  display: flex;
+  flex: 1 1 280px;
+  gap: 8px;
+  max-width: 440px;
+  min-width: min(280px, 100%);
+}
+
+.semester-calendar-card-toolbar-control :where(.ant-select) {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.semester-calendar-card-toolbar-control :where(.ant-select-selection-item) {
+  font-weight: 600;
+  text-align: center;
+}
+
+.semester-calendar-card-toolbar-control :where(.ant-tag) {
+  flex: 0 0 auto;
+  font-size: 13px;
+  margin-inline-end: 0;
+  padding: 2px 8px;
+}
+
 .semester-calendar-legend {
   align-items: center;
   color: var(--ant-color-text-secondary);

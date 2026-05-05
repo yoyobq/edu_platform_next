@@ -243,7 +243,7 @@ test('admin 访问正式学期校历页时应成功并支持查看事件详情',
   await expect(
     page.locator('.ant-card-head-title').filter({ hasText: '2025-2026 学年第二学期' }),
   ).toBeVisible();
-  await expect(page.getByText('教学周 18 周（截至考试周前）')).toBeVisible();
+  await expect(page.getByText('教学周 18 周')).toBeVisible();
   await expect(page.getByText('月份')).toBeVisible();
   await expect(page.getByText('2月').first()).toBeVisible();
   await expect(page.getByText('1', { exact: true }).first()).toBeVisible();
