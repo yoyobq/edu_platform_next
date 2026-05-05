@@ -1,6 +1,5 @@
-// src/pages/login/index.tsx
-
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { ArrowRightOutlined } from '@ant-design/icons';
 import { Button, Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
@@ -13,12 +12,13 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
-import { BrandLockup } from '@/shared/ui/brand';
-
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const authSession = useAuthSessionState();
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia('(max-width: 860px)').matches,
+  );
   const [submitError, setSubmitError] = useState<string | null>(() => {
     const flash = readAuthRefreshFeedbackFlash();
 
@@ -31,6 +31,16 @@ export function LoginPage() {
       needsProfileCompletion: authSession.snapshot?.needsProfileCompletion ?? false,
     },
   );
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 860px)');
+    const syncViewport = () => setIsNarrowViewport(mediaQuery.matches);
+
+    syncViewport();
+    mediaQuery.addEventListener('change', syncViewport);
+
+    return () => mediaQuery.removeEventListener('change', syncViewport);
+  }, []);
 
   if (authSession.status === 'authenticated') {
     return <Navigate to={redirectTarget} replace />;
@@ -46,82 +56,105 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-bg-layout px-6 py-12 text-text">
-      <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
-        <Flex gap={32} className="w-full" wrap>
-          <Flex vertical gap={24} className="min-w-70 flex-1">
-            <BrandLockup variant="public-entry" />
-            <div>
-              <h1
-                style={{
-                  fontSize: 'var(--ant-font-size-heading-3)',
-                  fontWeight: 'var(--ant-font-weight-heading)',
-                  lineHeight: 'var(--ant-line-height-heading-3)',
-                  marginBottom: 12,
-                  marginTop: 8,
-                }}
-              >
-                登录后再进入工作台
-              </h1>
-              <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
-                当前阶段先建立最小可恢复会话基础。登录成功后会优先回到你原本要访问的站内目标，
-                若没有目标，则回到工作台入口。
-              </Typography.Paragraph>
-            </div>
-          </Flex>
-
-          <div className="min-w-[320px] flex-1">
-            <Card styles={{ body: { padding: 24 } }}>
-              <Flex vertical gap={24}>
-                <div>
-                  <Typography.Title level={4} style={{ marginBottom: 8 }}>
-                    账户登录
-                  </Typography.Title>
-                  <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                    先用后端 `login` mutation 建立 token 会话，再在壳层内补齐当前账号信息。
-                  </Typography.Paragraph>
-                </div>
-
-                <LoginForm
-                  errorMessage={submitError ?? authSession.lastError}
-                  submitting={submitting}
-                  onSubmit={async (values) => {
-                    setSubmitting(true);
-                    setSubmitError(null);
-
-                    try {
-                      await login({
-                        audience: 'DESKTOP',
-                        loginName: values.loginName,
-                        loginPassword: values.loginPassword,
-                        type: 'PASSWORD',
-                      });
-
-                      navigate(
-                        resolveLoginRedirectTarget(
-                          new URLSearchParams(location.search).get('redirect'),
-                        ),
-                        { replace: true },
-                      );
-                    } catch (error) {
-                      setSubmitError(error instanceof Error ? error.message : '登录失败。');
-                    } finally {
-                      setSubmitting(false);
-                    }
+    <div
+      className={`login-page-shell min-h-screen text-text${
+        isNarrowViewport ? ' login-page-shell-narrow' : ''
+      }`}
+    >
+      <div className="login-page-frame">
+        <div className="login-page-grid">
+          <section
+            className={`login-story-column min-w-[280px] flex-1${
+              isNarrowViewport ? ' login-story-column-narrow' : ''
+            }`}
+            aria-labelledby="login-page-title"
+          >
+            <div className="login-brand-mark">
+              <img alt="" aria-hidden="true" src="/logo.svg" className="login-brand-logo" />
+              <div>
+                <span className="login-brand-name">智教随行</span>
+                <h1
+                  id="login-page-title"
+                  style={{
+                    fontSize: 'var(--ant-font-size)',
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    lineHeight: 1.35,
+                    marginBottom: 0,
+                    marginTop: 0,
                   }}
-                />
-
-                <Button
-                  type="link"
-                  style={{ paddingLeft: 0, width: 'fit-content' }}
-                  onClick={() => navigate('/forgot-password')}
                 >
-                  忘记密码
-                </Button>
-              </Flex>
-            </Card>
+                  EDU MATE
+                </h1>
+              </div>
+            </div>
+
+            {isNarrowViewport ? null : (
+              <div className="login-hero-block">
+                <div className="login-hero-image-shell">
+                  <img
+                    src="/images/login.jpg"
+                    alt=""
+                    aria-hidden="true"
+                    className="login-hero-image"
+                  />
+                </div>
+              </div>
+            )}
+          </section>
+
+          <div className="login-form-column min-w-0 flex-1">
+            <div className="login-card-shell">
+              <Card styles={{ body: { padding: '32px 32px' } }} variant="borderless">
+                <Flex vertical gap={24}>
+                  <div className="login-card-heading">
+                    <Typography.Title level={4} style={{ marginBottom: 4 }}>
+                      账户登录
+                    </Typography.Title>
+                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                      使用你的教务账户进入 EDU MATE。
+                    </Typography.Paragraph>
+                  </div>
+
+                  <LoginForm
+                    errorMessage={submitError ?? authSession.lastError}
+                    submitting={submitting}
+                    onSubmit={async (values) => {
+                      setSubmitting(true);
+                      setSubmitError(null);
+
+                      try {
+                        await login({
+                          audience: 'DESKTOP',
+                          loginName: values.loginName,
+                          loginPassword: values.loginPassword,
+                          type: 'PASSWORD',
+                        });
+
+                        navigate(
+                          resolveLoginRedirectTarget(
+                            new URLSearchParams(location.search).get('redirect'),
+                          ),
+                          { replace: true },
+                        );
+                      } catch (error) {
+                        setSubmitError(error instanceof Error ? error.message : '登录失败。');
+                      } finally {
+                        setSubmitting(false);
+                      }
+                    }}
+                  />
+
+                  <div className="login-recovery-link-shell">
+                    <Button type="link" onClick={() => navigate('/forgot-password')}>
+                      忘记密码？ <ArrowRightOutlined aria-hidden="true" />
+                    </Button>
+                  </div>
+                </Flex>
+              </Card>
+            </div>
           </div>
-        </Flex>
+        </div>
       </div>
     </div>
   );

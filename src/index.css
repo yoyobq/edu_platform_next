@@ -293,6 +293,168 @@ html.disable-motion *::after {
   transition-duration: 0s !important;
 }
 
+.login-page-shell {
+  background-color: color-mix(in srgb, var(--color-ai-accent) 3%, var(--ant-color-bg-layout));
+  background-image:
+    radial-gradient(
+      circle at 22% 46%,
+      color-mix(in srgb, var(--color-ai-accent) 12%, transparent),
+      transparent 34%
+    ),
+    radial-gradient(
+      circle at 74% 42%,
+      color-mix(in srgb, var(--ant-color-primary) 6%, transparent),
+      transparent 30%
+    );
+  position: relative;
+  overflow: hidden;
+}
+
+.login-page-frame {
+  align-items: center;
+  display: flex;
+  margin-inline: auto;
+  min-height: 100vh;
+  max-width: 1220px;
+  padding: 32px 24px;
+  position: relative;
+  width: 100%;
+  z-index: 1;
+}
+
+.login-page-shell-narrow .login-page-frame {
+  max-width: 438px;
+  padding-inline: 24px;
+}
+
+.login-page-grid {
+  align-items: start;
+  display: grid;
+  gap: 40px 72px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  width: 100%;
+}
+
+.login-page-shell-narrow .login-page-grid {
+  gap: 40px;
+  grid-template-columns: 1fr;
+  justify-items: stretch;
+}
+
+.login-story-column {
+  display: flex;
+  flex-basis: 0;
+  flex-direction: column;
+  gap: 30px;
+  max-width: 680px;
+  padding-top: 20px;
+}
+
+.login-brand-mark {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+}
+
+.login-brand-logo {
+  display: block;
+  flex-shrink: 0;
+  height: 60px;
+  width: auto;
+}
+
+.login-brand-name {
+  color: var(--ant-color-text);
+  display: block;
+  font-size: var(--ant-font-size-lg);
+  font-weight: 600;
+  line-height: 1.22;
+  margin-bottom: 2px;
+}
+
+.login-story-column-narrow {
+  align-items: center;
+  gap: 0;
+  padding-top: 0;
+}
+
+.login-story-column-narrow .login-brand-mark {
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.login-story-column-narrow .login-brand-logo {
+  height: 68px;
+}
+
+.login-story-column-narrow .login-brand-name {
+  margin-bottom: 4px;
+}
+
+.login-hero-block {
+  display: flex;
+  flex-direction: column;
+  max-width: 680px;
+}
+
+.login-hero-image-shell {
+  border-radius: var(--radius-card);
+  box-shadow: 0 18px 42px -30px color-mix(in srgb, var(--color-ai-accent) 64%, black);
+  overflow: hidden;
+  position: relative;
+}
+
+.login-hero-image {
+  aspect-ratio: 16 / 9;
+  display: block;
+  height: auto;
+  object-fit: cover;
+  width: 100%;
+}
+
+.login-form-column {
+  flex-basis: 360px;
+  justify-self: end;
+  max-width: 420px;
+  padding-top: 0;
+  width: 100%;
+}
+
+.login-page-shell-narrow .login-form-column {
+  justify-self: stretch;
+  max-width: none;
+}
+
+.login-card-shell > .ant-card {
+  background: color-mix(in srgb, var(--ant-color-bg-container) 95%, var(--color-ai-accent));
+  border-color: var(--ant-color-border-secondary);
+  border-radius: var(--radius-surface);
+  box-shadow: 0 18px 38px -26px rgba(0, 0, 0, 0.16);
+}
+
+.login-card-heading {
+  margin-bottom: 0;
+}
+
+.login-recovery-link-shell {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.login-recovery-link-shell .ant-btn {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  gap: 6px;
+  padding-left: 0;
+  width: fit-content;
+}
+
+.login-recovery-link-shell .ant-btn:hover {
+  color: var(--ant-color-link-hover);
+}
+
 @layer base {
   a:not([class]) {
     color: var(--ant-color-link);

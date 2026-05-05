@@ -62,7 +62,7 @@ export function BrandLockup({
                   }
             }
           >
-            {isHeader ? 'EDU Platform' : 'aigc-friendly-frontend'}
+            {isHeader ? 'EDU MATE' : '智教随行'}
           </Typography.Text>
         </Flex>
       )}
