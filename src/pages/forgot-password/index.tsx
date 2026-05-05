@@ -5,7 +5,6 @@ import { useNavigate } from 'react-router';
 import { ForgotPasswordForm, requestPasswordReset } from '@/features/public-auth';
 
 import { isGraphQLIngressError } from '@/shared/graphql';
-import { BrandLockup } from '@/shared/ui/brand';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
 
@@ -19,8 +18,26 @@ export function ForgotPasswordPage() {
     <div className="min-h-screen bg-bg-layout px-6 py-12 text-text">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
         <Flex gap={32} className="w-full" wrap>
-          <Flex vertical gap={24} className="min-w-[280px] flex-1">
-            <BrandLockup variant="public-entry" />
+          <Flex vertical gap={24} className="min-w-70 flex-1">
+            <div className="login-brand-mark">
+              <img alt="" aria-hidden="true" src="/logo.svg" className="login-brand-logo" />
+              <div>
+                <span className="login-brand-name">智教随行</span>
+                <span
+                  style={{
+                    display: 'block',
+                    fontSize: 'var(--ant-font-size)',
+                    fontWeight: 600,
+                    letterSpacing: '0.08em',
+                    lineHeight: 1.35,
+                    marginBottom: 0,
+                    marginTop: 0,
+                  }}
+                >
+                  EDU MATE
+                </span>
+              </div>
+            </div>
             <div>
               <h1
                 style={{
@@ -34,7 +51,7 @@ export function ForgotPasswordPage() {
                 找回你的账户密码
               </h1>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
-                当前阶段先补齐最小自助恢复闭环。输入邮箱后，我们会按统一反馈处理，不暴露账户是否存在。
+                输入账户绑定邮箱，按邮件中的链接重新设置密码
               </Typography.Paragraph>
             </div>
           </Flex>
@@ -49,7 +66,7 @@ export function ForgotPasswordPage() {
                         请检查你的邮箱
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                        若该账户存在，我们已发送重置邮件。你可以稍后从邮件中的链接继续完成密码重置。
+                        如果邮箱匹配已有账户，重置邮件会发送到该邮箱。请在邮件有效期内打开链接并设置新密码
                       </Typography.Paragraph>
                     </div>
 
@@ -64,7 +81,7 @@ export function ForgotPasswordPage() {
                         发送重置邮件
                       </Typography.Title>
                       <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                        输入你的邮箱，我们会发送一封用于重置密码的邮件。
+                        输入账户绑定邮箱，我们会发送一封密码重置邮件
                       </Typography.Paragraph>
                     </div>
 

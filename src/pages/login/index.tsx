@@ -1,5 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ArrowRightOutlined } from '@ant-design/icons';
+import {
+  BankOutlined,
+  CopyrightOutlined,
+  RobotOutlined,
+  ScheduleOutlined,
+} from '@ant-design/icons';
 import { Button, Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
@@ -16,6 +21,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const authSession = useAuthSessionState();
+  const copyrightYear = new Date().getFullYear();
   const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
     typeof window === 'undefined' ? false : window.matchMedia('(max-width: 860px)').matches,
   );
@@ -64,7 +70,7 @@ export function LoginPage() {
       <div className="login-page-frame">
         <div className="login-page-grid">
           <section
-            className={`login-story-column min-w-[280px] flex-1${
+            className={`login-story-column min-w-70 flex-1${
               isNarrowViewport ? ' login-story-column-narrow' : ''
             }`}
             aria-labelledby="login-page-title"
@@ -76,10 +82,10 @@ export function LoginPage() {
                 <h1
                   id="login-page-title"
                   style={{
-                    fontSize: 'var(--ant-font-size)',
-                    fontWeight: 600,
-                    letterSpacing: '0.08em',
-                    lineHeight: 1.35,
+                    fontSize: 27,
+                    fontWeight: 800,
+                    letterSpacing: 0,
+                    lineHeight: 1.1,
                     marginBottom: 0,
                     marginTop: 0,
                   }}
@@ -88,6 +94,14 @@ export function LoginPage() {
                 </h1>
               </div>
             </div>
+
+            {isNarrowViewport ? null : (
+              <p className="login-story-copy">
+                面向学生、教师与教职工的智能伴侣，
+                <br />
+                帮助安排事务、协调流程并引导 AI 融入日常工作（并不能）
+              </p>
+            )}
 
             {isNarrowViewport ? null : (
               <div className="login-hero-block">
@@ -99,21 +113,41 @@ export function LoginPage() {
                     className="login-hero-image"
                   />
                 </div>
+                <div className="login-feature-chip-row">
+                  <span className="login-feature-chip">
+                    <BankOutlined aria-hidden="true" />
+                    对齐校园网数据
+                  </span>
+                  <span className="login-feature-chip">
+                    <RobotOutlined aria-hidden="true" />
+                    AI 介入工作流
+                  </span>
+                  <span className="login-feature-chip">
+                    <ScheduleOutlined aria-hidden="true" />
+                    更懂教务场景
+                  </span>
+                </div>
               </div>
             )}
           </section>
 
           <div className="login-form-column min-w-0 flex-1">
             <div className="login-card-shell">
-              <Card styles={{ body: { padding: '32px 32px' } }} variant="borderless">
-                <Flex vertical gap={24}>
+              <Card
+                styles={{
+                  body: {
+                    padding: isNarrowViewport
+                      ? '32px 26px'
+                      : 'clamp(42px, 3.1vw, 52px) clamp(38px, 3.2vw, 54px) clamp(34px, 2.5vw, 42px)',
+                  },
+                }}
+                variant="borderless"
+              >
+                <Flex vertical>
                   <div className="login-card-heading">
-                    <Typography.Title level={4} style={{ marginBottom: 4 }}>
-                      账户登录
+                    <Typography.Title level={3} style={{ marginBottom: 0 }}>
+                      账号登录
                     </Typography.Title>
-                    <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                      使用你的教务账户进入 EDU MATE。
-                    </Typography.Paragraph>
                   </div>
 
                   <LoginForm
@@ -147,8 +181,28 @@ export function LoginPage() {
 
                   <div className="login-recovery-link-shell">
                     <Button type="link" onClick={() => navigate('/forgot-password')}>
-                      忘记密码？ <ArrowRightOutlined aria-hidden="true" />
+                      忘记密码？
                     </Button>
+                  </div>
+
+                  <div className="login-security-note">
+                    <div className="login-legal-divider" aria-hidden="true" />
+                    <div className="login-legal-copy">
+                      <span className="login-copyright-copy">
+                        <span className="login-copyright-mark" aria-hidden="true">
+                          <CopyrightOutlined />
+                        </span>
+                        信息工程系 2023-{copyrightYear}
+                      </span>
+                      <a
+                        className="login-legal-link"
+                        href="https://beian.miit.gov.cn/"
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        苏ICP备2025181449号-1
+                      </a>
+                    </div>
                   </div>
                 </Flex>
               </Card>

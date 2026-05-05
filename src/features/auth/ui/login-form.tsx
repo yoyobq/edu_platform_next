@@ -1,5 +1,6 @@
 // src/features/auth/ui/login-form.tsx
 
+import { LockOutlined, UserOutlined } from '@ant-design/icons';
 import { Alert, Button, Form, Input } from 'antd';
 
 type LoginFormValues = {
@@ -33,7 +34,11 @@ export function LoginForm({ errorMessage, onSubmit, submitting }: LoginFormProps
         name="loginName"
         rules={[{ required: true, message: '请输入登录名或邮箱。' }]}
       >
-        <Input placeholder="请输入登录名或邮箱" autoComplete="username" />
+        <Input
+          placeholder="请输入登录名或邮箱"
+          autoComplete="username"
+          prefix={<UserOutlined aria-hidden="true" />}
+        />
       </Form.Item>
 
       <Form.Item
@@ -41,14 +46,20 @@ export function LoginForm({ errorMessage, onSubmit, submitting }: LoginFormProps
         name="loginPassword"
         rules={[{ required: true, message: '请输入密码。' }]}
       >
-        <Input.Password placeholder="请输入密码" autoComplete="current-password" />
+        <Input.Password
+          placeholder="请输入密码"
+          autoComplete="current-password"
+          prefix={<LockOutlined aria-hidden="true" />}
+        />
       </Form.Item>
 
-      <Form.Item style={{ marginBottom: 0 }}>
-        <Button type="primary" htmlType="submit" block loading={submitting}>
-          登录
-        </Button>
-      </Form.Item>
+      <div className="login-submit-action">
+        <Form.Item style={{ marginBottom: 0 }}>
+          <Button type="primary" htmlType="submit" block loading={submitting}>
+            登录
+          </Button>
+        </Form.Item>
+      </div>
     </Form>
   );
 }

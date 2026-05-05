@@ -120,7 +120,7 @@ export function UpstreamLoginModal({
         width={760}
         onCancel={onCancel}
       >
-        <div className="grid min-h-[430px] grid-cols-[45fr_55fr] overflow-hidden">
+        <div className="grid min-h-107.5 grid-cols-[45fr_55fr] overflow-hidden">
           <aside
             className="flex flex-col border-r border-border px-10 py-7 pt-12"
             style={{
