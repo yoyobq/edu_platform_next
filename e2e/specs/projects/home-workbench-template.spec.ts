@@ -94,6 +94,7 @@ test('学生身份进入首页时，应进入我的工作台周课表内容', as
 
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('当前账号暂无可展示周课表')).toBeVisible();
+  await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveCount(0);
   await expect(page.getByText('成员默认模板')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '打开开始入口' })).toHaveCount(0);
 });
@@ -102,6 +103,7 @@ test('GUEST 进入首页时，应进入我的工作台周课表内容', async ({
   await openHomeAs(page, { primaryAccessGroup: 'GUEST' });
 
   await expect(page.getByText('当前账号暂无可展示周课表')).toBeVisible();
+  await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveCount(0);
   await expect(page.getByText('最小默认模板')).toHaveCount(0);
 });
 
@@ -159,6 +161,10 @@ test('其他待办可以拖拽到周课表空格，并同步本地存储', async
 
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('测试课程')).toBeVisible();
+  await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveAttribute(
+    'href',
+    '/academic-affairs/my-teaching-logs',
+  );
 
   const todoItems = page.locator('.home-workbench-todo-items');
   const todoItem = todoItems.locator('.home-workbench-todo-item', { hasText: '拖拽待办' });

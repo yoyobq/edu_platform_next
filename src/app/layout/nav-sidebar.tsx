@@ -3,6 +3,7 @@
 import { type ReactNode, useMemo } from 'react';
 import {
   ApiOutlined,
+  BookOutlined,
   CalendarOutlined,
   CodeOutlined,
   ExperimentOutlined,
@@ -32,6 +33,7 @@ import { NAV_FULL_WIDTH, NAV_RAIL_WIDTH, useNavCapability } from '@/app/provider
 
 const ICON_MAP: Record<string, React.ComponentType> = {
   ApiOutlined,
+  BookOutlined,
   CalendarOutlined,
   CodeOutlined,
   ExperimentOutlined,

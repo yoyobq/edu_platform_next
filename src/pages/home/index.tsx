@@ -1,10 +1,10 @@
 // src/pages/home/index.tsx
 
 import { useEffect, useMemo, useState } from 'react';
-import { SwapOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, BookOutlined, SwapOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Flex, Skeleton, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 import {
   type AcademicTimetableItem,
@@ -23,6 +23,7 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
+import { hasAcademicTeachingLogAccess } from '@/shared/auth-access';
 import { HexAvatar } from '@/shared/hex-avatar';
 import {
   type HomeModuleAction,
@@ -272,9 +273,11 @@ function HomeModuleCard({
 
 function WorkbenchWeeklyTimetable({
   accountId,
+  showTeachingLogQuickEntry,
   staffId,
 }: {
   accountId: number | null;
+  showTeachingLogQuickEntry: boolean;
   staffId: string | null;
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -420,6 +423,28 @@ function WorkbenchWeeklyTimetable({
             aria-labelledby="home-workbench-quick-entry-title"
           >
             <h2 id="home-workbench-quick-entry-title">快捷入口</h2>
+            {showTeachingLogQuickEntry ? (
+              <div className="home-workbench-quick-entry-list">
+                <Link
+                  className="home-workbench-quick-entry-card"
+                  to="/academic-affairs/my-teaching-logs"
+                >
+                  <span className="home-workbench-quick-entry-icon">
+                    <BookOutlined />
+                  </span>
+                  <span className="home-workbench-quick-entry-main">
+                    <span className="home-workbench-quick-entry-group">教务助手</span>
+                    <span className="home-workbench-quick-entry-title">My 教学日志</span>
+                    <span className="home-workbench-quick-entry-desc">
+                      对照教学计划，补齐待填日志
+                    </span>
+                  </span>
+                  <span className="home-workbench-quick-entry-arrow">
+                    <ArrowRightOutlined />
+                  </span>
+                </Link>
+              </div>
+            ) : null}
           </section>
         </div>
       </div>
@@ -488,6 +513,9 @@ export function HomePage() {
   });
   const visibleModules = viewModel.modules.filter(isVisibleHomeModule);
   const shouldShowModuleSkeleton = viewModel.contentKind === 'admin-modules' && isPending;
+  const canShowTeachingLogQuickEntry = hasAcademicTeachingLogAccess({
+    accessGroup: authSession.snapshot?.userInfo.accessGroup,
+  });
 
   const handleAction = (action: HomeModuleAction) => {
     if (action.disabled) {
@@ -574,6 +602,7 @@ export function HomePage() {
       {viewModel.contentKind === 'weekly-timetable' ? (
         <WorkbenchWeeklyTimetable
           accountId={authSession.snapshot?.accountId ?? null}
+          showTeachingLogQuickEntry={canShowTeachingLogQuickEntry}
           staffId={staffId}
         />
       ) : shouldShowModuleSkeleton ? (

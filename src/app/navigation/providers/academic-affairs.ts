@@ -82,7 +82,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'FormOutlined',
+            iconKey: 'BookOutlined',
             key: '/academic-affairs/my-teaching-logs',
             label: 'My 教学日志',
             navMode: 'rail' as const,

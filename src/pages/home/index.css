@@ -228,6 +228,94 @@
   white-space: normal;
 }
 
+.home-workbench-quick-entry-list {
+  align-items: stretch;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 260px));
+  margin-block-start: 14px;
+}
+
+.home-workbench-quick-entry-card {
+  align-items: center;
+  background: color-mix(in srgb, var(--ant-color-primary-bg) 58%, var(--ant-color-bg-container));
+  border: 1px solid color-mix(in srgb, var(--ant-color-primary-border) 72%, transparent);
+  border-radius: 8px;
+  color: inherit;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-height: 74px;
+  padding: 12px;
+  text-decoration: none;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.15s ease;
+}
+
+.home-workbench-quick-entry-card:hover,
+.home-workbench-quick-entry-card:focus-visible {
+  background: color-mix(in srgb, var(--ant-color-primary-bg) 72%, var(--ant-color-bg-container));
+  border-color: var(--ant-color-primary-border);
+  box-shadow: 0 8px 22px color-mix(in srgb, var(--ant-color-primary) 10%, transparent);
+  color: inherit;
+  transform: translateY(-1px);
+}
+
+.home-workbench-quick-entry-icon,
+.home-workbench-quick-entry-arrow {
+  align-items: center;
+  display: inline-flex;
+  justify-content: center;
+}
+
+.home-workbench-quick-entry-icon {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-primary-border);
+  border-radius: 8px;
+  color: var(--ant-color-primary);
+  font-size: 18px;
+  height: 40px;
+  width: 40px;
+}
+
+.home-workbench-quick-entry-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.home-workbench-quick-entry-group {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.home-workbench-quick-entry-title {
+  color: var(--ant-color-text);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.home-workbench-quick-entry-desc {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-workbench-quick-entry-arrow {
+  color: var(--ant-color-primary);
+  font-size: 14px;
+}
+
 @media (max-width: 768px) {
   .home-workbench-hero {
     align-items: flex-start;
