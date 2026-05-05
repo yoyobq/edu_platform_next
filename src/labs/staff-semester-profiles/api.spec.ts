@@ -11,6 +11,8 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  backfillStaffSemesterProfilesFromCourseSchedules,
+  requestStaffSemesterProfileDepartments,
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,
   updateStaffSemesterProfile,
@@ -232,5 +234,124 @@ describe('staff-semester-profiles api', () => {
         },
       },
     );
+  });
+
+  it('loads enabled departments for backfill workload department selection', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      departments: [
+        {
+          departmentName: '计算机系',
+          id: 'D-01',
+          isEnabled: true,
+          shortName: '计科',
+        },
+      ],
+    });
+
+    await expect(requestStaffSemesterProfileDepartments()).resolves.toEqual([
+      {
+        departmentName: '计算机系',
+        id: 'D-01',
+        isEnabled: true,
+        shortName: '计科',
+      },
+    ]);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query StaffSemesterProfileDepartments'),
+      {
+        isEnabled: true,
+        limit: 500,
+      },
+    );
+  });
+
+  it('previews staff semester profile backfill from course schedules with normalized input', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      backfillStaffSemesterProfilesFromCourseSchedules: {
+        alreadyExistingCount: 0,
+        blockingCount: 0,
+        candidateCount: 1,
+        creatableCount: 1,
+        createdCount: 0,
+        dryRun: true,
+        items: [
+          {
+            action: 'would_create',
+            blockingReason: null,
+            inheritedFromSemesterId: 202501,
+            staffId: 'STAFF-001',
+            staffName: '张老师',
+            teacherEngagementType: 'FULL_TIME_TEACHER',
+            teachingGroupId: 'TG-01',
+          },
+        ],
+        semesterId: 202601,
+        workloadDepartmentId: 'D-01',
+      },
+    });
+
+    await expect(
+      backfillStaffSemesterProfilesFromCourseSchedules({
+        dryRun: true,
+        semesterId: 202601,
+        workloadDepartmentId: ' D-01 ',
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        candidateCount: 1,
+        dryRun: true,
+      }),
+    );
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('backfillStaffSemesterProfilesFromCourseSchedules'),
+      {
+        input: {
+          dryRun: true,
+          semesterId: 202601,
+          workloadDepartmentId: 'D-01',
+        },
+      },
+    );
+  });
+
+  it('executes staff semester profile backfill with dryRun false by default', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      backfillStaffSemesterProfilesFromCourseSchedules: {
+        alreadyExistingCount: 0,
+        blockingCount: 0,
+        candidateCount: 1,
+        creatableCount: 1,
+        createdCount: 1,
+        dryRun: false,
+        items: [
+          {
+            action: 'created',
+            blockingReason: null,
+            inheritedFromSemesterId: null,
+            staffId: 'STAFF-002',
+            staffName: '李老师',
+            teacherEngagementType: 'FULL_TIME_TEACHER',
+            teachingGroupId: null,
+          },
+        ],
+        semesterId: 202601,
+        workloadDepartmentId: 'D-01',
+      },
+    });
+
+    await backfillStaffSemesterProfilesFromCourseSchedules({
+      semesterId: 202601,
+      workloadDepartmentId: 'D-01',
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
+      input: {
+        dryRun: false,
+        semesterId: 202601,
+        workloadDepartmentId: 'D-01',
+      },
+    });
   });
 });

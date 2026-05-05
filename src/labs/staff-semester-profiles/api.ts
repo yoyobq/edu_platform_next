@@ -12,6 +12,17 @@ export type StaffSemesterProfileSortBy = 'staffId' | 'staffName' | 'updatedAt';
 
 export type SortDirection = 'ASC' | 'DESC';
 
+export type StaffSemesterProfileBackfillAction =
+  | 'already_exists'
+  | 'blocked'
+  | 'created'
+  | 'would_create';
+
+export type StaffSemesterProfileBackfillBlockingReason =
+  | 'teaching_group_not_found'
+  | 'teaching_group_workload_department_mismatch'
+  | null;
+
 export type StaffSemesterProfile = {
   remarks: string | null;
   semesterId: number;
@@ -57,6 +68,41 @@ export type UpdateStaffSemesterProfileInput = {
   workloadDepartmentId?: string | null;
 };
 
+export type StaffSemesterProfileDepartmentOption = {
+  departmentName: string;
+  id: string;
+  isEnabled: boolean;
+  shortName: string | null;
+};
+
+export type BackfillStaffSemesterProfilesFromCourseSchedulesInput = {
+  dryRun?: boolean;
+  semesterId: number;
+  workloadDepartmentId: string;
+};
+
+export type BackfillStaffSemesterProfilesFromCourseSchedulesItem = {
+  action: StaffSemesterProfileBackfillAction;
+  blockingReason: StaffSemesterProfileBackfillBlockingReason;
+  inheritedFromSemesterId: number | null;
+  staffId: string;
+  staffName: string;
+  teacherEngagementType: AcademicTeacherEngagementType;
+  teachingGroupId: string | null;
+};
+
+export type BackfillStaffSemesterProfilesFromCourseSchedulesResult = {
+  alreadyExistingCount: number;
+  blockingCount: number;
+  candidateCount: number;
+  creatableCount: number;
+  createdCount: number;
+  dryRun: boolean;
+  items: BackfillStaffSemesterProfilesFromCourseSchedulesItem[];
+  semesterId: number;
+  workloadDepartmentId: string;
+};
+
 type StaffSemesterProfilesResponse = {
   staffSemesterProfiles: StaffSemesterProfileListResponse;
 };
@@ -65,6 +111,14 @@ type UpdateStaffSemesterProfileResponse = {
   updateStaffSemesterProfile: StaffSemesterProfile & {
     createdAt: string;
   };
+};
+
+type StaffSemesterProfileDepartmentsResponse = {
+  departments: StaffSemesterProfileDepartmentOption[];
+};
+
+type BackfillStaffSemesterProfilesFromCourseSchedulesResponse = {
+  backfillStaffSemesterProfilesFromCourseSchedules: BackfillStaffSemesterProfilesFromCourseSchedulesResult;
 };
 
 const STAFF_SEMESTER_PROFILES_QUERY = `
@@ -111,6 +165,17 @@ const STAFF_SEMESTER_PROFILES_QUERY = `
   }
 `;
 
+const STAFF_SEMESTER_PROFILE_DEPARTMENTS_QUERY = `
+  query StaffSemesterProfileDepartments($isEnabled: Boolean, $limit: Int) {
+    departments(isEnabled: $isEnabled, limit: $limit) {
+      departmentName
+      id
+      isEnabled
+      shortName
+    }
+  }
+`;
+
 const UPDATE_STAFF_SEMESTER_PROFILE_MUTATION = `
   mutation UpdateStaffSemesterProfile($input: UpdateStaffSemesterProfileInput!) {
     updateStaffSemesterProfile(input: $input) {
@@ -125,6 +190,32 @@ const UPDATE_STAFF_SEMESTER_PROFILE_MUTATION = `
       remarks
       createdAt
       updatedAt
+    }
+  }
+`;
+
+const BACKFILL_STAFF_SEMESTER_PROFILES_FROM_COURSE_SCHEDULES_MUTATION = `
+  mutation BackfillStaffSemesterProfilesFromCourseSchedules(
+    $input: BackfillStaffSemesterProfilesFromCourseSchedulesInput!
+  ) {
+    backfillStaffSemesterProfilesFromCourseSchedules(input: $input) {
+      dryRun
+      semesterId
+      workloadDepartmentId
+      candidateCount
+      creatableCount
+      createdCount
+      alreadyExistingCount
+      blockingCount
+      items {
+        staffId
+        staffName
+        action
+        inheritedFromSemesterId
+        teacherEngagementType
+        teachingGroupId
+        blockingReason
+      }
     }
   }
 `;
@@ -166,6 +257,14 @@ function normalizeUpdateInput(input: UpdateStaffSemesterProfileInput) {
   };
 }
 
+function normalizeBackfillInput(input: BackfillStaffSemesterProfilesFromCourseSchedulesInput) {
+  return {
+    dryRun: input.dryRun ?? false,
+    semesterId: input.semesterId,
+    workloadDepartmentId: input.workloadDepartmentId.trim(),
+  };
+}
+
 function normalizeRequestInput(input: RequestStaffSemesterProfilesInput) {
   return {
     keyword: normalizeStringFilter(input.keyword),
@@ -194,6 +293,22 @@ function resolveStaffSemesterProfilesErrorMessage(error: unknown, fallback: stri
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+export async function requestStaffSemesterProfileDepartments() {
+  try {
+    const response = await executeGraphQL<
+      StaffSemesterProfileDepartmentsResponse,
+      {
+        isEnabled: boolean;
+        limit: number;
+      }
+    >(STAFF_SEMESTER_PROFILE_DEPARTMENTS_QUERY, { isEnabled: true, limit: 500 });
+
+    return response.departments;
+  } catch (error) {
+    throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法加载系部列表。'));
+  }
 }
 
 export async function requestStaffSemesterProfiles(input: RequestStaffSemesterProfilesInput) {
@@ -250,5 +365,26 @@ export async function updateStaffSemesterProfile(input: UpdateStaffSemesterProfi
     return response.updateStaffSemesterProfile;
   } catch (error) {
     throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法修改教师学期归属。'));
+  }
+}
+
+export async function backfillStaffSemesterProfilesFromCourseSchedules(
+  input: BackfillStaffSemesterProfilesFromCourseSchedulesInput,
+) {
+  try {
+    const response = await executeGraphQL<
+      BackfillStaffSemesterProfilesFromCourseSchedulesResponse,
+      {
+        input: ReturnType<typeof normalizeBackfillInput>;
+      }
+    >(BACKFILL_STAFF_SEMESTER_PROFILES_FROM_COURSE_SCHEDULES_MUTATION, {
+      input: normalizeBackfillInput(input),
+    });
+
+    return response.backfillStaffSemesterProfilesFromCourseSchedules;
+  } catch (error) {
+    throw new Error(
+      resolveStaffSemesterProfilesErrorMessage(error, '暂时无法从课程表补齐教师学期归属。'),
+    );
   }
 }

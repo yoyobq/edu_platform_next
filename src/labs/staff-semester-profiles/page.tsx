@@ -8,6 +8,7 @@ import {
   Input,
   message,
   Modal,
+  Popconfirm,
   Select,
   Skeleton,
   Table,
@@ -26,10 +27,17 @@ import {
 
 import {
   type AcademicTeacherEngagementType,
+  backfillStaffSemesterProfilesFromCourseSchedules,
+  type BackfillStaffSemesterProfilesFromCourseSchedulesItem,
+  type BackfillStaffSemesterProfilesFromCourseSchedulesResult,
+  requestStaffSemesterProfileDepartments,
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,
   type SortDirection,
   type StaffSemesterProfile,
+  type StaffSemesterProfileBackfillAction,
+  type StaffSemesterProfileBackfillBlockingReason,
+  type StaffSemesterProfileDepartmentOption,
   type StaffSemesterProfileListResponse,
   type StaffSemesterProfileSortBy,
   updateStaffSemesterProfile,
@@ -102,6 +110,28 @@ const TEACHER_ENGAGEMENT_TYPE_OPTIONS = Object.entries(TEACHER_ENGAGEMENT_TYPE_L
     value,
   }),
 );
+
+const BACKFILL_ACTION_LABELS: Record<StaffSemesterProfileBackfillAction, string> = {
+  already_exists: '已存在',
+  blocked: '需处理',
+  created: '已创建',
+  would_create: '待创建',
+};
+
+const BACKFILL_ACTION_TAG_COLORS: Record<StaffSemesterProfileBackfillAction, string> = {
+  already_exists: 'default',
+  blocked: 'red',
+  created: 'green',
+  would_create: 'blue',
+};
+
+const BACKFILL_BLOCKING_REASON_LABELS: Record<
+  NonNullable<StaffSemesterProfileBackfillBlockingReason>,
+  string
+> = {
+  teaching_group_not_found: '历史教研组不存在',
+  teaching_group_workload_department_mismatch: '历史教研组与本次工作量归口系不一致',
+};
 
 const EMPTY_CELL_TEXT = '—';
 
@@ -224,6 +254,16 @@ function buildWorkloadDepartmentOptions(records: StaffSemesterProfile[]) {
   );
 }
 
+function buildDepartmentOptions(records: StaffSemesterProfileDepartmentOption[]) {
+  return records
+    .filter((record) => record.id.trim())
+    .map((record) => ({
+      label: record.departmentName?.trim() || record.shortName?.trim() || record.id,
+      value: record.id,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'));
+}
+
 function buildTeachingGroupOptions(records: StaffSemesterProfile[], workloadDepartmentId?: string) {
   const normalizedWorkloadDepartmentId = workloadDepartmentId?.trim();
   const scopedRecords = normalizedWorkloadDepartmentId
@@ -289,6 +329,10 @@ function applyUpdatedProfile(
   };
 }
 
+function resolveBackfillItemRowKey(record: BackfillStaffSemesterProfilesFromCourseSchedulesItem) {
+  return `${record.staffId}-${record.action}`;
+}
+
 export function StaffSemesterProfilesLabPage() {
   const loaderData = useLoaderData() as StaffSemesterProfilesLabLoaderData;
   const [messageApi, messageContextHolder] = message.useMessage();
@@ -303,12 +347,24 @@ export function StaffSemesterProfilesLabPage() {
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingProfileOptions, setLoadingProfileOptions] = useState(false);
+  const [loadingDepartments, setLoadingDepartments] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [profileOptionsError, setProfileOptionsError] = useState<string | null>(null);
+  const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [profileOptionRecords, setProfileOptionRecords] = useState<StaffSemesterProfile[]>([]);
+  const [departmentRecords, setDepartmentRecords] = useState<
+    StaffSemesterProfileDepartmentOption[]
+  >([]);
   const [editingProfile, setEditingProfile] = useState<StaffSemesterProfile | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [backfillWorkloadDepartmentId, setBackfillWorkloadDepartmentId] = useState(
+    loaderData?.defaultDepartmentId ?? '',
+  );
+  const [backfillResult, setBackfillResult] =
+    useState<BackfillStaffSemesterProfilesFromCourseSchedulesResult | null>(null);
+  const [previewingBackfill, setPreviewingBackfill] = useState(false);
+  const [executingBackfill, setExecutingBackfill] = useState(false);
   const [profileResponse, setProfileResponse] = useState<StaffSemesterProfileListResponse | null>(
     null,
   );
@@ -403,6 +459,22 @@ export function StaffSemesterProfilesLabPage() {
     }
   }, []);
 
+  const loadDepartments = useCallback(async () => {
+    setLoadingDepartments(true);
+    setDepartmentError(null);
+
+    try {
+      const result = await requestStaffSemesterProfileDepartments();
+
+      setDepartmentRecords(result);
+    } catch (error) {
+      setDepartmentError(error instanceof Error ? error.message : '暂时无法加载系部列表。');
+      setDepartmentRecords([]);
+    } finally {
+      setLoadingDepartments(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (selectedSemesterId) {
       void loadProfiles(queryState);
@@ -418,6 +490,16 @@ export function StaffSemesterProfilesLabPage() {
       setProfileOptionRecords([]);
     }
   }, [loadProfileOptions, selectedSemesterId]);
+
+  useEffect(() => {
+    if (viewerRole === 'admin') {
+      void loadDepartments();
+    }
+  }, [loadDepartments, viewerRole]);
+
+  useEffect(() => {
+    setBackfillResult(null);
+  }, [backfillWorkloadDepartmentId, selectedSemesterId]);
 
   const applyFilters = useCallback(() => {
     setQueryState((currentValue) => ({
@@ -449,6 +531,7 @@ export function StaffSemesterProfilesLabPage() {
   );
 
   const canEditTeacherEngagementType = viewerRole === 'admin' || viewerRole === 'academicOfficer';
+  const canBackfillFromCourseSchedules = viewerRole === 'admin';
   const canEditTeachingGroup = true;
   const canEditWorkloadDepartment = viewerRole === 'admin' || viewerRole === 'academicOfficer';
   const editableFieldCount =
@@ -459,10 +542,23 @@ export function StaffSemesterProfilesLabPage() {
     () => buildWorkloadDepartmentOptions(profileOptionRecords),
     [profileOptionRecords],
   );
+  const backfillDepartmentOptions = useMemo(
+    () => buildDepartmentOptions(departmentRecords),
+    [departmentRecords],
+  );
   const filterTeachingGroupOptions = useMemo(
     () => buildTeachingGroupOptions(profileOptionRecords, filterState.workloadDepartmentId),
     [filterState.workloadDepartmentId, profileOptionRecords],
   );
+  const isBackfillResultForCurrentSelection =
+    backfillResult?.semesterId === selectedSemesterId &&
+    backfillResult.workloadDepartmentId === backfillWorkloadDepartmentId;
+  const hasCurrentBackfillBlocking =
+    Boolean(isBackfillResultForCurrentSelection) && (backfillResult?.blockingCount ?? 0) > 0;
+  const canSubmitBackfill =
+    Boolean(selectedSemesterId && backfillWorkloadDepartmentId.trim()) &&
+    !previewingBackfill &&
+    !executingBackfill;
   const editingWorkloadDepartmentId = Form.useWatch('workloadDepartmentId', editForm);
   const effectiveEditingWorkloadDepartmentId =
     editingWorkloadDepartmentId ?? editingProfile?.workloadDepartmentId ?? undefined;
@@ -491,6 +587,66 @@ export function StaffSemesterProfilesLabPage() {
       editingProfile?.teachingGroupName,
       effectiveEditingWorkloadDepartmentId,
       profileOptionRecords,
+    ],
+  );
+
+  const runBackfill = useCallback(
+    async (dryRun: boolean) => {
+      const normalizedWorkloadDepartmentId = backfillWorkloadDepartmentId.trim();
+
+      if (!selectedSemesterId || !normalizedWorkloadDepartmentId) {
+        void messageApi.warning('请选择学期和工作量归口系。');
+        return;
+      }
+
+      if (!dryRun && hasCurrentBackfillBlocking) {
+        void messageApi.warning('当前预览存在阻断项，请处理后再确认补齐。');
+        return;
+      }
+
+      if (dryRun) {
+        setPreviewingBackfill(true);
+      } else {
+        setExecutingBackfill(true);
+      }
+
+      try {
+        const result = await backfillStaffSemesterProfilesFromCourseSchedules({
+          dryRun,
+          semesterId: selectedSemesterId,
+          workloadDepartmentId: normalizedWorkloadDepartmentId,
+        });
+
+        setBackfillResult(result);
+
+        if (dryRun) {
+          void messageApi.success('补齐预览已生成。');
+          return;
+        }
+
+        void messageApi.success(`补齐完成，本次创建 ${result.createdCount} 条。`);
+        await loadProfiles(queryState);
+        await loadProfileOptions(selectedSemesterId);
+      } catch (error) {
+        void messageApi.error(
+          error instanceof Error ? error.message : '暂时无法从课程表补齐教师学期归属。',
+        );
+      } finally {
+        if (dryRun) {
+          setPreviewingBackfill(false);
+        } else {
+          setExecutingBackfill(false);
+        }
+      }
+    },
+    [
+      backfillWorkloadDepartmentId,
+      hasCurrentBackfillBlocking,
+      loadProfileOptions,
+      loadProfiles,
+      messageApi,
+      queryState,
+      selectedSemesterId,
     ],
   );
 
@@ -683,6 +839,85 @@ export function StaffSemesterProfilesLabPage() {
     [openEditModal, queryState.sortBy, queryState.sortOrder],
   );
 
+  const backfillColumns = useMemo<
+    ColumnsType<BackfillStaffSemesterProfilesFromCourseSchedulesItem>
+  >(
+    () => [
+      {
+        dataIndex: 'staffId',
+        fixed: 'left',
+        key: 'staffId',
+        render: (value: string) => (
+          <Typography.Text ellipsis={{ tooltip: value }}>
+            <span className="font-mono text-sm">{value}</span>
+          </Typography.Text>
+        ),
+        title: '工号',
+        width: 150,
+      },
+      {
+        dataIndex: 'staffName',
+        fixed: 'left',
+        key: 'staffName',
+        render: (value: string) => renderSingleLineText(value, { strong: true }),
+        title: '姓名',
+        width: 140,
+      },
+      {
+        dataIndex: 'action',
+        key: 'action',
+        render: (value: StaffSemesterProfileBackfillAction) => (
+          <Tag color={BACKFILL_ACTION_TAG_COLORS[value]} style={{ marginInlineEnd: 0 }}>
+            {BACKFILL_ACTION_LABELS[value]}
+          </Tag>
+        ),
+        title: '状态',
+        width: 104,
+      },
+      {
+        dataIndex: 'teacherEngagementType',
+        key: 'teacherEngagementType',
+        render: (value: AcademicTeacherEngagementType) => (
+          <Tag color={TEACHER_ENGAGEMENT_TYPE_TAG_COLORS[value]} style={{ marginInlineEnd: 0 }}>
+            {TEACHER_ENGAGEMENT_TYPE_LABELS[value]}
+          </Tag>
+        ),
+        title: '聘任',
+        width: 132,
+      },
+      {
+        dataIndex: 'teachingGroupId',
+        key: 'teachingGroupId',
+        render: (value: string | null) => renderSingleLineText(value),
+        title: '教研组 ID',
+        width: 160,
+      },
+      {
+        dataIndex: 'inheritedFromSemesterId',
+        key: 'inheritedFromSemesterId',
+        render: (value: number | null) =>
+          value === null ? renderEmptyText() : <Typography.Text>{value}</Typography.Text>,
+        title: '继承来源学期',
+        width: 140,
+      },
+      {
+        dataIndex: 'blockingReason',
+        key: 'blockingReason',
+        render: (value: StaffSemesterProfileBackfillBlockingReason) =>
+          value ? (
+            <Typography.Text type="danger">
+              {BACKFILL_BLOCKING_REASON_LABELS[value]}
+            </Typography.Text>
+          ) : (
+            renderEmptyText()
+          ),
+        title: '阻断原因',
+        width: 280,
+      },
+    ],
+    [],
+  );
+
   const total = profileResponse?.total ?? 0;
 
   function handleTableChange(
@@ -849,6 +1084,120 @@ export function StaffSemesterProfilesLabPage() {
           </div>
         )}
       </Card>
+
+      {canBackfillFromCourseSchedules ? (
+        <Card
+          title={
+            <div className="flex flex-col">
+              <span>从课程表补齐教师学期归属</span>
+              <span className="mt-1 text-sm font-normal text-text-secondary">
+                先预览课程表候选教师，再批量创建缺失的学期归属
+              </span>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">
+            {departmentError ? <Alert message={departmentError} showIcon type="warning" /> : null}
+
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+              <label className="flex flex-col gap-2">
+                <Typography.Text strong>工作量归口系</Typography.Text>
+                <Select
+                  showSearch
+                  loading={loadingDepartments}
+                  optionFilterProp="label"
+                  options={backfillDepartmentOptions}
+                  placeholder="请选择要写入的系部"
+                  value={backfillWorkloadDepartmentId || undefined}
+                  onChange={(value) => setBackfillWorkloadDepartmentId(value)}
+                />
+              </label>
+
+              <div className="flex items-end gap-3">
+                <Button
+                  disabled={!canSubmitBackfill}
+                  loading={previewingBackfill}
+                  onClick={() => void runBackfill(true)}
+                >
+                  预览补齐
+                </Button>
+                <Popconfirm
+                  cancelText="取消"
+                  disabled={!canSubmitBackfill || hasCurrentBackfillBlocking}
+                  okButtonProps={{ loading: executingBackfill }}
+                  okText="确认补齐"
+                  title={
+                    backfillResult && isBackfillResultForCurrentSelection
+                      ? `确认创建 ${backfillResult.creatableCount} 条教师学期归属？`
+                      : '尚未预览，确认直接执行补齐？'
+                  }
+                  onConfirm={() => void runBackfill(false)}
+                >
+                  <Button
+                    disabled={!canSubmitBackfill || hasCurrentBackfillBlocking}
+                    loading={executingBackfill}
+                    type="primary"
+                  >
+                    确认补齐
+                  </Button>
+                </Popconfirm>
+              </div>
+            </div>
+
+            {hasCurrentBackfillBlocking ? (
+              <Alert message="当前预览存在阻断项，确认补齐已禁用。" showIcon type="warning" />
+            ) : null}
+
+            {backfillResult ? (
+              <div className="flex flex-col gap-4">
+                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+                  <div className="rounded-block border border-border bg-bg-container p-3">
+                    <Typography.Text type="secondary">候选教师</Typography.Text>
+                    <div className="mt-1 text-xl font-semibold">
+                      {backfillResult.candidateCount}
+                    </div>
+                  </div>
+                  <div className="rounded-block border border-border bg-bg-container p-3">
+                    <Typography.Text type="secondary">可创建</Typography.Text>
+                    <div className="mt-1 text-xl font-semibold">
+                      {backfillResult.creatableCount}
+                    </div>
+                  </div>
+                  <div className="rounded-block border border-border bg-bg-container p-3">
+                    <Typography.Text type="secondary">阻断</Typography.Text>
+                    <div className="mt-1 text-xl font-semibold">{backfillResult.blockingCount}</div>
+                  </div>
+                  <div className="rounded-block border border-border bg-bg-container p-3">
+                    <Typography.Text type="secondary">本次已创建</Typography.Text>
+                    <div className="mt-1 text-xl font-semibold">{backfillResult.createdCount}</div>
+                  </div>
+                  <div className="rounded-block border border-border bg-bg-container p-3">
+                    <Typography.Text type="secondary">执行时已存在</Typography.Text>
+                    <div className="mt-1 text-xl font-semibold">
+                      {backfillResult.alreadyExistingCount}
+                    </div>
+                  </div>
+                </div>
+
+                <Table<BackfillStaffSemesterProfilesFromCourseSchedulesItem>
+                  columns={backfillColumns}
+                  dataSource={backfillResult.items}
+                  locale={{
+                    emptyText: (
+                      <Empty description="暂无补齐明细" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                    ),
+                  }}
+                  pagination={{ pageSize: 10, size: 'small' }}
+                  rowKey={resolveBackfillItemRowKey}
+                  scroll={{ x: 1106 }}
+                  size="small"
+                  tableLayout="fixed"
+                />
+              </div>
+            ) : null}
+          </div>
+        </Card>
+      ) : null}
 
       <Card
         title={
