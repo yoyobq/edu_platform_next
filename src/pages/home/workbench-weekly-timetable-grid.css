@@ -40,20 +40,25 @@
   gap: 0;
 }
 
+.workbench-weekly-timetable-week-stepper :where(.ant-btn) {
+  height: 30px;
+  width: 30px;
+}
+
 .workbench-weekly-timetable-week-value {
   align-items: center;
   background: var(--ant-color-bg-container);
   border-block: 1px solid var(--ant-color-border);
   color: var(--ant-color-text);
   display: inline-flex;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 700;
-  height: 24px;
+  height: 30px;
   line-height: 1;
-  padding-inline: 10px;
-  white-space: nowrap;
-  min-width: 68px;
   justify-content: center;
+  min-width: 82px;
+  padding-inline: 12px;
+  white-space: nowrap;
 }
 
 .workbench-weekly-timetable-current-week-dot {
@@ -65,11 +70,31 @@
   width: 7px;
 }
 
+.workbench-weekly-timetable-week-range {
+  color: var(--ant-color-text-secondary);
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
 .workbench-weekly-timetable-weekend-controls {
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
+}
+
+.workbench-weekly-timetable-weekend-switch {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 8px;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .workbench-weekly-timetable-header-cell,
@@ -84,14 +109,16 @@
   align-items: center;
   color: var(--ant-color-text-secondary);
   display: flex;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   gap: 6px;
   justify-content: center;
 }
 
 .workbench-weekly-timetable-header-cell {
-  background: var(--ant-color-fill-quaternary);
+  background: var(--ant-color-bg-container);
+  color: var(--ant-color-text);
+  font-weight: 700;
 }
 
 .workbench-weekly-timetable-period-cell {
@@ -105,11 +132,12 @@
 }
 
 .workbench-weekly-timetable-header-corner {
-  background: var(--ant-color-fill-quaternary);
+  background: var(--ant-color-bg-container);
 }
 
 .workbench-weekly-timetable-header-date {
   color: var(--ant-color-text-tertiary);
+  font-size: 13px;
   font-weight: 500;
 }
 

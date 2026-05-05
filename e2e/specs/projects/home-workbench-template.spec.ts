@@ -94,6 +94,7 @@ test('学生身份进入首页时，应进入我的工作台周课表内容', as
 
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('当前账号暂无可展示周课表')).toBeVisible();
+  await expect(page.getByText('注意：待办事项暂时保存在本地，无法跨设备展示')).toBeVisible();
   await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveCount(0);
   await expect(page.getByText('成员默认模板')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '打开开始入口' })).toHaveCount(0);
@@ -161,10 +162,20 @@ test('其他待办可以拖拽到周课表空格，并同步本地存储', async
 
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('测试课程')).toBeVisible();
+  await expect(page.getByText('5月04日 - 5月10日')).toBeVisible();
   await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveAttribute(
     'href',
     '/academic-affairs/my-teaching-logs',
   );
+  await expect(page.getByRole('button', { name: /显示周[六日]/ })).toHaveCount(0);
+
+  const weekendSwitch = page.getByRole('switch', { name: '显示无课周末' });
+
+  await expect(weekendSwitch).toBeVisible();
+  await expect(page.locator('[data-workbench-weekly-timetable-day="6"]')).toHaveCount(0);
+  await weekendSwitch.click();
+  await expect(page.locator('[data-workbench-weekly-timetable-day="6"]')).toContainText('周六');
+  await expect(page.locator('[data-workbench-weekly-timetable-day="7"]')).toContainText('周日');
 
   const todoItems = page.locator('.home-workbench-todo-items');
   const todoItem = todoItems.locator('.home-workbench-todo-item', { hasText: '拖拽待办' });

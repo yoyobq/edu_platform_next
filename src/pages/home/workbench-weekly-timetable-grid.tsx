@@ -9,7 +9,7 @@ import {
   useState,
 } from 'react';
 import { CloseOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Empty } from 'antd';
+import { Button, Empty, Switch } from 'antd';
 
 import {
   type AcademicTimetableGridItem,
@@ -183,6 +183,16 @@ function formatHeaderDate(value: string) {
     2,
     '0',
   )}`;
+}
+
+function formatWeekRangeDate(value: string) {
+  const date = parseLocalDatePart(normalizeDatePart(value) ?? value);
+
+  if (!date) {
+    return null;
+  }
+
+  return `${date.getMonth() + 1}月${String(date.getDate()).padStart(2, '0')}日`;
 }
 
 function buildWeeklyDateByDayOfWeek(items: readonly AcademicTimetableItem[]) {
@@ -492,15 +502,6 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
 
     return nextGridColumnByDayOfWeek;
   }, [visibleDays]);
-  const customItemRowKeys = useMemo(() => {
-    const visibleDayOfWeekSet = new Set(visibleDays.map((day) => day.dayOfWeek));
-
-    return new Set(
-      customItems
-        .filter((item) => visibleDayOfWeekSet.has(item.dayOfWeek))
-        .map((item) => item.rowKey),
-    );
-  }, [customItems, visibleDays]);
   const visibleSlotPlacements = useMemo(
     () =>
       slotPlacements.filter(
@@ -525,6 +526,23 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
     return nextGridRowByPeriod;
   }, [displayRows]);
   const displayWeekIndex = props.selectedWeekIndex ?? props.currentWeekIndex ?? null;
+  const weekDateRangeLabel = useMemo(() => {
+    if (!props.getDayDate) {
+      return null;
+    }
+
+    const weekStartDate = props.getDayDate(1);
+    const weekEndDate = props.getDayDate(7);
+
+    if (!weekStartDate || !weekEndDate) {
+      return null;
+    }
+
+    const startLabel = formatWeekRangeDate(weekStartDate);
+    const endLabel = formatWeekRangeDate(weekEndDate);
+
+    return startLabel && endLabel ? `${startLabel} - ${endLabel}` : null;
+  }, [props]);
   const isCurrentWeek =
     displayWeekIndex !== null &&
     props.currentWeekIndex !== null &&
@@ -849,38 +867,26 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
                   title="当前周"
                 />
               ) : null}
+              {weekDateRangeLabel ? (
+                <span className="workbench-weekly-timetable-week-range">{weekDateRangeLabel}</span>
+              ) : null}
             </div>
           ) : (
             <span />
           )}
           {hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
             <div className="workbench-weekly-timetable-weekend-controls">
-              {hiddenWeekendDays.map((dayOfWeek) => (
-                <Button
-                  key={`show-weekend-${dayOfWeek}`}
+              <label className="workbench-weekly-timetable-weekend-switch">
+                <span>显示无课周末</span>
+                <Switch
+                  aria-label="显示无课周末"
+                  checked={hiddenWeekendDays.length === 0 && expandedEmptyWeekendDays.length > 0}
                   size="small"
-                  onClick={() => {
-                    setExpandedWeekendDayOfWeeks((current) =>
-                      current.includes(dayOfWeek) ? current : [...current, dayOfWeek],
-                    );
+                  onChange={(checked) => {
+                    setExpandedWeekendDayOfWeeks(checked ? WEEKEND_DAY_OF_WEEKS : []);
                   }}
-                >
-                  显示{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
-                </Button>
-              ))}
-              {expandedEmptyWeekendDays.map((dayOfWeek) => (
-                <Button
-                  key={`hide-weekend-${dayOfWeek}`}
-                  size="small"
-                  onClick={() => {
-                    setExpandedWeekendDayOfWeeks((current) =>
-                      current.filter((currentDayOfWeek) => currentDayOfWeek !== dayOfWeek),
-                    );
-                  }}
-                >
-                  隐藏{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
-                </Button>
-              ))}
+                />
+              </label>
             </div>
           ) : null}
         </div>
@@ -894,12 +900,10 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
             gridTemplateRows: `44px ${displayRows
               .map((row) => {
                 if (row.kind === 'period') {
-                  return customItemRowKeys.has(row.key)
-                    ? 'minmax(96px, auto)'
-                    : 'minmax(72px, auto)';
+                  return 'minmax(72px, auto)';
                 }
 
-                return customItemRowKeys.has(row.key) ? 'minmax(64px, auto)' : '44px';
+                return 'minmax(44px, auto)';
               })
               .join(' ')}`,
             minWidth: 72 + visibleDayCount * 156,

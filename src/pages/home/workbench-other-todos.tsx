@@ -17,7 +17,13 @@ function buildWorkbenchTodosStorageKey(accountId: number | null | undefined) {
   return [WORKBENCH_TODOS_STORAGE_PREFIX, accountId ?? 'anonymous'].join(':');
 }
 
-export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | undefined }) {
+export function WorkbenchOtherTodos({
+  accountId,
+  headingId,
+}: {
+  accountId: number | null | undefined;
+  headingId: string;
+}) {
   const storageKey = buildWorkbenchTodosStorageKey(accountId);
   const [items, setItems] = useState<WorkbenchLocalCustomItem[]>(() =>
     readWorkbenchLocalCustomItems(storageKey),
@@ -87,6 +93,23 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
 
   return (
     <>
+      <div className="home-workbench-secondary-heading">
+        <div className="home-workbench-secondary-title-action">
+          <h2 id={headingId}>其他待办</h2>
+          <button
+            aria-label="添加其他待办"
+            className="home-workbench-todo-add"
+            title="添加其他待办"
+            type="button"
+            onClick={openEditor}
+          >
+            <PlusOutlined />
+          </button>
+        </div>
+        <span className="home-workbench-todo-local-notice">
+          注意：待办事项暂时保存在本地，无法跨设备展示
+        </span>
+      </div>
       <div
         className={`home-workbench-todo-items ${
           canDropTimetableItem ? 'home-workbench-todo-items-drop-enabled' : ''
@@ -108,15 +131,6 @@ export function WorkbenchOtherTodos({ accountId }: { accountId: number | null | 
           moveDraggedItemToTodos();
         }}
       >
-        <button
-          aria-label="添加其他待办"
-          className="home-workbench-todo-add"
-          title="添加其他待办"
-          type="button"
-          onClick={openEditor}
-        >
-          <PlusOutlined />
-        </button>
         {items.map((item) => (
           <div
             draggable

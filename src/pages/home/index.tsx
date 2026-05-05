@@ -1,7 +1,7 @@
 // src/pages/home/index.tsx
 
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRightOutlined, BookOutlined, SwapOutlined } from '@ant-design/icons';
+import { ArrowRightOutlined, BookOutlined, HomeOutlined, SwapOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Flex, Skeleton, Tag, Tooltip, Typography } from 'antd';
 import type { ReactNode } from 'react';
 import { Link, useNavigate } from 'react-router';
@@ -38,6 +38,7 @@ import {
   resolveNicknameWorkbenchGreeting,
   resolveWorkbenchTimeGreeting,
 } from './workbench-greeting';
+import { WorkbenchHeroDecor } from './workbench-hero-decor';
 import { WorkbenchOtherTodos } from './workbench-other-todos';
 import { WorkbenchWeeklyTimetableGrid } from './workbench-weekly-timetable-grid';
 
@@ -415,8 +416,11 @@ function WorkbenchWeeklyTimetable({
             className="home-workbench-secondary-panel"
             aria-labelledby="home-workbench-other-representatives-title"
           >
-            <h2 id="home-workbench-other-representatives-title">其他待办</h2>
-            <WorkbenchOtherTodos key={accountId ?? 'anonymous'} accountId={accountId} />
+            <WorkbenchOtherTodos
+              key={accountId ?? 'anonymous'}
+              accountId={accountId}
+              headingId="home-workbench-other-representatives-title"
+            />
           </section>
           <section
             className="home-workbench-secondary-panel"
@@ -539,11 +543,15 @@ export function HomePage() {
 
   return (
     <Flex vertical gap={24}>
-      <Card>
+      <Card styles={{ body: { padding: 0 } }}>
         <div className="home-workbench-hero">
+          <WorkbenchHeroDecor />
           <div className="home-workbench-hero-main">
             <div className="home-workbench-heading">
               <div className="home-workbench-title-row">
+                <span className="home-workbench-title-icon" aria-hidden="true">
+                  <HomeOutlined />
+                </span>
                 <h1 className="home-workbench-eyebrow">我的工作台</h1>
                 {viewModel.contentKind === 'admin-modules' && viewModel.templateLabel ? (
                   <span className="home-workbench-template-label">
@@ -574,6 +582,11 @@ export function HomePage() {
                   </>
                 )}
               </Typography.Title>
+              <div className="home-workbench-signature">
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                  合理安排，把握节奏，简明高效。
+                </Typography.Paragraph>
+              </div>
             </div>
             {viewModel.templateDescription ? (
               <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
