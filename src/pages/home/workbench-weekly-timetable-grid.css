@@ -231,62 +231,6 @@
   border-color: var(--ant-color-primary);
 }
 
-.workbench-weekly-timetable-custom-editor {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.workbench-weekly-timetable-custom-editor-color {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-}
-
-.workbench-weekly-timetable-custom-editor-color span {
-  color: var(--ant-color-text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.workbench-weekly-timetable-custom-color-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-.workbench-weekly-timetable-custom-color-option {
-  align-items: center;
-  border: 1px solid color-mix(in srgb, var(--ant-color-border) 68%, transparent);
-  cursor: pointer;
-  display: inline-flex;
-  height: 28px;
-  justify-content: center;
-  padding: 0;
-  transition:
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    transform 0.15s ease;
-  width: 28px;
-}
-
-.workbench-weekly-timetable-custom-color-option[aria-pressed='true'] {
-  border-color: var(--ant-color-text);
-  box-shadow:
-    0 0 0 2px var(--ant-color-bg-container),
-    0 0 0 4px color-mix(in srgb, var(--ant-color-text) 28%, transparent);
-}
-
-.workbench-weekly-timetable-custom-color-option:hover,
-.workbench-weekly-timetable-custom-color-option:focus-visible {
-  border-color: var(--ant-color-primary);
-  box-shadow:
-    0 0 0 2px var(--ant-color-bg-container),
-    0 0 0 4px color-mix(in srgb, var(--ant-color-primary) 22%, transparent);
-}
-
 .workbench-weekly-timetable-weekend-cell {
   background: var(--ant-color-warning-bg);
 }

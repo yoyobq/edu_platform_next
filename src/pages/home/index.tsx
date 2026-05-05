@@ -36,6 +36,7 @@ import {
   resolveNicknameWorkbenchGreeting,
   resolveWorkbenchTimeGreeting,
 } from './workbench-greeting';
+import { WorkbenchOtherTodos } from './workbench-other-todos';
 import { WorkbenchWeeklyTimetableGrid } from './workbench-weekly-timetable-grid';
 
 import './index.css';
@@ -268,7 +269,13 @@ function HomeModuleCard({
   );
 }
 
-function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
+function WorkbenchWeeklyTimetable({
+  accountId,
+  staffId,
+}: {
+  accountId: number | null;
+  staffId: string | null;
+}) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [items, setItems] = useState<AcademicTimetableItem[]>([]);
@@ -387,16 +394,33 @@ function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
   }
 
   return (
-    <WorkbenchWeeklyTimetableGrid
-      currentWeekIndex={currentWeekIndex}
-      emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
-      isWeekNavigationLoading={isLoading}
-      items={items}
-      maxWeekIndex={maxWeekIndex}
-      selectedWeekIndex={selectedWeekIndex}
-      showCurrentTimeIndicator
-      onWeekChange={(weekIndex) => void changeWeek(weekIndex)}
-    />
+    <div className="home-workbench-timetable-content">
+      <WorkbenchWeeklyTimetableGrid
+        currentWeekIndex={currentWeekIndex}
+        emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
+        isWeekNavigationLoading={isLoading}
+        items={items}
+        maxWeekIndex={maxWeekIndex}
+        selectedWeekIndex={selectedWeekIndex}
+        showCurrentTimeIndicator
+        onWeekChange={(weekIndex) => void changeWeek(weekIndex)}
+      />
+      <div className="home-workbench-secondary-row">
+        <section
+          className="home-workbench-secondary-panel"
+          aria-labelledby="home-workbench-other-representatives-title"
+        >
+          <h2 id="home-workbench-other-representatives-title">其他待办</h2>
+          <WorkbenchOtherTodos key={accountId ?? 'anonymous'} accountId={accountId} />
+        </section>
+        <section
+          className="home-workbench-secondary-panel"
+          aria-labelledby="home-workbench-quick-entry-title"
+        >
+          <h2 id="home-workbench-quick-entry-title">快捷入口</h2>
+        </section>
+      </div>
+    </div>
   );
 }
 
@@ -545,7 +569,10 @@ export function HomePage() {
       </Card>
 
       {viewModel.contentKind === 'weekly-timetable' ? (
-        <WorkbenchWeeklyTimetable staffId={staffId} />
+        <WorkbenchWeeklyTimetable
+          accountId={authSession.snapshot?.accountId ?? null}
+          staffId={staffId}
+        />
       ) : shouldShowModuleSkeleton ? (
         <div className="grid gap-4 xl:grid-cols-3">
           {Array.from({ length: 3 }, (_, index) => (

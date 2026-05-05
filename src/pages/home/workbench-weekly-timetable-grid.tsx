@@ -8,7 +8,7 @@ import {
   useState,
 } from 'react';
 import { CloseOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
-import { Button, Empty, Input, Modal } from 'antd';
+import { Button, Empty } from 'antd';
 
 import {
   type AcademicTimetableGridItem,
@@ -17,6 +17,19 @@ import {
   resolveCourseCategoryMeta,
   resolveTimetablePeriodCount,
 } from '@/features/academic-timetable';
+
+import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
+import {
+  DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
+  PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR,
+} from './workbench-custom-item-options';
+import {
+  createWorkbenchLocalCustomItemId,
+  isWorkbenchLocalCustomItem,
+  readWorkbenchLocalCustomItems,
+  type WorkbenchLocalCustomItem,
+  writeWorkbenchLocalCustomItems,
+} from './workbench-local-custom-items';
 
 import './workbench-weekly-timetable-grid.css';
 
@@ -40,12 +53,9 @@ type VisibleTimetableDay = {
   dayOfWeek: number;
   label: string;
 };
-type TimetableCustomItem = {
-  backgroundColor?: string;
+type TimetableCustomItem = WorkbenchLocalCustomItem & {
   dayOfWeek: number;
-  id: string;
   rowKey: string;
-  title: string;
 };
 type EditingCustomCell = {
   dayOfWeek: number;
@@ -67,8 +77,6 @@ type TimetableTimeSegment = {
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const WEEKEND_DAY_OF_WEEKS = [6, 7] as const;
 const TIMETABLE_CUSTOM_ITEMS_STORAGE_PREFIX = 'edu-mate:timetable-custom-items:v1';
-const DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR = 'var(--color-ai-accent-bg)';
-const PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR = 'rgb(243 232 255 / 0.82)';
 const DEFAULT_CUSTOM_ITEMS: readonly TimetableCustomItem[] = [
   {
     backgroundColor: PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR,
@@ -78,28 +86,6 @@ const DEFAULT_CUSTOM_ITEMS: readonly TimetableCustomItem[] = [
     title: '班会',
   },
 ];
-const CUSTOM_ITEM_BACKGROUND_OPTIONS = [
-  {
-    label: 'AI 橙',
-    value: DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
-  },
-  {
-    label: '蓝',
-    value: 'rgb(219 234 254 / 0.82)',
-  },
-  {
-    label: '绿',
-    value: 'rgb(220 252 231 / 0.82)',
-  },
-  {
-    label: '紫',
-    value: PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR,
-  },
-  {
-    label: '黄',
-    value: 'rgb(254 249 195 / 0.82)',
-  },
-] as const;
 
 const TIMETABLE_TIME_SEGMENTS: readonly TimetableTimeSegment[] = [
   { endMinute: 8 * 60 + 15, rowKey: 'break-morning', startMinute: 8 * 60 },
@@ -384,55 +370,28 @@ function buildCustomItemStorageKey<TItem extends AcademicTimetableGridItem>(
 }
 
 function isTimetableCustomItem(value: unknown): value is TimetableCustomItem {
-  if (!value || typeof value !== 'object') {
+  if (!isWorkbenchLocalCustomItem(value)) {
     return false;
   }
 
   const item = value as Partial<TimetableCustomItem>;
 
-  return (
-    typeof item.dayOfWeek === 'number' &&
-    (item.backgroundColor === undefined || typeof item.backgroundColor === 'string') &&
-    typeof item.id === 'string' &&
-    typeof item.rowKey === 'string' &&
-    typeof item.title === 'string'
-  );
+  return typeof item.dayOfWeek === 'number' && typeof item.rowKey === 'string';
 }
 
 function readCustomItems(storageKey: string): TimetableCustomItem[] {
-  if (typeof window === 'undefined') {
-    return [...DEFAULT_CUSTOM_ITEMS];
-  }
-
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-
-    if (!rawValue) {
-      return [...DEFAULT_CUSTOM_ITEMS];
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-
-    return Array.isArray(parsedValue) ? parsedValue.filter(isTimetableCustomItem) : [];
-  } catch {
-    return [...DEFAULT_CUSTOM_ITEMS];
-  }
+  return readWorkbenchLocalCustomItems(storageKey, {
+    fallbackItems: DEFAULT_CUSTOM_ITEMS,
+    isItem: isTimetableCustomItem,
+  });
 }
 
 function writeCustomItems(storageKey: string, items: readonly TimetableCustomItem[]) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.localStorage.setItem(storageKey, JSON.stringify(items));
+  writeWorkbenchLocalCustomItems(storageKey, items);
 }
 
 function createCustomItemId() {
-  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
-    return crypto.randomUUID();
-  }
-
-  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return createWorkbenchLocalCustomItemId();
 }
 
 function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
@@ -1046,48 +1005,21 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
           ) : null}
         </div>
       </div>
-      <Modal
-        cancelText="取消"
-        okButtonProps={{ disabled: !customItemTitle.trim() }}
-        okText="添加"
+      <WorkbenchCustomItemEditor
+        backgroundColor={customItemBackgroundColor}
+        inputValue={customItemTitle}
         open={editingCustomCell !== null}
+        placeholder="输入事项名称"
         title={
           editingCustomCell
             ? `添加事项 · ${editingCustomCell.dayLabel} ${editingCustomCell.rowLabel}`
             : '添加事项'
         }
+        onBackgroundColorChange={setCustomItemBackgroundColor}
         onCancel={closeCustomItemEditor}
-        onOk={addCustomItem}
-      >
-        <div className="workbench-weekly-timetable-custom-editor">
-          <Input
-            autoFocus
-            maxLength={40}
-            placeholder="输入事项名称"
-            showCount
-            value={customItemTitle}
-            onChange={(event) => setCustomItemTitle(event.target.value)}
-            onPressEnter={addCustomItem}
-          />
-          <div className="workbench-weekly-timetable-custom-editor-color">
-            <span>背景颜色</span>
-            <div className="workbench-weekly-timetable-custom-color-options">
-              {CUSTOM_ITEM_BACKGROUND_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  aria-label={option.label}
-                  aria-pressed={customItemBackgroundColor === option.value}
-                  className="workbench-weekly-timetable-custom-color-option"
-                  style={{ backgroundColor: option.value }}
-                  title={option.label}
-                  type="button"
-                  onClick={() => setCustomItemBackgroundColor(option.value)}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
-      </Modal>
+        onInputChange={setCustomItemTitle}
+        onSubmit={addCustomItem}
+      />
     </div>
   );
 }
