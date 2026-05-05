@@ -85,6 +85,53 @@ function pickWorkbenchSemester(records: AcademicSemesterRecord[]) {
   return sortedRecords.find((record) => record.isCurrent) ?? sortedRecords[0] ?? null;
 }
 
+function addUtcDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * 86_400_000);
+}
+
+function parseUtcDateOnly(value: string) {
+  const [year, month, day] = value.split('-').map(Number);
+
+  if (!year || !month || !day) {
+    return null;
+  }
+
+  return new Date(Date.UTC(year, month - 1, day));
+}
+
+function startOfUtcTeachingWeek(date: Date) {
+  const weekday = (date.getUTCDay() + 6) % 7;
+
+  return addUtcDays(date, -weekday);
+}
+
+function resolveWorkbenchTeachingWeekCount(semester: AcademicSemesterRecord) {
+  const firstTeachingDate = parseUtcDateOnly(semester.firstTeachingDate);
+  const examStartDate = parseUtcDateOnly(semester.examStartDate);
+
+  if (!firstTeachingDate || !examStartDate) {
+    return null;
+  }
+
+  const firstTeachingWeekStart = startOfUtcTeachingWeek(firstTeachingDate);
+  const examWeekStart = startOfUtcTeachingWeek(examStartDate);
+  const lastTeachingWeekStart =
+    examWeekStart.getTime() > firstTeachingWeekStart.getTime()
+      ? addUtcDays(examWeekStart, -7)
+      : firstTeachingWeekStart;
+
+  return (
+    Math.floor((lastTeachingWeekStart.getTime() - firstTeachingWeekStart.getTime()) / 604_800_000) +
+    1
+  );
+}
+
+function clampWorkbenchWeekIndex(value: number, maxWeekIndex: number | null) {
+  const minValue = Math.max(1, value);
+
+  return maxWeekIndex ? Math.min(minValue, maxWeekIndex) : minValue;
+}
+
 function HomeModuleCard({
   module,
   onAction,
@@ -215,12 +262,20 @@ function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [items, setItems] = useState<AcademicTimetableItem[]>([]);
+  const [selectedSemester, setSelectedSemester] = useState<AcademicSemesterRecord | null>(null);
+  const [currentWeekIndex, setCurrentWeekIndex] = useState<number | null>(null);
+  const [selectedWeekIndex, setSelectedWeekIndex] = useState<number | null>(null);
+  const [maxWeekIndex, setMaxWeekIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (!staffId) {
       setErrorMessage(null);
       setIsLoading(false);
       setItems([]);
+      setSelectedSemester(null);
+      setCurrentWeekIndex(null);
+      setSelectedWeekIndex(null);
+      setMaxWeekIndex(null);
       return;
     }
 
@@ -237,11 +292,19 @@ function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
         if (!semester) {
           if (isActive) {
             setItems([]);
+            setSelectedSemester(null);
+            setCurrentWeekIndex(null);
+            setSelectedWeekIndex(null);
+            setMaxWeekIndex(null);
           }
           return;
         }
 
-        const weekIndex = resolveCurrentTeachingWeekIndex(semester) ?? 1;
+        const resolvedMaxWeekIndex = resolveWorkbenchTeachingWeekCount(semester);
+        const weekIndex = clampWorkbenchWeekIndex(
+          resolveCurrentTeachingWeekIndex(semester) ?? 1,
+          resolvedMaxWeekIndex,
+        );
         const result = await requestAcademicWeeklyTimetableItems({
           semesterId: semester.id,
           staffId: resolvedStaffId,
@@ -250,11 +313,19 @@ function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
 
         if (isActive) {
           setItems(result);
+          setSelectedSemester(semester);
+          setCurrentWeekIndex(weekIndex);
+          setSelectedWeekIndex(weekIndex);
+          setMaxWeekIndex(resolvedMaxWeekIndex);
         }
       } catch (error) {
         if (isActive) {
           setErrorMessage(error instanceof Error ? error.message : '暂时无法加载周课表。');
           setItems([]);
+          setSelectedSemester(null);
+          setCurrentWeekIndex(null);
+          setSelectedWeekIndex(null);
+          setMaxWeekIndex(null);
         }
       } finally {
         if (isActive) {
@@ -270,19 +341,51 @@ function WorkbenchWeeklyTimetable({ staffId }: { staffId: string | null }) {
     };
   }, [staffId]);
 
+  async function changeWeek(nextWeekIndex: number) {
+    if (!staffId || !selectedSemester) {
+      return;
+    }
+
+    const resolvedWeekIndex = clampWorkbenchWeekIndex(nextWeekIndex, maxWeekIndex);
+
+    setErrorMessage(null);
+    setIsLoading(true);
+
+    try {
+      const result = await requestAcademicWeeklyTimetableItems({
+        semesterId: selectedSemester.id,
+        staffId,
+        weekIndex: resolvedWeekIndex,
+      });
+
+      setItems(result);
+      setSelectedWeekIndex(resolvedWeekIndex);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : '暂时无法加载周课表。');
+      setItems([]);
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
   if (errorMessage) {
     return <Alert showIcon title={errorMessage} type="error" />;
   }
 
-  if (isLoading) {
+  if (isLoading && selectedWeekIndex === null) {
     return <Skeleton active paragraph={{ rows: 10 }} title={false} />;
   }
 
   return (
     <WorkbenchWeeklyTimetableGrid
+      currentWeekIndex={currentWeekIndex}
       emptyDescription={staffId ? '当前教学周没有命中的课表项' : '当前账号暂无可展示周课表'}
+      isWeekNavigationLoading={isLoading}
       items={items}
+      maxWeekIndex={maxWeekIndex}
+      selectedWeekIndex={selectedWeekIndex}
       showCurrentTimeIndicator
+      onWeekChange={(weekIndex) => void changeWeek(weekIndex)}
     />
   );
 }

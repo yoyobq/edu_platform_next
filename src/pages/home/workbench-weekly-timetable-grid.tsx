@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
+import { CloseOutlined, LeftOutlined, PlusOutlined, RightOutlined } from '@ant-design/icons';
 import { Button, Empty, Input, Modal } from 'antd';
 
 import {
@@ -436,13 +436,18 @@ function createCustomItemId() {
 }
 
 function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
+  currentWeekIndex?: number | null;
   emptyDescription: string;
   getDayDate?: (dayOfWeek: number) => string | null;
   getEntryKey: (item: TItem) => string;
   getTieBreaker: (item: TItem) => string;
   getDayHeaderSupplement?: (dayOfWeek: number) => string | null;
+  isWeekNavigationLoading?: boolean;
   items: TItem[];
+  maxWeekIndex?: number | null;
+  onWeekChange?: (weekIndex: number) => void;
   renderEntry: (item: TItem) => ReactNode;
+  selectedWeekIndex?: number | null;
   showCurrentTimeIndicator?: boolean;
   viewKey: TimetableViewKey;
 }) {
@@ -557,6 +562,19 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
 
     return nextGridRowByPeriod;
   }, [displayRows]);
+  const displayWeekIndex = props.selectedWeekIndex ?? props.currentWeekIndex ?? null;
+  const isCurrentWeek =
+    displayWeekIndex !== null &&
+    props.currentWeekIndex !== null &&
+    displayWeekIndex === props.currentWeekIndex;
+  const canNavigatePreviousWeek =
+    Boolean(props.onWeekChange) && displayWeekIndex !== null && displayWeekIndex > 1;
+  const canNavigateNextWeek =
+    Boolean(props.onWeekChange) &&
+    displayWeekIndex !== null &&
+    (props.maxWeekIndex === null ||
+      props.maxWeekIndex === undefined ||
+      displayWeekIndex < props.maxWeekIndex);
 
   useEffect(() => {
     setCustomItems(readCustomItems(customItemStorageKey));
@@ -778,34 +796,78 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      {hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
-        <div className="workbench-weekly-timetable-weekend-controls">
-          {hiddenWeekendDays.map((dayOfWeek) => (
-            <Button
-              key={`show-weekend-${dayOfWeek}`}
-              size="small"
-              onClick={() => {
-                setExpandedWeekendDayOfWeeks((current) =>
-                  current.includes(dayOfWeek) ? current : [...current, dayOfWeek],
-                );
-              }}
-            >
-              显示{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
-            </Button>
-          ))}
-          {expandedEmptyWeekendDays.map((dayOfWeek) => (
-            <Button
-              key={`hide-weekend-${dayOfWeek}`}
-              size="small"
-              onClick={() => {
-                setExpandedWeekendDayOfWeeks((current) =>
-                  current.filter((currentDayOfWeek) => currentDayOfWeek !== dayOfWeek),
-                );
-              }}
-            >
-              隐藏{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
-            </Button>
-          ))}
+      {displayWeekIndex || hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
+        <div className="workbench-weekly-timetable-toolbar">
+          {displayWeekIndex ? (
+            <div className="workbench-weekly-timetable-week-navigator">
+              <div className="workbench-weekly-timetable-week-stepper">
+                <Button
+                  aria-label="上一周"
+                  disabled={!canNavigatePreviousWeek || props.isWeekNavigationLoading}
+                  icon={<LeftOutlined />}
+                  size="small"
+                  onClick={() => {
+                    if (canNavigatePreviousWeek) {
+                      props.onWeekChange?.(displayWeekIndex - 1);
+                    }
+                  }}
+                />
+                <span className="workbench-weekly-timetable-week-value">
+                  第 {displayWeekIndex} 周
+                </span>
+                <Button
+                  aria-label="下一周"
+                  disabled={!canNavigateNextWeek || props.isWeekNavigationLoading}
+                  icon={<RightOutlined />}
+                  size="small"
+                  onClick={() => {
+                    if (canNavigateNextWeek) {
+                      props.onWeekChange?.(displayWeekIndex + 1);
+                    }
+                  }}
+                />
+              </div>
+              {isCurrentWeek ? (
+                <span
+                  aria-label="当前周"
+                  className="workbench-weekly-timetable-current-week-dot"
+                  title="当前周"
+                />
+              ) : null}
+            </div>
+          ) : (
+            <span />
+          )}
+          {hiddenWeekendDays.length > 0 || expandedEmptyWeekendDays.length > 0 ? (
+            <div className="workbench-weekly-timetable-weekend-controls">
+              {hiddenWeekendDays.map((dayOfWeek) => (
+                <Button
+                  key={`show-weekend-${dayOfWeek}`}
+                  size="small"
+                  onClick={() => {
+                    setExpandedWeekendDayOfWeeks((current) =>
+                      current.includes(dayOfWeek) ? current : [...current, dayOfWeek],
+                    );
+                  }}
+                >
+                  显示{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
+                </Button>
+              ))}
+              {expandedEmptyWeekendDays.map((dayOfWeek) => (
+                <Button
+                  key={`hide-weekend-${dayOfWeek}`}
+                  size="small"
+                  onClick={() => {
+                    setExpandedWeekendDayOfWeeks((current) =>
+                      current.filter((currentDayOfWeek) => currentDayOfWeek !== dayOfWeek),
+                    );
+                  }}
+                >
+                  隐藏{DAY_OF_WEEK_LABELS[dayOfWeek - 1]}
+                </Button>
+              ))}
+            </div>
+          ) : null}
         </div>
       ) : null}
       <div className="workbench-weekly-timetable-shell overflow-x-auto">
@@ -1031,9 +1093,14 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
 }
 
 export function WorkbenchWeeklyTimetableGrid(props: {
+  currentWeekIndex?: number | null;
   emptyDescription: string;
+  isWeekNavigationLoading?: boolean;
   items: AcademicTimetableItem[];
+  maxWeekIndex?: number | null;
+  selectedWeekIndex?: number | null;
   showCurrentTimeIndicator?: boolean;
+  onWeekChange?: (weekIndex: number) => void;
 }) {
   const rawDateByDayOfWeek = useMemo(() => buildWeeklyDateByDayOfWeek(props.items), [props.items]);
   const dateByDayOfWeek = useMemo(() => {
@@ -1048,12 +1115,16 @@ export function WorkbenchWeeklyTimetableGrid(props: {
 
   return (
     <BaseTimetableGrid
+      currentWeekIndex={props.currentWeekIndex}
       emptyDescription={props.emptyDescription}
       getDayDate={(dayOfWeek) => rawDateByDayOfWeek.get(dayOfWeek) ?? null}
       getEntryKey={getWeeklyTimetableEntryKey}
       getTieBreaker={getWeeklyTimetableItemTieBreaker}
       getDayHeaderSupplement={(dayOfWeek) => dateByDayOfWeek.get(dayOfWeek) ?? null}
+      isWeekNavigationLoading={props.isWeekNavigationLoading}
       items={props.items}
+      maxWeekIndex={props.maxWeekIndex}
+      onWeekChange={props.onWeekChange}
       renderEntry={(item) => {
         const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
         const courseCategoryAccentClassName = courseCategoryMeta
@@ -1104,6 +1175,7 @@ export function WorkbenchWeeklyTimetableGrid(props: {
           </article>
         );
       }}
+      selectedWeekIndex={props.selectedWeekIndex}
       showCurrentTimeIndicator={props.showCurrentTimeIndicator}
       viewKey="weekly"
     />

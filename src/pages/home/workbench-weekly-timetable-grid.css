@@ -17,6 +17,54 @@
   overflow-y: hidden;
 }
 
+.workbench-weekly-timetable-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 30px;
+  padding-block: 2px;
+}
+
+.workbench-weekly-timetable-week-navigator {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.workbench-weekly-timetable-week-stepper {
+  align-items: center;
+  display: inline-flex;
+  gap: 0;
+}
+
+.workbench-weekly-timetable-week-value {
+  align-items: center;
+  background: var(--ant-color-bg-container);
+  border-block: 1px solid var(--ant-color-border);
+  color: var(--ant-color-text);
+  display: inline-flex;
+  font-size: 16px;
+  font-weight: 700;
+  height: 24px;
+  line-height: 1;
+  padding-inline: 10px;
+  white-space: nowrap;
+  min-width: 68px;
+  justify-content: center;
+}
+
+.workbench-weekly-timetable-current-week-dot {
+  background: var(--ant-color-success);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ant-color-success) 14%, transparent);
+  flex: 0 0 auto;
+  height: 7px;
+  width: 7px;
+}
+
 .workbench-weekly-timetable-weekend-controls {
   display: flex;
   flex-wrap: wrap;
