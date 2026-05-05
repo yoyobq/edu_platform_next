@@ -9,7 +9,7 @@ import type { AdminUserDetail } from '../application/get-admin-user-detail';
 import {
   ADMIN_USER_DETAIL_ACCOUNT_STATUS_LABELS,
   ADMIN_USER_DETAIL_STAFF_EMPLOYMENT_STATUS_LABELS,
-  ADMIN_USER_DETAIL_STAFF_SLOT_LABELS,
+  getAdminUserDetailStaffSlotLabel,
 } from '../application/get-admin-user-detail';
 import type {
   UpdateAdminUserDetailAccountSectionCommand,
@@ -1077,7 +1077,7 @@ export function AdminUserDetailPageContent({
                             color="processing"
                             style={{ margin: 0 }}
                           >
-                            {ADMIN_USER_DETAIL_STAFF_SLOT_LABELS[post.slotCode]}
+                            {getAdminUserDetailStaffSlotLabel(post.slotCode)}
                           </Tag>
                         ))}
                       </Flex>

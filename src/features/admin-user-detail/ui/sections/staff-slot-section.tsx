@@ -11,7 +11,7 @@ import type {
 import {
   ADMIN_USER_DETAIL_ASSIGNABLE_STAFF_SLOT_CODES,
   ADMIN_USER_DETAIL_IDENTITY_POST_STATUS_LABELS,
-  ADMIN_USER_DETAIL_STAFF_SLOT_LABELS,
+  getAdminUserDetailStaffSlotLabel,
 } from '../../application/get-admin-user-detail';
 import { BilingualLabel } from '../components/bilingual-label';
 import { DetailSectionBlock } from '../components/detail-section-block';
@@ -97,7 +97,7 @@ function getScopeRawId(post: StaffSlotPost) {
 
 function getSlotCodeOptions() {
   return ADMIN_USER_DETAIL_ASSIGNABLE_STAFF_SLOT_CODES.map((slotCode) => ({
-    label: ADMIN_USER_DETAIL_STAFF_SLOT_LABELS[slotCode],
+    label: getAdminUserDetailStaffSlotLabel(slotCode),
     value: slotCode,
   }));
 }
@@ -162,7 +162,7 @@ function StaffSlotViewerBlock({
         label: <BilingualLabel compact title="Slot" subtitle="Slot Type" />,
         value: (
           <div className="flex flex-col gap-0.5">
-            <span>{ADMIN_USER_DETAIL_STAFF_SLOT_LABELS[post.slotCode]}</span>
+            <span>{getAdminUserDetailStaffSlotLabel(post.slotCode)}</span>
             <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
               {post.slotCode}
             </Typography.Text>

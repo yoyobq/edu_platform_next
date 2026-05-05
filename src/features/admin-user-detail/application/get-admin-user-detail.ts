@@ -72,12 +72,16 @@ export const ADMIN_USER_DETAIL_GENDER_LABELS: Record<AdminUserDetailGender, stri
 };
 
 export const ADMIN_USER_DETAIL_STAFF_SLOT_LABELS: Record<AdminUserDetailStaffSlotCode, string> = {
-  ACADEMIC_OFFICER: '教务员',
+  ACADEMIC_OFFICER: '教务行政',
   CLASS_ADVISER: '班主任',
   COUNSELOR: '辅导员',
-  STUDENT_AFFAIRS_OFFICER: '学工员',
+  STUDENT_AFFAIRS_OFFICER: '学工行政',
   TEACHING_GROUP_LEADER: '教学组长',
 };
+
+export function getAdminUserDetailStaffSlotLabel(slotCode: AdminUserDetailStaffSlotCode) {
+  return ADMIN_USER_DETAIL_STAFF_SLOT_LABELS[slotCode] ?? slotCode;
+}
 
 export const ADMIN_USER_DETAIL_IDENTITY_POST_STATUS_LABELS: Record<
   AdminUserDetailIdentityPostStatus,

@@ -199,7 +199,7 @@ test('admin 用户详情页应渲染 staff 字段', async ({ page }) => {
   await expect(page.getByText('staff-1011').first()).toBeVisible();
   await expect(page.getByText('Lambda Xu').first()).toBeVisible();
   await expect(page.getByText('辅导员')).toBeVisible();
-  await expect(page.getByText('教务员')).toBeVisible();
+  await expect(page.getByText('教务行政')).toBeVisible();
 
   await page.getByRole('tab', { name: '身份信息' }).click();
 
@@ -323,12 +323,12 @@ test('staff slot 支持部门类新增与确认结束', async ({ page }) => {
   await page.getByRole('tab', { name: '身份信息' }).click();
   await page.getByTestId('staff-slot-add-button').click();
   await page.getByTestId('staff-slot-code-select').locator('input').click();
-  await page.getByTitle('学工员').click();
+  await page.getByTitle('学工行政').click();
   await page.getByTestId('staff-slot-department-select').locator('input').click();
   await page.getByTitle('数学系').click();
   await page.getByRole('button', { name: '保存任职' }).click();
 
-  await expect(page.getByText('学工员').last()).toBeVisible();
+  await expect(page.getByText('学工行政').last()).toBeVisible();
   await expect(page.getByText('STUDENT_AFFAIRS_OFFICER')).toHaveCount(1);
   expect(assignInputs[0]).toMatchObject({
     accountId,
