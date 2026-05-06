@@ -61,10 +61,10 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+    ...(hasLabNavigationAccess(['admin'], filter)
       ? [
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'ApiOutlined',
             key: '/labs/upstream-session-demo',
             label: 'Upstream 会话示例',

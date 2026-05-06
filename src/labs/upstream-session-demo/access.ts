@@ -1,5 +1,5 @@
 export const upstreamSessionDemoLabAccess = {
-  allowedAccessLevels: ['admin', 'staff'],
+  allowedAccessLevels: ['admin'],
   env: ['dev', 'prod'],
   menu: false,
 } as const;

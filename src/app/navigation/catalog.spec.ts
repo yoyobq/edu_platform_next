@@ -124,7 +124,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
@@ -141,7 +140,6 @@ describe('navigation catalog', () => {
     );
 
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',
@@ -176,7 +174,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',
