@@ -2,7 +2,9 @@
 
 import {
   type CSSProperties,
+  lazy,
   type ReactNode,
+  Suspense,
   useCallback,
   useEffect,
   useMemo,
@@ -54,9 +56,7 @@ import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
 import { AccountMenu } from './account-menu';
 import { EntryAccentGlyph } from './entry-accent-glyph';
-import { EntrySidecar } from './entry-sidecar';
 import { NavSidebar } from './nav-sidebar';
-import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
 import { useMediaQuery } from './use-media-query';
 import { useWidthBand } from './use-width-band';
 
@@ -70,6 +70,14 @@ type MainFrameStyle = CSSProperties & {
 };
 
 const NAV_RAIL_CONTROL_SIZE = 40;
+const EntrySidecar = lazy(() =>
+  import('./entry-sidecar').then((module) => ({ default: module.EntrySidecar })),
+);
+const ThirdWorkspaceDemoHost = lazy(() =>
+  import('./third-workspace-demo-host').then((module) => ({
+    default: module.ThirdWorkspaceDemoHost,
+  })),
+);
 
 function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
@@ -93,6 +101,8 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
+  const shouldLoadThirdWorkspaceDemoHost =
+    location.pathname === '/labs/demo' || location.search.includes('thirdWorkspaceArtifact=');
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
   const hasExplicitChildren = typeof children !== 'undefined';
@@ -640,9 +650,17 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           <div data-workspace-mount="artifacts-canvas" />
         </div>
 
-        <ThirdWorkspaceDemoHost />
+        {shouldLoadThirdWorkspaceDemoHost ? (
+          <Suspense fallback={null}>
+            <ThirdWorkspaceDemoHost />
+          </Suspense>
+        ) : null}
 
-        <EntrySidecar />
+        {isOpen ? (
+          <Suspense fallback={null}>
+            <EntrySidecar />
+          </Suspense>
+        ) : null}
 
         <div data-layout-layer="global-overlay-root" aria-hidden="true">
           <div data-overlay-mount="cross-region-visual" />

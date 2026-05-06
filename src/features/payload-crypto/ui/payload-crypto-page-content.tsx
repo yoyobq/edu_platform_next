@@ -11,7 +11,7 @@ import {
   PlayCircleOutlined,
   SunOutlined,
 } from '@ant-design/icons';
-import { CodeHighlighter } from '@ant-design/x';
+import CodeHighlighter from '@ant-design/x/es/code-highlighter';
 import { Button, Card, Input, Modal, Popconfirm, Switch, Tag, Typography } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 

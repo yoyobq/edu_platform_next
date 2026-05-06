@@ -20,6 +20,23 @@ function parseInteger(value: string | undefined, fallback: number): number {
   return Number.isNaN(parsedValue) ? fallback : parsedValue;
 }
 
+function normalizeModuleId(moduleId: string): string {
+  return moduleId.replaceAll('\\', '/');
+}
+
+function isNodeModulePackage(moduleId: string, packageName: string): boolean {
+  const normalizedModuleId = normalizeModuleId(moduleId);
+
+  return (
+    normalizedModuleId.includes(`/node_modules/${packageName}/`) ||
+    normalizedModuleId.endsWith(`/node_modules/${packageName}`)
+  );
+}
+
+function isAnyNodeModulePackage(moduleId: string, packageNames: string[]): boolean {
+  return packageNames.some((packageName) => isNodeModulePackage(moduleId, packageName));
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const envDir = path.resolve(__dirname, 'env');
@@ -49,6 +66,96 @@ export default defineConfig(({ mode }) => {
       outDir: buildOutDir,
       sourcemap: buildSourcemap,
       chunkSizeWarningLimit: buildChunkWarningLimit,
+      rolldownOptions: {
+        output: {
+          codeSplitting: {
+            groups: [
+              {
+                name: 'vendor-react',
+                test: (moduleId) =>
+                  isAnyNodeModulePackage(moduleId, ['react', 'react-dom', 'scheduler']),
+                priority: 50,
+              },
+              {
+                name: 'vendor-ant-design-x',
+                test: (moduleId) => isNodeModulePackage(moduleId, '@ant-design/x'),
+                priority: 45,
+                maxSize: 450_000,
+              },
+              {
+                name: 'vendor-antd',
+                test: (moduleId) =>
+                  isAnyNodeModulePackage(moduleId, [
+                    'antd',
+                    '@ant-design/colors',
+                    '@ant-design/cssinjs',
+                    '@ant-design/cssinjs-utils',
+                    '@ant-design/fast-color',
+                    '@ant-design/icons',
+                    '@rc-component/async-validator',
+                    '@rc-component/color-picker',
+                    '@rc-component/context',
+                    '@rc-component/drawer',
+                    '@rc-component/motion',
+                    '@rc-component/mutate-observer',
+                    '@rc-component/portal',
+                    '@rc-component/qrcode',
+                    '@rc-component/resize-observer',
+                    '@rc-component/tour',
+                    '@rc-component/trigger',
+                    '@rc-component/util',
+                    'rc-cascader',
+                    'rc-checkbox',
+                    'rc-collapse',
+                    'rc-dialog',
+                    'rc-dropdown',
+                    'rc-field-form',
+                    'rc-image',
+                    'rc-input',
+                    'rc-input-number',
+                    'rc-mentions',
+                    'rc-menu',
+                    'rc-motion',
+                    'rc-notification',
+                    'rc-pagination',
+                    'rc-picker',
+                    'rc-progress',
+                    'rc-rate',
+                    'rc-resize-observer',
+                    'rc-segmented',
+                    'rc-select',
+                    'rc-slider',
+                    'rc-steps',
+                    'rc-switch',
+                    'rc-table',
+                    'rc-tabs',
+                    'rc-textarea',
+                    'rc-tooltip',
+                    'rc-tree',
+                    'rc-tree-select',
+                    'rc-upload',
+                    'rc-util',
+                    'rc-virtual-list',
+                  ]),
+                priority: 40,
+                maxSize: 450_000,
+              },
+              {
+                name: 'vendor-graphql',
+                test: (moduleId) =>
+                  isAnyNodeModulePackage(moduleId, ['@apollo/client', 'graphql', 'graphql-ws']),
+                priority: 35,
+              },
+              {
+                name: 'vendor',
+                test: (moduleId) => normalizeModuleId(moduleId).includes('/node_modules/'),
+                priority: 10,
+                maxSize: 450_000,
+              },
+            ],
+          },
+        },
+      },
     },
   };
 });
