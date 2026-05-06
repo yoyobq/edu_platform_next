@@ -1342,7 +1342,8 @@ const JournalDraftCard = memo(function JournalDraftCard({
                   })}
                   {isFilled ? (
                     <span className="lecture-journal-readonly-input">
-                      <Input
+                      <Input.TextArea
+                        autoSize={{ minRows: 1, maxRows: 4 }}
                         placeholder="未填写"
                         readOnly
                         size="large"
@@ -1571,6 +1572,7 @@ export function AcademicTeachingLogPageContent({
   const initialJournalDraftsRef = useRef<JournalDraftMap>({});
   const isQueryInFlightRef = useRef(false);
   const cardItemElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
+  const autoScrolledCompleteResultRef = useRef<AcademicTeachingLogPrefillResult | null>(null);
   const savedCardCollapseAnimationFramesRef = useRef<Record<string, number>>({});
   const savedCardCollapseTimeoutsRef = useRef<Record<string, number>>({});
 
@@ -2044,6 +2046,39 @@ export function AcademicTeachingLogPageContent({
     () => filterItemsByCourseCategory(scopedJournalItems, activeCourseCategoryFilter),
     [activeCourseCategoryFilter, scopedJournalItems],
   );
+  useEffect(() => {
+    const isDefaultingToCompleteResult =
+      prefillResult &&
+      resultViewScope === 'missing' &&
+      activeResultViewScope === 'complete' &&
+      dateVisiblePresentedMissingEditableItems.length === 0 &&
+      visibleJournalItems.length > 0;
+
+    if (!isDefaultingToCompleteResult || autoScrolledCompleteResultRef.current === prefillResult) {
+      return;
+    }
+
+    autoScrolledCompleteResultRef.current = prefillResult;
+
+    const frameId = window.requestAnimationFrame(() => {
+      const lastVisibleItem = visibleJournalItems[visibleJournalItems.length - 1];
+      const lastVisibleItemElement = cardItemElementsRef.current[lastVisibleItem.key];
+
+      lastVisibleItemElement?.scrollIntoView({
+        block: 'end',
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frameId);
+    };
+  }, [
+    activeResultViewScope,
+    dateVisiblePresentedMissingEditableItems.length,
+    prefillResult,
+    resultViewScope,
+    visibleJournalItems,
+  ]);
   const currentResultCount = visibleJournalItems.length;
   const currentCourseCategoryLabel =
     activeCourseCategoryFilter === 'ALL'
