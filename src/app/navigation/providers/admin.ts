@@ -1,4 +1,4 @@
-import { canAccessPayloadCrypto } from '@/features/payload-crypto';
+import { canAccessPayloadCrypto } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -38,9 +38,7 @@ export const getAdminNavigationItems: NavigationItemsProvider = (filter) => {
     VERIFICATION_ISSUANCE_NAVIGATION_ITEM,
     ...(canAccessPayloadCrypto({
       accountId: filter.accountId,
-      userInfo: {
-        accessGroup: filter.accessGroup,
-      },
+      accessGroup: filter.accessGroup,
     })
       ? [PAYLOAD_CRYPTO_NAVIGATION_ITEM]
       : []),

@@ -4,12 +4,12 @@ import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 
+import { ThirdWorkspaceDemoCanvas } from '@/shared/third-workspace-demo/canvas';
 import {
   getThirdWorkspaceDemoArtifactById,
   readThirdWorkspaceDemoArtifactId,
-  ThirdWorkspaceDemoCanvas,
   withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
+} from '@/shared/third-workspace-demo/model';
 
 const THIRD_WORKSPACE_ROOT_SELECTOR = '[data-layout-layer="third-workspace-root"]';
 const THIRD_WORKSPACE_MOUNT_SELECTOR = '[data-workspace-mount="artifacts-canvas"]';

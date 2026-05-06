@@ -77,12 +77,6 @@ export default defineConfig(({ mode }) => {
                 priority: 50,
               },
               {
-                name: 'vendor-ant-design-x',
-                test: (moduleId) => isNodeModulePackage(moduleId, '@ant-design/x'),
-                priority: 45,
-                maxSize: 450_000,
-              },
-              {
                 name: 'vendor-antd',
                 test: (moduleId) =>
                   isAnyNodeModulePackage(moduleId, [
@@ -145,12 +139,6 @@ export default defineConfig(({ mode }) => {
                 test: (moduleId) =>
                   isAnyNodeModulePackage(moduleId, ['@apollo/client', 'graphql', 'graphql-ws']),
                 priority: 35,
-              },
-              {
-                name: 'vendor',
-                test: (moduleId) => normalizeModuleId(moduleId).includes('/node_modules/'),
-                priority: 10,
-                maxSize: 450_000,
               },
             ],
           },

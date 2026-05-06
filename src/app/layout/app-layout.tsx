@@ -50,7 +50,10 @@ import {
 
 import { logout, useAuthSessionState } from '@/features/auth';
 
-import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
+import {
+  THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
+  withWorkbenchSearch,
+} from '@/shared/third-workspace-demo/model';
 import { BrandLockup } from '@/shared/ui/brand';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
@@ -97,12 +100,14 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
+  const [hasLoadedEntrySidecar, setHasLoadedEntrySidecar] = useState(isOpen);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
   const shouldLoadThirdWorkspaceDemoHost =
-    location.pathname === '/labs/demo' || location.search.includes('thirdWorkspaceArtifact=');
+    location.pathname === '/labs/demo' ||
+    new URLSearchParams(location.search).has(THIRD_WORKSPACE_DEMO_SEARCH_PARAM);
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
   const hasExplicitChildren = typeof children !== 'undefined';
@@ -279,6 +284,8 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   ]);
 
   const openEntrySidecar = useCallback(() => {
+    setHasLoadedEntrySidecar(true);
+
     if (!isOpen) {
       open();
     }
@@ -286,6 +293,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
   useEffect(() => {
     const handleOpenRequest = () => {
+      setHasLoadedEntrySidecar(true);
       open();
     };
 
@@ -656,7 +664,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           </Suspense>
         ) : null}
 
-        {isOpen ? (
+        {hasLoadedEntrySidecar ? (
           <Suspense fallback={null}>
             <EntrySidecar />
           </Suspense>
@@ -681,6 +689,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                 close();
                 return;
               }
+              setHasLoadedEntrySidecar(true);
               open();
             }}
           >

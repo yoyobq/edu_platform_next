@@ -69,3 +69,12 @@ export function hasStaffSemesterProfilesAccess(input: {
       slotGroup.includes(TEACHING_GROUP_LEADER_SLOT_GROUP))
   );
 }
+
+export function canAccessPayloadCrypto(input: {
+  accountId?: number | null;
+  accessGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return (input.accountId === 1 || input.accountId === 2) && accessGroup.includes('ADMIN');
+}

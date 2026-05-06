@@ -11,7 +11,7 @@ import {
   THIRD_WORKSPACE_DEMO_ARTIFACTS,
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
+} from '@/shared/third-workspace-demo/model';
 
 import { demoLabAccess } from './access';
 import { demoLabMeta } from './meta';

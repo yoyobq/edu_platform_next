@@ -23,7 +23,7 @@ import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { LoginPage } from '@/pages/login';
 import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
-import { PayloadCryptoPage } from '@/pages/payload-crypto';
+import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
 import { ProfilePage } from '@/pages/profile';
 import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
@@ -52,9 +52,9 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
-import { canAccessPayloadCrypto } from '@/features/payload-crypto';
 
 import {
+  canAccessPayloadCrypto,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
@@ -406,7 +406,12 @@ async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
     return null;
   }
 
-  if (!canAccessPayloadCrypto(snapshot)) {
+  if (
+    !canAccessPayloadCrypto({
+      accountId: snapshot.accountId,
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
     return {
       isForbidden: true,
     };
@@ -927,7 +932,7 @@ const router = createBrowserRouter([
       {
         path: '/system/payload-crypto',
         loader: payloadCryptoPageLoader,
-        Component: PayloadCryptoPage,
+        lazy: loadPayloadCryptoRouteModule,
       },
       {
         path: '/labs',

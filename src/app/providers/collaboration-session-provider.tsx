@@ -16,7 +16,7 @@ import {
   resolveThirdWorkspaceDemoTrigger,
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
+} from '@/shared/third-workspace-demo/model';
 
 import {
   type AppEnv,

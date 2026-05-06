@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canAccessPayloadCrypto,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
@@ -53,5 +54,12 @@ describe('auth access policy helpers', () => {
       }),
     ).toBe(true);
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('limits payload crypto access to the configured admin accounts', () => {
+    expect(canAccessPayloadCrypto({ accountId: 1, accessGroup: ['ADMIN'] })).toBe(true);
+    expect(canAccessPayloadCrypto({ accountId: 2, accessGroup: ['ADMIN'] })).toBe(true);
+    expect(canAccessPayloadCrypto({ accountId: 3, accessGroup: ['ADMIN'] })).toBe(false);
+    expect(canAccessPayloadCrypto({ accountId: 1, accessGroup: ['STAFF'] })).toBe(false);
   });
 });
