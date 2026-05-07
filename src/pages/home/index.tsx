@@ -9,6 +9,7 @@ import { Link, useNavigate } from 'react-router';
 import {
   type AcademicTimetableItem,
   requestAcademicWeeklyTimetableItems,
+  requestMyAcademicSemesterTimetableItems,
   resolveCurrentTeachingWeekIndex,
 } from '@/features/academic-timetable';
 import {
@@ -276,10 +277,12 @@ function WorkbenchWeeklyTimetable({
   accountId,
   showTeachingLogQuickEntry,
   staffId,
+  viewerRole,
 }: {
   accountId: number | null;
   showTeachingLogQuickEntry: boolean;
   staffId: string | null;
+  viewerRole: 'authenticated' | 'admin' | 'staff';
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -290,7 +293,7 @@ function WorkbenchWeeklyTimetable({
   const [maxWeekIndex, setMaxWeekIndex] = useState<number | null>(null);
 
   useEffect(() => {
-    if (!staffId) {
+    if (!staffId && viewerRole !== 'staff') {
       setErrorMessage(null);
       setIsLoading(false);
       setItems([]);
@@ -302,7 +305,7 @@ function WorkbenchWeeklyTimetable({
     }
 
     let isActive = true;
-    const resolvedStaffId = staffId;
+    const resolvedStaffId = staffId ?? '';
 
     async function loadWeeklyTimetable() {
       setErrorMessage(null);
@@ -327,11 +330,18 @@ function WorkbenchWeeklyTimetable({
           resolveCurrentTeachingWeekIndex(semester) ?? 1,
           resolvedMaxWeekIndex,
         );
-        const result = await requestAcademicWeeklyTimetableItems({
-          semesterId: semester.id,
-          staffId: resolvedStaffId,
-          weekIndex,
-        });
+        const result =
+          viewerRole === 'staff'
+            ? (
+                await requestMyAcademicSemesterTimetableItems({
+                  semesterId: semester.id,
+                })
+              ).filter((item) => item.weekIndex === weekIndex)
+            : await requestAcademicWeeklyTimetableItems({
+                semesterId: semester.id,
+                staffId: resolvedStaffId,
+                weekIndex,
+              });
 
         if (isActive) {
           setItems(result);
@@ -361,10 +371,10 @@ function WorkbenchWeeklyTimetable({
     return () => {
       isActive = false;
     };
-  }, [staffId]);
+  }, [staffId, viewerRole]);
 
   async function changeWeek(nextWeekIndex: number) {
-    if (!staffId || !selectedSemester) {
+    if ((!staffId && viewerRole !== 'staff') || !selectedSemester) {
       return;
     }
 
@@ -374,11 +384,18 @@ function WorkbenchWeeklyTimetable({
     setIsLoading(true);
 
     try {
-      const result = await requestAcademicWeeklyTimetableItems({
-        semesterId: selectedSemester.id,
-        staffId,
-        weekIndex: resolvedWeekIndex,
-      });
+      const result =
+        viewerRole === 'staff'
+          ? (
+              await requestMyAcademicSemesterTimetableItems({
+                semesterId: selectedSemester.id,
+              })
+            ).filter((item) => item.weekIndex === resolvedWeekIndex)
+          : await requestAcademicWeeklyTimetableItems({
+              semesterId: selectedSemester.id,
+              staffId: staffId ?? '',
+              weekIndex: resolvedWeekIndex,
+            });
 
       setItems(result);
       setSelectedWeekIndex(resolvedWeekIndex);
@@ -520,6 +537,11 @@ export function HomePage() {
   const canShowTeachingLogQuickEntry = hasAcademicTeachingLogAccess({
     accessGroup: authSession.snapshot?.userInfo.accessGroup,
   });
+  const weeklyTimetableViewerRole = authSession.snapshot?.userInfo.accessGroup.includes('ADMIN')
+    ? 'admin'
+    : authSession.snapshot?.userInfo.accessGroup.includes('STAFF')
+      ? 'staff'
+      : 'authenticated';
 
   const handleAction = (action: HomeModuleAction) => {
     if (action.disabled) {
@@ -612,6 +634,7 @@ export function HomePage() {
           accountId={authSession.snapshot?.accountId ?? null}
           showTeachingLogQuickEntry={canShowTeachingLogQuickEntry}
           staffId={staffId}
+          viewerRole={weeklyTimetableViewerRole}
         />
       ) : shouldShowModuleSkeleton ? (
         <div className="grid gap-4 xl:grid-cols-3">

@@ -11,11 +11,15 @@ export type {
   AcademicTimetableItem,
   AcademicTimetableQueryFilters,
   AcademicWeeklyTimetableQueryFilters,
+  MyAcademicTeacherSemesterScheduleQueryFilters,
+  MyAcademicTimetableQueryFilters,
 } from './infrastructure/academic-timetable-api';
 export {
   requestAcademicSemesterTimetableItems,
   requestAcademicTeacherSemesterScheduleItems,
   requestAcademicWeeklyTimetableItems,
+  requestMyAcademicSemesterTimetableItems,
+  requestMyAcademicTeacherSemesterScheduleItems,
   resolveAcademicTimetableErrorMessage,
 } from './infrastructure/academic-timetable-api';
 export { SemesterTimetablePageContent } from './ui/semester-timetable-page-content';

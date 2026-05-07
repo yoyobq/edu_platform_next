@@ -167,6 +167,11 @@ export type FetchAcademicTeachingLogPrefillInput = {
   upstreamSessionToken?: string;
 };
 
+export type FetchMyAcademicTeachingLogPrefillInput = Omit<
+  FetchAcademicTeachingLogPrefillInput,
+  'staffId'
+>;
+
 export type AcademicTeachingLogSaveResult = {
   code: number;
   expiresAt: string;

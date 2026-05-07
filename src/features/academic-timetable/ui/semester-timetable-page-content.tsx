@@ -10,6 +10,7 @@ import { resolveStaffDirectoryEntries } from '@/shared/upstream';
 import type {
   AcademicTeacherSemesterScheduleItem,
   AcademicTeacherSemesterScheduleQueryFilters,
+  MyAcademicTeacherSemesterScheduleQueryFilters,
 } from '../infrastructure/academic-timetable-api';
 
 import { SemesterTimetableGrid } from './timetable-grid';
@@ -22,6 +23,10 @@ type SemesterTimetablePageContentProps = {
   listAcademicTeacherSemesterScheduleItems: (
     input: AcademicTeacherSemesterScheduleQueryFilters,
   ) => Promise<AcademicTeacherSemesterScheduleItem[]>;
+  listMyAcademicTeacherSemesterScheduleItems?: (
+    input: MyAcademicTeacherSemesterScheduleQueryFilters,
+  ) => Promise<AcademicTeacherSemesterScheduleItem[]>;
+  viewerRole?: 'admin' | 'staff';
 };
 
 type SemesterTimetableFilters = {
@@ -76,8 +81,11 @@ export function SemesterTimetablePageContent({
   defaultStaffId,
   listAcademicSemesters,
   listAcademicTeacherSemesterScheduleItems,
+  listMyAcademicTeacherSemesterScheduleItems,
+  viewerRole = 'admin',
 }: SemesterTimetablePageContentProps) {
   const loaderDefaultStaffId = defaultStaffId?.trim() || '';
+  const isStaffViewer = viewerRole === 'staff';
   const [filters, setFilters] = useState<SemesterTimetableFilters>({
     staffId: loaderDefaultStaffId,
   });
@@ -100,7 +108,10 @@ export function SemesterTimetablePageContent({
     () => normalizeStringFilter(filters.staffId) ?? '',
     [filters.staffId],
   );
-  const hasSemesterQueryId = useMemo(() => Boolean(normalizedStaffId), [normalizedStaffId]);
+  const hasSemesterQueryId = useMemo(
+    () => isStaffViewer || Boolean(normalizedStaffId),
+    [isStaffViewer, normalizedStaffId],
+  );
   const selectedSemester = useMemo(
     () => semesters.find((record) => record.id === selectedSemesterId) ?? null,
     [semesters, selectedSemesterId],
@@ -126,22 +137,30 @@ export function SemesterTimetablePageContent({
     async (semesterId: number, currentFilters: SemesterTimetableFilters) => {
       const normalizedQueryStaffId = normalizeStringFilter(currentFilters.staffId);
 
-      if (!normalizedQueryStaffId) {
+      if (!isStaffViewer && !normalizedQueryStaffId) {
         setSemesterScheduleItemsError(null);
         setSemesterScheduleItems([]);
         return;
       }
 
-      setSubmittedStaffId(normalizedQueryStaffId);
+      setSubmittedStaffId(normalizedQueryStaffId ?? loaderDefaultStaffId);
       setSemesterScheduleItemsLoading(true);
       setSemesterScheduleItemsError(null);
 
       try {
-        const result = await listAcademicTeacherSemesterScheduleItems({
-          semesterId,
-          staffId: normalizedQueryStaffId,
-        });
+        const result =
+          isStaffViewer && listMyAcademicTeacherSemesterScheduleItems
+            ? await listMyAcademicTeacherSemesterScheduleItems({
+                semesterId,
+              })
+            : await listAcademicTeacherSemesterScheduleItems({
+                semesterId,
+                staffId: normalizedQueryStaffId ?? loaderDefaultStaffId,
+              });
 
+        if (isStaffViewer && result[0]?.staffId) {
+          setSubmittedStaffId(result[0].staffId);
+        }
         setSemesterScheduleItems(result);
       } catch (error) {
         setSemesterScheduleItemsError(
@@ -152,7 +171,12 @@ export function SemesterTimetablePageContent({
         setSemesterScheduleItemsLoading(false);
       }
     },
-    [listAcademicTeacherSemesterScheduleItems],
+    [
+      isStaffViewer,
+      listAcademicTeacherSemesterScheduleItems,
+      listMyAcademicTeacherSemesterScheduleItems,
+      loaderDefaultStaffId,
+    ],
   );
 
   useEffect(() => {
@@ -307,8 +331,13 @@ export function SemesterTimetablePageContent({
             <div className="semester-timetable-control-field">
               <Typography.Text strong>教师 ID</Typography.Text>
               <Input
+                disabled={isStaffViewer}
                 style={{ marginTop: 8 }}
-                placeholder={loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'}
+                placeholder={
+                  isStaffViewer
+                    ? '本人课表由当前登录身份确定'
+                    : loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'
+                }
                 value={filters.staffId}
                 onChange={(event) => {
                   setFilters((current) => ({

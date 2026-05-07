@@ -49,8 +49,17 @@ export type RequestAcademicStableWorkloadInput = {
   sstsTeachingClassId?: string;
 };
 
+export type RequestMyAcademicStableWorkloadInput = Omit<
+  RequestAcademicStableWorkloadInput,
+  'staffId'
+>;
+
 type AcademicStableWorkloadResponse = {
   listAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
+};
+
+type MyAcademicStableWorkloadResponse = {
+  listMyAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
 };
 
 const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
@@ -66,6 +75,51 @@ const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
       endDate: $endDate
       semesterId: $semesterId
       staffId: $staffId
+      startDate: $startDate
+      sstsCourseId: $sstsCourseId
+      sstsTeachingClassId: $sstsTeachingClassId
+    ) {
+      invalidReason
+      isComplete
+      isValid
+      truncationReason
+      items {
+        calcEffect
+        classroomName
+        coefficient
+        courseCategory
+        courseName
+        date
+        isEffective
+        logicalDayOfWeek
+        periodEnd
+        periodStart
+        physicalDayOfWeek
+        scheduleId
+        semesterId
+        slotId
+        staffId
+        staffName
+        sstsCourseId
+        sstsTeachingClassId
+        teachingClassName
+        weekIndex
+      }
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
+  query ListMyAcademicStableWorkloadOccurrences(
+    $endDate: String
+    $semesterId: Int!
+    $startDate: String
+    $sstsCourseId: String
+    $sstsTeachingClassId: String
+  ) {
+    listMyAcademicStableWorkloadOccurrences(
+      endDate: $endDate
+      semesterId: $semesterId
       startDate: $startDate
       sstsCourseId: $sstsCourseId
       sstsTeachingClassId: $sstsTeachingClassId
@@ -117,6 +171,16 @@ function normalizeRequestInput(input: RequestAcademicStableWorkloadInput) {
   };
 }
 
+function normalizeMyRequestInput(input: RequestMyAcademicStableWorkloadInput) {
+  return {
+    endDate: normalizeStringFilter(input.endDate),
+    semesterId: input.semesterId,
+    startDate: normalizeStringFilter(input.startDate),
+    sstsCourseId: normalizeStringFilter(input.sstsCourseId),
+    sstsTeachingClassId: normalizeStringFilter(input.sstsTeachingClassId),
+  };
+}
+
 function resolveAcademicWorkloadErrorMessage(error: unknown, fallback: string) {
   if (isGraphQLIngressError(error)) {
     const firstError = error.graphqlErrors?.[0];
@@ -144,5 +208,20 @@ export async function requestAcademicStableWorkloadOccurrences(
     return response.listAcademicStableWorkloadOccurrences;
   } catch (error) {
     throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载教师工作量。'));
+  }
+}
+
+export async function requestMyAcademicStableWorkloadOccurrences(
+  input: RequestMyAcademicStableWorkloadInput,
+) {
+  try {
+    const response = await executeGraphQL<
+      MyAcademicStableWorkloadResponse,
+      OperationVariables & RequestMyAcademicStableWorkloadInput
+    >(LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY, normalizeMyRequestInput(input));
+
+    return response.listMyAcademicStableWorkloadOccurrences;
+  } catch (error) {
+    throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载本人教师工作量。'));
   }
 }

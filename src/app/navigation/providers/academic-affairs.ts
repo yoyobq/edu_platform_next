@@ -1,4 +1,5 @@
 import {
+  hasAcademicCalendarReadAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
   hasAdminOrAcademicOfficerAccess,
@@ -47,7 +48,9 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
   ];
 
   const calendarScheduleChildren: NavigationLeafItem[] = [
-    ...(hasAcademicAffairsNavigationAccess(filter)
+    ...(hasAcademicCalendarReadAccess({
+      accessGroup: filter.accessGroup,
+    })
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,

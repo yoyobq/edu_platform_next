@@ -344,6 +344,7 @@ async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
+    viewerRole: snapshot.userInfo.accessGroup.includes('ADMIN') ? 'admin' : 'staff',
   };
 }
 
@@ -568,6 +569,7 @@ async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
 
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    viewerRole: accessGroup.includes('ADMIN') ? 'admin' : 'staff',
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
@@ -616,6 +618,7 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
+    viewerRole: accessGroup.includes('ADMIN') ? 'admin' : 'staff',
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canAccessPayloadCrypto,
+  hasAcademicCalendarReadAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
@@ -26,6 +27,7 @@ describe('auth access policy helpers', () => {
   });
 
   it('allows staff to enter teaching logs but only admins and teaching group leaders manage teacher selection', () => {
+    expect(hasAcademicCalendarReadAccess({ accessGroup: ['STAFF'] })).toBe(true);
     expect(hasAcademicTeachingLogAccess({ accessGroup: ['STAFF'] })).toBe(true);
     expect(hasAcademicTimetableAccess({ accessGroup: ['STAFF'] })).toBe(true);
     expect(hasAcademicTimetableAccess({ accessGroup: ['STUDENT'] })).toBe(false);

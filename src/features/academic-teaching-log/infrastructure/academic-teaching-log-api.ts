@@ -11,6 +11,7 @@ import type {
   AcademicTeachingLogPrefillResult,
   AcademicTeachingLogSaveResult,
   FetchAcademicTeachingLogPrefillInput,
+  FetchMyAcademicTeachingLogPrefillInput,
   SaveAcademicIntegratedTeachingLogInput,
   SaveAcademicPracticeTeachingLogInput,
   SaveAcademicTheoryTeachingLogInput,
@@ -23,6 +24,7 @@ export type {
   AcademicTeachingLogPrefillResult,
   AcademicTeachingLogSaveResult,
   FetchAcademicTeachingLogPrefillInput,
+  FetchMyAcademicTeachingLogPrefillInput,
   LectureJournalExpectedOccurrence,
   LectureJournalReconciliationItem,
   LectureJournalReconciliationResult,
@@ -36,6 +38,10 @@ export type {
 
 type AcademicTeachingLogPrefillResponse = {
   listAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
+};
+
+type MyAcademicTeachingLogPrefillResponse = {
+  listMyAcademicTeachingLogPrefillItems: AcademicTeachingLogPrefillResult;
 };
 
 type SaveAcademicTheoryTeachingLogResponse = {
@@ -218,6 +224,37 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
   }
 `;
 
+const LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY =
+  LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY.replace(
+    `query ListAcademicTeachingLogPrefillItems(
+    $endDate: String
+    $semesterId: Int!
+    $staffId: String!
+    $startDate: String
+    $upstreamSessionToken: String
+  )`,
+    `query ListMyAcademicTeachingLogPrefillItems(
+    $endDate: String
+    $semesterId: Int!
+    $startDate: String
+    $upstreamSessionToken: String
+  )`,
+  ).replace(
+    `listAcademicTeachingLogPrefillItems(
+      endDate: $endDate
+      semesterId: $semesterId
+      staffId: $staffId
+      startDate: $startDate
+      upstreamSessionToken: $upstreamSessionToken
+    )`,
+    `listMyAcademicTeachingLogPrefillItems(
+      endDate: $endDate
+      semesterId: $semesterId
+      startDate: $startDate
+      upstreamSessionToken: $upstreamSessionToken
+    )`,
+  );
+
 const SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION = `
   mutation SaveAcademicTheoryTeachingLog($input: SaveAcademicTheoryTeachingLogInput!) {
     saveAcademicTheoryTeachingLog(input: $input) {
@@ -302,6 +339,17 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
     staffId,
     startDate,
     upstreamSessionToken,
+  };
+}
+
+function normalizeFetchMyAcademicTeachingLogPrefillInput(
+  input: FetchMyAcademicTeachingLogPrefillInput,
+) {
+  return {
+    endDate: normalizeOptionalString(input.endDate),
+    semesterId: input.semesterId,
+    startDate: normalizeOptionalString(input.startDate),
+    upstreamSessionToken: normalizeOptionalString(input.upstreamSessionToken),
   };
 }
 
@@ -411,6 +459,32 @@ export async function fetchAcademicTeachingLogPrefillItems(
     }
 
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志预填项。'));
+  }
+}
+
+export async function fetchMyAcademicTeachingLogPrefillItems(
+  input: FetchMyAcademicTeachingLogPrefillInput,
+) {
+  try {
+    const response = await requestGraphQL<
+      MyAcademicTeachingLogPrefillResponse,
+      FetchMyAcademicTeachingLogPrefillInput & {
+        endDate?: string;
+        startDate?: string;
+        upstreamSessionToken?: string;
+      }
+    >(
+      LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
+      normalizeFetchMyAcademicTeachingLogPrefillInput(input),
+    );
+
+    return response.listMyAcademicTeachingLogPrefillItems;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本人教学日志预填项。'));
   }
 }
 

@@ -109,6 +109,7 @@ import {
 } from '../application/view-filter-policy';
 import {
   fetchAcademicTeachingLogPrefillItems,
+  fetchMyAcademicTeachingLogPrefillItems,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
   saveAcademicIntegratedTeachingLog,
@@ -2358,7 +2359,15 @@ export function AcademicTeachingLogPageContent({
       }
 
       const result = await runLectureJournalReconciliationQueryWorkflow({
-        fetchAcademicTeachingLogPrefillItems,
+        fetchAcademicTeachingLogPrefillItems: isStaffViewer
+          ? ({ endDate, semesterId, startDate, upstreamSessionToken }) =>
+              fetchMyAcademicTeachingLogPrefillItems({
+                endDate,
+                semesterId,
+                startDate,
+                upstreamSessionToken,
+              })
+          : fetchAcademicTeachingLogPrefillItems,
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
         isExpiredUpstreamSessionError,
         persistSessionFromResult,

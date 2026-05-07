@@ -125,6 +125,8 @@ export type AcademicTimetableQueryFilters = {
   sstsTeachingClassId?: string;
 };
 
+export type MyAcademicTimetableQueryFilters = Omit<AcademicTimetableQueryFilters, 'staffId'>;
+
 export type AcademicWeeklyTimetableQueryFilters = AcademicTimetableQueryFilters & {
   weekIndex: number;
 };
@@ -136,6 +138,10 @@ export type AcademicTeacherSemesterScheduleQueryFilters = {
 
 type AcademicSemesterTimetableItemsResponse = {
   listAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
+};
+
+type MyAcademicSemesterTimetableItemsResponse = {
+  listMyAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
 };
 
 type AcademicWeeklyTimetableItemsResponse = {
@@ -177,6 +183,28 @@ const LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
     listAcademicSemesterPlannedTimetable(
       semesterId: $semesterId
       staffId: $staffId
+      sstsCourseId: $sstsCourseId
+      sstsTeachingClassId: $sstsTeachingClassId
+    ) {
+      invalidReason
+      isComplete
+      isValid
+      items {
+        ${ACADEMIC_TIMETABLE_ITEM_FIELDS}
+      }
+      truncationReason
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
+  query ListMyAcademicSemesterPlannedTimetable(
+    $semesterId: Int!
+    $sstsCourseId: String
+    $sstsTeachingClassId: String
+  ) {
+    listMyAcademicSemesterPlannedTimetable(
+      semesterId: $semesterId
       sstsCourseId: $sstsCourseId
       sstsTeachingClassId: $sstsTeachingClassId
     ) {
@@ -367,6 +395,25 @@ export async function requestAcademicSemesterTimetableItems(input: AcademicTimet
     return resolvePlannedTimetableItems(response.listAcademicSemesterPlannedTimetable);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载学期课表。'));
+  }
+}
+
+export async function requestMyAcademicSemesterTimetableItems(
+  input: MyAcademicTimetableQueryFilters,
+) {
+  try {
+    const response = await requestGraphQL<
+      MyAcademicSemesterTimetableItemsResponse,
+      MyAcademicTimetableQueryFilters
+    >(LIST_MY_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY, {
+      semesterId: input.semesterId,
+      sstsCourseId: normalizeStringFilter(input.sstsCourseId),
+      sstsTeachingClassId: normalizeStringFilter(input.sstsTeachingClassId),
+    });
+
+    return resolvePlannedTimetableItems(response.listMyAcademicSemesterPlannedTimetable);
+  } catch (error) {
+    throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载本人学期课表。'));
   }
 }
 

@@ -27,11 +27,13 @@ import {
   type AcademicStableWorkloadEnvelope,
   type AcademicStableWorkloadOccurrence,
   requestAcademicStableWorkloadOccurrences,
+  requestMyAcademicStableWorkloadOccurrences,
 } from './api';
 import { academicWorkloadLabMeta } from './meta';
 
 type AcademicWorkloadLabLoaderData = {
   defaultStaffId?: string | null;
+  viewerRole?: 'admin' | 'staff';
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 
@@ -244,6 +246,7 @@ function isAddedEffectiveOccurrence(item: AcademicStableWorkloadOccurrence) {
 
 export function AcademicWorkloadLabPage() {
   const loaderData = useLoaderData() as AcademicWorkloadLabLoaderData;
+  const isStaffViewer = loaderData?.viewerRole === 'staff';
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
@@ -432,7 +435,7 @@ export function AcademicWorkloadLabPage() {
     baselineTeachingWeekCount > 0 ? baselineRangeHours / baselineTeachingWeekCount : 0;
 
   const handleCalculate = useCallback(async () => {
-    if (!selectedSemesterId || !normalizedStaffId) {
+    if (!selectedSemesterId || (!isStaffViewer && !normalizedStaffId)) {
       return;
     }
 
@@ -440,10 +443,14 @@ export function AcademicWorkloadLabPage() {
     setWorkloadError(null);
 
     try {
-      const result = await requestAcademicStableWorkloadOccurrences({
-        semesterId: selectedSemesterId,
-        staffId: normalizedStaffId,
-      });
+      const result = isStaffViewer
+        ? await requestMyAcademicStableWorkloadOccurrences({
+            semesterId: selectedSemesterId,
+          })
+        : await requestAcademicStableWorkloadOccurrences({
+            semesterId: selectedSemesterId,
+            staffId: normalizedStaffId,
+          });
 
       setOccurrenceEnvelope(result);
     } catch (error) {
@@ -451,7 +458,7 @@ export function AcademicWorkloadLabPage() {
     } finally {
       setLoadingOccurrences(false);
     }
-  }, [normalizedStaffId, selectedSemesterId]);
+  }, [isStaffViewer, normalizedStaffId, selectedSemesterId]);
 
   const handleResetRange = useCallback(() => {
     setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
@@ -597,7 +604,8 @@ export function AcademicWorkloadLabPage() {
               <label className="flex flex-col gap-2">
                 <Typography.Text strong>教师 staffId</Typography.Text>
                 <Input
-                  placeholder="例如 T20250017"
+                  disabled={isStaffViewer}
+                  placeholder={isStaffViewer ? '本人工作量由当前登录身份确定' : '例如 T20250017'}
                   value={staffId}
                   onChange={(event) => setStaffId(event.target.value)}
                   onPressEnter={() => {
@@ -640,7 +648,7 @@ export function AcademicWorkloadLabPage() {
             <div className="flex flex-wrap gap-3">
               <Button
                 type="primary"
-                disabled={!selectedSemesterId || !normalizedStaffId}
+                disabled={!selectedSemesterId || (!isStaffViewer && !normalizedStaffId)}
                 loading={loadingOccurrences}
                 onClick={() => {
                   void handleCalculate();
@@ -872,7 +880,10 @@ export function AcademicWorkloadLabPage() {
         </div>
       ) : null}
 
-      {!loadingOccurrences && !occurrenceEnvelope && normalizedStaffId && selectedSemesterId ? (
+      {!loadingOccurrences &&
+      !occurrenceEnvelope &&
+      (isStaffViewer || normalizedStaffId) &&
+      selectedSemesterId ? (
         <Alert
           message="准备完成"
           description="点击“计算学期工作量”后，将按教师与学期读取整学期 occurrence 明细，再在前端对当前教学周范围做重算。"

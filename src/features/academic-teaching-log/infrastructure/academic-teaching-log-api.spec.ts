@@ -17,6 +17,7 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   fetchAcademicTeachingLogPrefillItems,
+  fetchMyAcademicTeachingLogPrefillItems,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
   saveAcademicTheoryTeachingLog,
@@ -137,6 +138,44 @@ describe('academic-teaching-log api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('\n      canFill\n      expiresAt');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('reconciliation');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('unmatchedPlanItems');
+  });
+
+  it('requests my teaching log prefill without sending staffId', async () => {
+    const payload = {
+      blockingIssue: null,
+      canFill: true,
+      expiresAt: '2026-04-25T12:00:00.000Z',
+      integratedPreviews: [],
+      items: [],
+      reconciliation: null,
+      upstreamSessionToken: 'rolling-token-005',
+      warnings: [],
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      listMyAcademicTeachingLogPrefillItems: payload,
+    });
+
+    await expect(
+      fetchMyAcademicTeachingLogPrefillItems({
+        endDate: ' 2026-05-01 ',
+        semesterId: 202601,
+        startDate: ' 2026-04-01 ',
+        upstreamSessionToken: ' rolling-token-004 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('listMyAcademicTeachingLogPrefillItems'),
+      {
+        endDate: '2026-05-01',
+        semesterId: 202601,
+        startDate: '2026-04-01',
+        upstreamSessionToken: 'rolling-token-004',
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId: $staffId');
   });
 
   it('rejects prefill loading without staffId', async () => {

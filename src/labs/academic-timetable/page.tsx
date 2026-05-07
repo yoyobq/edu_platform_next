@@ -24,6 +24,7 @@ import {
   type AcademicTimetableItem,
   type AcademicTimetableQueryFilters,
   requestAcademicWeeklyTimetableItems,
+  requestMyAcademicSemesterTimetableItems,
 } from './api';
 import { resolveCurrentTeachingWeekIndex } from './helpers';
 import { academicTimetableLabMeta } from './meta';
@@ -31,6 +32,7 @@ import { WeeklyTimetableGrid } from './timetable-grid';
 
 type AcademicTimetableLabLoaderData = {
   defaultStaffId?: string | null;
+  viewerRole?: 'admin' | 'staff';
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 
@@ -115,6 +117,7 @@ function hasAtLeastOneQueryId(filters: WeeklyTimetableFilters) {
 export function AcademicTimetableLabPage() {
   const loaderData = useLoaderData() as AcademicTimetableLabLoaderData;
   const loaderDefaultStaffId = loaderData?.defaultStaffId?.trim() || '';
+  const isStaffViewer = loaderData?.viewerRole === 'staff';
   const roleLabel = loaderData?.viewerKind === 'internal' ? '内部用户' : '登录用户';
 
   const [filters, setFilters] = useState<WeeklyTimetableFilters>({
@@ -132,7 +135,10 @@ export function AcademicTimetableLabPage() {
   const hasUserEditedWeekIndexRef = useRef(false);
   const latestFiltersRef = useRef(filters);
 
-  const hasAnyQueryId = useMemo(() => hasAtLeastOneQueryId(filters), [filters]);
+  const hasAnyQueryId = useMemo(
+    () => isStaffViewer || hasAtLeastOneQueryId(filters),
+    [filters, isStaffViewer],
+  );
   const selectedSemester = useMemo(
     () => semesters.find((record) => record.id === selectedSemesterId) ?? null,
     [semesters, selectedSemesterId],
@@ -156,7 +162,7 @@ export function AcademicTimetableLabPage() {
 
   const loadTimetableItems = useCallback(
     async (semesterId: number, currentFilters: WeeklyTimetableFilters) => {
-      if (!hasAtLeastOneQueryId(currentFilters)) {
+      if (!isStaffViewer && !hasAtLeastOneQueryId(currentFilters)) {
         setTimetableItemsError(null);
         setTimetableItems([]);
         return;
@@ -166,10 +172,16 @@ export function AcademicTimetableLabPage() {
       setTimetableItemsError(null);
 
       try {
-        const result = await requestAcademicWeeklyTimetableItems({
-          ...buildSharedQueryFilters(semesterId, currentFilters),
-          weekIndex: currentFilters.weekIndex,
-        });
+        const result = isStaffViewer
+          ? (
+              await requestMyAcademicSemesterTimetableItems(
+                buildSharedQueryFilters(semesterId, currentFilters),
+              )
+            ).filter((item) => item.weekIndex === currentFilters.weekIndex)
+          : await requestAcademicWeeklyTimetableItems({
+              ...buildSharedQueryFilters(semesterId, currentFilters),
+              weekIndex: currentFilters.weekIndex,
+            });
 
         setTimetableItems(result);
       } catch (error) {
@@ -179,7 +191,7 @@ export function AcademicTimetableLabPage() {
         setTimetableItemsLoading(false);
       }
     },
-    [],
+    [isStaffViewer],
   );
 
   useEffect(() => {
@@ -290,8 +302,13 @@ export function AcademicTimetableLabPage() {
           <div className="min-w-40 flex-1">
             <Typography.Text strong>教师 ID</Typography.Text>
             <Input
+              disabled={isStaffViewer}
               style={{ marginTop: 8 }}
-              placeholder={loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'}
+              placeholder={
+                isStaffViewer
+                  ? '本人课表由当前登录身份确定'
+                  : loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'
+              }
               value={filters.staffId}
               onChange={(event) => {
                 setFilters((current) => ({
@@ -424,8 +441,8 @@ export function AcademicTimetableLabPage() {
           </div>
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前页面以 listAcademicWeeklyPlannedTimetable
-            作为基础课表视图；结合现有口径，它比“学期总览”更接近实际可用的常规课表。
+            当前页面在管理视角以 listAcademicWeeklyPlannedTimetable 作为基础课表视图；普通 staff
+            视角读取 listMyAcademicSemesterPlannedTimetable 后按周过滤。
           </Typography.Paragraph>
         </div>
       </Card>
