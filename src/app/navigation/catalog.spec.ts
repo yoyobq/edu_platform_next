@@ -118,6 +118,7 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
+      '/calendar-schedule/semester-calendar',
       '/calendar-schedule/semester-timetable',
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
