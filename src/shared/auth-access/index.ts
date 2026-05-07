@@ -47,6 +47,7 @@ export function hasAcademicTeachingLogManagerAccess(input: {
   slotGroup?: readonly string[];
 }) {
   const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
 
   if (accessGroup.includes('ADMIN')) {
     return true;
@@ -54,7 +55,8 @@ export function hasAcademicTeachingLogManagerAccess(input: {
 
   return (
     accessGroup.includes('STAFF') &&
-    (input.slotGroup ?? []).includes(TEACHING_GROUP_LEADER_SLOT_GROUP)
+    (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
+      slotGroup.includes(TEACHING_GROUP_LEADER_SLOT_GROUP))
   );
 }
 

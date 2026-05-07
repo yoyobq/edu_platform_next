@@ -87,6 +87,8 @@
 
 详见 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md) — `slotGroup 导航语义` 节。
 
+本节只约束菜单项与全局入口的曝光，不约束页面内部自助 / 管理视角分流。页面同时存在自助 query 与管理 query 时，必须按功能级 capability helper 判定，不能用“菜单项是否命中某个 `slotGroup`”替代页面权限。
+
 **进入全局菜单必须同时满足：**
 
 - 有明确职责边界，有独立 landing page

@@ -18,6 +18,17 @@
 - 一体化预填来自 `prefill.integratedPreviews`
 - 保存只通过 `save-workflow` 编排；页面保留保存反馈、登录弹窗、折叠状态与本地展示 patch
 
+## 视角与权限
+
+本页面遵循 [identity-access-session.md](./identity-access-session.md) 的通用自助 / 管理视角口径。
+
+- `STAFF` 默认走本人自助视角，不因存在任意 `slotGroup` 而失效
+- 是否进入管理视角只看教学日志功能级 capability，不看“是否存在任意 `slotGroup`”
+- 当前管理视角允许 `ADMIN`、`STAFF + ACADEMIC_OFFICER`、`STAFF + TEACHING_GROUP_LEADER`
+- `STAFF + CLASS_ADVISER` 当前没有教学日志管理视角，仍走本人自助视角
+- 自助视角调用本人 prefill 查询，管理视角调用指定教师 prefill 查询
+- 这里的管理视角只决定列表 / prefill 查询分流，不代表保存、上游 session 或具体资源范围自动放开
+
 ## 业务策略
 
 - 课程类别判断统一走 feature 内共享 helper

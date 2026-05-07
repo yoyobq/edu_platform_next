@@ -87,14 +87,16 @@
 - 状态切换（如"发送邮件 → 检查邮箱"）在右栏 Card 内部完成，不切换路由
 - 返回登录等导航动作用 `Button type="link"` 放在 Card 底部
 
-### 全局协作入口：浮动按钮 + Drawer Sidecar
+### 全局协作入口：触发入口 + Drawer Sidecar
 
-项目的 AI 协作入口采用浮动按钮（`✨ 开始`）触发右侧 Drawer（`src/app/layout/entry-sidecar.tsx`）：
+项目的 AI 协作入口采用受控触发入口打开右侧 Drawer（`src/app/layout/entry-sidecar.tsx`）：
 
-- 浮动按钮固定在右下角，包含快捷键提示（`Alt+K`）
+- 当前右下角浮动按钮（`✨ 开始`）的实现保留在 `src/app/layout/app-layout.tsx`，但通过 `SHOULD_SHOW_ENTRY_TRIGGER = false` 临时隐藏；这是临时显示策略，不代表按钮能力被删除
+- `Alt+K` 快捷键仍是当前可用的全局打开方式
+- 首页等页面级入口应继续通过 `requestOpenEntrySidecar()` 这类受控事件打开 Sidecar，不直接依赖 layout 私有状态
 - Sidecar 基于 antd `<Drawer>` 实现，`mask={false}` 允许用户继续操作主区域
 - 打开时 `main` 弹性收窄（桌面端），关闭时 `main` 回到全宽
-- `Esc` 优先关闭 Sidecar，焦点回退到触发按钮
+- `Esc` 优先关闭 Sidecar；若由可见控件触发，焦点回退到该控件；若由快捷键或受控事件触发，不要求回退到当前隐藏的浮动按钮
 
 约束：
 

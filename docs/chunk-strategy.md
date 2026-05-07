@@ -20,7 +20,7 @@
   - Overlay mount
   - 路由错误边界
 - 低频全局体验按需加载：
-  - Sidecar 内容面板只在入口打开后加载；触发按钮和快捷键保留在 layout 主链路
+  - Sidecar 内容面板只在入口打开后加载；快捷键、受控打开事件和临时隐藏的浮动按钮代码保留在 layout 主链路
   - Third Workspace host 只在 `/labs/demo` 或带第三工作区参数时加载
 - 非首页路由默认优先采用 route-level `lazy`
 - `labs` 优先于 `sandbox` 进入按需加载治理

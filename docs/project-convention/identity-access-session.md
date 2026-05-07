@@ -190,6 +190,29 @@
 - `identityHint`：后端账户侧提示字段，不是前端权威身份输入
 - `activeRole`：仅允许作为前端本地展示偏好，不参与授权
 
+## 当前自助/管理视角口径
+
+前端页面在同一功能内区分自助视角与管理视角：
+
+- `STAFF` 表示员工基础业务身份，是自助视角的兜底输入
+- `slotGroup` 表示增量能力，不替换、不扣减、不覆盖 `STAFF`
+- 页面不得因为存在任意 `slotGroup` 就自动进入管理视角
+- 只有当前功能显式承认的 `slotGroup` 才能把该页面提升为管理视角
+- 当前功能不承认的 `slotGroup` 应被忽略，并继续保留 `STAFF` 自助视角
+- 管理视角使用的前端 capability helper 必须与后端同一功能的 `Authority` policy 对齐
+- 同一页面若同时存在自助 query 与管理 query，应先判断功能级管理能力，再决定调用哪一个 query
+- 管理视角只表达当前功能的页面 / 查询分流，不自动继承为同域其他操作、保存 mutation 或资源范围能力
+- 需要按部门、班级、教研组等业务范围裁剪时，继续依赖后端接口与业务关系结果，不从 `slotGroup` 反推 scope
+
+以“我的教学日志”列表 / prefill 查询为例：
+
+- `STAFF` 默认走本人自助查询
+- `ADMIN` 走管理查询
+- `STAFF + ACADEMIC_OFFICER` 走教学日志管理查询
+- `STAFF + TEACHING_GROUP_LEADER` 走教学日志管理查询
+- `STAFF + CLASS_ADVISER` 当前没有教学日志管理能力，仍走本人自助查询
+- 如果前端已经切到管理 query，但后端 policy 没有承认同一 `slotGroup`，页面会表现为“有 slotGroup 后反而没有 STAFF 权限”；这属于前后端功能级管理口径不一致，不是 `STAFF` 自助权限被移除
+
 在个人资料语义上：
 
 - `myProfileIdentity.slotGroup` 可以作为当前用户职责摘要展示

@@ -73,6 +73,7 @@ type MainFrameStyle = CSSProperties & {
 };
 
 const NAV_RAIL_CONTROL_SIZE = 40;
+// Temporarily hide the floating entry trigger; keep the implementation for later restoration.
 const SHOULD_SHOW_ENTRY_TRIGGER = false;
 const EntrySidecar = lazy(() =>
   import('./entry-sidecar').then((module) => ({ default: module.EntrySidecar })),
