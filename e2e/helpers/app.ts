@@ -965,10 +965,6 @@ export async function openHomeWithSearch(page: Page, search: string): Promise<vo
 }
 
 export async function openEntrySidecar(page: Page): Promise<void> {
-  await getEntrySidecarTrigger(page).click();
+  await page.keyboard.press('Alt+K');
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
-}
-
-export function getEntrySidecarTrigger(page: Page) {
-  return page.locator('button[aria-keyshortcuts="Alt+K"]');
 }

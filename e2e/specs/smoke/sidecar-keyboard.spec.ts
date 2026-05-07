@@ -1,10 +1,8 @@
-import { getEntrySidecarTrigger, openHome } from '../../helpers/app';
+import { openHome } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-test('应可通过快捷键打开入口面板，并在按下 Escape 后关闭并恢复焦点', async ({ page }) => {
+test('应可通过快捷键打开入口面板，并在按下 Escape 后关闭', async ({ page }) => {
   await openHome(page);
-
-  const trigger = getEntrySidecarTrigger(page);
 
   await page.evaluate(() => {
     document.dispatchEvent(
@@ -23,5 +21,4 @@ test('应可通过快捷键打开入口面板，并在按下 Escape 后关闭并
   await page.keyboard.press('Escape');
 
   await expect(page.getByRole('dialog', { name: '从这里开始' })).toHaveCount(0);
-  await expect(trigger).toBeFocused();
 });

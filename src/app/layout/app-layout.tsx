@@ -73,6 +73,7 @@ type MainFrameStyle = CSSProperties & {
 };
 
 const NAV_RAIL_CONTROL_SIZE = 40;
+const SHOULD_SHOW_ENTRY_TRIGGER = false;
 const EntrySidecar = lazy(() =>
   import('./entry-sidecar').then((module) => ({ default: module.EntrySidecar })),
 );
@@ -674,36 +675,38 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           <div data-overlay-mount="cross-region-visual" />
         </div>
 
-        <div
-          className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
-          data-entry-open={isOpen ? 'true' : 'false'}
-        >
-          <Button
-            ref={triggerRef}
-            type={isOpen ? 'default' : 'primary'}
-            size="large"
-            shape="round"
-            aria-keyshortcuts="Alt+K"
-            onClick={() => {
-              if (isOpen) {
-                close();
-                return;
-              }
-              setHasLoadedEntrySidecar(true);
-              open();
-            }}
+        {SHOULD_SHOW_ENTRY_TRIGGER ? (
+          <div
+            className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
+            data-entry-open={isOpen ? 'true' : 'false'}
           >
-            <div className="flex items-center gap-2">
-              <EntryAccentGlyph inverse={!isOpen} />
-              <span>开始</span>
-              {showShortcutHint ? (
-                <span className="entry-trigger-shortcut rounded-full px-2 py-0.5 text-xs">
-                  Alt+K
-                </span>
-              ) : null}
-            </div>
-          </Button>
-        </div>
+            <Button
+              ref={triggerRef}
+              type={isOpen ? 'default' : 'primary'}
+              size="large"
+              shape="round"
+              aria-keyshortcuts="Alt+K"
+              onClick={() => {
+                if (isOpen) {
+                  close();
+                  return;
+                }
+                setHasLoadedEntrySidecar(true);
+                open();
+              }}
+            >
+              <div className="flex items-center gap-2">
+                <EntryAccentGlyph inverse={!isOpen} />
+                <span>开始</span>
+                {showShortcutHint ? (
+                  <span className="entry-trigger-shortcut rounded-full px-2 py-0.5 text-xs">
+                    Alt+K
+                  </span>
+                ) : null}
+              </div>
+            </Button>
+          </div>
+        ) : null}
       </div>
     </ConfigProvider>
   );
