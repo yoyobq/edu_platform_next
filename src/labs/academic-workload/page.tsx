@@ -21,6 +21,8 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
+import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+
 import { academicWorkloadLabAccess } from './access';
 import {
   type AcademicStableWorkloadCalcEffect,
@@ -33,7 +35,7 @@ import { academicWorkloadLabMeta } from './meta';
 
 type AcademicWorkloadLabLoaderData = {
   defaultStaffId?: string | null;
-  viewerRole?: 'admin' | 'staff';
+  viewerRole?: AcademicInternalViewerRole;
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 

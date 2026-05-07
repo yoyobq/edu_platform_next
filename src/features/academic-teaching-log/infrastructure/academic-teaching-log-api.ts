@@ -56,21 +56,7 @@ type SaveAcademicIntegratedTeachingLogResponse = {
   saveAcademicIntegratedTeachingLog: AcademicTeachingLogSaveResult;
 };
 
-const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
-  query ListAcademicTeachingLogPrefillItems(
-    $endDate: String
-    $semesterId: Int!
-    $staffId: String!
-    $startDate: String
-    $upstreamSessionToken: String
-  ) {
-    listAcademicTeachingLogPrefillItems(
-      endDate: $endDate
-      semesterId: $semesterId
-      staffId: $staffId
-      startDate: $startDate
-      upstreamSessionToken: $upstreamSessionToken
-    ) {
+const ACADEMIC_TEACHING_LOG_PREFILL_RESULT_FIELDS = `
       blockingIssue
       canFill
       expiresAt
@@ -220,40 +206,45 @@ const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
       }
       upstreamSessionToken
       warnings
-    }
-  }
 `;
 
-const LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY =
-  LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY.replace(
-    `query ListAcademicTeachingLogPrefillItems(
+const LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
+  query ListAcademicTeachingLogPrefillItems(
     $endDate: String
     $semesterId: Int!
     $staffId: String!
     $startDate: String
     $upstreamSessionToken: String
-  )`,
-    `query ListMyAcademicTeachingLogPrefillItems(
-    $endDate: String
-    $semesterId: Int!
-    $startDate: String
-    $upstreamSessionToken: String
-  )`,
-  ).replace(
-    `listAcademicTeachingLogPrefillItems(
+  ) {
+    listAcademicTeachingLogPrefillItems(
       endDate: $endDate
       semesterId: $semesterId
       staffId: $staffId
       startDate: $startDate
       upstreamSessionToken: $upstreamSessionToken
-    )`,
-    `listMyAcademicTeachingLogPrefillItems(
+    ) {
+${ACADEMIC_TEACHING_LOG_PREFILL_RESULT_FIELDS}
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY = `
+  query ListMyAcademicTeachingLogPrefillItems(
+    $endDate: String
+    $semesterId: Int!
+    $startDate: String
+    $upstreamSessionToken: String
+  ) {
+    listMyAcademicTeachingLogPrefillItems(
       endDate: $endDate
       semesterId: $semesterId
       startDate: $startDate
       upstreamSessionToken: $upstreamSessionToken
-    )`,
-  );
+    ) {
+${ACADEMIC_TEACHING_LOG_PREFILL_RESULT_FIELDS}
+    }
+  }
+`;
 
 const SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION = `
   mutation SaveAcademicTheoryTeachingLog($input: SaveAcademicTheoryTeachingLogInput!) {

@@ -3,13 +3,12 @@ import type {
   StoredUpstreamSession,
 } from '@/entities/upstream-session';
 
+import type { AcademicViewerRole } from '@/shared/auth-access';
 import {
   populateStaffDirectory,
   readStaffDirectory,
   type StaffDirectoryResult,
 } from '@/shared/upstream';
-
-type StaffDirectoryViewerRole = 'admin' | 'authenticated' | 'staff';
 
 type StaffDirectoryWorkflowDeps = {
   populateStaffDirectoryFn?: typeof populateStaffDirectory;
@@ -20,7 +19,7 @@ type ResolveStaffDirectoryParams = StaffDirectoryWorkflowDeps & {
   currentDirectory?: StaffDirectoryResult | null;
   persistSessionFromResult: PersistUpstreamSessionFromResult;
   session?: StoredUpstreamSession | null;
-  viewerRole: StaffDirectoryViewerRole;
+  viewerRole: AcademicViewerRole;
 };
 
 type ResolveStaffDirectoryOutcome = {

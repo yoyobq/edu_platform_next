@@ -19,6 +19,8 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
+import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+
 import { academicTimetableLabAccess } from './access';
 import {
   type AcademicTimetableItem,
@@ -32,7 +34,7 @@ import { WeeklyTimetableGrid } from './timetable-grid';
 
 type AcademicTimetableLabLoaderData = {
   defaultStaffId?: string | null;
-  viewerRole?: 'admin' | 'staff';
+  viewerRole?: AcademicInternalViewerRole;
   viewerKind?: 'authenticated' | 'internal';
 } | null;
 

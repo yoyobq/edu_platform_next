@@ -48,6 +48,7 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import type { AcademicViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   readVerifiedStaffIdentity,
@@ -126,7 +127,7 @@ export type AcademicTeachingLogPageLoaderData = {
     accountId: number;
     displayName: string;
   } | null;
-  viewerRole?: 'admin' | 'authenticated' | 'staff';
+  viewerRole?: AcademicViewerRole;
 } | null;
 
 type AcademicTeachingLogPageContentProps = {
@@ -136,7 +137,7 @@ type AcademicTeachingLogPageContentProps = {
     accountId: number;
     displayName: string;
   } | null;
-  viewerRole?: 'admin' | 'authenticated' | 'staff';
+  viewerRole?: AcademicViewerRole;
 };
 
 type PendingAction = 'query' | null;

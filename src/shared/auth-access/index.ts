@@ -1,6 +1,8 @@
 export const AUTH_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'REGISTRANT', 'STAFF', 'STUDENT'] as const;
 
 export type AuthAccessGroup = (typeof AUTH_ACCESS_GROUPS)[number];
+export type AcademicViewerRole = 'admin' | 'authenticated' | 'staff';
+export type AcademicInternalViewerRole = Exclude<AcademicViewerRole, 'authenticated'>;
 
 export const ACADEMIC_OFFICER_SLOT_GROUP = 'ACADEMIC_OFFICER';
 export const TEACHING_GROUP_LEADER_SLOT_GROUP = 'TEACHING_GROUP_LEADER';

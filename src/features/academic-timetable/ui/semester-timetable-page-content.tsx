@@ -4,6 +4,7 @@ import { Alert, Button, Card, Empty, Input, Select, Skeleton, Typography } from 
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
+import type { AcademicInternalViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { resolveStaffDirectoryEntries } from '@/shared/upstream';
 
@@ -26,7 +27,7 @@ type SemesterTimetablePageContentProps = {
   listMyAcademicTeacherSemesterScheduleItems?: (
     input: MyAcademicTeacherSemesterScheduleQueryFilters,
   ) => Promise<AcademicTeacherSemesterScheduleItem[]>;
-  viewerRole?: 'admin' | 'staff';
+  viewerRole?: AcademicInternalViewerRole;
 };
 
 type SemesterTimetableFilters = {
@@ -158,8 +159,8 @@ export function SemesterTimetablePageContent({
                 staffId: normalizedQueryStaffId ?? loaderDefaultStaffId,
               });
 
-        if (isStaffViewer && result[0]?.staffId) {
-          setSubmittedStaffId(result[0].staffId);
+        if (isStaffViewer) {
+          setSubmittedStaffId(result[0]?.staffId ?? loaderDefaultStaffId);
         }
         setSemesterScheduleItems(result);
       } catch (error) {

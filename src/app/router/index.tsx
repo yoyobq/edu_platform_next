@@ -54,6 +54,8 @@ import {
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
 import {
+  type AcademicInternalViewerRole,
+  type AcademicViewerRole,
   canAccessPayloadCrypto,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
@@ -185,6 +187,12 @@ function buildWelcomeRedirectURL(request: Request) {
   const { redirectTarget, url } = getRequestTarget(request);
 
   return buildWelcomeRedirectTarget(redirectTarget, url.origin);
+}
+
+function resolveAcademicInternalViewerRole(
+  accessGroup: readonly string[],
+): AcademicInternalViewerRole {
+  return accessGroup.includes('ADMIN') ? 'admin' : 'staff';
 }
 
 function hasHydratingSession() {
@@ -344,7 +352,7 @@ async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
-    viewerRole: snapshot.userInfo.accessGroup.includes('ADMIN') ? 'admin' : 'staff',
+    viewerRole: resolveAcademicInternalViewerRole(snapshot.userInfo.accessGroup),
   };
 }
 
@@ -569,7 +577,7 @@ async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
 
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
-    viewerRole: accessGroup.includes('ADMIN') ? 'admin' : 'staff',
+    viewerRole: resolveAcademicInternalViewerRole(accessGroup),
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
@@ -618,7 +626,7 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
-    viewerRole: accessGroup.includes('ADMIN') ? 'admin' : 'staff',
+    viewerRole: resolveAcademicInternalViewerRole(accessGroup),
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
@@ -703,7 +711,7 @@ async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {
     accessGroup,
     slotGroup: snapshot.slotGroup,
   });
-  const viewerRole = hasManagerAccess
+  const viewerRole: AcademicViewerRole = hasManagerAccess
     ? 'admin'
     : snapshot.identity?.kind === 'STAFF'
       ? 'staff'

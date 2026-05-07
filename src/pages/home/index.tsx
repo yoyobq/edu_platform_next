@@ -24,7 +24,7 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
-import { hasAcademicTeachingLogAccess } from '@/shared/auth-access';
+import { type AcademicViewerRole, hasAcademicTeachingLogAccess } from '@/shared/auth-access';
 import { HexAvatar } from '@/shared/hex-avatar';
 import {
   type HomeModuleAction,
@@ -282,7 +282,7 @@ function WorkbenchWeeklyTimetable({
   accountId: number | null;
   showTeachingLogQuickEntry: boolean;
   staffId: string | null;
-  viewerRole: 'authenticated' | 'admin' | 'staff';
+  viewerRole: AcademicViewerRole;
 }) {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);

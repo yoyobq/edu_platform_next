@@ -9,11 +9,13 @@ import { Error403 } from '@/features/error-feedback';
 
 import { requestAcademicSemesters } from '@/entities/academic-semester';
 
+import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+
 export function SemesterTimetablePage() {
   const loaderData = useLoaderData() as {
     defaultStaffId?: string | null;
     isForbidden?: boolean;
-    viewerRole?: 'admin' | 'staff';
+    viewerRole?: AcademicInternalViewerRole;
   } | null;
 
   if (loaderData?.isForbidden) {
