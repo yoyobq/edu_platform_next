@@ -14,7 +14,7 @@ export async function loadStaffInviteIntent(
       invite: null,
       status: 'failure',
       reason: 'invalid',
-      message: '这个邀请链接无效，请确认链接是否完整。',
+      message: '这个邀请链接暂时无法识别，请确认邮件中的链接是否完整。',
     };
   }
 

@@ -8,7 +8,10 @@ export type PasswordResetPreview = {
   nickname: string | null;
 };
 
-export type StaffInviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
+export type InviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
+export type PublicInviteRecordType = 'INVITE_STAFF' | 'INVITE_STUDENT';
+export type PublicInviteType = 'staff' | 'student';
+export type StaffInviteStatusReason = InviteStatusReason;
 
 export type VerificationIntentResult =
   | { passwordResetPreview?: PasswordResetPreview; status: 'valid' }
@@ -52,12 +55,36 @@ export type StaffInviteInfo = {
   canProceed: boolean;
   description: string | null;
   expiresAt: string;
+  inviteUrl: string | null;
   invitedEmail: string;
   issuer: string | null;
   staffId: string;
   statusReason: StaffInviteStatusReason;
   title: string | null;
 };
+
+export type PublicInviteInfo = {
+  canProceed: boolean;
+  description: string | null;
+  expiresAt: string;
+  inviteUrl: string | null;
+  invitedEmail: string;
+  issuer: string | null;
+  staffId: string | null;
+  statusReason: InviteStatusReason;
+  title: string | null;
+  type: PublicInviteRecordType;
+};
+
+export type PublicInviteIntentResult =
+  | { invite: PublicInviteInfo; status: 'ready' }
+  | {
+      invite: PublicInviteInfo | null;
+      message: string;
+      reason: VerificationFailureReason;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
 
 export type StaffInviteIdentity = {
   departmentName: string | null;

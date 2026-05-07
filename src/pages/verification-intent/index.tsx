@@ -8,6 +8,7 @@ import {
   ResetPasswordIntentPanel,
   type ResetPasswordIntentPanelCopy,
   StaffInviteIntentPanel,
+  StudentInviteIntentPanel,
   VerifyEmailIntentPanel,
 } from '@/features/public-auth';
 
@@ -223,7 +224,7 @@ export function InviteIntentPage() {
             教职工邀请激活
           </h1>
           <Typography.Text type="secondary">
-            请按步骤完成链接确认、上游身份核对与账户设置
+            请按页面提示完成邀请确认、身份核对与账户设置
           </Typography.Text>
         </Flex>
         <div className="shadow-card">
@@ -235,16 +236,44 @@ export function InviteIntentPage() {
     );
   }
 
+  if (normalizedInviteType === 'student') {
+    return (
+      <InviteFlowShell>
+        <Flex vertical gap={8} align="center" style={{ textAlign: 'center' }}>
+          <BrandLockup variant="public-entry" />
+          <h1
+            style={{
+              fontSize: 'var(--ant-font-size-heading-3)',
+              fontWeight: 'var(--ant-font-weight-heading)',
+              lineHeight: 'var(--ant-line-height-3)',
+              margin: 0,
+            }}
+          >
+            学生邀请
+          </h1>
+          <Typography.Text type="secondary">
+            请先确认邀请链接状态。邀请链接签发后 48 小时内有效。
+          </Typography.Text>
+        </Flex>
+        <div className="shadow-card">
+          <Card styles={{ body: { padding: '32px 24px' } }}>
+            <StudentInviteIntentPanel verificationCode={verificationCode} />
+          </Card>
+        </div>
+      </InviteFlowShell>
+    );
+  }
+
   return (
     <VerificationIntentShell
       title="邀请入口"
-      description="邀请类一次性入口保持 path-first 语义。当前仅教职工邀请已接入真实激活流程，其它类型仍保留为受限入口。"
+      description="当前支持 staff / student 邀请链接。请确认邮件中的链接是否完整。"
     >
       <VerificationIntentDetails
         details={[
           { label: '邀请类型', value: inviteType },
           { label: '验证代码', value: verificationCode },
-          { label: '当前状态', value: '仅保留入口与参数展示，暂未接入真实激活流程' },
+          { label: '当前状态', value: '暂不支持这个邀请类型，请确认邮件中的链接是否完整' },
         ]}
       />
     </VerificationIntentShell>

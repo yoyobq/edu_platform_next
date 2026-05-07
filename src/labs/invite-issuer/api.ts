@@ -99,6 +99,10 @@ function resolveErrorMessage(error: unknown, fallback: string) {
       return extensions.errorMessage;
     }
 
+    if (extensions.errorCode === 'INVITE_ISSUE_FAILED') {
+      return '邀请邮件发送失败，系统已撤销该邀请，请稍后重试或联系管理员。';
+    }
+
     return error.userMessage;
   }
 

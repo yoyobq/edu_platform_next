@@ -45,6 +45,7 @@ function IdentityBlock({
   inviteStaffId: string;
 }) {
   const departmentDisplayName = identity.departmentName || identity.orgId;
+  const staffIdDisplayName = inviteStaffId.trim() || identity.personId;
 
   return (
     <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
@@ -79,7 +80,7 @@ function IdentityBlock({
               工号
             </Typography.Text>
             <div style={{ marginTop: 2 }}>
-              <Typography.Text>{inviteStaffId}</Typography.Text>
+              <Typography.Text>{staffIdDisplayName}</Typography.Text>
             </div>
           </div>
         </Flex>

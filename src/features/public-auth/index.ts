@@ -10,6 +10,8 @@ export type {
   ChangeLoginEmailIntentResult,
   PasswordResetIntentKind,
   PasswordResetPreview,
+  PublicInviteInfo,
+  PublicInviteIntentResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -24,6 +26,7 @@ export { ResetPasswordForm } from './ui/reset-password-form';
 export type { ResetPasswordIntentPanelCopy } from './ui/reset-password-intent-panel';
 export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 export { StaffInviteIntentPanel } from './ui/staff-invite-intent-panel';
+export { StudentInviteIntentPanel } from './ui/student-invite-intent-panel';
 export { VerifyEmailIntentPanel } from './ui/verify-email-intent-panel';
 
 const publicAuthPorts: PublicAuthPorts = {

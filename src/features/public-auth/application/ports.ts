@@ -1,6 +1,7 @@
 import type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  PublicInviteIntentResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
@@ -21,6 +22,10 @@ export type PublicAuthApiPort = {
     verificationCode: string;
   }) => Promise<VerificationIntentResult>;
   getStaffInviteInfo: (input: { verificationCode: string }) => Promise<StaffInviteIntentResult>;
+  getPublicInviteInfo: (input: {
+    inviteType: 'staff' | 'student';
+    verificationCode: string;
+  }) => Promise<PublicInviteIntentResult>;
   loginUpstreamSession: (input: { password: string; userId: string }) => Promise<{
     expiresAt: string;
     upstreamSessionToken: string;

@@ -14,6 +14,9 @@ import type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
   PasswordResetPreview,
+  PublicInviteInfo,
+  PublicInviteIntentResult,
+  PublicInviteType,
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
@@ -75,9 +78,10 @@ type PublicInviteInfoResponse = {
       canProceed: boolean;
       description?: string | null;
       expiresAt: string;
+      inviteUrl?: string | null;
       invitedEmail: string;
       issuer?: string | null;
-      staffId: string;
+      staffId?: string | null;
       statusReason: 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
       title?: string | null;
       type: 'INVITE_STAFF' | 'INVITE_STUDENT' | 'PASSWORD_RESET' | 'MAGIC_LINK';
@@ -181,6 +185,7 @@ const PUBLIC_INVITE_INFO_QUERY = `
         canProceed
         description
         expiresAt
+        inviteUrl
         invitedEmail
         issuer
         staffId
@@ -449,23 +454,24 @@ function resolveInviteIntentFailureMessage(
   reason: VerificationFailureReason,
   fallback?: string | null,
 ): string {
+  // Invite expiry was shortened to 48 hours; keep this copy consistent even if older backends send stale text.
+  if (reason === 'expired') {
+    return '这个邀请链接已经过期。邀请链接签发后 48 小时内有效，请联系管理员重新发送邀请。';
+  }
+
   if (fallback) {
     return fallback;
   }
 
-  if (reason === 'expired') {
-    return '这个邀请链接已经过期，请联系管理员重新发起邀请。';
-  }
-
   if (reason === 'used') {
-    return '这个邀请链接已经被使用，无法继续完成教职工邀请注册。';
+    return '这个邀请链接已经使用过了，不能再次用于邀请注册。如需帮助，请联系管理员。';
   }
 
   if (reason === 'invalid') {
-    return '这个邀请链接无效，请确认链接是否完整。';
+    return '这个邀请链接暂时无法识别，请确认邮件中的链接是否完整。';
   }
 
-  return '暂时无法确认邀请链接状态，请稍后重试。';
+  return '暂时无法确认邀请链接状态，请稍后再试。';
 }
 
 function resolvePublicAuthErrorMessage(error: unknown, fallback: string): string {
@@ -492,6 +498,47 @@ function resolveChangeLoginEmailFailureMessage(
 }
 
 async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
+  const result = await findPublicInviteIntent({
+    inviteType: 'staff',
+    verificationCode,
+  });
+
+  if (result.status === 'ready') {
+    if (result.invite.type === 'INVITE_STAFF') {
+      return {
+        status: 'ready',
+        invite: mapStaffInviteInfo(result.invite),
+      };
+    }
+
+    return {
+      invite: null,
+      status: 'failure',
+      reason: 'invalid',
+      message: '这个链接不是教职工邀请链接，请确认邮件中的链接是否完整。',
+    };
+  }
+
+  if (result.status === 'failure') {
+    return {
+      invite: result.invite?.type === 'INVITE_STAFF' ? mapStaffInviteInfo(result.invite) : null,
+      status: 'failure',
+      reason: result.reason,
+      message: result.message,
+    };
+  }
+
+  return result;
+}
+
+function expectedInviteRecordType(inviteType: PublicInviteType) {
+  return inviteType === 'student' ? 'INVITE_STUDENT' : 'INVITE_STAFF';
+}
+
+async function findPublicInviteIntent(input: {
+  inviteType: PublicInviteType;
+  verificationCode: string;
+}): Promise<PublicInviteIntentResult> {
   try {
     const response = await requestGraphQL<
       PublicInviteInfoResponse,
@@ -499,37 +546,38 @@ async function findStaffInviteIntent(verificationCode: string): Promise<StaffInv
         token: string;
       }
     >(PUBLIC_INVITE_INFO_QUERY, {
-      token: verificationCode,
+      token: input.verificationCode,
     });
     const result = response.publicInviteInfo;
     const info = result.info;
+    const expectedType = expectedInviteRecordType(input.inviteType);
 
-    if (info?.type && info.type !== 'INVITE_STAFF') {
+    if (info?.type && info.type !== expectedType) {
       return {
         invite: null,
         status: 'failure',
         reason: 'invalid',
-        message: '当前只支持教职工邀请链接。',
+        message: '这个邀请链接类型与当前入口不匹配，请确认邮件中的链接是否完整。',
       };
     }
 
     if (
       result.success &&
       info &&
-      info.type === 'INVITE_STAFF' &&
+      info.type === expectedType &&
       info.canProceed &&
       info.statusReason === 'AVAILABLE'
     ) {
       return {
         status: 'ready',
-        invite: mapStaffInviteInfo(info),
+        invite: mapPublicInviteInfo(info),
       };
     }
 
     const reason = mapInviteStatusReasonToFailureReason(info?.statusReason, result.reason);
 
     return {
-      invite: info && info.type === 'INVITE_STAFF' ? mapStaffInviteInfo(info) : null,
+      invite: info && info.type === expectedType ? mapPublicInviteInfo(info) : null,
       status: 'failure',
       reason,
       message: resolveInviteIntentFailureMessage(reason, result.message),
@@ -548,12 +596,11 @@ function normalizeOptionalText(value: string | undefined): string | undefined {
   return normalized ? normalized : undefined;
 }
 
-function mapStaffInviteInfo(
-  info: NonNullable<PublicInviteInfoResponse['publicInviteInfo']['info']>,
-): {
+function mapStaffInviteInfo(info: PublicInviteInfo): {
   canProceed: boolean;
   description: string | null;
   expiresAt: string;
+  inviteUrl: string | null;
   invitedEmail: string;
   issuer: string | null;
   staffId: string;
@@ -564,11 +611,29 @@ function mapStaffInviteInfo(
     canProceed: info.canProceed,
     description: info.description || null,
     expiresAt: info.expiresAt,
+    inviteUrl: info.inviteUrl || null,
     invitedEmail: info.invitedEmail,
     issuer: info.issuer || null,
-    staffId: info.staffId,
+    staffId: info.staffId || '',
     statusReason: info.statusReason,
     title: info.title || null,
+  };
+}
+
+function mapPublicInviteInfo(
+  info: NonNullable<PublicInviteInfoResponse['publicInviteInfo']['info']>,
+): PublicInviteInfo {
+  return {
+    canProceed: info.canProceed,
+    description: info.description || null,
+    expiresAt: info.expiresAt,
+    inviteUrl: info.inviteUrl || null,
+    invitedEmail: info.invitedEmail,
+    issuer: info.issuer || null,
+    staffId: info.staffId || null,
+    statusReason: info.statusReason,
+    title: info.title || null,
+    type: info.type === 'INVITE_STUDENT' ? 'INVITE_STUDENT' : 'INVITE_STAFF',
   };
 }
 
@@ -708,6 +773,18 @@ export const publicAuthApi: PublicAuthApiPort = {
   },
   async getStaffInviteInfo(input) {
     return findStaffInviteIntent(input.verificationCode);
+  },
+  async getPublicInviteInfo(input) {
+    if (!input.verificationCode.trim()) {
+      return {
+        invite: null,
+        status: 'failure',
+        reason: 'invalid',
+        message: '这个邀请链接暂时无法识别，请确认邮件中的链接是否完整。',
+      };
+    }
+
+    return findPublicInviteIntent(input);
   },
   async loginUpstreamSession(input) {
     return loginUpstreamSession(input);

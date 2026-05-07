@@ -246,6 +246,7 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
               expiresAt: '2026-04-30T03:00:00.000Z',
               invitedEmail: 'invitee@example.com',
               issuer: '系统管理员',
+              staffId: 'teacher.alice',
               statusReason: 'AVAILABLE',
               title: '教职工邀请',
               type: 'INVITE_STAFF',
@@ -316,13 +317,17 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
   await expect(page.getByText('invitee@example.com')).toBeVisible();
 
   await page.getByRole('button', { name: '下一步：身份核对' }).click();
-  await expect(page.getByText('这里填写的是校园网账号，不是当前平台登录账号。')).toBeVisible();
-  await page.getByLabel('校园网工号').fill('teacher.alice');
+  await expect(page.getByText('本次邀请信息')).toBeVisible();
+  await expect(page.getByText('指定校园网工号').first()).toBeVisible();
+  await expect(page.getByText('teacher.alice')).toBeVisible();
+  await expect(page.getByText('请使用本次邀请指定的校园网工号完成身份核对。')).toBeVisible();
+  await expect(page.getByLabel('指定校园网工号')).toHaveValue('teacher.alice');
+  await expect(page.getByLabel('指定校园网工号')).toHaveAttribute('readonly', '');
   await page.getByLabel('校园网密码').fill('Password!123');
   await page.getByRole('button', { name: '核对身份并继续' }).click();
 
   await expect(
-    page.getByText('登录邮箱会自动使用本次邀请对应的邮箱。完成提交后，请回到登录页继续使用。'),
+    page.getByText('登录邮箱会自动使用本次邀请对应的邮箱。提交完成后，请返回登录页继续使用。'),
   ).toBeVisible();
   await expect(page.getByText('Alice Teacher', { exact: true })).toBeVisible();
   await expect(page.getByText('邀请邮箱', { exact: true })).toBeVisible();
@@ -330,7 +335,7 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
   await expect(page.getByText('部门', { exact: true })).toBeVisible();
   await expect(page.getByText('数学系', { exact: true })).toBeVisible();
   await expect(page.getByText('工号', { exact: true })).toBeVisible();
-  await expect(page.getByText('staff-001', { exact: true })).toBeVisible();
+  await expect(page.getByText('teacher.alice', { exact: true })).toBeVisible();
   await expect(page.getByText('ID: staff-department-001', { exact: true })).toHaveCount(0);
   await expect(page.getByText('上游账号', { exact: true })).toHaveCount(0);
 
@@ -566,19 +571,19 @@ for (const inviteCase of [
   {
     title: '已过期 invite 应显示失败态',
     statusReason: 'EXPIRED' as const,
-    message: '这个邀请链接已经过期，请联系管理员重新发起邀请。',
+    message: '这个邀请链接已经过期。邀请链接签发后 48 小时内有效，请联系管理员重新发送邀请。',
     expectedTitle: '邀请已过期',
   },
   {
     title: '已使用 invite 应显示失败态',
     statusReason: 'CONSUMED' as const,
-    message: '这个邀请链接已经被使用，无法继续完成教职工邀请注册。',
+    message: '这个邀请链接已经使用过了，不能再次用于邀请注册。如需帮助，请联系管理员。',
     expectedTitle: '邀请已使用',
   },
   {
     title: '无效 invite 应显示失败态',
     statusReason: 'INVALID' as const,
-    message: '这个邀请链接无效，请确认链接是否完整。',
+    message: '这个邀请链接暂时无法识别，请确认邮件中的链接是否完整。',
     expectedTitle: '邀请不可用',
   },
 ]) {
@@ -596,6 +601,58 @@ for (const inviteCase of [
     await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
   });
 }
+
+test('有效 student invite 应查询公开信息并提示注册暂未开放', async ({ page }) => {
+  let publicInviteToken: string | null = null;
+  let consumeRequestCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query PublicInviteInfo')) {
+      publicInviteToken = payload?.variables?.token ?? null;
+      await fulfillGraphQL(route, {
+        data: {
+          publicInviteInfo: {
+            info: {
+              canProceed: true,
+              description: '请核对邮箱，学生邀请链接签发后 48 小时内有效。',
+              expiresAt: '2026-05-10T03:00:00.000Z',
+              inviteUrl: 'https://your-app.com/invite/student/student-invite-001',
+              invitedEmail: 'student@example.com',
+              issuer: '系统管理员',
+              staffId: null,
+              statusReason: 'AVAILABLE',
+              title: '学生邀请',
+              type: 'INVITE_STUDENT',
+            },
+            message: null,
+            reason: null,
+            success: true,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation ConsumeStaffInvite')) {
+      consumeRequestCount += 1;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.invite('student', 'student-invite-001'));
+
+  await expect(page.getByRole('heading', { name: '学生邀请' })).toBeVisible();
+  await expect(page.getByText('student@example.com')).toBeVisible();
+  await expect(page.getByText('学生邀请暂时还不能在线注册')).toBeVisible();
+  await expect(page.getByText('在线注册接口尚未开放')).toBeVisible();
+  await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
+  expect(publicInviteToken).toBe('student-invite-001');
+  expect(consumeRequestCount).toBe(0);
+});
 
 test('上游账号校验失败时应提示明确错误且停留在身份核对阶段', async ({ page }) => {
   await mockStaffInviteFlow(page, {

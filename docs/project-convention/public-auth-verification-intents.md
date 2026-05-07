@@ -33,15 +33,16 @@
 
 ## 当前路线状态
 
-| 路由                                                  | 当前状态 | 说明                                                 |
-| ----------------------------------------------------- | -------- | ---------------------------------------------------- |
-| `/forgot-password`                                    | 已落地   | 真实提交已接通                                       |
-| `/reset-password/:verificationCode`                   | 已落地   | 真实校验、重置、错误模型与 E2E 已接通                |
-| `/reset-password?token=...`                           | 兼容保留 | 当前继续支持 query token 透传                        |
-| `/invite/staff/:verificationCode`                     | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md` |
-| `/invite/:inviteType/:verificationCode`（非 `staff`） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活             |
-| `/verify/email/:verificationCode`                     | 已落地   | 已接入真实消费、成功 / 失败闭环与会话同步            |
-| `/magic-link/:verificationCode`                       | 壳页     | 当前仍未接入真实登录续接闭环                         |
+| 路由                                                | 当前状态 | 说明                                                          |
+| --------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `/forgot-password`                                  | 已落地   | 真实提交已接通                                                |
+| `/reset-password/:verificationCode`                 | 已落地   | 真实校验、重置、错误模型与 E2E 已接通                         |
+| `/reset-password?token=...`                         | 兼容保留 | 当前继续支持 query token 透传                                 |
+| `/invite/staff/:verificationCode`                   | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md`          |
+| `/invite/student/:verificationCode`                 | 公开信息 | 查询 `publicInviteInfo`；后端未提供学生注册接口前不消费 token |
+| `/invite/:inviteType/:verificationCode`（其它类型） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活                      |
+| `/verify/email/:verificationCode`                   | 已落地   | 已接入真实消费、成功 / 失败闭环与会话同步                     |
+| `/magic-link/:verificationCode`                     | 壳页     | 当前仍未接入真实登录续接闭环                                  |
 
 ## 对 `magic-link` 的当前约束
 

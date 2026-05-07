@@ -223,7 +223,7 @@ function StaffInviteFailureState({
         ? '邀请已使用'
         : reason === 'invalid'
           ? '邀请不可用'
-          : '暂时无法继续邀请注册';
+          : '暂时无法继续处理邀请';
 
   return (
     <Flex vertical gap={16}>
@@ -299,6 +299,44 @@ function StaffInviteSummaryCard({ invite }: { invite: StaffInviteInfo }) {
               </div>
             </div>
           )}
+        </Flex>
+      </Flex>
+    </div>
+  );
+}
+
+function StaffInviteVerificationTarget({ invite }: { invite: StaffInviteInfo }) {
+  return (
+    <div
+      className="rounded-card p-4"
+      style={{
+        background: 'var(--ant-color-primary-bg)',
+        border: '1px solid var(--ant-color-primary-border)',
+      }}
+    >
+      <Flex vertical gap={12}>
+        <Typography.Text strong>本次邀请信息</Typography.Text>
+        <Flex gap={16} wrap>
+          <div style={{ minWidth: 220 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+              邀请邮箱
+            </Typography.Text>
+            <div style={{ marginTop: 4 }}>
+              <Typography.Text strong copyable>
+                {invite.invitedEmail}
+              </Typography.Text>
+            </div>
+          </div>
+          <div style={{ minWidth: 160 }}>
+            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
+              指定校园网工号
+            </Typography.Text>
+            <div style={{ marginTop: 4 }}>
+              <Typography.Text strong copyable>
+                {invite.staffId || '未读取到'}
+              </Typography.Text>
+            </div>
+          </div>
         </Flex>
       </Flex>
     </div>
@@ -425,7 +463,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
               icon={<ReloadOutlined />}
               onClick={() => setReloadKey((current) => current + 1)}
             >
-              重新检查邀请
+              重新确认邀请状态
             </Button>
           </Flex>
         </Flex>
@@ -444,7 +482,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
           <StaffInviteSummaryCard invite={invite} />
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            {invite.description || '请核对邮箱，无误后进入身份核对流程。'}
+            {invite.description || '请核对邀请邮箱。确认无误后，可以继续完成身份核对。'}
           </Typography.Paragraph>
 
           <StaffInviteStepActions
@@ -476,15 +514,17 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
     return (
       <StaffInviteFlowSection phase={phase}>
         <Flex vertical gap={16}>
+          <StaffInviteVerificationTarget invite={invite} />
+
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前邀请邮箱：{invite.invitedEmail}，邀请 staffId：{invite.staffId}
-            。核对通过后，身份信息会自动锁定并回填。
+            身份核对通过后，系统会自动锁定并回填身份信息。
           </Typography.Paragraph>
 
           <UpstreamStaffVerificationForm
             errorMessage={upstreamError}
             form={upstreamForm}
             formId={UPSTREAM_VERIFICATION_FORM_ID}
+            lockedUserId={invite.staffId}
             onSubmit={async (values) => {
               setVerifyingIdentity(true);
               setUpstreamError(null);
@@ -539,7 +579,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
       <StaffInviteFlowSection phase={phase}>
         <Flex vertical gap={16}>
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            登录邮箱会自动使用本次邀请对应的邮箱。完成提交后，请回到登录页继续使用。
+            登录邮箱会自动使用本次邀请对应的邮箱。提交完成后，请返回登录页继续使用。
           </Typography.Paragraph>
 
           <StaffInviteRegisterForm
@@ -625,7 +665,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
               icon={<ReloadOutlined />}
               onClick={() => setReloadKey((current) => current + 1)}
             >
-              重新检查邀请
+              重新确认邀请状态
             </Button>
           </Flex>
         </Flex>
