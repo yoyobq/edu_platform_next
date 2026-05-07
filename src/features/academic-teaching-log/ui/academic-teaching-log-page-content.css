@@ -1349,7 +1349,13 @@
   line-height: 1.45;
 }
 
-.lecture-journal-session-mismatch-alert .ant-alert-action {
+.lecture-journal-result-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.lecture-journal-result-alerts .ant-alert-action {
   align-self: center;
 }
 

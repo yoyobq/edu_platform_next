@@ -22,13 +22,33 @@ function getReadableGraphQLMessage(detail: UpstreamGraphQLErrorDetail | null): s
   return detail.message;
 }
 
-function getKnownUpstreamErrorMessage(detail: UpstreamGraphQLErrorDetail | null): string | null {
-  if (hasErrorCode(detail, ['UPSTREAM_STAFF_SCOPE_MISMATCH'])) {
+function getKnownUpstreamErrorMessage(
+  error: unknown,
+  detail: UpstreamGraphQLErrorDetail | null,
+): string | null {
+  if (hasErrorCodeOrMessage(error, detail, ['UPSTREAM_STAFF_SCOPE_MISMATCH'])) {
     return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
   }
 
-  if (hasErrorCode(detail, ['UPSTREAM_SESSION_STAFF_MISMATCH'])) {
+  if (hasErrorCodeOrMessage(error, detail, ['UPSTREAM_SESSION_STAFF_MISMATCH'])) {
     return '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。';
+  }
+
+  if (
+    hasErrorCodeOrMessage(error, detail, [
+      'INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT',
+      'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH',
+    ])
+  ) {
+    return '一体化计划明细需要的课时数超过当前本地课表中可顺序分配的有效课时数，请检查本地学期课表、教学周历或计划明细课时后再重试。';
+  }
+
+  if (hasErrorCodeOrMessage(error, detail, ['INTEGRATED_CROSS_DAY_CONSUMPTION'])) {
+    return '一体化计划明细的课时分配会跨教学日期，请确认本地课表与计划明细课时符合实际后再填写。';
+  }
+
+  if (hasErrorCodeOrMessage(error, detail, ['INTEGRATED_CROSS_WEEK_CONSUMPTION'])) {
+    return '一体化计划明细的课时分配会跨教学周，请确认本地课表与计划明细课时符合实际后再填写。';
   }
 
   return null;
@@ -52,6 +72,18 @@ function hasErrorCode(
     (detail?.code && errorCodes.includes(detail.code)) ||
     (detail?.errorCode && errorCodes.includes(detail.errorCode)),
   );
+}
+
+function hasErrorCodeOrMessage(
+  error: unknown,
+  detail: UpstreamGraphQLErrorDetail | null,
+  errorCodes: readonly string[],
+): boolean {
+  if (hasErrorCode(detail, errorCodes)) {
+    return true;
+  }
+
+  return matchesMessage(error, detail, errorCodes);
 }
 
 function matchesMessage(
@@ -107,7 +139,7 @@ export function isExpiredUpstreamSessionError(error: unknown): boolean {
 
 export function resolveUpstreamErrorMessage(error: unknown, fallback: string): string {
   const detail = readUpstreamGraphQLErrorDetail(error);
-  const knownMessage = getKnownUpstreamErrorMessage(detail);
+  const knownMessage = getKnownUpstreamErrorMessage(error, detail);
 
   if (knownMessage) {
     return knownMessage;

@@ -65,22 +65,26 @@ export function buildResultViewScopeOptions(counts: {
   unmatched: number;
 }): ResultViewScopeOption[] {
   return [
-    {
-      count: counts.complete,
-      label: resolveResultViewScopeLabel('complete'),
-      value: 'complete' as const,
-    },
+    counts.complete > 0
+      ? {
+          count: counts.complete,
+          label: resolveResultViewScopeLabel('complete'),
+          value: 'complete' as const,
+        }
+      : null,
     {
       count: counts.missing,
       label: resolveResultViewScopeLabel('missing'),
       value: 'missing' as const,
     },
-    {
-      count: counts.unmatched,
-      label: resolveResultViewScopeLabel('unmatched'),
-      value: 'unmatched' as const,
-    },
-  ].filter((option) => option.count > 0);
+    counts.unmatched > 0
+      ? {
+          count: counts.unmatched,
+          label: resolveResultViewScopeLabel('unmatched'),
+          value: 'unmatched' as const,
+        }
+      : null,
+  ].filter((option): option is ResultViewScopeOption => Boolean(option));
 }
 
 export function resolveResultViewScope(

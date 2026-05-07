@@ -39,11 +39,38 @@ describe('lecture journal view filter policy', () => {
         value: 'complete',
       },
       {
+        count: 0,
+        label: '待补日志',
+        value: 'missing',
+      },
+      {
         count: 1,
         label: '需核对',
         value: 'unmatched',
       },
     ]);
+  });
+
+  it('keeps the missing scope visible after all missing logs are filled', () => {
+    const options = buildResultViewScopeOptions({
+      complete: 3,
+      missing: 0,
+      unmatched: 0,
+    });
+
+    expect(options).toEqual([
+      {
+        count: 3,
+        label: '全部',
+        value: 'complete',
+      },
+      {
+        count: 0,
+        label: '待补日志',
+        value: 'missing',
+      },
+    ]);
+    expect(resolveResultViewScope(options, 'missing')).toBe('missing');
   });
 
   it('falls back to missing scope when the active scope is unavailable', () => {

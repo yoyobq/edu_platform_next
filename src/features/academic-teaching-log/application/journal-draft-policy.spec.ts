@@ -6,6 +6,7 @@ import {
   DEFAULT_INTEGRATED_SHIFT,
   DEFAULT_INTEGRATED_SHIFT_NAME,
   DEFAULT_SECURITY_AND_MAINTAIN,
+  DEFAULT_TOPIC_RECORD,
   type JournalDraftSourceItem,
   reuseJournalDraftMapReferences,
 } from './journal-draft-policy';
@@ -40,6 +41,17 @@ function buildJournal(overrides: Partial<NonNullable<JournalDraftSourceItem['jou
 }
 
 describe('journal draft policy', () => {
+  it('prefills missing theory logs with the default topic record', () => {
+    const drafts = buildJournalDrafts([
+      buildItem({
+        courseCategory: '1',
+        key: 'theory-missing',
+      }),
+    ]);
+
+    expect(drafts['theory-missing']?.topicRecord).toBe(DEFAULT_TOPIC_RECORD);
+  });
+
   it('prefills missing practice logs with default discipline and security text', () => {
     const drafts = buildJournalDrafts([
       buildItem({

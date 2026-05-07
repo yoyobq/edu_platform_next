@@ -61,6 +61,7 @@ export const SHIFT_NAME_BY_VALUE = {
 } as const;
 export const DEFAULT_INTEGRATED_SHIFT_NAME = SHIFT_NAME_BY_VALUE[DEFAULT_INTEGRATED_SHIFT];
 export const DEFAULT_SECURITY_AND_MAINTAIN = '正常';
+export const DEFAULT_TOPIC_RECORD = '优';
 
 export const EMPTY_JOURNAL_DRAFT: JournalDraft = {
   completeAndSummary: '',
@@ -368,7 +369,9 @@ export function buildJournalDrafts(items: JournalDraftSourceItem[]): JournalDraf
 
     const template = pickNearestFilledJournalTemplate(item, filledItems);
     const isIntegratedCard = isIntegratedCourseCategory(item.courseCategory);
-    const planCourseContent = isPracticeCourseCategory(item.courseCategory)
+    const isPracticeCard = isPracticeCourseCategory(item.courseCategory);
+    const isTheoryCard = !isIntegratedCard && !isPracticeCard;
+    const planCourseContent = isPracticeCard
       ? item.practiceTopicName || ''
       : item.courseContent || '';
 
@@ -401,7 +404,9 @@ export function buildJournalDrafts(items: JournalDraftSourceItem[]): JournalDraf
         ? resolveShiftName(item.shift || DEFAULT_INTEGRATED_SHIFT) || DEFAULT_INTEGRATED_SHIFT_NAME
         : '',
       submitStatusText: isIntegratedCard && item.status === 'FILLED' ? '已填写' : '',
-      topicRecord: isIntegratedCard ? '' : template?.journal?.topicRecord || '',
+      topicRecord: isIntegratedCard
+        ? ''
+        : template?.journal?.topicRecord || (isTheoryCard ? DEFAULT_TOPIC_RECORD : ''),
     };
 
     return result;

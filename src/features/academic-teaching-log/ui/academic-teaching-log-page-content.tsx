@@ -71,6 +71,7 @@ import {
   DEFAULT_INTEGRATED_SHIFT,
   DEFAULT_INTEGRATED_SHIFT_NAME,
   DEFAULT_SECURITY_AND_MAINTAIN,
+  DEFAULT_TOPIC_RECORD,
   EMPTY_JOURNAL_DRAFT,
   type JournalDraft,
   type JournalDraftMap,
@@ -141,10 +142,12 @@ type AcademicTeachingLogPageContentProps = {
 type PendingAction = 'query' | null;
 
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
-const TOPIC_RECORD_OPTIONS = ['优', '良', '正常', '一般'];
-const TOPIC_RECORD_VISUAL_DEFAULT = TOPIC_RECORD_OPTIONS[0];
+const TOPIC_RECORD_OPTIONS = [DEFAULT_TOPIC_RECORD, '良', '正常', '一般'];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
 const INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH = 'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH';
+const INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT = 'INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT';
+const INTEGRATED_CROSS_DAY_CONSUMPTION = 'INTEGRATED_CROSS_DAY_CONSUMPTION';
+const INTEGRATED_CROSS_WEEK_CONSUMPTION = 'INTEGRATED_CROSS_WEEK_CONSUMPTION';
 const UPSTREAM_STAFF_SCOPE_MISMATCH = 'UPSTREAM_STAFF_SCOPE_MISMATCH';
 const UPSTREAM_SESSION_STAFF_MISMATCH = 'UPSTREAM_SESSION_STAFF_MISMATCH';
 const COURSE_CATEGORY_META = {
@@ -351,13 +354,36 @@ function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
   return Boolean(value?.includes(INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH));
 }
 
+function includesIssueCode(value: string | null | undefined, issueCode: string) {
+  return Boolean(value?.includes(issueCode));
+}
+
 function resolveLectureJournalIssueMessage(value: string | null) {
+  if (!value) {
+    return value;
+  }
+
   if (value === UPSTREAM_STAFF_SCOPE_MISMATCH) {
     return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
   }
 
   if (value === UPSTREAM_SESSION_STAFF_MISMATCH) {
     return '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。';
+  }
+
+  if (
+    includesIssueCode(value, INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT) ||
+    includesIssueCode(value, INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH)
+  ) {
+    return '一体化计划明细需要的课时数超过当前本地课表中可顺序分配的有效课时数，请检查本地学期课表、教学周历或计划明细课时后再重试。';
+  }
+
+  if (includesIssueCode(value, INTEGRATED_CROSS_DAY_CONSUMPTION)) {
+    return '一体化计划明细的课时分配会跨教学日期，请确认本地课表与计划明细课时符合实际后再填写。';
+  }
+
+  if (includesIssueCode(value, INTEGRATED_CROSS_WEEK_CONSUMPTION)) {
+    return '一体化计划明细的课时分配会跨教学周，请确认本地课表与计划明细课时符合实际后再填写。';
   }
 
   return value;
@@ -494,7 +520,7 @@ function resolveTopicRecordControlValue(topicRecord: string) {
   const normalizedValue = topicRecord.trim();
 
   if (!normalizedValue) {
-    return TOPIC_RECORD_VISUAL_DEFAULT;
+    return DEFAULT_TOPIC_RECORD;
   }
 
   return TOPIC_RECORD_OPTIONS.includes(normalizedValue) ? normalizedValue : undefined;
@@ -1573,7 +1599,6 @@ export function AcademicTeachingLogPageContent({
   const initialJournalDraftsRef = useRef<JournalDraftMap>({});
   const isQueryInFlightRef = useRef(false);
   const cardItemElementsRef = useRef<Record<string, HTMLDivElement | null>>({});
-  const autoScrolledCompleteResultRef = useRef<AcademicTeachingLogPrefillResult | null>(null);
   const savedCardCollapseAnimationFramesRef = useRef<Record<string, number>>({});
   const savedCardCollapseTimeoutsRef = useRef<Record<string, number>>({});
 
@@ -2047,39 +2072,6 @@ export function AcademicTeachingLogPageContent({
     () => filterItemsByCourseCategory(scopedJournalItems, activeCourseCategoryFilter),
     [activeCourseCategoryFilter, scopedJournalItems],
   );
-  useEffect(() => {
-    const isDefaultingToCompleteResult =
-      prefillResult &&
-      resultViewScope === 'missing' &&
-      activeResultViewScope === 'complete' &&
-      dateVisiblePresentedMissingEditableItems.length === 0 &&
-      visibleJournalItems.length > 0;
-
-    if (!isDefaultingToCompleteResult || autoScrolledCompleteResultRef.current === prefillResult) {
-      return;
-    }
-
-    autoScrolledCompleteResultRef.current = prefillResult;
-
-    const frameId = window.requestAnimationFrame(() => {
-      const lastVisibleItem = visibleJournalItems[visibleJournalItems.length - 1];
-      const lastVisibleItemElement = cardItemElementsRef.current[lastVisibleItem.key];
-
-      lastVisibleItemElement?.scrollIntoView({
-        block: 'end',
-      });
-    });
-
-    return () => {
-      window.cancelAnimationFrame(frameId);
-    };
-  }, [
-    activeResultViewScope,
-    dateVisiblePresentedMissingEditableItems.length,
-    prefillResult,
-    resultViewScope,
-    visibleJournalItems,
-  ]);
   const currentResultCount = visibleJournalItems.length;
   const currentCourseCategoryLabel =
     activeCourseCategoryFilter === 'ALL'
@@ -2120,12 +2112,21 @@ export function AcademicTeachingLogPageContent({
     pageLevelPrefillBlockingIssue,
     pageLevelPrefillWarnings,
   );
+  const hasGenericFillAvailabilityIssue = Boolean(
+    prefillResult && !pageLevelPrefillBlockingIssue && fillAvailabilityIssue,
+  );
   const sessionStaffMismatchAcknowledgementIssue =
     hasSessionStaffMismatchWarning && !hasAcknowledgedSessionStaffMismatchWarning
       ? '不可保存，点击上方警告信息中的我已知晓按钮解锁'
       : null;
   const cardFillAvailabilityIssue =
     fillAvailabilityIssue ?? sessionStaffMismatchAcknowledgementIssue;
+  const shouldRenderResultAlerts = Boolean(
+    sessionStaffMismatchWarningMessage ||
+    pageLevelPrefillBlockingIssue ||
+    hasGenericFillAvailabilityIssue ||
+    visiblePageLevelPrefillWarnings.length,
+  );
   const hasControlAlerts = Boolean(semesterError || staffDirectoryError);
   const missingStaffFilterMessage = isStaffViewer
     ? '当前账号没有可用的教师 ID，无法查询教学日志对账。'
@@ -2626,20 +2627,6 @@ export function AcademicTeachingLogPageContent({
       ) : null}
 
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
-      {pageLevelPrefillBlockingIssue ? (
-        <Alert message={pageLevelPrefillBlockingIssue} showIcon type="error" />
-      ) : null}
-      {prefillResult && !pageLevelPrefillBlockingIssue && fillAvailabilityIssue ? (
-        <Alert message="当前填写前检查未通过。" showIcon type="error" />
-      ) : null}
-      {visiblePageLevelPrefillWarnings.length ? (
-        <Alert
-          description={visiblePageLevelPrefillWarnings.join('；')}
-          message="填写前检查提示"
-          showIcon
-          type="warning"
-        />
-      ) : null}
       {isLoadingReconciliation ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!isLoadingReconciliation && reconciliationResult ? (
@@ -2761,29 +2748,45 @@ export function AcademicTeachingLogPageContent({
             ) : null}
           </section>
 
-          {sessionStaffMismatchWarningMessage ? (
-            <div className="lecture-journal-session-mismatch-alert">
-              <Alert
-                action={
-                  hasSessionStaffMismatchWarning ? (
-                    <span className="lecture-journal-warning-action">
-                      <Button
-                        disabled={hasAcknowledgedSessionStaffMismatchWarning}
-                        icon={<CheckOutlined />}
-                        type="default"
-                        onClick={() => {
-                          setHasAcknowledgedSessionStaffMismatchWarning(true);
-                        }}
-                      >
-                        {hasAcknowledgedSessionStaffMismatchWarning ? '已知晓' : '我已知晓'}
-                      </Button>
-                    </span>
-                  ) : undefined
-                }
-                message={sessionStaffMismatchWarningMessage}
-                showIcon
-                type="warning"
-              />
+          {shouldRenderResultAlerts ? (
+            <div className="lecture-journal-result-alerts">
+              {sessionStaffMismatchWarningMessage ? (
+                <Alert
+                  action={
+                    hasSessionStaffMismatchWarning ? (
+                      <span className="lecture-journal-warning-action">
+                        <Button
+                          disabled={hasAcknowledgedSessionStaffMismatchWarning}
+                          icon={<CheckOutlined />}
+                          type="default"
+                          onClick={() => {
+                            setHasAcknowledgedSessionStaffMismatchWarning(true);
+                          }}
+                        >
+                          {hasAcknowledgedSessionStaffMismatchWarning ? '已知晓' : '我已知晓'}
+                        </Button>
+                      </span>
+                    ) : undefined
+                  }
+                  message={sessionStaffMismatchWarningMessage}
+                  showIcon
+                  type="warning"
+                />
+              ) : null}
+              {pageLevelPrefillBlockingIssue ? (
+                <Alert message={pageLevelPrefillBlockingIssue} showIcon type="error" />
+              ) : null}
+              {hasGenericFillAvailabilityIssue ? (
+                <Alert message="当前填写前检查未通过。" showIcon type="error" />
+              ) : null}
+              {visiblePageLevelPrefillWarnings.length ? (
+                <Alert
+                  description={visiblePageLevelPrefillWarnings.join('；')}
+                  message="填写前检查提示"
+                  showIcon
+                  type="warning"
+                />
+              ) : null}
             </div>
           ) : null}
 
@@ -2792,7 +2795,9 @@ export function AcademicTeachingLogPageContent({
               <Empty
                 description={
                   activeResultViewScope === 'missing'
-                    ? '当前筛选下没有需要补填的课次。'
+                    ? shouldRenderFutureCourseSwitch && futureCourseVisibility === 'hide'
+                      ? '当前没有需要补填的已开课课次，未开课课次已隐藏。'
+                      : '待补日志已全部补齐。'
                     : activeResultViewScope === 'unmatched'
                       ? '当前筛选下没有需要核对的课次。'
                       : '当前筛选下没有课次。'
