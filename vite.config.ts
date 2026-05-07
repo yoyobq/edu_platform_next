@@ -37,6 +37,10 @@ function isAnyNodeModulePackage(moduleId: string, packageNames: string[]): boole
   return packageNames.some((packageName) => isNodeModulePackage(moduleId, packageName));
 }
 
+function isNodeModulePackageScope(moduleId: string, packageScope: string): boolean {
+  return normalizeModuleId(moduleId).includes(`/node_modules/${packageScope}/`);
+}
+
 // https://vite.dev/config/
 export default defineConfig(({ mode }) => {
   const envDir = path.resolve(__dirname, 'env');
@@ -77,27 +81,35 @@ export default defineConfig(({ mode }) => {
                 priority: 50,
               },
               {
-                name: 'vendor-antd',
+                name: 'vendor-antd-color',
                 test: (moduleId) =>
                   isAnyNodeModulePackage(moduleId, [
-                    'antd',
+                    '@ant-design/fast-color',
+                    '@rc-component/color-picker',
+                  ]),
+                priority: 48,
+              },
+              {
+                name: 'vendor-antd-icons',
+                test: (moduleId) =>
+                  isAnyNodeModulePackage(moduleId, ['@ant-design/icons', '@ant-design/icons-svg']),
+                priority: 47,
+              },
+              {
+                name: 'vendor-antd-style',
+                test: (moduleId) =>
+                  isAnyNodeModulePackage(moduleId, [
                     '@ant-design/colors',
                     '@ant-design/cssinjs',
                     '@ant-design/cssinjs-utils',
-                    '@ant-design/fast-color',
-                    '@ant-design/icons',
-                    '@rc-component/async-validator',
-                    '@rc-component/color-picker',
-                    '@rc-component/context',
-                    '@rc-component/drawer',
-                    '@rc-component/motion',
-                    '@rc-component/mutate-observer',
-                    '@rc-component/portal',
-                    '@rc-component/qrcode',
-                    '@rc-component/resize-observer',
-                    '@rc-component/tour',
-                    '@rc-component/trigger',
-                    '@rc-component/util',
+                  ]),
+                priority: 46,
+              },
+              {
+                name: 'vendor-rc',
+                test: (moduleId) =>
+                  isNodeModulePackageScope(moduleId, '@rc-component') ||
+                  isAnyNodeModulePackage(moduleId, [
                     'rc-cascader',
                     'rc-checkbox',
                     'rc-collapse',
@@ -131,8 +143,12 @@ export default defineConfig(({ mode }) => {
                     'rc-util',
                     'rc-virtual-list',
                   ]),
+                priority: 45,
+              },
+              {
+                name: 'vendor-antd',
+                test: (moduleId) => isNodeModulePackage(moduleId, 'antd'),
                 priority: 40,
-                maxSize: 450_000,
               },
               {
                 name: 'vendor-graphql',
