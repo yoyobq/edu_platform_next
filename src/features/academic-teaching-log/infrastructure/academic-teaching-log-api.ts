@@ -1,12 +1,10 @@
 import type { OperationVariables } from '@apollo/client';
 
-import {
-  isExpiredUpstreamSessionError,
-  resolveUpstreamErrorMessage,
-} from '@/entities/upstream-session';
+import { isExpiredUpstreamSessionError } from '@/entities/upstream-session';
 
 import { executeGraphQL } from '@/shared/graphql';
 
+import { resolveLectureJournalUpstreamErrorMessage } from '../application/lecture-journal-issue-message';
 import type {
   AcademicTeachingLogPrefillResult,
   AcademicTeachingLogSaveResult,
@@ -17,7 +15,6 @@ import type {
   SaveAcademicTheoryTeachingLogInput,
 } from '../application/types';
 
-export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 export type {
   AcademicIntegratedTeachingLogPrefillPreview,
   AcademicTeachingLogPrefillItem,
@@ -449,7 +446,9 @@ export async function fetchAcademicTeachingLogPrefillItems(
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载教学日志预填项。'));
+    throw new Error(
+      resolveLectureJournalUpstreamErrorMessage(error, '暂时无法加载教学日志预填项。'),
+    );
   }
 }
 
@@ -475,7 +474,9 @@ export async function fetchMyAcademicTeachingLogPrefillItems(
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本人教学日志预填项。'));
+    throw new Error(
+      resolveLectureJournalUpstreamErrorMessage(error, '暂时无法加载本人教学日志预填项。'),
+    );
   }
 }
 
@@ -496,7 +497,9 @@ export async function saveAcademicTheoryTeachingLog(input: SaveAcademicTheoryTea
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存理论课教学日志。'));
+    throw new Error(
+      resolveLectureJournalUpstreamErrorMessage(error, '暂时无法保存理论课教学日志。'),
+    );
   }
 }
 
@@ -517,7 +520,9 @@ export async function saveAcademicPracticeTeachingLog(input: SaveAcademicPractic
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存实训课教学日志。'));
+    throw new Error(
+      resolveLectureJournalUpstreamErrorMessage(error, '暂时无法保存实训课教学日志。'),
+    );
   }
 }
 
@@ -540,6 +545,8 @@ export async function saveAcademicIntegratedTeachingLog(
       throw error;
     }
 
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法保存一体化教学日志。'));
+    throw new Error(
+      resolveLectureJournalUpstreamErrorMessage(error, '暂时无法保存一体化教学日志。'),
+    );
   }
 }

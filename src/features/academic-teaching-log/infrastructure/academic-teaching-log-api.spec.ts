@@ -7,6 +7,7 @@ const { executeGraphQLMock, isExpiredUpstreamSessionErrorMock } = vi.hoisted(() 
 
 vi.mock('@/entities/upstream-session', () => ({
   isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
+  readUpstreamGraphQLErrorDetail: () => null,
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
 }));

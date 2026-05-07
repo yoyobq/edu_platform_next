@@ -42,6 +42,7 @@ import {
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  isExpiredUpstreamSessionError,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -80,6 +81,13 @@ import {
   reuseJournalDraftMapReferences,
 } from '../application/journal-draft-policy';
 import {
+  INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH,
+  isUpstreamSessionStaffMismatchIssue,
+  resolveLectureJournalIssueMessage,
+  resolveLectureJournalUpstreamErrorMessage,
+  UPSTREAM_SESSION_STAFF_MISMATCH,
+} from '../application/lecture-journal-issue-message';
+import {
   initialLectureJournalQueryState,
   lectureJournalQueryReducer,
 } from '../application/query-state';
@@ -112,8 +120,6 @@ import {
 import {
   fetchAcademicTeachingLogPrefillItems,
   fetchMyAcademicTeachingLogPrefillItems,
-  isExpiredUpstreamSessionError,
-  resolveUpstreamErrorMessage,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
   saveAcademicTheoryTeachingLog,
@@ -145,12 +151,6 @@ type PendingAction = 'query' | null;
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
 const TOPIC_RECORD_OPTIONS = [DEFAULT_TOPIC_RECORD, '良', '正常', '一般'];
 const SAVED_CARD_COLLAPSE_DURATION_MS = 240;
-const INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH = 'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH';
-const INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT = 'INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT';
-const INTEGRATED_CROSS_DAY_CONSUMPTION = 'INTEGRATED_CROSS_DAY_CONSUMPTION';
-const INTEGRATED_CROSS_WEEK_CONSUMPTION = 'INTEGRATED_CROSS_WEEK_CONSUMPTION';
-const UPSTREAM_STAFF_SCOPE_MISMATCH = 'UPSTREAM_STAFF_SCOPE_MISMATCH';
-const UPSTREAM_SESSION_STAFF_MISMATCH = 'UPSTREAM_SESSION_STAFF_MISMATCH';
 const COURSE_CATEGORY_META = {
   '1': {
     accentClassName: 'lecture-journal-course-category-theory',
@@ -353,41 +353,6 @@ function buildTeacherOptionLabel(teacher: StaffDirectoryEntry) {
 
 function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
   return Boolean(value?.includes(INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH));
-}
-
-function includesIssueCode(value: string | null | undefined, issueCode: string) {
-  return Boolean(value?.includes(issueCode));
-}
-
-function resolveLectureJournalIssueMessage(value: string | null) {
-  if (!value) {
-    return value;
-  }
-
-  if (value === UPSTREAM_STAFF_SCOPE_MISMATCH) {
-    return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
-  }
-
-  if (value === UPSTREAM_SESSION_STAFF_MISMATCH) {
-    return '当前校园网登录用户与查询教师不一致，本次按所选教师展示对账结果。';
-  }
-
-  if (
-    includesIssueCode(value, INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT) ||
-    includesIssueCode(value, INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH)
-  ) {
-    return '一体化计划明细需要的课时数超过当前本地课表中可顺序分配的有效课时数，请检查本地学期课表、教学周历或计划明细课时后再重试。';
-  }
-
-  if (includesIssueCode(value, INTEGRATED_CROSS_DAY_CONSUMPTION)) {
-    return '一体化计划明细的课时分配会跨教学日期，请确认本地课表与计划明细课时符合实际后再填写。';
-  }
-
-  if (includesIssueCode(value, INTEGRATED_CROSS_WEEK_CONSUMPTION)) {
-    return '一体化计划明细的课时分配会跨教学周，请确认本地课表与计划明细课时符合实际后再填写。';
-  }
-
-  return value;
 }
 
 function hasIntegratedOccurrenceMismatchIssue(item: JournalEditableCardItem) {
@@ -1861,7 +1826,9 @@ export function AcademicTeachingLogPageContent({
         return outcome;
       } catch (error) {
         if (activeStaffDirectoryRequestIdRef.current === requestId) {
-          setStaffDirectoryError(resolveUpstreamErrorMessage(error, '暂时无法加载教师目录。'));
+          setStaffDirectoryError(
+            resolveLectureJournalUpstreamErrorMessage(error, '暂时无法加载教师目录。'),
+          );
         }
 
         return null;
@@ -2094,11 +2061,11 @@ export function AcademicTeachingLogPageContent({
     : [];
   const visiblePageLevelPrefillWarnings = prefillResult
     ? resolvePageLevelPrefillWarnings(
-        prefillResult.warnings.filter((warning) => warning !== UPSTREAM_SESSION_STAFF_MISMATCH),
+        prefillResult.warnings.filter((warning) => !isUpstreamSessionStaffMismatchIssue(warning)),
       )
     : [];
   const hasSessionStaffMismatchWarning = Boolean(
-    prefillResult?.warnings.includes(UPSTREAM_SESSION_STAFF_MISMATCH),
+    prefillResult?.warnings.some((warning) => isUpstreamSessionStaffMismatchIssue(warning)),
   );
   const sessionStaffMismatchWarningMessage =
     upstreamIdentityWarning ||
@@ -2285,7 +2252,7 @@ export function AcademicTeachingLogPageContent({
         setSaveFeedbackByKey((current) => ({
           ...current,
           [item.key]: {
-            text: resolveUpstreamErrorMessage(error, '暂时无法保存教学日志。'),
+            text: resolveLectureJournalUpstreamErrorMessage(error, '暂时无法保存教学日志。'),
             tone: 'error',
           },
         }));
@@ -2373,7 +2340,7 @@ export function AcademicTeachingLogPageContent({
         isCurrent: () => activeQueryRequestIdRef.current === requestId,
         isExpiredUpstreamSessionError,
         persistSessionFromResult,
-        resolveUpstreamErrorMessage,
+        resolveUpstreamErrorMessage: resolveLectureJournalUpstreamErrorMessage,
         semesterId: selectedSemester.id,
         session: scopedSessionResult.session,
         staffId: normalizedStaffId,
@@ -2402,7 +2369,7 @@ export function AcademicTeachingLogPageContent({
       }
 
       dispatchQueryState({
-        message: resolveUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'),
+        message: resolveLectureJournalUpstreamErrorMessage(error, '暂时无法加载教学日志对账结果。'),
         type: 'failed',
       });
     } finally {
@@ -2435,7 +2402,7 @@ export function AcademicTeachingLogPageContent({
         await runQueryAction(nextSession);
       }
     } catch (error) {
-      setLoginError(resolveUpstreamErrorMessage(error, '暂时无法登录校园网。'));
+      setLoginError(resolveLectureJournalUpstreamErrorMessage(error, '暂时无法登录校园网。'));
     } finally {
       setIsSubmittingLogin(false);
     }
