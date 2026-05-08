@@ -47,9 +47,7 @@ This directory contains project documentation.
 - 想按测试目标区分 `core` 和 `smoke` E2E，或想跑单文件时，先看 [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
 - 想了解测试约定、Playwright E2E 入口或 `env` 配置时，先看 [testing.md](./testing.md)
 - 想判断 AI 生成结果该先落哪层、何时能进入 `stable` 时，先看 [ai-workflow.md](./ai-workflow.md)
-- 想确认后端真相时，先看 [backend/README.md](./backend/README.md)：
-  `schema.graphql` 看 GraphQL 类型与显式业务结果；
-  `domain-error.ts` 和 `graphql-exception.filter.ts` 看运行时错误码与映射
+- 想确认后端真相时，先看 [backend/README.md](./backend/README.md)：优先查同机后端工作区，`docs/backend/*` 只作本地 fallback
 - 想了解当前仍未完全定稿的事项、已知限制或背景决策时，再看 [open-decisions.md](./open-decisions.md)
 
 ## Rule Docs
@@ -106,7 +104,7 @@ This directory contains project documentation.
 - `app / pages / widgets / features / entities / shared` 的细分职责当前见 [layer-model.md](./layer-model.md)
 - `stable` 区内部何时需要第二维 Clean 分层，当前见 [stable-clean/architecture.md](./stable-clean/architecture.md)
 - API、storage、URL 参数、SDK、mock 的统一收束规则当前见 [infrastructure-rules.md](./infrastructure-rules.md)
-- `docs/backend/` 是后端真相目录；默认先看 [backend/README.md](./backend/README.md)，再按需查具体文件片段
+- 后端真相入口是 [backend/README.md](./backend/README.md)；优先查同机后端工作区，再按需查 `docs/backend/*` 本地快照
 - `stable` 第二维主题当前按“先列清单，再记录具体决策”的方式推进
 - `stable` 第二维的最小目录模板当前见 [stable-clean/templates.md](./stable-clean/templates.md)
 - [open-decisions.md](./open-decisions.md) 只记录真正的开放项、已知限制与关键背景决策

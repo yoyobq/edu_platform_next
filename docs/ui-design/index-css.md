@@ -66,6 +66,8 @@
 
   /* Layout Z-Index Tokens (Semantic Layer Tokens) */
   --z-index-main-base: 0;
+  --z-index-sidebar-affordance: 10;
+  --z-index-floating-action-bar: 50;
   --z-index-top-control-bar: 900;
   --z-index-main-modal: 1000;
   --z-index-sidecar-container: 1100;

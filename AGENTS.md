@@ -115,4 +115,4 @@ Rules:
 - Testing: `docs/testing.md`
 - Chunks: `docs/chunk-strategy.md`
 - Conventions: `docs/project-convention/`
-- Backend GraphQL truth: `docs/backend/README.md`
+- Backend truth: `docs/backend/README.md`

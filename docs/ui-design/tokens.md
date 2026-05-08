@@ -147,13 +147,17 @@
 
 z-index 只能走语义化 token，禁止手写裸数字（包括 Tailwind 内置的 `z-10`、`z-50` 等数字类）。
 
-| Token                          | 值   | 场景                                   | Tailwind 类            |
-| ------------------------------ | ---- | -------------------------------------- | ---------------------- |
-| `--z-index-main-base`          | 0    | 主内容区基准层                         | `z-main-base`          |
-| `--z-index-top-control-bar`    | 900  | 顶部全局浮层按钮（含可恢复的开始按钮） | `z-top-control-bar`    |
-| `--z-index-main-modal`         | 1000 | 与 antd Modal 默认对齐                 | `z-main-modal`         |
-| `--z-index-sidecar-container`  | 1100 | AI Sidecar 面板容器                    | `z-sidecar-container`  |
-| `--z-index-sidecar-overlay`    | 1150 | Sidecar 遮罩层                         | `z-sidecar-overlay`    |
-| `--z-index-cross-layer-prompt` | 2000 | 跨层浮层提示（最高层）                 | `z-cross-layer-prompt` |
+组件内部的局部叠层也不要直接写裸 `z-index` 数字；用当前组件命名空间下的局部 CSS 变量承载数值，例如 `--xxx-entry-hover-layer`。
+
+| Token                           | 值   | 场景                                   | Tailwind 类             |
+| ------------------------------- | ---- | -------------------------------------- | ----------------------- |
+| `--z-index-main-base`           | 0    | 主内容区基准层                         | `z-main-base`           |
+| `--z-index-sidebar-affordance`  | 10   | 侧栏边缘 affordance / hover 捕获层     | `z-sidebar-affordance`  |
+| `--z-index-floating-action-bar` | 50   | 页面级底部浮动操作条                   | `z-floating-action-bar` |
+| `--z-index-top-control-bar`     | 900  | 顶部全局浮层按钮（含可恢复的开始按钮） | `z-top-control-bar`     |
+| `--z-index-main-modal`          | 1000 | 与 antd Modal 默认对齐                 | `z-main-modal`          |
+| `--z-index-sidecar-container`   | 1100 | AI Sidecar 面板容器                    | `z-sidecar-container`   |
+| `--z-index-sidecar-overlay`     | 1150 | Sidecar 遮罩层                         | `z-sidecar-overlay`     |
+| `--z-index-cross-layer-prompt`  | 2000 | 跨层浮层提示（最高层）                 | `z-cross-layer-prompt`  |
 
 **antd 组件层级**由 ConfigProvider `zIndexPopupBase`（默认 1000）统一管理，与上表变量独立。自定义 Sidecar 面板通过 `readZIndexToken('--z-index-sidecar-container', 1100)` 动态读取该 token 传给 antd Drawer 的 `zIndex` prop。

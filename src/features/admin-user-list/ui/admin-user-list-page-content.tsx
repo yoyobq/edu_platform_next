@@ -948,7 +948,7 @@ export function AdminUserListPageContent({
 
       {/* Floating Action Bar */}
       <div
-        className={`fixed bottom-8 left-1/2 z-50 -translate-x-1/2 transition-all duration-300 ease-in-out ${
+        className={`fixed bottom-8 left-1/2 z-floating-action-bar -translate-x-1/2 transition-all duration-300 ease-in-out ${
           selectedCount > 0
             ? 'translate-y-0 opacity-100'
             : 'translate-y-20 opacity-0 pointer-events-none'

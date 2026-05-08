@@ -4,9 +4,7 @@
 
 本文件只描述前端当前 `staff invite` 链路的页面语义、交互边界与实现约定。
 
-后端 contract、schema 与 resolver 真相不在这里维护，统一以后端 schema 为准：
-
-- [schema.graphql](/var/www/platform_next/docs/backend/schema.graphql)
+后端 contract、schema 与 resolver 真相不在这里维护，统一以 [../backend/README.md](../backend/README.md) 指向的后端来源为准。
 
 ## 适用范围
 
@@ -63,10 +61,10 @@
 - 上游身份摘要当前只展示：
   - staff name
   - invited email
-  - department，优先展示 `departmentName`；若后端返回为空，前端固定显示“白宫”
-  - personId
-- 不展示上游账号
-- 不额外展示部门 ID；当前不再因 `departmentName` 缺失回退显示 `orgId`
+  - department，展示后端返回的 `departmentName`；当前 contract 下部门名称不应缺失
+  - staff id，优先展示 invite 的 `staffId`；若 invite 未携带，则回退展示 `identity.personId`
+- 不展示 `upstreamLoginId`
+- 不额外展示部门 ID
 
 ## 成功态
 

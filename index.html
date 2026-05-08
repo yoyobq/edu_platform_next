@@ -8,8 +8,9 @@
     <title>EDU MATE · 智教随行</title>
     <!-- 防止深色模式刷新时的白屏闪烁（FOUC）：在 React 挂载前提前设 .dark class -->
     <script>
-      if (localStorage.getItem('app-theme') === 'dark') {
+      if (localStorage.getItem('color-scheme') === 'dark') {
         document.documentElement.classList.add('dark');
+        document.documentElement.style.colorScheme = 'dark';
       }
     </script>
   </head>

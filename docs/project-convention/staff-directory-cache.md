@@ -2,7 +2,7 @@
 
 # Staff Directory Cache
 
-本文件记录前端消费 `staffId -> 教师姓名` 的统一约定。后端 schema 真相仍以 [../backend/schema.graphql](../backend/schema.graphql) 为准。
+本文件记录前端消费 `staffId -> 教师姓名` 的统一约定。后端 schema 真相以 [../backend/README.md](../backend/README.md) 指向的来源为准。
 
 ## 当前结论
 

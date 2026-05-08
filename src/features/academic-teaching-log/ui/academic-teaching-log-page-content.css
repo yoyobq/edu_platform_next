@@ -1,6 +1,9 @@
 .lecture-journal-page {
   --lecture-journal-record-accent: var(--ant-color-border);
   --lecture-journal-record-accent-bg: var(--ant-color-fill-tertiary);
+  --lecture-journal-record-action-layer: 2;
+  --lecture-journal-record-content-layer: 1;
+  --lecture-journal-record-decor-layer: 0;
   --lecture-journal-record-radius: 20px;
   --lecture-journal-record-gap: 20px;
   --lecture-journal-course-category-theory-color: #1d4ed8;
@@ -667,7 +670,7 @@
   position: absolute;
   top: -68px;
   width: 132px;
-  z-index: 0;
+  z-index: var(--lecture-journal-record-decor-layer);
 }
 
 .lecture-journal-record:focus-within {
@@ -724,7 +727,7 @@
   position: absolute;
   right: 24px;
   top: 18px;
-  z-index: 2;
+  z-index: var(--lecture-journal-record-action-layer);
 }
 
 .lecture-journal-record-header {
@@ -736,7 +739,7 @@
   justify-content: space-between;
   padding: 20px 24px 16px;
   position: relative;
-  z-index: 1;
+  z-index: var(--lecture-journal-record-content-layer);
 }
 
 .lecture-journal-record-overview {
@@ -997,7 +1000,7 @@
   gap: 10px;
   padding: 14px 24px;
   position: relative;
-  z-index: 1;
+  z-index: var(--lecture-journal-record-content-layer);
 }
 
 .lecture-journal-integrated-warning-text {

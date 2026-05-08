@@ -115,7 +115,7 @@
 
 ## 后端 auth error 信号
 
-当前后端真相以 `docs/backend/domain-error.ts` 与 `docs/backend/graphql-exception.filter.ts` 为准：
+当前后端真相以 `docs/backend/README.md` 指向的后端错误码与异常映射来源为准：
 
 - `extensions.code` 是 GraphQL 标准大类
 - `extensions.errorCode` 是后端细粒度错误码

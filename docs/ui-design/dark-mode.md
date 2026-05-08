@@ -48,28 +48,29 @@ Tailwind v4 默认 `dark:` 基于 `prefers-color-scheme`，无法响应手动切
 
 ## FOUC 防范
 
-当前 `useEffect` 方案在 React 挂载完成前有一帧白屏（深色模式刷新时先渲染浅色，再切换）。在 `public/index.html` 的 `<head>` 最末尾加内联脚本，确保首帧就是正确底色：
+当前 `useEffect` 方案在 React 挂载完成前有一帧白屏（深色模式刷新时先渲染浅色，再切换）。在根目录 `index.html` 的 `<head>` 最末尾加内联脚本，确保首帧就是正确底色：
 
 ```html
 <script>
-  if (localStorage.getItem('app-theme') === 'dark') {
+  if (localStorage.getItem('color-scheme') === 'dark') {
     document.documentElement.classList.add('dark');
+    document.documentElement.style.colorScheme = 'dark';
   }
 </script>
 ```
 
-React 侧的 `useEffect` 逻辑不需要改——它只负责后续切换和状态同步。
+FOUC 脚本和 React Provider 必须使用同一个 localStorage key：`color-scheme`。React 侧的 `useEffect` 负责后续切换和状态同步。
 
 ## 实现方案
 
 **主题状态**（顶层 Provider 文件，与 ConfigProvider 同层）：
 
 ```tsx
-const [isDark, setIsDark] = useState(() => localStorage.getItem('app-theme') === 'dark');
+const [isDark, setIsDark] = useState(() => localStorage.getItem('color-scheme') === 'dark');
 
 useEffect(() => {
   document.documentElement.classList.toggle('dark', isDark);
-  localStorage.setItem('app-theme', isDark ? 'dark' : 'light');
+  localStorage.setItem('color-scheme', isDark ? 'dark' : 'light');
 }, [isDark]);
 ```
 

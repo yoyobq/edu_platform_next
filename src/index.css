@@ -79,6 +79,7 @@
   --z-index-sidecar-container: 1100;
   --z-index-sidecar-overlay: 1150;
   --z-index-sidebar-affordance: 10;
+  --z-index-floating-action-bar: 50;
   --z-index-cross-layer-prompt: 2000;
 
   /* Error Block Tokens */
@@ -294,6 +295,8 @@ html.disable-motion *::after {
 }
 
 .login-page-shell {
+  --login-page-frame-layer: 1;
+
   background-color: #f6f1eb;
   background-image:
     radial-gradient(circle at 12% 2%, color-mix(in srgb, white 68%, transparent), transparent 28%),
@@ -345,7 +348,7 @@ html.disable-motion *::after {
   padding-block: 54px;
   position: relative;
   width: calc(100% - 96px);
-  z-index: 1;
+  z-index: var(--login-page-frame-layer);
 }
 
 .login-page-shell-narrow .login-page-frame {

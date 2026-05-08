@@ -95,7 +95,7 @@
 说明：
 
 - 这几个值属于后端运行时错误约定，不是 GraphQL schema 内建枚举
-- 对齐来源以 `docs/backend/domain-error.ts` 与 `docs/backend/graphql-exception.filter.ts` 为准；`schema.graphql` 主要描述成功返回类型与显式业务结果
+- 对齐来源以 `docs/backend/README.md` 指向的后端错误码与异常映射来源为准；`schema.graphql` 主要描述成功返回类型与显式业务结果
 - 当前文档仅将其作为 auth 相关错误信号记录；具体哪些 code 可触发 silent refresh，应以 ingress/runtime 方案文档为准
 
 判断顺序固定为：

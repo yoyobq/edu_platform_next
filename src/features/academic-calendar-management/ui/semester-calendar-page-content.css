@@ -1,4 +1,8 @@
 .semester-calendar-sheet {
+  --semester-calendar-cell-base-layer: 0;
+  --semester-calendar-cell-hover-layer: 1;
+  --semester-calendar-sticky-head-layer: 3;
+
   background: var(--ant-color-bg-container);
   border-end-end-radius: var(--radius-block);
   border-end-start-radius: var(--radius-block);
@@ -120,7 +124,7 @@
   overflow: hidden;
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: var(--semester-calendar-sticky-head-layer);
 }
 
 .semester-calendar-sticky-head {
@@ -249,7 +253,7 @@ button.semester-calendar-day-cell {
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease;
-  z-index: 0;
+  z-index: var(--semester-calendar-cell-base-layer);
 }
 
 .semester-calendar-day-cell-clickable::after {
@@ -273,13 +277,13 @@ button.semester-calendar-day-cell {
 .semester-calendar-day-cell-clickable:hover {
   box-shadow: var(--shadow-card-hover);
   transform: translateY(-1px);
-  z-index: 1;
+  z-index: var(--semester-calendar-cell-hover-layer);
 }
 
 .semester-calendar-day-cell-clickable:focus-visible {
   outline: 2px solid var(--ant-color-primary-border);
   outline-offset: -2px;
-  z-index: 1;
+  z-index: var(--semester-calendar-cell-hover-layer);
 }
 
 .semester-calendar-day-note {

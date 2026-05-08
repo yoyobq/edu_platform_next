@@ -26,6 +26,8 @@
 }
 
 .home-workbench-profile {
+  --home-workbench-profile-layer: 1;
+
   align-items: center;
   display: flex;
   flex: 0 0 auto;
@@ -35,7 +37,7 @@
   min-width: 140px;
   position: relative;
   text-align: center;
-  z-index: 1;
+  z-index: var(--home-workbench-profile-layer);
 }
 
 .home-workbench-profile-avatar {
