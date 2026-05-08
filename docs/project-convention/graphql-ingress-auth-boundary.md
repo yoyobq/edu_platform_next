@@ -120,6 +120,15 @@
 - `extensions.code` 是 GraphQL 标准大类
 - `extensions.errorCode` 是后端细粒度错误码
 - 生产环境默认不透出 `extensions.errorCode`
+- 前端运行时不以 `extensions.errorCode` 作为 auth refresh 主开关
+
+前后端契约：
+
+- GraphQL top-level `errors[].extensions.code === 'UNAUTHENTICATED'` 表示“当前会话不可用”
+- 该判断只适用于已登录态接口、`me`、受保护 mutation/query 等会话请求
+- `login` 的账号密码错误、`refresh` 的 refresh token 失败不应触发共享层 refresh/logout
+- HTTP `401` 只作为 transport 层兜底
+- `TOKEN_INVALID` / `TOKEN_INVALID_AFTER_REFRESH` 只保留为前端兼容旧响应的 fallback，不再作为新契约扩展
 
 当前 JWT 相关错误在后端都会归到 `UNAUTHENTICATED`：
 
@@ -136,6 +145,18 @@
 - 前端会看到 `extensions.code = 'BAD_USER_INPUT'`
 - 因此它最终会落到 `GraphQLIngressError.type = 'graphql'`，而不是 `type = 'auth'`
 
+当前前端 auth 分类顺序跟随 Apollo 4 error class：
+
+1. `CombinedGraphQLErrors`：优先检查 `errors[].extensions.code === 'UNAUTHENTICATED'`
+2. 兼容旧响应：GraphQL error message 为 `TOKEN_INVALID` 或 `TOKEN_INVALID_AFTER_REFRESH` 时也归入 `auth`
+3. `ServerError`：HTTP `401` 归入 `auth`
+
+这意味着：
+
+- `extensions.errorCode` 只用于排查和文档对齐，不作为前端稳定分支条件
+- “先看 HTTP 401 再看 GraphQL errors”不是当前实现模型；Apollo 已经先把错误归成 GraphQL execution error 或 HTTP transport error
+- 信号契约与前端动作策略分开：命中 `auth` 只表示请求层识别到会话问题，是否自动 refresh 还要看 `authMode` 与 `allowAuthRetry`
+
 ## 当前请求层 reactive refresh 边界
 
 当前 `shared/graphql` 的 `executeGraphQL` 已具备受控的 reactive refresh：
@@ -151,6 +172,7 @@
 
 - `authMode: 'none'` 的所有请求
 - `allowAuthRetry: false` 的请求（auth 主流程统一标记此选项）
+- `login`、`refresh` 等 auth 主流程请求，即使出现认证相关错误，也不交给 `shared/graphql` 自动续期
 
 这条能力的约束是：
 

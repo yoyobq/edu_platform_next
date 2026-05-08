@@ -15,7 +15,8 @@
 当前项目采用以下规则：
 
 - `shared/graphql` 只抛一种基础设施异常：`GraphQLIngressError`
-- 业务 payload 失败继续由 feature 自己解释，不进入 ingress error 模型
+- 只有 transport failure 和 top-level GraphQL `errors` 进入 ingress error 模型
+- 业务 payload 失败继续由 feature 自己解释
 - application / router / auth flow 自己的流程推进不进入 ingress error 模型
 
 一句话约束：
@@ -23,6 +24,17 @@
 - transport failure 用 `GraphQLIngressError`
 - domain failure 用显式结果
 - application flow 自己推进
+
+## 全局错误契约
+
+当前前后端 GraphQL 错误契约：
+
+- top-level GraphQL `errors` 代表 GraphQL execution error，进入 `GraphQLIngressError`
+- payload 内部的 `success: false`、`reason`、`message` 是业务结果，不进入 `GraphQLIngressError`
+- `errors[].extensions.code` 是前端可依赖的稳定机器语义
+- `extensions.errorCode` 是细分诊断信息，不作为生产运行时主分支依据
+- GraphQL 可能返回 HTTP 200 + `errors`，HTTP status 只代表 transport 层
+- error `message` 不作为新契约逻辑条件，只能保留为旧响应兼容
 
 ## 错误分类
 
@@ -83,26 +95,27 @@
 
 来源包括：
 
-- HTTP `401`
-- top-level GraphQL `errors[].extensions.code === 'UNAUTHENTICATED'`
+- Apollo `CombinedGraphQLErrors` 中的 top-level GraphQL `errors[].extensions.code === 'UNAUTHENTICATED'`
+- 兼容旧后端响应的 GraphQL error message：`TOKEN_INVALID`、`TOKEN_INVALID_AFTER_REFRESH`
+- Apollo `ServerError` 中的 HTTP `401`
 
-当前项目已确认的后端 auth error code 还包括：
+后端可能存在更细的 auth error code，例如：
 
 - `JWT_TOKEN_EXPIRED`
 - `JWT_TOKEN_INVALID`
-- `INVALID_REFRESH_TOKEN`
 
 说明：
 
 - 这几个值属于后端运行时错误约定，不是 GraphQL schema 内建枚举
-- 对齐来源以 `docs/backend/README.md` 指向的后端错误码与异常映射来源为准；`schema.graphql` 主要描述成功返回类型与显式业务结果
-- 当前文档仅将其作为 auth 相关错误信号记录；具体哪些 code 可触发 silent refresh，应以 ingress/runtime 方案文档为准
+- 对齐来源以 `docs/backend/README.md` 指向的后端错误码与异常映射来源为准
+- 该信号只用于已登录态接口、`me`、受保护 mutation/query 等会话请求；`login` 的账号密码错误不应触发 refresh/logout
 
 判断顺序固定为：
 
-1. 先判断 HTTP 层是否已稳定暴露 `401`
-2. 若没有 `401`，再判断 top-level GraphQL `errors[].extensions.code === 'UNAUTHENTICATED'`
-3. 命中后统一归入 `auth`
+1. 先按 Apollo error class 判断是否为 `CombinedGraphQLErrors`
+2. 若 GraphQL errors 命中 `UNAUTHENTICATED` 或兼容 message，则归入 `auth`
+3. 再判断是否为 `ServerError`，其中 HTTP `401` 归入 `auth`
+4. 其他错误继续按 Apollo 4.x 映射规则归类
 
 默认用户提示：
 
@@ -179,7 +192,7 @@ type GraphQLIngressErrorContext = {
 映射规则：
 
 - `CombinedGraphQLErrors`
-  - 若含 `UNAUTHENTICATED` → `auth`
+  - 若含 `UNAUTHENTICATED` 或兼容 message → `auth`
   - 否则 → `graphql`
 - `ServerError`
   - `401` → `auth`

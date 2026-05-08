@@ -34,10 +34,13 @@
 当前已落地的 provider 归属为：
 
 - `home`：首页 `/`
-- `academic-affairs`：`教务管理` 当前包含 `/academic-affairs/academic-calendar`、`/academic-affairs/semester-course-schedule-sync`；`校历课表` 当前包含 `/academic-affairs/semester-calendar`；`教务助手` 当前包含 `/academic-affairs/my-teaching-logs`
-- `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/system/payload-crypto`
+- `academic-affairs`：
+  - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/semester-timetable`
+  - `教务助手`：`/academic-affairs/my-teaching-logs`
+  - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/semester-course-schedule-sync`
+- `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
-- `labs`：`/labs/change-login-email`、`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/academic-timetable`、`/labs/academic-workload`
+- `labs`：`/labs/change-login-email`、`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/academic-timetable`、`/labs/academic-workload`、`/labs/staff-semester-profiles`
 - `sandbox`：`/sandbox/playground`
 
 补充约束：
