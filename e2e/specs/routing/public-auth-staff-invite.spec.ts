@@ -50,6 +50,74 @@ async function fulfillTransportFailure(route: Route, kind: TransportFailureKind,
   });
 }
 
+async function mockStaffHomeGraphQL(page: Page) {
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query AcademicSemesters')) {
+      await fulfillGraphQL(route, {
+        data: {
+          academicSemesters: [
+            {
+              createdAt: '2026-04-01T00:00:00.000Z',
+              endDate: '2026-07-31',
+              examStartDate: '2026-07-13',
+              firstTeachingDate: '2026-05-04',
+              id: 101,
+              isCurrent: true,
+              name: '2026 春季学期',
+              schoolYear: 2026,
+              startDate: '2026-05-01',
+              termNumber: 2,
+              updatedAt: '2026-04-01T00:00:00.000Z',
+            },
+          ],
+        },
+      });
+      return;
+    }
+
+    if (query.includes('query ListMyAcademicSemesterPlannedTimetable')) {
+      await fulfillGraphQL(route, {
+        data: {
+          listMyAcademicSemesterPlannedTimetable: {
+            invalidReason: null,
+            isComplete: true,
+            isValid: true,
+            items: [
+              {
+                calcEffect: 'NORMAL',
+                classroomName: 'A101',
+                coefficient: '1',
+                courseCategory: 'THEORY',
+                courseName: '测试课程',
+                date: '2026-05-04',
+                isEffective: true,
+                logicalDayOfWeek: 1,
+                periodEnd: 1,
+                periodStart: 1,
+                physicalDayOfWeek: 1,
+                scheduleId: 9001,
+                semesterId: 101,
+                slotId: 9101,
+                staffId: 'staff-001',
+                staffName: 'Alice Teacher',
+                teachingClassName: '测试班级',
+                weekIndex: 1,
+              },
+            ],
+            truncationReason: null,
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+}
+
 async function mockStaffInviteInfo(
   page: Page,
   options?: {
@@ -501,6 +569,7 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
 
     await route.fallback();
   });
+  await mockStaffHomeGraphQL(page);
 
   await page.goto(routes.invite('staff', 'staff-invite-login-name-001'));
 
@@ -544,8 +613,11 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
   });
 
   await expect(page).toHaveURL(routes.home);
-  await expect(page.getByText('当前主身份')).toBeVisible();
-  await expect(page.getByText('STAFF').first()).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
+  await expect(page.getByText('Alice Teacher')).toBeVisible();
+  await expect(page.getByText('测试课程')).toBeVisible();
+  await expect(page.getByText('路由渲染异常')).toHaveCount(0);
+  await expect(page.getByText('Failed to fetch')).toHaveCount(0);
 });
 
 test('当 departmentName 为空时，应展示白宫', async ({ page }) => {
