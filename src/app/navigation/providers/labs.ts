@@ -75,6 +75,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
+    ...(hasLabNavigationAccess(['admin'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/labs/integrated-plan-corrections',
+            label: '一体化对齐',
+            navMode: 'rail' as const,
+            path: '/labs/integrated-plan-corrections',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(hasLabNavigationAccess(['admin', 'staff'], filter)
       ? [
           {

@@ -77,6 +77,10 @@ import {
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
+import {
+  integratedPlanCorrectionsLabAccess,
+  loadIntegratedPlanCorrectionsLabRouteModule,
+} from '@/labs/integrated-plan-corrections';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
   loadStaffSemesterProfilesLabRouteModule,
@@ -540,6 +544,47 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function integratedPlanCorrectionsLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(integratedPlanCorrectionsLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(integratedPlanCorrectionsLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(integratedPlanCorrectionsLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return {
+    upstreamAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
+  };
+}
+
 async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(academicTimetableLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -967,6 +1012,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'integrated-plan-corrections',
+            loader: integratedPlanCorrectionsLabLoader,
+            lazy: loadIntegratedPlanCorrectionsLabRouteModule,
           },
           {
             path: 'academic-timetable',
