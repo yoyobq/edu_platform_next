@@ -6,13 +6,36 @@
 
 `staff invite` 的页面细节与交互语义，统一以 [public-auth-staff-invite.md](./public-auth-staff-invite.md) 为准；本文件只收口这些 intent 入口的共同边界、归属和当前状态。
 
-## 适用范围
+## Public Auth 入口全集
+
+当前 `PublicEntryLayout` 下的 public auth 入口包括：
+
+- `/login`
+- `/forgot-password`
+- `/reset-password`
+- `/reset-password/:verificationCode`
+- `/invite/:inviteType/:verificationCode`
+- `/verify/email/:verificationCode`
+- `/welcome-back/reset-password`
+- `/welcome-back/reset-password/:verificationCode`
+- `/magic-link/:verificationCode`
+
+其中：
+
+- `/login` 是 auth session 登录入口，由 `features/auth` 承接
+- 其它一次性公开入口由 `features/public-auth` 承接
+- 所有入口都挂在 `PublicEntryLayout`，不进入登录后 app shell
+
+## Verification Intent 范围
 
 当前 public auth intent 入口包括：
 
 - `/invite/:inviteType/:verificationCode`
 - `/verify/email/:verificationCode`
+- `/reset-password`
 - `/reset-password/:verificationCode`
+- `/welcome-back/reset-password`
+- `/welcome-back/reset-password/:verificationCode`
 - `/magic-link/:verificationCode`
 
 共同归属固定为：
@@ -21,7 +44,7 @@
 - feature owner：`src/features/public-auth`
 - page owner：
   - `/invite/*`、`/verify/email/*`、`/magic-link/*` 继续由 `src/pages/verification-intent` 承接
-  - `/reset-password/:verificationCode` 继续走 `verification-intent` 内的真实 reset password panel
+  - `/reset-password*`、`/welcome-back/reset-password*` 继续走 `verification-intent` 内的真实 reset password panel
 
 ## 固定边界
 
@@ -30,14 +53,19 @@
 - `features/auth` 继续只负责 session 登录、恢复、续期与退出
 - 不因为当前只剩部分 intent 未接实，就把 `/invite`、`/verify/email`、`/magic-link` 塞回 `features/auth`
 - 这些 intent 入口继续挂在 `PublicEntryLayout`，不并入登录后壳层
+- `/login` 虽然属于 public auth 入口，但不是 verification intent；账号密码错误不触发 shared/graphql 的 refresh/logout
 
 ## 当前路线状态
 
 | 路由                                                | 当前状态 | 说明                                                          |
 | --------------------------------------------------- | -------- | ------------------------------------------------------------- |
+| `/login`                                            | 已落地   | session 登录入口；loader 会 restore，`skipRestore=1` 可跳过   |
 | `/forgot-password`                                  | 已落地   | 真实提交已接通                                                |
+| `/reset-password`                                   | 已落地   | 支持 query token / scene 兼容入口                             |
 | `/reset-password/:verificationCode`                 | 已落地   | 真实校验、重置、错误模型与 E2E 已接通                         |
 | `/reset-password?token=...`                         | 兼容保留 | 当前继续支持 query token 透传                                 |
+| `/welcome-back/reset-password`                      | 已落地   | welcome-back 文案场景；支持 query token                       |
+| `/welcome-back/reset-password/:verificationCode`    | 已落地   | welcome-back 文案场景；path-first verification code           |
 | `/invite/staff/:verificationCode`                   | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md`          |
 | `/invite/student/:verificationCode`                 | 公开信息 | 查询 `publicInviteInfo`；后端未提供学生注册接口前不消费 token |
 | `/invite/:inviteType/:verificationCode`（其它类型） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活                      |
@@ -49,6 +77,14 @@
 - 只有在后端明确提供“验证成功后建立 session”的稳定契约时，`magic-link` 才进入真实实现
 - 在拿到该契约前，页面继续保留壳页，不伪造成功登录
 - 不把临时回跳方案写成正式规则
+
+## Reset Password 场景
+
+- `/reset-password/:verificationCode` 是默认密码重置入口
+- `/reset-password?token=...` 是兼容入口，仍由同一 page 读取 `token`
+- `/welcome-back/reset-password/:verificationCode` 是 welcome-back 文案场景，底层仍复用 reset password panel
+- `/welcome-back/reset-password?token=...` 同样允许 query token
+- 若后端 preview 返回 `legacy-user-password-reset`，页面按 welcome-back copy 展示
 
 ## 当前联调补充
 

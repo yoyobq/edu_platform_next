@@ -6,8 +6,8 @@
 
 ## 当前会话入口
 
-- `login`：建立会话，只返回 `accessToken` 与 `refreshToken`
-- `refresh`：续期会话，只返回新的 `accessToken` 与 `refreshToken`
+- `login`：建立 pending session；后端返回 `accessToken / refreshToken`，前端映射为 `AuthPendingSession`
+- `refresh`：续期会话；后端返回新的 `accessToken / refreshToken`，前端随后执行 `me` 并产出 hydrated snapshot
 - `me`：返回前端当前会话权威快照
 - `logout`：前端当前按纯本地退出处理，直接清本地会话
 
@@ -57,7 +57,7 @@
 
 当前本地会话存储允许两种形态：
 
-- pending session：仅含 `accessToken / refreshToken`
+- pending session：运行时类型为 `accessToken / refreshToken / kind: 'PENDING'`
 - hydrated snapshot：完整 `me` 水合结果
 
 前者只用于 `hydrating` 过渡态，后者才是正式业务页面消费的完整会话快照。

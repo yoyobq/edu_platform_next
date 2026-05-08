@@ -103,6 +103,13 @@
 - 模块需要的数据和摘要，应优先通过对应 feature 暴露的 use case 获取
 - 若某个首页模块开始承载复杂查询、流程编排或业务判断，应下沉为独立 feature，再由首页消费其公开入口
 
+当前实现补充：
+
+- `src/features/workbench-home/application/build-home-page-view-model.ts` 已承接首页模板与模块 contract 的 view model 组装
+- `src/pages/home/index.tsx` 仍保留较多 UI composition、局部 adapter 和模块渲染逻辑，这是已知整理债务
+- 新增复杂查询、跨模块流程或可复用业务判断时，不应继续堆进 `pages/home/index.tsx`，应下沉到 `features/workbench-home` 或对应业务 feature
+- 纯页面布局、局部渲染和轻量编排仍可留在 `pages/home`
+
 ### 9. 最小默认工作台必须始终成立
 
 - 在没有个人偏好、没有可用角色模板时，首页仍必须给出最小默认工作台

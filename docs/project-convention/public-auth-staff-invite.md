@@ -36,11 +36,13 @@
 ## 邀请确认阶段
 
 - 先查询 `publicInviteInfo(token)`
-- 仅展示最小必要信息：
+- 摘要卡展示最小必要信息：
   - invited email
+  - staffId
+  - statusReason 的中文状态
   - issuer
   - expiresAt
-  - description
+- 当前不展示 title / description
 - 若 invite 无效、过期、已使用，应直接进入失败态
 
 ## 上游身份核对阶段

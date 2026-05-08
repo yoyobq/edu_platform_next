@@ -5,9 +5,12 @@
 ## 规则
 
 - `title` 默认是页面主标题语义，输出 `h1`；视觉默认按常规页面头尺寸，不使用超大 H1。
+- `description` 放页面级说明，只解释当前页面职责，不承载筛选状态或操作结果。
+- `badge` 放眉标题行的轻量状态标识，不替代页面内 Alert 或业务状态卡片。
 - 需要弱化默认标题时，才使用 `eyebrow`；首页这种特殊场景可让 `eyebrowAsHeading` 承担 `h1`。
 - `titleLevel` 管视觉大小；`titleHeadingLevel` 管语义层级。不要把两者混在一起。
 - `icon` 必须与菜单栏同一页面的 `iconKey` 对齐，来源保持 `@ant-design/icons`。
+- `iconPlacement` 默认为 `title`；只有首页欢迎区或需要弱化主标题图标时，才放到 `eyebrow`。
 - 需要非默认色系时使用组件显式字段，例如 `colorScheme="purple"`；渐变、曲线和 icon 必须一起切换。
 - 普通业务页不要使用 AI 色。AI 色只进入明确 AI 场景。
 - 背景装饰由公共组件统一提供；页面不要各自复制曲线、渐变或装饰 SVG。

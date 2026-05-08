@@ -82,8 +82,10 @@ This directory contains project documentation.
 
 ## Project Convention Docs
 
-- [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - [project-convention/academic-teaching-log.md](./project-convention/academic-teaching-log.md)
+- [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
+- [project-convention/course-category-visual-semantics.md](./project-convention/course-category-visual-semantics.md)
+- [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
 - [project-convention/form-input-normalization.md](./project-convention/form-input-normalization.md)
 - [project-convention/graphql-error-model.md](./project-convention/graphql-error-model.md)
 - [project-convention/graphql-ingress-auth-boundary.md](./project-convention/graphql-ingress-auth-boundary.md)
@@ -92,10 +94,41 @@ This directory contains project documentation.
 - [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
+- [project-convention/staff-directory-cache.md](./project-convention/staff-directory-cache.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
 - [project-convention/welcome-profile-completion.md](./project-convention/welcome-profile-completion.md)
-- [project-convention/e2e-test-groups.md](./project-convention/e2e-test-groups.md)
+
+## UI Design Docs
+
+- [ui-design/README.md](./ui-design/README.md)
+- [ui-design/ai-rules.md](./ui-design/ai-rules.md)
+- [ui-design/chart.md](./ui-design/chart.md)
+- [ui-design/colors.md](./ui-design/colors.md)
+- [ui-design/dark-mode.md](./ui-design/dark-mode.md)
+- [ui-design/index-css.md](./ui-design/index-css.md)
+- [ui-design/interaction-feedback.md](./ui-design/interaction-feedback.md)
+- [ui-design/page-header.md](./ui-design/page-header.md)
+- [ui-design/spacing.md](./ui-design/spacing.md)
+- [ui-design/table-rules.md](./ui-design/table-rules.md)
+- [ui-design/tokens.md](./ui-design/tokens.md)
+- [ui-design/typography.md](./ui-design/typography.md)
+- [ui-design/ux-guidelines.md](./ui-design/ux-guidelines.md)
+- [ui-design/brand/README.md](./ui-design/brand/README.md)
+- [ui-design/brand/app-icons.md](./ui-design/brand/app-icons.md)
+- [ui-design/brand/asset-engineering.md](./ui-design/brand/asset-engineering.md)
+- [ui-design/brand/brand-tone.md](./ui-design/brand/brand-tone.md)
+- [ui-design/brand/logo.md](./ui-design/brand/logo.md)
+- [ui-design/brand/ui-icons.md](./ui-design/brand/ui-icons.md)
+- [ui-design/inspirations/README.md](./ui-design/inspirations/README.md)
+- [ui-design/inspirations/claude.md](./ui-design/inspirations/claude.md)
+- [ui-design/inspirations/framer.md](./ui-design/inspirations/framer.md)
+- [ui-design/inspirations/linear.md](./ui-design/inspirations/linear.md)
+- [ui-design/inspirations/notion.md](./ui-design/inspirations/notion.md)
+- [ui-design/inspirations/raycast.md](./ui-design/inspirations/raycast.md)
+- [ui-design/inspirations/stripe.md](./ui-design/inspirations/stripe.md)
+- [ui-design/inspirations/vercel.md](./ui-design/inspirations/vercel.md)
+- [ui-design/inspirations/vercel-geist.md](./ui-design/inspirations/vercel-geist.md)
 
 ## Notes
 
@@ -117,40 +150,63 @@ docs/
   ai-workflow.md
   backend/
     README.md
+  chunk-strategy.md
   dependency-rules.md
+  human/
+    frontend-rules-v0.6.md
   infrastructure-rules.md
+  labs-rules.md
+  layer-model.md
   layout.md
-  navigation.md
   layout-ideas.md
-  workbench-entry-rules.md
+  navigation.md
+  open-decisions.md
+  rule-precedence.md
+  sandbox-rules.md
   stable-clean/
     README.md
     architecture.md
     checklist.md
     decisions.md
     templates.md
+  testing.md
   ui-stack-rules.md
   ui-design/
     README.md
+    ai-rules.md
     chart.md
+    colors.md
+    dark-mode.md
+    index-css.md
+    interaction-feedback.md
+    page-header.md
+    spacing.md
     table-rules.md
+    tokens.md
+    typography.md
+    ux-guidelines.md
+    brand/
+      README.md
+      app-icons.md
+      asset-engineering.md
+      brand-tone.md
+      logo.md
+      ui-icons.md
     inspirations/
       README.md
-      IBM.md
       claude.md
       framer.md
       linear.md
       notion.md
+      raycast.md
       stripe.md
-  labs-rules.md
-  layer-model.md
-  open-decisions.md
-  rule-precedence.md
-  sandbox-rules.md
-  testing.md
+      vercel.md
+      vercel-geist.md
+  workbench-entry-rules.md
   project-convention/
     academic-teaching-log.md
     admin-user-list.md
+    course-category-visual-semantics.md
     e2e-test-groups.md
     form-input-normalization.md
     graphql-error-model.md
@@ -160,8 +216,8 @@ docs/
     public-auth-staff-invite.md
     public-auth-verification-intents.md
     route-url-semantics.md
+    staff-directory-cache.md
     time-display-semantics.md
+    upstream-session-frontend-ownership.md
     welcome-profile-completion.md
-  human/
-    frontend-rules-v0.6.md
 ```

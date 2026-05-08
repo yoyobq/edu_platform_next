@@ -143,6 +143,7 @@ layout 不只是静态切片，也要处理路由切换时的状态延续。
 
 - `main` 的路由切换不应默认销毁或重置 Sidecar 的完整状态
 - Sidecar 的挂载节点应位于路由 `<Outlet />` 之外，保持全局级存在
+- 当前右下角 Entry Sidecar 浮动入口由 `SHOULD_SHOW_ENTRY_TRIGGER = false` 临时隐藏；Sidecar 实现、快捷键、受控打开事件仍保留，不代表能力删除
 - 当 `main` 从列表页跳转到详情页时，Sidecar 默认保留历史对话，仅更新当前页面上下文
 - 只有在用户显式发起“新对话”或切换到不同业务域时，才允许清空 Sidecar
 

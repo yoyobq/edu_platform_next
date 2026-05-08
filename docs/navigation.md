@@ -41,7 +41,7 @@
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：`/labs/change-login-email`、`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/academic-timetable`、`/labs/academic-workload`、`/labs/staff-semester-profiles`
-- `sandbox`：`/sandbox/playground`
+- `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：
 
@@ -199,6 +199,7 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 
 - `payload-crypto`：稳定页位于 `/system/payload-crypto`，只对特定 admin 账号开放
 - `sandbox/playground`：只在 `dev / test` 暴露
+- `sandbox/playground`：路径仍保持 `/sandbox/...`，只是导航展示合并进 Labs 分组
 
 这些特殊规则应继续跟随业务域 provider 归属，不回流到 layout 层。
 

@@ -27,6 +27,7 @@
 - `/invite/leader/:verificationCode`
 - `/verify/email/:verificationCode`
 - `/reset-password/:verificationCode`
+- `/welcome-back/reset-password/:verificationCode`
 - `/magic-link/:verificationCode`
 
 原因：
