@@ -107,31 +107,48 @@
 各业务域导出自己的 `navigation meta`，壳层挂载时聚合，结合 authenticated snapshot 过滤投影。
 
 ```typescript
-type NavigationMetaItem = {
-  /** 稳定 key，同时作为 menu item key */
+type NavigationLocalEntryMeta = {
+  description: string;
+  keywords: readonly string[];
+};
+
+type NavigationBaseItem = {
   key: string;
-  /** 显示文案 */
   label: string;
-  /** 图标标识（由渲染层统一映射，不直接存 JSX 组件） */
   iconKey: string;
-  /** 叶子项必须指向稳定 landing path；分组项可复用结构性 path，但不要求可点击 */
-  path: string;
-  /** 属于哪个主身份的一级骨架 */
-  primaryAccessGroup: 'ADMIN' | 'STAFF' | 'STUDENT' | 'GUEST' | 'REGISTRANT';
-  /** 受 slotGroup 控制（填入 slotGroup 值；null 表示不受 slot 控制） */
-  slotGroup: string | null;
-  /** 启用的导航能力档位 */
   navMode: 'none' | 'rail' | 'full';
-  /** 二级菜单 */
-  children?: NavigationMetaItem[];
+};
+
+type NavigationLeafItem = NavigationBaseItem & {
+  path: string;
+  primaryAccessGroup: 'ADMIN' | 'STAFF' | 'STUDENT' | 'GUEST' | 'REGISTRANT';
+  allowedAccessGroups?: readonly AuthAccessGroup[];
+  slotGroup: string | null;
+  localEntry?: NavigationLocalEntryMeta;
+};
+
+type NavigationGroupItem = NavigationBaseItem & {
+  allowedAccessGroups: readonly AuthAccessGroup[];
+  children: readonly NavigationLeafItem[];
+};
+
+type NavigationMetaItem = NavigationGroupItem | NavigationLeafItem;
+
+type NavigationFilter = {
+  accountId?: number;
+  primaryAccessGroup: AuthAccessGroup;
+  accessGroup: readonly AuthAccessGroup[];
+  slotGroup: readonly string[];
+  appEnv: 'dev' | 'test' | 'prod';
 };
 ```
 
 补充约束：
 
 - 叶子项必须有稳定 landing path
-- 分组项当前也可保留 `path` 字段用于结构归属，但渲染层不要求其对应真实 landing page
-- 若分组项不可点击，导航事件只应落到叶子项
+- 分组项只负责结构聚合，不带 `path`，不可点击
+- 导航事件只应落到 leaf；route access check 也只匹配 leaf `path`
+- leaf 可通过 `localEntry` 投影到首页本地入口或 command/local entry
 - 同一结构性分组若由多个业务域共同贡献子项，聚合层允许按相同 `key` 合并 children
 - provider 保持纯数据或纯函数，不内嵌渲染组件，不直接依赖壳层状态
 
@@ -169,7 +186,8 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 
 当前稳定过滤规则为：
 
-- `allowedAccessGroups` 未显式声明时，默认只允许 `primaryAccessGroup`
+- group 必须显式声明 `allowedAccessGroups`
+- leaf 的 `allowedAccessGroups` 未显式声明时，默认只允许 `primaryAccessGroup`
 - `slotGroup` 命中失败时，项或分组不进入最终树
 - 分组项若过滤后没有任何 child，应整体移除
 - route access check 与 sidebar 菜单树使用同一套聚合结果，不允许出现两套访问真相

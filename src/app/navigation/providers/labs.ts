@@ -134,9 +134,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       key: 'labs',
       label: 'Labs',
       navMode: 'rail',
-      path: '/labs',
-      primaryAccessGroup: 'ADMIN',
-      slotGroup: null,
     },
   ];
 };
