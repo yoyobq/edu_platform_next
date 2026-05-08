@@ -55,6 +55,17 @@
   --color-ai-accent-bg-hover: color-mix(in srgb, #cc6b46 18%, var(--ant-color-bg-container, white));
   --color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 
+  /* Course category semantic colors */
+  --course-category-theory-color: #1d4ed8;
+  --course-category-theory-bg: #dbeafe;
+  --course-category-theory-bg-muted: rgb(219 234 254 / 0.62);
+  --course-category-practice-color: #0f766e;
+  --course-category-practice-bg: #ccfbf1;
+  --course-category-practice-bg-muted: rgb(204 251 241 / 0.62);
+  --course-category-integrated-color: #b45309;
+  --course-category-integrated-bg: #ffedd5;
+  --course-category-integrated-bg-muted: rgb(255 237 213 / 0.64);
+
   /* 语义圆角（wrapper 层） */
   --radius-block: 10px;
   --radius-card: 10px;
@@ -753,6 +764,29 @@ html.disable-motion *::after {
 .dark {
   color-scheme: dark;
   --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --course-category-theory-color: #93c5fd;
+  --course-category-theory-bg: rgb(29 78 216 / 0.34);
+  --course-category-theory-bg: color-mix(in srgb, #1d4ed8 34%, var(--ant-color-bg-container));
+  --course-category-theory-bg-muted: rgb(29 78 216 / 0.24);
+  --course-category-theory-bg-muted: color-mix(in srgb, #1d4ed8 24%, var(--ant-color-bg-container));
+  --course-category-practice-color: #5eead4;
+  --course-category-practice-bg: rgb(15 118 110 / 0.34);
+  --course-category-practice-bg: color-mix(in srgb, #0f766e 34%, var(--ant-color-bg-container));
+  --course-category-practice-bg-muted: rgb(15 118 110 / 0.24);
+  --course-category-practice-bg-muted: color-mix(
+    in srgb,
+    #0f766e 24%,
+    var(--ant-color-bg-container)
+  );
+  --course-category-integrated-color: #fdba74;
+  --course-category-integrated-bg: rgb(180 83 9 / 0.34);
+  --course-category-integrated-bg: color-mix(in srgb, #b45309 34%, var(--ant-color-bg-container));
+  --course-category-integrated-bg-muted: rgb(180 83 9 / 0.24);
+  --course-category-integrated-bg-muted: color-mix(
+    in srgb,
+    #b45309 24%,
+    var(--ant-color-bg-container)
+  );
 }
 
 .app-nav-menu-shell > .ant-menu.ant-menu-inline {

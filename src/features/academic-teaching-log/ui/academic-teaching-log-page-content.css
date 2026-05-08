@@ -6,12 +6,12 @@
   --lecture-journal-record-decor-layer: 0;
   --lecture-journal-record-radius: 20px;
   --lecture-journal-record-gap: 20px;
-  --lecture-journal-course-category-theory-color: #1d4ed8;
-  --lecture-journal-course-category-theory-bg: #dbeafe;
-  --lecture-journal-course-category-practice-color: #0f766e;
-  --lecture-journal-course-category-practice-bg: #ccfbf1;
-  --lecture-journal-course-category-integrated-color: #b45309;
-  --lecture-journal-course-category-integrated-bg: #ffedd5;
+  --lecture-journal-course-category-theory-color: var(--course-category-theory-color);
+  --lecture-journal-course-category-theory-bg: var(--course-category-theory-bg);
+  --lecture-journal-course-category-practice-color: var(--course-category-practice-color);
+  --lecture-journal-course-category-practice-bg: var(--course-category-practice-bg);
+  --lecture-journal-course-category-integrated-color: var(--course-category-integrated-color);
+  --lecture-journal-course-category-integrated-bg: var(--course-category-integrated-bg);
 }
 
 .lecture-journal-query-shell {

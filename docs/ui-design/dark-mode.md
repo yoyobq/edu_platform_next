@@ -4,7 +4,7 @@
 
 ## 工作量
 
-远低于预期。绝大多数 CSS 变量消费 `--ant-*`，antd `darkAlgorithm` 切换后自动更新。需要手动处理的只有三处。
+远低于预期。绝大多数 CSS 变量消费 `--ant-*`，antd `darkAlgorithm` 切换后自动更新。需要手动处理的只有四处。
 
 ## 自动适配（无需改动）
 
@@ -13,7 +13,7 @@
 - `--color-ai-accent-bg` 系列（混合基已改为 `var(--ant-color-bg-container)`，深色下自动混入深色背景）
 - 滚动条颜色（消费 `--ant-color-border` 等）
 
-## 需要手动处理的三处
+## 需要手动处理的四处
 
 ### ① 背景色 token 条件传入
 
@@ -38,7 +38,17 @@
 }
 ```
 
-### ③ Tailwind dark: 变体绑定到 class
+### ③ 课程类别色深色变体
+
+课程类别的浅色底色是 pastel，不能在深色模式下直接半透明覆盖。`src/index.css` 用 `.dark` 覆盖 `--course-category-*-color`、`--course-category-*-bg`、`--course-category-*-bg-muted`：
+
+- 完整底色用于教学日志 chip / tag
+- 弱化底色用于课表和首页周课表等高密度网格
+- 深色弱化底色必须混入 `--ant-color-bg-container`
+
+组件只消费 token，不写自己的 `.dark` 规则，也不手写 `rgb(... / opacity)`。
+
+### ④ Tailwind dark: 变体绑定到 class
 
 Tailwind v4 默认 `dark:` 基于 `prefers-color-scheme`，无法响应手动切换。需要在 `index.css` 开头加：
 
@@ -94,6 +104,6 @@ useEffect(() => {
 
 ## Tailwind `dark:` 前缀使用规则
 
-`dark:` 前缀**仅限** `index.css` 全局层级使用（如 `shadow-card-hover` 深色变体的 `.dark {}` 覆盖）。
+`dark:` 前缀**仅限** `index.css` 全局层级使用（如 `shadow-card-hover`、课程类别色深色变体的 `.dark {}` 覆盖）。
 
-**组件代码中禁止出现 `dark:` 前缀类**。暗色模式下的颜色适配 100% 依赖 antd Token 自动翻转（`colorBgLayout`、`colorBgContainer`、`colorText` 等全部走 `darkAlgorithm`）。如果某个颜色在深色下效果不对，说明该 token 的浅色声明需要调整，而不是在组件层加 `dark:` 补丁。
+**组件代码中禁止出现 `dark:` 前缀类**。暗色模式下的颜色适配依赖 antd Token 自动翻转或 `index.css` 里的全局语义变量覆盖。如果某个颜色在深色下效果不对，应调整 token，而不是在组件层加 `dark:` 补丁。

@@ -1,10 +1,18 @@
 .workbench-weekly-timetable-grid {
-  --workbench-weekly-timetable-course-category-theory-color: #1d4ed8;
-  --workbench-weekly-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
-  --workbench-weekly-timetable-course-category-practice-color: #0f766e;
-  --workbench-weekly-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
-  --workbench-weekly-timetable-course-category-integrated-color: #b45309;
-  --workbench-weekly-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
+  --workbench-weekly-timetable-course-category-theory-color: var(--course-category-theory-color);
+  --workbench-weekly-timetable-course-category-theory-bg: var(--course-category-theory-bg-muted);
+  --workbench-weekly-timetable-course-category-practice-color: var(
+    --course-category-practice-color
+  );
+  --workbench-weekly-timetable-course-category-practice-bg: var(
+    --course-category-practice-bg-muted
+  );
+  --workbench-weekly-timetable-course-category-integrated-color: var(
+    --course-category-integrated-color
+  );
+  --workbench-weekly-timetable-course-category-integrated-bg: var(
+    --course-category-integrated-bg-muted
+  );
   --workbench-weekly-timetable-entry-base-layer: 0;
   --workbench-weekly-timetable-entry-hover-layer: 2;
   --workbench-weekly-timetable-now-line-layer: 5;

@@ -137,19 +137,29 @@
 
 当前前端会话快照收敛为：
 
-- `accountId`
-- `account`
-- `userInfo`
-- `identity`
 - `accessToken`
 - `refreshToken`
+- `accountId`
+- `account`
+- `displayName`
+- `userInfo`
+- `identity`
+- `isAuthenticated`
+- `needsProfileCompletion`
+- `primaryAccessGroup`
 - `slotGroup`
 
 字段边界如下：
 
+- `accessToken` / `refreshToken`：当前本站 auth session 的 token，不代表上游系统会话
+- `accountId`：当前认证账户 ID
 - `account`：认证主体与账户侧信息
+- `displayName`：壳层、账号菜单与协作上下文使用的稳定展示名
 - `userInfo`：公共资料与 `accessGroup`
 - `identity`：当前主身份的详情补充；仅在存在独立身份实体时返回
+- `isAuthenticated`：hydrated snapshot 的字面量标记，当前固定为 `true`
+- `needsProfileCompletion`：是否必须先进入 `/welcome` 完成资料补全
+- `primaryAccessGroup`：当前一级导航和主身份语义来源
 - `slotGroup`：来自 access token 的增量授权摘要
 
 注意：

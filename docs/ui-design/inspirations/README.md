@@ -641,5 +641,5 @@ AI 交互区域必须在视觉上与主业务区分离。当前方案：
 - 根据外部风格覆盖 Tailwind 配置、antd Token 或 brand 规则
 - 大面积渐变、多色品牌语法、超过 300ms 的复杂动效（高光页除外）
 - 把 Tailwind 类直接打到 antd / antdX 组件本体上
-- 在组件代码中使用 Tailwind `dark:` 前缀类——暗色模式 100% 依赖 antd Token 自动翻转，`dark:` 只在 `index.css` 的全局层级（如 `shadow-card-hover` 深色变体）使用
+- 在组件代码中使用 Tailwind `dark:` 前缀类——暗色模式依赖 antd Token 自动翻转或 `index.css` 全局语义变量覆盖，`dark:` 只在 `index.css` 的全局层级（如 `shadow-card-hover`、课程类别色深色变体）使用
 - 用裸 `<h1>` ~ `<h6>` 手搓标题层级替代 `Typography.Title`（公共入口页语义覆盖除外）

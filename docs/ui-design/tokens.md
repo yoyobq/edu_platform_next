@@ -82,7 +82,25 @@
 
 补充说明：此 token 尚未在 `index.css` 中定义，需追加到 `@theme inline` 块。参见 [index-css.md](./index-css.md)。
 
-**Token 封口规则**：不因局部页面临时新增视觉 token。若某个模式无法由现有 token 支撑，应先回到既有 token 体系中重组，而非发明新变量。已识别待补的 token 仅 `--color-ai-accent-border` 一条。
+**Token 封口规则**：不因局部页面临时新增视觉 token。若某个模式无法由现有 token 支撑，应先回到既有 token 体系中重组，而非发明新变量。课程类别色属于跨页面业务语义 token，必须走下方统一定义。
+
+---
+
+## 课程类别
+
+课程类别色是业务语义 token，统一定义在 `src/index.css`：
+
+| 类别   | 文字 token                           | 完整底色 token                    | 弱化底色 token                          |
+| ------ | ------------------------------------ | --------------------------------- | --------------------------------------- |
+| 理论课 | `--course-category-theory-color`     | `--course-category-theory-bg`     | `--course-category-theory-bg-muted`     |
+| 实践课 | `--course-category-practice-color`   | `--course-category-practice-bg`   | `--course-category-practice-bg-muted`   |
+| 一体化 | `--course-category-integrated-color` | `--course-category-integrated-bg` | `--course-category-integrated-bg-muted` |
+
+- 教学日志 chip / tag 用完整底色
+- 课表网格卡片用弱化底色
+- 深色模式由 `.dark` 覆盖 token；组件不得手写浅色 pastel 透明值
+
+语义与映射见 [course-category-visual-semantics.md](../project-convention/course-category-visual-semantics.md)。
 
 ---
 

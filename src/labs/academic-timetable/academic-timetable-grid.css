@@ -1,10 +1,10 @@
 .academic-timetable-grid {
-  --academic-timetable-course-category-theory-color: #1d4ed8;
-  --academic-timetable-course-category-theory-bg: rgb(219 234 254 / 0.62);
-  --academic-timetable-course-category-practice-color: #0f766e;
-  --academic-timetable-course-category-practice-bg: rgb(204 251 241 / 0.62);
-  --academic-timetable-course-category-integrated-color: #b45309;
-  --academic-timetable-course-category-integrated-bg: rgb(255 237 213 / 0.64);
+  --academic-timetable-course-category-theory-color: var(--course-category-theory-color);
+  --academic-timetable-course-category-theory-bg: var(--course-category-theory-bg-muted);
+  --academic-timetable-course-category-practice-color: var(--course-category-practice-color);
+  --academic-timetable-course-category-practice-bg: var(--course-category-practice-bg-muted);
+  --academic-timetable-course-category-integrated-color: var(--course-category-integrated-color);
+  --academic-timetable-course-category-integrated-bg: var(--course-category-integrated-bg-muted);
   --academic-timetable-entry-base-layer: 0;
   --academic-timetable-entry-hover-layer: 2;
   --academic-timetable-slot-layer: 1;
