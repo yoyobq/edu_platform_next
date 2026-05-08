@@ -1,6 +1,11 @@
 import type { OperationVariables } from '@apollo/client';
 
 import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+  normalizeTextListValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
@@ -275,20 +280,8 @@ type UpdateMyUserInfoVariables = {
   input: UpdateMyUserInfoInput;
 };
 
-function normalizeRequiredTextValue(value: string): string {
-  return value.trim();
-}
-
-function normalizeOptionalTextValue(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-
-  return normalized ? normalized : null;
-}
-
 function normalizeTagsValue(tags: string[]): string[] {
-  return tags
-    .map((tag) => tag.trim())
-    .filter((tag, index, values) => tag.length > 0 && values.indexOf(tag) === index);
+  return normalizeTextListValue(tags, { dedupe: true, emptyItemPolicy: 'filter' });
 }
 
 export async function updateMyUserInfo(input: UpdateMyUserInfoInput) {
@@ -297,14 +290,14 @@ export async function updateMyUserInfo(input: UpdateMyUserInfoInput) {
       UPDATE_MY_USER_INFO_MUTATION,
       {
         input: {
-          address: normalizeOptionalTextValue(input.address),
-          birthDate: normalizeOptionalTextValue(input.birthDate),
-          email: normalizeOptionalTextValue(input.email),
+          address: normalizeOptionalTextValue(input.address, 'to_null'),
+          birthDate: normalizeOptionalTextValue(input.birthDate, 'to_null'),
+          email: normalizeOptionalTextValue(input.email, 'to_null'),
           gender: input.gender,
           geographic: input.geographic,
           nickname: normalizeRequiredTextValue(input.nickname),
-          phone: normalizeOptionalTextValue(input.phone),
-          signature: normalizeOptionalTextValue(input.signature),
+          phone: normalizeOptionalTextValue(input.phone, 'to_null'),
+          signature: normalizeOptionalTextValue(input.signature, 'to_null'),
           tags: normalizeTagsValue(input.tags),
         },
       },

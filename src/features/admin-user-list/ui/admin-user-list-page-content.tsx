@@ -695,7 +695,7 @@ export function AdminUserListPageContent({
         accessGroups: draftAccessGroups.length > 0 ? draftAccessGroups : undefined,
         hasStaff: normalizeHasStaff(draftHasStaff),
         page: 1,
-        query: draftQuery.trim() || undefined,
+        query: draftQuery,
         status: draftStatus,
       }),
     );

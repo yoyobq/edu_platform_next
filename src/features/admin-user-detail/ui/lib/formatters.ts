@@ -1,6 +1,10 @@
 import dayjs, { type Dayjs } from 'dayjs';
 
 import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+import {
+  normalizeOptionalTextValue as normalizeSharedOptionalTextValue,
+  normalizeRequiredTextValue as normalizeSharedRequiredTextValue,
+} from '@/shared/form-normalization';
 
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
 
@@ -60,17 +64,11 @@ export function formatCount(value: number) {
 }
 
 export function normalizeOptionalTextValue(value: string | null | undefined) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const nextValue = value.trim();
-
-  return nextValue ? nextValue : null;
+  return normalizeSharedOptionalTextValue(value, 'to_null');
 }
 
 export function normalizeRequiredTextValue(value: string) {
-  return value.trim();
+  return normalizeSharedRequiredTextValue(value);
 }
 
 export function normalizeBirthDateValue(value: Dayjs | null | undefined) {

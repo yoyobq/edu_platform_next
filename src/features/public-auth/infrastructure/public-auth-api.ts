@@ -7,6 +7,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { normalizeDepartmentName } from '@/shared/department';
+import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
@@ -591,9 +592,7 @@ async function findPublicInviteIntent(input: {
 }
 
 function normalizeOptionalText(value: string | undefined): string | undefined {
-  const normalized = value?.trim();
-
-  return normalized ? normalized : undefined;
+  return normalizeOptionalTextValue(value, 'to_undefined');
 }
 
 function mapStaffInviteInfo(info: PublicInviteInfo): {
@@ -704,7 +703,7 @@ export const publicAuthApi: PublicAuthApiPort = {
   },
   async consumeChangeLoginEmail(input): Promise<ChangeLoginEmailConfirmResult> {
     try {
-      const accessToken = input.accessToken?.trim() || undefined;
+      const accessToken = normalizeOptionalTextValue(input.accessToken, 'to_undefined');
       const response = await requestGraphQL<
         ConsumeChangeLoginEmailResponse,
         {

@@ -2,6 +2,10 @@ import type { OperationVariables } from '@apollo/client';
 
 import { isExpiredUpstreamSessionError } from '@/entities/upstream-session';
 
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
 import { resolveLectureJournalUpstreamErrorMessage } from '../application/lecture-journal-issue-message';
@@ -290,19 +294,11 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
 }
 
 function normalizeOptionalString(value?: string) {
-  const normalizedValue = value?.trim();
-
-  return normalizedValue ? normalizedValue : undefined;
+  return normalizeOptionalTextValue(value, 'to_undefined');
 }
 
 function normalizeRequiredString(value: string, fieldName: string) {
-  const normalizedValue = value.trim();
-
-  if (!normalizedValue) {
-    throw new Error(`${fieldName} 为必填。`);
-  }
-
-  return normalizedValue;
+  return normalizeRequiredTextValue(value, { message: `${fieldName} 为必填。` });
 }
 
 function normalizeOptionalNumber(value?: number) {
@@ -313,13 +309,11 @@ function normalizeFetchAcademicTeachingLogPrefillInput(
   input: FetchAcademicTeachingLogPrefillInput,
 ) {
   const endDate = normalizeOptionalString(input.endDate);
-  const staffId = String(input.staffId || '').trim();
+  const staffId = normalizeRequiredTextValue(String(input.staffId || ''), {
+    message: 'staffId 为必填。',
+  });
   const startDate = normalizeOptionalString(input.startDate);
   const upstreamSessionToken = normalizeOptionalString(input.upstreamSessionToken);
-
-  if (!staffId) {
-    throw new Error('staffId 为必填。');
-  }
 
   return {
     endDate,

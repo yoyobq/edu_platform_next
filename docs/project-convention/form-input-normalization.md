@@ -71,6 +71,13 @@
 - `app shell` 或全局 URL state 相关 helper：`src/app/lib/`
 - 领域内专用 normalization：放在 owning `feature`、`entity` 或 `labs` 附近
 
+当前共享落点：
+
+- `src/shared/form-normalization.ts`
+- `normalizeRequiredTextValue(value, { label | message })`
+- `normalizeOptionalTextValue(value, emptyPolicy)`
+- `normalizeTextListValue(values, { emptyItemPolicy: 'filter', dedupe })`
+
 ## 空值语义
 
 以下几种值默认不得视为同义：
@@ -85,6 +92,7 @@
 - 不得在没有声明 policy 的情况下自动合并这四种语义
 - 空白字符串的解释应进入 normalization，而不是散落在各个事件处理器里
 - optional text 必须显式选择自己的 empty policy
+- 代码中不得再新增无 policy 的 `value?.trim() || undefined` / `value?.trim() || null` helper
 
 推荐的 empty policy：
 
@@ -98,6 +106,13 @@
 - required text：先 `trim`，再拒绝空结果
 - optional text：先 `trim`，再按显式 empty policy 收敛
 - `keyword` 一类搜索字段应只 normalize 一次，再复用到 URL state 与 request payload
+
+当前 helper 对应关系：
+
+- required text：`normalizeRequiredTextValue(value, { label })`
+- optional filter/search/URL param：`normalizeOptionalTextValue(value, 'to_undefined')`
+- optional mutation field 且后端 contract 约定 `null` 表示清空：`normalizeOptionalTextValue(value, 'to_null')`
+- 空字符串有业务含义：`normalizeOptionalTextValue(value, 'keep_empty_string')`
 
 ## 列表规则
 
@@ -134,9 +149,11 @@ URL Search Params 也是输入面的一部分，应和 form 使用同一套语�
 - request builder 只消费 normalized value，不直接消费 raw component state
 - feature 接收的应是稳定 params object，而不是再从 form 内部状态二次猜语义
 - component 可以为了 UX 保留 raw state，但 submit handler 应只跨一次 normalization 边界
+- 若 feature 已有 query/request builder，应在 builder 内统一 normalize；UI submit handler 不重复 `trim`
 
 ## 渐进迁移
 
 - 不要求一次性重写所有 form
-- 修改旧 form 时，先把重复的 normalization 逻辑收敛为一个本地 helper
-- 当同类 helper 明确复用后，再上收至更稳定的位置
+- 修改旧 form 时，优先复用 `src/shared/form-normalization.ts`
+- 只有领域专用解析（日期、枚举、组合字段、后端特殊 contract）才保留在 owning feature
+- 保留本地 wrapper 时，wrapper 必须显式调用 shared helper 并写清 empty policy

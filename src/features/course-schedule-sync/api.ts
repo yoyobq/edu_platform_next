@@ -7,6 +7,10 @@ import {
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
@@ -168,11 +172,11 @@ export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(i
     }
   >(SYNC_COURSE_SCHEDULES_MUTATION, {
     input: {
-      departmentId: input.departmentId.trim(),
+      departmentId: normalizeRequiredTextValue(input.departmentId, { label: '院系' }),
       reviewStatus: input.reviewStatus,
-      schoolYear: String(input.schoolYear || '').trim(),
-      semester: String(input.semester || '').trim(),
-      teacherId: input.teacherId?.trim() || undefined,
+      schoolYear: normalizeRequiredTextValue(String(input.schoolYear || ''), { label: '学年' }),
+      semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
+      teacherId: normalizeOptionalTextValue(input.teacherId, 'to_undefined'),
       upstreamSessionToken: input.upstreamSessionToken,
     },
   });

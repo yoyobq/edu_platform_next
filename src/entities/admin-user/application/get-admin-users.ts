@@ -1,4 +1,5 @@
 import type { AuthAccessGroup } from '@/shared/auth-access';
+import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 
 export const ADMIN_USER_ACCOUNT_STATUSES = [
   'ACTIVE',
@@ -81,9 +82,7 @@ export const DEFAULT_ADMIN_USER_LIST_QUERY: Required<
 };
 
 function normalizeQuery(value: string | undefined) {
-  const trimmed = value?.trim();
-
-  return trimmed ? trimmed : undefined;
+  return normalizeOptionalTextValue(value, 'to_undefined');
 }
 
 function normalizeAccessGroups(value: readonly AuthAccessGroup[] | undefined) {

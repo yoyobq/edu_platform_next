@@ -4,6 +4,11 @@ import {
   WHITE_HOUSE_DEPARTMENT_NAME,
   WHITE_HOUSE_DEPARTMENT_OPTION_ID,
 } from '@/shared/department';
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+  normalizeTextListValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
 import type { AdminDepartmentOption } from '../application/get-admin-department-options';
@@ -554,22 +559,8 @@ function mapStaffSlotPost(dto: StaffSlotPostDTO): AdminUserDetail['staffSlotPost
   return dto;
 }
 
-function normalizeOptionalTextValue(value: string | null | undefined) {
-  if (value === undefined || value === null) {
-    return null;
-  }
-
-  const nextValue = value.trim();
-
-  return nextValue ? nextValue : null;
-}
-
-function normalizeRequiredTextValue(value: string) {
-  return value.trim();
-}
-
 function normalizeTagsValue(tags: readonly string[]) {
-  return Array.from(new Set(tags.map((tag) => tag.trim()).filter((tag) => tag.length > 0)));
+  return normalizeTextListValue(tags, { dedupe: true, emptyItemPolicy: 'filter' });
 }
 
 function normalizeAccessGroupValue(accessGroup: readonly AuthAccessGroup[]) {
@@ -655,14 +646,14 @@ export async function requestAdminUserDetailUserInfoSectionUpdate(
     {
       input: {
         accountId: input.accountId,
-        address: normalizeOptionalTextValue(input.address),
-        birthDate: normalizeOptionalTextValue(input.birthDate),
-        email: normalizeOptionalTextValue(input.email),
+        address: normalizeOptionalTextValue(input.address, 'to_null'),
+        birthDate: normalizeOptionalTextValue(input.birthDate, 'to_null'),
+        email: normalizeOptionalTextValue(input.email, 'to_null'),
         gender: input.gender,
         geographic: input.geographic,
         nickname: normalizeRequiredTextValue(input.nickname),
-        phone: normalizeOptionalTextValue(input.phone),
-        signature: normalizeOptionalTextValue(input.signature),
+        phone: normalizeOptionalTextValue(input.phone, 'to_null'),
+        signature: normalizeOptionalTextValue(input.signature, 'to_null'),
         tags: normalizeTagsValue(input.tags),
         userState: input.userState,
       },
@@ -718,10 +709,10 @@ export async function requestAdminUserDetailStaffSectionUpdate(
     {
       input: {
         accountId: input.accountId,
-        departmentId: normalizeOptionalTextValue(input.departmentId),
-        jobTitle: normalizeOptionalTextValue(input.jobTitle),
+        departmentId: normalizeOptionalTextValue(input.departmentId, 'to_null'),
+        jobTitle: normalizeOptionalTextValue(input.jobTitle, 'to_null'),
         name: normalizeRequiredTextValue(input.name),
-        remark: normalizeOptionalTextValue(input.remark),
+        remark: normalizeOptionalTextValue(input.remark, 'to_null'),
       },
     },
   );
@@ -757,14 +748,14 @@ export async function requestAdminUserDetailStaffSlotAssign(input: {
     {
       input: {
         accountId: input.accountId,
-        classId: normalizeOptionalTextValue(input.classId) ?? undefined,
-        departmentId: normalizeOptionalTextValue(input.departmentId) ?? undefined,
+        classId: normalizeOptionalTextValue(input.classId, 'to_undefined'),
+        departmentId: normalizeOptionalTextValue(input.departmentId, 'to_undefined'),
         endAt: input.endAt,
         isTemporary: input.isTemporary,
-        remarks: normalizeOptionalTextValue(input.remarks) ?? undefined,
+        remarks: normalizeOptionalTextValue(input.remarks, 'to_undefined'),
         slotCode: input.slotCode,
         startAt: input.startAt,
-        teachingGroupId: normalizeOptionalTextValue(input.teachingGroupId) ?? undefined,
+        teachingGroupId: normalizeOptionalTextValue(input.teachingGroupId, 'to_undefined'),
       },
     },
   );

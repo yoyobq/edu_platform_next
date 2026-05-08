@@ -1,14 +1,19 @@
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
+
 import type { ProfileCompletionInput, ProfileCompletionResult } from '../application/types';
 
 function normalizeOptionalString(value: string | null | undefined) {
-  return typeof value === 'string' && value.trim() ? value.trim() : null;
+  return normalizeOptionalTextValue(value, 'to_null');
 }
 
 export function mapProfileCompletionInputToDTO(input: ProfileCompletionInput) {
   return {
     departmentId:
       input.targetIdentity === 'STAFF' ? normalizeOptionalString(input.departmentId) : null,
-    name: input.name.trim(),
+    name: normalizeRequiredTextValue(input.name, { label: '姓名' }),
     nickname: normalizeOptionalString(input.nickname),
     phone: normalizeOptionalString(input.phone),
     targetIdentity: input.targetIdentity,

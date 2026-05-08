@@ -50,6 +50,7 @@ import {
 } from '@/entities/upstream-session';
 
 import type { AcademicViewerRole } from '@/shared/auth-access';
+import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   readVerifiedStaffIdentity,
@@ -236,9 +237,7 @@ function pickNextSemesterId(
 }
 
 function normalizeOptionalString(value: string) {
-  const normalizedValue = value.trim();
-
-  return normalizedValue ? normalizedValue : '';
+  return normalizeOptionalTextValue(value, 'keep_empty_string');
 }
 
 function formatTeachingDate(value: string | null | undefined) {

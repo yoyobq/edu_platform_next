@@ -1,3 +1,8 @@
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
+
 import type {
   AcademicCalendarEventDayPeriod,
   AcademicCalendarEventRecord,
@@ -11,25 +16,15 @@ import type {
 } from './types';
 
 export function normalizeRequiredText(value: string, label: string) {
-  const normalizedValue = value.trim();
-
-  if (!normalizedValue) {
-    throw new Error(`请输入${label}。`);
-  }
-
-  return normalizedValue;
+  return normalizeRequiredTextValue(value, { label });
 }
 
 export function normalizeOptionalText(value?: string | null) {
-  const normalizedValue = value?.trim();
-
-  return normalizedValue ? normalizedValue : undefined;
+  return normalizeOptionalTextValue(value, 'to_undefined');
 }
 
 export function normalizeOptionalDate(value?: string | null) {
-  const normalizedValue = value?.trim();
-
-  return normalizedValue ? normalizedValue : undefined;
+  return normalizeOptionalTextValue(value, 'to_undefined');
 }
 
 export function formatDateTime(value: string) {

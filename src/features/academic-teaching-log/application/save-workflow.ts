@@ -3,6 +3,8 @@ import type {
   StoredUpstreamSession,
 } from '@/entities/upstream-session';
 
+import { normalizeOptionalTextValue } from '@/shared/form-normalization';
+
 import { isIntegratedCourseCategory, isPracticeCourseCategory } from './course-category';
 import { DEFAULT_INTEGRATED_SHIFT, type JournalDraft } from './journal-draft-policy';
 import { isFutureTeachingDate } from './teaching-date';
@@ -57,9 +59,7 @@ type LectureJournalSaveWorkflowOutcome = {
 };
 
 function normalizeOptionalString(value: string) {
-  const normalizedValue = value.trim();
-
-  return normalizedValue ? normalizedValue : '';
+  return normalizeOptionalTextValue(value, 'keep_empty_string');
 }
 
 function resolveJournalDetailId(item: LectureJournalSaveWorkflowItem) {
