@@ -20,6 +20,56 @@
   border-radius: var(--radius-block);
 }
 
+.academic-timetable-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 32px;
+}
+
+.academic-timetable-week-navigator {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.academic-timetable-week-stepper {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.academic-timetable-week-value {
+  color: var(--ant-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 64px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.academic-timetable-current-week-dot {
+  background: var(--ant-color-success);
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px var(--ant-color-success-bg);
+  display: inline-flex;
+  height: 8px;
+  width: 8px;
+}
+
+.academic-timetable-week-range {
+  color: var(--ant-color-text-tertiary);
+  font-size: 13px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .academic-timetable-header-cell,
 .academic-timetable-period-cell,
 .academic-timetable-base-cell {

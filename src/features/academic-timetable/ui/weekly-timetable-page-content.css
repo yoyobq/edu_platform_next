@@ -1,0 +1,146 @@
+/* src/features/academic-timetable/ui/weekly-timetable-page-content.css */
+
+.weekly-timetable-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.weekly-timetable-query-state {
+  padding: 24px;
+}
+
+.weekly-timetable-query-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+}
+
+.weekly-timetable-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  justify-content: space-between;
+  min-width: 0;
+  padding: 24px;
+}
+
+.weekly-timetable-summary-heading {
+  min-width: 0;
+}
+
+.weekly-timetable-summary-eyebrow {
+  color: var(--ant-color-text-tertiary);
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.weekly-timetable-summary-title {
+  color: var(--ant-color-text);
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.25;
+  margin: 8px 0 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-timetable-summary-meta {
+  border-top: 1px solid var(--ant-color-border-secondary);
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  padding-top: 16px;
+}
+
+.weekly-timetable-summary-meta-item {
+  min-width: 0;
+}
+
+.weekly-timetable-summary-meta-item span {
+  color: var(--ant-color-text-tertiary);
+  display: block;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.weekly-timetable-summary-meta-item strong {
+  color: var(--ant-color-text);
+  display: block;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.weekly-timetable-controls {
+  background: var(--ant-color-fill-quaternary);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 280px;
+  padding: 24px;
+}
+
+.weekly-timetable-control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.weekly-timetable-control-input {
+  min-width: 0;
+  width: 100%;
+}
+
+.weekly-timetable-control-input :where(.ant-select),
+.weekly-timetable-control-input :where(.ant-input-number),
+.weekly-timetable-control-input :where(.ant-select-auto-complete) {
+  width: 100%;
+}
+
+.weekly-timetable-control-help {
+  color: var(--ant-color-warning);
+  font-size: 12px;
+  line-height: 18px;
+  min-height: 18px;
+}
+
+.weekly-timetable-control-help-hidden {
+  visibility: hidden;
+}
+
+.weekly-timetable-control-action {
+  margin-top: auto;
+}
+
+.weekly-timetable-query-alert {
+  grid-column: 1 / -1;
+  padding: 0 24px 24px;
+}
+
+.weekly-timetable-result {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (max-width: 860px) {
+  .weekly-timetable-query-content {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .weekly-timetable-summary {
+    padding: 24px;
+  }
+
+  .weekly-timetable-summary-meta {
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  }
+}

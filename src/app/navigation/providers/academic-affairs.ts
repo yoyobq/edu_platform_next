@@ -3,6 +3,7 @@ import {
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
+  hasAcademicTimetableManagerAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
@@ -87,6 +88,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       accessGroup: filter.accessGroup,
     })
       ? [
+          ...(hasAcademicTimetableManagerAccess({
+            accessGroup: filter.accessGroup,
+            slotGroup: filter.slotGroup,
+          })
+            ? [
+                {
+                  allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+                  iconKey: 'TableOutlined',
+                  key: '/calendar-schedule/weekly-timetable',
+                  label: '每周课表',
+                  navMode: 'rail' as const,
+                  path: '/calendar-schedule/weekly-timetable',
+                  primaryAccessGroup: 'STAFF' as const,
+                  slotGroup: null,
+                },
+              ]
+            : []),
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'TableOutlined',

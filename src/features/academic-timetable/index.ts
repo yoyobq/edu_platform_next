@@ -1,12 +1,21 @@
+export type {
+  AcademicTeachingClassOptionLabelInput,
+  TeachingWeekDateRange,
+} from './application/timetable-grid';
 export {
+  buildAcademicTeachingClassOptionLabel,
   buildTimetableSlotPlacements,
   resolveCourseCategoryMeta,
   resolveCurrentTeachingWeekIndex,
+  resolveTeachingWeekCount,
+  resolveTeachingWeekDateRange,
   resolveTimetablePeriodCount,
 } from './application/timetable-grid';
 export type {
   AcademicTeacherSemesterScheduleItem,
   AcademicTeacherSemesterScheduleQueryFilters,
+  AcademicTeachingClassOption,
+  AcademicTeachingClassOptionsQueryFilters,
   AcademicTimetableGridItem,
   AcademicTimetableItem,
   AcademicTimetableQueryFilters,
@@ -17,6 +26,7 @@ export type {
 export {
   requestAcademicSemesterTimetableItems,
   requestAcademicTeacherSemesterScheduleItems,
+  requestAcademicTeachingClassOptions,
   requestAcademicWeeklyTimetableItems,
   requestMyAcademicSemesterTimetableItems,
   requestMyAcademicTeacherSemesterScheduleItems,
@@ -24,3 +34,4 @@ export {
 } from './infrastructure/academic-timetable-api';
 export { SemesterTimetablePageContent } from './ui/semester-timetable-page-content';
 export { SemesterTimetableGrid, WeeklyTimetableGrid } from './ui/timetable-grid';
+export { WeeklyTimetablePageContent } from './ui/weekly-timetable-page-content';

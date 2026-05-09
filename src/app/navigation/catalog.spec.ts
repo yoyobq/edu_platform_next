@@ -46,6 +46,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/weekly-timetable',
       '/calendar-schedule/semester-timetable',
     ]);
     expect(
@@ -90,7 +91,11 @@ describe('navigation catalog', () => {
     );
     expect(
       findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
-    ).toEqual(['/calendar-schedule/semester-calendar', '/calendar-schedule/semester-timetable']);
+    ).toEqual([
+      '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/weekly-timetable',
+      '/calendar-schedule/semester-timetable',
+    ]);
     expect(
       findGroup(prodAdminItems, 'academic-assistant')?.children.map((item) => item.key),
     ).toEqual([
@@ -152,6 +157,11 @@ describe('navigation catalog', () => {
       '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
+    expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
+      '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/weekly-timetable',
+      '/calendar-schedule/semester-timetable',
+    ]);
   });
 
   it('shows academic calendar but keeps course schedule sync admin-only for academic officers', () => {
@@ -177,6 +187,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/weekly-timetable',
       '/calendar-schedule/semester-timetable',
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
@@ -252,6 +263,7 @@ describe('navigation catalog', () => {
     expect(leaves.map((item) => item.key)).toEqual([
       '/',
       '/calendar-schedule/semester-calendar',
+      '/calendar-schedule/weekly-timetable',
       '/calendar-schedule/semester-timetable',
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/integrated-plan-corrections',

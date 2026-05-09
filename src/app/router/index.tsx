@@ -38,6 +38,7 @@ import {
   WelcomeBackResetPasswordIntentPage,
 } from '@/pages/verification-intent';
 import { VerificationIssuancePage } from '@/pages/verification-issuance';
+import { WeeklyTimetablePage } from '@/pages/weekly-timetable';
 import { WelcomePage } from '@/pages/welcome';
 import {
   buildWelcomeRedirectTarget,
@@ -364,6 +365,34 @@ async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     }),
+  };
+}
+
+async function weeklyTimetablePageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
+
+  if (!snapshot) {
+    return null;
+  }
+
+  if (
+    !hasAcademicTimetableManagerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    isForbidden: false,
+    upstreamAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
   };
 }
 
@@ -958,6 +987,11 @@ const router = createBrowserRouter([
         path: '/calendar-schedule/semester-calendar',
         loader: semesterCalendarPageLoader,
         Component: SemesterCalendarPage,
+      },
+      {
+        path: '/calendar-schedule/weekly-timetable',
+        loader: weeklyTimetablePageLoader,
+        Component: WeeklyTimetablePage,
       },
       {
         path: '/calendar-schedule/semester-timetable',

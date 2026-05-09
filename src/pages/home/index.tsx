@@ -11,6 +11,7 @@ import {
   requestAcademicWeeklyTimetableItems,
   requestMyAcademicSemesterTimetableItems,
   resolveCurrentTeachingWeekIndex,
+  resolveTeachingWeekCount,
 } from '@/features/academic-timetable';
 import {
   API_HEALTH_STATUS_HOME_RETRY_ACTION_ID,
@@ -98,47 +99,6 @@ function pickWorkbenchSemester(records: AcademicSemesterRecord[]) {
   const sortedRecords = sortSemesters(records);
 
   return sortedRecords.find((record) => record.isCurrent) ?? sortedRecords[0] ?? null;
-}
-
-function addUtcDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * 86_400_000);
-}
-
-function parseUtcDateOnly(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-
-  if (!year || !month || !day) {
-    return null;
-  }
-
-  return new Date(Date.UTC(year, month - 1, day));
-}
-
-function startOfUtcTeachingWeek(date: Date) {
-  const weekday = (date.getUTCDay() + 6) % 7;
-
-  return addUtcDays(date, -weekday);
-}
-
-function resolveWorkbenchTeachingWeekCount(semester: AcademicSemesterRecord) {
-  const firstTeachingDate = parseUtcDateOnly(semester.firstTeachingDate);
-  const examStartDate = parseUtcDateOnly(semester.examStartDate);
-
-  if (!firstTeachingDate || !examStartDate) {
-    return null;
-  }
-
-  const firstTeachingWeekStart = startOfUtcTeachingWeek(firstTeachingDate);
-  const examWeekStart = startOfUtcTeachingWeek(examStartDate);
-  const lastTeachingWeekStart =
-    examWeekStart.getTime() > firstTeachingWeekStart.getTime()
-      ? addUtcDays(examWeekStart, -7)
-      : firstTeachingWeekStart;
-
-  return (
-    Math.floor((lastTeachingWeekStart.getTime() - firstTeachingWeekStart.getTime()) / 604_800_000) +
-    1
-  );
 }
 
 function clampWorkbenchWeekIndex(value: number, maxWeekIndex: number | null) {
@@ -325,7 +285,7 @@ function WorkbenchWeeklyTimetable({
           return;
         }
 
-        const resolvedMaxWeekIndex = resolveWorkbenchTeachingWeekCount(semester);
+        const resolvedMaxWeekIndex = resolveTeachingWeekCount(semester);
         const weekIndex = clampWorkbenchWeekIndex(
           resolveCurrentTeachingWeekIndex(semester) ?? 1,
           resolvedMaxWeekIndex,

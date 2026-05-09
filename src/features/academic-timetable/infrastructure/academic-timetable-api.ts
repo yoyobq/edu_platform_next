@@ -54,6 +54,14 @@ type AcademicTeacherSemesterScheduleItemDTO = {
   weekType: AcademicTeacherSemesterScheduleWeekType;
 };
 
+type AcademicTeachingClassOptionDTO = {
+  courseNames: string[];
+  staffIds: string[];
+  staffNames: string[];
+  sstsTeachingClassId: string;
+  teachingClassNames: string[];
+};
+
 type AcademicPlannedTimetableResultDTO<TItem> = {
   invalidReason: AcademicPlannedTimetableProjectionInvalidReasonCode | null;
   isComplete: boolean;
@@ -64,6 +72,10 @@ type AcademicPlannedTimetableResultDTO<TItem> = {
 
 type AcademicTeacherSemesterScheduleResultDTO = {
   items: AcademicTeacherSemesterScheduleItemDTO[];
+};
+
+type AcademicTeachingClassOptionsResultDTO = {
+  items: AcademicTeachingClassOptionDTO[];
 };
 
 export type AcademicTimetableGridItem = {
@@ -117,6 +129,14 @@ export type AcademicTeacherSemesterScheduleItem = {
   weekType: AcademicTeacherSemesterScheduleWeekType;
 };
 
+export type AcademicTeachingClassOption = {
+  courseNames: string[];
+  staffIds: string[];
+  staffNames: string[];
+  sstsTeachingClassId: string;
+  teachingClassNames: string[];
+};
+
 export type AcademicTimetableQueryFilters = {
   limit?: number;
   semesterId: number;
@@ -140,6 +160,12 @@ export type MyAcademicTeacherSemesterScheduleQueryFilters = {
   semesterId: number;
 };
 
+export type AcademicTeachingClassOptionsQueryFilters = {
+  keyword?: string;
+  limit?: number;
+  semesterId: number;
+};
+
 type AcademicSemesterTimetableItemsResponse = {
   listAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
 };
@@ -158,6 +184,10 @@ type AcademicTeacherSemesterScheduleItemsResponse = {
 
 type MyAcademicTeacherSemesterScheduleItemsResponse = {
   listMyAcademicTeacherSemesterScheduleItems: AcademicTeacherSemesterScheduleResultDTO;
+};
+
+type AcademicTeachingClassOptionsResponse = {
+  listAcademicTeachingClassOptions: AcademicTeachingClassOptionsResultDTO;
 };
 
 const ACADEMIC_TIMETABLE_ITEM_FIELDS = `
@@ -309,10 +339,42 @@ const LIST_MY_ACADEMIC_TEACHER_SEMESTER_SCHEDULE_ITEMS_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_TEACHING_CLASS_OPTIONS_QUERY = `
+  query ListAcademicTeachingClassOptions($semesterId: Int!, $keyword: String, $limit: Int) {
+    listAcademicTeachingClassOptions(semesterId: $semesterId, keyword: $keyword, limit: $limit) {
+      items {
+        sstsTeachingClassId
+        teachingClassNames
+        courseNames
+        staffIds
+        staffNames
+      }
+    }
+  }
+`;
+
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
   return normalizedValue ? normalizedValue : undefined;
+}
+
+function normalizeStringList(values: readonly string[]) {
+  const seenValues = new Set<string>();
+  const normalizedValues: string[] = [];
+
+  for (const value of values) {
+    const normalizedValue = value.trim();
+
+    if (!normalizedValue || seenValues.has(normalizedValue)) {
+      continue;
+    }
+
+    seenValues.add(normalizedValue);
+    normalizedValues.push(normalizedValue);
+  }
+
+  return normalizedValues;
 }
 
 function normalizeSharedFilters(input: AcademicTimetableQueryFilters) {
@@ -386,6 +448,18 @@ function mapAcademicTeacherSemesterScheduleItem(
     weekRanges: item.weekRanges,
     weekPattern: item.weekPattern,
     weekType: item.weekType,
+  };
+}
+
+function mapAcademicTeachingClassOption(
+  item: AcademicTeachingClassOptionDTO,
+): AcademicTeachingClassOption {
+  return {
+    courseNames: normalizeStringList(item.courseNames),
+    staffIds: normalizeStringList(item.staffIds),
+    staffNames: normalizeStringList(item.staffNames),
+    sstsTeachingClassId: item.sstsTeachingClassId.trim(),
+    teachingClassNames: normalizeStringList(item.teachingClassNames),
   };
 }
 
@@ -468,6 +542,27 @@ export async function requestAcademicWeeklyTimetableItems(
     return resolvePlannedTimetableItems(response.listAcademicWeeklyPlannedTimetable);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载单周课表。'));
+  }
+}
+
+export async function requestAcademicTeachingClassOptions(
+  input: AcademicTeachingClassOptionsQueryFilters,
+) {
+  try {
+    const response = await requestGraphQL<
+      AcademicTeachingClassOptionsResponse,
+      AcademicTeachingClassOptionsQueryFilters
+    >(LIST_ACADEMIC_TEACHING_CLASS_OPTIONS_QUERY, {
+      semesterId: input.semesterId,
+      keyword: normalizeStringFilter(input.keyword),
+      limit: input.limit,
+    });
+
+    return response.listAcademicTeachingClassOptions.items
+      .map(mapAcademicTeachingClassOption)
+      .filter((item) => item.sstsTeachingClassId);
+  } catch (error) {
+    throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载教学班选项。'));
   }
 }
 

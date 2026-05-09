@@ -10,6 +10,23 @@ type TeachingWeekSemester = {
   startDate: string;
 };
 
+type TeachingWeekCountSemester = {
+  examStartDate: string;
+  firstTeachingDate: string;
+};
+
+export type AcademicTeachingClassOptionLabelInput = {
+  courseNames: readonly string[];
+  sstsTeachingClassId: string;
+  staffNames: readonly string[];
+  teachingClassNames: readonly string[];
+};
+
+export type TeachingWeekDateRange = {
+  endDate: string;
+  startDate: string;
+};
+
 type TimetableSlotGroup<TItem extends AcademicTimetableGridItem> = {
   dayOfWeek: number;
   items: TItem[];
@@ -94,6 +111,16 @@ function startOfTeachingWeek(value: Date) {
   const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
 
   return new Date(value.getTime() - daysFromMonday * MILLISECONDS_PER_DAY);
+}
+
+function addUtcDays(date: Date, days: number) {
+  return new Date(date.getTime() + days * MILLISECONDS_PER_DAY);
+}
+
+function formatUtcDateOnly(date: Date) {
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(
+    date.getUTCDate(),
+  ).padStart(2, '0')}`;
 }
 
 function sortTimetableItems<TItem extends AcademicTimetableGridItem>(
@@ -255,6 +282,51 @@ export function resolveCurrentTeachingWeekIndex(
   );
 }
 
+export function resolveTeachingWeekCount(semester: TeachingWeekCountSemester) {
+  const firstTeachingDate = parseIsoDateOnly(semester.firstTeachingDate);
+  const examStartDate = parseIsoDateOnly(semester.examStartDate);
+
+  if (!firstTeachingDate || !examStartDate) {
+    return null;
+  }
+
+  const firstTeachingWeekStart = startOfTeachingWeek(firstTeachingDate);
+  const examWeekStart = startOfTeachingWeek(examStartDate);
+  const lastTeachingWeekStart =
+    examWeekStart.getTime() > firstTeachingWeekStart.getTime()
+      ? addUtcDays(examWeekStart, -7)
+      : firstTeachingWeekStart;
+
+  return (
+    Math.floor(
+      (lastTeachingWeekStart.getTime() - firstTeachingWeekStart.getTime()) / MILLISECONDS_PER_WEEK,
+    ) + 1
+  );
+}
+
+export function resolveTeachingWeekDateRange(
+  semester: TeachingWeekSemester,
+  weekIndex: number | null | undefined,
+): TeachingWeekDateRange | null {
+  if (!weekIndex || weekIndex < 1) {
+    return null;
+  }
+
+  const firstTeachingDate = parseIsoDateOnly(semester.firstTeachingDate);
+
+  if (!firstTeachingDate) {
+    return null;
+  }
+
+  const weekStartDate = addUtcDays(startOfTeachingWeek(firstTeachingDate), (weekIndex - 1) * 7);
+  const weekEndDate = addUtcDays(weekStartDate, 6);
+
+  return {
+    endDate: formatUtcDateOnly(weekEndDate),
+    startDate: formatUtcDateOnly(weekStartDate),
+  };
+}
+
 export function resolveCourseCategoryMeta(courseCategory: string | null | undefined) {
   const normalizedCourseCategory = courseCategory?.trim();
 
@@ -265,4 +337,18 @@ export function resolveCourseCategoryMeta(courseCategory: string | null | undefi
   return (
     COURSE_CATEGORY_META[normalizedCourseCategory as keyof typeof COURSE_CATEGORY_META] ?? null
   );
+}
+
+export function buildAcademicTeachingClassOptionLabel(
+  option: AcademicTeachingClassOptionLabelInput,
+) {
+  const courseText = option.courseNames.length ? option.courseNames.join('/') : '未命名课程';
+  const classText = option.teachingClassNames.length
+    ? option.teachingClassNames.join('/')
+    : '未命名教学班';
+  const staffText = option.staffNames.join('/');
+
+  return `${courseText} / ${classText} (${option.sstsTeachingClassId})${
+    staffText ? ` - ${staffText}` : ''
+  }`;
 }

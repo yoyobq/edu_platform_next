@@ -1,5 +1,6 @@
 import { type CSSProperties, type ReactNode, useMemo } from 'react';
-import { Empty } from 'antd';
+import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { Button, Empty } from 'antd';
 
 import {
   buildTimetableSlotPlacements,
@@ -94,13 +95,19 @@ function resolveWeekPatternLabel(item: AcademicTeacherSemesterScheduleItem) {
 }
 
 function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
+  currentWeekIndex?: number | null;
   emptyDescription: string;
   getEntryKey: (item: TItem) => string;
   getTieBreaker: (item: TItem) => string;
   getDayHeaderSupplement?: (dayOfWeek: number) => string | null;
+  isWeekNavigationLoading?: boolean;
   items: TItem[];
+  maxWeekIndex?: number | null;
+  onWeekChange?: (weekIndex: number) => void;
   renderEntry: (item: TItem) => ReactNode;
+  selectedWeekIndex?: number | null;
   viewKey: TimetableViewKey;
+  weekDateRangeLabel?: string | null;
 }) {
   const slotPlacements = useMemo(
     () => buildTimetableSlotPlacements(props.items, props.getTieBreaker),
@@ -126,115 +133,173 @@ function BaseTimetableGrid<TItem extends AcademicTimetableGridItem>(props: {
       ),
     [periodCount, slotPlacements, visibleDayCount],
   );
-
-  if (props.items.length === 0) {
-    return <Empty description={props.emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />;
-  }
+  const displayWeekIndex = props.selectedWeekIndex ?? props.currentWeekIndex ?? null;
+  const isCurrentWeek =
+    displayWeekIndex !== null &&
+    props.currentWeekIndex !== null &&
+    displayWeekIndex === props.currentWeekIndex;
+  const canNavigatePreviousWeek =
+    Boolean(props.onWeekChange) && displayWeekIndex !== null && displayWeekIndex > 1;
+  const canNavigateNextWeek =
+    Boolean(props.onWeekChange) &&
+    displayWeekIndex !== null &&
+    (props.maxWeekIndex === null ||
+      props.maxWeekIndex === undefined ||
+      displayWeekIndex < props.maxWeekIndex);
+  const hasWeekToolbar = props.viewKey === 'weekly' && Boolean(displayWeekIndex);
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="academic-timetable-shell overflow-x-auto">
-        <div
-          className="academic-timetable-grid"
-          style={{
-            gridTemplateColumns: `72px repeat(${visibleDayCount}, minmax(156px, 1fr))`,
-            gridTemplateRows: `44px repeat(${periodCount}, minmax(72px, auto))`,
-            minWidth: 72 + visibleDayCount * 156,
-          }}
-        >
-          <div className="academic-timetable-header-cell academic-timetable-header-corner">
-            节次
+      {hasWeekToolbar ? (
+        <div className="academic-timetable-toolbar">
+          <div className="academic-timetable-week-navigator">
+            <div className="academic-timetable-week-stepper">
+              <Button
+                aria-label="上一周"
+                disabled={!canNavigatePreviousWeek || props.isWeekNavigationLoading}
+                icon={<LeftOutlined />}
+                size="small"
+                onClick={() => {
+                  if (canNavigatePreviousWeek) {
+                    props.onWeekChange?.(displayWeekIndex - 1);
+                  }
+                }}
+              />
+              <span className="academic-timetable-week-value">第 {displayWeekIndex} 周</span>
+              <Button
+                aria-label="下一周"
+                disabled={!canNavigateNextWeek || props.isWeekNavigationLoading}
+                icon={<RightOutlined />}
+                size="small"
+                onClick={() => {
+                  if (canNavigateNextWeek) {
+                    props.onWeekChange?.(displayWeekIndex + 1);
+                  }
+                }}
+              />
+            </div>
+            {isCurrentWeek ? (
+              <span aria-label="当前周" className="academic-timetable-current-week-dot" />
+            ) : null}
+            {props.weekDateRangeLabel ? (
+              <span className="academic-timetable-week-range">{props.weekDateRangeLabel}</span>
+            ) : null}
           </div>
+        </div>
+      ) : null}
+      {props.items.length === 0 ? (
+        <Empty description={props.emptyDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />
+      ) : (
+        <div className="academic-timetable-shell overflow-x-auto">
+          <div
+            className="academic-timetable-grid"
+            style={{
+              gridTemplateColumns: `72px repeat(${visibleDayCount}, minmax(156px, 1fr))`,
+              gridTemplateRows: `44px repeat(${periodCount}, minmax(72px, auto))`,
+              minWidth: 72 + visibleDayCount * 156,
+            }}
+          >
+            <div className="academic-timetable-header-cell academic-timetable-header-corner">
+              节次
+            </div>
 
-          {visibleDayLabels.map((label, index) => {
-            const dayHeaderSupplement = props.getDayHeaderSupplement?.(index + 1);
-
-            return (
-              <div
-                key={label}
-                className="academic-timetable-header-cell"
-                style={{ gridColumn: index + 2, gridRow: 1 }}
-              >
-                <span>{label}</span>
-                {dayHeaderSupplement ? (
-                  <span className="academic-timetable-header-date">{dayHeaderSupplement}</span>
-                ) : null}
-              </div>
-            );
-          })}
-
-          {Array.from({ length: periodCount }, (_, periodIndex) => {
-            const period = periodIndex + 1;
-
-            return (
-              <div
-                key={`period-${period}`}
-                className="academic-timetable-period-cell"
-                style={{ gridColumn: 1, gridRow: period + 1 }}
-              >
-                第 {period} 节
-              </div>
-            );
-          })}
-
-          {Array.from({ length: periodCount }, (_, periodIndex) =>
-            visibleDayLabels.map((_, dayIndex) => {
-              const isWeekendColumn = props.viewKey === 'weekly' && dayIndex >= 5;
+            {visibleDayLabels.map((label, index) => {
+              const dayHeaderSupplement = props.getDayHeaderSupplement?.(index + 1);
 
               return (
                 <div
-                  key={`slot-${dayIndex + 1}-${periodIndex + 1}`}
-                  className={`academic-timetable-base-cell ${
-                    isWeekendColumn ? 'academic-timetable-weekend-cell' : ''
-                  }`}
-                  style={{
-                    gridColumn: dayIndex + 2,
-                    gridRow: periodIndex + 2,
-                  }}
-                />
-              );
-            }),
-          )}
-
-          {visibleSlotPlacements.map((group) => (
-            <div
-              key={group.key}
-              className={`academic-timetable-slot-group ${
-                group.items.length > 1 ? 'academic-timetable-slot-group-stacked' : ''
-              }`}
-              style={
-                {
-                  gridColumn: group.dayOfWeek + 1,
-                  gridRow: `${group.periodStart + 1} / span ${
-                    Math.min(group.periodEnd, periodCount) - group.periodStart + 1
-                  }`,
-                  insetInlineStart:
-                    group.laneCount > 1
-                      ? `calc(${(group.laneIndex * 100) / group.laneCount}% + 4px)`
-                      : undefined,
-                  width: group.laneCount > 1 ? `calc(${100 / group.laneCount}% - 8px)` : undefined,
-                  '--academic-timetable-slot-layer': String(
-                    group.laneCount > 1 ? group.laneIndex + 1 : 1,
-                  ),
-                } as TimetableSlotGroupStyle
-              }
-            >
-              {group.items.map((item) => (
-                <div className="academic-timetable-slot-group-item" key={props.getEntryKey(item)}>
-                  {props.renderEntry(item)}
+                  key={label}
+                  className="academic-timetable-header-cell"
+                  style={{ gridColumn: index + 2, gridRow: 1 }}
+                >
+                  <span>{label}</span>
+                  {dayHeaderSupplement ? (
+                    <span className="academic-timetable-header-date">{dayHeaderSupplement}</span>
+                  ) : null}
                 </div>
-              ))}
-            </div>
-          ))}
+              );
+            })}
+
+            {Array.from({ length: periodCount }, (_, periodIndex) => {
+              const period = periodIndex + 1;
+
+              return (
+                <div
+                  key={`period-${period}`}
+                  className="academic-timetable-period-cell"
+                  style={{ gridColumn: 1, gridRow: period + 1 }}
+                >
+                  第 {period} 节
+                </div>
+              );
+            })}
+
+            {Array.from({ length: periodCount }, (_, periodIndex) =>
+              visibleDayLabels.map((_, dayIndex) => {
+                const isWeekendColumn = props.viewKey === 'weekly' && dayIndex >= 5;
+
+                return (
+                  <div
+                    key={`slot-${dayIndex + 1}-${periodIndex + 1}`}
+                    className={`academic-timetable-base-cell ${
+                      isWeekendColumn ? 'academic-timetable-weekend-cell' : ''
+                    }`}
+                    style={{
+                      gridColumn: dayIndex + 2,
+                      gridRow: periodIndex + 2,
+                    }}
+                  />
+                );
+              }),
+            )}
+
+            {visibleSlotPlacements.map((group) => (
+              <div
+                key={group.key}
+                className={`academic-timetable-slot-group ${
+                  group.items.length > 1 ? 'academic-timetable-slot-group-stacked' : ''
+                }`}
+                style={
+                  {
+                    gridColumn: group.dayOfWeek + 1,
+                    gridRow: `${group.periodStart + 1} / span ${
+                      Math.min(group.periodEnd, periodCount) - group.periodStart + 1
+                    }`,
+                    insetInlineStart:
+                      group.laneCount > 1
+                        ? `calc(${(group.laneIndex * 100) / group.laneCount}% + 4px)`
+                        : undefined,
+                    width:
+                      group.laneCount > 1 ? `calc(${100 / group.laneCount}% - 8px)` : undefined,
+                    '--academic-timetable-slot-layer': String(
+                      group.laneCount > 1 ? group.laneIndex + 1 : 1,
+                    ),
+                  } as TimetableSlotGroupStyle
+                }
+              >
+                {group.items.map((item) => (
+                  <div className="academic-timetable-slot-group-item" key={props.getEntryKey(item)}>
+                    {props.renderEntry(item)}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
 
 export function WeeklyTimetableGrid(props: {
+  currentWeekIndex?: number | null;
   emptyDescription: string;
+  isWeekNavigationLoading?: boolean;
   items: AcademicTimetableItem[];
+  maxWeekIndex?: number | null;
+  onWeekChange?: (weekIndex: number) => void;
+  selectedWeekIndex?: number | null;
+  weekDateRangeLabel?: string | null;
 }) {
   const dateByDayOfWeek = useMemo(() => {
     const nextDateByDayOfWeek = new Map<number, string>();
@@ -250,11 +315,15 @@ export function WeeklyTimetableGrid(props: {
 
   return (
     <BaseTimetableGrid
+      currentWeekIndex={props.currentWeekIndex}
       emptyDescription={props.emptyDescription}
       getEntryKey={getWeeklyTimetableEntryKey}
       getTieBreaker={getWeeklyTimetableItemTieBreaker}
       getDayHeaderSupplement={(dayOfWeek) => dateByDayOfWeek.get(dayOfWeek) ?? null}
+      isWeekNavigationLoading={props.isWeekNavigationLoading}
       items={props.items}
+      maxWeekIndex={props.maxWeekIndex}
+      onWeekChange={props.onWeekChange}
       renderEntry={(item) => {
         const courseCategoryMeta = resolveCourseCategoryMeta(item.courseCategory);
         const courseCategoryAccentClassName = courseCategoryMeta?.accentClassName || '';
@@ -298,7 +367,9 @@ export function WeeklyTimetableGrid(props: {
           </article>
         );
       }}
+      selectedWeekIndex={props.selectedWeekIndex}
       viewKey="weekly"
+      weekDateRangeLabel={props.weekDateRangeLabel}
     />
   );
 }
