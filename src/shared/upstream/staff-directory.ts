@@ -41,6 +41,20 @@ export type VerifiedStaffIdentityResult = {
   upstreamSessionToken: string;
 };
 
+export type StaffDirectoryCacheSession = {
+  upstreamSessionToken: string;
+};
+
+export type PersistStaffDirectoryCacheSessionFromResult<
+  TSession extends StaffDirectoryCacheSession,
+> = (session: TSession, result: PopulateStaffDirectoryResult) => TSession;
+
+export type ResolveStaffDirectoryCacheResult<TSession extends StaffDirectoryCacheSession> = {
+  directory: StaffDirectoryResult | null;
+  didPopulate: boolean;
+  session: TSession | null;
+};
+
 type StaffDirectoryResponse = {
   staffDirectory: StaffDirectoryResult;
 };
@@ -196,4 +210,46 @@ export async function readVerifiedStaffIdentity(input: { sessionToken: string })
   });
 
   return response.fetchVerifiedStaffIdentity;
+}
+
+export async function resolveStaffDirectoryCache<
+  TSession extends StaffDirectoryCacheSession,
+>(input: {
+  canPopulate: boolean;
+  currentDirectory?: StaffDirectoryResult | null;
+  persistSessionFromResult: PersistStaffDirectoryCacheSessionFromResult<TSession>;
+  populateStaffDirectoryFn?: typeof populateStaffDirectory;
+  readStaffDirectoryFn?: typeof readStaffDirectory;
+  session?: TSession | null;
+}): Promise<ResolveStaffDirectoryCacheResult<TSession>> {
+  if (!input.canPopulate) {
+    return {
+      didPopulate: false,
+      directory: input.currentDirectory ?? null,
+      session: input.session ?? null,
+    };
+  }
+
+  const readDirectory = input.readStaffDirectoryFn ?? readStaffDirectory;
+  const populateDirectory = input.populateStaffDirectoryFn ?? populateStaffDirectory;
+  const currentDirectory = input.currentDirectory ?? (await readDirectory());
+
+  if (currentDirectory.cacheStatus !== 'MISS' || !input.session) {
+    return {
+      didPopulate: false,
+      directory: currentDirectory,
+      session: input.session ?? null,
+    };
+  }
+
+  const populateResult = await populateDirectory({
+    sessionToken: input.session.upstreamSessionToken,
+  });
+  const nextSession = input.persistSessionFromResult(input.session, populateResult);
+
+  return {
+    didPopulate: true,
+    directory: populateResult,
+    session: nextSession,
+  };
 }

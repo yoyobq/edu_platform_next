@@ -1,23 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
-  ApiOutlined,
   ExclamationCircleOutlined,
   FileSearchOutlined,
-  LoginOutlined,
+  QuestionCircleOutlined,
   SearchOutlined,
-  SwapOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
+  AutoComplete,
   Button,
   Empty,
   Form,
-  Input,
   Select,
   Skeleton,
   Switch,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import { useLoaderData } from 'react-router';
@@ -38,8 +37,12 @@ import {
 
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import {
+  resolveStaffDirectoryCache,
+  type StaffDirectoryEntry,
+  type StaffDirectoryResult,
+} from '@/shared/upstream';
 
-import { integratedPlanCorrectionsLabAccess } from './access';
 import {
   type IntegratedPlanCorrectionAlignmentStatus,
   type IntegratedPlanCorrectionItem,
@@ -50,7 +53,6 @@ import {
   type IntegratedPlanCorrectionTeachingClassGroup,
   listIntegratedPlanCorrectionSuggestions,
 } from './api';
-import { integratedPlanCorrectionsLabMeta } from './meta';
 
 import './page.css';
 
@@ -62,13 +64,13 @@ type IntegratedPlanCorrectionsLabLoaderData = {
 } | null;
 
 type QueryFilters = {
-  lecturePlanId: string;
   staffId: string;
-  teachingClassId: string;
 };
 
 const EMPTY_TEXT = '—';
 const DAY_OF_WEEK_LABELS = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const PLAN_DETAIL_EXTRA_WARNING_TEXT =
+  '该计划周次没有对应校历可排课次，优先建议删除该计划明细或调整周次。';
 
 const DIFF_LABELS: Record<string, string> = {
   ACADEMIC_SEMESTER_TARGET_NOT_FOUND: '学期坐标缺失',
@@ -92,9 +94,49 @@ const BLOCKING_DIFFS = new Set([
   'OCCURRENCE_HOURS_INSUFFICIENT',
   'PLANNED_OCCURRENCE_PROJECTION_INVALID',
 ]);
+const PRIMARY_DIFF_PRIORITY = [
+  'ACADEMIC_SEMESTER_TARGET_NOT_FOUND',
+  'LECTURE_PLAN_DETAIL_ID_MISSING',
+  'OCCURRENCE_HOURS_INSUFFICIENT',
+  'PLANNED_OCCURRENCE_PROJECTION_INVALID',
+  'PLAN_DETAIL_EXTRA',
+  'PLAN_DETAIL_MISSING',
+  'PLAN_LESSON_HOURS_EXTRA',
+  'PLAN_LESSON_HOURS_MISSING',
+  'WEEK_NUMBER_MISMATCH',
+  'LESSON_HOURS_MISMATCH',
+  'CROSS_WEEK',
+  'CROSS_DAY',
+  'CASCADE_FROM_BLOCKING_DETAIL',
+] as const;
 
 function normalizeString(value: string) {
   return normalizeOptionalTextValue(value, 'to_undefined') ?? '';
+}
+
+function buildTeacherOptionLabel(teacher: StaffDirectoryEntry) {
+  return `${teacher.staffId} ${teacher.name}`;
+}
+
+function resolveTeacherStaffId(value: string, teachers: readonly StaffDirectoryEntry[]) {
+  const normalizedValue = normalizeString(value);
+
+  if (!normalizedValue) {
+    return '';
+  }
+
+  const matchedTeacher = teachers.find(
+    (teacher) =>
+      teacher.staffId === normalizedValue ||
+      teacher.name === normalizedValue ||
+      buildTeacherOptionLabel(teacher) === normalizedValue,
+  );
+
+  if (matchedTeacher) {
+    return matchedTeacher.staffId;
+  }
+
+  return normalizedValue.split(/\s+/)[0] ?? '';
 }
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
@@ -147,27 +189,6 @@ function formatDate(value: string) {
   }).format(date);
 }
 
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return EMPTY_TEXT;
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-  }).format(date);
-}
-
 function resolveDiffColor(diff: string) {
   if (BLOCKING_DIFFS.has(diff)) {
     return 'red';
@@ -216,6 +237,29 @@ function resolveAlignmentMeta(status: IntegratedPlanCorrectionAlignmentStatus) {
   };
 }
 
+function resolvePrimaryAlignmentDiff(item: IntegratedPlanCorrectionItem) {
+  for (const diff of PRIMARY_DIFF_PRIORITY) {
+    if (item.diffs.includes(diff)) {
+      return diff;
+    }
+  }
+
+  return item.diffs[0] ?? null;
+}
+
+function resolveAlignmentBadge(item: IntegratedPlanCorrectionItem) {
+  const primaryDiff = resolvePrimaryAlignmentDiff(item);
+
+  if (primaryDiff) {
+    return {
+      label: DIFF_LABELS[primaryDiff] ?? primaryDiff,
+      tagColor: resolveDiffColor(primaryDiff),
+    };
+  }
+
+  return resolveAlignmentMeta(item.alignmentStatus);
+}
+
 function resolveAlignmentActionText(item: IntegratedPlanCorrectionItem) {
   if (item.blockingIssue) {
     return '存在阻塞，先处理阻塞原因。';
@@ -232,7 +276,7 @@ function resolveAlignmentActionText(item: IntegratedPlanCorrectionItem) {
   }
 
   if (item.alignmentStatus === 'CURRENT_ONLY' && item.diffs.includes('PLAN_DETAIL_EXTRA')) {
-    return '计划多排一条明细。';
+    return PLAN_DETAIL_EXTRA_WARNING_TEXT;
   }
 
   if (item.alignmentStatus === 'EXPECTED_ONLY' && item.diffs.includes('PLAN_DETAIL_MISSING')) {
@@ -244,14 +288,14 @@ function resolveAlignmentActionText(item: IntegratedPlanCorrectionItem) {
   }
 
   if (item.alignmentStatus === 'EXPECTED_ONLY') {
-    return '真实应有计划缺少对应计划行，建议补充。';
+    return '按校历排课课次缺少对应计划行，建议补充。';
   }
 
   if (item.diffs.length > 0) {
-    return '当前行已匹配真实应有行，但字段需要按建议值修正。';
+    return '授课计划行已匹配校历课次，但字段需要按建议值修正。';
   }
 
-  return '当前计划行与真实应有行一致。';
+  return '授课计划行与校历课次一致。';
 }
 
 function resolvePlanLessonHoursDiffText(input: {
@@ -338,16 +382,69 @@ function renderDiffTags(diffs: readonly string[]) {
   );
 }
 
-function formatIndexRange(group: IntegratedPlanCorrectionRepairGroup) {
-  if (group.startOriginalIndex === null && group.endOriginalIndex === null) {
+function formatIndexRangeValue(startOriginalIndex: number | null, endOriginalIndex: number | null) {
+  if (startOriginalIndex === null && endOriginalIndex === null) {
     return EMPTY_TEXT;
   }
 
-  if (group.startOriginalIndex === group.endOriginalIndex || group.endOriginalIndex === null) {
-    return formatNullable(group.startOriginalIndex);
+  if (startOriginalIndex === endOriginalIndex || endOriginalIndex === null) {
+    return formatNullable(startOriginalIndex);
   }
 
-  return `${formatNullable(group.startOriginalIndex)} - ${formatNullable(group.endOriginalIndex)}`;
+  return `${formatNullable(startOriginalIndex)} - ${formatNullable(endOriginalIndex)}`;
+}
+
+function buildRepairGroupLocatorText(group: IntegratedPlanCorrectionRepairGroup) {
+  return [
+    `需要修复组 ID: ${formatNullable(group.id)}`,
+    `教学班 ID: ${formatNullable(group.teachingClassId)}`,
+    `计划 ID: ${formatNullable(group.lecturePlanId)}`,
+    `index: ${formatIndexRangeValue(group.startOriginalIndex, group.endOriginalIndex)}`,
+    `root 明细 ID: ${formatNullable(group.rootLecturePlanDetailId)}`,
+  ].join('\n');
+}
+
+function buildSuggestionLocatorText(suggestion: IntegratedPlanCorrectionSuggestion) {
+  return [`明细 ID: ${formatNullable(suggestion.lecturePlanDetailId)}`].join('\n');
+}
+
+function buildAlignmentItemLocatorText(item: IntegratedPlanCorrectionItem) {
+  return [
+    `明细 ID: ${formatNullable(item.lecturePlanDetailId)}`,
+    `教学班 ID: ${formatNullable(item.teachingClassId)}`,
+    `计划 ID: ${formatNullable(item.lecturePlanId)}`,
+    `当前序号: ${formatNullable(item.currentOriginalIndex)}`,
+    `应有序号: ${formatNullable(item.expectedIndex)}`,
+    `需要修复组 ID: ${formatNullable(item.repairGroupId)}`,
+  ].join('\n');
+}
+
+async function copyLocatorText(text: string) {
+  if (typeof navigator === 'undefined' || !navigator.clipboard?.writeText) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(text);
+}
+
+function LocatorCopyText({ text }: { text: string }) {
+  return (
+    <span className="integrated-plan-corrections-locator-copy">
+      <Tooltip
+        overlayClassName="integrated-plan-corrections-locator-tooltip"
+        title={<pre>{text}</pre>}
+      >
+        <Button
+          aria-label="复制定位信息"
+          icon={<QuestionCircleOutlined />}
+          shape="circle"
+          size="small"
+          type="text"
+          onClick={() => void copyLocatorText(text)}
+        />
+      </Tooltip>
+    </span>
+  );
 }
 
 function formatOccurrence(occurrence: IntegratedPlanCorrectionOccurrence) {
@@ -464,17 +561,23 @@ function PlanComparison({
 
   return (
     <div className="integrated-plan-corrections-compare">
-      <section>
-        <h4>当前计划</h4>
+      <section className="integrated-plan-corrections-compare-pane integrated-plan-corrections-compare-pane-current">
+        <div className="integrated-plan-corrections-compare-pane-head">
+          <h4>授课计划中计划课时</h4>
+          <Tag color="gold">需修正</Tag>
+        </div>
         <div className="integrated-plan-corrections-plan-metrics">
           <PlanMetric label="周次" value={currentPlan.weekNumber} />
           <PlanMetric label="课时" value={currentPlan.lessonHours} />
         </div>
         <CurrentPlanDetails currentPlan={currentPlan} />
       </section>
-      <section>
+      <div className="integrated-plan-corrections-compare-vs" aria-hidden="true">
+        VS
+      </div>
+      <section className="integrated-plan-corrections-compare-pane integrated-plan-corrections-compare-pane-suggested">
         <h4>
-          按计划应分配课次
+          按校历计算所得剩余可排课课次
           {suggestedWeek.isCrossWeek ? <Tag color="orange">跨周</Tag> : null}
         </h4>
         <div className="integrated-plan-corrections-plan-metrics">
@@ -520,9 +623,8 @@ function SuggestionPanel({
     <div className="integrated-plan-corrections-suggestion">
       <div className="integrated-plan-corrections-suggestion-head">
         <div>
-          <Typography.Text strong>
-            明细 {formatNullable(suggestion.lecturePlanDetailId)}
-          </Typography.Text>
+          <Typography.Text strong>计划明细</Typography.Text>
+          <LocatorCopyText text={buildSuggestionLocatorText(suggestion)} />
           {isGroupRoot ? (
             <Tag color="blue">分组 root</Tag>
           ) : suggestion.cascadeFromGroupRoot && suggestion.blockingIssue ? (
@@ -539,7 +641,7 @@ function SuggestionPanel({
       ) : null}
       {hasPlanDetailExtra(suggestion.diffs) ? (
         <Alert
-          description="该计划周次没有对应真实课时，优先建议删除该计划明细或调整周次。不要先把后续已重新对齐的明细当作连带错误处理。"
+          description={PLAN_DETAIL_EXTRA_WARNING_TEXT}
           message="计划明细多填"
           showIcon
           type="warning"
@@ -553,23 +655,25 @@ function SuggestionPanel({
 
 function AlignmentItemCard({ item }: { item: IntegratedPlanCorrectionItem }) {
   const alignmentMeta = resolveAlignmentMeta(item.alignmentStatus);
+  const alignmentBadge = resolveAlignmentBadge(item);
+  const primaryDiff = resolvePrimaryAlignmentDiff(item);
+  const secondaryDiffs = primaryDiff
+    ? item.diffs.filter((diff) => diff !== primaryDiff)
+    : item.diffs;
 
   return (
     <article className={`integrated-plan-corrections-alignment-row ${alignmentMeta.className}`}>
       <header className="integrated-plan-corrections-alignment-head">
         <div>
           <div className="integrated-plan-corrections-alignment-title-row">
-            <Tag color={alignmentMeta.tagColor}>{alignmentMeta.label}</Tag>
+            <Tag color={alignmentBadge.tagColor}>{alignmentBadge.label}</Tag>
             <Typography.Text strong>
               {formatNullable(item.courseName)} / {formatNullable(item.teachingClassName)}
             </Typography.Text>
+            <LocatorCopyText text={buildAlignmentItemLocatorText(item)} />
           </div>
-          <p>
-            当前序号 {formatNullable(item.currentOriginalIndex)} · 应有序号{' '}
-            {formatNullable(item.expectedIndex)} · 明细 {formatNullable(item.lecturePlanDetailId)}
-          </p>
         </div>
-        <div>{renderDiffTags(item.diffs)}</div>
+        {secondaryDiffs.length > 0 ? <div>{renderDiffTags(secondaryDiffs)}</div> : null}
       </header>
 
       <Alert
@@ -604,16 +708,12 @@ function RepairGroupCard({
     >
       <header className="integrated-plan-corrections-group-head">
         <div>
-          <Typography.Text type="secondary">Repair Group {index + 1}</Typography.Text>
-          <h3>{formatNullable(group.id)}</h3>
-          <p>
-            教学班 {formatNullable(group.teachingClassId)} · 计划{' '}
-            {formatNullable(group.lecturePlanId)} · index {formatIndexRange(group)}
-          </p>
+          <Typography.Text type="secondary">需要修复组 {index + 1}</Typography.Text>
+          <h3>{hasBlockingIssue ? '存在阻塞的连续异常' : '连续异常'}</h3>
         </div>
         <div className="integrated-plan-corrections-group-summary">
           <span>{group.affectedDetailIds.length} 条受影响明细</span>
-          <span>root {formatNullable(group.rootLecturePlanDetailId)}</span>
+          <LocatorCopyText text={buildRepairGroupLocatorText(group)} />
         </div>
       </header>
 
@@ -674,27 +774,20 @@ function SecondaryRepairGroups({
 }
 
 function TeachingClassAlignmentTable({
-  group,
   items,
   repairGroups,
 }: {
-  group: IntegratedPlanCorrectionTeachingClassGroup;
   items: IntegratedPlanCorrectionItem[];
   repairGroups: IntegratedPlanCorrectionRepairGroup[];
 }) {
   return (
     <section className="integrated-plan-corrections-table">
       <header className="integrated-plan-corrections-table-head">
-        <div>
-          <Typography.Text type="secondary">对齐表</Typography.Text>
-          <h3>
-            {formatNullable(group.courseName)} / {formatNullable(group.teachingClassName)}
-          </h3>
-          <p>
-            教学班 {formatNullable(group.teachingClassId)} · 计划{' '}
-            {formatNullable(group.lecturePlanId)} · index {formatNullable(group.startOriginalIndex)}{' '}
-            - {formatNullable(group.endOriginalIndex)}
-          </p>
+        <div className="integrated-plan-corrections-table-title-row">
+          <span className="integrated-plan-corrections-table-title">勘误对齐表</span>
+          <span className="integrated-plan-corrections-table-subtitle">
+            该功能仅供参考，不保证修改后完全合规
+          </span>
         </div>
         <div className="integrated-plan-corrections-table-summary">
           <span>{items.length} 行</span>
@@ -704,7 +797,7 @@ function TeachingClassAlignmentTable({
 
       {items.length === 0 ? (
         <div className="integrated-plan-corrections-empty">
-          <Empty description="当前对齐表没有可展示行" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description="当前勘误对齐表没有可展示行" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         </div>
       ) : (
         <div className="integrated-plan-corrections-alignments">
@@ -730,7 +823,7 @@ function buildTeachingClassTabLabel(input: {
 
   return (
     <span className="integrated-plan-corrections-tab-label">
-      <span>{title || input.group.id}</span>
+      <span title={title || input.group.id}>{title || input.group.id}</span>
       <Tag>{input.itemCount}</Tag>
     </span>
   );
@@ -748,13 +841,7 @@ function TeachingClassAlignmentTabs({
   if (tables.length === 1) {
     const [table] = tables;
 
-    return (
-      <TeachingClassAlignmentTable
-        group={table.group}
-        items={table.items}
-        repairGroups={table.repairGroups}
-      />
-    );
+    return <TeachingClassAlignmentTable items={table.items} repairGroups={table.repairGroups} />;
   }
 
   return (
@@ -762,11 +849,7 @@ function TeachingClassAlignmentTabs({
       <Tabs
         items={tables.map((table) => ({
           children: (
-            <TeachingClassAlignmentTable
-              group={table.group}
-              items={table.items}
-              repairGroups={table.repairGroups}
-            />
+            <TeachingClassAlignmentTable items={table.items} repairGroups={table.repairGroups} />
           ),
           key: table.group.id,
           label: buildTeachingClassTabLabel({
@@ -786,7 +869,6 @@ export function IntegratedPlanCorrectionsLabPage() {
   const {
     clear,
     clearRememberedCredentials,
-    keepAliveFailure,
     login,
     persistSessionFromResult,
     rememberedCredentials,
@@ -802,15 +884,18 @@ export function IntegratedPlanCorrectionsLabPage() {
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [filters, setFilters] = useState<QueryFilters>({
-    lecturePlanId: '',
     staffId: '',
-    teachingClassId: '',
   });
   const [result, setResult] = useState<IntegratedPlanCorrectionSuggestionsResult | null>(null);
+  const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
+    null,
+  );
   const [semesterError, setSemesterError] = useState<string | null>(null);
+  const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
   const [queryError, setQueryError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [isLoadingSemesters, setIsLoadingSemesters] = useState(false);
+  const [isLoadingStaffDirectory, setIsLoadingStaffDirectory] = useState(false);
   const [isQuerying, setIsQuerying] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -818,9 +903,18 @@ export function IntegratedPlanCorrectionsLabPage() {
   const [shouldRunQueryAfterLogin, setShouldRunQueryAfterLogin] = useState(false);
 
   const selectedSemester = semesters.find((semester) => semester.id === selectedSemesterId) ?? null;
-  const normalizedStaffId = normalizeString(filters.staffId);
-  const normalizedTeachingClassId = normalizeString(filters.teachingClassId);
-  const normalizedLecturePlanId = normalizeString(filters.lecturePlanId);
+  const staffDirectoryTeachers = useMemo(
+    () => staffDirectoryResult?.teachers ?? [],
+    [staffDirectoryResult?.teachers],
+  );
+  const normalizedStaffId = resolveTeacherStaffId(filters.staffId, staffDirectoryTeachers);
+  const storedSessionDirectoryKey = storedSession
+    ? [
+        storedSession.accountId,
+        storedSession.upstreamLoginId || 'unknown',
+        storedSession.upstreamSessionToken,
+      ].join(':')
+    : 'none';
   const semesterOptions = useMemo(
     () =>
       semesters.map((semester) => ({
@@ -829,7 +923,15 @@ export function IntegratedPlanCorrectionsLabPage() {
       })),
     [semesters],
   );
-  const canQuery = Boolean(upstreamAccount && selectedSemester && normalizedStaffId);
+  const teacherOptions = useMemo(
+    () =>
+      staffDirectoryTeachers.map((teacher) => ({
+        label: buildTeacherOptionLabel(teacher),
+        value: buildTeacherOptionLabel(teacher),
+      })),
+    [staffDirectoryTeachers],
+  );
+  const canQuery = Boolean(selectedSemester && normalizedStaffId);
   const teachingClassTables = useMemo(() => {
     if (!result) {
       return [];
@@ -901,21 +1003,43 @@ export function IntegratedPlanCorrectionsLabPage() {
   }, []);
 
   useEffect(() => {
-    if (!keepAliveFailure) {
-      return;
+    let cancelled = false;
+
+    async function loadStaffDirectory() {
+      setIsLoadingStaffDirectory(true);
+      setStaffDirectoryError(null);
+
+      try {
+        const outcome = await resolveStaffDirectoryCache({
+          canPopulate: true,
+          persistSessionFromResult,
+          session: storedSession,
+        });
+
+        if (!cancelled) {
+          setStaffDirectoryResult(outcome.directory);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          if (isExpiredUpstreamSessionError(error)) {
+            clear();
+          }
+
+          setStaffDirectoryError(error instanceof Error ? error.message : '暂时无法加载教师目录。');
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingStaffDirectory(false);
+        }
+      }
     }
 
-    clear();
-    setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue(
-      buildUpstreamLoginCredentialsInitialValues({
-        fallbackUserId: keepAliveFailure.upstreamLoginId,
-        lockedUserId: null,
-        rememberedCredentials,
-      }),
-    );
-    setIsLoginModalOpen(true);
-  }, [clear, keepAliveFailure, loginForm, rememberedCredentials]);
+    void loadStaffDirectory();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [clear, persistSessionFromResult, storedSession, storedSessionDirectoryKey]);
 
   function updateFilter(key: keyof QueryFilters, value: string) {
     setFilters((current) => ({
@@ -924,8 +1048,8 @@ export function IntegratedPlanCorrectionsLabPage() {
     }));
   }
 
-  function openLoginModal() {
-    setLoginError(null);
+  function openLoginModal(nextLoginError: string | null = null) {
+    setLoginError(nextLoginError);
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: storedSession?.upstreamLoginId,
@@ -939,6 +1063,13 @@ export function IntegratedPlanCorrectionsLabPage() {
   async function runQuery(sessionOverride?: StoredUpstreamSession) {
     const session = sessionOverride ?? storedSession;
 
+    setQueryError(null);
+
+    if (!upstreamAccount) {
+      setQueryError('当前登录账号尚未就绪，请稍后再试。');
+      return;
+    }
+
     if (!session) {
       setShouldRunQueryAfterLogin(true);
       openLoginModal();
@@ -951,14 +1082,11 @@ export function IntegratedPlanCorrectionsLabPage() {
     }
 
     setIsQuerying(true);
-    setQueryError(null);
 
     try {
       const nextResult = await listIntegratedPlanCorrectionSuggestions({
-        lecturePlanId: normalizedLecturePlanId || undefined,
         semesterId: selectedSemester.id,
         staffId: normalizedStaffId,
-        teachingClassId: normalizedTeachingClassId || undefined,
         upstreamSessionToken: session.upstreamSessionToken,
       });
 
@@ -968,8 +1096,7 @@ export function IntegratedPlanCorrectionsLabPage() {
       if (isExpiredUpstreamSessionError(error)) {
         clear();
         setShouldRunQueryAfterLogin(true);
-        setLoginError('教务系统连接已失效，请重新连接后继续。');
-        openLoginModal();
+        openLoginModal('教务系统连接已失效，请重新连接后继续。');
         return;
       }
 
@@ -1006,33 +1133,18 @@ export function IntegratedPlanCorrectionsLabPage() {
       <DecoratedPageHeader
         badge={<Tag color="purple">Lab</Tag>}
         colorScheme="purple"
-        description="按 upstream 原始顺序对齐当前计划与真实应有计划，逐行检查一体化教学计划周次与课时。"
+        description="按校园网已有授课计划和校历中的实际上课时间逐条比对，检查教学计划中漏排、多排或与校历冲突的课次。"
         icon={<FileSearchOutlined />}
-        title="一体化计划修正建议"
+        title="一体化对齐"
       />
 
       <section className="integrated-plan-corrections-toolbar">
-        <div className="integrated-plan-corrections-session">
-          <ApiOutlined />
-          <span>
-            校园网：
-            {storedSession
-              ? `${storedSession.upstreamLoginId || '已连接'} · ${formatDateTime(storedSession.expiresAt)}`
-              : '未连接'}
-          </span>
-          <Button
-            icon={storedSession ? <SwapOutlined /> : <LoginOutlined />}
-            size="small"
-            type="link"
-            disabled={!upstreamAccount}
-            onClick={openLoginModal}
-          >
-            {storedSession ? '切换账号' : '连接校园网'}
-          </Button>
-        </div>
-
-        <div className="integrated-plan-corrections-filters">
-          <label>
+        <div
+          className="integrated-plan-corrections-querybar"
+          aria-label="一体化勘误查询条件"
+          role="search"
+        >
+          <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-semester">
             <span>学期</span>
             <Select
               loading={isLoadingSemesters}
@@ -1042,60 +1154,54 @@ export function IntegratedPlanCorrectionsLabPage() {
               onChange={setSelectedSemesterId}
             />
           </label>
-          <label>
-            <span>教师 ID</span>
-            <Input
+          <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
+            <span>教师</span>
+            <AutoComplete
               allowClear
-              placeholder="staffId"
+              filterOption={(inputValue, option) =>
+                String(option?.label || '')
+                  .toLowerCase()
+                  .includes(inputValue.trim().toLowerCase()) ||
+                String(option?.value || '')
+                  .toLowerCase()
+                  .includes(inputValue.trim().toLowerCase())
+              }
+              notFoundContent={
+                isLoadingStaffDirectory
+                  ? '读取中'
+                  : staffDirectoryError
+                    ? '目录不可用，可手动输入'
+                    : undefined
+              }
+              options={teacherOptions}
+              popupClassName="integrated-plan-corrections-teacher-autocomplete-popup"
+              popupMatchSelectWidth={240}
+              placeholder="ID 或姓名"
               value={filters.staffId}
-              onChange={(event) => updateFilter('staffId', event.target.value)}
+              onChange={(value) => updateFilter('staffId', value)}
             />
           </label>
-          <label>
-            <span>教学班 ID</span>
-            <Input
-              allowClear
-              placeholder="可选"
-              value={filters.teachingClassId}
-              onChange={(event) => updateFilter('teachingClassId', event.target.value)}
-            />
-          </label>
-          <label>
-            <span>计划 ID</span>
-            <Input
-              allowClear
-              placeholder="可选"
-              value={filters.lecturePlanId}
-              onChange={(event) => updateFilter('lecturePlanId', event.target.value)}
-            />
-          </label>
-          <Button
-            disabled={!canQuery || isQuerying}
-            icon={<SearchOutlined />}
-            loading={isQuerying}
-            type="primary"
-            onClick={() => void runQuery()}
-          >
-            查询建议
-          </Button>
-        </div>
-
-        <div className="integrated-plan-corrections-meta">
-          <Tag color="gold">
-            访问级别：{integratedPlanCorrectionsLabAccess.allowedAccessLevels.join(', ')}
-          </Tag>
-          <Tag color="default">隐藏路由</Tag>
-          <Tag color="default">只读</Tag>
-          <Typography.Text type="secondary">
-            {integratedPlanCorrectionsLabMeta.purpose}
-          </Typography.Text>
+          <div className="integrated-plan-corrections-query-preference">
+            <Switch size="small" checked={showConsistentRows} onChange={setShowConsistentRows} />
+            <Tooltip title="默认隐藏 MATCHED 且无 diff 的行">
+              <span>显示一致行</span>
+            </Tooltip>
+          </div>
+          <div className="integrated-plan-corrections-query-action">
+            <Button
+              disabled={!canQuery || isQuerying}
+              icon={<SearchOutlined />}
+              loading={isQuerying}
+              type="primary"
+              onClick={() => void runQuery()}
+            >
+              查询建议
+            </Button>
+          </div>
         </div>
       </section>
 
       {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-      {!upstreamAccount ? (
-        <Alert message="当前登录账号尚未就绪，无法建立校园网上游会话。" showIcon type="warning" />
-      ) : null}
       {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
       {isQuerying ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
@@ -1104,22 +1210,13 @@ export function IntegratedPlanCorrectionsLabPage() {
           <div className="integrated-plan-corrections-summary">
             <SummaryMetric label="计划" value={result.summary.planCount} />
             <SummaryMetric label="明细" value={result.summary.detailCount} />
-            <SummaryMetric label="修复组" value={result.summary.repairGroupCount} />
+            <SummaryMetric label="需要修复组" value={result.summary.repairGroupCount} />
             <SummaryMetric label="影响明细" value={result.summary.affectedDetailCount} />
             <SummaryMetric
               label="阻塞"
               tone={result.summary.blockingIssueCount > 0 ? 'danger' : 'default'}
               value={result.summary.blockingIssueCount}
             />
-          </div>
-          <div className="integrated-plan-corrections-result-controls">
-            <span>
-              <Typography.Text strong>显示一致行</Typography.Text>
-              <Typography.Text type="secondary">
-                默认隐藏 `MATCHED` 且无 diff 的行，只保留需要处理的对齐结果。
-              </Typography.Text>
-            </span>
-            <Switch checked={showConsistentRows} onChange={setShowConsistentRows} />
           </div>
 
           {teachingClassTables.length === 0 ? (
@@ -1143,14 +1240,14 @@ export function IntegratedPlanCorrectionsLabPage() {
           <div>
             <Typography.Text strong>等待查询</Typography.Text>
             <Typography.Paragraph type="secondary">
-              查询后会按 items 展示“当前计划 vs 真实应有计划”的逐行对齐结果。
+              查询后会展示授课计划课时与校历排课课次的逐行对比结果。
             </Typography.Paragraph>
           </div>
         </section>
       ) : null}
 
       <UpstreamLoginModal
-        description="本页只读使用校园网会话查询建议，不会提交计划修正。"
+        description="本页使用校园网会话查询建议，不会提交计划修正。"
         form={loginForm}
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}

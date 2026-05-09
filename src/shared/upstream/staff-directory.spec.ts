@@ -12,6 +12,7 @@ import {
   populateStaffDirectory,
   readStaffDirectory,
   readVerifiedStaffIdentity,
+  resolveStaffDirectoryCache,
   resolveStaffDirectoryEntries,
 } from './staff-directory';
 
@@ -136,5 +137,87 @@ describe('staff directory shared api', () => {
         sessionToken: 'rolling-token-001',
       },
     );
+  });
+
+  it('resolves fresh staff directory cache without populate', async () => {
+    const directory = {
+      cacheExpiresAt: '2026-05-01T10:30:00.000Z',
+      cacheStatus: 'FRESH' as const,
+      fetchedAt: '2026-05-01T10:00:00.000Z',
+      teacherCount: 1,
+      teachers: [{ name: '龚晶晶', staffId: '3664' }],
+    };
+    const session = {
+      upstreamSessionToken: 'rolling-token-001',
+    };
+    const persistSessionFromResult = vi.fn();
+    const populateStaffDirectoryFn = vi.fn();
+    const readStaffDirectoryFn = vi.fn().mockResolvedValueOnce(directory);
+
+    await expect(
+      resolveStaffDirectoryCache({
+        canPopulate: true,
+        persistSessionFromResult,
+        populateStaffDirectoryFn,
+        readStaffDirectoryFn,
+        session,
+      }),
+    ).resolves.toEqual({
+      didPopulate: false,
+      directory,
+      session,
+    });
+
+    expect(populateStaffDirectoryFn).not.toHaveBeenCalled();
+    expect(persistSessionFromResult).not.toHaveBeenCalled();
+  });
+
+  it('populates missed staff directory cache and persists the rolling session', async () => {
+    const missedDirectory = {
+      cacheExpiresAt: null,
+      cacheStatus: 'MISS' as const,
+      fetchedAt: null,
+      teacherCount: 0,
+      teachers: [],
+    };
+    const populatedDirectory = {
+      cacheExpiresAt: '2026-05-01T10:30:00.000Z',
+      cacheStatus: 'FRESH' as const,
+      expiresAt: '2026-05-01T12:00:00.000Z',
+      fetchedAt: '2026-05-01T10:00:00.000Z',
+      teacherCount: 1,
+      teachers: [{ name: '龚晶晶', staffId: '3664' }],
+      upstreamSessionToken: 'rolling-token-002',
+    };
+    const session = {
+      expiresAt: '2026-05-01T11:00:00.000Z',
+      upstreamSessionToken: 'rolling-token-001',
+    };
+    const nextSession = {
+      expiresAt: '2026-05-01T12:00:00.000Z',
+      upstreamSessionToken: 'rolling-token-002',
+    };
+    const persistSessionFromResult = vi.fn().mockReturnValueOnce(nextSession);
+    const populateStaffDirectoryFn = vi.fn().mockResolvedValueOnce(populatedDirectory);
+    const readStaffDirectoryFn = vi.fn().mockResolvedValueOnce(missedDirectory);
+
+    await expect(
+      resolveStaffDirectoryCache({
+        canPopulate: true,
+        persistSessionFromResult,
+        populateStaffDirectoryFn,
+        readStaffDirectoryFn,
+        session,
+      }),
+    ).resolves.toEqual({
+      didPopulate: true,
+      directory: populatedDirectory,
+      session: nextSession,
+    });
+
+    expect(populateStaffDirectoryFn).toHaveBeenCalledWith({
+      sessionToken: 'rolling-token-001',
+    });
+    expect(persistSessionFromResult).toHaveBeenCalledWith(session, populatedDirectory);
   });
 });

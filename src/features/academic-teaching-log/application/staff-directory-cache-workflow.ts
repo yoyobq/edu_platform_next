@@ -7,6 +7,7 @@ import type { AcademicViewerRole } from '@/shared/auth-access';
 import {
   populateStaffDirectory,
   readStaffDirectory,
+  resolveStaffDirectoryCache,
   type StaffDirectoryResult,
 } from '@/shared/upstream';
 
@@ -31,35 +32,12 @@ type ResolveStaffDirectoryOutcome = {
 export async function resolveLectureJournalStaffDirectory(
   params: ResolveStaffDirectoryParams,
 ): Promise<ResolveStaffDirectoryOutcome> {
-  if (params.viewerRole !== 'admin') {
-    return {
-      didPopulate: false,
-      directory: params.currentDirectory ?? null,
-      session: params.session ?? null,
-    };
-  }
-
-  const readDirectory = params.readStaffDirectoryFn ?? readStaffDirectory;
-  const populateDirectory = params.populateStaffDirectoryFn ?? populateStaffDirectory;
-  const currentDirectory = params.currentDirectory ?? (await readDirectory());
-
-  if (currentDirectory.cacheStatus !== 'MISS' || !params.session) {
-    return {
-      didPopulate: false,
-      directory: currentDirectory,
-      session: params.session ?? null,
-    };
-  }
-
-  const populateResult = await populateDirectory({
-    sessionToken: params.session.upstreamSessionToken,
+  return resolveStaffDirectoryCache({
+    canPopulate: params.viewerRole === 'admin',
+    currentDirectory: params.currentDirectory,
+    persistSessionFromResult: params.persistSessionFromResult,
+    populateStaffDirectoryFn: params.populateStaffDirectoryFn,
+    readStaffDirectoryFn: params.readStaffDirectoryFn,
+    session: params.session,
   });
-
-  const nextSession = params.persistSessionFromResult(params.session, populateResult);
-
-  return {
-    didPopulate: true,
-    directory: populateResult,
-    session: nextSession,
-  };
 }
