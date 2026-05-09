@@ -110,7 +110,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'TeamOutlined',
+            iconKey: 'SolutionOutlined',
             key: '/labs/staff-semester-profiles',
             label: '教师学期归属',
             navMode: 'rail' as const,

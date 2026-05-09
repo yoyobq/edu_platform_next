@@ -135,7 +135,7 @@ describe('navigation catalog', () => {
     ]);
   });
 
-  it('shows staff semester profiles to teaching group leaders', () => {
+  it('keeps staff semester profiles hidden from teaching group leaders', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1003,
@@ -148,7 +148,6 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/staff-semester-profiles',
     ]);
   });
 

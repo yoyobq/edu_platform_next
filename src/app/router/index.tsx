@@ -729,16 +729,17 @@ async function staffSemesterProfilesLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   const accessGroup = snapshot.userInfo.accessGroup;
-  const slotGroup = snapshot.slotGroup;
+  const viewerRole = accessGroup.includes('ADMIN') ? 'admin' : 'academicOfficer';
+  const defaultDepartmentId =
+    snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null;
+
+  if (viewerRole === 'academicOfficer' && !defaultDepartmentId?.trim()) {
+    throw new Response('Forbidden', { status: 403 });
+  }
 
   return {
-    defaultDepartmentId:
-      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
-    viewerRole: accessGroup.includes('ADMIN')
-      ? 'admin'
-      : slotGroup.includes('ACADEMIC_OFFICER')
-        ? 'academicOfficer'
-        : 'teachingGroupLeader',
+    defaultDepartmentId,
+    viewerRole,
   };
 }
 

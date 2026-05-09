@@ -1,3 +1,4 @@
+// src/labs/staff-semester-profiles/infrastructure/staff-semester-profiles-api.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, isGraphQLIngressErrorMock } = vi.hoisted(() => ({
@@ -16,7 +17,7 @@ import {
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,
   updateStaffSemesterProfile,
-} from './api';
+} from './staff-semester-profiles-api';
 
 describe('staff-semester-profiles api', () => {
   beforeEach(() => {
@@ -194,6 +195,35 @@ describe('staff-semester-profiles api', () => {
       teacherEngagementType: undefined,
       teachingGroupId: undefined,
       workloadDepartmentId: undefined,
+    });
+  });
+
+  it('loads option records within workload department scope', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      staffSemesterProfiles: {
+        current: 1,
+        list: [],
+        pageSize: 100,
+        total: 0,
+      },
+    });
+
+    await requestStaffSemesterProfileOptionRecords({
+      semesterId: 202601,
+      workloadDepartmentId: ' D-01 ',
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
+      keyword: undefined,
+      limit: 100,
+      page: 1,
+      semesterId: 202601,
+      sortBy: 'staffId',
+      sortOrder: 'ASC',
+      staffId: undefined,
+      teacherEngagementType: undefined,
+      teachingGroupId: undefined,
+      workloadDepartmentId: 'D-01',
     });
   });
 

@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { SolutionOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
-  Card,
   Empty,
   Form,
-  Input,
   message,
   Modal,
-  Popconfirm,
   Select,
-  Skeleton,
   Table,
   Tag,
   Tooltip,
@@ -25,47 +22,53 @@ import {
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+
+import { formatDateTime } from './lib/format';
+import {
+  TEACHER_ENGAGEMENT_TYPE_LABELS,
+  TEACHER_ENGAGEMENT_TYPE_OPTIONS,
+  TEACHER_ENGAGEMENT_TYPE_TAG_COLORS,
+} from './lib/labels';
+import {
+  buildDepartmentOptions,
+  buildTeacherOptions,
+  buildTeachingGroupOptions,
+  buildWorkloadDepartmentOptions,
+  ensureEntityOption,
+  hasTeachingGroupInDepartment,
+} from './lib/options';
+import {
+  DEFAULT_FILTER_STATE,
+  DEFAULT_QUERY_STATE,
+  fromSorterOrder,
+  isProfileSortField,
+  normalizeTextFilter,
+  scopeFilterStateToWorkloadDepartment,
+  type StaffSemesterProfilesFilterState,
+  type StaffSemesterProfilesQueryState,
+  toSorterOrder,
+} from './lib/query-state';
+import { pickNextSemesterId, sortSemesters } from './lib/semester';
+import { StaffSemesterProfilesBackfillPanel } from './ui/backfill-panel';
+import { renderEmptyText, renderSingleLineText } from './ui/cell-renderers';
+import { StaffSemesterProfilesFiltersCard } from './ui/filters-card';
 import {
   type AcademicTeacherEngagementType,
   backfillStaffSemesterProfilesFromCourseSchedules,
-  type BackfillStaffSemesterProfilesFromCourseSchedulesItem,
   type BackfillStaffSemesterProfilesFromCourseSchedulesResult,
   requestStaffSemesterProfileDepartments,
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,
-  type SortDirection,
   type StaffSemesterProfile,
-  type StaffSemesterProfileBackfillAction,
-  type StaffSemesterProfileBackfillBlockingReason,
   type StaffSemesterProfileDepartmentOption,
   type StaffSemesterProfileListResponse,
-  type StaffSemesterProfileSortBy,
   updateStaffSemesterProfile,
 } from './api';
 
-type StaffSemesterProfilesFilterState = {
-  keyword: string;
-  staffId: string;
-  teacherEngagementType?: AcademicTeacherEngagementType;
-  teachingGroupId: string;
-  workloadDepartmentId: string;
-};
-
-type StaffSemesterProfilesQueryState = StaffSemesterProfilesFilterState & {
-  limit: number;
-  page: number;
-  sortBy: StaffSemesterProfileSortBy;
-  sortOrder: SortDirection;
-};
-
-type EntitySelectOption = {
-  label: string;
-  value: string;
-};
-
 type StaffSemesterProfilesLabLoaderData = {
   defaultDepartmentId?: string | null;
-  viewerRole?: 'academicOfficer' | 'admin' | 'teachingGroupLeader';
+  viewerRole?: 'academicOfficer' | 'admin';
 } | null;
 
 type EditProfileFormValues = {
@@ -74,241 +77,14 @@ type EditProfileFormValues = {
   workloadDepartmentId?: string;
 };
 
-const DEFAULT_FILTER_STATE: StaffSemesterProfilesFilterState = {
-  keyword: '',
-  staffId: '',
-  teacherEngagementType: undefined,
-  teachingGroupId: '',
-  workloadDepartmentId: '',
-};
-
-const DEFAULT_QUERY_STATE: StaffSemesterProfilesQueryState = {
-  ...DEFAULT_FILTER_STATE,
-  limit: 50,
-  page: 1,
-  sortBy: 'staffId',
-  sortOrder: 'ASC',
-};
-
-const TEACHER_ENGAGEMENT_TYPE_LABELS: Record<AcademicTeacherEngagementType, string> = {
-  ADMINISTRATIVE_TEACHING: '行政兼课',
-  EXTERNAL_TEACHER: '外聘教师',
-  FULL_TIME_TEACHER: '专任教师',
-  PUBLIC_WELFARE_POST: '公益岗',
-};
-
-const TEACHER_ENGAGEMENT_TYPE_TAG_COLORS: Record<AcademicTeacherEngagementType, string> = {
-  ADMINISTRATIVE_TEACHING: 'purple',
-  EXTERNAL_TEACHER: 'orange',
-  FULL_TIME_TEACHER: 'green',
-  PUBLIC_WELFARE_POST: 'cyan',
-};
-
-const TEACHER_ENGAGEMENT_TYPE_OPTIONS = Object.entries(TEACHER_ENGAGEMENT_TYPE_LABELS).map(
-  ([value, label]) => ({
-    label,
-    value,
-  }),
-);
-
-const BACKFILL_ACTION_LABELS: Record<StaffSemesterProfileBackfillAction, string> = {
-  already_exists: '已存在',
-  blocked: '需处理',
-  created: '已创建',
-  would_create: '待创建',
-};
-
-const BACKFILL_ACTION_TAG_COLORS: Record<StaffSemesterProfileBackfillAction, string> = {
-  already_exists: 'default',
-  blocked: 'red',
-  created: 'green',
-  would_create: 'blue',
-};
-
-const BACKFILL_BLOCKING_REASON_LABELS: Record<
-  NonNullable<StaffSemesterProfileBackfillBlockingReason>,
-  string
-> = {
-  teaching_group_not_found: '历史教研组不存在',
-  teaching_group_workload_department_mismatch: '历史教研组与本次工作量归口系不一致',
-};
-
-const EMPTY_CELL_TEXT = '—';
-
-function toSorterOrder(sortOrder: SortDirection): 'ascend' | 'descend' {
-  return sortOrder === 'ASC' ? 'ascend' : 'descend';
-}
-
-function fromSorterOrder(value: 'ascend' | 'descend' | null | undefined): SortDirection {
-  return value === 'descend' ? 'DESC' : 'ASC';
-}
-
-function isProfileSortField(value: string | undefined): value is StaffSemesterProfileSortBy {
-  return value === 'staffId' || value === 'staffName' || value === 'updatedAt';
-}
-
-function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
-}
-
-function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection: number | null) {
-  if (currentSelection !== null && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
-}
-
-function formatDateTime(value: string) {
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value || EMPTY_CELL_TEXT;
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    month: '2-digit',
-    timeZone: 'Asia/Shanghai',
-    year: 'numeric',
-  }).format(date);
-}
-
-function normalizeTextFilter(value: string) {
-  return value.trim();
-}
-
 function resolveProfileRowKey(record: StaffSemesterProfile) {
   return `${record.semesterId}-${record.staffId}`;
-}
-
-function renderEmptyText() {
-  return <Typography.Text type="secondary">{EMPTY_CELL_TEXT}</Typography.Text>;
-}
-
-function renderSingleLineText(
-  value: string | null | undefined,
-  options: { strong?: boolean } = {},
-) {
-  const normalizedValue = value?.trim();
-
-  if (!normalizedValue) {
-    return renderEmptyText();
-  }
-
-  return (
-    <Typography.Text ellipsis={{ tooltip: normalizedValue }} strong={options.strong}>
-      {normalizedValue}
-    </Typography.Text>
-  );
-}
-
-function buildEntityOptions(
-  records: StaffSemesterProfile[],
-  getId: (record: StaffSemesterProfile) => string | null,
-  getName: (record: StaffSemesterProfile) => string | null,
-) {
-  const optionByValue = new Map<string, EntitySelectOption>();
-
-  for (const record of records) {
-    const id = getId(record)?.trim();
-
-    if (!id) {
-      continue;
-    }
-
-    const name = getName(record)?.trim();
-
-    optionByValue.set(id, {
-      label: name || id,
-      value: id,
-    });
-  }
-
-  return Array.from(optionByValue.values()).sort((left, right) =>
-    left.label.localeCompare(right.label, 'zh-CN'),
-  );
-}
-
-function buildWorkloadDepartmentOptions(records: StaffSemesterProfile[]) {
-  return buildEntityOptions(
-    records,
-    (record) => record.workloadDepartmentId,
-    (record) => record.workloadDepartmentName,
-  );
-}
-
-function buildDepartmentOptions(records: StaffSemesterProfileDepartmentOption[]) {
-  return records
-    .filter((record) => record.id.trim())
-    .map((record) => ({
-      label: record.departmentName?.trim() || record.shortName?.trim() || record.id,
-      value: record.id,
-    }))
-    .sort((left, right) => left.label.localeCompare(right.label, 'zh-CN'));
-}
-
-function buildTeachingGroupOptions(records: StaffSemesterProfile[], workloadDepartmentId?: string) {
-  const normalizedWorkloadDepartmentId = workloadDepartmentId?.trim();
-  const scopedRecords = normalizedWorkloadDepartmentId
-    ? records.filter((record) => record.workloadDepartmentId === normalizedWorkloadDepartmentId)
-    : records;
-
-  return buildEntityOptions(
-    scopedRecords,
-    (record) => record.teachingGroupId,
-    (record) => record.teachingGroupName,
-  );
-}
-
-function ensureEntityOption(
-  options: EntitySelectOption[],
-  id: string | null | undefined,
-  name: string | null | undefined,
-) {
-  const normalizedId = id?.trim();
-
-  if (!normalizedId || options.some((option) => option.value === normalizedId)) {
-    return options;
-  }
-
-  return [...options, { label: name?.trim() || normalizedId, value: normalizedId }].sort(
-    (left, right) => left.label.localeCompare(right.label, 'zh-CN'),
-  );
 }
 
 function normalizeOptionalEditValue(value: string | null | undefined) {
   const normalizedValue = value?.trim();
 
   return normalizedValue ? normalizedValue : null;
-}
-
-function hasTeachingGroupInDepartment(
-  records: StaffSemesterProfile[],
-  teachingGroupId: string,
-  workloadDepartmentId: string,
-) {
-  return records.some(
-    (record) =>
-      record.teachingGroupId === teachingGroupId &&
-      record.workloadDepartmentId === workloadDepartmentId,
-  );
 }
 
 function applyUpdatedProfile(
@@ -329,21 +105,27 @@ function applyUpdatedProfile(
   };
 }
 
-function resolveBackfillItemRowKey(record: BackfillStaffSemesterProfilesFromCourseSchedulesItem) {
-  return `${record.staffId}-${record.action}`;
-}
-
 export function StaffSemesterProfilesLabPage() {
   const loaderData = useLoaderData() as StaffSemesterProfilesLabLoaderData;
   const [messageApi, messageContextHolder] = message.useMessage();
   const [editForm] = Form.useForm<EditProfileFormValues>();
-  const viewerRole = loaderData?.viewerRole ?? 'teachingGroupLeader';
+  const viewerRole = loaderData?.viewerRole ?? 'academicOfficer';
+  const isAcademicOfficer = viewerRole === 'academicOfficer';
+  const defaultDepartmentId = loaderData?.defaultDepartmentId?.trim() ?? '';
+  const scopedWorkloadDepartmentId = isAcademicOfficer ? defaultDepartmentId : '';
+  const initialFilterState = useMemo(
+    () => scopeFilterStateToWorkloadDepartment(DEFAULT_FILTER_STATE, scopedWorkloadDepartmentId),
+    [scopedWorkloadDepartmentId],
+  );
+  const initialQueryState = useMemo(
+    () => scopeFilterStateToWorkloadDepartment(DEFAULT_QUERY_STATE, scopedWorkloadDepartmentId),
+    [scopedWorkloadDepartmentId],
+  );
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [filterState, setFilterState] =
-    useState<StaffSemesterProfilesFilterState>(DEFAULT_FILTER_STATE);
-  const [queryState, setQueryState] =
-    useState<StaffSemesterProfilesQueryState>(DEFAULT_QUERY_STATE);
+    useState<StaffSemesterProfilesFilterState>(initialFilterState);
+  const [queryState, setQueryState] = useState<StaffSemesterProfilesQueryState>(initialQueryState);
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingProfiles, setLoadingProfiles] = useState(false);
   const [loadingProfileOptions, setLoadingProfileOptions] = useState(false);
@@ -403,11 +185,6 @@ export function StaffSemesterProfilesLabPage() {
     };
   }, []);
 
-  const selectedSemester = useMemo(
-    () => semesters.find((semester) => semester.id === selectedSemesterId) ?? null,
-    [selectedSemesterId, semesters],
-  );
-
   const loadProfiles = useCallback(
     async (nextQueryState: StaffSemesterProfilesQueryState) => {
       if (!selectedSemesterId) {
@@ -415,21 +192,31 @@ export function StaffSemesterProfilesLabPage() {
         return;
       }
 
+      if (isAcademicOfficer && !scopedWorkloadDepartmentId) {
+        setProfileError('当前教务账号缺少系部归属，无法查看教师学期归属。');
+        setProfileResponse(null);
+        return;
+      }
+
+      const effectiveQueryState = scopeFilterStateToWorkloadDepartment(
+        nextQueryState,
+        scopedWorkloadDepartmentId,
+      );
+
       setLoadingProfiles(true);
       setProfileError(null);
 
       try {
         const result = await requestStaffSemesterProfiles({
-          keyword: normalizeTextFilter(nextQueryState.keyword),
-          limit: nextQueryState.limit,
-          page: nextQueryState.page,
+          limit: effectiveQueryState.limit,
+          page: effectiveQueryState.page,
           semesterId: selectedSemesterId,
-          sortBy: nextQueryState.sortBy,
-          sortOrder: nextQueryState.sortOrder,
-          staffId: normalizeTextFilter(nextQueryState.staffId),
-          teacherEngagementType: nextQueryState.teacherEngagementType,
-          teachingGroupId: normalizeTextFilter(nextQueryState.teachingGroupId),
-          workloadDepartmentId: normalizeTextFilter(nextQueryState.workloadDepartmentId),
+          sortBy: effectiveQueryState.sortBy,
+          sortOrder: effectiveQueryState.sortOrder,
+          staffId: normalizeTextFilter(effectiveQueryState.staffId),
+          teacherEngagementType: effectiveQueryState.teacherEngagementType,
+          teachingGroupId: normalizeTextFilter(effectiveQueryState.teachingGroupId),
+          workloadDepartmentId: normalizeTextFilter(effectiveQueryState.workloadDepartmentId),
         });
 
         setProfileResponse(result);
@@ -440,24 +227,36 @@ export function StaffSemesterProfilesLabPage() {
         setLoadingProfiles(false);
       }
     },
-    [selectedSemesterId],
+    [isAcademicOfficer, scopedWorkloadDepartmentId, selectedSemesterId],
   );
 
-  const loadProfileOptions = useCallback(async (semesterId: number) => {
-    setLoadingProfileOptions(true);
-    setProfileOptionsError(null);
+  const loadProfileOptions = useCallback(
+    async (semesterId: number) => {
+      if (isAcademicOfficer && !scopedWorkloadDepartmentId) {
+        setProfileOptionsError('当前教务账号缺少系部归属，无法加载归属选项。');
+        setProfileOptionRecords([]);
+        return;
+      }
 
-    try {
-      const result = await requestStaffSemesterProfileOptionRecords({ semesterId });
+      setLoadingProfileOptions(true);
+      setProfileOptionsError(null);
 
-      setProfileOptionRecords(result);
-    } catch (error) {
-      setProfileOptionsError(error instanceof Error ? error.message : '暂时无法加载归属选项。');
-      setProfileOptionRecords([]);
-    } finally {
-      setLoadingProfileOptions(false);
-    }
-  }, []);
+      try {
+        const result = await requestStaffSemesterProfileOptionRecords({
+          semesterId,
+          workloadDepartmentId: scopedWorkloadDepartmentId || undefined,
+        });
+
+        setProfileOptionRecords(result);
+      } catch (error) {
+        setProfileOptionsError(error instanceof Error ? error.message : '暂时无法加载归属选项。');
+        setProfileOptionRecords([]);
+      } finally {
+        setLoadingProfileOptions(false);
+      }
+    },
+    [isAcademicOfficer, scopedWorkloadDepartmentId],
+  );
 
   const loadDepartments = useCallback(async () => {
     setLoadingDepartments(true);
@@ -498,57 +297,104 @@ export function StaffSemesterProfilesLabPage() {
   }, [loadDepartments, viewerRole]);
 
   useEffect(() => {
+    if (!isAcademicOfficer) {
+      return;
+    }
+
+    setFilterState((currentValue) => ({
+      ...currentValue,
+      teachingGroupId:
+        currentValue.workloadDepartmentId === scopedWorkloadDepartmentId
+          ? currentValue.teachingGroupId
+          : '',
+      workloadDepartmentId: scopedWorkloadDepartmentId,
+    }));
+    setQueryState((currentValue) => ({
+      ...currentValue,
+      page: 1,
+      teachingGroupId:
+        currentValue.workloadDepartmentId === scopedWorkloadDepartmentId
+          ? currentValue.teachingGroupId
+          : '',
+      workloadDepartmentId: scopedWorkloadDepartmentId,
+    }));
+  }, [isAcademicOfficer, scopedWorkloadDepartmentId]);
+
+  useEffect(() => {
     setBackfillResult(null);
   }, [backfillWorkloadDepartmentId, selectedSemesterId]);
 
   const applyFilters = useCallback(() => {
+    const effectiveFilterState = scopeFilterStateToWorkloadDepartment(
+      filterState,
+      scopedWorkloadDepartmentId,
+    );
+
+    setFilterState(effectiveFilterState);
     setQueryState((currentValue) => ({
       ...currentValue,
-      ...filterState,
+      ...effectiveFilterState,
       page: 1,
     }));
-  }, [filterState]);
+  }, [filterState, scopedWorkloadDepartmentId]);
 
   const resetFilters = useCallback(() => {
-    setFilterState(DEFAULT_FILTER_STATE);
+    setFilterState(initialFilterState);
     setQueryState((currentValue) => ({
       ...currentValue,
-      ...DEFAULT_FILTER_STATE,
+      ...initialFilterState,
       page: 1,
     }));
-  }, []);
+  }, [initialFilterState]);
 
   const hasActiveFilters = useMemo(
     () =>
       Boolean(
-        normalizeTextFilter(queryState.keyword) ||
         normalizeTextFilter(queryState.staffId) ||
         queryState.teacherEngagementType ||
         normalizeTextFilter(queryState.teachingGroupId) ||
-        normalizeTextFilter(queryState.workloadDepartmentId),
+        (!isAcademicOfficer && normalizeTextFilter(queryState.workloadDepartmentId)),
       ),
-    [queryState],
+    [isAcademicOfficer, queryState],
   );
 
   const canEditTeacherEngagementType = viewerRole === 'admin' || viewerRole === 'academicOfficer';
   const canBackfillFromCourseSchedules = viewerRole === 'admin';
   const canEditTeachingGroup = true;
-  const canEditWorkloadDepartment = viewerRole === 'admin' || viewerRole === 'academicOfficer';
+  const canEditWorkloadDepartment = viewerRole === 'admin';
   const editableFieldCount =
     (canEditTeacherEngagementType ? 1 : 0) +
     (canEditTeachingGroup ? 1 : 0) +
     (canEditWorkloadDepartment ? 1 : 0);
+  const scopedProfileOptionRecords = useMemo(
+    () =>
+      scopedWorkloadDepartmentId
+        ? profileOptionRecords.filter(
+            (record) => record.workloadDepartmentId === scopedWorkloadDepartmentId,
+          )
+        : profileOptionRecords,
+    [profileOptionRecords, scopedWorkloadDepartmentId],
+  );
   const workloadDepartmentOptions = useMemo(
-    () => buildWorkloadDepartmentOptions(profileOptionRecords),
-    [profileOptionRecords],
+    () =>
+      ensureEntityOption(
+        buildWorkloadDepartmentOptions(scopedProfileOptionRecords),
+        scopedWorkloadDepartmentId,
+        scopedWorkloadDepartmentId,
+      ),
+    [scopedProfileOptionRecords, scopedWorkloadDepartmentId],
+  );
+  const teacherOptions = useMemo(
+    () => buildTeacherOptions(scopedProfileOptionRecords),
+    [scopedProfileOptionRecords],
   );
   const backfillDepartmentOptions = useMemo(
     () => buildDepartmentOptions(departmentRecords),
     [departmentRecords],
   );
   const filterTeachingGroupOptions = useMemo(
-    () => buildTeachingGroupOptions(profileOptionRecords, filterState.workloadDepartmentId),
-    [filterState.workloadDepartmentId, profileOptionRecords],
+    () => buildTeachingGroupOptions(scopedProfileOptionRecords, filterState.workloadDepartmentId),
+    [filterState.workloadDepartmentId, scopedProfileOptionRecords],
   );
   const isBackfillResultForCurrentSelection =
     backfillResult?.semesterId === selectedSemesterId &&
@@ -675,7 +521,9 @@ export function StaffSemesterProfilesLabPage() {
     const values = await editForm.validateFields();
     const nextTeacherEngagementType = values.teacherEngagementType;
     const nextTeachingGroupId = normalizeOptionalEditValue(values.teachingGroupId);
-    const nextWorkloadDepartmentId = normalizeOptionalEditValue(values.workloadDepartmentId);
+    const nextWorkloadDepartmentId = canEditWorkloadDepartment
+      ? normalizeOptionalEditValue(values.workloadDepartmentId)
+      : editingProfile.workloadDepartmentId;
     const input: Parameters<typeof updateStaffSemesterProfile>[0] = {
       semesterId: editingProfile.semesterId,
       staffId: editingProfile.staffId,
@@ -686,11 +534,6 @@ export function StaffSemesterProfilesLabPage() {
       nextTeacherEngagementType !== editingProfile.teacherEngagementType
     ) {
       input.teacherEngagementType = nextTeacherEngagementType;
-    }
-
-    if (viewerRole === 'academicOfficer' && nextWorkloadDepartmentId === null) {
-      void messageApi.warning('教务行政不能清空工作量归属系部。');
-      return;
     }
 
     if (
@@ -764,7 +607,7 @@ export function StaffSemesterProfilesLabPage() {
         sortOrder:
           queryState.sortBy === 'staffId' ? toSorterOrder(queryState.sortOrder) : undefined,
         title: '工号',
-        width: 150,
+        width: 88,
       },
       {
         dataIndex: 'staffName',
@@ -775,7 +618,7 @@ export function StaffSemesterProfilesLabPage() {
         sortOrder:
           queryState.sortBy === 'staffName' ? toSorterOrder(queryState.sortOrder) : undefined,
         title: '姓名',
-        width: 150,
+        width: 104,
       },
       {
         dataIndex: 'teacherEngagementType',
@@ -789,21 +632,21 @@ export function StaffSemesterProfilesLabPage() {
             renderEmptyText()
           ),
         title: '聘任',
-        width: 132,
+        width: 112,
       },
       {
         key: 'teachingGroup',
         render: (_, record) =>
           renderSingleLineText(record.teachingGroupName || record.teachingGroupId),
         title: '教研组',
-        width: 180,
+        width: 160,
       },
       {
         key: 'workloadDepartment',
         render: (_, record) =>
           renderSingleLineText(record.workloadDepartmentName || record.workloadDepartmentId),
         title: '工作量归属系部',
-        width: 220,
+        width: 180,
       },
       {
         dataIndex: 'updatedAt',
@@ -822,7 +665,7 @@ export function StaffSemesterProfilesLabPage() {
         sortOrder:
           queryState.sortBy === 'updatedAt' ? toSorterOrder(queryState.sortOrder) : undefined,
         title: '更新时间',
-        width: 180,
+        width: 160,
       },
       {
         fixed: 'right',
@@ -833,92 +676,25 @@ export function StaffSemesterProfilesLabPage() {
           </Button>
         ),
         title: '操作',
-        width: 88,
+        width: 72,
       },
     ],
     [openEditModal, queryState.sortBy, queryState.sortOrder],
   );
 
-  const backfillColumns = useMemo<
-    ColumnsType<BackfillStaffSemesterProfilesFromCourseSchedulesItem>
-  >(
-    () => [
-      {
-        dataIndex: 'staffId',
-        fixed: 'left',
-        key: 'staffId',
-        render: (value: string) => (
-          <Typography.Text ellipsis={{ tooltip: value }}>
-            <span className="font-mono text-sm">{value}</span>
-          </Typography.Text>
-        ),
-        title: '工号',
-        width: 150,
-      },
-      {
-        dataIndex: 'staffName',
-        fixed: 'left',
-        key: 'staffName',
-        render: (value: string) => renderSingleLineText(value, { strong: true }),
-        title: '姓名',
-        width: 140,
-      },
-      {
-        dataIndex: 'action',
-        key: 'action',
-        render: (value: StaffSemesterProfileBackfillAction) => (
-          <Tag color={BACKFILL_ACTION_TAG_COLORS[value]} style={{ marginInlineEnd: 0 }}>
-            {BACKFILL_ACTION_LABELS[value]}
-          </Tag>
-        ),
-        title: '状态',
-        width: 104,
-      },
-      {
-        dataIndex: 'teacherEngagementType',
-        key: 'teacherEngagementType',
-        render: (value: AcademicTeacherEngagementType) => (
-          <Tag color={TEACHER_ENGAGEMENT_TYPE_TAG_COLORS[value]} style={{ marginInlineEnd: 0 }}>
-            {TEACHER_ENGAGEMENT_TYPE_LABELS[value]}
-          </Tag>
-        ),
-        title: '聘任',
-        width: 132,
-      },
-      {
-        dataIndex: 'teachingGroupId',
-        key: 'teachingGroupId',
-        render: (value: string | null) => renderSingleLineText(value),
-        title: '教研组 ID',
-        width: 160,
-      },
-      {
-        dataIndex: 'inheritedFromSemesterId',
-        key: 'inheritedFromSemesterId',
-        render: (value: number | null) =>
-          value === null ? renderEmptyText() : <Typography.Text>{value}</Typography.Text>,
-        title: '继承来源学期',
-        width: 140,
-      },
-      {
-        dataIndex: 'blockingReason',
-        key: 'blockingReason',
-        render: (value: StaffSemesterProfileBackfillBlockingReason) =>
-          value ? (
-            <Typography.Text type="danger">
-              {BACKFILL_BLOCKING_REASON_LABELS[value]}
-            </Typography.Text>
-          ) : (
-            renderEmptyText()
-          ),
-        title: '阻断原因',
-        width: 280,
-      },
-    ],
-    [],
-  );
-
   const total = profileResponse?.total ?? 0;
+
+  const updateFilterState = useCallback((patch: Partial<StaffSemesterProfilesFilterState>) => {
+    setFilterState((currentValue) => ({
+      ...currentValue,
+      ...patch,
+    }));
+  }, []);
+
+  const handleSemesterChange = useCallback((value: number) => {
+    setSelectedSemesterId(value);
+    setQueryState((currentValue) => ({ ...currentValue, page: 1 }));
+  }, []);
 
   function handleTableChange(
     pagination: TablePaginationConfig,
@@ -947,273 +723,50 @@ export function StaffSemesterProfilesLabPage() {
     <div className="flex flex-col gap-6">
       {messageContextHolder}
 
-      <div className="flex flex-col gap-2">
-        <Typography.Title level={3} style={{ margin: 0 }}>
-          教师学期归属
-        </Typography.Title>
-        <Typography.Paragraph style={{ margin: 0 }} type="secondary">
-          {selectedSemester ? `${selectedSemester.name} · 共 ${total} 条` : '请选择学期'}
-        </Typography.Paragraph>
-      </div>
+      <DecoratedPageHeader
+        description="按学期维护教师聘任类型、教研组与工作量归属系部"
+        icon={<SolutionOutlined />}
+        title="教师学期归属"
+      />
 
-      <Card>
-        {loadingSemesters ? (
-          <Skeleton active paragraph={{ rows: 5 }} />
-        ) : (
-          <div className="flex flex-col gap-4">
-            {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>学期</Typography.Text>
-                <Select
-                  options={semesters.map((semester) => ({
-                    label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                    value: semester.id,
-                  }))}
-                  placeholder="请选择学期"
-                  value={selectedSemesterId ?? undefined}
-                  onChange={(value) => {
-                    setSelectedSemesterId(value);
-                    setQueryState((currentValue) => ({ ...currentValue, page: 1 }));
-                  }}
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>工号</Typography.Text>
-                <Input
-                  allowClear
-                  placeholder="精确匹配"
-                  value={filterState.staffId}
-                  onChange={(event) =>
-                    setFilterState((currentValue) => ({
-                      ...currentValue,
-                      staffId: event.target.value,
-                    }))
-                  }
-                  onPressEnter={applyFilters}
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>关键词</Typography.Text>
-                <Input
-                  allowClear
-                  placeholder="姓名 / 工号"
-                  value={filterState.keyword}
-                  onChange={(event) =>
-                    setFilterState((currentValue) => ({
-                      ...currentValue,
-                      keyword: event.target.value,
-                    }))
-                  }
-                  onPressEnter={applyFilters}
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>聘任类型</Typography.Text>
-                <Select
-                  allowClear
-                  options={Object.entries(TEACHER_ENGAGEMENT_TYPE_LABELS).map(([value, label]) => ({
-                    label,
-                    value,
-                  }))}
-                  placeholder="全部"
-                  value={filterState.teacherEngagementType}
-                  onChange={(value) =>
-                    setFilterState((currentValue) => ({
-                      ...currentValue,
-                      teacherEngagementType: value,
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>教研组</Typography.Text>
-                <Select
-                  allowClear
-                  showSearch
-                  loading={loadingProfileOptions}
-                  optionFilterProp="label"
-                  options={filterTeachingGroupOptions}
-                  placeholder="按名称筛选"
-                  value={filterState.teachingGroupId || undefined}
-                  onChange={(value) =>
-                    setFilterState((currentValue) => ({
-                      ...currentValue,
-                      teachingGroupId: value ?? '',
-                    }))
-                  }
-                />
-              </label>
-
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>工作量归属系部</Typography.Text>
-                <Select
-                  allowClear
-                  showSearch
-                  loading={loadingProfileOptions}
-                  optionFilterProp="label"
-                  options={workloadDepartmentOptions}
-                  placeholder="按名称筛选"
-                  value={filterState.workloadDepartmentId || undefined}
-                  onChange={(value) =>
-                    setFilterState((currentValue) => ({
-                      ...currentValue,
-                      teachingGroupId: '',
-                      workloadDepartmentId: value ?? '',
-                    }))
-                  }
-                />
-              </label>
-            </div>
-
-            {profileOptionsError ? (
-              <Alert message={profileOptionsError} showIcon type="warning" />
-            ) : null}
-
-            <div className="flex flex-wrap justify-end gap-3">
-              <Button disabled={!selectedSemesterId} type="primary" onClick={applyFilters}>
-                查询
-              </Button>
-              <Button onClick={resetFilters}>重置</Button>
-            </div>
-          </div>
-        )}
-      </Card>
+      <StaffSemesterProfilesFiltersCard
+        filterState={filterState}
+        isAcademicOfficer={isAcademicOfficer}
+        loadingProfileOptions={loadingProfileOptions}
+        loadingSemesters={loadingSemesters}
+        profileOptionsError={profileOptionsError}
+        scopedWorkloadDepartmentId={scopedWorkloadDepartmentId}
+        selectedSemesterId={selectedSemesterId}
+        semesterError={semesterError}
+        semesters={semesters}
+        teacherOptions={teacherOptions}
+        teachingGroupOptions={filterTeachingGroupOptions}
+        workloadDepartmentOptions={workloadDepartmentOptions}
+        onApplyFilters={applyFilters}
+        onFilterChange={updateFilterState}
+        onResetFilters={resetFilters}
+        onSemesterChange={handleSemesterChange}
+      />
 
       {canBackfillFromCourseSchedules ? (
-        <Card
-          title={
-            <div className="flex flex-col">
-              <span>从课程表补齐教师学期归属</span>
-              <span className="mt-1 text-sm font-normal text-text-secondary">
-                先预览课程表候选教师，再批量创建缺失的学期归属
-              </span>
-            </div>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            {departmentError ? <Alert message={departmentError} showIcon type="warning" /> : null}
-
-            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
-              <label className="flex flex-col gap-2">
-                <Typography.Text strong>工作量归口系</Typography.Text>
-                <Select
-                  showSearch
-                  loading={loadingDepartments}
-                  optionFilterProp="label"
-                  options={backfillDepartmentOptions}
-                  placeholder="请选择要写入的系部"
-                  value={backfillWorkloadDepartmentId || undefined}
-                  onChange={(value) => setBackfillWorkloadDepartmentId(value)}
-                />
-              </label>
-
-              <div className="flex items-end gap-3">
-                <Button
-                  disabled={!canSubmitBackfill}
-                  loading={previewingBackfill}
-                  onClick={() => void runBackfill(true)}
-                >
-                  预览补齐
-                </Button>
-                <Popconfirm
-                  cancelText="取消"
-                  disabled={!canSubmitBackfill || hasCurrentBackfillBlocking}
-                  okButtonProps={{ loading: executingBackfill }}
-                  okText="确认补齐"
-                  title={
-                    backfillResult && isBackfillResultForCurrentSelection
-                      ? `确认创建 ${backfillResult.creatableCount} 条教师学期归属？`
-                      : '尚未预览，确认直接执行补齐？'
-                  }
-                  onConfirm={() => void runBackfill(false)}
-                >
-                  <Button
-                    disabled={!canSubmitBackfill || hasCurrentBackfillBlocking}
-                    loading={executingBackfill}
-                    type="primary"
-                  >
-                    确认补齐
-                  </Button>
-                </Popconfirm>
-              </div>
-            </div>
-
-            {hasCurrentBackfillBlocking ? (
-              <Alert message="当前预览存在阻断项，确认补齐已禁用。" showIcon type="warning" />
-            ) : null}
-
-            {backfillResult ? (
-              <div className="flex flex-col gap-4">
-                <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
-                  <div className="rounded-block border border-border bg-bg-container p-3">
-                    <Typography.Text type="secondary">候选教师</Typography.Text>
-                    <div className="mt-1 text-xl font-semibold">
-                      {backfillResult.candidateCount}
-                    </div>
-                  </div>
-                  <div className="rounded-block border border-border bg-bg-container p-3">
-                    <Typography.Text type="secondary">可创建</Typography.Text>
-                    <div className="mt-1 text-xl font-semibold">
-                      {backfillResult.creatableCount}
-                    </div>
-                  </div>
-                  <div className="rounded-block border border-border bg-bg-container p-3">
-                    <Typography.Text type="secondary">阻断</Typography.Text>
-                    <div className="mt-1 text-xl font-semibold">{backfillResult.blockingCount}</div>
-                  </div>
-                  <div className="rounded-block border border-border bg-bg-container p-3">
-                    <Typography.Text type="secondary">本次已创建</Typography.Text>
-                    <div className="mt-1 text-xl font-semibold">{backfillResult.createdCount}</div>
-                  </div>
-                  <div className="rounded-block border border-border bg-bg-container p-3">
-                    <Typography.Text type="secondary">执行时已存在</Typography.Text>
-                    <div className="mt-1 text-xl font-semibold">
-                      {backfillResult.alreadyExistingCount}
-                    </div>
-                  </div>
-                </div>
-
-                <Table<BackfillStaffSemesterProfilesFromCourseSchedulesItem>
-                  columns={backfillColumns}
-                  dataSource={backfillResult.items}
-                  locale={{
-                    emptyText: (
-                      <Empty description="暂无补齐明细" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                    ),
-                  }}
-                  pagination={{ pageSize: 10, size: 'small' }}
-                  rowKey={resolveBackfillItemRowKey}
-                  scroll={{ x: 1106 }}
-                  size="small"
-                  tableLayout="fixed"
-                />
-              </div>
-            ) : null}
-          </div>
-        </Card>
+        <StaffSemesterProfilesBackfillPanel
+          backfillResult={backfillResult}
+          canSubmitBackfill={canSubmitBackfill}
+          departmentError={departmentError}
+          departmentOptions={backfillDepartmentOptions}
+          executingBackfill={executingBackfill}
+          hasCurrentBackfillBlocking={hasCurrentBackfillBlocking}
+          isBackfillResultForCurrentSelection={isBackfillResultForCurrentSelection}
+          loadingDepartments={loadingDepartments}
+          previewingBackfill={previewingBackfill}
+          workloadDepartmentId={backfillWorkloadDepartmentId}
+          onRunBackfill={(dryRun) => void runBackfill(dryRun)}
+          onWorkloadDepartmentChange={setBackfillWorkloadDepartmentId}
+        />
       ) : null}
 
-      <Card
-        title={
-          <div className="flex flex-col">
-            <span>教师学期归属列表</span>
-            <span className="mt-1 text-sm font-normal text-text-secondary">
-              {selectedSemester
-                ? `${selectedSemester.name} · 数据来自 staffSemesterProfiles`
-                : '请选择学期'}
-            </span>
-          </div>
-        }
-      >
-        {profileError ? (
-          <Alert message={profileError} showIcon style={{ marginBottom: 16 }} type="error" />
-        ) : null}
+      <div className="flex flex-col gap-4">
+        {profileError ? <Alert message={profileError} showIcon type="error" /> : null}
 
         <Table<StaffSemesterProfile>
           columns={columns}
@@ -1239,12 +792,12 @@ export function StaffSemesterProfilesLabPage() {
             total,
           }}
           rowKey={resolveProfileRowKey}
-          scroll={{ x: 1340 }}
-          size="middle"
+          scroll={{ x: 920 }}
+          size="small"
           tableLayout="fixed"
           onChange={handleTableChange}
         />
-      </Card>
+      </div>
 
       <Modal
         destroyOnHidden
@@ -1276,17 +829,9 @@ export function StaffSemesterProfilesLabPage() {
               ) : null}
 
               {canEditTeachingGroup ? (
-                <Form.Item<EditProfileFormValues>
-                  label="教研组"
-                  name="teachingGroupId"
-                  rules={
-                    viewerRole === 'teachingGroupLeader'
-                      ? [{ required: true, message: '请选择教研组。' }]
-                      : undefined
-                  }
-                >
+                <Form.Item<EditProfileFormValues> label="教研组" name="teachingGroupId">
                   <Select
-                    allowClear={viewerRole !== 'teachingGroupLeader'}
+                    allowClear
                     loading={loadingProfileOptions}
                     showSearch
                     optionFilterProp="label"
@@ -1316,9 +861,6 @@ export function StaffSemesterProfilesLabPage() {
               ) : null}
             </Form>
 
-            {viewerRole === 'teachingGroupLeader' ? (
-              <Alert message="教研组负责人只能修改教研组，且不能清空。" showIcon type="info" />
-            ) : null}
             {editableFieldCount === 0 ? (
               <Alert message="当前账号没有可编辑字段。" showIcon type="warning" />
             ) : null}

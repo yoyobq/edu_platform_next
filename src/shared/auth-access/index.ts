@@ -88,18 +88,7 @@ export function hasStaffSemesterProfilesAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
-  const accessGroup = input.accessGroup ?? [];
-  const slotGroup = input.slotGroup ?? [];
-
-  if (accessGroup.includes('ADMIN')) {
-    return true;
-  }
-
-  return (
-    accessGroup.includes('STAFF') &&
-    (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
-      slotGroup.includes(TEACHING_GROUP_LEADER_SLOT_GROUP))
-  );
+  return hasAdminOrAcademicOfficerAccess(input);
 }
 
 export function canAccessPayloadCrypto(input: {

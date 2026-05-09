@@ -50,7 +50,7 @@ describe('auth access policy helpers', () => {
     expect(hasAcademicTeachingLogManagerAccess({ accessGroup: ['ADMIN'] })).toBe(true);
   });
 
-  it('allows staff semester profiles to admins, academic officers, and teaching group leaders', () => {
+  it('allows staff semester profiles to admins and academic officers', () => {
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['ADMIN'] })).toBe(true);
     expect(
       hasStaffSemesterProfilesAccess({
@@ -63,7 +63,7 @@ describe('auth access policy helpers', () => {
         accessGroup: ['STAFF'],
         slotGroup: ['TEACHING_GROUP_LEADER'],
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
