@@ -71,6 +71,63 @@ type VerifiedStaffIdentityResponse = {
   fetchVerifiedStaffIdentity: VerifiedStaffIdentityResult;
 };
 
+function normalizeStaffDirectoryTeacherText(value: string) {
+  return value.trim();
+}
+
+function findExactStaffDirectoryTeacher(value: string, teachers: readonly StaffDirectoryEntry[]) {
+  const normalizedValue = normalizeStaffDirectoryTeacherText(value);
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return (
+    teachers.find(
+      (teacher) =>
+        teacher.staffId === normalizedValue ||
+        teacher.name === normalizedValue ||
+        formatStaffDirectoryTeacherLabel(teacher) === normalizedValue,
+    ) ?? null
+  );
+}
+
+export function formatStaffDirectoryTeacherLabel(teacher: StaffDirectoryEntry) {
+  return `${teacher.staffId} ${teacher.name}`;
+}
+
+export function formatStaffDirectoryTeacherInputValue(
+  value: string,
+  teachers: readonly StaffDirectoryEntry[],
+) {
+  const matchedTeacher = findExactStaffDirectoryTeacher(value, teachers);
+
+  return matchedTeacher ? formatStaffDirectoryTeacherLabel(matchedTeacher) : value;
+}
+
+export function resolveStaffDirectoryTeacherInputValue(
+  value: string,
+  teachers: readonly StaffDirectoryEntry[],
+) {
+  const matchedTeacher = findExactStaffDirectoryTeacher(value, teachers);
+
+  return matchedTeacher?.staffId ?? value;
+}
+
+export function resolveStaffDirectoryTeacherStaffId(
+  value: string,
+  teachers: readonly StaffDirectoryEntry[],
+) {
+  const normalizedValue = normalizeStaffDirectoryTeacherText(value);
+  const matchedTeacher = findExactStaffDirectoryTeacher(normalizedValue, teachers);
+
+  if (matchedTeacher) {
+    return matchedTeacher.staffId;
+  }
+
+  return normalizedValue.split(/\s+/)[0] ?? '';
+}
+
 const STAFF_DIRECTORY_QUERY = `
   query StaffDirectory {
     staffDirectory {

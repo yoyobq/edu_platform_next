@@ -18,7 +18,6 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
-  AutoComplete,
   Button,
   Collapse,
   Empty,
@@ -54,8 +53,9 @@ import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   readVerifiedStaffIdentity,
-  type StaffDirectoryEntry,
+  resolveStaffDirectoryTeacherStaffId,
   type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type VerifiedStaffIdentityResult,
 } from '@/shared/upstream';
 
@@ -344,10 +344,6 @@ function resolveStatusTone(status: JournalEditableCardItem['status']) {
   }
 
   return 'default';
-}
-
-function buildTeacherOptionLabel(teacher: StaffDirectoryEntry) {
-  return `${teacher.staffId} ${teacher.name}`;
 }
 
 function isIntegratedOccurrenceMismatchText(value: string | null | undefined) {
@@ -1915,7 +1911,11 @@ export function AcademicTeachingLogPageContent({
   }, [isAdminViewer, loadStaffDirectoryForAdmin, storedSessionDirectoryKey]);
 
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
-  const normalizedStaffId = normalizeOptionalString(staffId);
+  const staffDirectoryTeachers = useMemo(
+    () => staffDirectoryResult?.teachers ?? [],
+    [staffDirectoryResult?.teachers],
+  );
+  const normalizedStaffId = resolveStaffDirectoryTeacherStaffId(staffId, staffDirectoryTeachers);
   const hasMissingStaffFilter = !normalizedStaffId;
   const isLocalAccountReady = Boolean(liveUpstreamAccount);
   const upstreamIdentityLabel = upstreamIdentity
@@ -1923,10 +1923,6 @@ export function AcademicTeachingLogPageContent({
     : storedSession
       ? '正在确认校园网身份'
       : '未连接校园网';
-  const teacherOptions = (staffDirectoryResult?.teachers ?? []).map((teacher) => ({
-    label: buildTeacherOptionLabel(teacher),
-    value: teacher.staffId,
-  }));
   const prefillIntegratedItems = useMemo(
     () =>
       (prefillResult?.integratedPreviews ?? []).map((item) =>
@@ -2530,23 +2526,15 @@ export function AcademicTeachingLogPageContent({
               <span className="lecture-journal-filter-label">教师</span>
               {isAdminViewer ? (
                 <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
-                  <AutoComplete
-                    variant="borderless"
-                    notFoundContent={isLoadingStaffDirectory ? '读取中' : undefined}
-                    options={teacherOptions}
+                  <StaffDirectoryTeacherAutoComplete
+                    loading={isLoadingStaffDirectory}
                     popupClassName="lecture-journal-teacher-autocomplete-popup"
                     popupMatchSelectWidth={220}
                     placeholder={liveDefaultStaffId || 'ID 或姓名'}
+                    teachers={staffDirectoryTeachers}
                     value={staffId}
+                    variant="borderless"
                     onChange={setStaffId}
-                    filterOption={(inputValue, option) =>
-                      String(option?.label || '')
-                        .toLowerCase()
-                        .includes(inputValue.trim().toLowerCase()) ||
-                      String(option?.value || '')
-                        .toLowerCase()
-                        .includes(inputValue.trim().toLowerCase())
-                    }
                   />
                 </span>
               ) : (

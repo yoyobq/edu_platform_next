@@ -20,6 +20,12 @@ import {
 } from '@/entities/academic-semester';
 
 import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+import {
+  resolveStaffDirectoryTeacherStaffId,
+  type StaffDirectoryEntry,
+  StaffDirectoryTeacherAutoComplete,
+  useStaffDirectoryTeachers,
+} from '@/shared/upstream';
 
 import { academicTimetableLabAccess } from './access';
 import {
@@ -99,18 +105,22 @@ function normalizeStringFilter(value: string) {
 function buildSharedQueryFilters(
   semesterId: number,
   filters: WeeklyTimetableFilters,
+  teachers: readonly StaffDirectoryEntry[],
 ): AcademicTimetableQueryFilters {
   return {
     semesterId,
-    staffId: normalizeStringFilter(filters.staffId),
+    staffId: resolveStaffDirectoryTeacherStaffId(filters.staffId, teachers) || undefined,
     sstsCourseId: normalizeStringFilter(filters.sstsCourseId),
     sstsTeachingClassId: normalizeStringFilter(filters.sstsTeachingClassId),
   };
 }
 
-function hasAtLeastOneQueryId(filters: WeeklyTimetableFilters) {
+function hasAtLeastOneQueryId(
+  filters: WeeklyTimetableFilters,
+  teachers: readonly StaffDirectoryEntry[],
+) {
   return Boolean(
-    normalizeStringFilter(filters.staffId) ||
+    resolveStaffDirectoryTeacherStaffId(filters.staffId, teachers) ||
     normalizeStringFilter(filters.sstsCourseId) ||
     normalizeStringFilter(filters.sstsTeachingClassId),
   );
@@ -136,10 +146,15 @@ export function AcademicTimetableLabPage() {
   const autoFilledWeekSemesterIdRef = useRef<number | null>(null);
   const hasUserEditedWeekIndexRef = useRef(false);
   const latestFiltersRef = useRef(filters);
+  const {
+    error: staffDirectoryError,
+    loading: staffDirectoryLoading,
+    teachers: staffDirectoryTeachers,
+  } = useStaffDirectoryTeachers();
 
   const hasAnyQueryId = useMemo(
-    () => isStaffViewer || hasAtLeastOneQueryId(filters),
-    [filters, isStaffViewer],
+    () => isStaffViewer || hasAtLeastOneQueryId(filters, staffDirectoryTeachers),
+    [filters, isStaffViewer, staffDirectoryTeachers],
   );
   const selectedSemester = useMemo(
     () => semesters.find((record) => record.id === selectedSemesterId) ?? null,
@@ -164,7 +179,7 @@ export function AcademicTimetableLabPage() {
 
   const loadTimetableItems = useCallback(
     async (semesterId: number, currentFilters: WeeklyTimetableFilters) => {
-      if (!isStaffViewer && !hasAtLeastOneQueryId(currentFilters)) {
+      if (!isStaffViewer && !hasAtLeastOneQueryId(currentFilters, staffDirectoryTeachers)) {
         setTimetableItemsError(null);
         setTimetableItems([]);
         return;
@@ -177,11 +192,11 @@ export function AcademicTimetableLabPage() {
         const result = isStaffViewer
           ? (
               await requestMyAcademicSemesterTimetableItems(
-                buildSharedQueryFilters(semesterId, currentFilters),
+                buildSharedQueryFilters(semesterId, currentFilters, staffDirectoryTeachers),
               )
             ).filter((item) => item.weekIndex === currentFilters.weekIndex)
           : await requestAcademicWeeklyTimetableItems({
-              ...buildSharedQueryFilters(semesterId, currentFilters),
+              ...buildSharedQueryFilters(semesterId, currentFilters, staffDirectoryTeachers),
               weekIndex: currentFilters.weekIndex,
             });
 
@@ -193,7 +208,7 @@ export function AcademicTimetableLabPage() {
         setTimetableItemsLoading(false);
       }
     },
-    [isStaffViewer],
+    [isStaffViewer, staffDirectoryTeachers],
   );
 
   useEffect(() => {
@@ -302,20 +317,26 @@ export function AcademicTimetableLabPage() {
           </div>
 
           <div className="min-w-40 flex-1">
-            <Typography.Text strong>教师 ID</Typography.Text>
-            <Input
+            <Typography.Text strong>教师</Typography.Text>
+            <StaffDirectoryTeacherAutoComplete
               disabled={isStaffViewer}
+              directoryUnavailableContent={
+                staffDirectoryError ? '目录不可用，可手动输入' : undefined
+              }
+              loading={staffDirectoryLoading}
+              popupMatchSelectWidth={240}
               style={{ marginTop: 8 }}
               placeholder={
                 isStaffViewer
                   ? '本人课表由当前登录身份确定'
                   : loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'
               }
+              teachers={staffDirectoryTeachers}
               value={filters.staffId}
-              onChange={(event) => {
+              onChange={(value) => {
                 setFilters((current) => ({
                   ...current,
-                  staffId: event.target.value,
+                  staffId: value,
                 }));
               }}
             />

@@ -9,11 +9,15 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  formatStaffDirectoryTeacherInputValue,
+  formatStaffDirectoryTeacherLabel,
   populateStaffDirectory,
   readStaffDirectory,
   readVerifiedStaffIdentity,
   resolveStaffDirectoryCache,
   resolveStaffDirectoryEntries,
+  resolveStaffDirectoryTeacherInputValue,
+  resolveStaffDirectoryTeacherStaffId,
 } from './staff-directory';
 
 describe('staff directory shared api', () => {
@@ -107,6 +111,20 @@ describe('staff directory shared api', () => {
     ).rejects.toThrow('staffIds 最多支持 800 项。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('formats and resolves staff directory teacher input values', () => {
+    const teachers = [
+      { name: '龚晶晶', staffId: '3664' },
+      { name: '张三', staffId: 'T20250017' },
+    ];
+
+    expect(formatStaffDirectoryTeacherLabel(teachers[1])).toBe('T20250017 张三');
+    expect(formatStaffDirectoryTeacherInputValue('3664', teachers)).toBe('3664 龚晶晶');
+    expect(resolveStaffDirectoryTeacherInputValue('3664 龚晶晶', teachers)).toBe('3664');
+    expect(resolveStaffDirectoryTeacherInputValue('手动输入', teachers)).toBe('手动输入');
+    expect(resolveStaffDirectoryTeacherStaffId('T20250017 张三', teachers)).toBe('T20250017');
+    expect(resolveStaffDirectoryTeacherStaffId('T20250018 李四', teachers)).toBe('T20250018');
   });
 
   it('reads verified staff identity with the current upstream session token', async () => {

@@ -7,7 +7,6 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
-  AutoComplete,
   Button,
   Empty,
   Form,
@@ -35,12 +34,12 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
-import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   resolveStaffDirectoryCache,
-  type StaffDirectoryEntry,
+  resolveStaffDirectoryTeacherStaffId,
   type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
 } from '@/shared/upstream';
 
 import {
@@ -109,35 +108,6 @@ const PRIMARY_DIFF_PRIORITY = [
   'CROSS_DAY',
   'CASCADE_FROM_BLOCKING_DETAIL',
 ] as const;
-
-function normalizeString(value: string) {
-  return normalizeOptionalTextValue(value, 'to_undefined') ?? '';
-}
-
-function buildTeacherOptionLabel(teacher: StaffDirectoryEntry) {
-  return `${teacher.staffId} ${teacher.name}`;
-}
-
-function resolveTeacherStaffId(value: string, teachers: readonly StaffDirectoryEntry[]) {
-  const normalizedValue = normalizeString(value);
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  const matchedTeacher = teachers.find(
-    (teacher) =>
-      teacher.staffId === normalizedValue ||
-      teacher.name === normalizedValue ||
-      buildTeacherOptionLabel(teacher) === normalizedValue,
-  );
-
-  if (matchedTeacher) {
-    return matchedTeacher.staffId;
-  }
-
-  return normalizedValue.split(/\s+/)[0] ?? '';
-}
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -907,7 +877,10 @@ export function IntegratedPlanCorrectionsLabPage() {
     () => staffDirectoryResult?.teachers ?? [],
     [staffDirectoryResult?.teachers],
   );
-  const normalizedStaffId = resolveTeacherStaffId(filters.staffId, staffDirectoryTeachers);
+  const normalizedStaffId = resolveStaffDirectoryTeacherStaffId(
+    filters.staffId,
+    staffDirectoryTeachers,
+  );
   const storedSessionDirectoryKey = storedSession
     ? [
         storedSession.accountId,
@@ -922,14 +895,6 @@ export function IntegratedPlanCorrectionsLabPage() {
         value: semester.id,
       })),
     [semesters],
-  );
-  const teacherOptions = useMemo(
-    () =>
-      staffDirectoryTeachers.map((teacher) => ({
-        label: buildTeacherOptionLabel(teacher),
-        value: buildTeacherOptionLabel(teacher),
-      })),
-    [staffDirectoryTeachers],
   );
   const canQuery = Boolean(selectedSemester && normalizedStaffId);
   const teachingClassTables = useMemo(() => {
@@ -1156,27 +1121,16 @@ export function IntegratedPlanCorrectionsLabPage() {
           </label>
           <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
             <span>教师</span>
-            <AutoComplete
+            <StaffDirectoryTeacherAutoComplete
               allowClear
-              filterOption={(inputValue, option) =>
-                String(option?.label || '')
-                  .toLowerCase()
-                  .includes(inputValue.trim().toLowerCase()) ||
-                String(option?.value || '')
-                  .toLowerCase()
-                  .includes(inputValue.trim().toLowerCase())
+              directoryUnavailableContent={
+                staffDirectoryError ? '目录不可用，可手动输入' : undefined
               }
-              notFoundContent={
-                isLoadingStaffDirectory
-                  ? '读取中'
-                  : staffDirectoryError
-                    ? '目录不可用，可手动输入'
-                    : undefined
-              }
-              options={teacherOptions}
+              loading={isLoadingStaffDirectory}
               popupClassName="integrated-plan-corrections-teacher-autocomplete-popup"
               popupMatchSelectWidth={240}
               placeholder="ID 或姓名"
+              teachers={staffDirectoryTeachers}
               value={filters.staffId}
               onChange={(value) => updateFilter('staffId', value)}
             />

@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TableOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Empty, Input, Select, Skeleton, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Select, Skeleton, Typography } from 'antd';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
 import type { AcademicInternalViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import { resolveStaffDirectoryEntries } from '@/shared/upstream';
+import {
+  resolveStaffDirectoryEntries,
+  resolveStaffDirectoryTeacherStaffId,
+  StaffDirectoryTeacherAutoComplete,
+  useStaffDirectoryTeachers,
+} from '@/shared/upstream';
 
 import type {
   AcademicTeacherSemesterScheduleItem,
@@ -104,10 +109,15 @@ export function SemesterTimetablePageContent({
   const submittedFiltersRef = useRef<SemesterTimetableFilters>({ staffId: loaderDefaultStaffId });
   const activeStaffNameRequestIdRef = useRef(0);
   const [submittedStaffId, setSubmittedStaffId] = useState(loaderDefaultStaffId);
+  const {
+    error: staffDirectoryError,
+    loading: staffDirectoryLoading,
+    teachers: staffDirectoryTeachers,
+  } = useStaffDirectoryTeachers();
 
   const normalizedStaffId = useMemo(
-    () => normalizeStringFilter(filters.staffId) ?? '',
-    [filters.staffId],
+    () => resolveStaffDirectoryTeacherStaffId(filters.staffId, staffDirectoryTeachers),
+    [filters.staffId, staffDirectoryTeachers],
   );
   const hasSemesterQueryId = useMemo(
     () => isStaffViewer || Boolean(normalizedStaffId),
@@ -136,7 +146,10 @@ export function SemesterTimetablePageContent({
 
   const loadSemesterScheduleItems = useCallback(
     async (semesterId: number, currentFilters: SemesterTimetableFilters) => {
-      const normalizedQueryStaffId = normalizeStringFilter(currentFilters.staffId);
+      const normalizedQueryStaffId = resolveStaffDirectoryTeacherStaffId(
+        currentFilters.staffId,
+        staffDirectoryTeachers,
+      );
 
       if (!isStaffViewer && !normalizedQueryStaffId) {
         setSemesterScheduleItemsError(null);
@@ -177,6 +190,7 @@ export function SemesterTimetablePageContent({
       listAcademicTeacherSemesterScheduleItems,
       listMyAcademicTeacherSemesterScheduleItems,
       loaderDefaultStaffId,
+      staffDirectoryTeachers,
     ],
   );
 
@@ -330,20 +344,26 @@ export function SemesterTimetablePageContent({
             </div>
 
             <div className="semester-timetable-control-field">
-              <Typography.Text strong>教师 ID</Typography.Text>
-              <Input
+              <Typography.Text strong>教师</Typography.Text>
+              <StaffDirectoryTeacherAutoComplete
                 disabled={isStaffViewer}
+                directoryUnavailableContent={
+                  staffDirectoryError ? '目录不可用，可手动输入' : undefined
+                }
+                loading={staffDirectoryLoading}
+                popupMatchSelectWidth={240}
                 style={{ marginTop: 8 }}
                 placeholder={
                   isStaffViewer
                     ? '本人课表由当前登录身份确定'
                     : loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'
                 }
+                teachers={staffDirectoryTeachers}
                 value={filters.staffId}
-                onChange={(event) => {
+                onChange={(value) => {
                   setFilters((current) => ({
                     ...current,
-                    staffId: event.target.value,
+                    staffId: value,
                   }));
                 }}
               />
@@ -360,7 +380,7 @@ export function SemesterTimetablePageContent({
                     return;
                   }
 
-                  const submittedFilters = { staffId: filters.staffId };
+                  const submittedFilters = { staffId: normalizedStaffId };
 
                   submittedFiltersRef.current = submittedFilters;
                   void loadSemesterScheduleItems(selectedSemesterId, submittedFilters);

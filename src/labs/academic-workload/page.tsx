@@ -5,7 +5,6 @@ import {
   Card,
   Descriptions,
   Empty,
-  Input,
   Select,
   Skeleton,
   Table,
@@ -22,6 +21,11 @@ import {
 } from '@/entities/academic-semester';
 
 import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+import {
+  resolveStaffDirectoryTeacherStaffId,
+  StaffDirectoryTeacherAutoComplete,
+  useStaffDirectoryTeachers,
+} from '@/shared/upstream';
 
 import { academicWorkloadLabAccess } from './access';
 import {
@@ -135,12 +139,6 @@ function buildTeachingWeekOptions(semester: AcademicSemesterRecord | null) {
   }
 
   return weeks;
-}
-
-function normalizeStaffId(value: string) {
-  const normalizedValue = value.trim();
-
-  return normalizedValue ? normalizedValue : '';
 }
 
 function formatLongDate(value: string) {
@@ -261,8 +259,13 @@ export function AcademicWorkloadLabPage() {
   const [workloadError, setWorkloadError] = useState<string | null>(null);
   const [occurrenceEnvelope, setOccurrenceEnvelope] =
     useState<AcademicStableWorkloadEnvelope | null>(null);
+  const {
+    error: staffDirectoryError,
+    loading: staffDirectoryLoading,
+    teachers: staffDirectoryTeachers,
+  } = useStaffDirectoryTeachers();
 
-  const normalizedStaffId = normalizeStaffId(staffId);
+  const normalizedStaffId = resolveStaffDirectoryTeacherStaffId(staffId, staffDirectoryTeachers);
 
   useEffect(() => {
     let cancelled = false;
@@ -604,14 +607,22 @@ export function AcademicWorkloadLabPage() {
               </label>
 
               <label className="flex flex-col gap-2">
-                <Typography.Text strong>教师 staffId</Typography.Text>
-                <Input
+                <Typography.Text strong>教师</Typography.Text>
+                <StaffDirectoryTeacherAutoComplete
                   disabled={isStaffViewer}
+                  directoryUnavailableContent={
+                    staffDirectoryError ? '目录不可用，可手动输入' : undefined
+                  }
+                  loading={staffDirectoryLoading}
+                  popupMatchSelectWidth={240}
                   placeholder={isStaffViewer ? '本人工作量由当前登录身份确定' : '例如 T20250017'}
+                  teachers={staffDirectoryTeachers}
                   value={staffId}
-                  onChange={(event) => setStaffId(event.target.value)}
-                  onPressEnter={() => {
-                    void handleCalculate();
+                  onChange={setStaffId}
+                  onInputKeyDown={(event) => {
+                    if (event.key === 'Enter') {
+                      void handleCalculate();
+                    }
                   }}
                 />
               </label>
