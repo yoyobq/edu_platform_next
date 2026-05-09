@@ -1,9 +1,9 @@
-// src/labs/staff-semester-profiles/lib/query-state.ts
+// src/features/staff-semester-profiles/application/query-state.ts
 import type {
   AcademicTeacherEngagementType,
   SortDirection,
   StaffSemesterProfileSortBy,
-} from '../api';
+} from '../infrastructure/staff-semester-profiles-api';
 
 export type StaffSemesterProfilesViewerRole = 'academicOfficer' | 'admin';
 

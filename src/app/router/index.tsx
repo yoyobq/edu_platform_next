@@ -29,6 +29,7 @@ import { ProfilePage } from '@/pages/profile';
 import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import { SemesterTimetablePage } from '@/pages/semester-timetable';
+import { StaffSemesterProfilesPage } from '@/pages/staff-semester-profiles';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -82,10 +83,6 @@ import {
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  loadStaffSemesterProfilesLabRouteModule,
-  staffSemesterProfilesLabAccess,
-} from '@/labs/staff-semester-profiles';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -689,28 +686,12 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
-async function staffSemesterProfilesLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(staffSemesterProfilesLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
+async function staffSemesterProfilesPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(staffSemesterProfilesLabAccess)) {
-      return null;
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -719,7 +700,6 @@ async function staffSemesterProfilesLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (
-    !hasLabAccess(staffSemesterProfilesLabAccess) ||
     !hasStaffSemesterProfilesAccess({
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
@@ -990,6 +970,11 @@ const router = createBrowserRouter([
         Component: SemesterCourseScheduleSyncPage,
       },
       {
+        path: '/academic-affairs/staff-semester-profiles',
+        loader: staffSemesterProfilesPageLoader,
+        Component: StaffSemesterProfilesPage,
+      },
+      {
         path: '/academic-affairs/my-teaching-logs',
         loader: myTeachingLogsPageLoader,
         Component: MyTeachingLogsPage,
@@ -1040,11 +1025,6 @@ const router = createBrowserRouter([
             path: 'academic-workload',
             loader: academicWorkloadLabLoader,
             lazy: loadAcademicWorkloadLabRouteModule,
-          },
-          {
-            path: 'staff-semester-profiles',
-            loader: staffSemesterProfilesLabLoader,
-            lazy: loadStaffSemesterProfilesLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

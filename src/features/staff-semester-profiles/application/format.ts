@@ -1,4 +1,4 @@
-// src/labs/staff-semester-profiles/lib/format.ts
+// src/features/staff-semester-profiles/application/format.ts
 import { EMPTY_CELL_TEXT } from './labels';
 
 export function formatDateTime(value: string) {

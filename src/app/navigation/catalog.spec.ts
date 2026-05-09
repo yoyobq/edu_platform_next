@@ -42,6 +42,7 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+      '/academic-affairs/staff-semester-profiles',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -62,7 +63,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/staff-semester-profiles',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -82,7 +82,11 @@ describe('navigation catalog', () => {
     );
 
     expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
-      ['/academic-affairs/academic-calendar', '/academic-affairs/semester-course-schedule-sync'],
+      [
+        '/academic-affairs/academic-calendar',
+        '/academic-affairs/semester-course-schedule-sync',
+        '/academic-affairs/staff-semester-profiles',
+      ],
     );
     expect(
       findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
@@ -99,7 +103,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/staff-semester-profiles',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -170,6 +173,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
+      '/academic-affairs/staff-semester-profiles',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -182,8 +186,16 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/staff-semester-profiles',
     ]);
+    expect(
+      canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
+        accountId: 1002,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+        appEnv: 'dev',
+      }),
+    ).toBe(true);
     expect(
       canAccessNavigationPath('/academic-affairs/semester-course-schedule-sync', {
         accountId: 1002,
@@ -245,12 +257,12 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
+      '/academic-affairs/staff-semester-profiles',
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/academic-timetable',
       '/labs/academic-workload',
-      '/labs/staff-semester-profiles',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',

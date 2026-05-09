@@ -1,7 +1,7 @@
-// src/labs/staff-semester-profiles/ui/cell-renderers.tsx
+// src/features/staff-semester-profiles/ui/cell-renderers.tsx
 import { Typography } from 'antd';
 
-import { EMPTY_CELL_TEXT } from '../lib/labels';
+import { EMPTY_CELL_TEXT } from '../application/labels';
 
 export function renderEmptyText() {
   return <Typography.Text type="secondary">{EMPTY_CELL_TEXT}</Typography.Text>;

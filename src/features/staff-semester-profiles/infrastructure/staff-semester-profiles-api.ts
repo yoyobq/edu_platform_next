@@ -1,4 +1,4 @@
-// src/labs/staff-semester-profiles/infrastructure/staff-semester-profiles-api.ts
+// src/features/staff-semester-profiles/infrastructure/staff-semester-profiles-api.ts
 import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
@@ -45,7 +45,6 @@ export type StaffSemesterProfileListResponse = {
 };
 
 export type RequestStaffSemesterProfilesInput = {
-  keyword?: string;
   limit?: number;
   page?: number;
   semesterId: number;
@@ -125,7 +124,6 @@ type BackfillStaffSemesterProfilesFromCourseSchedulesResponse = {
 
 const STAFF_SEMESTER_PROFILES_QUERY = `
   query StaffSemesterProfiles(
-    $keyword: String
     $limit: Int
     $page: Int
     $semesterId: Int!
@@ -137,7 +135,6 @@ const STAFF_SEMESTER_PROFILES_QUERY = `
     $workloadDepartmentId: String
   ) {
     staffSemesterProfiles(
-      keyword: $keyword
       limit: $limit
       page: $page
       semesterId: $semesterId
@@ -269,7 +266,6 @@ function normalizeBackfillInput(input: BackfillStaffSemesterProfilesFromCourseSc
 
 function normalizeRequestInput(input: RequestStaffSemesterProfilesInput) {
   return {
-    keyword: normalizeStringFilter(input.keyword),
     limit: normalizePositiveInteger(input.limit, 10, 100),
     page: normalizePositiveInteger(input.page, 1),
     semesterId: input.semesterId,

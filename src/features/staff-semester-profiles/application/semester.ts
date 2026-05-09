@@ -1,4 +1,4 @@
-// src/labs/staff-semester-profiles/lib/semester.ts
+// src/features/staff-semester-profiles/application/semester.ts
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
 export function sortSemesters(records: AcademicSemesterRecord[]) {

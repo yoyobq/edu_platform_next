@@ -1,11 +1,11 @@
-// src/labs/staff-semester-profiles/ui/filters-card.tsx
+// src/features/staff-semester-profiles/ui/filters-card.tsx
 import { Alert, Button, Card, Select, Skeleton, Typography } from 'antd';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
-import { TEACHER_ENGAGEMENT_TYPE_OPTIONS } from '../lib/labels';
-import type { EntitySelectOption } from '../lib/options';
-import type { StaffSemesterProfilesFilterState } from '../lib/query-state';
+import { TEACHER_ENGAGEMENT_TYPE_OPTIONS } from '../application/labels';
+import type { EntitySelectOption } from '../application/options';
+import type { StaffSemesterProfilesFilterState } from '../application/query-state';
 
 type StaffSemesterProfilesFiltersCardProps = {
   filterState: StaffSemesterProfilesFilterState;

@@ -1,5 +1,8 @@
-// src/labs/staff-semester-profiles/lib/options.ts
-import type { StaffSemesterProfile, StaffSemesterProfileDepartmentOption } from '../api';
+// src/features/staff-semester-profiles/application/options.ts
+import type {
+  StaffSemesterProfile,
+  StaffSemesterProfileDepartmentOption,
+} from '../infrastructure/staff-semester-profiles-api';
 
 export type EntitySelectOption = {
   label: string;

@@ -4,6 +4,7 @@ import {
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
   hasAdminOrAcademicOfficerAccess,
+  hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
@@ -42,6 +43,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             navMode: 'rail' as const,
             path: '/academic-affairs/semester-course-schedule-sync',
             primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStaffSemesterProfilesAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'SolutionOutlined',
+            key: '/academic-affairs/staff-semester-profiles',
+            label: '教师学期归属',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/staff-semester-profiles',
+            primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
         ]

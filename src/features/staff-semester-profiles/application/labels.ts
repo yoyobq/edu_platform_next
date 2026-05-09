@@ -1,9 +1,9 @@
-// src/labs/staff-semester-profiles/lib/labels.ts
+// src/features/staff-semester-profiles/application/labels.ts
 import type {
   AcademicTeacherEngagementType,
   StaffSemesterProfileBackfillAction,
   StaffSemesterProfileBackfillBlockingReason,
-} from '../api';
+} from '../infrastructure/staff-semester-profiles-api';
 
 export const EMPTY_CELL_TEXT = '—';
 

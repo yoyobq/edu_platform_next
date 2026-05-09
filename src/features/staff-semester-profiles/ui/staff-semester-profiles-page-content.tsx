@@ -1,3 +1,4 @@
+// src/features/staff-semester-profiles/ui/staff-semester-profiles-page-content.tsx
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SolutionOutlined } from '@ant-design/icons';
 import {
@@ -15,7 +16,6 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
@@ -24,12 +24,12 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
-import { formatDateTime } from './lib/format';
+import { formatDateTime } from '../application/format';
 import {
   TEACHER_ENGAGEMENT_TYPE_LABELS,
   TEACHER_ENGAGEMENT_TYPE_OPTIONS,
   TEACHER_ENGAGEMENT_TYPE_TAG_COLORS,
-} from './lib/labels';
+} from '../application/labels';
 import {
   buildDepartmentOptions,
   buildTeacherOptions,
@@ -37,7 +37,7 @@ import {
   buildWorkloadDepartmentOptions,
   ensureEntityOption,
   hasTeachingGroupInDepartment,
-} from './lib/options';
+} from '../application/options';
 import {
   DEFAULT_FILTER_STATE,
   DEFAULT_QUERY_STATE,
@@ -47,12 +47,10 @@ import {
   scopeFilterStateToWorkloadDepartment,
   type StaffSemesterProfilesFilterState,
   type StaffSemesterProfilesQueryState,
+  type StaffSemesterProfilesViewerRole,
   toSorterOrder,
-} from './lib/query-state';
-import { pickNextSemesterId, sortSemesters } from './lib/semester';
-import { StaffSemesterProfilesBackfillPanel } from './ui/backfill-panel';
-import { renderEmptyText, renderSingleLineText } from './ui/cell-renderers';
-import { StaffSemesterProfilesFiltersCard } from './ui/filters-card';
+} from '../application/query-state';
+import { pickNextSemesterId, sortSemesters } from '../application/semester';
 import {
   type AcademicTeacherEngagementType,
   backfillStaffSemesterProfilesFromCourseSchedules,
@@ -64,12 +62,16 @@ import {
   type StaffSemesterProfileDepartmentOption,
   type StaffSemesterProfileListResponse,
   updateStaffSemesterProfile,
-} from './api';
+} from '../infrastructure/staff-semester-profiles-api';
 
-type StaffSemesterProfilesLabLoaderData = {
+import { StaffSemesterProfilesBackfillPanel } from './backfill-panel';
+import { renderEmptyText, renderSingleLineText } from './cell-renderers';
+import { StaffSemesterProfilesFiltersCard } from './filters-card';
+
+export type StaffSemesterProfilesPageContentProps = {
   defaultDepartmentId?: string | null;
-  viewerRole?: 'academicOfficer' | 'admin';
-} | null;
+  viewerRole?: StaffSemesterProfilesViewerRole;
+};
 
 type EditProfileFormValues = {
   teacherEngagementType?: AcademicTeacherEngagementType;
@@ -105,13 +107,15 @@ function applyUpdatedProfile(
   };
 }
 
-export function StaffSemesterProfilesLabPage() {
-  const loaderData = useLoaderData() as StaffSemesterProfilesLabLoaderData;
+export function StaffSemesterProfilesPageContent({
+  defaultDepartmentId: defaultDepartmentIdProp,
+  viewerRole: viewerRoleProp,
+}: StaffSemesterProfilesPageContentProps) {
   const [messageApi, messageContextHolder] = message.useMessage();
   const [editForm] = Form.useForm<EditProfileFormValues>();
-  const viewerRole = loaderData?.viewerRole ?? 'academicOfficer';
+  const viewerRole = viewerRoleProp ?? 'academicOfficer';
   const isAcademicOfficer = viewerRole === 'academicOfficer';
-  const defaultDepartmentId = loaderData?.defaultDepartmentId?.trim() ?? '';
+  const defaultDepartmentId = defaultDepartmentIdProp?.trim() ?? '';
   const scopedWorkloadDepartmentId = isAcademicOfficer ? defaultDepartmentId : '';
   const initialFilterState = useMemo(
     () => scopeFilterStateToWorkloadDepartment(DEFAULT_FILTER_STATE, scopedWorkloadDepartmentId),
@@ -141,7 +145,7 @@ export function StaffSemesterProfilesLabPage() {
   const [editingProfile, setEditingProfile] = useState<StaffSemesterProfile | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
   const [backfillWorkloadDepartmentId, setBackfillWorkloadDepartmentId] = useState(
-    loaderData?.defaultDepartmentId ?? '',
+    defaultDepartmentIdProp ?? '',
   );
   const [backfillResult, setBackfillResult] =
     useState<BackfillStaffSemesterProfilesFromCourseSchedulesResult | null>(null);

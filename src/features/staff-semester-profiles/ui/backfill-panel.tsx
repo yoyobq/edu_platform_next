@@ -1,22 +1,22 @@
-// src/labs/staff-semester-profiles/ui/backfill-panel.tsx
+// src/features/staff-semester-profiles/ui/backfill-panel.tsx
 import { Alert, Button, Card, Empty, Popconfirm, Select, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-import type {
-  AcademicTeacherEngagementType,
-  BackfillStaffSemesterProfilesFromCourseSchedulesItem,
-  BackfillStaffSemesterProfilesFromCourseSchedulesResult,
-  StaffSemesterProfileBackfillAction,
-  StaffSemesterProfileBackfillBlockingReason,
-} from '../api';
 import {
   BACKFILL_ACTION_LABELS,
   BACKFILL_ACTION_TAG_COLORS,
   BACKFILL_BLOCKING_REASON_LABELS,
   TEACHER_ENGAGEMENT_TYPE_LABELS,
   TEACHER_ENGAGEMENT_TYPE_TAG_COLORS,
-} from '../lib/labels';
-import type { EntitySelectOption } from '../lib/options';
+} from '../application/labels';
+import type { EntitySelectOption } from '../application/options';
+import type {
+  AcademicTeacherEngagementType,
+  BackfillStaffSemesterProfilesFromCourseSchedulesItem,
+  BackfillStaffSemesterProfilesFromCourseSchedulesResult,
+  StaffSemesterProfileBackfillAction,
+  StaffSemesterProfileBackfillBlockingReason,
+} from '../infrastructure/staff-semester-profiles-api';
 
 import { renderEmptyText, renderSingleLineText } from './cell-renderers';
 

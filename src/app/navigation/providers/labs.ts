@@ -1,7 +1,5 @@
 import type { AuthAccessGroup } from '@/features/auth';
 
-import { hasStaffSemesterProfilesAccess } from '@/shared/auth-access';
-
 import type { NavigationItemsProvider } from '../types';
 
 function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
@@ -98,23 +96,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: '教师工作量',
             navMode: 'rail' as const,
             path: '/labs/academic-workload',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasStaffSemesterProfilesAccess({
-      accessGroup: filter.accessGroup,
-      slotGroup: filter.slotGroup,
-    })
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'SolutionOutlined',
-            key: '/labs/staff-semester-profiles',
-            label: '教师学期归属',
-            navMode: 'rail' as const,
-            path: '/labs/staff-semester-profiles',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

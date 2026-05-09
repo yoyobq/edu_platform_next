@@ -1,4 +1,4 @@
-// src/labs/staff-semester-profiles/infrastructure/staff-semester-profiles-api.spec.ts
+// src/features/staff-semester-profiles/infrastructure/staff-semester-profiles-api.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, isGraphQLIngressErrorMock } = vi.hoisted(() => ({
@@ -51,7 +51,6 @@ describe('staff-semester-profiles api', () => {
 
     await expect(
       requestStaffSemesterProfiles({
-        keyword: ' 张 ',
         limit: 20,
         page: 2,
         semesterId: 202601,
@@ -73,7 +72,6 @@ describe('staff-semester-profiles api', () => {
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('staffSemesterProfiles'),
       {
-        keyword: '张',
         limit: 20,
         page: 2,
         semesterId: 202601,
@@ -104,7 +102,6 @@ describe('staff-semester-profiles api', () => {
     });
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
-      keyword: undefined,
       limit: 100,
       page: 1,
       semesterId: 202601,
@@ -173,7 +170,6 @@ describe('staff-semester-profiles api', () => {
     );
 
     expect(executeGraphQLMock).toHaveBeenNthCalledWith(1, expect.any(String), {
-      keyword: undefined,
       limit: 100,
       page: 1,
       semesterId: 202601,
@@ -185,7 +181,6 @@ describe('staff-semester-profiles api', () => {
       workloadDepartmentId: undefined,
     });
     expect(executeGraphQLMock).toHaveBeenNthCalledWith(2, expect.any(String), {
-      keyword: undefined,
       limit: 100,
       page: 2,
       semesterId: 202601,
@@ -214,7 +209,6 @@ describe('staff-semester-profiles api', () => {
     });
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
-      keyword: undefined,
       limit: 100,
       page: 1,
       semesterId: 202601,

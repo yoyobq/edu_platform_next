@@ -1,4 +1,5 @@
-// src/labs/staff-semester-profiles/api.ts
+// src/features/staff-semester-profiles/index.ts
+export type { StaffSemesterProfilesViewerRole } from './application/query-state';
 export type {
   AcademicTeacherEngagementType,
   BackfillStaffSemesterProfilesFromCourseSchedulesInput,
@@ -22,3 +23,5 @@ export {
   requestStaffSemesterProfiles,
   updateStaffSemesterProfile,
 } from './infrastructure/staff-semester-profiles-api';
+export type { StaffSemesterProfilesPageContentProps } from './ui/staff-semester-profiles-page-content';
+export { StaffSemesterProfilesPageContent } from './ui/staff-semester-profiles-page-content';
