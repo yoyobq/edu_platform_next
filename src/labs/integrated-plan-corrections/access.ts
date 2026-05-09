@@ -1,5 +1,5 @@
 export const integratedPlanCorrectionsLabAccess = {
-  allowedAccessLevels: ['admin'],
+  allowedAccessLevels: ['admin', 'staff'],
   env: ['dev', 'prod'],
   menu: false,
 } as const;

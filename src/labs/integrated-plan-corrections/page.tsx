@@ -34,6 +34,7 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import type { AcademicViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   resolveStaffDirectoryCache,
@@ -51,15 +52,18 @@ import {
   type IntegratedPlanCorrectionSuggestionsResult,
   type IntegratedPlanCorrectionTeachingClassGroup,
   listIntegratedPlanCorrectionSuggestions,
+  listMyIntegratedPlanCorrectionSuggestions,
 } from './api';
 
 import './page.css';
 
 type IntegratedPlanCorrectionsLabLoaderData = {
+  defaultStaffId?: string | null;
   upstreamAccount?: {
     accountId: number;
     displayName: string;
   } | null;
+  viewerRole?: AcademicViewerRole;
 } | null;
 
 type QueryFilters = {
@@ -459,7 +463,7 @@ function SummaryMetric({
   value,
 }: {
   label: string;
-  tone?: 'default' | 'danger';
+  tone?: 'default' | 'danger' | 'warning';
   value: number;
 }) {
   return (
@@ -734,6 +738,9 @@ function SecondaryRepairGroups({
   return (
     <details className="integrated-plan-corrections-debug">
       <summary>连续异常分组 repairGroups（{repairGroups.length}）</summary>
+      <div className="integrated-plan-corrections-debug-hint">
+        管理员调试信息，普通用户无需关注。
+      </div>
       <div className="integrated-plan-corrections-groups integrated-plan-corrections-groups-secondary">
         {repairGroups.map((group, index) => (
           <RepairGroupCard group={group} index={index} key={group.id} />
@@ -834,6 +841,9 @@ function TeachingClassAlignmentTabs({
 
 export function IntegratedPlanCorrectionsLabPage() {
   const loaderData = useLoaderData() as IntegratedPlanCorrectionsLabLoaderData;
+  const defaultStaffId = loaderData?.defaultStaffId?.trim() ?? '';
+  const viewerRole = loaderData?.viewerRole ?? 'authenticated';
+  const isStaffViewer = viewerRole === 'staff';
   const upstreamAccount = loaderData?.upstreamAccount ?? null;
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const {
@@ -848,13 +858,13 @@ export function IntegratedPlanCorrectionsLabPage() {
     keepAlive: true,
   });
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    lockedUserId: null,
+    lockedUserId: isStaffViewer && defaultStaffId ? defaultStaffId : null,
     rememberedCredentials,
   });
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [filters, setFilters] = useState<QueryFilters>({
-    staffId: '',
+    staffId: defaultStaffId,
   });
   const [result, setResult] = useState<IntegratedPlanCorrectionSuggestionsResult | null>(null);
   const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
@@ -896,7 +906,9 @@ export function IntegratedPlanCorrectionsLabPage() {
       })),
     [semesters],
   );
-  const canQuery = Boolean(selectedSemester && normalizedStaffId);
+  const canQuery = Boolean(
+    selectedSemester && (isStaffViewer ? defaultStaffId : normalizedStaffId),
+  );
   const teachingClassTables = useMemo(() => {
     if (!result) {
       return [];
@@ -968,6 +980,19 @@ export function IntegratedPlanCorrectionsLabPage() {
   }, []);
 
   useEffect(() => {
+    if (isStaffViewer) {
+      setFilters((current) =>
+        current.staffId === defaultStaffId ? current : { ...current, staffId: defaultStaffId },
+      );
+      return;
+    }
+
+    if (defaultStaffId && !filters.staffId.trim()) {
+      setFilters((current) => ({ ...current, staffId: defaultStaffId }));
+    }
+  }, [defaultStaffId, filters.staffId, isStaffViewer]);
+
+  useEffect(() => {
     let cancelled = false;
 
     async function loadStaffDirectory() {
@@ -1018,7 +1043,7 @@ export function IntegratedPlanCorrectionsLabPage() {
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: storedSession?.upstreamLoginId,
-        lockedUserId: null,
+        lockedUserId: isStaffViewer && defaultStaffId ? defaultStaffId : null,
         rememberedCredentials,
       }),
     );
@@ -1041,19 +1066,29 @@ export function IntegratedPlanCorrectionsLabPage() {
       return;
     }
 
-    if (!selectedSemester || !normalizedStaffId) {
-      setQueryError('请选择学期并填写教师 ID 后再查询。');
+    if (!selectedSemester) {
+      setQueryError('请选择学期后再查询。');
+      return;
+    }
+
+    if (isStaffViewer ? !defaultStaffId : !normalizedStaffId) {
+      setQueryError(isStaffViewer ? '当前账号没有可用的教师 ID。' : '请填写教师 ID 后再查询。');
       return;
     }
 
     setIsQuerying(true);
 
     try {
-      const nextResult = await listIntegratedPlanCorrectionSuggestions({
-        semesterId: selectedSemester.id,
-        staffId: normalizedStaffId,
-        upstreamSessionToken: session.upstreamSessionToken,
-      });
+      const nextResult = isStaffViewer
+        ? await listMyIntegratedPlanCorrectionSuggestions({
+            semesterId: selectedSemester.id,
+            upstreamSessionToken: session.upstreamSessionToken,
+          })
+        : await listIntegratedPlanCorrectionSuggestions({
+            semesterId: selectedSemester.id,
+            staffId: normalizedStaffId,
+            upstreamSessionToken: session.upstreamSessionToken,
+          });
 
       persistSessionFromResult(session, nextResult);
       setResult(nextResult);
@@ -1103,102 +1138,121 @@ export function IntegratedPlanCorrectionsLabPage() {
         title="一体化对齐"
       />
 
-      <section className="integrated-plan-corrections-toolbar">
-        <div
-          className="integrated-plan-corrections-querybar"
-          aria-label="一体化勘误查询条件"
-          role="search"
-        >
-          <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-semester">
-            <span>学期</span>
-            <Select
-              loading={isLoadingSemesters}
-              options={semesterOptions}
-              placeholder="选择学期"
-              value={selectedSemesterId ?? undefined}
-              onChange={setSelectedSemesterId}
-            />
-          </label>
-          <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
-            <span>教师</span>
-            <StaffDirectoryTeacherAutoComplete
-              allowClear
-              directoryUnavailableContent={
-                staffDirectoryError ? '目录不可用，可手动输入' : undefined
-              }
-              loading={isLoadingStaffDirectory}
-              popupClassName="integrated-plan-corrections-teacher-autocomplete-popup"
-              popupMatchSelectWidth={240}
-              placeholder="ID 或姓名"
-              teachers={staffDirectoryTeachers}
-              value={filters.staffId}
-              onChange={(value) => updateFilter('staffId', value)}
-            />
-          </label>
-          <div className="integrated-plan-corrections-query-preference">
-            <Switch size="small" checked={showConsistentRows} onChange={setShowConsistentRows} />
-            <Tooltip title="默认隐藏 MATCHED 且无 diff 的行">
-              <span>显示一致行</span>
-            </Tooltip>
-          </div>
-          <div className="integrated-plan-corrections-query-action">
-            <Button
-              disabled={!canQuery || isQuerying}
-              icon={<SearchOutlined />}
-              loading={isQuerying}
-              type="primary"
-              onClick={() => void runQuery()}
+      <div className="integrated-plan-corrections-workspace">
+        <aside className="integrated-plan-corrections-side">
+          <section className="integrated-plan-corrections-toolbar">
+            <div
+              className="integrated-plan-corrections-querybar"
+              aria-label="一体化勘误查询条件"
+              role="search"
             >
-              查询建议
-            </Button>
-          </div>
-        </div>
-      </section>
+              <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-semester">
+                <span>学期</span>
+                <Select
+                  loading={isLoadingSemesters}
+                  options={semesterOptions}
+                  placeholder="选择学期"
+                  value={selectedSemesterId ?? undefined}
+                  onChange={setSelectedSemesterId}
+                />
+              </label>
+              <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
+                <span>教师</span>
+                <StaffDirectoryTeacherAutoComplete
+                  allowClear
+                  disabled={isStaffViewer}
+                  directoryUnavailableContent={
+                    staffDirectoryError ? '目录不可用，可手动输入' : undefined
+                  }
+                  loading={isLoadingStaffDirectory}
+                  popupClassName="integrated-plan-corrections-teacher-autocomplete-popup"
+                  popupMatchSelectWidth={240}
+                  placeholder={isStaffViewer ? '当前登录教师' : 'ID 或姓名'}
+                  teachers={staffDirectoryTeachers}
+                  value={filters.staffId}
+                  onChange={(value) => updateFilter('staffId', value)}
+                />
+              </label>
+              <div className="integrated-plan-corrections-query-preference">
+                <Switch
+                  size="small"
+                  checked={showConsistentRows}
+                  onChange={setShowConsistentRows}
+                />
+                <Tooltip title="默认隐藏 MATCHED 且无 diff 的行">
+                  <span>显示一致行</span>
+                </Tooltip>
+              </div>
+              <div className="integrated-plan-corrections-query-action">
+                <Button
+                  disabled={!canQuery || isQuerying}
+                  icon={<SearchOutlined />}
+                  loading={isQuerying}
+                  type="primary"
+                  onClick={() => void runQuery()}
+                >
+                  查询建议
+                </Button>
+              </div>
+            </div>
+          </section>
 
-      {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-      {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
-      {isQuerying ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
+          {semesterError || queryError ? (
+            <div className="integrated-plan-corrections-side-alerts">
+              {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+              {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
+            </div>
+          ) : null}
 
-      {!isQuerying && result ? (
-        <section className="integrated-plan-corrections-result">
-          <div className="integrated-plan-corrections-summary">
-            <SummaryMetric label="计划" value={result.summary.planCount} />
-            <SummaryMetric label="明细" value={result.summary.detailCount} />
-            <SummaryMetric label="需要修复组" value={result.summary.repairGroupCount} />
-            <SummaryMetric label="影响明细" value={result.summary.affectedDetailCount} />
-            <SummaryMetric
-              label="阻塞"
-              tone={result.summary.blockingIssueCount > 0 ? 'danger' : 'default'}
-              value={result.summary.blockingIssueCount}
-            />
-          </div>
-
-          {teachingClassTables.length === 0 ? (
-            <div className="integrated-plan-corrections-empty">
-              <Empty
-                description="未发现需要展示的一体化计划对齐结果"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
+          {result ? (
+            <section className="integrated-plan-corrections-summary" aria-label="一体化勘误概览">
+              <SummaryMetric
+                label="影响明细"
+                tone={result.summary.affectedDetailCount > 0 ? 'warning' : 'default'}
+                value={result.summary.affectedDetailCount}
               />
-            </div>
-          ) : (
-            <div className="integrated-plan-corrections-tables">
-              <TeachingClassAlignmentTabs tables={teachingClassTables} />
-            </div>
-          )}
-        </section>
-      ) : null}
+              <SummaryMetric
+                label="阻塞"
+                tone={result.summary.blockingIssueCount > 0 ? 'danger' : 'default'}
+                value={result.summary.blockingIssueCount}
+              />
+            </section>
+          ) : null}
+        </aside>
 
-      {!isQuerying && !result ? (
-        <section className="integrated-plan-corrections-prequery">
-          <ExclamationCircleOutlined />
-          <div>
-            <Typography.Text strong>等待查询</Typography.Text>
-            <Typography.Paragraph type="secondary">
-              查询后会展示授课计划课时与校历排课课次的逐行对比结果。
-            </Typography.Paragraph>
-          </div>
-        </section>
-      ) : null}
+        <main className="integrated-plan-corrections-main">
+          {isQuerying ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
+
+          {!isQuerying && result ? (
+            <section className="integrated-plan-corrections-result">
+              {teachingClassTables.length === 0 ? (
+                <div className="integrated-plan-corrections-empty">
+                  <Empty
+                    description="未发现需要展示的一体化计划对齐结果"
+                    image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  />
+                </div>
+              ) : (
+                <div className="integrated-plan-corrections-tables">
+                  <TeachingClassAlignmentTabs tables={teachingClassTables} />
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {!isQuerying && !result ? (
+            <section className="integrated-plan-corrections-prequery">
+              <ExclamationCircleOutlined />
+              <div>
+                <Typography.Text strong>等待查询</Typography.Text>
+                <Typography.Paragraph type="secondary">
+                  查询后会展示授课计划课时与校历排课课次的逐行对比结果。
+                </Typography.Paragraph>
+              </div>
+            </section>
+          ) : null}
+        </main>
+      </div>
 
       <UpstreamLoginModal
         description="本页使用校园网会话查询建议，不会提交计划修正。"

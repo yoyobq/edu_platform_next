@@ -114,6 +114,15 @@ type ListIntegratedPlanCorrectionSuggestionsResponse = {
   listAcademicIntegratedPlanCorrectionSuggestions: IntegratedPlanCorrectionSuggestionsResult;
 };
 
+export type ListMyIntegratedPlanCorrectionSuggestionsInput = {
+  semesterId: number;
+  upstreamSessionToken: string;
+};
+
+type ListMyIntegratedPlanCorrectionSuggestionsResponse = {
+  listMyAcademicIntegratedPlanCorrectionSuggestions: IntegratedPlanCorrectionSuggestionsResult;
+};
+
 const LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
   query ListAcademicIntegratedPlanCorrectionSuggestions(
     $lecturePlanId: String
@@ -127,6 +136,114 @@ const LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
       semesterId: $semesterId
       staffId: $staffId
       teachingClassId: $teachingClassId
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      summary {
+        planCount
+        detailCount
+        repairGroupCount
+        affectedDetailCount
+        blockingIssueCount
+      }
+      teachingClassGroups {
+        id
+        lecturePlanId
+        teachingClassId
+        courseName
+        teachingClassName
+        startOriginalIndex
+        endOriginalIndex
+        itemOriginalIndexes
+        repairGroupIds
+      }
+      repairGroups {
+        id
+        rootLecturePlanDetailId
+        lecturePlanId
+        teachingClassId
+        startOriginalIndex
+        endOriginalIndex
+        affectedDetailIds
+        diffs
+        blockingIssue
+        suggestions {
+          lecturePlanDetailId
+          cascadeFromGroupRoot
+          diffs
+          blockingIssue
+          currentPlan {
+            weekNumber
+            lessonHours
+            learningTaskNo
+            learningTaskName
+            learningSessionNo
+            learningSessionContent
+            teachingUnitNo
+            teachingUnitName
+          }
+          suggested {
+            firstWeekNumber
+            lessonHours
+            suggestedOccurrences {
+              date
+              weekNumber
+              dayOfWeek
+              periodStart
+              periodEnd
+              lessonHours
+            }
+          }
+        }
+      }
+      items {
+        alignmentStatus
+        lecturePlanId
+        lecturePlanDetailId
+        teachingClassId
+        courseName
+        teachingClassName
+        currentOriginalIndex
+        expectedIndex
+        diffs
+        blockingIssue
+        repairGroupId
+        cascadeFromGroupRoot
+        currentPlan {
+          weekNumber
+          lessonHours
+          learningTaskNo
+          learningTaskName
+          learningSessionNo
+          learningSessionContent
+          teachingUnitNo
+          teachingUnitName
+        }
+        suggested {
+          firstWeekNumber
+          lessonHours
+          suggestedOccurrences {
+            date
+            weekNumber
+            dayOfWeek
+            periodStart
+            periodEnd
+            lessonHours
+          }
+        }
+      }
+      upstreamSessionToken
+      expiresAt
+    }
+  }
+`;
+
+const LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
+  query ListMyAcademicIntegratedPlanCorrectionSuggestions(
+    $semesterId: Int!
+    $upstreamSessionToken: String!
+  ) {
+    listMyAcademicIntegratedPlanCorrectionSuggestions(
+      semesterId: $semesterId
       upstreamSessionToken: $upstreamSessionToken
     ) {
       summary {
@@ -253,6 +370,15 @@ function normalizeInput(input: ListIntegratedPlanCorrectionSuggestionsInput) {
   };
 }
 
+function normalizeMyInput(input: ListMyIntegratedPlanCorrectionSuggestionsInput) {
+  return {
+    semesterId: input.semesterId,
+    upstreamSessionToken: normalizeRequiredTextValue(String(input.upstreamSessionToken || ''), {
+      message: 'upstreamSessionToken 为必填。',
+    }),
+  };
+}
+
 export async function listIntegratedPlanCorrectionSuggestions(
   input: ListIntegratedPlanCorrectionSuggestionsInput,
 ) {
@@ -263,6 +389,25 @@ export async function listIntegratedPlanCorrectionSuggestions(
     >(LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeInput(input));
 
     return response.listAcademicIntegratedPlanCorrectionSuggestions;
+  } catch (error) {
+    if (isExpiredUpstreamSessionError(error)) {
+      throw error;
+    }
+
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载一体化计划修正建议。'));
+  }
+}
+
+export async function listMyIntegratedPlanCorrectionSuggestions(
+  input: ListMyIntegratedPlanCorrectionSuggestionsInput,
+) {
+  try {
+    const response = await requestGraphQL<
+      ListMyIntegratedPlanCorrectionSuggestionsResponse,
+      ReturnType<typeof normalizeMyInput>
+    >(LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeMyInput(input));
+
+    return response.listMyAcademicIntegratedPlanCorrectionSuggestions;
   } catch (error) {
     if (isExpiredUpstreamSessionError(error)) {
       throw error;

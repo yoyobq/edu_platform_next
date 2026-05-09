@@ -15,7 +15,10 @@ vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
 }));
 
-import { listIntegratedPlanCorrectionSuggestions } from './api';
+import {
+  listIntegratedPlanCorrectionSuggestions,
+  listMyIntegratedPlanCorrectionSuggestions,
+} from './api';
 
 describe('integrated-plan-corrections api', () => {
   beforeEach(() => {
@@ -167,6 +170,44 @@ describe('integrated-plan-corrections api', () => {
     });
   });
 
+  it('requests my correction suggestions without sending staffId', async () => {
+    const payload = {
+      expiresAt: null,
+      items: [],
+      repairGroups: [],
+      summary: {
+        affectedDetailCount: 0,
+        blockingIssueCount: 0,
+        detailCount: 0,
+        planCount: 0,
+        repairGroupCount: 0,
+      },
+      teachingClassGroups: [],
+      upstreamSessionToken: 'rolling-token-002',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      listMyAcademicIntegratedPlanCorrectionSuggestions: payload,
+    });
+
+    await expect(
+      listMyIntegratedPlanCorrectionSuggestions({
+        semesterId: 202601,
+        upstreamSessionToken: ' token-001 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('listMyAcademicIntegratedPlanCorrectionSuggestions'),
+      {
+        semesterId: 202601,
+        upstreamSessionToken: 'token-001',
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId:');
+  });
+
   it('rejects required fields before requesting', async () => {
     await expect(
       listIntegratedPlanCorrectionSuggestions({
@@ -180,6 +221,13 @@ describe('integrated-plan-corrections api', () => {
       listIntegratedPlanCorrectionSuggestions({
         semesterId: 202601,
         staffId: 'STAFF-001',
+        upstreamSessionToken: ' ',
+      }),
+    ).rejects.toThrow('upstreamSessionToken 为必填。');
+
+    await expect(
+      listMyIntegratedPlanCorrectionSuggestions({
+        semesterId: 202601,
         upstreamSessionToken: ' ',
       }),
     ).rejects.toThrow('upstreamSessionToken 为必填。');

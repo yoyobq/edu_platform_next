@@ -4,6 +4,31 @@
   gap: 20px;
 }
 
+.integrated-plan-corrections-workspace {
+  align-items: start;
+  display: grid;
+  gap: 18px;
+  grid-template-areas: 'main side';
+  grid-template-columns: minmax(0, 7fr) minmax(300px, 3fr);
+}
+
+.integrated-plan-corrections-main {
+  grid-area: main;
+  min-width: 0;
+}
+
+.integrated-plan-corrections-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  grid-area: side;
+  max-height: calc(100vh - 32px);
+  min-width: 0;
+  overflow: auto;
+  position: sticky;
+  top: 16px;
+}
+
 .integrated-plan-corrections-toolbar {
   background: color-mix(
     in srgb,
@@ -19,10 +44,10 @@
 }
 
 .integrated-plan-corrections-querybar {
-  align-items: end;
+  align-items: stretch;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(220px, 1.1fr) minmax(160px, 0.8fr) auto auto;
+  grid-template-columns: 1fr;
 }
 
 .integrated-plan-corrections-query-field {
@@ -55,7 +80,11 @@
 
 .integrated-plan-corrections-query-action {
   display: flex;
-  justify-content: flex-end;
+  justify-content: stretch;
+}
+
+.integrated-plan-corrections-query-action :where(.ant-btn) {
+  width: 100%;
 }
 
 .integrated-plan-corrections-teacher-autocomplete-popup {
@@ -71,7 +100,13 @@
 .integrated-plan-corrections-summary {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.integrated-plan-corrections-side-alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .integrated-plan-corrections-metric {
@@ -103,6 +138,15 @@
 
 .integrated-plan-corrections-metric-danger strong {
   color: var(--ant-color-error);
+}
+
+.integrated-plan-corrections-metric-warning {
+  background: var(--ant-color-warning-bg);
+  border-color: var(--ant-color-warning-border);
+}
+
+.integrated-plan-corrections-metric-warning strong {
+  color: var(--ant-color-warning);
 }
 
 .integrated-plan-corrections-groups {
@@ -319,6 +363,17 @@
   cursor: pointer;
   font-weight: 600;
   line-height: 24px;
+}
+
+.integrated-plan-corrections-debug summary {
+  color: var(--ant-color-text-tertiary);
+}
+
+.integrated-plan-corrections-debug-hint {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+  margin-top: 8px;
 }
 
 .integrated-plan-corrections-suggestion-list {
@@ -595,8 +650,20 @@
 }
 
 @media (max-width: 960px) {
+  .integrated-plan-corrections-workspace {
+    grid-template-areas:
+      'side'
+      'main';
+    grid-template-columns: 1fr;
+  }
+
+  .integrated-plan-corrections-side {
+    max-height: none;
+    overflow: visible;
+    position: static;
+  }
+
   .integrated-plan-corrections-querybar,
-  .integrated-plan-corrections-summary,
   .integrated-plan-corrections-compare,
   .integrated-plan-corrections-debug-item {
     grid-template-columns: 1fr;
@@ -619,5 +686,11 @@
 
   .integrated-plan-corrections-query-action {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 560px) {
+  .integrated-plan-corrections-summary {
+    grid-template-columns: 1fr;
   }
 }

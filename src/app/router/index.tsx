@@ -577,11 +577,24 @@ async function integratedPlanCorrectionsLabLoader({ request }: LoaderFunctionArg
     throw new Response('Forbidden', { status: 403 });
   }
 
+  const accessGroup = snapshot.userInfo.accessGroup;
+  const hasManagerAccess = hasAcademicTeachingLogManagerAccess({
+    accessGroup,
+    slotGroup: snapshot.slotGroup,
+  });
+  const viewerRole: AcademicViewerRole = hasManagerAccess
+    ? 'admin'
+    : snapshot.identity?.kind === 'STAFF'
+      ? 'staff'
+      : 'authenticated';
+
   return {
+    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
+    viewerRole,
   };
 }
 
