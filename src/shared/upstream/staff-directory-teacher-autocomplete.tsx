@@ -21,6 +21,7 @@ export type StaffDirectoryTeacherAutoCompleteProps = Omit<
 };
 
 export function StaffDirectoryTeacherAutoComplete({
+  allowClear = true,
   defaultActiveFirstOption = false,
   directoryUnavailableContent,
   loading = false,
@@ -55,6 +56,7 @@ export function StaffDirectoryTeacherAutoComplete({
   return (
     <AutoComplete
       {...autoCompleteProps}
+      allowClear={allowClear}
       defaultActiveFirstOption={defaultActiveFirstOption}
       filterOption={(inputValue, option) =>
         String(option?.label || '')

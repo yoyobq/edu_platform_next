@@ -55,6 +55,7 @@
 - 选择候选项时，业务值写回 `staffId`
 - 手动输入时，保留用户正在编辑的原始文本，不因为唯一候选项或匹配到 `staffId` 就自动补齐
 - 输入框失焦后，如果当前值能命中教师目录，再展示为 `staffId name`
+- 默认提供右侧清空按钮；确有只读或固定值场景时，由调用方显式禁用或设为不可编辑
 - 候选只作为输入辅助；提交或查询前仍需用 `resolveStaffDirectoryTeacherStaffId(value, teachers)` 收敛成稳定 `staffId`
 - 教师目录不可用时，管理查询仍允许手动输入 `staffId`
 

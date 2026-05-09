@@ -1178,7 +1178,6 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
               <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
                 <span>教师</span>
                 <StaffDirectoryTeacherAutoComplete
-                  allowClear
                   disabled={isStaffViewer}
                   directoryUnavailableContent={
                     staffDirectoryError ? '目录不可用，可手动输入' : undefined

@@ -7,10 +7,6 @@
   flex-direction: column;
 }
 
-.semester-timetable-query-alert {
-  padding: 24px 24px 0;
-}
-
 .semester-timetable-query-panel {
   align-items: stretch;
   display: grid;
@@ -90,7 +86,29 @@
 }
 
 .semester-timetable-control-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
   min-width: 0;
+}
+
+.semester-timetable-control-input {
+  width: 100%;
+}
+
+.semester-timetable-control-input :where(.ant-select) {
+  width: 100%;
+}
+
+.semester-timetable-control-help {
+  color: var(--ant-color-warning);
+  font-size: 12px;
+  min-height: 18px;
+  line-height: 18px;
+}
+
+.semester-timetable-control-help-hidden {
+  visibility: hidden;
 }
 
 .semester-timetable-control-action {

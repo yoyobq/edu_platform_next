@@ -8,6 +8,7 @@ import {
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
+  hasAcademicTimetableManagerAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
 } from './index';
@@ -64,6 +65,23 @@ describe('auth access policy helpers', () => {
       }),
     ).toBe(true);
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('allows academic timetable manager selection to admins and academic staff slots', () => {
+    expect(hasAcademicTimetableManagerAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasAcademicTimetableManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasAcademicTimetableManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    ).toBe(true);
+    expect(hasAcademicTimetableManagerAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
   it('allows integrated plan corrections to staff self-service and manager selection', () => {

@@ -39,7 +39,7 @@ type SemesterTimetableFilters = {
   staffId: string;
 };
 
-const REQUIRED_STAFF_ID_FILTER_MESSAGE = '学期课表以教师 + 学期为视口，请先填写教师 ID。';
+const REQUIRED_STAFF_ID_FILTER_MESSAGE = '请选择或输入教师后再查询学期课表';
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -293,12 +293,6 @@ export function SemesterTimetablePageContent({
 
     return (
       <div className="semester-timetable-query-content">
-        {!hasSemesterQueryId ? (
-          <div className="semester-timetable-query-alert">
-            <Alert showIcon title={REQUIRED_STAFF_ID_FILTER_MESSAGE} type="warning" />
-          </div>
-        ) : null}
-
         <div className="semester-timetable-query-panel">
           <div className="semester-timetable-summary">
             {selectedSemester ? (
@@ -332,41 +326,46 @@ export function SemesterTimetablePageContent({
           <div className="semester-timetable-controls">
             <div className="semester-timetable-control-field">
               <Typography.Text strong>学期</Typography.Text>
-              <Select
-                style={{ marginTop: 8, width: '100%' }}
-                value={selectedSemesterId ?? undefined}
-                options={semesters.map((semester) => ({
-                  label: semester.isCurrent ? `${semester.name} · 当前` : semester.name,
-                  value: semester.id,
-                }))}
-                onChange={(value) => setSelectedSemesterId(value)}
-              />
+              <div className="semester-timetable-control-input">
+                <Select
+                  value={selectedSemesterId ?? undefined}
+                  options={semesters.map((semester) => ({
+                    label: semester.isCurrent ? `${semester.name} · 当前` : semester.name,
+                    value: semester.id,
+                  }))}
+                  onChange={(value) => setSelectedSemesterId(value)}
+                />
+              </div>
             </div>
 
             <div className="semester-timetable-control-field">
               <Typography.Text strong>教师</Typography.Text>
-              <StaffDirectoryTeacherAutoComplete
-                disabled={isStaffViewer}
-                directoryUnavailableContent={
-                  staffDirectoryError ? '目录不可用，可手动输入' : undefined
-                }
-                loading={staffDirectoryLoading}
-                popupMatchSelectWidth={240}
-                style={{ marginTop: 8 }}
-                placeholder={
-                  isStaffViewer
-                    ? '本人课表由当前登录身份确定'
-                    : loaderDefaultStaffId || '默认尝试带出当前登录用户 staffId'
-                }
-                teachers={staffDirectoryTeachers}
-                value={filters.staffId}
-                onChange={(value) => {
-                  setFilters((current) => ({
-                    ...current,
-                    staffId: value,
-                  }));
-                }}
-              />
+              <div className="semester-timetable-control-input">
+                <StaffDirectoryTeacherAutoComplete
+                  disabled={isStaffViewer}
+                  directoryUnavailableContent={
+                    staffDirectoryError ? '目录不可用，可手动输入' : undefined
+                  }
+                  loading={staffDirectoryLoading}
+                  popupMatchSelectWidth={240}
+                  placeholder={isStaffViewer ? '当前登录教师' : 'ID 或姓名'}
+                  teachers={staffDirectoryTeachers}
+                  value={filters.staffId}
+                  onChange={(value) => {
+                    setFilters((current) => ({
+                      ...current,
+                      staffId: value,
+                    }));
+                  }}
+                />
+              </div>
+              <span
+                className={`semester-timetable-control-help ${
+                  hasSemesterQueryId ? 'semester-timetable-control-help-hidden' : ''
+                }`}
+              >
+                {REQUIRED_STAFF_ID_FILTER_MESSAGE}
+              </span>
             </div>
 
             <div className="semester-timetable-control-action">

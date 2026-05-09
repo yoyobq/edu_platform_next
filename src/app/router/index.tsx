@@ -63,6 +63,7 @@ import {
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
+  hasAcademicTimetableManagerAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
@@ -196,6 +197,13 @@ function resolveAcademicInternalViewerRole(
   accessGroup: readonly string[],
 ): AcademicInternalViewerRole {
   return accessGroup.includes('ADMIN') ? 'admin' : 'staff';
+}
+
+function resolveSemesterTimetableViewerRole(input: {
+  accessGroup: readonly string[];
+  slotGroup: readonly string[];
+}): AcademicInternalViewerRole {
+  return hasAcademicTimetableManagerAccess(input) ? 'admin' : 'staff';
 }
 
 function hasHydratingSession() {
@@ -355,7 +363,10 @@ async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
-    viewerRole: resolveAcademicInternalViewerRole(snapshot.userInfo.accessGroup),
+    viewerRole: resolveSemesterTimetableViewerRole({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    }),
   };
 }
 
