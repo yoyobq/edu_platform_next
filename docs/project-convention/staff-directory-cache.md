@@ -45,7 +45,24 @@
 
 只需要给已有业务列表补姓名的页面使用 `staffDirectoryEntries`，对 `missingStaffIds` 展示原始 `staffId` 兜底。
 
+## 公共教师选择 UI
+
+需要按教师筛选的页面统一使用 `src/shared/upstream` 暴露的 `StaffDirectoryTeacherAutoComplete`，不要在各页面重复实现教师 AutoComplete。
+
+组件规则：
+
+- 候选项展示为 `staffId name`，例如 `3664 张三`
+- 选择候选项时，业务值写回 `staffId`
+- 手动输入时，保留用户正在编辑的原始文本，不因为唯一候选项或匹配到 `staffId` 就自动补齐
+- 输入框失焦后，如果当前值能命中教师目录，再展示为 `staffId name`
+- 候选只作为输入辅助；提交或查询前仍需用 `resolveStaffDirectoryTeacherStaffId(value, teachers)` 收敛成稳定 `staffId`
+- 教师目录不可用时，管理查询仍允许手动输入 `staffId`
+
+自助视角中，若当前登录身份已经决定教师，页面可以禁用该组件并展示当前教师，不提供切换教师或切换 upstream 账号的普通 UI。
+
 ## 当前落点
 
 - `src/shared/upstream` 暴露 Staff Directory Cache client
+- `src/shared/upstream` 暴露 `StaffDirectoryTeacherAutoComplete`、`useStaffDirectoryTeachers` 与教师输入解析 helper
 - `src/features/academic-teaching-log` 的 `My 教学日志` 页面消费完整教师目录
+- `src/features/academic-timetable`、`src/labs/academic-timetable`、`src/labs/academic-workload`、`src/labs/integrated-plan-corrections` 复用同一套教师选择 UI
