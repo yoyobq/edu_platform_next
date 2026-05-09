@@ -1,6 +1,6 @@
 // src/shared/upstream/staff-directory-teacher-autocomplete.tsx
+import { type ReactNode, useMemo, useState } from 'react';
 import { AutoComplete, type AutoCompleteProps } from 'antd';
-import type { ReactNode } from 'react';
 
 import {
   formatStaffDirectoryTeacherInputValue,
@@ -21,25 +21,41 @@ export type StaffDirectoryTeacherAutoCompleteProps = Omit<
 };
 
 export function StaffDirectoryTeacherAutoComplete({
+  defaultActiveFirstOption = false,
   directoryUnavailableContent,
   loading = false,
+  onBlur,
   onChange,
+  onFocus,
+  onSelect,
   teachers,
   value = '',
   ...autoCompleteProps
 }: StaffDirectoryTeacherAutoCompleteProps) {
-  const options = teachers.map((teacher) => {
-    const label = formatStaffDirectoryTeacherLabel(teacher);
+  const [isFocused, setIsFocused] = useState(false);
+  const formattedValue = useMemo(
+    () => formatStaffDirectoryTeacherInputValue(value, teachers),
+    [teachers, value],
+  );
+  const [displayValue, setDisplayValue] = useState(formattedValue);
+  const renderedValue = isFocused ? displayValue : formattedValue;
+  const options = useMemo(
+    () =>
+      teachers.map((teacher) => {
+        const label = formatStaffDirectoryTeacherLabel(teacher);
 
-    return {
-      label,
-      value: teacher.staffId,
-    };
-  });
+        return {
+          label,
+          value: teacher.staffId,
+        };
+      }),
+    [teachers],
+  );
 
   return (
     <AutoComplete
       {...autoCompleteProps}
+      defaultActiveFirstOption={defaultActiveFirstOption}
       filterOption={(inputValue, option) =>
         String(option?.label || '')
           .toLowerCase()
@@ -50,10 +66,28 @@ export function StaffDirectoryTeacherAutoComplete({
       }
       notFoundContent={loading ? '读取中' : directoryUnavailableContent}
       options={options}
-      value={formatStaffDirectoryTeacherInputValue(value, teachers)}
-      onChange={(nextValue) =>
-        onChange?.(resolveStaffDirectoryTeacherInputValue(nextValue, teachers))
-      }
+      value={renderedValue}
+      onBlur={(event) => {
+        setIsFocused(false);
+        setDisplayValue(formatStaffDirectoryTeacherInputValue(displayValue, teachers));
+        onBlur?.(event);
+      }}
+      onChange={(nextValue) => {
+        setDisplayValue(nextValue);
+        onChange?.(nextValue);
+      }}
+      onFocus={(event) => {
+        setIsFocused(true);
+        setDisplayValue(formattedValue);
+        onFocus?.(event);
+      }}
+      onSelect={(nextValue, option) => {
+        const resolvedValue = resolveStaffDirectoryTeacherInputValue(nextValue, teachers);
+
+        setDisplayValue(formatStaffDirectoryTeacherInputValue(resolvedValue, teachers));
+        onChange?.(resolvedValue);
+        onSelect?.(nextValue, option);
+      }}
     />
   );
 }
