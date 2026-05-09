@@ -1,3 +1,4 @@
+// src/features/academic-integrated-plan-corrections/ui/academic-integrated-plan-corrections-page-content.tsx
 import { useEffect, useMemo, useState } from 'react';
 import {
   ExclamationCircleOutlined,
@@ -18,7 +19,6 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
@@ -43,6 +43,7 @@ import {
   StaffDirectoryTeacherAutoComplete,
 } from '@/shared/upstream';
 
+import { canViewIntegratedPlanCorrectionRepairGroups } from '../application/correction-view-policy';
 import {
   type IntegratedPlanCorrectionAlignmentStatus,
   type IntegratedPlanCorrectionItem,
@@ -53,11 +54,11 @@ import {
   type IntegratedPlanCorrectionTeachingClassGroup,
   listIntegratedPlanCorrectionSuggestions,
   listMyIntegratedPlanCorrectionSuggestions,
-} from './api';
+} from '../infrastructure/academic-integrated-plan-corrections-api';
 
-import './page.css';
+import './academic-integrated-plan-corrections-page-content.css';
 
-type IntegratedPlanCorrectionsLabLoaderData = {
+export type AcademicIntegratedPlanCorrectionsPageLoaderData = {
   defaultStaffId?: string | null;
   upstreamAccount?: {
     accountId: number;
@@ -65,6 +66,9 @@ type IntegratedPlanCorrectionsLabLoaderData = {
   } | null;
   viewerRole?: AcademicViewerRole;
 } | null;
+
+export type AcademicIntegratedPlanCorrectionsPageContentProps =
+  NonNullable<AcademicIntegratedPlanCorrectionsPageLoaderData>;
 
 type QueryFilters = {
   staffId: string;
@@ -753,9 +757,11 @@ function SecondaryRepairGroups({
 function TeachingClassAlignmentTable({
   items,
   repairGroups,
+  showRepairGroups,
 }: {
   items: IntegratedPlanCorrectionItem[];
   repairGroups: IntegratedPlanCorrectionRepairGroup[];
+  showRepairGroups: boolean;
 }) {
   return (
     <section className="integrated-plan-corrections-table">
@@ -768,7 +774,7 @@ function TeachingClassAlignmentTable({
         </div>
         <div className="integrated-plan-corrections-table-summary">
           <span>{items.length} 行</span>
-          <span>{repairGroups.length} 个异常分组</span>
+          {showRepairGroups ? <span>{repairGroups.length} 个异常分组</span> : null}
         </div>
       </header>
 
@@ -784,7 +790,7 @@ function TeachingClassAlignmentTable({
         </div>
       )}
 
-      <SecondaryRepairGroups repairGroups={repairGroups} />
+      {showRepairGroups ? <SecondaryRepairGroups repairGroups={repairGroups} /> : null}
     </section>
   );
 }
@@ -807,8 +813,10 @@ function buildTeachingClassTabLabel(input: {
 }
 
 function TeachingClassAlignmentTabs({
+  showRepairGroups,
   tables,
 }: {
+  showRepairGroups: boolean;
   tables: {
     group: IntegratedPlanCorrectionTeachingClassGroup;
     items: IntegratedPlanCorrectionItem[];
@@ -818,7 +826,13 @@ function TeachingClassAlignmentTabs({
   if (tables.length === 1) {
     const [table] = tables;
 
-    return <TeachingClassAlignmentTable items={table.items} repairGroups={table.repairGroups} />;
+    return (
+      <TeachingClassAlignmentTable
+        items={table.items}
+        repairGroups={table.repairGroups}
+        showRepairGroups={showRepairGroups}
+      />
+    );
   }
 
   return (
@@ -826,7 +840,11 @@ function TeachingClassAlignmentTabs({
       <Tabs
         items={tables.map((table) => ({
           children: (
-            <TeachingClassAlignmentTable items={table.items} repairGroups={table.repairGroups} />
+            <TeachingClassAlignmentTable
+              items={table.items}
+              repairGroups={table.repairGroups}
+              showRepairGroups={showRepairGroups}
+            />
           ),
           key: table.group.id,
           label: buildTeachingClassTabLabel({
@@ -839,12 +857,14 @@ function TeachingClassAlignmentTabs({
   );
 }
 
-export function IntegratedPlanCorrectionsLabPage() {
-  const loaderData = useLoaderData() as IntegratedPlanCorrectionsLabLoaderData;
-  const defaultStaffId = loaderData?.defaultStaffId?.trim() ?? '';
-  const viewerRole = loaderData?.viewerRole ?? 'authenticated';
+export function AcademicIntegratedPlanCorrectionsPageContent({
+  defaultStaffId: rawDefaultStaffId,
+  upstreamAccount = null,
+  viewerRole = 'authenticated',
+}: AcademicIntegratedPlanCorrectionsPageContentProps) {
+  const defaultStaffId = rawDefaultStaffId?.trim() ?? '';
   const isStaffViewer = viewerRole === 'staff';
-  const upstreamAccount = loaderData?.upstreamAccount ?? null;
+  const showRepairGroups = canViewIntegratedPlanCorrectionRepairGroups(viewerRole);
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const {
     clear,
@@ -1131,7 +1151,6 @@ export function IntegratedPlanCorrectionsLabPage() {
   return (
     <div className="integrated-plan-corrections-page">
       <DecoratedPageHeader
-        badge={<Tag color="purple">Lab</Tag>}
         colorScheme="purple"
         description="按校园网已有授课计划和校历中的实际上课时间逐条比对，检查教学计划中漏排、多排或与校历冲突的课次。"
         icon={<FileSearchOutlined />}
@@ -1180,7 +1199,7 @@ export function IntegratedPlanCorrectionsLabPage() {
                   onChange={setShowConsistentRows}
                 />
                 <Tooltip title="默认隐藏 MATCHED 且无 diff 的行">
-                  <span>显示一致行</span>
+                  <span>显示已对齐行</span>
                 </Tooltip>
               </div>
               <div className="integrated-plan-corrections-query-action">
@@ -1234,7 +1253,10 @@ export function IntegratedPlanCorrectionsLabPage() {
                 </div>
               ) : (
                 <div className="integrated-plan-corrections-tables">
-                  <TeachingClassAlignmentTabs tables={teachingClassTables} />
+                  <TeachingClassAlignmentTabs
+                    showRepairGroups={showRepairGroups}
+                    tables={teachingClassTables}
+                  />
                 </div>
               )}
             </section>

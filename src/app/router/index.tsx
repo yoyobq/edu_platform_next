@@ -21,6 +21,7 @@ import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
+import { IntegratedPlanCorrectionsPage } from '@/pages/integrated-plan-corrections';
 import { LoginPage } from '@/pages/login';
 import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
 import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
@@ -57,6 +58,8 @@ import {
   type AcademicInternalViewerRole,
   type AcademicViewerRole,
   canAccessPayloadCrypto,
+  hasAcademicIntegratedPlanCorrectionsAccess,
+  hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
@@ -77,10 +80,6 @@ import {
   loadChangeLoginEmailLabRouteModule,
 } from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
-import {
-  integratedPlanCorrectionsLabAccess,
-  loadIntegratedPlanCorrectionsLabRouteModule,
-} from '@/labs/integrated-plan-corrections';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
   loadStaffSemesterProfilesLabRouteModule,
@@ -544,28 +543,11 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function integratedPlanCorrectionsLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(integratedPlanCorrectionsLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
+async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(integratedPlanCorrectionsLabAccess)) {
-      return null;
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -573,18 +555,24 @@ async function integratedPlanCorrectionsLabLoader({ request }: LoaderFunctionArg
     throw redirect(buildWelcomeRedirectURL(request));
   }
 
-  if (!hasLabAccess(integratedPlanCorrectionsLabAccess)) {
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  if (
+    !hasAcademicIntegratedPlanCorrectionsAccess({
+      accessGroup,
+    })
+  ) {
     throw new Response('Forbidden', { status: 403 });
   }
 
-  const accessGroup = snapshot.userInfo.accessGroup;
-  const hasManagerAccess = hasAcademicTeachingLogManagerAccess({
+  const hasManagerAccess = hasAcademicIntegratedPlanCorrectionsManagerAccess({
     accessGroup,
     slotGroup: snapshot.slotGroup,
   });
+  const isStaff = accessGroup.includes('STAFF');
   const viewerRole: AcademicViewerRole = hasManagerAccess
     ? 'admin'
-    : snapshot.identity?.kind === 'STAFF'
+    : isStaff
       ? 'staff'
       : 'authenticated';
 
@@ -995,6 +983,11 @@ const router = createBrowserRouter([
         Component: MyTeachingLogsPage,
       },
       {
+        path: '/academic-affairs/integrated-plan-corrections',
+        loader: integratedPlanCorrectionsPageLoader,
+        Component: IntegratedPlanCorrectionsPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -1025,11 +1018,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'integrated-plan-corrections',
-            loader: integratedPlanCorrectionsLabLoader,
-            lazy: loadIntegratedPlanCorrectionsLabRouteModule,
           },
           {
             path: 'academic-timetable',

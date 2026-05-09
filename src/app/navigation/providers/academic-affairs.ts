@@ -1,5 +1,6 @@
 import {
   hasAcademicCalendarReadAccess,
+  hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
   hasAdminOrAcademicOfficerAccess,
@@ -94,6 +95,22 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: 'My 教学日志',
             navMode: 'rail' as const,
             path: '/academic-affairs/my-teaching-logs',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicIntegratedPlanCorrectionsAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/academic-affairs/integrated-plan-corrections',
+            label: '一体化对齐',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/integrated-plan-corrections',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

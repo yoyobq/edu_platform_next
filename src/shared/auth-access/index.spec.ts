@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   canAccessPayloadCrypto,
   hasAcademicCalendarReadAccess,
+  hasAcademicIntegratedPlanCorrectionsAccess,
+  hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
@@ -62,6 +64,30 @@ describe('auth access policy helpers', () => {
       }),
     ).toBe(true);
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('allows integrated plan corrections to staff self-service and manager selection', () => {
+    expect(hasAcademicIntegratedPlanCorrectionsAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasAcademicIntegratedPlanCorrectionsAccess({ accessGroup: ['STAFF'] })).toBe(true);
+    expect(hasAcademicIntegratedPlanCorrectionsAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+    expect(hasAcademicIntegratedPlanCorrectionsManagerAccess({ accessGroup: ['ADMIN'] })).toBe(
+      true,
+    );
+    expect(
+      hasAcademicIntegratedPlanCorrectionsManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasAcademicIntegratedPlanCorrectionsManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    ).toBe(true);
+    expect(hasAcademicIntegratedPlanCorrectionsManagerAccess({ accessGroup: ['STAFF'] })).toBe(
+      false,
+    );
   });
 
   it('limits payload crypto access to the configured admin accounts', () => {

@@ -54,12 +54,12 @@ describe('navigation catalog', () => {
     ).toBe('TableOutlined');
     expect(findGroup(items, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/integrated-plan-corrections',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',
@@ -89,12 +89,14 @@ describe('navigation catalog', () => {
     ).toEqual(['/calendar-schedule/semester-calendar', '/calendar-schedule/semester-timetable']);
     expect(
       findGroup(prodAdminItems, 'academic-assistant')?.children.map((item) => item.key),
-    ).toEqual(['/academic-affairs/my-teaching-logs']);
+    ).toEqual([
+      '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/integrated-plan-corrections',
+    ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/integrated-plan-corrections',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',
@@ -125,6 +127,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/academic-timetable',
@@ -175,6 +178,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/academic-timetable',
@@ -217,6 +221,18 @@ describe('navigation catalog', () => {
         }),
       ),
     ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/academic-affairs/integrated-plan-corrections',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath('/academic-affairs/integrated-plan-corrections', studentFilter),
+    ).toBe(false);
   });
 
   it('continues exposing navigation leaf items for the local entry catalog', () => {
@@ -227,12 +243,12 @@ describe('navigation catalog', () => {
       '/calendar-schedule/semester-calendar',
       '/calendar-schedule/semester-timetable',
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/integrated-plan-corrections',
       '/labs/academic-timetable',
       '/labs/academic-workload',
       '/labs/staff-semester-profiles',

@@ -62,6 +62,21 @@ export function hasAcademicTeachingLogManagerAccess(input: {
   );
 }
 
+export function hasAcademicIntegratedPlanCorrectionsAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
+export function hasAcademicIntegratedPlanCorrectionsManagerAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasAcademicTeachingLogManagerAccess(input);
+}
+
 export function hasStaffSemesterProfilesAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

@@ -1,3 +1,4 @@
+// src/features/academic-integrated-plan-corrections/infrastructure/academic-integrated-plan-corrections-api.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, isExpiredUpstreamSessionErrorMock } = vi.hoisted(() => ({
@@ -18,7 +19,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   listIntegratedPlanCorrectionSuggestions,
   listMyIntegratedPlanCorrectionSuggestions,
-} from './api';
+} from './academic-integrated-plan-corrections-api';
 
 describe('integrated-plan-corrections api', () => {
   beforeEach(() => {
