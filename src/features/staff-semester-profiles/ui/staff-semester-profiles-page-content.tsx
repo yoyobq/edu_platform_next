@@ -851,7 +851,7 @@ export function StaffSemesterProfilesPageContent({
                   name="workloadDepartmentId"
                 >
                   <Select
-                    allowClear={viewerRole !== 'academicOfficer'}
+                    allowClear
                     showSearch
                     loading={loadingProfileOptions}
                     optionFilterProp="label"

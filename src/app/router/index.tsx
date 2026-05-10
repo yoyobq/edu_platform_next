@@ -59,6 +59,7 @@ import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 import {
   type AcademicInternalViewerRole,
   type AcademicViewerRole,
+  type AuthAccessGroup,
   canAccessPayloadCrypto,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
@@ -192,13 +193,13 @@ function buildWelcomeRedirectURL(request: Request) {
 }
 
 function resolveAcademicInternalViewerRole(
-  accessGroup: readonly string[],
+  accessGroup: readonly AuthAccessGroup[],
 ): AcademicInternalViewerRole {
   return accessGroup.includes('ADMIN') ? 'admin' : 'staff';
 }
 
 function resolveSemesterTimetableViewerRole(input: {
-  accessGroup: readonly string[];
+  accessGroup: readonly AuthAccessGroup[];
   slotGroup: readonly string[];
 }): AcademicInternalViewerRole {
   return hasAcademicTimetableManagerAccess(input) ? 'admin' : 'staff';
