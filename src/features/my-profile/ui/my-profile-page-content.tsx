@@ -900,6 +900,23 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
   );
 }
 
+function RecentLoginCard({
+  loginHistory,
+}: {
+  loginHistory: MyProfileBasicData['account']['recentLoginHistory'];
+}) {
+  return (
+    <section className="rounded-card bg-bg-container p-6 shadow-card">
+      <Flex vertical gap={16}>
+        <Typography.Title level={5} style={{ margin: 0 }}>
+          最近登录活动
+        </Typography.Title>
+        <RecentLoginList items={loginHistory} />
+      </Flex>
+    </section>
+  );
+}
+
 function SecurityTab({
   disableChangeLoginEmail,
   loginEmail,
@@ -916,9 +933,7 @@ function SecurityTab({
         <ResetPasswordCard currentLoginEmail={loginEmail} />
       </div>
 
-      <Card title="最近登录活动">
-        <RecentLoginList items={loginHistory} />
-      </Card>
+      <RecentLoginCard loginHistory={loginHistory} />
     </div>
   );
 }
