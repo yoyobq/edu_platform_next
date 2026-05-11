@@ -16,6 +16,7 @@ import { AppLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
 import { AcademicCalendarPage } from '@/pages/academic-calendar';
+import { AcademicWorkloadPage } from '@/pages/academic-workload';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
@@ -73,10 +74,6 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  academicWorkloadLabAccess,
-  loadAcademicWorkloadLabRouteModule,
-} from '@/labs/academic-workload';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -576,37 +573,17 @@ async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionAr
   };
 }
 
-async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(academicWorkloadLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
+async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(academicWorkloadLabAccess)) {
-      return { viewerKind: 'authenticated' };
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
   if (snapshot.needsProfileCompletion) {
     throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(academicWorkloadLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
   }
 
   const accessGroup = snapshot.userInfo.accessGroup;
@@ -627,16 +604,11 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
 
   return {
     canManageWorkload,
-    defaultDepartmentId:
-      snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
-    viewerRole: canManageWorkload ? 'admin' : 'staff',
-    viewerKind:
-      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
 }
 
@@ -944,6 +916,11 @@ const router = createBrowserRouter([
         Component: IntegratedPlanCorrectionsPage,
       },
       {
+        path: '/academic-assistant/academic-workload',
+        loader: academicWorkloadPageLoader,
+        Component: AcademicWorkloadPage,
+      },
+      {
         path: '/admin/error-preview',
         loader: () => redirect('/errors/preview'),
       },
@@ -969,11 +946,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'academic-workload',
-            loader: academicWorkloadLabLoader,
-            lazy: loadAcademicWorkloadLabRouteModule,
           },
           {
             path: 'course-schedule-sync',

@@ -1,4 +1,4 @@
-// src/labs/academic-workload/infrastructure/academic-workload-api.ts
+// src/features/academic-workload/infrastructure/academic-workload-api.ts
 import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';

@@ -1,4 +1,4 @@
-// src/labs/academic-workload/application/workload-baseline.ts
+// src/features/academic-workload/application/workload-baseline.ts
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
 export type AcademicWorkloadCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';

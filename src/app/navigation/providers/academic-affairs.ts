@@ -4,6 +4,7 @@ import {
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
+  hasAcademicWorkloadAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
@@ -147,6 +148,22 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '一体化对齐',
             navMode: 'rail' as const,
             path: '/academic-affairs/integrated-plan-corrections',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicWorkloadAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CarryOutOutlined',
+            key: '/academic-assistant/academic-workload',
+            label: '工作量明细',
+            navMode: 'rail' as const,
+            path: '/academic-assistant/academic-workload',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

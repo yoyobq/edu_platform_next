@@ -1,4 +1,4 @@
-// src/labs/academic-workload/ui/page.tsx
+// src/features/academic-workload/ui/academic-workload-page-content.tsx
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CarryOutOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
@@ -16,15 +16,17 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
   requestAcademicSemesters,
 } from '@/entities/academic-semester';
-import { isExpiredUpstreamSessionError, useUpstreamSession } from '@/entities/upstream-session';
+import {
+  isExpiredUpstreamSessionError,
+  type UpstreamAccountIdentity,
+  useUpstreamSession,
+} from '@/entities/upstream-session';
 
-import type { AcademicInternalViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   resolveStaffDirectoryCache,
@@ -55,18 +57,13 @@ import {
   requestMyAcademicStableWorkloadOccurrences,
 } from '../infrastructure/academic-workload-api';
 
-import './academic-workload-page.css';
+import './academic-workload-page-content.css';
 
-type AcademicWorkloadLabLoaderData = {
+export type AcademicWorkloadPageContentProps = {
   canManageWorkload?: boolean;
   defaultStaffId?: string | null;
-  upstreamAccount?: {
-    accountId: number;
-    displayName: string;
-  } | null;
-  viewerRole?: AcademicInternalViewerRole;
-  viewerKind?: 'authenticated' | 'internal';
-} | null;
+  upstreamAccount?: UpstreamAccountIdentity | null;
+};
 
 const CALC_EFFECT_LABELS: Record<AcademicStableWorkloadCalcEffect, string> = {
   CANCEL: '停课',
@@ -163,14 +160,17 @@ function formatLogicalWeekdayNotice(item: AcademicStableWorkloadOccurrence) {
   return `原${logicalDayLabel}课程`;
 }
 
-export function AcademicWorkloadLabPage() {
-  const loaderData = useLoaderData() as AcademicWorkloadLabLoaderData;
-  const canManageWorkload = Boolean(loaderData?.canManageWorkload);
+export function AcademicWorkloadPageContent({
+  canManageWorkload: rawCanManageWorkload = false,
+  defaultStaffId = null,
+  upstreamAccount = null,
+}: AcademicWorkloadPageContentProps) {
+  const canManageWorkload = Boolean(rawCanManageWorkload);
   const isSelfServiceViewer = !canManageWorkload;
   const latestOccurrenceRequestIdRef = useRef(0);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [staffId, setStaffId] = useState(loaderData?.defaultStaffId ?? '');
+  const [staffId, setStaffId] = useState(defaultStaffId ?? '');
   const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
   const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
   const [tableViewFilter, setTableViewFilter] = useState<AcademicWorkloadTableViewFilter>('all');
@@ -185,7 +185,7 @@ export function AcademicWorkloadLabPage() {
     persistSessionFromResult,
     session: storedSession,
   } = useUpstreamSession({
-    account: loaderData?.upstreamAccount ?? null,
+    account: upstreamAccount,
   });
   const storedSessionDirectoryKey = storedSession
     ? [
@@ -245,10 +245,10 @@ export function AcademicWorkloadLabPage() {
   }, []);
 
   useEffect(() => {
-    if (!staffId && loaderData?.defaultStaffId) {
-      setStaffId(loaderData.defaultStaffId);
+    if (!staffId && defaultStaffId) {
+      setStaffId(defaultStaffId);
     }
-  }, [loaderData?.defaultStaffId, staffId]);
+  }, [defaultStaffId, staffId]);
 
   useEffect(() => {
     storedSessionRef.current = storedSession;
@@ -563,7 +563,7 @@ export function AcademicWorkloadLabPage() {
                 range={{ draggableTrack: true }}
                 tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
                 value={weekRangeSliderValue}
-                onChange={(nextValue) => {
+                onChange={(nextValue: number | number[]) => {
                   if (!Array.isArray(nextValue)) {
                     return;
                   }

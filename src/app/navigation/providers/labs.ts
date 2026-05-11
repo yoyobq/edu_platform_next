@@ -60,20 +60,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CarryOutOutlined',
-            key: '/labs/academic-workload',
-            label: '工作量明细',
-            navMode: 'rail' as const,
-            path: '/labs/academic-workload',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
   ];
 
   if (children.length === 0) {

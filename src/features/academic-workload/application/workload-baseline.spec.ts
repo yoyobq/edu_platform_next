@@ -1,4 +1,4 @@
-// src/labs/academic-workload/application/workload-baseline.spec.ts
+// src/features/academic-workload/application/workload-baseline.spec.ts
 import { describe, expect, it } from 'vitest';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
