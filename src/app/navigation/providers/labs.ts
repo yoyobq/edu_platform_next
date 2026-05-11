@@ -64,9 +64,9 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'BarChartOutlined',
+            iconKey: 'CarryOutOutlined',
             key: '/labs/academic-workload',
-            label: '教师工作量',
+            label: '工作量明细',
             navMode: 'rail' as const,
             path: '/labs/academic-workload',
             primaryAccessGroup: 'STAFF' as const,

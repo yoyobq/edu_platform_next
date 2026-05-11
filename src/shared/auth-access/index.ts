@@ -51,6 +51,19 @@ export function hasAcademicTimetableManagerAccess(input: {
   return hasAcademicTeachingLogManagerAccess(input);
 }
 
+export function hasAcademicWorkloadAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
+export function hasAcademicWorkloadManagerAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasAcademicTeachingLogManagerAccess(input);
+}
+
 export function hasAcademicTeachingLogManagerAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

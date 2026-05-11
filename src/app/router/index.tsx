@@ -67,6 +67,8 @@ import {
   hasAcademicTeachingLogManagerAccess,
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
+  hasAcademicWorkloadAccess,
+  hasAcademicWorkloadManagerAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
@@ -182,12 +184,6 @@ function buildWelcomeRedirectURL(request: Request) {
   const { redirectTarget, url } = getRequestTarget(request);
 
   return buildWelcomeRedirectTarget(redirectTarget, url.origin);
-}
-
-function resolveAcademicInternalViewerRole(
-  accessGroup: readonly AuthAccessGroup[],
-): AcademicInternalViewerRole {
-  return accessGroup.includes('ADMIN') ? 'admin' : 'staff';
 }
 
 function resolveSemesterTimetableViewerRole(input: {
@@ -614,8 +610,23 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   const accessGroup = snapshot.userInfo.accessGroup;
+  const slotGroup = snapshot.slotGroup;
+
+  if (
+    !hasAcademicWorkloadAccess({
+      accessGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const canManageWorkload = hasAcademicWorkloadManagerAccess({
+    accessGroup,
+    slotGroup,
+  });
 
   return {
+    canManageWorkload,
     defaultDepartmentId:
       snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
@@ -623,7 +634,7 @@ async function academicWorkloadLabLoader({ request }: LoaderFunctionArgs) {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
-    viewerRole: resolveAcademicInternalViewerRole(accessGroup),
+    viewerRole: canManageWorkload ? 'admin' : 'staff',
     viewerKind:
       accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
