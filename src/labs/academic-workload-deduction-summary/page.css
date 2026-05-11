@@ -1,0 +1,403 @@
+/* src/labs/academic-workload-deduction-summary/page.css */
+.academic-workload-lab-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-lab-panel,
+.academic-workload-lab-summary {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 100%;
+  min-width: 0;
+  padding: 16px;
+}
+
+.academic-workload-lab-query {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: minmax(300px, 0.85fr) minmax(0, 1.15fr);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-lab-filters {
+  align-items: end;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(180px, 1fr) minmax(160px, 0.8fr);
+}
+
+.academic-workload-lab-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.academic-workload-lab-filters label > span {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-filters :where(.ant-select) {
+  width: 100%;
+}
+
+.academic-workload-lab-option {
+  align-items: center;
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  min-height: 32px;
+  min-width: 0;
+  padding: 5px 8px;
+}
+
+.academic-workload-lab-option > span {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-filters :where(.ant-btn) {
+  grid-column: 1 / -1;
+}
+
+.academic-workload-lab-week-range,
+.academic-workload-lab-semester-scope {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.academic-workload-lab-week-range {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.academic-workload-lab-week-range-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.academic-workload-lab-week-range-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-lab-week-range-header span,
+.academic-workload-lab-semester-scope span,
+.academic-workload-lab-week-boundary span {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-week-range-header strong,
+.academic-workload-lab-semester-scope strong,
+.academic-workload-lab-week-boundary strong {
+  color: var(--ant-color-text);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-week-range-header :where(.ant-btn) {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  line-height: 1.35;
+  padding: 0;
+}
+
+.academic-workload-lab-week-range :where(.ant-slider) {
+  margin-block: 4px 14px;
+  margin-inline: 8px;
+}
+
+.academic-workload-lab-week-range-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.academic-workload-lab-week-boundary {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.academic-workload-lab-week-boundary small,
+.academic-workload-lab-semester-scope small {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.academic-workload-lab-semester-scope {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  justify-content: center;
+}
+
+.academic-workload-lab-result {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-lab-soft-card {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  max-width: 100%;
+  min-width: 0;
+  padding: 2px 10px;
+}
+
+.academic-workload-lab-soft-card summary {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+  line-height: 1.35;
+  min-height: 36px;
+}
+
+.academic-workload-lab-soft-card summary span {
+  color: var(--ant-color-text);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.academic-workload-lab-soft-card summary small {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+}
+
+.academic-workload-lab-soft-card-body {
+  border-top: 1px solid var(--ant-color-border-secondary);
+  max-width: 100%;
+  min-width: 0;
+  padding-block: 10px 8px;
+}
+
+.academic-workload-lab-table-shell {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.academic-workload-lab-table-shell :where(.ant-table-wrapper) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-lab-table-shell .ant-table-tbody > tr > .academic-workload-lab-detail-cell-even {
+  background: var(--ant-color-bg-container);
+}
+
+.academic-workload-lab-table-shell .ant-table-tbody > tr > .academic-workload-lab-detail-cell-odd {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-workload-lab-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-lab-detail-cell-even,
+.academic-workload-lab-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-lab-detail-cell-odd {
+  background: var(--ant-color-fill-secondary);
+}
+
+.academic-workload-lab-summary-heading {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.academic-workload-lab-summary-heading h2 {
+  color: var(--ant-color-text);
+  font-size: 18px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.academic-workload-lab-summary-heading p {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+}
+
+.academic-workload-lab-metrics {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.academic-workload-lab-metric {
+  background: var(--ant-color-fill-tertiary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.academic-workload-lab-metric span {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-metric strong {
+  color: var(--ant-color-text);
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.academic-workload-lab-metric-danger strong,
+.academic-workload-lab-total-hour {
+  color: var(--ant-color-error);
+}
+
+.academic-workload-lab-metric-success strong {
+  color: var(--ant-color-success);
+}
+
+.academic-workload-lab-column-title-stacked {
+  align-items: center;
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.academic-workload-lab-date-column-title {
+  align-items: center;
+  display: inline-flex;
+  flex-direction: column;
+  font-size: 11px;
+  line-height: 1.15;
+}
+
+.academic-workload-lab-staff,
+.academic-workload-lab-course,
+.academic-workload-lab-department-name {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-lab-staff strong,
+.academic-workload-lab-course strong,
+.academic-workload-lab-department-name strong {
+  color: var(--ant-color-text);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.academic-workload-lab-class-name {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 6px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.academic-workload-lab-class-name-item {
+  display: inline-block;
+}
+
+.academic-workload-lab-department-name small {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.academic-workload-lab-hour,
+.academic-workload-lab-total-hour {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.academic-workload-lab-empty {
+  color: var(--ant-color-text-tertiary);
+}
+
+.academic-workload-lab-date-hour {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+@media (max-width: 960px) {
+  .academic-workload-lab-query,
+  .academic-workload-lab-filters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .academic-workload-lab-week-range-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .academic-workload-lab-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .academic-workload-lab-summary-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .academic-workload-lab-metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

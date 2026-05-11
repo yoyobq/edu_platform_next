@@ -20,7 +20,10 @@ vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
 }));
 
-import { fetchCourseScheduleSyncDepartmentOptions } from './api';
+import {
+  dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
+  fetchCourseScheduleSyncDepartmentOptions,
+} from './api';
 
 describe('course-schedule-sync api', () => {
   beforeEach(() => {
@@ -54,5 +57,65 @@ describe('course-schedule-sync api', () => {
       { limit: 500 },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('isEnabled: $isEnabled');
+  });
+
+  it('previews course schedule sync through the independent dry-run mutation', async () => {
+    const dryRunResult = {
+      createdCount: 1,
+      dryRun: true,
+      failedCount: 0,
+      failures: [],
+      fetchedCount: 2,
+      items: [
+        {
+          action: 'created',
+          scheduleId: null,
+          sstsCourseId: 'C-001',
+          sstsTeachingClassId: 'TC-001',
+        },
+        {
+          action: 'updated',
+          scheduleId: 1001,
+          sstsCourseId: 'C-002',
+          sstsTeachingClassId: 'TC-002',
+        },
+      ],
+      previewedCount: 2,
+      semesterId: 3,
+      updatedCount: 1,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans: dryRunResult,
+    });
+
+    await expect(
+      dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans({
+        departmentId: ' ORG0302 ',
+        reviewStatus: 'APPROVED',
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
+        teacherId: ' ',
+        upstreamSessionToken: 'token-1',
+      }),
+    ).resolves.toEqual(dryRunResult);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation DryRunSyncCourseSchedules'),
+      {
+        input: {
+          departmentId: 'ORG0302',
+          reviewStatus: 'APPROVED',
+          schoolYear: '2025',
+          semester: '1',
+          teacherId: undefined,
+          upstreamSessionToken: 'token-1',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans',
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('previewedCount');
   });
 });

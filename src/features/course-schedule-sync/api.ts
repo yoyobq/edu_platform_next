@@ -24,7 +24,7 @@ export type DepartmentCurriculumPlanReviewStatus =
 
 export type CourseScheduleSyncItem = {
   action: string;
-  scheduleId: number;
+  scheduleId: number | null;
   sstsCourseId: string | null;
   sstsTeachingClassId: string | null;
 };
@@ -39,15 +39,26 @@ export type CourseScheduleSyncFailure = {
 
 export type CourseScheduleSyncResult = {
   createdCount: number;
-  expiresAt: string;
+  dryRun?: boolean;
+  expiresAt?: string | null;
   failedCount: number;
   failures: CourseScheduleSyncFailure[];
   fetchedCount: number;
-  importedCount: number;
+  importedCount?: number;
   items: CourseScheduleSyncItem[];
+  previewedCount?: number;
   semesterId: number;
-  upstreamSessionToken: string;
+  upstreamSessionToken?: string | null;
   updatedCount: number;
+};
+
+export type CourseScheduleSyncInput = {
+  departmentId: string;
+  reviewStatus?: DepartmentCurriculumPlanReviewStatus;
+  schoolYear: string;
+  semester: string;
+  teacherId?: string;
+  upstreamSessionToken: string;
 };
 
 export type CourseScheduleSyncSemesterOption = {
@@ -72,6 +83,10 @@ type SyncCourseSchedulesResponse = {
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans: CourseScheduleSyncResult;
 };
 
+type DryRunSyncCourseSchedulesResponse = {
+  dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans: CourseScheduleSyncResult;
+};
+
 const SYNC_COURSE_SCHEDULES_MUTATION = `
   mutation SyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
     $input: SyncCourseSchedulesFromUpstreamDepartmentCurriculumPlansInput!
@@ -82,6 +97,35 @@ const SYNC_COURSE_SCHEDULES_MUTATION = `
       semesterId
       fetchedCount
       importedCount
+      createdCount
+      updatedCount
+      failedCount
+      items {
+        action
+        scheduleId
+        sstsCourseId
+        sstsTeachingClassId
+      }
+      failures {
+        code
+        message
+        details
+        sstsCourseId
+        sstsTeachingClassId
+      }
+    }
+  }
+`;
+
+const DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION = `
+  mutation DryRunSyncCourseSchedules(
+    $input: SyncCourseSchedulesFromUpstreamDepartmentCurriculumPlansInput!
+  ) {
+    dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input: $input) {
+      dryRun
+      semesterId
+      fetchedCount
+      previewedCount
       createdCount
       updatedCount
       failedCount
@@ -120,6 +164,17 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   return executeGraphQL(query, variables);
 }
 
+function normalizeCourseScheduleSyncInput(input: CourseScheduleSyncInput) {
+  return {
+    departmentId: normalizeRequiredTextValue(input.departmentId, { label: '院系' }),
+    reviewStatus: input.reviewStatus,
+    schoolYear: normalizeRequiredTextValue(String(input.schoolYear || ''), { label: '学年' }),
+    semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
+    teacherId: normalizeOptionalTextValue(input.teacherId, 'to_undefined'),
+    upstreamSessionToken: input.upstreamSessionToken,
+  };
+}
+
 export async function fetchCourseScheduleSyncSemesterOptions() {
   try {
     const response = await requestAcademicSemesters({ limit: 500 });
@@ -150,35 +205,31 @@ export async function fetchCourseScheduleSyncDepartmentOptions() {
   }
 }
 
-export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input: {
-  departmentId: string;
-  reviewStatus?: DepartmentCurriculumPlanReviewStatus;
-  schoolYear: string;
-  semester: string;
-  teacherId?: string;
-  upstreamSessionToken: string;
-}) {
+export async function dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
+  input: CourseScheduleSyncInput,
+) {
+  const response = await requestGraphQL<
+    DryRunSyncCourseSchedulesResponse,
+    {
+      input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
+    }
+  >(DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION, {
+    input: normalizeCourseScheduleSyncInput(input),
+  });
+
+  return response.dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;
+}
+
+export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
+  input: CourseScheduleSyncInput,
+) {
   const response = await requestGraphQL<
     SyncCourseSchedulesResponse,
     {
-      input: {
-        departmentId: string;
-        reviewStatus?: DepartmentCurriculumPlanReviewStatus;
-        schoolYear: string;
-        semester: string;
-        teacherId?: string;
-        upstreamSessionToken: string;
-      };
+      input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
     }
   >(SYNC_COURSE_SCHEDULES_MUTATION, {
-    input: {
-      departmentId: normalizeRequiredTextValue(input.departmentId, { label: '院系' }),
-      reviewStatus: input.reviewStatus,
-      schoolYear: normalizeRequiredTextValue(String(input.schoolYear || ''), { label: '学年' }),
-      semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
-      teacherId: normalizeOptionalTextValue(input.teacherId, 'to_undefined'),
-      upstreamSessionToken: input.upstreamSessionToken,
-    },
+    input: normalizeCourseScheduleSyncInput(input),
   });
 
   return response.syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;

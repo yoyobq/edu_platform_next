@@ -1,12 +1,14 @@
 export type {
   CourseScheduleSyncDepartmentOption,
   CourseScheduleSyncFailure,
+  CourseScheduleSyncInput,
   CourseScheduleSyncItem,
   CourseScheduleSyncResult,
   CourseScheduleSyncSemesterOption,
   DepartmentCurriculumPlanReviewStatus,
 } from './api';
 export {
+  dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
   isAcademicSemesterNotFoundError,

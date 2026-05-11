@@ -18,6 +18,7 @@ import {
   type CourseScheduleSyncResult,
   type CourseScheduleSyncSemesterOption,
   type DepartmentCurriculumPlanReviewStatus,
+  dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
   isExpiredUpstreamSessionError,
@@ -31,6 +32,13 @@ type SyncFormValues = {
   schoolYear: string;
   semester: string;
   teacherId?: string;
+};
+
+type SyncRunMode = 'dryRun' | 'sync';
+
+type PendingSyncRequest = {
+  mode: SyncRunMode;
+  values: SyncFormValues;
 };
 
 type SemesterOption = {
@@ -137,6 +145,20 @@ function formatDateTime(value: string | null) {
   });
 }
 
+function formatOptionalCount(value: number | undefined) {
+  return typeof value === 'number' ? value : '未返回';
+}
+
+function resolveResultSemanticMessage(result: CourseScheduleSyncResult) {
+  if (result.dryRun) {
+    return '本次仅预览，不写入课程表。created 项的 scheduleId 会为空，updated 项返回既有 scheduleId。';
+  }
+
+  return result.failedCount > 0
+    ? '本次请求存在失败计数，但 GraphQL 请求整体成功。'
+    : '本次请求未返回失败计数。';
+}
+
 export function SemesterCourseScheduleSyncPageContent({
   currentAccount,
   isAuthenticating,
@@ -147,6 +169,7 @@ export function SemesterCourseScheduleSyncPageContent({
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -156,7 +179,7 @@ export function SemesterCourseScheduleSyncPageContent({
   const [result, setResult] = useState<CourseScheduleSyncResult | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
-  const [pendingSyncValues, setPendingSyncValues] = useState<SyncFormValues | null>(null);
+  const [pendingSyncRequest, setPendingSyncRequest] = useState<PendingSyncRequest | null>(null);
   const {
     clear,
     clearRememberedCredentials,
@@ -178,7 +201,7 @@ export function SemesterCourseScheduleSyncPageContent({
 
   const clearCurrentSession = useCallback(() => {
     clear();
-    setPendingSyncValues(null);
+    setPendingSyncRequest(null);
   }, [clear]);
 
   useEffect(() => {
@@ -205,30 +228,44 @@ export function SemesterCourseScheduleSyncPageContent({
   ]);
 
   const performSync = useCallback(
-    async (session: StoredUpstreamSession, values: SyncFormValues) => {
-      setIsSyncing(true);
+    async (session: StoredUpstreamSession, values: SyncFormValues, mode: SyncRunMode) => {
+      const isDryRun = mode === 'dryRun';
+
+      if (isDryRun) {
+        setIsPreviewing(true);
+      } else {
+        setIsSyncing(true);
+      }
+
       setSyncError(null);
       setResult(null);
-      setPendingSyncValues(null);
+      setPendingSyncRequest(null);
 
       try {
-        const syncResult = await syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans({
+        const input = {
           departmentId: values.departmentId,
           reviewStatus: values.reviewStatus,
           schoolYear: values.schoolYear,
           semester: values.semester,
           teacherId: values.teacherId,
           upstreamSessionToken: session.upstreamSessionToken,
-        });
+        };
+        const syncResult = isDryRun
+          ? await dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input)
+          : await syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input);
 
         persistSessionFromResult(session, syncResult);
         setResult(syncResult);
-        setPendingSyncValues(null);
+        setPendingSyncRequest(null);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clearCurrentSession();
-          setPendingSyncValues(values);
-          setLoginError('upstream 会话已失效，请重新登录后继续同步。');
+          setPendingSyncRequest({ mode, values });
+          setLoginError(
+            isDryRun
+              ? 'upstream 会话已失效，请重新登录后继续预览。'
+              : 'upstream 会话已失效，请重新登录后继续同步。',
+          );
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
@@ -243,7 +280,11 @@ export function SemesterCourseScheduleSyncPageContent({
         setResult(null);
         setSyncError(resolveCourseScheduleSyncErrorMessage(error));
       } finally {
-        setIsSyncing(false);
+        if (isDryRun) {
+          setIsPreviewing(false);
+        } else {
+          setIsSyncing(false);
+        }
       }
     },
     [
@@ -255,39 +296,42 @@ export function SemesterCourseScheduleSyncPageContent({
     ],
   );
 
-  const handleRunSync = useCallback(async () => {
-    const values = await syncForm.validateFields();
+  const handleRunSync = useCallback(
+    async (mode: SyncRunMode) => {
+      const values = await syncForm.validateFields();
 
-    setSyncError(null);
-    setLoginError(null);
+      setSyncError(null);
+      setLoginError(null);
 
-    if (!currentAccount) {
-      setSyncError('当前登录会话尚未恢复，请稍后重试。');
-      return;
-    }
+      if (!currentAccount) {
+        setSyncError('当前登录会话尚未恢复，请稍后重试。');
+        return;
+      }
 
-    if (!storedSession) {
-      setPendingSyncValues(values);
-      setIsLoginModalOpen(true);
-      loginForm.setFieldsValue(
-        buildUpstreamLoginCredentialsInitialValues({
-          lockedUserId: lockedUpstreamLoginUserId,
-          rememberedCredentials,
-        }),
-      );
-      return;
-    }
+      if (!storedSession) {
+        setPendingSyncRequest({ mode, values });
+        setIsLoginModalOpen(true);
+        loginForm.setFieldsValue(
+          buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
+            rememberedCredentials,
+          }),
+        );
+        return;
+      }
 
-    await performSync(storedSession, values);
-  }, [
-    currentAccount,
-    lockedUpstreamLoginUserId,
-    loginForm,
-    performSync,
-    rememberedCredentials,
-    storedSession,
-    syncForm,
-  ]);
+      await performSync(storedSession, values, mode);
+    },
+    [
+      currentAccount,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      performSync,
+      rememberedCredentials,
+      storedSession,
+      syncForm,
+    ],
+  );
 
   useEffect(() => {
     if (!isAuthenticating && !currentAccount) {
@@ -402,14 +446,18 @@ export function SemesterCourseScheduleSyncPageContent({
 
       try {
         const nextStoredSession = await loginUpstream(values);
-        const nextPendingSyncValues = pendingSyncValues;
+        const nextPendingSyncRequest = pendingSyncRequest;
 
-        setPendingSyncValues(null);
+        setPendingSyncRequest(null);
         setIsLoginModalOpen(false);
         loginForm.resetFields();
 
-        if (nextPendingSyncValues) {
-          await performSync(nextStoredSession, nextPendingSyncValues);
+        if (nextPendingSyncRequest) {
+          await performSync(
+            nextStoredSession,
+            nextPendingSyncRequest.values,
+            nextPendingSyncRequest.mode,
+          );
         }
       } catch (error) {
         setLoginError(resolveCourseScheduleSyncErrorMessage(error, 'login'));
@@ -417,7 +465,7 @@ export function SemesterCourseScheduleSyncPageContent({
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginForm, loginUpstream, pendingSyncValues, performSync],
+    [currentAccount, loginForm, loginUpstream, pendingSyncRequest, performSync],
   );
 
   if (isAuthenticating) {
@@ -429,6 +477,7 @@ export function SemesterCourseScheduleSyncPageContent({
   }
 
   const schoolYearOptions = getUniqueSchoolYearOptions(semesterOptions);
+  const isRunningSync = isPreviewing || isSyncing;
 
   if (pageError) {
     return (
@@ -547,10 +596,23 @@ export function SemesterCourseScheduleSyncPageContent({
           </div>
 
           <div className="flex flex-wrap gap-3">
-            <Button loading={isSyncing} onClick={() => void handleRunSync()} type="primary">
-              触发同步
+            <Button
+              disabled={isSyncing}
+              loading={isPreviewing}
+              onClick={() => void handleRunSync('dryRun')}
+            >
+              预览同步
             </Button>
             <Button
+              disabled={isPreviewing}
+              loading={isSyncing}
+              onClick={() => void handleRunSync('sync')}
+              type="primary"
+            >
+              执行同步
+            </Button>
+            <Button
+              disabled={isRunningSync}
               onClick={() => {
                 clearCurrentSession();
                 setLoginError(null);
@@ -559,6 +621,7 @@ export function SemesterCourseScheduleSyncPageContent({
               清理 upstream token
             </Button>
             <Button
+              disabled={isRunningSync}
               onClick={() => {
                 setIsLoginModalOpen(true);
                 setLoginError(null);
@@ -581,21 +644,35 @@ export function SemesterCourseScheduleSyncPageContent({
         {result ? (
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
+              <Descriptions.Item label="运行模式">
+                {result.dryRun ? 'Dry-run 预览' : '正式同步'}
+              </Descriptions.Item>
               <Descriptions.Item label="semesterId">{result.semesterId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
-              <Descriptions.Item label="importedCount">{result.importedCount}</Descriptions.Item>
+              {result.dryRun ? (
+                <Descriptions.Item label="previewedCount">
+                  {formatOptionalCount(result.previewedCount)}
+                </Descriptions.Item>
+              ) : (
+                <Descriptions.Item label="importedCount">
+                  {formatOptionalCount(result.importedCount)}
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="createdCount">{result.createdCount}</Descriptions.Item>
               <Descriptions.Item label="updatedCount">{result.updatedCount}</Descriptions.Item>
               <Descriptions.Item label="failedCount">{result.failedCount}</Descriptions.Item>
-              <Descriptions.Item label="续签 token 过期时间">
-                {formatDateTime(result.expiresAt)}
-              </Descriptions.Item>
-              <Descriptions.Item label="部分成功语义" span={2}>
-                {result.failedCount > 0
-                  ? '本次请求存在失败计数，但 GraphQL 请求整体成功。'
-                  : '本次请求未返回失败计数。'}
-              </Descriptions.Item>
+              {result.expiresAt ? (
+                <Descriptions.Item label="续签 token 过期时间">
+                  {formatDateTime(result.expiresAt)}
+                </Descriptions.Item>
+              ) : null}
             </Descriptions>
+
+            <Alert
+              showIcon
+              type={result.dryRun ? 'info' : result.failedCount > 0 ? 'warning' : 'success'}
+              message={resolveResultSemanticMessage(result)}
+            />
 
             <div className="flex flex-col gap-3">
               <pre className="overflow-x-auto rounded-xl border border-line-default bg-bg-layout p-4 text-sm leading-6 text-text">
@@ -608,7 +685,7 @@ export function SemesterCourseScheduleSyncPageContent({
             showIcon
             type="warning"
             message="还没有同步结果"
-            description="填写参数并触发同步后，这里会展示同步摘要和原始响应。"
+            description="填写参数并预览或执行同步后，这里会展示同步摘要和原始响应。"
           />
         )}
       </Card>
@@ -623,7 +700,7 @@ export function SemesterCourseScheduleSyncPageContent({
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
-          setPendingSyncValues(null);
+          setPendingSyncRequest(null);
           setLoginError(null);
         }}
         onFinish={handleLoginFinish}
