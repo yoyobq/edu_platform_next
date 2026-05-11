@@ -66,4 +66,4 @@
 - `src/shared/upstream` 暴露 Staff Directory Cache client
 - `src/shared/upstream` 暴露 `StaffDirectoryTeacherAutoComplete`、`useStaffDirectoryTeachers` 与教师输入解析 helper
 - `src/features/academic-teaching-log` 的 `My 教学日志` 页面消费完整教师目录
-- `src/features/academic-timetable`、`src/features/academic-integrated-plan-corrections`、`src/labs/academic-timetable`、`src/labs/academic-workload` 复用同一套教师选择 UI
+- `src/features/academic-timetable`、`src/features/academic-integrated-plan-corrections`、`src/labs/academic-workload` 复用同一套教师选择 UI

@@ -72,17 +72,9 @@ import {
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import {
-  academicTimetableLabAccess,
-  loadAcademicTimetableLabRouteModule,
-} from '@/labs/academic-timetable';
-import {
   academicWorkloadLabAccess,
   loadAcademicWorkloadLabRouteModule,
 } from '@/labs/academic-workload';
-import {
-  changeLoginEmailLabAccess,
-  loadChangeLoginEmailLabRouteModule,
-} from '@/labs/change-login-email';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -509,42 +501,6 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function changeLoginEmailLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(changeLoginEmailLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(changeLoginEmailLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(changeLoginEmailLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
-}
-
 async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(upstreamSessionDemoLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -621,49 +577,6 @@ async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionAr
       displayName: snapshot.displayName,
     },
     viewerRole,
-  };
-}
-
-async function academicTimetableLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(academicTimetableLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(academicTimetableLabAccess)) {
-      return { viewerKind: 'authenticated' };
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(academicTimetableLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  const accessGroup = snapshot.userInfo.accessGroup;
-
-  return {
-    defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
-    viewerRole: resolveAcademicInternalViewerRole(accessGroup),
-    viewerKind:
-      accessGroup.includes('ADMIN') || accessGroup.includes('STAFF') ? 'internal' : 'authenticated',
   };
 }
 
@@ -1042,19 +955,9 @@ const router = createBrowserRouter([
             lazy: loadInviteIssuerLabRouteModule,
           },
           {
-            path: 'change-login-email',
-            loader: changeLoginEmailLabLoader,
-            lazy: loadChangeLoginEmailLabRouteModule,
-          },
-          {
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'academic-timetable',
-            loader: academicTimetableLabLoader,
-            lazy: loadAcademicTimetableLabRouteModule,
           },
           {
             path: 'academic-workload',

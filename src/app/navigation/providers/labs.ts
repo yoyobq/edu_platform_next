@@ -36,19 +36,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
     ...(hasLabNavigationAccess(['admin'], filter)
       ? [
           {
-            iconKey: 'MailOutlined',
-            key: '/labs/change-login-email',
-            label: '登录邮箱变更',
-            navMode: 'rail' as const,
-            path: '/labs/change-login-email',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasLabNavigationAccess(['admin'], filter)
-      ? [
-          {
             iconKey: 'SendOutlined',
             key: '/labs/invite-issuer',
             label: '邀请管理',
@@ -69,20 +56,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             navMode: 'rail' as const,
             path: '/labs/upstream-session-demo',
             primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
-            key: '/labs/academic-timetable',
-            label: '课表视图',
-            navMode: 'rail' as const,
-            path: '/labs/academic-timetable',
-            primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
         ]

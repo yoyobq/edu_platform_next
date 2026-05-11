@@ -44,4 +44,3 @@
   - 当前共享判断：`src/features/academic-teaching-log/application/course-category.ts`
 - 周课表 / 学期课表：`src/features/academic-timetable/`
 - 首页周课表：`src/pages/home/workbench-weekly-timetable-grid.css`
-- 周课表 / 学期课表实验页：`src/labs/academic-timetable/`

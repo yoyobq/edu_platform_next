@@ -59,10 +59,8 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/academic-timetable',
       '/labs/academic-workload',
       '/sandbox/playground',
     ]);
@@ -103,10 +101,8 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
     expect(
@@ -138,7 +134,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
   });
@@ -154,7 +149,6 @@ describe('navigation catalog', () => {
     );
 
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
@@ -195,7 +189,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-timetable',
       '/labs/academic-workload',
     ]);
     expect(
@@ -270,10 +263,8 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
-      '/labs/change-login-email',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/academic-timetable',
       '/labs/academic-workload',
       '/sandbox/playground',
       '/admin/users',

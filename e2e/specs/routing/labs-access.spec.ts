@@ -189,7 +189,7 @@ test('旧 labs 认证码签发路径应不再可访问', async ({ page }) => {
   await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });
 
-test('具备 admin 权限的已登录会话，应允许进入 labs change login email', async ({ page }) => {
+test('旧 labs 登录邮箱变更路径应不再可访问', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -202,10 +202,27 @@ test('具备 admin 权限的已登录会话，应允许进入 labs change login 
     primaryAccessGroup: 'ADMIN',
   });
 
-  await page.goto(routes.labsChangeLoginEmail);
+  await page.goto('/labs/change-login-email');
 
-  await expect(page.getByRole('heading', { name: '登录邮箱变更发信页' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '发送验证邮件' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+});
+
+test('旧 labs 课表视图路径应不再可访问', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'staff-user',
+      primaryAccessGroup: 'STAFF',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'staff-user',
+    primaryAccessGroup: 'STAFF',
+  });
+
+  await page.goto('/labs/academic-timetable');
+
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });
 
 test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 labs upstream session demo', async ({
@@ -536,132 +553,6 @@ test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({
   await expect(page.getByText('教职工邀请已签发')).toBeVisible();
   await expect(page.locator('text=staff-token-001').first()).toBeVisible();
   await expect(page.getByText('/invite/staff/staff-token-001')).toBeVisible();
-});
-
-test('labs change login email 可发起 requestChangeLoginEmail 并展示前端验证路由模板', async ({
-  page,
-}) => {
-  let requestInput: { currentLoginPassword?: string; newLoginEmail?: string } | null = null;
-
-  await mockApiHealth(page);
-  await mockAuthGraphQL(page, {
-    currentSession: {
-      displayName: 'admin-user',
-      primaryAccessGroup: 'ADMIN',
-    },
-  });
-  await seedAuthSession(page, {
-    displayName: 'admin-user',
-    primaryAccessGroup: 'ADMIN',
-  });
-
-  await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-          variables?: {
-            input?: { currentLoginPassword?: string; newLoginEmail?: string };
-          };
-        }
-      | undefined;
-    const query = typeof payload?.query === 'string' ? payload.query : '';
-
-    if (query.includes('mutation RequestChangeLoginEmail')) {
-      requestInput = payload?.variables?.input ?? null;
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            requestChangeLoginEmail: {
-              message: '验证邮件已发送',
-              success: true,
-            },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-
-    await route.fallback();
-  });
-
-  await page.goto(routes.labsChangeLoginEmail);
-
-  await page.getByLabel('新的登录邮箱').fill('new-login@example.com');
-  await page.getByLabel('当前登录密码').fill('current-password');
-  await page.getByRole('button', { name: '给自己发送验证邮件' }).click();
-
-  await expect(page.getByText('验证邮件已请求发送')).toBeVisible();
-  await expect(page.locator('text=new-login@example.com').first()).toBeVisible();
-  await expect(page.locator('text=/verify/email/\\{verificationCode\\}/').first()).toBeVisible();
-  expect(requestInput).toEqual({
-    currentLoginPassword: 'current-password',
-    newLoginEmail: 'new-login@example.com',
-  });
-});
-
-test('labs change login email 可通过 adminRequestChangeLoginEmail 为指定账号发起验证邮件', async ({
-  page,
-}) => {
-  let requestInput: { accountId?: number; newLoginEmail?: string } | null = null;
-
-  await mockApiHealth(page);
-  await mockAuthGraphQL(page, {
-    currentSession: {
-      displayName: 'admin-user',
-      primaryAccessGroup: 'ADMIN',
-    },
-  });
-  await seedAuthSession(page, {
-    displayName: 'admin-user',
-    primaryAccessGroup: 'ADMIN',
-  });
-
-  await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-          variables?: {
-            input?: { accountId?: number; newLoginEmail?: string };
-          };
-        }
-      | undefined;
-    const query = typeof payload?.query === 'string' ? payload.query : '';
-
-    if (query.includes('mutation AdminRequestChangeLoginEmail')) {
-      requestInput = payload?.variables?.input ?? null;
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            adminRequestChangeLoginEmail: {
-              message: '已为目标账号发送验证邮件',
-              success: true,
-            },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-
-    await route.fallback();
-  });
-
-  await page.goto(routes.labsChangeLoginEmail);
-
-  await page.getByLabel('新的登录邮箱').fill('delegated-login@example.com');
-  await page.getByLabel('目标账号 ID').fill('9527');
-  await page.getByRole('button', { name: '以 admin 身份为指定账号发送' }).click();
-
-  await expect(page.getByText('指定账号的验证邮件已请求发送')).toBeVisible();
-  await expect(page.locator('text=9527').first()).toBeVisible();
-  await expect(page.locator('text=delegated-login@example.com').first()).toBeVisible();
-  expect(requestInput).toEqual({
-    accountId: 9527,
-    newLoginEmail: 'delegated-login@example.com',
-  });
 });
 
 test('admin 认证码签发可从教师字典选择教师并发送邀请', async ({ page }) => {

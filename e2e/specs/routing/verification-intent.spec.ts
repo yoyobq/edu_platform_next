@@ -32,7 +32,7 @@ for (const verificationCase of verificationCases) {
     await expect(page.getByRole('banner')).toHaveCount(0);
 
     for (const assertion of verificationCase.assertions) {
-      await expect(page.getByText(assertion)).toBeVisible();
+      await expect(page.getByText(assertion, { exact: true })).toBeVisible();
     }
   });
 }
