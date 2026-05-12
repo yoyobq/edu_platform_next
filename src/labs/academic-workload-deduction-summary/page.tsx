@@ -1,6 +1,14 @@
 // src/labs/academic-workload-deduction-summary/page.tsx
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, CarryOutOutlined, ReloadOutlined } from '@ant-design/icons';
+import {
+  type ReactNode,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { BarChartOutlined, CarryOutOutlined, CopyOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
 import {
   Alert,
@@ -779,13 +787,18 @@ function renderTeachingClassName(value: string) {
   }
 
   return (
-    <span className="academic-workload-lab-class-name">
-      {teachingClassNames.map((teachingClassName) => (
-        <span className="academic-workload-lab-class-name-item" key={teachingClassName}>
-          {teachingClassName}
-        </span>
-      ))}
-    </span>
+    <Tooltip title={value}>
+      <span className="academic-workload-lab-class-name">
+        {teachingClassNames.map((teachingClassName, index) => (
+          <span
+            className="academic-workload-lab-class-name-item"
+            key={`${teachingClassName}-${index}`}
+          >
+            {teachingClassName}
+          </span>
+        ))}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -832,6 +845,154 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
   );
 }
 
+function getEngagementTabLabel(key: EngagementTabKey) {
+  return ENGAGEMENT_TABS.find((item) => item.key === key)?.label ?? '当前表';
+}
+
+function getDeductionTableTotalHundredths(rows: AcademicWorkloadDeductionTableRow[]) {
+  return rows.reduce(
+    (total, row) => (row.staffRowIndex === 0 ? total + row.staffTotalHundredths : total),
+    0,
+  );
+}
+
+function renderDeductionTableSummary(input: {
+  columnCount: number;
+  label: string;
+  rows: AcademicWorkloadDeductionTableRow[];
+}) {
+  const totalHundredths = getDeductionTableTotalHundredths(input.rows);
+
+  return (
+    <Table.Summary>
+      <Table.Summary.Row className="academic-workload-lab-total-row">
+        <Table.Summary.Cell
+          align="center"
+          className="academic-workload-lab-total-label"
+          colSpan={input.columnCount - 1}
+          index={0}
+        >
+          {input.label}
+        </Table.Summary.Cell>
+        <Table.Summary.Cell
+          align="right"
+          className="academic-workload-lab-total-value"
+          index={input.columnCount - 1}
+        >
+          <span className="academic-workload-lab-hour">
+            {formatDeductedHundredths(totalHundredths)}
+          </span>
+        </Table.Summary.Cell>
+      </Table.Summary.Row>
+    </Table.Summary>
+  );
+}
+
+function formatTeachingClassClipboardValue(value: string) {
+  const teachingClassNames = value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return teachingClassNames.length > 0 ? teachingClassNames.join('\n') : EMPTY_TEXT;
+}
+
+function formatDateColumnClipboardTitle(
+  value: string,
+  teachingWeeks: readonly TeachingWeekOption[],
+) {
+  const teachingWeek = findTeachingWeekByDate(value, teachingWeeks);
+
+  return [
+    formatDateColumnMonthDay(value),
+    teachingWeek ? `第${teachingWeek.value}周` : '第-周',
+    formatDateColumnWeekday(value),
+  ].join('\n');
+}
+
+function formatClipboardCell(value: string | number | null | undefined) {
+  const text = value === null || value === undefined ? '' : String(value);
+
+  if (!/["\n\r\t]/.test(text)) {
+    return text;
+  }
+
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
+function buildDeductionTableClipboardText(input: {
+  dateColumns: string[];
+  rows: AcademicWorkloadDeductionTableRow[];
+  summaryLabel: string;
+  teachingWeeks: readonly TeachingWeekOption[];
+}) {
+  const headers = [
+    '序号',
+    '工号',
+    '姓名',
+    '任课班级',
+    '课程',
+    '周课时',
+    '上课周数',
+    ...input.dateColumns.map((date) => formatDateColumnClipboardTitle(date, input.teachingWeeks)),
+    '小计',
+    '合计',
+  ];
+  const bodyRows = input.rows.map((row) => [
+    row.staffRowIndex === 0 ? row.sequence : '',
+    row.staffRowIndex === 0 ? row.item.staffId : '',
+    row.staffRowIndex === 0 ? row.item.staffName : '',
+    formatTeachingClassClipboardValue(row.item.teachingClassName),
+    row.item.courseName || '未命名课程',
+    formatHourString(row.item.baselineWeeklyHours),
+    row.item.baselineTeachingWeekCount,
+    ...input.dateColumns.map((date) => {
+      const summary = row.dateSummaries[date];
+
+      return summary?.hasHourValue ? formatDeductedHundredths(summary.deductedHundredths) : '0';
+    }),
+    formatDeductedHundredths(row.tableSubtotalHundredths),
+    row.staffRowIndex === 0 ? formatDeductedHundredths(row.staffTotalHundredths) : '',
+  ]);
+  const summaryRow = Array.from<string>({ length: headers.length }).fill('');
+
+  summaryRow[0] = input.summaryLabel;
+  summaryRow[headers.length - 1] = formatDeductedHundredths(
+    getDeductionTableTotalHundredths(input.rows),
+  );
+
+  return [headers, ...bodyRows, summaryRow]
+    .map((row) => row.map(formatClipboardCell).join('\t'))
+    .join('\n');
+}
+
+async function copyTextToClipboard(text: string) {
+  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textArea = document.createElement('textarea');
+
+  textArea.value = text;
+  textArea.setAttribute('readonly', 'true');
+  textArea.style.position = 'fixed';
+  textArea.style.insetBlockStart = '-9999px';
+  textArea.style.opacity = '0';
+  document.body.append(textArea);
+  textArea.select();
+
+  try {
+    const copied = document.execCommand('copy');
+
+    if (!copied) {
+      throw new Error('复制失败');
+    }
+  } finally {
+    textArea.remove();
+  }
+}
+
 function buildDeductionColumns(
   dateColumns: string[],
   showTeacherTypeTag: boolean,
@@ -874,7 +1035,7 @@ function buildDeductionColumns(
       key: 'teachingClassName',
       onCell: getDetailCellProps,
       render: (value: string) => renderTeachingClassName(value),
-      title: renderStackedColumnTitle('任课', '班级'),
+      title: '任课班级',
       width: 132,
     },
     {
@@ -889,7 +1050,7 @@ function buildDeductionColumns(
       width: 180,
     },
     {
-      align: 'center',
+      align: 'right',
       key: 'baselineWeeklyHours',
       onCell: getDetailCellProps,
       render: (_, row) => renderHourCell(row.item.baselineWeeklyHours),
@@ -897,7 +1058,7 @@ function buildDeductionColumns(
       width: 68,
     },
     {
-      align: 'center',
+      align: 'right',
       dataIndex: ['item', 'baselineTeachingWeekCount'],
       key: 'baselineTeachingWeekCount',
       onCell: getDetailCellProps,
@@ -905,7 +1066,7 @@ function buildDeductionColumns(
       width: 68,
     },
     ...dateColumns.map((date) => ({
-      align: 'center' as const,
+      align: 'right' as const,
       key: `date-${date}`,
       onCell: getDetailCellProps,
       render: (_: unknown, row: AcademicWorkloadDeductionTableRow) => (
@@ -917,7 +1078,7 @@ function buildDeductionColumns(
       width: DEDUCTION_DATE_COLUMN_WIDTH,
     })),
     {
-      align: 'center',
+      align: 'right',
       key: 'subtotal',
       onCell: getDetailCellProps,
       render: (_, row) => (
@@ -929,7 +1090,7 @@ function buildDeductionColumns(
       width: 92,
     },
     {
-      align: 'center',
+      align: 'right',
       key: 'staffTotal',
       render: (_, row) =>
         renderMergedCell(
@@ -959,21 +1120,21 @@ function buildDepartmentSummaryColumns() {
       title: '归口系',
     },
     {
-      align: 'center',
+      align: 'right',
       dataIndex: 'staffCount',
       key: 'staffCount',
       title: '教师数',
       width: 92,
     },
     {
-      align: 'center',
+      align: 'right',
       dataIndex: 'itemCount',
       key: 'itemCount',
       title: '明细行',
       width: 92,
     },
     {
-      align: 'center',
+      align: 'right',
       dataIndex: 'deductedHours',
       key: 'deductedHours',
       render: (value: string) => renderDeductedHourCell(value),
@@ -981,7 +1142,7 @@ function buildDepartmentSummaryColumns() {
       width: 108,
     },
     {
-      align: 'center',
+      align: 'right',
       dataIndex: 'addedHours',
       key: 'addedHours',
       render: (value: string) => renderHourCell(value),
@@ -1015,6 +1176,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
   const isAdminViewer = loaderData?.viewerRole === 'admin';
   const scopedDepartmentId = loaderData?.defaultDepartmentId?.trim() || '';
   const latestRequestIdRef = useRef(0);
+  const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
@@ -1030,6 +1192,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | 'idle'>('idle');
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [summaryError, setSummaryError] = useState<string | null>(null);
@@ -1042,6 +1205,28 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
     setSummaryError(null);
     setLoadingSummary(false);
   }, []);
+
+  const setTemporaryCopyStatus = useCallback((status: 'copied' | 'failed') => {
+    setCopyStatus(status);
+
+    if (copyStatusTimerRef.current) {
+      clearTimeout(copyStatusTimerRef.current);
+    }
+
+    copyStatusTimerRef.current = setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, 1600);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (copyStatusTimerRef.current) {
+        clearTimeout(copyStatusTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -1196,18 +1381,33 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
     () => buildVisibleTotal(visibleDeductionItems),
     [visibleDeductionItems],
   );
+  const deferredActiveEngagementType = useDeferredValue(activeEngagementType);
+  const deferredVisibleDeductionItems = useDeferredValue(visibleDeductionItems);
+  const isDeductionRenderPending =
+    deferredActiveEngagementType !== activeEngagementType ||
+    deferredVisibleDeductionItems !== visibleDeductionItems;
   const visibleDepartmentSummaries = useMemo(
-    () => buildVisibleDepartmentSummaries(visibleDeductionItems),
-    [visibleDeductionItems],
+    () => buildVisibleDepartmentSummaries(deferredVisibleDeductionItems),
+    [deferredVisibleDeductionItems],
   );
   const deductionRows = useMemo(
     () =>
-      buildTableRows(visibleDeductionItems, {
-        sortByEngagementType: activeEngagementType === 'ALL',
+      buildTableRows(deferredVisibleDeductionItems, {
+        sortByEngagementType: deferredActiveEngagementType === 'ALL',
       }),
-    [activeEngagementType, visibleDeductionItems],
+    [deferredActiveEngagementType, deferredVisibleDeductionItems],
   );
   const deductionDateColumns = useMemo(() => collectDateColumns(deductionRows), [deductionRows]);
+  const deductionColumns = useMemo(
+    () =>
+      buildDeductionColumns(
+        deductionDateColumns,
+        deferredActiveEngagementType === 'ALL',
+        teachingWeeks,
+      ),
+    [deferredActiveEngagementType, deductionDateColumns, teachingWeeks],
+  );
+  const deductionSummaryLabel = `${getEngagementTabLabel(deferredActiveEngagementType)}小计`;
 
   const departmentOptions = useMemo(() => {
     const baseOptions = buildDepartmentSelectOptions(departmentRecords);
@@ -1284,12 +1484,10 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
     }
   };
 
-  const selectedScopeLabel = isExternalTeacherRangeMode
-    ? `${formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)} · ${formatTeachingWeekDateSpan(
-        selectedStartWeek,
-        selectedEndWeek,
-      )}`
-    : '整学期';
+  const activeEngagementLabel = getEngagementTabLabel(activeEngagementType);
+  const summaryContextLabel = `${selectedSemester?.name ?? `学期 ${selectedSemesterId}`} · ${
+    activeEngagementLabel
+  }`;
   const shouldShowDepartmentSummary = isAdminViewer && visibleDepartmentSummaries.length > 1;
 
   const handleResetWeekRange = () => {
@@ -1297,6 +1495,33 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
     setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
     setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
   };
+  const handleCopyDeductionTable = useCallback(async () => {
+    if (deductionRows.length === 0) {
+      return;
+    }
+
+    try {
+      await copyTextToClipboard(
+        buildDeductionTableClipboardText({
+          dateColumns: deductionDateColumns,
+          rows: deductionRows,
+          summaryLabel: deductionSummaryLabel,
+          teachingWeeks,
+        }),
+      );
+      setTemporaryCopyStatus('copied');
+    } catch {
+      setTemporaryCopyStatus('failed');
+    }
+  }, [
+    deductionDateColumns,
+    deductionRows,
+    deductionSummaryLabel,
+    setTemporaryCopyStatus,
+    teachingWeeks,
+  ]);
+  const copyButtonLabel =
+    copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制';
 
   return (
     <div className="academic-workload-lab-page">
@@ -1315,6 +1540,35 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
           <Skeleton active paragraph={{ rows: 3 }} />
         ) : (
           <div className="academic-workload-lab-query">
+            {summaryEnvelope ? (
+              <section className="academic-workload-lab-overview">
+                <div className="academic-workload-lab-summary-heading">
+                  <div>
+                    <h2>当前汇总</h2>
+                    <p>{summaryContextLabel}</p>
+                  </div>
+                  <label className="academic-workload-lab-summary-option">
+                    <span>计入运动会扣课</span>
+                    <Switch
+                      checked={showSportsMeetDeductions}
+                      size="small"
+                      onChange={setShowSportsMeetDeductions}
+                    />
+                  </label>
+                </div>
+
+                <div className="academic-workload-lab-metrics academic-workload-lab-query-metrics">
+                  <SummaryMetric label="教师数" value={String(visibleSummary.staffCount)} />
+                  <SummaryMetric label="课程数" value={String(visibleSummary.itemCount)} />
+                  <SummaryMetric
+                    label="扣课"
+                    tone="danger"
+                    value={formatDeductedHourString(visibleSummary.deductedHours)}
+                  />
+                </div>
+              </section>
+            ) : null}
+
             <div className="academic-workload-lab-filters">
               <label>
                 <span>学期</span>
@@ -1348,15 +1602,6 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                   }}
                 />
               </label>
-
-              <div className="academic-workload-lab-option">
-                <span>显示运动会扣课</span>
-                <Switch
-                  checked={showSportsMeetDeductions}
-                  size="small"
-                  onChange={setShowSportsMeetDeductions}
-                />
-              </div>
 
               <Button
                 icon={<BarChartOutlined />}
@@ -1431,13 +1676,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                   </div>
                 </div>
               </div>
-            ) : (
-              <div className="academic-workload-lab-semester-scope">
-                <span>统计范围</span>
-                <strong>整学期</strong>
-                <small>{selectedSemester?.name ?? '当前选择学期'}</small>
-              </div>
-            )}
+            ) : null}
           </div>
         )}
       </section>
@@ -1445,6 +1684,20 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
       <Tabs
         activeKey={activeEngagementType}
         items={tabItems}
+        tabBarExtraContent={{
+          right: (
+            <Button
+              disabled={!summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0}
+              icon={<CopyOutlined />}
+              size="small"
+              onClick={() => {
+                void handleCopyDeductionTable();
+              }}
+            >
+              {copyButtonLabel}
+            </Button>
+          ),
+        }}
         onChange={handleEngagementTypeChange}
       />
 
@@ -1472,44 +1725,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
             />
           ) : null}
 
-          <section className="academic-workload-lab-summary">
-            <div className="academic-workload-lab-summary-heading">
-              <div>
-                <h2>当前汇总</h2>
-                <p>
-                  {selectedSemester?.name ?? `学期 ${selectedSemesterId}`} ·{' '}
-                  {ENGAGEMENT_TABS.find((item) => item.key === activeEngagementType)?.label} ·{' '}
-                  {selectedScopeLabel}
-                </p>
-              </div>
-              <Button
-                icon={<ReloadOutlined />}
-                loading={loadingSummary}
-                onClick={() => {
-                  void loadSummary();
-                }}
-              >
-                刷新
-              </Button>
-            </div>
-
-            <div className="academic-workload-lab-metrics">
-              <SummaryMetric label="教师数" value={String(visibleSummary.staffCount)} />
-              <SummaryMetric label="明细行" value={String(visibleSummary.itemCount)} />
-              <SummaryMetric
-                label="原始扣课"
-                tone="danger"
-                value={formatDeductedHourString(visibleSummary.deductedHours)}
-              />
-              <SummaryMetric
-                label="补回课时"
-                tone="success"
-                value={formatHourString(visibleSummary.addedHours)}
-              />
-            </div>
-          </section>
-
-          {shouldShowDepartmentSummary ? (
+          {!isDeductionRenderPending && shouldShowDepartmentSummary ? (
             <section className="academic-workload-lab-soft-card">
               <details>
                 <summary>
@@ -1525,6 +1741,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                       rowKey={(record) => record.workloadDepartmentId}
                       scroll={{ x: 720 }}
                       size="small"
+                      tableLayout="fixed"
                     />
                   </div>
                 </div>
@@ -1532,16 +1749,14 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
             </section>
           ) : null}
 
-          {visibleDeductionItems.length === 0 ? (
+          {isDeductionRenderPending ? (
+            <Skeleton active paragraph={{ rows: 6 }} />
+          ) : deferredVisibleDeductionItems.length === 0 ? (
             <Empty description="当前条件下没有课程记录。" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
             <div className="academic-workload-lab-table-shell">
               <Table<AcademicWorkloadDeductionTableRow>
-                columns={buildDeductionColumns(
-                  deductionDateColumns,
-                  activeEngagementType === 'ALL',
-                  teachingWeeks,
-                )}
+                columns={deductionColumns}
                 dataSource={deductionRows}
                 pagination={false}
                 rowKey={(row) => row.key}
@@ -1551,6 +1766,14 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                     deductionDateColumns.length * DEDUCTION_DATE_COLUMN_WIDTH,
                 }}
                 size="small"
+                tableLayout="fixed"
+                summary={() =>
+                  renderDeductionTableSummary({
+                    columnCount: deductionColumns.length,
+                    label: deductionSummaryLabel,
+                    rows: deductionRows,
+                  })
+                }
               />
             </div>
           )}
