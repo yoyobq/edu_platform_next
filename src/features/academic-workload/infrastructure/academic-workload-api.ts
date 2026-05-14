@@ -10,6 +10,12 @@ export type AcademicStableWorkloadCalcEffect =
   | 'SWAP_IN'
   | 'SWAP_OUT';
 
+export type AcademicTeacherEngagementType =
+  | 'ADMINISTRATIVE_TEACHING'
+  | 'EXTERNAL_TEACHER'
+  | 'FULL_TIME_TEACHER'
+  | 'PUBLIC_WELFARE_POST';
+
 export type AcademicStableWorkloadOccurrence = {
   calcEffect: AcademicStableWorkloadCalcEffect;
   classroomName: string | null;
@@ -41,6 +47,35 @@ export type AcademicStableWorkloadEnvelope = {
   truncationReason: string | null;
 };
 
+export type AcademicWorkloadReportItem = {
+  coefficient: string;
+  courseName: string | null;
+  hours: string;
+  staffId: string;
+  staffName: string;
+  sstsCourseId: string | null;
+  sstsTeachingClassId: string | null;
+  teacherEngagementType: AcademicTeacherEngagementType;
+  teachingClassName: string;
+  weekCount: number;
+  weeklyHours: string;
+};
+
+export type AcademicWorkloadReportTotal = {
+  hours: string;
+  itemCount: number;
+  staffCount: number;
+};
+
+export type AcademicWorkloadReportEnvelope = {
+  invalidReason: string | null;
+  isComplete: boolean;
+  isValid: boolean;
+  items: AcademicWorkloadReportItem[];
+  total: AcademicWorkloadReportTotal;
+  truncationReason: string | null;
+};
+
 export type RequestAcademicStableWorkloadInput = {
   endDate?: string;
   semesterId: number;
@@ -55,12 +90,35 @@ export type RequestMyAcademicStableWorkloadInput = Omit<
   'staffId'
 >;
 
+export type RequestAcademicWorkloadReportInput = {
+  endDate?: string;
+  semesterId: number;
+  startDate?: string;
+  teacherEngagementType?: AcademicTeacherEngagementType;
+  workloadDepartmentId?: string;
+};
+
+export type AcademicWorkloadDepartmentOption = {
+  departmentName: string;
+  id: string;
+  isEnabled: boolean;
+  shortName: string | null;
+};
+
 type AcademicStableWorkloadResponse = {
   listAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
 };
 
 type MyAcademicStableWorkloadResponse = {
   listMyAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
+};
+
+type AcademicWorkloadReportResponse = {
+  getAcademicWorkloadReport: AcademicWorkloadReportEnvelope;
+};
+
+type AcademicWorkloadDepartmentOptionsResponse = {
+  departments: AcademicWorkloadDepartmentOption[];
 };
 
 const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
@@ -155,6 +213,58 @@ const LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
   }
 `;
 
+const GET_ACADEMIC_WORKLOAD_REPORT_QUERY = `
+  query GetAcademicWorkloadReport(
+    $semesterId: Int!
+    $workloadDepartmentId: String
+    $teacherEngagementType: AcademicTeacherEngagementType
+    $startDate: String
+    $endDate: String
+  ) {
+    getAcademicWorkloadReport(
+      semesterId: $semesterId
+      workloadDepartmentId: $workloadDepartmentId
+      teacherEngagementType: $teacherEngagementType
+      startDate: $startDate
+      endDate: $endDate
+    ) {
+      isValid
+      invalidReason
+      isComplete
+      truncationReason
+      items {
+        staffId
+        staffName
+        teacherEngagementType
+        sstsTeachingClassId
+        teachingClassName
+        sstsCourseId
+        courseName
+        weeklyHours
+        weekCount
+        coefficient
+        hours
+      }
+      total {
+        itemCount
+        staffCount
+        hours
+      }
+    }
+  }
+`;
+
+const ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY = `
+  query AcademicWorkloadDepartmentOptions($isEnabled: Boolean, $limit: Int) {
+    departments(isEnabled: $isEnabled, limit: $limit) {
+      departmentName
+      id
+      isEnabled
+      shortName
+    }
+  }
+`;
+
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
@@ -179,6 +289,16 @@ function normalizeMyRequestInput(input: RequestMyAcademicStableWorkloadInput) {
     startDate: normalizeStringFilter(input.startDate),
     sstsCourseId: normalizeStringFilter(input.sstsCourseId),
     sstsTeachingClassId: normalizeStringFilter(input.sstsTeachingClassId),
+  };
+}
+
+function normalizeReportRequestInput(input: RequestAcademicWorkloadReportInput) {
+  return {
+    endDate: normalizeStringFilter(input.endDate),
+    semesterId: input.semesterId,
+    startDate: normalizeStringFilter(input.startDate),
+    teacherEngagementType: input.teacherEngagementType,
+    workloadDepartmentId: normalizeStringFilter(input.workloadDepartmentId),
   };
 }
 
@@ -224,5 +344,34 @@ export async function requestMyAcademicStableWorkloadOccurrences(
     return response.listMyAcademicStableWorkloadOccurrences;
   } catch (error) {
     throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载本人教师工作量。'));
+  }
+}
+
+export async function requestAcademicWorkloadReport(input: RequestAcademicWorkloadReportInput) {
+  try {
+    const response = await executeGraphQL<
+      AcademicWorkloadReportResponse,
+      OperationVariables & RequestAcademicWorkloadReportInput
+    >(GET_ACADEMIC_WORKLOAD_REPORT_QUERY, normalizeReportRequestInput(input));
+
+    return response.getAcademicWorkloadReport;
+  } catch (error) {
+    throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载教师工作量预报。'));
+  }
+}
+
+export async function requestAcademicWorkloadDepartmentOptions() {
+  try {
+    const response = await executeGraphQL<
+      AcademicWorkloadDepartmentOptionsResponse,
+      {
+        isEnabled: boolean;
+        limit: number;
+      }
+    >(ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY, { isEnabled: true, limit: 500 });
+
+    return response.departments;
+  } catch (error) {
+    throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载归口系列表。'));
   }
 }

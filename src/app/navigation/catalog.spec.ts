@@ -43,6 +43,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
+      '/academic-affairs/academic-workload-report',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -86,6 +87,7 @@ describe('navigation catalog', () => {
         '/academic-affairs/academic-calendar',
         '/academic-affairs/semester-course-schedule-sync',
         '/academic-affairs/staff-semester-profiles',
+        '/academic-affairs/academic-workload-report',
       ],
     );
     expect(
@@ -183,6 +185,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
+      '/academic-affairs/academic-workload-report',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -215,6 +218,15 @@ describe('navigation catalog', () => {
         appEnv: 'dev',
       }),
     ).toBe(false);
+    expect(
+      canAccessNavigationPath('/academic-affairs/academic-workload-report', {
+        accountId: 1002,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+        appEnv: 'dev',
+      }),
+    ).toBe(true);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {
@@ -267,6 +279,19 @@ describe('navigation catalog', () => {
       false,
     );
     expect(
+      canAccessNavigationPath('/academic-affairs/academic-workload-report', buildFilter()),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/academic-affairs/academic-workload-report',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
       canAccessNavigationPath('/labs/academic-workload-deduction-summary', buildFilter()),
     ).toBe(true);
     expect(canAccessNavigationPath('/labs/academic-workload', buildFilter())).toBe(false);
@@ -295,6 +320,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-calendar',
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
+      '/academic-affairs/academic-workload-report',
       '/labs/academic-workload-deduction-summary',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',

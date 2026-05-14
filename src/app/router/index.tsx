@@ -17,6 +17,7 @@ import { canAccessNavigationPath } from '@/app/navigation';
 
 import { AcademicCalendarPage } from '@/pages/academic-calendar';
 import { AcademicWorkloadPage } from '@/pages/academic-workload';
+import { AcademicWorkloadReportPage } from '@/pages/academic-workload-report';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
@@ -70,6 +71,7 @@ import {
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
+  hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
@@ -651,6 +653,45 @@ async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  const accessGroup = snapshot.userInfo.accessGroup;
+  const slotGroup = snapshot.slotGroup;
+
+  if (
+    !hasAdminOrAcademicOfficerAccess({
+      accessGroup,
+      slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  const canSelectWorkloadDepartment = accessGroup.includes('ADMIN');
+  const defaultWorkloadDepartmentId =
+    snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null;
+
+  if (!canSelectWorkloadDepartment && !defaultWorkloadDepartmentId?.trim()) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return {
+    canSelectWorkloadDepartment,
+    defaultWorkloadDepartmentId,
+  };
+}
+
 async function staffSemesterProfilesPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
 
@@ -943,6 +984,11 @@ const router = createBrowserRouter([
         path: '/academic-affairs/staff-semester-profiles',
         loader: staffSemesterProfilesPageLoader,
         Component: StaffSemesterProfilesPage,
+      },
+      {
+        path: '/academic-affairs/academic-workload-report',
+        loader: academicWorkloadReportPageLoader,
+        Component: AcademicWorkloadReportPage,
       },
       {
         path: '/academic-affairs/my-teaching-logs',

@@ -66,6 +66,20 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
+    ...(hasAcademicAffairsNavigationAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CarryOutOutlined',
+            key: '/academic-affairs/academic-workload-report',
+            label: '工作量预报',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/academic-workload-report',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
   ];
 
   const calendarScheduleChildren: NavigationLeafItem[] = [

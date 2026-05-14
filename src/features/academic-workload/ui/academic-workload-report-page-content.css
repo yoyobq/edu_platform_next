@@ -1,0 +1,231 @@
+/* src/features/academic-workload/ui/academic-workload-report-page-content.css */
+.academic-workload-report-page {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.academic-workload-report-panel,
+.academic-workload-report-result {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px;
+}
+
+.academic-workload-report-query {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+}
+
+.academic-workload-report-week-range {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.academic-workload-report-week-range-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.academic-workload-report-week-range-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-report-week-range-header span,
+.academic-workload-report-filters label > span {
+  color: var(--ant-color-text);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.academic-workload-report-week-range-header strong {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.academic-workload-report-week-range-header :where(.ant-btn) {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  line-height: 1.35;
+  padding: 0;
+}
+
+.academic-workload-report-week-range :where(.ant-slider) {
+  margin-block: 4px 14px;
+  margin-inline: 8px;
+}
+
+.academic-workload-report-week-range-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.9fr);
+}
+
+.academic-workload-report-week-boundary {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  min-width: 0;
+  padding: 6px 8px;
+  row-gap: 1px;
+}
+
+.academic-workload-report-week-boundary span {
+  align-self: center;
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  grid-row: 1 / span 2;
+  line-height: 1.35;
+}
+
+.academic-workload-report-week-boundary small {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.academic-workload-report-week-boundary strong {
+  color: var(--ant-color-text);
+  font-size: 14px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.academic-workload-report-filters {
+  align-content: end;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.academic-workload-report-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-report-filters :where(.ant-select) {
+  width: 100%;
+}
+
+.academic-workload-report-header {
+  align-items: start;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.academic-workload-report-header > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-report-metrics {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(86px, 1fr));
+}
+
+.academic-workload-report-metrics > div {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.academic-workload-report-metrics span {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.academic-workload-report-metrics strong {
+  color: var(--ant-color-text);
+  font-size: 18px;
+  line-height: 1.35;
+}
+
+.academic-workload-report-table-shell {
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.academic-workload-report-staff-name,
+.academic-workload-report-course,
+.academic-workload-report-multiline {
+  color: var(--ant-color-text);
+  line-height: 1.4;
+  white-space: pre-line;
+  word-break: break-word;
+}
+
+.academic-workload-report-staff-name,
+.academic-workload-report-course,
+.academic-workload-report-hour,
+.academic-workload-report-total-value {
+  font-weight: 600;
+}
+
+.academic-workload-report-total-label {
+  color: var(--ant-color-text);
+  font-weight: 600;
+  text-align: right;
+}
+
+.academic-workload-report-total-value {
+  color: var(--ant-color-primary);
+  text-align: right;
+}
+
+@media (max-width: 760px) {
+  .academic-workload-report-query {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .academic-workload-report-week-range-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .academic-workload-report-header {
+    flex-direction: column;
+  }
+
+  .academic-workload-report-metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+  }
+}
