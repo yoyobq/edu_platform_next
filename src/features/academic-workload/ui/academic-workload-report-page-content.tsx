@@ -2,7 +2,7 @@
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
-import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Typography } from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -45,14 +45,18 @@ type DepartmentSelectOption = {
 };
 
 type AcademicWorkloadReportTableRow = {
+  detailRowIndex: number;
   item: AcademicWorkloadReportItem;
   key: string;
   sequence: number;
   staffRowIndex: number;
   staffRowSpan: number;
+  staffTotalHours: number;
 };
 
+const DEFAULT_WORKLOAD_DEPARTMENT_ID = 'ORG0302';
 const EMPTY_TEXT = '-';
+const REPORT_TABLE_BASE_WIDTH = 856;
 
 const TEACHER_ENGAGEMENT_TYPE_LABELS: Record<AcademicTeacherEngagementType, string> = {
   ADMINISTRATIVE_TEACHING: '行政兼课',
@@ -68,15 +72,15 @@ const TEACHER_ENGAGEMENT_TYPE_ORDER: Record<AcademicTeacherEngagementType, numbe
   EXTERNAL_TEACHER: 4,
 };
 
-const TEACHER_ENGAGEMENT_TYPE_OPTIONS: {
+const TEACHER_ENGAGEMENT_TYPE_TABS: {
   label: string;
-  value: AcademicWorkloadReportEngagementFilter;
+  key: AcademicWorkloadReportEngagementFilter;
 }[] = [
-  { label: '全部教师', value: 'ALL' },
-  { label: '专任教师', value: 'FULL_TIME_TEACHER' },
-  { label: '行政兼课', value: 'ADMINISTRATIVE_TEACHING' },
-  { label: '公益性岗位', value: 'PUBLIC_WELFARE_POST' },
-  { label: '外聘教师', value: 'EXTERNAL_TEACHER' },
+  { key: 'ALL', label: '全部教师' },
+  { key: 'FULL_TIME_TEACHER', label: '专任教师' },
+  { key: 'ADMINISTRATIVE_TEACHING', label: '行政兼课' },
+  { key: 'PUBLIC_WELFARE_POST', label: '公益性岗位' },
+  { key: 'EXTERNAL_TEACHER', label: '外聘教师' },
 ];
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
@@ -162,6 +166,25 @@ function formatReportText(value: string | number | null | undefined) {
   return normalizedValue || EMPTY_TEXT;
 }
 
+function parseReportNumber(value: string | number | null | undefined) {
+  const normalizedValue =
+    value === null || value === undefined ? '' : String(value).trim().replaceAll(',', '');
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  const numberValue = Number(normalizedValue);
+
+  return Number.isFinite(numberValue) ? numberValue : null;
+}
+
+function formatReportDecimal(value: string | number | null | undefined, fractionDigits: number) {
+  const numberValue = parseReportNumber(value);
+
+  return numberValue === null ? formatReportText(value) : numberValue.toFixed(fractionDigits);
+}
+
 function getReportStaffKey(item: AcademicWorkloadReportItem) {
   return `${item.teacherEngagementType}::${item.staffId}`;
 }
@@ -211,6 +234,7 @@ function buildAcademicWorkloadReportRows(
   );
   const rows: AcademicWorkloadReportTableRow[] = [];
   let cursor = 0;
+  let detailRowIndex = 0;
   let sequence = 0;
 
   while (cursor < sortedItems.length) {
@@ -227,6 +251,10 @@ function buildAcademicWorkloadReportRows(
 
     sequence += 1;
 
+    const staffTotalHours = sortedItems
+      .slice(cursor, nextCursor)
+      .reduce((total, item) => total + (parseReportNumber(item.hours) ?? 0), 0);
+
     for (let index = cursor; index < nextCursor; index += 1) {
       const item = sortedItems[index];
 
@@ -239,10 +267,13 @@ function buildAcademicWorkloadReportRows(
           item.sstsCourseId || 'course',
           index,
         ].join('::'),
+        detailRowIndex,
         sequence,
         staffRowIndex: index - cursor,
         staffRowSpan: nextCursor - cursor,
+        staffTotalHours,
       });
+      detailRowIndex += 1;
     }
 
     cursor = nextCursor;
@@ -260,6 +291,44 @@ function renderReportMergedCell(children: ReactNode, row: AcademicWorkloadReport
   };
 }
 
+function getReportDetailCellClassName(row: AcademicWorkloadReportTableRow) {
+  return row.detailRowIndex % 2 === 0
+    ? 'academic-workload-report-detail-cell-even'
+    : 'academic-workload-report-detail-cell-odd';
+}
+
+function getReportDetailCellProps(row: AcademicWorkloadReportTableRow) {
+  return {
+    className: getReportDetailCellClassName(row),
+  };
+}
+
+function renderTeachingClassName(value: string) {
+  const teachingClassNames = value
+    .split(/[,，]/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  if (teachingClassNames.length === 0) {
+    return <span className="academic-workload-report-class-name">{EMPTY_TEXT}</span>;
+  }
+
+  return (
+    <Tooltip title={value}>
+      <span className="academic-workload-report-class-name">
+        {teachingClassNames.map((teachingClassName, index) => (
+          <span
+            className="academic-workload-report-class-name-item"
+            key={`${teachingClassName}-${index}`}
+          >
+            {teachingClassName}
+          </span>
+        ))}
+      </span>
+    </Tooltip>
+  );
+}
+
 function renderAcademicWorkloadReportSummary(totalHours: string) {
   return (
     <Table.Summary.Row>
@@ -273,20 +342,38 @@ function renderAcademicWorkloadReportSummary(totalHours: string) {
   );
 }
 
+function ReportMetric({
+  label,
+  tone = 'default',
+  value,
+}: {
+  label: string;
+  tone?: 'default' | 'primary';
+  value: string;
+}) {
+  return (
+    <div className={`academic-workload-report-metric academic-workload-report-metric-${tone}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
 export function AcademicWorkloadReportPageContent({
   canSelectWorkloadDepartment: rawCanSelectWorkloadDepartment = false,
   defaultWorkloadDepartmentId = null,
 }: AcademicWorkloadReportPageContentProps) {
   const canSelectWorkloadDepartment = Boolean(rawCanSelectWorkloadDepartment);
   const defaultScopedWorkloadDepartmentId = defaultWorkloadDepartmentId?.trim() ?? '';
+  const initialWorkloadDepartmentId = canSelectWorkloadDepartment
+    ? DEFAULT_WORKLOAD_DEPARTMENT_ID
+    : defaultScopedWorkloadDepartmentId;
   const latestRequestIdRef = useRef(0);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
   const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
-  const [workloadDepartmentId, setWorkloadDepartmentId] = useState(
-    canSelectWorkloadDepartment ? '' : defaultScopedWorkloadDepartmentId,
-  );
+  const [workloadDepartmentId, setWorkloadDepartmentId] = useState(initialWorkloadDepartmentId);
   const [departmentRecords, setDepartmentRecords] = useState<AcademicWorkloadDepartmentOption[]>(
     [],
   );
@@ -299,6 +386,13 @@ export function AcademicWorkloadReportPageContent({
   const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportEnvelope, setReportEnvelope] = useState<AcademicWorkloadReportEnvelope | null>(null);
+
+  const invalidateReport = useCallback(() => {
+    latestRequestIdRef.current += 1;
+    setReportEnvelope(null);
+    setReportError(null);
+    setLoadingReport(false);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -365,9 +459,18 @@ export function AcademicWorkloadReportPageContent({
 
   useEffect(() => {
     if (!canSelectWorkloadDepartment) {
+      if (workloadDepartmentId !== defaultScopedWorkloadDepartmentId) {
+        invalidateReport();
+      }
+
       setWorkloadDepartmentId(defaultScopedWorkloadDepartmentId);
     }
-  }, [canSelectWorkloadDepartment, defaultScopedWorkloadDepartmentId]);
+  }, [
+    canSelectWorkloadDepartment,
+    defaultScopedWorkloadDepartmentId,
+    invalidateReport,
+    workloadDepartmentId,
+  ]);
 
   const selectedSemester = useMemo(
     () => semesters.find((semester) => semester.id === selectedSemesterId) ?? null,
@@ -399,17 +502,8 @@ export function AcademicWorkloadReportPageContent({
   }, [teachingWeeks]);
 
   useEffect(() => {
-    latestRequestIdRef.current += 1;
-    setReportEnvelope(null);
-    setReportError(null);
-    setLoadingReport(false);
-  }, [
-    activeEngagementType,
-    selectedSemesterId,
-    selectedWeekEnd,
-    selectedWeekStart,
-    workloadDepartmentId,
-  ]);
+    invalidateReport();
+  }, [invalidateReport, selectedSemesterId]);
 
   const selectedStartWeek = useMemo(
     () => teachingWeeks.find((week) => week.value === selectedWeekStart) ?? null,
@@ -441,11 +535,12 @@ export function AcademicWorkloadReportPageContent({
     selectedWeekStart !== null && selectedWeekEnd !== null
       ? selectedWeekEnd - selectedWeekStart + 1
       : null;
+  const isExternalTeacherRangeMode = activeEngagementType === 'EXTERNAL_TEACHER';
   const departmentOptions = useMemo(() => {
     const baseOptions = buildDepartmentSelectOptions(departmentRecords);
 
     return ensureSelectedDepartmentOption({
-      fallbackLabel: canSelectWorkloadDepartment ? '当前归口系' : '账号归口系',
+      fallbackLabel: canSelectWorkloadDepartment ? '默认归口系' : '当前归口系',
       options: baseOptions,
       selectedDepartmentId: workloadDepartmentId,
     });
@@ -464,59 +559,85 @@ export function AcademicWorkloadReportPageContent({
       }),
     [activeEngagementType, reportEnvelope?.items],
   );
+  const reportTotalHours = reportEnvelope
+    ? formatReportDecimal(reportEnvelope.total.hours, 2)
+    : EMPTY_TEXT;
   const canLoadReport =
     Boolean(selectedSemesterId) && (canSelectWorkloadDepartment || Boolean(workloadDepartmentId));
+  const tabItems = useMemo(
+    () =>
+      TEACHER_ENGAGEMENT_TYPE_TABS.map((item) => ({
+        key: item.key,
+        label: item.label,
+      })),
+    [],
+  );
 
   const handleResetWeekRange = () => {
+    invalidateReport();
     setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
     setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
   };
 
-  const loadReport = useCallback(async () => {
-    if (!selectedSemesterId) {
-      return;
-    }
-
-    if (!canSelectWorkloadDepartment && !workloadDepartmentId) {
-      setReportError('当前账号缺少工作量归口系，暂时无法生成报表。');
-      return;
-    }
-
-    const requestId = latestRequestIdRef.current + 1;
-    latestRequestIdRef.current = requestId;
-    setLoadingReport(true);
-    setReportError(null);
-    setReportEnvelope(null);
-
-    try {
-      const result = await requestAcademicWorkloadReport({
-        endDate: selectedEndWeek?.endDate,
-        semesterId: selectedSemesterId,
-        startDate: selectedStartWeek?.startDate,
-        teacherEngagementType: activeEngagementType === 'ALL' ? undefined : activeEngagementType,
-        workloadDepartmentId,
-      });
-
-      if (latestRequestIdRef.current === requestId) {
-        setReportEnvelope(result);
+  const loadReport = useCallback(
+    async (nextEngagementType: AcademicWorkloadReportEngagementFilter = activeEngagementType) => {
+      if (!selectedSemesterId) {
+        return;
       }
-    } catch (error) {
-      if (latestRequestIdRef.current === requestId) {
-        setReportError(error instanceof Error ? error.message : '暂时无法加载教师工作量预报。');
+
+      if (!canSelectWorkloadDepartment && !workloadDepartmentId) {
+        setReportError('当前账号缺少工作量归口系，暂时无法生成报表。');
+        return;
       }
-    } finally {
-      if (latestRequestIdRef.current === requestId) {
-        setLoadingReport(false);
+
+      const requestId = latestRequestIdRef.current + 1;
+      latestRequestIdRef.current = requestId;
+      setLoadingReport(true);
+      setReportError(null);
+      setReportEnvelope(null);
+
+      try {
+        const shouldUseTeachingWeekRange = nextEngagementType === 'EXTERNAL_TEACHER';
+        const result = await requestAcademicWorkloadReport({
+          endDate: shouldUseTeachingWeekRange ? selectedEndWeek?.endDate : undefined,
+          semesterId: selectedSemesterId,
+          startDate: shouldUseTeachingWeekRange ? selectedStartWeek?.startDate : undefined,
+          teacherEngagementType: nextEngagementType === 'ALL' ? undefined : nextEngagementType,
+          workloadDepartmentId,
+        });
+
+        if (latestRequestIdRef.current === requestId) {
+          setReportEnvelope(result);
+        }
+      } catch (error) {
+        if (latestRequestIdRef.current === requestId) {
+          setReportError(error instanceof Error ? error.message : '暂时无法加载教师工作量预报。');
+        }
+      } finally {
+        if (latestRequestIdRef.current === requestId) {
+          setLoadingReport(false);
+        }
       }
+    },
+    [
+      activeEngagementType,
+      canSelectWorkloadDepartment,
+      selectedEndWeek,
+      selectedSemesterId,
+      selectedStartWeek,
+      workloadDepartmentId,
+    ],
+  );
+
+  const handleEngagementTypeChange = (nextKey: string) => {
+    const nextEngagementType = nextKey as AcademicWorkloadReportEngagementFilter;
+
+    setActiveEngagementType(nextEngagementType);
+
+    if (selectedSemesterId && (reportEnvelope || loadingReport)) {
+      void loadReport(nextEngagementType);
     }
-  }, [
-    activeEngagementType,
-    canSelectWorkloadDepartment,
-    selectedEndWeek,
-    selectedSemesterId,
-    selectedStartWeek,
-    workloadDepartmentId,
-  ]);
+  };
 
   const columns = useMemo<ColumnsType<AcademicWorkloadReportTableRow>>(
     () => [
@@ -537,20 +658,20 @@ export function AcademicWorkloadReportPageContent({
             row,
           ),
         title: '姓名',
-        width: 108,
+        width: 92,
       },
       {
         dataIndex: ['item', 'teachingClassName'],
         key: 'teachingClassName',
-        render: (value: string) => (
-          <span className="academic-workload-report-multiline">{formatReportText(value)}</span>
-        ),
+        onCell: getReportDetailCellProps,
+        render: (value: string) => renderTeachingClassName(value),
         title: '任课班级',
-        width: 164,
+        width: 132,
       },
       {
         dataIndex: ['item', 'courseName'],
         key: 'courseName',
+        onCell: getReportDetailCellProps,
         render: (value: string | null) => (
           <span className="academic-workload-report-course">{formatReportText(value)}</span>
         ),
@@ -561,42 +682,52 @@ export function AcademicWorkloadReportPageContent({
         align: 'right',
         dataIndex: ['item', 'weeklyHours'],
         key: 'weeklyHours',
+        onCell: getReportDetailCellProps,
         render: (value: string) => formatReportText(value),
         title: '周课时',
-        width: 84,
+        width: 68,
       },
       {
         align: 'right',
         dataIndex: ['item', 'weekCount'],
         key: 'weekCount',
+        onCell: getReportDetailCellProps,
         render: (value: number) => formatReportText(value),
         title: '周数',
-        width: 72,
+        width: 68,
       },
       {
         align: 'right',
         dataIndex: ['item', 'coefficient'],
         key: 'coefficient',
-        render: (value: string) => formatReportText(value),
+        onCell: getReportDetailCellProps,
+        render: (value: string) => formatReportDecimal(value, 1),
         title: '系数',
-        width: 76,
+        width: 68,
       },
       {
         align: 'right',
         dataIndex: ['item', 'hours'],
         key: 'hours',
+        onCell: getReportDetailCellProps,
         render: (value: string) => (
-          <span className="academic-workload-report-hour">{formatReportText(value)}</span>
+          <span className="academic-workload-report-hour">{formatReportDecimal(value, 2)}</span>
         ),
         title: '课时',
-        width: 84,
+        width: 92,
       },
       {
         align: 'right',
         key: 'totalHours',
-        render: () => null,
+        render: (_, row) =>
+          renderReportMergedCell(
+            <span className="academic-workload-report-total-value">
+              {formatReportDecimal(row.staffTotalHours, 2)}
+            </span>,
+            row,
+          ),
         title: '总课时',
-        width: 96,
+        width: 92,
       },
     ],
     [],
@@ -618,64 +749,25 @@ export function AcademicWorkloadReportPageContent({
           <Skeleton active paragraph={{ rows: 3 }} />
         ) : (
           <div className="academic-workload-report-query">
-            <div className="academic-workload-report-week-range">
-              <div className="academic-workload-report-week-range-header">
-                <div>
-                  <span>教学周范围</span>
-                  <strong>{formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}</strong>
+            {reportEnvelope ? (
+              <section className="academic-workload-report-overview">
+                <div className="academic-workload-report-summary-heading">
+                  <div>
+                    <h2>当前预报</h2>
+                    <p>
+                      {formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)} ·{' '}
+                      {selectedDepartmentLabel} · {activeEngagementLabel}
+                    </p>
+                  </div>
                 </div>
-                <Button
-                  disabled={teachingWeeks.length === 0}
-                  size="small"
-                  type="link"
-                  onClick={handleResetWeekRange}
-                >
-                  全学期
-                </Button>
-              </div>
 
-              <Slider
-                disabled={!weekRangeSliderValue}
-                marks={weekRangeMarks}
-                max={lastTeachingWeekValue ?? 1}
-                min={firstTeachingWeekValue ?? 1}
-                range={{ draggableTrack: true }}
-                tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
-                value={weekRangeSliderValue}
-                onChange={(nextValue: number | number[]) => {
-                  if (!Array.isArray(nextValue)) {
-                    return;
-                  }
-
-                  const [nextStart, nextEnd] = nextValue;
-
-                  setSelectedWeekStart(nextStart ?? null);
-                  setSelectedWeekEnd(nextEnd ?? null);
-                }}
-              />
-
-              <div className="academic-workload-report-week-range-summary">
-                <div className="academic-workload-report-week-boundary">
-                  <span>起始</span>
-                  <strong>{selectedStartWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedStartWeek)}</small>
+                <div className="academic-workload-report-metrics academic-workload-report-query-metrics">
+                  <ReportMetric label="教师数" value={String(reportEnvelope.total.staffCount)} />
+                  <ReportMetric label="课程行" value={String(reportEnvelope.total.itemCount)} />
+                  <ReportMetric label="总课时" tone="primary" value={reportTotalHours} />
                 </div>
-                <div className="academic-workload-report-week-boundary">
-                  <span>范围</span>
-                  <strong>
-                    {selectedTeachingWeekCount !== null
-                      ? `已选 ${selectedTeachingWeekCount} 周`
-                      : '-'}
-                  </strong>
-                  <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
-                </div>
-                <div className="academic-workload-report-week-boundary">
-                  <span>结束</span>
-                  <strong>{selectedEndWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedEndWeek)}</small>
-                </div>
-              </div>
-            </div>
+              </section>
+            ) : null}
 
             <div className="academic-workload-report-filters">
               <label>
@@ -702,25 +794,16 @@ export function AcademicWorkloadReportPageContent({
                   loading={loadingDepartments}
                   optionFilterProp="label"
                   options={departmentOptions}
-                  placeholder={canSelectWorkloadDepartment ? '全部归口系' : '账号归口系'}
+                  placeholder={canSelectWorkloadDepartment ? '按名称筛选' : '当前账号归口系'}
                   value={workloadDepartmentId || undefined}
-                  onChange={(value) =>
+                  onChange={(value) => {
+                    invalidateReport();
                     setWorkloadDepartmentId(
                       canSelectWorkloadDepartment
                         ? (value ?? '')
                         : defaultScopedWorkloadDepartmentId,
-                    )
-                  }
-                />
-              </label>
-
-              <label>
-                <span>教师类型</span>
-                <Select<AcademicWorkloadReportEngagementFilter>
-                  aria-label="教师类型"
-                  options={TEACHER_ENGAGEMENT_TYPE_OPTIONS}
-                  value={activeEngagementType}
-                  onChange={setActiveEngagementType}
+                    );
+                  }}
                 />
               </label>
 
@@ -736,42 +819,84 @@ export function AcademicWorkloadReportPageContent({
                 生成预报
               </Button>
             </div>
+
+            {isExternalTeacherRangeMode ? (
+              <div className="academic-workload-report-week-range">
+                <div className="academic-workload-report-week-range-header">
+                  <div>
+                    <span>外聘教师统计周范围</span>
+                    <strong>{formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}</strong>
+                  </div>
+                  <Button
+                    disabled={teachingWeeks.length === 0}
+                    size="small"
+                    type="link"
+                    onClick={handleResetWeekRange}
+                  >
+                    全学期
+                  </Button>
+                </div>
+
+                <Slider
+                  disabled={!weekRangeSliderValue}
+                  marks={weekRangeMarks}
+                  max={lastTeachingWeekValue ?? 1}
+                  min={firstTeachingWeekValue ?? 1}
+                  range={{ draggableTrack: true }}
+                  tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
+                  value={weekRangeSliderValue}
+                  onChange={(nextValue: number | number[]) => {
+                    if (!Array.isArray(nextValue)) {
+                      return;
+                    }
+
+                    const [nextStart, nextEnd] = nextValue;
+
+                    invalidateReport();
+                    setSelectedWeekStart(nextStart ?? null);
+                    setSelectedWeekEnd(nextEnd ?? null);
+                  }}
+                />
+
+                <div className="academic-workload-report-week-range-summary">
+                  <div className="academic-workload-report-week-boundary">
+                    <span>起始</span>
+                    <strong>{selectedStartWeek?.label ?? '-'}</strong>
+                    <small>{formatWeekDateRange(selectedStartWeek)}</small>
+                  </div>
+                  <div className="academic-workload-report-week-boundary">
+                    <span>范围</span>
+                    <strong>
+                      {selectedTeachingWeekCount !== null
+                        ? `已选 ${selectedTeachingWeekCount} 周`
+                        : '-'}
+                    </strong>
+                    <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
+                  </div>
+                  <div className="academic-workload-report-week-boundary">
+                    <span>结束</span>
+                    <strong>{selectedEndWeek?.label ?? '-'}</strong>
+                    <small>{formatWeekDateRange(selectedEndWeek)}</small>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </div>
         )}
       </section>
+
+      <Tabs
+        activeKey={activeEngagementType}
+        items={tabItems}
+        onChange={handleEngagementTypeChange}
+      />
 
       {reportError ? <Alert message={reportError} showIcon type="error" /> : null}
 
       {loadingReport ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!loadingReport && reportEnvelope ? (
-        <section className="academic-workload-report-result">
-          <div className="academic-workload-report-header">
-            <div>
-              <Typography.Title level={4} style={{ margin: 0 }}>
-                当前预报
-              </Typography.Title>
-              <Typography.Text type="secondary">
-                {formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)} ·{' '}
-                {selectedDepartmentLabel} · {activeEngagementLabel}
-              </Typography.Text>
-            </div>
-            <div className="academic-workload-report-metrics">
-              <div>
-                <span>教师数</span>
-                <strong>{reportEnvelope.total.staffCount}</strong>
-              </div>
-              <div>
-                <span>课程行</span>
-                <strong>{reportEnvelope.total.itemCount}</strong>
-              </div>
-              <div>
-                <span>总课时</span>
-                <strong>{formatReportText(reportEnvelope.total.hours)}</strong>
-              </div>
-            </div>
-          </div>
-
+        <div className="academic-workload-report-result">
           {!reportEnvelope.isValid ? (
             <Alert
               message="预报数据异常"
@@ -802,20 +927,20 @@ export function AcademicWorkloadReportPageContent({
                 dataSource={reportRows}
                 pagination={false}
                 rowKey={(row) => row.key}
-                scroll={{ x: 928 }}
+                scroll={{ x: REPORT_TABLE_BASE_WIDTH }}
                 size="small"
                 tableLayout="fixed"
-                summary={() => renderAcademicWorkloadReportSummary(reportEnvelope.total.hours)}
+                summary={() => renderAcademicWorkloadReportSummary(reportTotalHours)}
               />
             </div>
           )}
-        </section>
+        </div>
       ) : null}
 
       {!loadingReport && !reportEnvelope && selectedSemesterId ? (
         <Alert
           message="选择条件后生成工作量预报"
-          description="预报按教师合并序号和姓名，表尾总课时使用后端合计。"
+          description="预报按教师合并序号、姓名和总课时，表尾总课时使用后端合计。"
           showIcon
           type="info"
         />

@@ -2,32 +2,83 @@
 .academic-workload-report-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 18px;
+  max-width: 100%;
+  min-width: 0;
 }
 
-.academic-workload-report-panel,
-.academic-workload-report-result {
+.academic-workload-report-panel {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius-lg);
   display: flex;
   flex-direction: column;
   gap: 14px;
+  max-width: 100%;
   min-width: 0;
   padding: 16px;
 }
 
 .academic-workload-report-query {
+  align-items: start;
   display: grid;
-  gap: 16px;
-  grid-template-columns: minmax(0, 2fr) minmax(300px, 1fr);
+  gap: 14px;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 440px);
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-report-overview {
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  grid-column: 1;
+  justify-content: center;
+  min-width: 0;
+  padding-block: 4px;
+}
+
+.academic-workload-report-filters {
+  align-items: end;
+  align-self: end;
+  display: grid;
+  gap: 12px;
+  grid-column: 2;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.academic-workload-report-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.academic-workload-report-filters label > span {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.academic-workload-report-filters :where(.ant-select) {
+  width: 100%;
+}
+
+.academic-workload-report-filters :where(.ant-btn) {
+  grid-column: 1 / -1;
 }
 
 .academic-workload-report-week-range {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
   display: flex;
   flex-direction: column;
   gap: 10px;
+  grid-column: 1 / -1;
   min-width: 0;
+  padding: 12px 14px;
 }
 
 .academic-workload-report-week-range-header {
@@ -46,16 +97,16 @@
 }
 
 .academic-workload-report-week-range-header span,
-.academic-workload-report-filters label > span {
-  color: var(--ant-color-text);
-  font-size: 14px;
-  font-weight: 600;
+.academic-workload-report-week-boundary span {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-workload-report-week-range-header strong {
-  color: var(--ant-color-text-secondary);
-  font-size: 13px;
+.academic-workload-report-week-range-header strong,
+.academic-workload-report-week-boundary strong {
+  color: var(--ant-color-text);
+  font-size: 14px;
   line-height: 1.35;
 }
 
@@ -76,156 +127,220 @@
 .academic-workload-report-week-range-summary {
   display: grid;
   gap: 8px;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.9fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .academic-workload-report-week-boundary {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
-  column-gap: 8px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
   padding: 6px 8px;
-  row-gap: 1px;
-}
-
-.academic-workload-report-week-boundary span {
-  align-self: center;
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  grid-row: 1 / span 2;
-  line-height: 1.35;
 }
 
 .academic-workload-report-week-boundary small {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
-  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.academic-workload-report-week-boundary strong {
-  color: var(--ant-color-text);
-  font-size: 14px;
-  line-height: 1.35;
-  min-width: 0;
-}
-
-.academic-workload-report-filters {
-  align-content: end;
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-}
-
-.academic-workload-report-filters label {
+.academic-workload-report-result {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 18px;
+  max-width: 100%;
   min-width: 0;
 }
 
-.academic-workload-report-filters :where(.ant-select) {
-  width: 100%;
+.academic-workload-report-table-shell {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-.academic-workload-report-header {
-  align-items: start;
+.academic-workload-report-table-shell :where(.ant-table-wrapper) {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.academic-workload-report-table-shell :where(.ant-table) {
+  font-size: 13px;
+}
+
+.academic-workload-report-table-shell :where(.ant-table-thead > tr > th) {
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.academic-workload-report-table-shell :where(.ant-table-tbody > tr > td) {
+  line-height: 1.35;
+  vertical-align: middle;
+}
+
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-report-detail-cell-even {
+  background: var(--ant-color-bg-container);
+}
+
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-report-detail-cell-odd {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-report-detail-cell-even,
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-report-detail-cell-odd {
+  background: var(--ant-color-fill-secondary);
+}
+
+.academic-workload-report-table-shell :where(.ant-table-summary > tr > td) {
+  background: var(--ant-color-fill-tertiary);
+  border-top: 1px solid var(--ant-color-border);
+  font-weight: 600;
+}
+
+.academic-workload-report-summary-heading {
+  align-items: center;
   display: flex;
-  gap: 16px;
+  gap: 12px;
   justify-content: space-between;
   min-width: 0;
 }
 
-.academic-workload-report-header > div:first-child {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
+.academic-workload-report-summary-heading h2 {
+  color: var(--ant-color-text);
+  font-size: 18px;
+  line-height: 1.35;
+  margin: 0;
+}
+
+.academic-workload-report-summary-heading p {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.35;
+  margin: 4px 0 0;
 }
 
 .academic-workload-report-metrics {
   display: grid;
-  flex: 0 0 auto;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(86px, 1fr));
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.academic-workload-report-metrics > div {
-  background: var(--ant-color-fill-quaternary);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
+.academic-workload-report-query-metrics {
+  column-gap: 24px;
+}
+
+.academic-workload-report-metric {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 0;
 }
 
-.academic-workload-report-metrics span {
-  color: var(--ant-color-text-tertiary);
+.academic-workload-report-metric span {
+  color: var(--ant-color-text-secondary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-workload-report-metrics strong {
+.academic-workload-report-metric strong {
   color: var(--ant-color-text);
-  font-size: 18px;
-  line-height: 1.35;
+  font-size: 22px;
+  line-height: 1.25;
 }
 
-.academic-workload-report-table-shell {
-  min-width: 0;
-  overflow-x: auto;
+.academic-workload-report-metric-primary strong,
+.academic-workload-report-total-value {
+  color: var(--ant-color-primary);
 }
 
 .academic-workload-report-staff-name,
+.academic-workload-report-class-name,
 .academic-workload-report-course,
 .academic-workload-report-multiline {
   color: var(--ant-color-text);
-  line-height: 1.4;
+  line-height: 1.35;
   white-space: pre-line;
   word-break: break-word;
+}
+
+.academic-workload-report-class-name {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+}
+
+.academic-workload-report-class-name-item {
+  display: block;
 }
 
 .academic-workload-report-staff-name,
 .academic-workload-report-course,
 .academic-workload-report-hour,
 .academic-workload-report-total-value {
+  font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
 .academic-workload-report-total-label {
   color: var(--ant-color-text);
-  font-weight: 600;
-  text-align: right;
+  text-align: center;
 }
 
 .academic-workload-report-total-value {
-  color: var(--ant-color-primary);
   text-align: right;
 }
 
-@media (max-width: 760px) {
-  .academic-workload-report-query {
+@media (max-width: 960px) {
+  .academic-workload-report-query,
+  .academic-workload-report-filters {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .academic-workload-report-overview,
+  .academic-workload-report-filters,
+  .academic-workload-report-week-range {
+    grid-column: auto;
   }
 
   .academic-workload-report-week-range-summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-workload-report-header {
+  .academic-workload-report-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .academic-workload-report-summary-heading {
+    align-items: flex-start;
     flex-direction: column;
   }
 
   .academic-workload-report-metrics {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    width: 100%;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
