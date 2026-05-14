@@ -154,12 +154,12 @@ const TEACHER_ENGAGEMENT_TYPE_ORDER: Record<AcademicTeacherEngagementType, numbe
   EXTERNAL_TEACHER: 4,
 };
 
-const ENGAGEMENT_TABS: { key: EngagementTabKey; label: string }[] = [
+const ENGAGEMENT_TABS: { hidden?: boolean; key: EngagementTabKey; label: string }[] = [
   { key: 'ALL', label: '全部' },
   { key: 'FULL_TIME_TEACHER', label: '专任教师' },
   { key: 'ADMINISTRATIVE_TEACHING', label: '行政兼课' },
   { key: 'PUBLIC_WELFARE_POST', label: '公益性岗位' },
-  { key: 'EXTERNAL_TEACHER', label: '外聘教师' },
+  { hidden: true, key: 'EXTERNAL_TEACHER', label: '外聘教师' },
 ];
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
@@ -1480,7 +1480,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
 
   const tabItems = useMemo(
     () =>
-      ENGAGEMENT_TABS.map((item) => ({
+      ENGAGEMENT_TABS.filter((item) => !item.hidden).map((item) => ({
         key: item.key,
         label: item.label,
       })),
