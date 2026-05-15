@@ -13,6 +13,16 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER,
+  ACADEMIC_WORKLOAD_REPORT_ENGAGEMENT_TABS,
+  type AcademicWorkloadEngagementFilter,
+  getAcademicWorkloadEngagementLabel,
+} from '../application/teacher-engagement';
+import {
+  formatAcademicWorkloadTeachingClassMultiline,
+  splitAcademicWorkloadTeachingClassNames,
+} from '../application/teaching-class-format';
+import {
   buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
   formatTeachingWeekRange,
@@ -22,7 +32,11 @@ import {
   type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
-  type AcademicTeacherEngagementType,
+  buildAcademicWorkloadDepartmentSelectOptions,
+  DEFAULT_WORKLOAD_DEPARTMENT_ID,
+  ensureSelectedAcademicWorkloadDepartmentOption,
+} from '../application/workload-department-options';
+import {
   type AcademicWorkloadDepartmentOption,
   type AcademicWorkloadReportEnvelope,
   type AcademicWorkloadReportItem,
@@ -41,13 +55,6 @@ export type AcademicWorkloadReportPageContentProps = {
   defaultWorkloadDepartmentId?: string | null;
 };
 
-type AcademicWorkloadReportEngagementFilter = 'ALL' | AcademicTeacherEngagementType;
-
-type DepartmentSelectOption = {
-  label: string;
-  value: string;
-};
-
 type AcademicWorkloadReportTableRow = {
   detailRowIndex: number;
   item: AcademicWorkloadReportItem;
@@ -58,34 +65,8 @@ type AcademicWorkloadReportTableRow = {
   staffTotalHours: number;
 };
 
-const DEFAULT_WORKLOAD_DEPARTMENT_ID = 'ORG0302';
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 856;
-
-const TEACHER_ENGAGEMENT_TYPE_LABELS: Record<AcademicTeacherEngagementType, string> = {
-  ADMINISTRATIVE_TEACHING: '行政兼课',
-  EXTERNAL_TEACHER: '外聘教师',
-  FULL_TIME_TEACHER: '专任教师',
-  PUBLIC_WELFARE_POST: '公益性岗位',
-};
-
-const TEACHER_ENGAGEMENT_TYPE_ORDER: Record<AcademicTeacherEngagementType, number> = {
-  FULL_TIME_TEACHER: 1,
-  ADMINISTRATIVE_TEACHING: 2,
-  PUBLIC_WELFARE_POST: 3,
-  EXTERNAL_TEACHER: 4,
-};
-
-const TEACHER_ENGAGEMENT_TYPE_TABS: {
-  label: string;
-  key: AcademicWorkloadReportEngagementFilter;
-}[] = [
-  { key: 'ALL', label: '全部教师' },
-  { key: 'FULL_TIME_TEACHER', label: '专任教师' },
-  { key: 'ADMINISTRATIVE_TEACHING', label: '行政兼课' },
-  { key: 'PUBLIC_WELFARE_POST', label: '公益性岗位' },
-  { key: 'EXTERNAL_TEACHER', label: '外聘教师' },
-];
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return (first || '').localeCompare(second || '', 'zh-Hans-CN');
@@ -120,50 +101,6 @@ function formatTeachingWeekDateSpan(
   return `${formatShortDate(startWeek.startDate)} - ${formatShortDate(endWeek.endDate)}`;
 }
 
-function buildDepartmentSelectOptions(records: AcademicWorkloadDepartmentOption[]) {
-  const optionsByValue = new Map<string, DepartmentSelectOption>();
-
-  records.forEach((record) => {
-    const id = record.id.trim();
-
-    if (!id) {
-      return;
-    }
-
-    const name = record.departmentName?.trim() || record.shortName?.trim() || id;
-
-    optionsByValue.set(id, {
-      label: name,
-      value: id,
-    });
-  });
-
-  return Array.from(optionsByValue.values()).sort((left, right) =>
-    left.label.localeCompare(right.label, 'zh-CN'),
-  );
-}
-
-function ensureSelectedDepartmentOption(input: {
-  fallbackLabel: string;
-  options: DepartmentSelectOption[];
-  selectedDepartmentId: string;
-}) {
-  if (
-    !input.selectedDepartmentId ||
-    input.options.some((option) => option.value === input.selectedDepartmentId)
-  ) {
-    return input.options;
-  }
-
-  return [
-    {
-      label: input.fallbackLabel,
-      value: input.selectedDepartmentId,
-    },
-    ...input.options,
-  ];
-}
-
 function formatReportText(value: string | number | null | undefined) {
   const normalizedValue = value === null || value === undefined ? '' : String(value).trim();
 
@@ -196,12 +133,7 @@ function formatReportExcelText(value: string | number | null | undefined) {
 }
 
 function formatTeachingClassExcelValue(value: string) {
-  const teachingClassNames = value
-    .split(/[,，、;；]/u)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return teachingClassNames.length > 0 ? teachingClassNames.join('\n') : EMPTY_TEXT;
+  return formatAcademicWorkloadTeachingClassMultiline(value, EMPTY_TEXT);
 }
 
 function getReportStaffKey(item: AcademicWorkloadReportItem) {
@@ -215,8 +147,8 @@ function compareReportItems(
 ) {
   if (options.sortByEngagementType) {
     const engagementOrder =
-      TEACHER_ENGAGEMENT_TYPE_ORDER[first.teacherEngagementType] -
-      TEACHER_ENGAGEMENT_TYPE_ORDER[second.teacherEngagementType];
+      ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER[first.teacherEngagementType] -
+      ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER[second.teacherEngagementType];
 
     if (engagementOrder !== 0) {
       return engagementOrder;
@@ -323,10 +255,7 @@ function getReportDetailCellProps(row: AcademicWorkloadReportTableRow) {
 }
 
 function renderTeachingClassName(value: string) {
-  const teachingClassNames = value
-    .split(/[,，、;；]/u)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const teachingClassNames = splitAcademicWorkloadTeachingClassNames(value);
 
   if (teachingClassNames.length === 0) {
     return <span className="academic-workload-report-class-name">{EMPTY_TEXT}</span>;
@@ -419,7 +348,7 @@ export function AcademicWorkloadReportPageContent({
     [],
   );
   const [activeEngagementType, setActiveEngagementType] =
-    useState<AcademicWorkloadReportEngagementFilter>('ALL');
+    useState<AcademicWorkloadEngagementFilter>('ALL');
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -603,9 +532,9 @@ export function AcademicWorkloadReportPageContent({
       : null;
   const isExternalTeacherRangeMode = activeEngagementType === 'EXTERNAL_TEACHER';
   const departmentOptions = useMemo(() => {
-    const baseOptions = buildDepartmentSelectOptions(departmentRecords);
+    const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
 
-    return ensureSelectedDepartmentOption({
+    return ensureSelectedAcademicWorkloadDepartmentOption({
       fallbackLabel: canSelectWorkloadDepartment ? '默认归口系' : '当前归口系',
       options: baseOptions,
       selectedDepartmentId: workloadDepartmentId,
@@ -614,10 +543,7 @@ export function AcademicWorkloadReportPageContent({
   const selectedDepartmentLabel =
     departmentOptions.find((option) => option.value === workloadDepartmentId)?.label ??
     (workloadDepartmentId || '全部归口系');
-  const activeEngagementLabel =
-    activeEngagementType === 'ALL'
-      ? '全部教师'
-      : TEACHER_ENGAGEMENT_TYPE_LABELS[activeEngagementType];
+  const activeEngagementLabel = getAcademicWorkloadEngagementLabel(activeEngagementType);
   const semesterLabel = selectedSemester?.name ?? `学期 ${selectedSemesterId}`;
   const reportRows = useMemo(
     () =>
@@ -634,7 +560,7 @@ export function AcademicWorkloadReportPageContent({
     Boolean(selectedSemesterId) && (canSelectWorkloadDepartment || Boolean(workloadDepartmentId));
   const tabItems = useMemo(
     () =>
-      TEACHER_ENGAGEMENT_TYPE_TABS.map((item) => ({
+      ACADEMIC_WORKLOAD_REPORT_ENGAGEMENT_TABS.map((item) => ({
         key: item.key,
         label: item.label,
       })),
@@ -648,7 +574,7 @@ export function AcademicWorkloadReportPageContent({
   };
 
   const loadReport = useCallback(
-    async (nextEngagementType: AcademicWorkloadReportEngagementFilter = activeEngagementType) => {
+    async (nextEngagementType: AcademicWorkloadEngagementFilter = activeEngagementType) => {
       if (!selectedSemesterId) {
         return;
       }
@@ -698,7 +624,7 @@ export function AcademicWorkloadReportPageContent({
   );
 
   const handleEngagementTypeChange = (nextKey: string) => {
-    const nextEngagementType = nextKey as AcademicWorkloadReportEngagementFilter;
+    const nextEngagementType = nextKey as AcademicWorkloadEngagementFilter;
 
     setExportStatus('idle');
     setActiveEngagementType(nextEngagementType);

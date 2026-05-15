@@ -1,4 +1,4 @@
-// src/labs/academic-workload-deduction-summary/page.tsx
+// src/features/academic-workload/ui/academic-workload-deduction-summary-page-content.tsx
 import {
   type ReactNode,
   useCallback,
@@ -30,7 +30,6 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
@@ -40,7 +39,32 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_ENGAGEMENT_TABS as ENGAGEMENT_TABS,
+  ACADEMIC_WORKLOAD_ENGAGEMENT_LABELS,
+  ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER,
   type AcademicTeacherEngagementType,
+  type AcademicWorkloadEngagementFilter,
+  getAcademicWorkloadEngagementLabel,
+} from '../application/teacher-engagement';
+import {
+  formatAcademicWorkloadTeachingClassMultiline,
+  splitAcademicWorkloadTeachingClassNames,
+} from '../application/teaching-class-format';
+import {
+  buildTeachingWeekMonthMarkValues,
+  buildTeachingWeekOptions,
+  formatTeachingWeekRange,
+  parseAcademicWorkloadIsoDate,
+  pickNextSemesterId,
+  sortSemesters,
+  type TeachingWeekOption,
+} from '../application/workload-baseline';
+import {
+  buildAcademicWorkloadDepartmentSelectOptions,
+  DEFAULT_WORKLOAD_DEPARTMENT_ID,
+  ensureSelectedAcademicWorkloadDepartmentOption,
+} from '../application/workload-department-options';
+import {
   type AcademicWorkloadDeductionDepartmentSummary,
   type AcademicWorkloadDeductionSummaryEnvelope,
   type AcademicWorkloadDeductionSummaryItem,
@@ -48,23 +72,15 @@ import {
   type AcademicWorkloadDepartmentOption,
   requestAcademicWorkloadDeductionSummary,
   requestAcademicWorkloadDepartmentOptions,
-} from './api';
+} from '../infrastructure/academic-workload-deduction-summary-api';
 import {
   type AcademicWorkloadDeductionExcelRow,
   exportAcademicWorkloadDeductionExcel,
-} from './excel-export';
-import { academicWorkloadDeductionSummaryLabMeta } from './meta';
+} from '../infrastructure/academic-workload-deduction-summary-excel-export';
 
-import './page.css';
+import './academic-workload-deduction-summary-page-content.css';
 
-type EngagementTabKey = 'ALL' | AcademicTeacherEngagementType;
-
-type TeachingWeekOption = {
-  endDate: string;
-  label: string;
-  startDate: string;
-  value: number;
-};
+type EngagementTabKey = AcademicWorkloadEngagementFilter;
 
 type DateAdjustmentSummary = {
   date: string;
@@ -106,21 +122,14 @@ type AcademicWorkloadDeductionTableRow = {
   tableSubtotalHundredths: number;
 };
 
-type DepartmentSelectOption = {
-  label: string;
-  value: string;
+export type AcademicWorkloadDeductionSummaryPageContentProps = {
+  canSelectWorkloadDepartment?: boolean;
+  defaultWorkloadDepartmentId?: string | null;
 };
 
-type AcademicWorkloadDeductionSummaryLabLoaderData = {
-  defaultDepartmentId: string | null;
-  viewerRole: 'admin' | 'department';
-};
-
-const DEFAULT_WORKLOAD_DEPARTMENT_ID = 'ORG0302';
 const DEDUCTION_TABLE_BASE_WIDTH = 864;
 const DEDUCTION_DATE_COLUMN_WIDTH = 76;
 const EMPTY_TEXT = '-';
-const MILLISECONDS_PER_DAY = 86400000;
 const SPORTS_MEET_SOURCE_EVENT_TYPE = 'SPORTS_MEET';
 
 const DEDUCTION_REASON_LABELS: Record<string, string> = {
@@ -133,13 +142,6 @@ const DEDUCTION_REASON_LABELS: Record<string, string> = {
 
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
-const TEACHER_ENGAGEMENT_TYPE_LABELS: Record<AcademicTeacherEngagementType, string> = {
-  ADMINISTRATIVE_TEACHING: '行政兼课',
-  EXTERNAL_TEACHER: '外聘教师',
-  FULL_TIME_TEACHER: '专任教师',
-  PUBLIC_WELFARE_POST: '公益性岗位',
-};
-
 const TEACHER_ENGAGEMENT_TYPE_TAG_COLORS: Record<AcademicTeacherEngagementType, string> = {
   ADMINISTRATIVE_TEACHING: 'purple',
   EXTERNAL_TEACHER: 'orange',
@@ -147,182 +149,8 @@ const TEACHER_ENGAGEMENT_TYPE_TAG_COLORS: Record<AcademicTeacherEngagementType, 
   PUBLIC_WELFARE_POST: 'cyan',
 };
 
-const TEACHER_ENGAGEMENT_TYPE_ORDER: Record<AcademicTeacherEngagementType, number> = {
-  FULL_TIME_TEACHER: 1,
-  ADMINISTRATIVE_TEACHING: 2,
-  PUBLIC_WELFARE_POST: 3,
-  EXTERNAL_TEACHER: 4,
-};
-
-const ENGAGEMENT_TABS: { hidden?: boolean; key: EngagementTabKey; label: string }[] = [
-  { key: 'ALL', label: '全部' },
-  { key: 'FULL_TIME_TEACHER', label: '专任教师' },
-  { key: 'ADMINISTRATIVE_TEACHING', label: '行政兼课' },
-  { key: 'PUBLIC_WELFARE_POST', label: '公益性岗位' },
-  { hidden: true, key: 'EXTERNAL_TEACHER', label: '外聘教师' },
-];
-
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return (first || '').localeCompare(second || '', 'zh-Hans-CN');
-}
-
-function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((first, second) => {
-    if (first.isCurrent !== second.isCurrent) {
-      return first.isCurrent ? -1 : 1;
-    }
-
-    if (first.schoolYear !== second.schoolYear) {
-      return second.schoolYear - first.schoolYear;
-    }
-
-    if (first.termNumber !== second.termNumber) {
-      return second.termNumber - first.termNumber;
-    }
-
-    return second.id - first.id;
-  });
-}
-
-function pickDefaultSemesterId(records: AcademicSemesterRecord[], currentValue: number | null) {
-  if (currentValue !== null && records.some((record) => record.id === currentValue)) {
-    return currentValue;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
-}
-
-function buildDepartmentSelectOptions(records: AcademicWorkloadDepartmentOption[]) {
-  const optionsByValue = new Map<string, DepartmentSelectOption>();
-
-  records.forEach((record) => {
-    const id = record.id.trim();
-
-    if (!id) {
-      return;
-    }
-
-    const name = record.departmentName?.trim() || record.shortName?.trim() || id;
-
-    optionsByValue.set(id, {
-      label: name,
-      value: id,
-    });
-  });
-
-  return Array.from(optionsByValue.values()).sort((left, right) =>
-    left.label.localeCompare(right.label, 'zh-CN'),
-  );
-}
-
-function ensureSelectedDepartmentOption(input: {
-  fallbackLabel: string;
-  options: DepartmentSelectOption[];
-  selectedDepartmentId: string;
-}) {
-  if (
-    !input.selectedDepartmentId ||
-    input.options.some((option) => option.value === input.selectedDepartmentId)
-  ) {
-    return input.options;
-  }
-
-  return [
-    ...input.options,
-    {
-      label: input.fallbackLabel,
-      value: input.selectedDepartmentId,
-    },
-  ];
-}
-
-function addDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * MILLISECONDS_PER_DAY);
-}
-
-function parseIsoDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-
-  return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
-}
-
-function formatIsoDate(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getUTCDate()}`.padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
-function startOfWeek(date: Date) {
-  const weekday = (date.getUTCDay() + 6) % 7;
-
-  return addDays(date, -weekday);
-}
-
-function buildTeachingWeekOptions(semester: AcademicSemesterRecord | null) {
-  if (!semester) {
-    return [] as TeachingWeekOption[];
-  }
-
-  const firstTeachingWeekStart = startOfWeek(parseIsoDate(semester.firstTeachingDate));
-  const examWeekStart = startOfWeek(parseIsoDate(semester.examStartDate));
-  const lastTeachingWeekStart =
-    examWeekStart.getTime() > firstTeachingWeekStart.getTime()
-      ? addDays(examWeekStart, -7)
-      : firstTeachingWeekStart;
-  const weeks: TeachingWeekOption[] = [];
-
-  for (
-    let cursor = firstTeachingWeekStart, index = 1;
-    cursor.getTime() <= lastTeachingWeekStart.getTime();
-    cursor = addDays(cursor, 7), index += 1
-  ) {
-    weeks.push({
-      endDate: formatIsoDate(addDays(cursor, 6)),
-      label: `第 ${index} 周`,
-      startDate: formatIsoDate(cursor),
-      value: index,
-    });
-  }
-
-  return weeks;
-}
-
-function buildTeachingWeekMonthMarkValues(weeks: readonly TeachingWeekOption[]) {
-  if (weeks.length === 0) {
-    return [] as number[];
-  }
-
-  const firstWeek = weeks[0];
-  const lastWeek = weeks.at(-1);
-
-  if (!lastWeek) {
-    return [] as number[];
-  }
-
-  const firstDate = parseIsoDate(firstWeek.startDate);
-  const lastDate = parseIsoDate(lastWeek.endDate);
-  const monthMarkValues = new Set([firstWeek.value]);
-
-  for (
-    let cursor = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1));
-    cursor.getTime() <= lastDate.getTime();
-    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
-  ) {
-    const monthStartWeek = weeks.find((week) => {
-      const weekStart = parseIsoDate(week.startDate);
-      const weekEnd = parseIsoDate(week.endDate);
-
-      return weekStart.getTime() <= cursor.getTime() && cursor.getTime() <= weekEnd.getTime();
-    });
-
-    if (monthStartWeek) {
-      monthMarkValues.add(monthStartWeek.value);
-    }
-  }
-
-  return weeks.filter((week) => monthMarkValues.has(week.value)).map((week) => week.value);
 }
 
 function formatShortDate(value: string) {
@@ -341,17 +169,6 @@ function formatWeekDateRange(week: TeachingWeekOption | null) {
   }
 
   return `${formatShortDate(week.startDate)} - ${formatShortDate(week.endDate)}`;
-}
-
-function formatTeachingWeekRange(
-  startWeek: TeachingWeekOption | null,
-  endWeek: TeachingWeekOption | null,
-) {
-  if (!startWeek || !endWeek) {
-    return '未选择教学周';
-  }
-
-  return `${startWeek.label} - ${endWeek.label}`;
 }
 
 function formatTeachingWeekDateSpan(
@@ -434,7 +251,7 @@ function formatDateColumnMonthDay(value: string) {
 }
 
 function formatDateColumnWeekday(value: string) {
-  const weekday = WEEKDAY_LABELS[parseIsoDate(value).getUTCDay()];
+  const weekday = WEEKDAY_LABELS[parseAcademicWorkloadIsoDate(value).getUTCDay()];
 
   return weekday ? `周${weekday}` : '周-';
 }
@@ -634,8 +451,8 @@ function sortDeductionItems(
 
     if (options.sortByEngagementType) {
       const engagementOrder =
-        TEACHER_ENGAGEMENT_TYPE_ORDER[first.teacherEngagementType] -
-        TEACHER_ENGAGEMENT_TYPE_ORDER[second.teacherEngagementType];
+        ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER[first.teacherEngagementType] -
+        ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER[second.teacherEngagementType];
 
       if (engagementOrder !== 0) {
         return engagementOrder;
@@ -754,8 +571,8 @@ function collectDateColumns(rows: AcademicWorkloadDeductionTableRow[]) {
 
 function getDetailCellClassName(row: AcademicWorkloadDeductionTableRow) {
   return row.detailRowIndex % 2 === 0
-    ? 'academic-workload-lab-detail-cell-even'
-    : 'academic-workload-lab-detail-cell-odd';
+    ? 'academic-workload-deduction-summary-detail-cell-even'
+    : 'academic-workload-deduction-summary-detail-cell-odd';
 }
 
 function getDetailCellProps(row: AcademicWorkloadDeductionTableRow) {
@@ -779,29 +596,32 @@ function renderMergedCell(
 }
 
 function renderHourCell(value: string | null | undefined) {
-  return <span className="academic-workload-lab-hour">{formatHourString(value)}</span>;
+  return (
+    <span className="academic-workload-deduction-summary-hour">{formatHourString(value)}</span>
+  );
 }
 
 function renderDeductedHourCell(value: string | null | undefined) {
-  return <span className="academic-workload-lab-hour">{formatDeductedHourString(value)}</span>;
+  return (
+    <span className="academic-workload-deduction-summary-hour">
+      {formatDeductedHourString(value)}
+    </span>
+  );
 }
 
 function renderTeachingClassName(value: string) {
-  const teachingClassNames = value
-    .split(/[,，]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
+  const teachingClassNames = splitAcademicWorkloadTeachingClassNames(value);
 
   if (teachingClassNames.length === 0) {
-    return <span className="academic-workload-lab-class-name">{EMPTY_TEXT}</span>;
+    return <span className="academic-workload-deduction-summary-class-name">{EMPTY_TEXT}</span>;
   }
 
   return (
     <Tooltip title={value}>
-      <span className="academic-workload-lab-class-name">
+      <span className="academic-workload-deduction-summary-class-name">
         {teachingClassNames.map((teachingClassName, index) => (
           <span
-            className="academic-workload-lab-class-name-item"
+            className="academic-workload-deduction-summary-class-name-item"
             key={`${teachingClassName}-${index}`}
           >
             {teachingClassName}
@@ -814,7 +634,7 @@ function renderTeachingClassName(value: string) {
 
 function renderStackedColumnTitle(firstLine: string, secondLine: string) {
   return (
-    <span className="academic-workload-lab-column-title-stacked">
+    <span className="academic-workload-deduction-summary-column-title-stacked">
       <span>{firstLine}</span>
       <span>{secondLine}</span>
     </span>
@@ -825,7 +645,7 @@ function renderDateColumnTitle(value: string, teachingWeeks: readonly TeachingWe
   const teachingWeek = findTeachingWeekByDate(value, teachingWeeks);
 
   return (
-    <span className="academic-workload-lab-date-column-title">
+    <span className="academic-workload-deduction-summary-date-column-title">
       <span>{formatDateColumnMonthDay(value)}</span>
       <span>{teachingWeek ? `第${teachingWeek.value}周` : '第-周'}</span>
       <span>{formatDateColumnWeekday(value)}</span>
@@ -835,11 +655,11 @@ function renderDateColumnTitle(value: string, teachingWeeks: readonly TeachingWe
 
 function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | undefined }) {
   if (!summary) {
-    return <span className="academic-workload-lab-empty">0</span>;
+    return <span className="academic-workload-deduction-summary-empty">0</span>;
   }
 
   if (!summary.hasHourValue) {
-    return <span className="academic-workload-lab-empty">0</span>;
+    return <span className="academic-workload-deduction-summary-empty">0</span>;
   }
 
   return (
@@ -848,7 +668,7 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
         summary.deductedHundredths,
       )} · ${summary.reasonLabels.join('、') || '未标注原因'}`}
     >
-      <span className="academic-workload-lab-date-hour academic-workload-lab-total-hour">
+      <span className="academic-workload-deduction-summary-date-hour academic-workload-deduction-summary-total-hour">
         {formatDeductedHundredths(summary.deductedHundredths)}
       </span>
     </Tooltip>
@@ -856,7 +676,7 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
 }
 
 function getEngagementTabLabel(key: EngagementTabKey) {
-  return ENGAGEMENT_TABS.find((item) => item.key === key)?.label ?? '当前表';
+  return getAcademicWorkloadEngagementLabel(key);
 }
 
 function getDeductionTableTotalHundredths(rows: AcademicWorkloadDeductionTableRow[]) {
@@ -875,10 +695,10 @@ function renderDeductionTableSummary(input: {
 
   return (
     <Table.Summary>
-      <Table.Summary.Row className="academic-workload-lab-total-row">
+      <Table.Summary.Row className="academic-workload-deduction-summary-total-row">
         <Table.Summary.Cell
           align="center"
-          className="academic-workload-lab-total-label"
+          className="academic-workload-deduction-summary-total-label"
           colSpan={input.columnCount - 1}
           index={0}
         >
@@ -886,10 +706,10 @@ function renderDeductionTableSummary(input: {
         </Table.Summary.Cell>
         <Table.Summary.Cell
           align="right"
-          className="academic-workload-lab-total-value"
+          className="academic-workload-deduction-summary-total-value"
           index={input.columnCount - 1}
         >
-          <span className="academic-workload-lab-hour">
+          <span className="academic-workload-deduction-summary-hour">
             {formatDeductedHundredths(totalHundredths)}
           </span>
         </Table.Summary.Cell>
@@ -899,12 +719,7 @@ function renderDeductionTableSummary(input: {
 }
 
 function formatTeachingClassClipboardValue(value: string) {
-  const teachingClassNames = value
-    .split(/[,，]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return teachingClassNames.length > 0 ? teachingClassNames.join('\n') : EMPTY_TEXT;
+  return formatAcademicWorkloadTeachingClassMultiline(value, EMPTY_TEXT);
 }
 
 function formatDateColumnClipboardTitle(
@@ -1055,11 +870,11 @@ function buildDeductionColumns(
       key: 'staffName',
       render: (_, row) =>
         renderMergedCell(
-          <span className="academic-workload-lab-staff">
+          <span className="academic-workload-deduction-summary-staff">
             <strong>{row.item.staffName}</strong>
             {showTeacherTypeTag ? (
               <Tag color={TEACHER_ENGAGEMENT_TYPE_TAG_COLORS[row.item.teacherEngagementType]}>
-                {TEACHER_ENGAGEMENT_TYPE_LABELS[row.item.teacherEngagementType]}
+                {ACADEMIC_WORKLOAD_ENGAGEMENT_LABELS[row.item.teacherEngagementType]}
               </Tag>
             ) : null}
           </span>,
@@ -1080,7 +895,7 @@ function buildDeductionColumns(
       key: 'course',
       onCell: getDetailCellProps,
       render: (_, row) => (
-        <span className="academic-workload-lab-course">
+        <span className="academic-workload-deduction-summary-course">
           <strong>{row.item.courseName || '未命名课程'}</strong>
         </span>
       ),
@@ -1120,7 +935,7 @@ function buildDeductionColumns(
       key: 'subtotal',
       onCell: getDetailCellProps,
       render: (_, row) => (
-        <span className="academic-workload-lab-hour">
+        <span className="academic-workload-deduction-summary-hour">
           {formatDeductedHundredths(row.tableSubtotalHundredths)}
         </span>
       ),
@@ -1132,7 +947,7 @@ function buildDeductionColumns(
       key: 'staffTotal',
       render: (_, row) =>
         renderMergedCell(
-          <span className="academic-workload-lab-hour">
+          <span className="academic-workload-deduction-summary-hour">
             {formatDeductedHundredths(row.staffTotalHundredths)}
           </span>,
           row,
@@ -1150,7 +965,7 @@ function buildDepartmentSummaryColumns() {
     {
       key: 'department',
       render: (_, record) => (
-        <span className="academic-workload-lab-department-name">
+        <span className="academic-workload-deduction-summary-department-name">
           <strong>{record.workloadDepartmentName || record.workloadDepartmentId}</strong>
           <small>{record.workloadDepartmentId}</small>
         </span>
@@ -1202,17 +1017,21 @@ function SummaryMetric({
   value: string;
 }) {
   return (
-    <div className={`academic-workload-lab-metric academic-workload-lab-metric-${tone}`}>
+    <div
+      className={`academic-workload-deduction-summary-metric academic-workload-deduction-summary-metric-${tone}`}
+    >
       <span>{label}</span>
       <strong>{value}</strong>
     </div>
   );
 }
 
-export function AcademicWorkloadDeductionSummaryLabPage() {
-  const loaderData = useLoaderData() as AcademicWorkloadDeductionSummaryLabLoaderData | null;
-  const isAdminViewer = loaderData?.viewerRole === 'admin';
-  const scopedDepartmentId = loaderData?.defaultDepartmentId?.trim() || '';
+export function AcademicWorkloadDeductionSummaryPageContent({
+  canSelectWorkloadDepartment: rawCanSelectWorkloadDepartment = false,
+  defaultWorkloadDepartmentId = null,
+}: AcademicWorkloadDeductionSummaryPageContentProps) {
+  const isAdminViewer = Boolean(rawCanSelectWorkloadDepartment);
+  const scopedDepartmentId = defaultWorkloadDepartmentId?.trim() || '';
   const latestRequestIdRef = useRef(0);
   const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1300,7 +1119,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
         }
 
         setSemesters(result);
-        setSelectedSemesterId((currentValue) => pickDefaultSemesterId(result, currentValue));
+        setSelectedSemesterId((currentValue) => pickNextSemesterId(result, currentValue));
       } catch (error) {
         if (!cancelled) {
           setSemesterError(error instanceof Error ? error.message : '暂时无法加载学期列表。');
@@ -1467,9 +1286,10 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
   const deductionSummaryLabel = `${getEngagementTabLabel(deferredActiveEngagementType)}小计`;
 
   const departmentOptions = useMemo(() => {
-    const baseOptions = buildDepartmentSelectOptions(departmentRecords);
+    const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
 
-    return ensureSelectedDepartmentOption({
+    return ensureSelectedAcademicWorkloadDepartmentOption({
+      appendMissing: true,
       fallbackLabel: isAdminViewer ? '默认归口系' : '当前归口系',
       options: baseOptions,
       selectedDepartmentId: workloadDepartmentId,
@@ -1550,7 +1370,10 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
   );
   const selectedDepartmentLabel =
     selectedDepartmentOption?.label ?? (workloadDepartmentId || '全部归口系');
-  const summaryContextLabel = `${semesterLabel} · ${activeEngagementLabel}`;
+  const summaryContextLabel = `${formatTeachingWeekRange(
+    selectedStartWeek,
+    selectedEndWeek,
+  )} · ${selectedDepartmentLabel} · ${activeEngagementLabel}`;
   const shouldShowDepartmentSummary = isAdminViewer && visibleDepartmentSummaries.length > 1;
 
   const handleResetWeekRange = () => {
@@ -1635,30 +1458,29 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
     exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
   return (
-    <div className="academic-workload-lab-page">
+    <div className="academic-workload-deduction-summary-page">
       <DecoratedPageHeader
-        badge={<Tag color="gold">Labs</Tag>}
-        description={academicWorkloadDeductionSummaryLabMeta.purpose}
+        description="按归口系、教师类型和教学周范围汇总教师扣课课时。"
         icon={<CarryOutOutlined />}
         title="教师扣课汇总"
       />
 
-      <section className="academic-workload-lab-panel">
+      <section className="academic-workload-deduction-summary-panel">
         {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
         {departmentError ? <Alert message={departmentError} showIcon type="error" /> : null}
 
         {loadingSemesters ? (
           <Skeleton active paragraph={{ rows: 3 }} />
         ) : (
-          <div className="academic-workload-lab-query">
+          <div className="academic-workload-deduction-summary-query">
             {summaryEnvelope ? (
-              <section className="academic-workload-lab-overview">
-                <div className="academic-workload-lab-summary-heading">
+              <section className="academic-workload-deduction-summary-overview">
+                <div className="academic-workload-deduction-summary-summary-heading">
                   <div>
                     <h2>当前汇总</h2>
                     <p>{summaryContextLabel}</p>
                   </div>
-                  <label className="academic-workload-lab-summary-option">
+                  <label className="academic-workload-deduction-summary-summary-option">
                     <span>计入运动会扣课</span>
                     <Switch
                       checked={showSportsMeetDeductions}
@@ -1668,7 +1490,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                   </label>
                 </div>
 
-                <div className="academic-workload-lab-metrics academic-workload-lab-query-metrics">
+                <div className="academic-workload-deduction-summary-metrics academic-workload-deduction-summary-query-metrics">
                   <SummaryMetric label="教师数" value={String(visibleSummary.staffCount)} />
                   <SummaryMetric label="课程数" value={String(visibleSummary.itemCount)} />
                   <SummaryMetric
@@ -1680,7 +1502,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
               </section>
             ) : null}
 
-            <div className="academic-workload-lab-filters">
+            <div className="academic-workload-deduction-summary-filters">
               <label>
                 <span>学期</span>
                 <Select
@@ -1728,8 +1550,8 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
             </div>
 
             {isExternalTeacherRangeMode ? (
-              <div className="academic-workload-lab-week-range">
-                <div className="academic-workload-lab-week-range-header">
+              <div className="academic-workload-deduction-summary-week-range">
+                <div className="academic-workload-deduction-summary-week-range-header">
                   <div>
                     <span>外聘教师统计周范围</span>
                     <strong>{formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}</strong>
@@ -1765,13 +1587,13 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                   }}
                 />
 
-                <div className="academic-workload-lab-week-range-summary">
-                  <div className="academic-workload-lab-week-boundary">
+                <div className="academic-workload-deduction-summary-week-range-summary">
+                  <div className="academic-workload-deduction-summary-week-boundary">
                     <span>起始</span>
                     <strong>{selectedStartWeek?.label ?? '-'}</strong>
                     <small>{formatWeekDateRange(selectedStartWeek)}</small>
                   </div>
-                  <div className="academic-workload-lab-week-boundary">
+                  <div className="academic-workload-deduction-summary-week-boundary">
                     <span>范围</span>
                     <strong>
                       {selectedTeachingWeekCount !== null
@@ -1780,7 +1602,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
                     </strong>
                     <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
                   </div>
-                  <div className="academic-workload-lab-week-boundary">
+                  <div className="academic-workload-deduction-summary-week-boundary">
                     <span>结束</span>
                     <strong>{selectedEndWeek?.label ?? '-'}</strong>
                     <small>{formatWeekDateRange(selectedEndWeek)}</small>
@@ -1836,7 +1658,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
       {loadingSummary ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!loadingSummary && summaryEnvelope ? (
-        <div className="academic-workload-lab-result">
+        <div className="academic-workload-deduction-summary-result">
           {!summaryEnvelope.isValid ? (
             <Alert
               message="结果数据异常"
@@ -1856,14 +1678,14 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
           ) : null}
 
           {!isDeductionRenderPending && shouldShowDepartmentSummary ? (
-            <section className="academic-workload-lab-soft-card">
+            <section className="academic-workload-deduction-summary-soft-card">
               <details>
                 <summary>
                   <span>归口系小计</span>
                   <small>{visibleDepartmentSummaries.length} 个归口系</small>
                 </summary>
-                <div className="academic-workload-lab-soft-card-body">
-                  <div className="academic-workload-lab-table-shell">
+                <div className="academic-workload-deduction-summary-soft-card-body">
+                  <div className="academic-workload-deduction-summary-table-shell">
                     <Table<AcademicWorkloadDeductionDepartmentSummary>
                       columns={departmentSummaryColumns}
                       dataSource={visibleDepartmentSummaries}
@@ -1884,7 +1706,7 @@ export function AcademicWorkloadDeductionSummaryLabPage() {
           ) : deferredVisibleDeductionItems.length === 0 ? (
             <Empty description="当前条件下没有课程记录。" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
-            <div className="academic-workload-lab-table-shell">
+            <div className="academic-workload-deduction-summary-table-shell">
               <Table<AcademicWorkloadDeductionTableRow>
                 columns={deductionColumns}
                 dataSource={deductionRows}

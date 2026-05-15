@@ -1,5 +1,5 @@
-/* src/labs/academic-workload-deduction-summary/page.css */
-.academic-workload-lab-page {
+/* src/features/academic-workload/ui/academic-workload-deduction-summary-page-content.css */
+.academic-workload-deduction-summary-page {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -7,8 +7,8 @@
   min-width: 0;
 }
 
-.academic-workload-lab-panel,
-.academic-workload-lab-summary {
+.academic-workload-deduction-summary-panel,
+.academic-workload-deduction-summary-summary {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius-lg);
@@ -20,7 +20,7 @@
   padding: 16px;
 }
 
-.academic-workload-lab-query {
+.academic-workload-deduction-summary-query {
   align-items: start;
   display: grid;
   gap: 14px;
@@ -29,7 +29,7 @@
   min-width: 0;
 }
 
-.academic-workload-lab-overview {
+.academic-workload-deduction-summary-overview {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -40,7 +40,7 @@
   padding-block: 4px;
 }
 
-.academic-workload-lab-filters {
+.academic-workload-deduction-summary-filters {
   align-items: end;
   align-self: end;
   display: grid;
@@ -49,28 +49,28 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.academic-workload-lab-filters label {
+.academic-workload-deduction-summary-filters label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.academic-workload-lab-filters label > span {
+.academic-workload-deduction-summary-filters label > span {
   color: var(--ant-color-text-secondary);
   font-size: 13px;
   line-height: 1.35;
 }
 
-.academic-workload-lab-filters :where(.ant-select) {
+.academic-workload-deduction-summary-filters :where(.ant-select) {
   width: 100%;
 }
 
-.academic-workload-lab-filters :where(.ant-btn) {
+.academic-workload-deduction-summary-filters :where(.ant-btn) {
   grid-column: 1 / -1;
 }
 
-.academic-workload-lab-week-range {
+.academic-workload-deduction-summary-week-range {
   background: var(--ant-color-fill-quaternary);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
@@ -82,7 +82,7 @@
   padding: 12px 14px;
 }
 
-.academic-workload-lab-week-range-header {
+.academic-workload-deduction-summary-week-range-header {
   align-items: center;
   display: flex;
   gap: 12px;
@@ -90,28 +90,28 @@
   min-width: 0;
 }
 
-.academic-workload-lab-week-range-header > div {
+.academic-workload-deduction-summary-week-range-header > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.academic-workload-lab-week-range-header span,
-.academic-workload-lab-week-boundary span {
+.academic-workload-deduction-summary-week-range-header span,
+.academic-workload-deduction-summary-week-boundary span {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-workload-lab-week-range-header strong,
-.academic-workload-lab-week-boundary strong {
+.academic-workload-deduction-summary-week-range-header strong,
+.academic-workload-deduction-summary-week-boundary strong {
   color: var(--ant-color-text);
   font-size: 14px;
   line-height: 1.35;
 }
 
-.academic-workload-lab-week-range-header :where(.ant-btn) {
+.academic-workload-deduction-summary-week-range-header :where(.ant-btn) {
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
@@ -120,18 +120,18 @@
   padding: 0;
 }
 
-.academic-workload-lab-week-range :where(.ant-slider) {
+.academic-workload-deduction-summary-week-range :where(.ant-slider) {
   margin-block: 4px 14px;
   margin-inline: 8px;
 }
 
-.academic-workload-lab-week-range-summary {
+.academic-workload-deduction-summary-week-range-summary {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.academic-workload-lab-week-boundary {
+.academic-workload-deduction-summary-week-boundary {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
@@ -142,7 +142,7 @@
   padding: 6px 8px;
 }
 
-.academic-workload-lab-week-boundary small {
+.academic-workload-deduction-summary-week-boundary small {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
@@ -151,7 +151,7 @@
   white-space: nowrap;
 }
 
-.academic-workload-lab-result {
+.academic-workload-deduction-summary-result {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -159,7 +159,7 @@
   min-width: 0;
 }
 
-.academic-workload-lab-soft-card {
+.academic-workload-deduction-summary-soft-card {
   background: var(--ant-color-fill-quaternary);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
@@ -168,7 +168,7 @@
   padding: 2px 10px;
 }
 
-.academic-workload-lab-soft-card summary {
+.academic-workload-deduction-summary-soft-card summary {
   align-items: center;
   color: var(--ant-color-text-secondary);
   cursor: pointer;
@@ -179,85 +179,91 @@
   min-height: 36px;
 }
 
-.academic-workload-lab-soft-card summary span {
+.academic-workload-deduction-summary-soft-card summary span {
   color: var(--ant-color-text);
   font-size: 14px;
   font-weight: 600;
 }
 
-.academic-workload-lab-soft-card summary small {
+.academic-workload-deduction-summary-soft-card summary small {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
 }
 
-.academic-workload-lab-soft-card-body {
+.academic-workload-deduction-summary-soft-card-body {
   border-top: 1px solid var(--ant-color-border-secondary);
   max-width: 100%;
   min-width: 0;
   padding-block: 10px 8px;
 }
 
-.academic-workload-lab-table-shell {
+.academic-workload-deduction-summary-table-shell {
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.academic-workload-lab-table-shell :where(.ant-table-wrapper) {
+.academic-workload-deduction-summary-table-shell :where(.ant-table-wrapper) {
   max-width: 100%;
   min-width: 0;
 }
 
-.academic-workload-lab-table-shell :where(.ant-table) {
+.academic-workload-deduction-summary-table-shell :where(.ant-table) {
   font-size: 13px;
 }
 
-.academic-workload-lab-table-shell :where(.ant-table-thead > tr > th) {
+.academic-workload-deduction-summary-table-shell :where(.ant-table-thead > tr > th) {
   font-weight: 500;
   line-height: 1.35;
 }
 
-.academic-workload-lab-table-shell :where(.ant-table-tbody > tr > td) {
+.academic-workload-deduction-summary-table-shell :where(.ant-table-tbody > tr > td) {
   line-height: 1.35;
   vertical-align: middle;
 }
 
-.academic-workload-lab-table-shell .ant-table-tbody > tr > .academic-workload-lab-detail-cell-even {
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-deduction-summary-detail-cell-even {
   background: var(--ant-color-bg-container);
 }
 
-.academic-workload-lab-table-shell .ant-table-tbody > tr > .academic-workload-lab-detail-cell-odd {
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-deduction-summary-detail-cell-odd {
   background: var(--ant-color-fill-quaternary);
 }
 
-.academic-workload-lab-table-shell
+.academic-workload-deduction-summary-table-shell
   .ant-table-tbody
   > tr:hover
-  > .academic-workload-lab-detail-cell-even,
-.academic-workload-lab-table-shell
+  > .academic-workload-deduction-summary-detail-cell-even,
+.academic-workload-deduction-summary-table-shell
   .ant-table-tbody
   > tr:hover
-  > .academic-workload-lab-detail-cell-odd {
+  > .academic-workload-deduction-summary-detail-cell-odd {
   background: var(--ant-color-fill-secondary);
 }
 
-.academic-workload-lab-table-shell :where(.ant-table-summary > tr > td) {
+.academic-workload-deduction-summary-table-shell :where(.ant-table-summary > tr > td) {
   background: var(--ant-color-fill-tertiary);
   border-top: 1px solid var(--ant-color-border);
   font-weight: 600;
 }
 
-.academic-workload-lab-total-label {
+.academic-workload-deduction-summary-total-label {
   color: var(--ant-color-text);
   text-align: center;
 }
 
-.academic-workload-lab-total-value {
+.academic-workload-deduction-summary-total-value {
   color: var(--ant-color-error);
 }
 
-.academic-workload-lab-summary-heading {
+.academic-workload-deduction-summary-summary-heading {
   align-items: center;
   display: flex;
   gap: 12px;
@@ -265,21 +271,21 @@
   min-width: 0;
 }
 
-.academic-workload-lab-summary-heading h2 {
+.academic-workload-deduction-summary-summary-heading h2 {
   color: var(--ant-color-text);
   font-size: 18px;
   line-height: 1.35;
   margin: 0;
 }
 
-.academic-workload-lab-summary-heading p {
+.academic-workload-deduction-summary-summary-heading p {
   color: var(--ant-color-text-secondary);
   font-size: 13px;
   line-height: 1.35;
   margin: 4px 0 0;
 }
 
-.academic-workload-lab-summary-option {
+.academic-workload-deduction-summary-summary-option {
   align-items: center;
   color: var(--ant-color-text-secondary);
   display: inline-flex;
@@ -291,18 +297,18 @@
   white-space: nowrap;
 }
 
-.academic-workload-lab-metrics {
+.academic-workload-deduction-summary-metrics {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
-.academic-workload-lab-query-metrics {
+.academic-workload-deduction-summary-query-metrics {
   column-gap: 24px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.academic-workload-lab-metric {
+.academic-workload-deduction-summary-metric {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -313,35 +319,35 @@
   padding: 0;
 }
 
-.academic-workload-lab-metric span {
+.academic-workload-deduction-summary-metric span {
   color: var(--ant-color-text-secondary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-workload-lab-metric strong {
+.academic-workload-deduction-summary-metric strong {
   color: var(--ant-color-text);
   font-size: 22px;
   line-height: 1.25;
 }
 
-.academic-workload-lab-metric-danger strong,
-.academic-workload-lab-total-hour {
+.academic-workload-deduction-summary-metric-danger strong,
+.academic-workload-deduction-summary-total-hour {
   color: var(--ant-color-error);
 }
 
-.academic-workload-lab-metric-success strong {
+.academic-workload-deduction-summary-metric-success strong {
   color: var(--ant-color-success);
 }
 
-.academic-workload-lab-column-title-stacked {
+.academic-workload-deduction-summary-column-title-stacked {
   align-items: center;
   display: inline-flex;
   flex-direction: column;
   line-height: 1.2;
 }
 
-.academic-workload-lab-date-column-title {
+.academic-workload-deduction-summary-date-column-title {
   align-items: center;
   display: inline-flex;
   flex-direction: column;
@@ -349,18 +355,18 @@
   line-height: 1.2;
 }
 
-.academic-workload-lab-staff,
-.academic-workload-lab-course,
-.academic-workload-lab-department-name {
+.academic-workload-deduction-summary-staff,
+.academic-workload-deduction-summary-course,
+.academic-workload-deduction-summary-department-name {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.academic-workload-lab-staff strong,
-.academic-workload-lab-course strong,
-.academic-workload-lab-department-name strong {
+.academic-workload-deduction-summary-staff strong,
+.academic-workload-deduction-summary-course strong,
+.academic-workload-deduction-summary-department-name strong {
   color: var(--ant-color-text);
   font-weight: 600;
   line-height: 1.35;
@@ -369,7 +375,7 @@
   white-space: nowrap;
 }
 
-.academic-workload-lab-class-name {
+.academic-workload-deduction-summary-class-name {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -377,61 +383,61 @@
   line-height: 1.35;
 }
 
-.academic-workload-lab-class-name-item {
+.academic-workload-deduction-summary-class-name-item {
   display: block;
 }
 
-.academic-workload-lab-department-name small {
+.academic-workload-deduction-summary-department-name small {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-workload-lab-hour,
-.academic-workload-lab-total-hour {
+.academic-workload-deduction-summary-hour,
+.academic-workload-deduction-summary-total-hour {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.academic-workload-lab-empty {
+.academic-workload-deduction-summary-empty {
   color: var(--ant-color-text-tertiary);
 }
 
-.academic-workload-lab-date-hour {
+.academic-workload-deduction-summary-date-hour {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
 }
 
 @media (max-width: 960px) {
-  .academic-workload-lab-query,
-  .academic-workload-lab-filters {
+  .academic-workload-deduction-summary-query,
+  .academic-workload-deduction-summary-filters {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-workload-lab-overview,
-  .academic-workload-lab-filters,
-  .academic-workload-lab-week-range {
+  .academic-workload-deduction-summary-overview,
+  .academic-workload-deduction-summary-filters,
+  .academic-workload-deduction-summary-week-range {
     grid-column: auto;
   }
 
-  .academic-workload-lab-week-range-summary {
+  .academic-workload-deduction-summary-week-range-summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-workload-lab-metrics {
+  .academic-workload-deduction-summary-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
-  .academic-workload-lab-summary-heading {
+  .academic-workload-deduction-summary-summary-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .academic-workload-lab-metrics {
+  .academic-workload-deduction-summary-metrics {
     grid-template-columns: minmax(0, 1fr);
   }
 }

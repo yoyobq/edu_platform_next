@@ -3,6 +3,8 @@ import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
+import type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
+
 export type AcademicStableWorkloadCalcEffect =
   | 'CANCEL'
   | 'MAKEUP'
@@ -10,11 +12,7 @@ export type AcademicStableWorkloadCalcEffect =
   | 'SWAP_IN'
   | 'SWAP_OUT';
 
-export type AcademicTeacherEngagementType =
-  | 'ADMINISTRATIVE_TEACHING'
-  | 'EXTERNAL_TEACHER'
-  | 'FULL_TIME_TEACHER'
-  | 'PUBLIC_WELFARE_POST';
+export type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
 
 export type AcademicStableWorkloadOccurrence = {
   calcEffect: AcademicStableWorkloadCalcEffect;

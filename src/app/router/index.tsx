@@ -17,6 +17,7 @@ import { canAccessNavigationPath } from '@/app/navigation';
 
 import { AcademicCalendarPage } from '@/pages/academic-calendar';
 import { AcademicWorkloadPage } from '@/pages/academic-workload';
+import { AcademicWorkloadDeductionSummaryPage } from '@/pages/academic-workload-deduction-summary';
 import { AcademicWorkloadReportPage } from '@/pages/academic-workload-report';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
@@ -76,10 +77,6 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  academicWorkloadDeductionSummaryLabAccess,
-  loadAcademicWorkloadDeductionSummaryLabRouteModule,
-} from '@/labs/academic-workload-deduction-summary';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -440,41 +437,6 @@ async function demoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function academicWorkloadDeductionSummaryLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(academicWorkloadDeductionSummaryLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  const snapshot = await ensureAuthenticatedSession(request);
-
-  if (!snapshot) {
-    return null;
-  }
-
-  if (
-    !hasLabAccess(academicWorkloadDeductionSummaryLabAccess) ||
-    !hasAcademicWorkloadManagerAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  const isAdmin = snapshot.userInfo.accessGroup.includes('ADMIN');
-  const defaultDepartmentId =
-    snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null;
-
-  if (!isAdmin && !defaultDepartmentId?.trim()) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return {
-    defaultDepartmentId,
-    viewerRole: isAdmin ? 'admin' : 'department',
-  };
-}
-
 async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
   const snapshot = await ensureAuthenticatedSession(request);
 
@@ -653,7 +615,7 @@ async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
-async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs) {
+async function loadAcademicWorkloadFormalReportScope(request: Request) {
   await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
@@ -690,6 +652,14 @@ async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs)
     canSelectWorkloadDepartment,
     defaultWorkloadDepartmentId,
   };
+}
+
+async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs) {
+  return loadAcademicWorkloadFormalReportScope(request);
+}
+
+async function academicWorkloadDeductionSummaryPageLoader({ request }: LoaderFunctionArgs) {
+  return loadAcademicWorkloadFormalReportScope(request);
 }
 
 async function staffSemesterProfilesPageLoader({ request }: LoaderFunctionArgs) {
@@ -991,6 +961,11 @@ const router = createBrowserRouter([
         Component: AcademicWorkloadReportPage,
       },
       {
+        path: '/academic-affairs/academic-workload-deduction-summary',
+        loader: academicWorkloadDeductionSummaryPageLoader,
+        Component: AcademicWorkloadDeductionSummaryPage,
+      },
+      {
         path: '/academic-affairs/my-teaching-logs',
         loader: myTeachingLogsPageLoader,
         Component: MyTeachingLogsPage,
@@ -1019,8 +994,7 @@ const router = createBrowserRouter([
         children: [
           {
             path: 'academic-workload-deduction-summary',
-            loader: academicWorkloadDeductionSummaryLabLoader,
-            lazy: loadAcademicWorkloadDeductionSummaryLabRouteModule,
+            loader: () => redirect('/academic-affairs/academic-workload-deduction-summary'),
           },
           {
             path: 'demo',

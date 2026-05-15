@@ -78,6 +78,16 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CarryOutOutlined',
+            key: '/academic-affairs/academic-workload-deduction-summary',
+            label: '扣课汇总',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/academic-workload-deduction-summary',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
         ]
       : []),
   ];

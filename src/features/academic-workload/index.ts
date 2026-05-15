@@ -19,6 +19,10 @@ export {
   requestMyAcademicStableWorkloadOccurrences,
 } from './infrastructure/academic-workload-api';
 export {
+  AcademicWorkloadDeductionSummaryPageContent,
+  type AcademicWorkloadDeductionSummaryPageContentProps,
+} from './ui/academic-workload-deduction-summary-page-content';
+export {
   AcademicWorkloadPageContent,
   type AcademicWorkloadPageContentProps,
 } from './ui/academic-workload-page-content';

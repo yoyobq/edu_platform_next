@@ -1,13 +1,15 @@
-// src/labs/academic-workload-deduction-summary/api.ts
+// src/features/academic-workload/infrastructure/academic-workload-deduction-summary-api.ts
 import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-export type AcademicTeacherEngagementType =
-  | 'ADMINISTRATIVE_TEACHING'
-  | 'EXTERNAL_TEACHER'
-  | 'FULL_TIME_TEACHER'
-  | 'PUBLIC_WELFARE_POST';
+import type { AcademicTeacherEngagementType } from './academic-workload-api';
+
+export type {
+  AcademicTeacherEngagementType,
+  AcademicWorkloadDepartmentOption,
+} from './academic-workload-api';
+export { requestAcademicWorkloadDepartmentOptions } from './academic-workload-api';
 
 export type AcademicWorkloadDeductionReasonDateSummary = {
   date: string;
@@ -69,19 +71,8 @@ export type RequestAcademicWorkloadDeductionSummaryInput = {
   workloadDepartmentId?: string;
 };
 
-export type AcademicWorkloadDepartmentOption = {
-  departmentName: string;
-  id: string;
-  isEnabled: boolean;
-  shortName: string | null;
-};
-
 type AcademicWorkloadDeductionSummaryResponse = {
   getAcademicWorkloadDeductionSummary: AcademicWorkloadDeductionSummaryEnvelope;
-};
-
-type AcademicWorkloadDepartmentOptionsResponse = {
-  departments: AcademicWorkloadDepartmentOption[];
 };
 
 const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
@@ -147,17 +138,6 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
   }
 `;
 
-const ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY = `
-  query AcademicWorkloadDepartmentOptions($isEnabled: Boolean, $limit: Int) {
-    departments(isEnabled: $isEnabled, limit: $limit) {
-      departmentName
-      id
-      isEnabled
-      shortName
-    }
-  }
-`;
-
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
@@ -205,24 +185,6 @@ export async function requestAcademicWorkloadDeductionSummary(
   } catch (error) {
     throw new Error(
       resolveAcademicWorkloadDeductionSummaryErrorMessage(error, '暂时无法加载教师扣课汇总。'),
-    );
-  }
-}
-
-export async function requestAcademicWorkloadDepartmentOptions() {
-  try {
-    const response = await executeGraphQL<
-      AcademicWorkloadDepartmentOptionsResponse,
-      {
-        isEnabled: boolean;
-        limit: number;
-      }
-    >(ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY, { isEnabled: true, limit: 500 });
-
-    return response.departments;
-  } catch (error) {
-    throw new Error(
-      resolveAcademicWorkloadDeductionSummaryErrorMessage(error, '暂时无法加载归口系列表。'),
     );
   }
 }

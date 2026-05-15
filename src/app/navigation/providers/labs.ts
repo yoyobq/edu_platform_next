@@ -1,7 +1,5 @@
 import type { AuthAccessGroup } from '@/features/auth';
 
-import { hasAcademicWorkloadManagerAccess } from '@/shared/auth-access';
-
 import type { NavigationItemsProvider } from '../types';
 
 function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
@@ -34,25 +32,7 @@ function hasLabNavigationAccess(
 }
 
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
-  const canManageAcademicWorkload = hasAcademicWorkloadManagerAccess({
-    accessGroup: filter.accessGroup,
-    slotGroup: filter.slotGroup,
-  });
   const children = [
-    ...(canManageAcademicWorkload
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CarryOutOutlined',
-            key: '/labs/academic-workload-deduction-summary',
-            label: '扣课汇总',
-            navMode: 'rail' as const,
-            path: '/labs/academic-workload-deduction-summary',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasLabNavigationAccess(['admin'], filter)
       ? [
           {

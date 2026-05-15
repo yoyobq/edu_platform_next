@@ -15,6 +15,7 @@ import {
   requestAcademicWorkloadDepartmentOptions,
   requestAcademicWorkloadReport,
 } from './academic-workload-api';
+import { requestAcademicWorkloadDeductionSummary } from './academic-workload-deduction-summary-api';
 
 describe('academic-workload api', () => {
   beforeEach(() => {
@@ -107,6 +108,86 @@ describe('academic-workload api', () => {
     );
   });
 
+  it('requests academic workload deduction summary with normalized filters', async () => {
+    const summary = {
+      departmentSummaries: [
+        {
+          addedHours: '0',
+          baselineHours: '32',
+          deductedHours: '4',
+          itemCount: 1,
+          staffCount: 1,
+          workloadDepartmentId: 'D-01',
+          workloadDepartmentName: '计算机系',
+        },
+      ],
+      invalidReason: null,
+      isComplete: true,
+      isValid: true,
+      items: [
+        {
+          addedHours: '0',
+          adjustmentDates: ['2026-04-06'],
+          baselineHours: '32',
+          baselineTeachingWeekCount: 16,
+          baselineWeeklyHours: '2',
+          courseCategory: '必修',
+          courseName: '语文',
+          deductedHours: '4',
+          deductionReasonSummaries: [
+            {
+              dateSummaries: [{ date: '2026-04-06', deductedHours: '2' }],
+              deductedHours: '2',
+              sourceEventType: 'HOLIDAY',
+            },
+          ],
+          staffId: 'T-001',
+          staffName: '王老师',
+          teacherEngagementType: 'FULL_TIME_TEACHER',
+          teachingClassName: '高一 1 班',
+          workloadDepartmentId: 'D-01',
+          workloadDepartmentName: '计算机系',
+        },
+      ],
+      total: {
+        addedHours: '0',
+        baselineHours: '32',
+        deductedHours: '4',
+        itemCount: 1,
+        staffCount: 1,
+      },
+      truncationReason: null,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      getAcademicWorkloadDeductionSummary: summary,
+    });
+
+    await expect(
+      requestAcademicWorkloadDeductionSummary({
+        endDate: ' 2026-06-21 ',
+        semesterId: 202602,
+        startDate: ' 2026-03-02 ',
+        teacherEngagementType: 'FULL_TIME_TEACHER',
+        workloadDepartmentId: ' D-01 ',
+      }),
+    ).resolves.toEqual(summary);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query AcademicWorkloadDeductionSummary'),
+      {
+        endDate: '2026-06-21',
+        semesterId: 202602,
+        startDate: '2026-03-02',
+        teacherEngagementType: 'FULL_TIME_TEACHER',
+        workloadDepartmentId: 'D-01',
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('getAcademicWorkloadDeductionSummary');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('deductionReasonSummaries');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('departmentSummaries');
+  });
+
   it('prefers GraphQL ingress error messages for report failures', async () => {
     const ingressError = {
       graphqlErrors: [
@@ -127,5 +208,27 @@ describe('academic-workload api', () => {
         semesterId: 202602,
       }),
     ).rejects.toThrow('当前学期尚未同步工作量数据。');
+  });
+
+  it('prefers GraphQL ingress error messages for deduction summary failures', async () => {
+    const ingressError = {
+      graphqlErrors: [
+        {
+          extensions: {
+            errorMessage: '当前学期尚未生成扣课汇总。',
+          },
+        },
+      ],
+      userMessage: '统一错误提示',
+    };
+
+    executeGraphQLMock.mockRejectedValueOnce(ingressError);
+    isGraphQLIngressErrorMock.mockReturnValueOnce(true);
+
+    await expect(
+      requestAcademicWorkloadDeductionSummary({
+        semesterId: 202602,
+      }),
+    ).rejects.toThrow('当前学期尚未生成扣课汇总。');
   });
 });

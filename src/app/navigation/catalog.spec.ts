@@ -44,6 +44,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
+      '/academic-affairs/academic-workload-deduction-summary',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -61,7 +62,6 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-workload-deduction-summary',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
@@ -88,6 +88,7 @@ describe('navigation catalog', () => {
         '/academic-affairs/semester-course-schedule-sync',
         '/academic-affairs/staff-semester-profiles',
         '/academic-affairs/academic-workload-report',
+        '/academic-affairs/academic-workload-deduction-summary',
       ],
     );
     expect(
@@ -105,7 +106,6 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-workload-deduction-summary',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
     ]);
@@ -114,7 +114,7 @@ describe('navigation catalog', () => {
     ).toEqual(['/admin/users', '/admin/verification-issuance', '/errors/preview']);
   });
 
-  it('shows the shared staff labs while keeping admin-only labs hidden', () => {
+  it('keeps labs hidden for regular staff', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1001,
@@ -155,9 +155,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-workload-deduction-summary',
-    ]);
+    expect(findGroup(staffItems, 'labs')).toBeUndefined();
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
       '/calendar-schedule/weekly-timetable',
@@ -180,12 +178,12 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
-      'labs',
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
+      '/academic-affairs/academic-workload-deduction-summary',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -197,9 +195,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-workload-deduction-summary',
-    ]);
+    expect(findGroup(staffItems, 'labs')).toBeUndefined();
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
         accountId: 1002,
@@ -283,6 +279,22 @@ describe('navigation catalog', () => {
     ).toBe(true);
     expect(
       canAccessNavigationPath(
+        '/academic-affairs/academic-workload-deduction-summary',
+        buildFilter(),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/academic-affairs/academic-workload-deduction-summary',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['ACADEMIC_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
         '/academic-affairs/academic-workload-report',
         buildFilter({
           primaryAccessGroup: 'STAFF',
@@ -292,8 +304,18 @@ describe('navigation catalog', () => {
       ),
     ).toBe(false);
     expect(
+      canAccessNavigationPath(
+        '/academic-affairs/academic-workload-deduction-summary',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
       canAccessNavigationPath('/labs/academic-workload-deduction-summary', buildFilter()),
-    ).toBe(true);
+    ).toBe(false);
     expect(canAccessNavigationPath('/labs/academic-workload', buildFilter())).toBe(false);
     expect(
       canAccessNavigationPath(
@@ -321,7 +343,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
-      '/labs/academic-workload-deduction-summary',
+      '/academic-affairs/academic-workload-deduction-summary',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/sandbox/playground',

@@ -1,4 +1,4 @@
-// src/labs/academic-workload-deduction-summary/excel-export.ts
+// src/features/academic-workload/infrastructure/academic-workload-deduction-summary-excel-export.ts
 import type { Cell, CellValue, Row, Style, Worksheet } from 'exceljs';
 
 type RichTextRun = {

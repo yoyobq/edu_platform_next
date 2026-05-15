@@ -1,6 +1,8 @@
 // src/features/academic-workload/infrastructure/academic-workload-report-excel-export.ts
 import type { Cell, CellValue, Row, Worksheet } from 'exceljs';
 
+import { formatAcademicWorkloadTeachingClassMultiline } from '../application/teaching-class-format';
+
 type RichTextRun = {
   font?: Cell['font'];
   text: string;
@@ -72,7 +74,7 @@ const DOCUMENT_CODE_MIDDLE_GAP_WIDTH = 78;
 const DOCUMENT_CODE_MIDDLE_GAP = ' '.repeat(DOCUMENT_CODE_MIDDLE_GAP_WIDTH);
 const SEMESTER_CONTEXT_MIN_MIDDLE_GAP = 16;
 const SEMESTER_CONTEXT_TRAILING_GAP = ' ';
-const SEMESTER_CONTEXT_WIDTH_SAFETY = 4;
+const SEMESTER_CONTEXT_WIDTH_SAFETY = 3;
 const TERM_NUMBER_LABELS: Record<number, string> = {
   1: '一',
   2: '二',
@@ -639,12 +641,7 @@ function toExcelNumber(value: number | string) {
 }
 
 function formatTeachingClassExcelValue(value: string) {
-  const teachingClassNames = value
-    .split(/[,，、;；]/u)
-    .map((item) => item.trim())
-    .filter(Boolean);
-
-  return teachingClassNames.length > 0 ? teachingClassNames.join('\n') : EMPTY_TEXT;
+  return formatAcademicWorkloadTeachingClassMultiline(value, EMPTY_TEXT);
 }
 
 function buildFormulaValue(formula: string, resultValue: number | string): CellValue {
