@@ -1,4 +1,4 @@
-import type { AuthAccessGroup } from '@/features/auth';
+import { type AuthAccessGroup, hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -32,7 +32,25 @@ function hasLabNavigationAccess(
 }
 
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
+  const hasAdjustedWorkloadReportAccess = hasAdminOrAcademicOfficerAccess({
+    accessGroup: filter.accessGroup,
+    slotGroup: filter.slotGroup,
+  });
   const children = [
+    ...(hasAdjustedWorkloadReportAccess
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileTextOutlined',
+            key: '/labs/academic-adjusted-workload-report',
+            label: '外聘兼课金',
+            navMode: 'rail' as const,
+            path: '/labs/academic-adjusted-workload-report',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(hasLabNavigationAccess(['admin'], filter)
       ? [
           {

@@ -77,6 +77,10 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
+import {
+  academicAdjustedWorkloadReportLabAccess,
+  loadAcademicAdjustedWorkloadReportLabRouteModule,
+} from '@/labs/academic-adjusted-workload-report';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -531,6 +535,14 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   return null;
+}
+
+async function academicAdjustedWorkloadReportLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(academicAdjustedWorkloadReportLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  return resolveAcademicWorkloadManagerScope(request);
 }
 
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
@@ -992,6 +1004,11 @@ const router = createBrowserRouter([
       {
         path: '/labs',
         children: [
+          {
+            path: 'academic-adjusted-workload-report',
+            loader: academicAdjustedWorkloadReportLabLoader,
+            lazy: loadAcademicAdjustedWorkloadReportLabRouteModule,
+          },
           {
             path: 'academic-workload-deduction-summary',
             loader: () => redirect('/academic-affairs/academic-workload-deduction-summary'),
