@@ -38,7 +38,6 @@ export function buildAcademicWorkloadDepartmentSelectOptions(
 }
 
 export function ensureSelectedAcademicWorkloadDepartmentOption(input: {
-  appendMissing?: boolean;
   fallbackLabel: string;
   options: AcademicWorkloadDepartmentSelectOption[];
   selectedDepartmentId: string;
@@ -55,7 +54,5 @@ export function ensureSelectedAcademicWorkloadDepartmentOption(input: {
     value: input.selectedDepartmentId,
   };
 
-  return input.appendMissing
-    ? [...input.options, selectedOption]
-    : [selectedOption, ...input.options];
+  return [selectedOption, ...input.options];
 }

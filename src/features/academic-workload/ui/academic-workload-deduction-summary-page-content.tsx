@@ -575,6 +575,12 @@ function getDetailCellClassName(row: AcademicWorkloadDeductionTableRow) {
     : 'academic-workload-deduction-summary-detail-cell-odd';
 }
 
+function getDeductionRowClassName(row: AcademicWorkloadDeductionTableRow) {
+  return row.detailRowIndex % 2 === 0
+    ? 'academic-workload-deduction-summary-detail-row-even'
+    : 'academic-workload-deduction-summary-detail-row-odd';
+}
+
 function getDetailCellProps(row: AcademicWorkloadDeductionTableRow) {
   return {
     className: getDetailCellClassName(row),
@@ -1289,7 +1295,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
 
     return ensureSelectedAcademicWorkloadDepartmentOption({
-      appendMissing: true,
       fallbackLabel: isAdminViewer ? '默认归口系' : '当前归口系',
       options: baseOptions,
       selectedDepartmentId: workloadDepartmentId,
@@ -1711,6 +1716,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
                 columns={deductionColumns}
                 dataSource={deductionRows}
                 pagination={false}
+                rowClassName={getDeductionRowClassName}
                 rowKey={(row) => row.key}
                 scroll={{
                   x:

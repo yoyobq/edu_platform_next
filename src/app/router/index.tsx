@@ -615,7 +615,7 @@ async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
-async function loadAcademicWorkloadFormalReportScope(request: Request) {
+async function resolveAcademicWorkloadManagerScope(request: Request) {
   await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
@@ -655,11 +655,11 @@ async function loadAcademicWorkloadFormalReportScope(request: Request) {
 }
 
 async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs) {
-  return loadAcademicWorkloadFormalReportScope(request);
+  return resolveAcademicWorkloadManagerScope(request);
 }
 
 async function academicWorkloadDeductionSummaryPageLoader({ request }: LoaderFunctionArgs) {
-  return loadAcademicWorkloadFormalReportScope(request);
+  return resolveAcademicWorkloadManagerScope(request);
 }
 
 async function staffSemesterProfilesPageLoader({ request }: LoaderFunctionArgs) {

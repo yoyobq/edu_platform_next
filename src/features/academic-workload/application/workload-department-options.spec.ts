@@ -20,7 +20,7 @@ describe('academic workload department option helpers', () => {
     ]);
   });
 
-  it('keeps a missing selected workload department visible at the requested edge', () => {
+  it('keeps a missing selected workload department visible before backend options', () => {
     const options = [{ label: '信息工程系', value: 'ORG0302' }];
 
     expect(
@@ -32,17 +32,6 @@ describe('academic workload department option helpers', () => {
     ).toEqual([
       { label: '当前归口系', value: 'ORG9999' },
       { label: '信息工程系', value: 'ORG0302' },
-    ]);
-    expect(
-      ensureSelectedAcademicWorkloadDepartmentOption({
-        appendMissing: true,
-        fallbackLabel: '当前归口系',
-        options,
-        selectedDepartmentId: 'ORG9999',
-      }),
-    ).toEqual([
-      { label: '信息工程系', value: 'ORG0302' },
-      { label: '当前归口系', value: 'ORG9999' },
     ]);
   });
 });
