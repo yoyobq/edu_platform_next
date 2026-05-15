@@ -1,8 +1,8 @@
 // src/features/academic-workload/ui/academic-workload-report-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
-import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Tabs, Tooltip } from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Slider, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -29,6 +29,10 @@ import {
   requestAcademicWorkloadDepartmentOptions,
   requestAcademicWorkloadReport,
 } from '../infrastructure/academic-workload-api';
+import {
+  type AcademicWorkloadReportExcelRow,
+  exportAcademicWorkloadReportExcel,
+} from '../infrastructure/academic-workload-report-excel-export';
 
 import './academic-workload-report-page-content.css';
 
@@ -185,6 +189,21 @@ function formatReportDecimal(value: string | number | null | undefined, fraction
   return numberValue === null ? formatReportText(value) : numberValue.toFixed(fractionDigits);
 }
 
+function formatReportExcelText(value: string | number | null | undefined) {
+  const normalizedValue = value === null || value === undefined ? '' : String(value).trim();
+
+  return normalizedValue;
+}
+
+function formatTeachingClassExcelValue(value: string) {
+  const teachingClassNames = value
+    .split(/[,，、;；]/u)
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return teachingClassNames.length > 0 ? teachingClassNames.join('\n') : EMPTY_TEXT;
+}
+
 function getReportStaffKey(item: AcademicWorkloadReportItem) {
   return `${item.teacherEngagementType}::${item.staffId}`;
 }
@@ -204,16 +223,16 @@ function compareReportItems(
     }
   }
 
-  const staffNameOrder = compareText(first.staffName, second.staffName);
-
-  if (staffNameOrder !== 0) {
-    return staffNameOrder;
-  }
-
   const staffIdOrder = compareText(first.staffId, second.staffId);
 
   if (staffIdOrder !== 0) {
     return staffIdOrder;
+  }
+
+  const staffNameOrder = compareText(first.staffName, second.staffName);
+
+  if (staffNameOrder !== 0) {
+    return staffNameOrder;
   }
 
   const teachingClassOrder = compareText(first.teachingClassName, second.teachingClassName);
@@ -305,7 +324,7 @@ function getReportDetailCellProps(row: AcademicWorkloadReportTableRow) {
 
 function renderTeachingClassName(value: string) {
   const teachingClassNames = value
-    .split(/[,，]/)
+    .split(/[,，、;；]/u)
     .map((item) => item.trim())
     .filter(Boolean);
 
@@ -340,6 +359,28 @@ function renderAcademicWorkloadReportSummary(totalHours: string) {
       </Table.Summary.Cell>
     </Table.Summary.Row>
   );
+}
+
+function buildReportTableExcelRows(
+  rows: AcademicWorkloadReportTableRow[],
+): AcademicWorkloadReportExcelRow[] {
+  return rows.map((row) => ({
+    coefficient: formatReportDecimal(row.item.coefficient, 1),
+    courseName: formatReportExcelText(row.item.courseName),
+    hours: formatReportDecimal(row.item.hours, 2),
+    sequence: row.sequence,
+    staffName: formatReportExcelText(row.item.staffName),
+    staffRowIndex: row.staffRowIndex,
+    staffRowSpan: row.staffRowSpan,
+    staffTotal: formatReportDecimal(row.staffTotalHours, 2),
+    teachingClassName: formatTeachingClassExcelValue(row.item.teachingClassName),
+    weekCount: row.item.weekCount,
+    weeklyHours: formatReportExcelText(row.item.weeklyHours),
+  }));
+}
+
+function buildReportExcelFileName(input: { engagementLabel: string; semesterLabel: string }) {
+  return `教师工作量预报-${input.semesterLabel}-${input.engagementLabel}.xlsx`;
 }
 
 function ReportMetric({
@@ -386,6 +427,9 @@ export function AcademicWorkloadReportPageContent({
   const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportEnvelope, setReportEnvelope] = useState<AcademicWorkloadReportEnvelope | null>(null);
+  const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
@@ -393,6 +437,28 @@ export function AcademicWorkloadReportPageContent({
     setReportError(null);
     setLoadingReport(false);
   }, []);
+
+  const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
+    setExportStatus(status);
+
+    if (exportStatusTimerRef.current) {
+      clearTimeout(exportStatusTimerRef.current);
+    }
+
+    exportStatusTimerRef.current = setTimeout(() => {
+      setExportStatus('idle');
+      exportStatusTimerRef.current = null;
+    }, 1800);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (exportStatusTimerRef.current) {
+        clearTimeout(exportStatusTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -552,6 +618,7 @@ export function AcademicWorkloadReportPageContent({
     activeEngagementType === 'ALL'
       ? '全部教师'
       : TEACHER_ENGAGEMENT_TYPE_LABELS[activeEngagementType];
+  const semesterLabel = selectedSemester?.name ?? `学期 ${selectedSemesterId}`;
   const reportRows = useMemo(
     () =>
       buildAcademicWorkloadReportRows(reportEnvelope?.items ?? [], {
@@ -562,6 +629,7 @@ export function AcademicWorkloadReportPageContent({
   const reportTotalHours = reportEnvelope
     ? formatReportDecimal(reportEnvelope.total.hours, 2)
     : EMPTY_TEXT;
+  const canExportReportExcel = activeEngagementType !== 'ALL';
   const canLoadReport =
     Boolean(selectedSemesterId) && (canSelectWorkloadDepartment || Boolean(workloadDepartmentId));
   const tabItems = useMemo(
@@ -632,12 +700,55 @@ export function AcademicWorkloadReportPageContent({
   const handleEngagementTypeChange = (nextKey: string) => {
     const nextEngagementType = nextKey as AcademicWorkloadReportEngagementFilter;
 
+    setExportStatus('idle');
     setActiveEngagementType(nextEngagementType);
 
     if (selectedSemesterId && (reportEnvelope || loadingReport)) {
       void loadReport(nextEngagementType);
     }
   };
+
+  const handleExportReportTable = useCallback(async () => {
+    if (!canExportReportExcel || !reportEnvelope || reportRows.length === 0 || exportingExcel) {
+      return;
+    }
+
+    setExportingExcel(true);
+
+    try {
+      await exportAcademicWorkloadReportExcel({
+        departmentName: selectedDepartmentLabel,
+        fileName: buildReportExcelFileName({
+          engagementLabel: activeEngagementLabel,
+          semesterLabel,
+        }),
+        rows: buildReportTableExcelRows(reportRows),
+        schoolYear: selectedSemester?.schoolYear ?? null,
+        sheetName: activeEngagementLabel,
+        summaryLabel: `${activeEngagementLabel}小计`,
+        summaryTotal: reportTotalHours,
+        termNumber: selectedSemester?.termNumber ?? null,
+      });
+      setTemporaryExportStatus('exported');
+    } catch {
+      setTemporaryExportStatus('failed');
+    } finally {
+      setExportingExcel(false);
+    }
+  }, [
+    activeEngagementLabel,
+    canExportReportExcel,
+    exportingExcel,
+    reportEnvelope,
+    reportRows,
+    reportTotalHours,
+    selectedDepartmentLabel,
+    selectedSemester,
+    semesterLabel,
+    setTemporaryExportStatus,
+  ]);
+  const exportButtonLabel =
+    exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
   const columns = useMemo<ColumnsType<AcademicWorkloadReportTableRow>>(
     () => [
@@ -888,6 +999,23 @@ export function AcademicWorkloadReportPageContent({
       <Tabs
         activeKey={activeEngagementType}
         items={tabItems}
+        tabBarExtraContent={{
+          right: canExportReportExcel ? (
+            <Space size={8}>
+              <Button
+                disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                icon={<DownloadOutlined />}
+                loading={exportingExcel}
+                size="small"
+                onClick={() => {
+                  void handleExportReportTable();
+                }}
+              >
+                {exportButtonLabel}
+              </Button>
+            </Space>
+          ) : null,
+        }}
         onChange={handleEngagementTypeChange}
       />
 
