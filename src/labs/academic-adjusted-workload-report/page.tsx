@@ -1,6 +1,6 @@
 // src/labs/academic-adjusted-workload-report/page.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, FileTextOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
 import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -21,6 +21,10 @@ import {
   requestAcademicAdjustedWorkloadReport,
   requestAcademicWorkloadDepartmentOptions,
 } from './api';
+import {
+  exportExternalTeacherCompensationExcel,
+  type ExternalTeacherCompensationExcelRow,
+} from './excel-export';
 
 import './page.css';
 
@@ -54,6 +58,7 @@ type ReportTableRow = {
 const DEFAULT_WORKLOAD_DEPARTMENT_ID = 'ORG0302';
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 976;
+const EXPORT_STATUS_RESET_DELAY_MS = 1800;
 const MILLISECONDS_PER_DAY = 86400000;
 
 const ENGAGEMENT_LABELS: Record<AcademicTeacherEngagementType, string> = {
@@ -223,6 +228,12 @@ function formatReportDecimal(value: string | number | null | undefined, fraction
   const numberValue = parseReportNumber(value);
 
   return numberValue === null ? formatReportText(value) : numberValue.toFixed(fractionDigits);
+}
+
+function formatReportExcelText(value: string | number | null | undefined) {
+  const normalizedValue = value === null || value === undefined ? '' : String(value).trim();
+
+  return normalizedValue;
 }
 
 function formatCompactDecimal(value: string | number | null | undefined) {
@@ -525,6 +536,32 @@ function renderReportSummary(totalActualHours: string) {
   );
 }
 
+function buildExternalTeacherCompensationExcelRows(
+  rows: ReportTableRow[],
+): ExternalTeacherCompensationExcelRow[] {
+  return rows.map((row) => ({
+    actualHours: formatReportExcelText(row.item.actualHours),
+    adjustmentHours: formatReportExcelText(row.item.adjustmentHours),
+    coefficient: formatReportExcelText(row.item.coefficient),
+    courseName: formatReportExcelText(row.item.courseName),
+    sequence: row.sequence,
+    staffName: formatReportExcelText(row.item.staffName),
+    staffRowIndex: row.staffRowIndex,
+    staffRowSpan: row.staffRowSpan,
+    teachingClassName: formatReportExcelText(row.item.teachingClassName),
+    weekCount: row.item.weekCount,
+    weeklyHours: formatReportExcelText(row.item.weeklyHours),
+  }));
+}
+
+function buildExternalTeacherCompensationExcelFileName(input: {
+  departmentLabel: string;
+  semesterLabel: string;
+  weekScopeLabel: string;
+}) {
+  return `兼职教师兼课金结算表-${input.semesterLabel}-${input.departmentLabel}-${input.weekScopeLabel}.xlsx`;
+}
+
 function ReportMetric({
   label,
   tone = 'default',
@@ -554,6 +591,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
     : defaultScopedWorkloadDepartmentId;
   const latestRequestIdRef = useRef(0);
   const hasAutoLoadedReportRef = useRef(false);
+  const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [departmentRecords, setDepartmentRecords] = useState<AcademicWorkloadDepartmentOption[]>(
@@ -571,14 +609,39 @@ export function AcademicAdjustedWorkloadReportLabPage() {
   const [reportEnvelope, setReportEnvelope] =
     useState<AcademicAdjustedWorkloadReportEnvelope | null>(null);
   const [markedDetailRowKeys, setMarkedDetailRowKeys] = useState<Set<string>>(() => new Set());
+  const [exportingExcel, setExportingExcel] = useState(false);
+  const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
+    setExportStatus('idle');
     setMarkedDetailRowKeys(new Set());
     setReportEnvelope(null);
     setReportError(null);
     setLoadingReport(false);
   }, []);
+
+  const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
+    setExportStatus(status);
+
+    if (exportStatusTimerRef.current) {
+      clearTimeout(exportStatusTimerRef.current);
+    }
+
+    exportStatusTimerRef.current = setTimeout(() => {
+      setExportStatus('idle');
+      exportStatusTimerRef.current = null;
+    }, EXPORT_STATUS_RESET_DELAY_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (exportStatusTimerRef.current) {
+        clearTimeout(exportStatusTimerRef.current);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -736,6 +799,8 @@ export function AcademicAdjustedWorkloadReportLabPage() {
   const selectedDepartmentLabel =
     departmentOptions.find((option) => option.value === workloadDepartmentId)?.label ??
     (workloadDepartmentId || '全部归口系');
+  const semesterLabel =
+    selectedSemester?.name ?? (selectedSemesterId ? `学期 ${selectedSemesterId}` : '未选择学期');
   const weekScopeLabel = resolveWeekScopeLabel({
     endWeek: selectedEndWeek,
     isFullTeachingWeekRange,
@@ -858,6 +923,54 @@ export function AcademicAdjustedWorkloadReportLabPage() {
     }),
     [markedDetailRowKeys, toggleDetailMark],
   );
+  const handleExportReportTable = useCallback(async () => {
+    if (!reportEnvelope || reportRows.length === 0 || exportingExcel) {
+      return;
+    }
+
+    setExportingExcel(true);
+
+    try {
+      await exportExternalTeacherCompensationExcel({
+        dateRange:
+          selectedStartWeek && selectedEndWeek
+            ? {
+                endDate: selectedEndWeek.endDate,
+                startDate: selectedStartWeek.startDate,
+              }
+            : null,
+        departmentName: selectedDepartmentLabel,
+        fileName: buildExternalTeacherCompensationExcelFileName({
+          departmentLabel: selectedDepartmentLabel,
+          semesterLabel,
+          weekScopeLabel,
+        }),
+        rows: buildExternalTeacherCompensationExcelRows(reportRows),
+        schoolYear: selectedSemester?.schoolYear ?? null,
+        summaryLabel: '合       计',
+        summaryTotalActualHours: reportEnvelope.total.actualHours,
+        termNumber: selectedSemester?.termNumber ?? null,
+      });
+      setTemporaryExportStatus('exported');
+    } catch {
+      setTemporaryExportStatus('failed');
+    } finally {
+      setExportingExcel(false);
+    }
+  }, [
+    exportingExcel,
+    reportEnvelope,
+    reportRows,
+    selectedDepartmentLabel,
+    selectedEndWeek,
+    selectedSemester,
+    selectedStartWeek,
+    semesterLabel,
+    setTemporaryExportStatus,
+    weekScopeLabel,
+  ]);
+  const exportButtonLabel =
+    exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
   const columns = useMemo<ColumnsType<ReportTableRow>>(
     () => [
@@ -987,6 +1100,17 @@ export function AcademicAdjustedWorkloadReportLabPage() {
                       {EXTERNAL_TEACHER_ENGAGEMENT_LABEL}
                     </p>
                   </div>
+                  <Button
+                    disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                    icon={<DownloadOutlined />}
+                    loading={exportingExcel}
+                    size="small"
+                    onClick={() => {
+                      void handleExportReportTable();
+                    }}
+                  >
+                    {exportButtonLabel}
+                  </Button>
                 </div>
 
                 <div className="academic-adjusted-workload-report-metrics academic-adjusted-workload-report-query-metrics">
