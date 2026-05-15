@@ -45,6 +45,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
+      '/academic-affairs/external-teacher-compensation',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -62,7 +63,6 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-adjusted-workload-report',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
@@ -90,6 +90,7 @@ describe('navigation catalog', () => {
         '/academic-affairs/staff-semester-profiles',
         '/academic-affairs/academic-workload-report',
         '/academic-affairs/academic-workload-deduction-summary',
+        '/academic-affairs/external-teacher-compensation',
       ],
     );
     expect(
@@ -107,7 +108,6 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-adjusted-workload-report',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
     ]);
@@ -180,13 +180,13 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
-      'labs',
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
+      '/academic-affairs/external-teacher-compensation',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -198,9 +198,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/academic-adjusted-workload-report',
-    ]);
+    expect(findGroup(staffItems, 'labs')).toBeUndefined();
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
         accountId: 1002,
@@ -229,7 +227,7 @@ describe('navigation catalog', () => {
       }),
     ).toBe(true);
     expect(
-      canAccessNavigationPath('/labs/academic-adjusted-workload-report', {
+      canAccessNavigationPath('/academic-affairs/external-teacher-compensation', {
         accountId: 1002,
         primaryAccessGroup: 'STAFF',
         accessGroup: ['STAFF'],
@@ -291,8 +289,11 @@ describe('navigation catalog', () => {
     expect(
       canAccessNavigationPath('/academic-affairs/academic-workload-report', buildFilter()),
     ).toBe(true);
+    expect(
+      canAccessNavigationPath('/academic-affairs/external-teacher-compensation', buildFilter()),
+    ).toBe(true);
     expect(canAccessNavigationPath('/labs/academic-adjusted-workload-report', buildFilter())).toBe(
-      true,
+      false,
     );
     expect(
       canAccessNavigationPath(
@@ -313,6 +314,16 @@ describe('navigation catalog', () => {
     expect(
       canAccessNavigationPath(
         '/academic-affairs/academic-workload-report',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/academic-affairs/external-teacher-compensation',
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
@@ -371,7 +382,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
-      '/labs/academic-adjusted-workload-report',
+      '/academic-affairs/external-teacher-compensation',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/sandbox/playground',

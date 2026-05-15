@@ -22,6 +22,7 @@ import { AcademicWorkloadReportPage } from '@/pages/academic-workload-report';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
 import { ErrorPreviewPage } from '@/pages/error-preview';
+import { ExternalTeacherCompensationPage } from '@/pages/external-teacher-compensation';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { IntegratedPlanCorrectionsPage } from '@/pages/integrated-plan-corrections';
@@ -77,10 +78,6 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  academicAdjustedWorkloadReportLabAccess,
-  loadAcademicAdjustedWorkloadReportLabRouteModule,
-} from '@/labs/academic-adjusted-workload-report';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -537,14 +534,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function academicAdjustedWorkloadReportLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(academicAdjustedWorkloadReportLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  return resolveAcademicWorkloadManagerScope(request);
-}
-
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
   const snapshot = getAuthSessionSnapshot();
@@ -671,6 +660,10 @@ async function academicWorkloadReportPageLoader({ request }: LoaderFunctionArgs)
 }
 
 async function academicWorkloadDeductionSummaryPageLoader({ request }: LoaderFunctionArgs) {
+  return resolveAcademicWorkloadManagerScope(request);
+}
+
+async function externalTeacherCompensationPageLoader({ request }: LoaderFunctionArgs) {
   return resolveAcademicWorkloadManagerScope(request);
 }
 
@@ -978,6 +971,11 @@ const router = createBrowserRouter([
         Component: AcademicWorkloadDeductionSummaryPage,
       },
       {
+        path: '/academic-affairs/external-teacher-compensation',
+        loader: externalTeacherCompensationPageLoader,
+        Component: ExternalTeacherCompensationPage,
+      },
+      {
         path: '/academic-affairs/my-teaching-logs',
         loader: myTeachingLogsPageLoader,
         Component: MyTeachingLogsPage,
@@ -1006,8 +1004,7 @@ const router = createBrowserRouter([
         children: [
           {
             path: 'academic-adjusted-workload-report',
-            loader: academicAdjustedWorkloadReportLabLoader,
-            lazy: loadAcademicAdjustedWorkloadReportLabRouteModule,
+            loader: () => redirect('/academic-affairs/external-teacher-compensation'),
           },
           {
             path: 'academic-workload-deduction-summary',

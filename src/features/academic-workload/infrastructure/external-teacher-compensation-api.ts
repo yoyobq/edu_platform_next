@@ -1,20 +1,15 @@
-// src/labs/academic-adjusted-workload-report/api.ts
+// src/features/academic-workload/infrastructure/external-teacher-compensation-api.ts
 import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-export type AcademicTeacherEngagementType =
-  | 'ADMINISTRATIVE_TEACHING'
-  | 'EXTERNAL_TEACHER'
-  | 'FULL_TIME_TEACHER'
-  | 'PUBLIC_WELFARE_POST';
+import type { AcademicTeacherEngagementType } from './academic-workload-api';
 
-export type AcademicWorkloadDepartmentOption = {
-  departmentName: string;
-  id: string;
-  isEnabled: boolean;
-  shortName: string | null;
-};
+export type {
+  AcademicTeacherEngagementType,
+  AcademicWorkloadDepartmentOption,
+} from './academic-workload-api';
+export { requestAcademicWorkloadDepartmentOptions } from './academic-workload-api';
 
 export type AcademicAdjustedWorkloadReportItem = {
   actualHours: string;
@@ -67,10 +62,6 @@ export type RequestAcademicAdjustedWorkloadReportInput = {
 
 type AcademicAdjustedWorkloadReportResponse = {
   getAcademicAdjustedWorkloadReport: AcademicAdjustedWorkloadReportEnvelope;
-};
-
-type AcademicWorkloadDepartmentOptionsResponse = {
-  departments: AcademicWorkloadDepartmentOption[];
 };
 
 const GET_ACADEMIC_ADJUSTED_WORKLOAD_REPORT_QUERY = `
@@ -126,17 +117,6 @@ const GET_ACADEMIC_ADJUSTED_WORKLOAD_REPORT_QUERY = `
   }
 `;
 
-const ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY = `
-  query AcademicAdjustedWorkloadDepartmentOptions($isEnabled: Boolean, $limit: Int) {
-    departments(isEnabled: $isEnabled, limit: $limit) {
-      departmentName
-      id
-      isEnabled
-      shortName
-    }
-  }
-`;
-
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
@@ -184,24 +164,6 @@ export async function requestAcademicAdjustedWorkloadReport(
         error,
         '暂时无法加载教师调整后工作量报表。',
       ),
-    );
-  }
-}
-
-export async function requestAcademicWorkloadDepartmentOptions() {
-  try {
-    const response = await executeGraphQL<
-      AcademicWorkloadDepartmentOptionsResponse,
-      {
-        isEnabled: boolean;
-        limit: number;
-      }
-    >(ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY, { isEnabled: true, limit: 500 });
-
-    return response.departments;
-  } catch (error) {
-    throw new Error(
-      resolveAcademicAdjustedWorkloadReportErrorMessage(error, '暂时无法加载归口系列表。'),
     );
   }
 }

@@ -1,10 +1,9 @@
-// src/labs/academic-adjusted-workload-report/page.tsx
+// src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
 import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   type AcademicSemesterRecord,
@@ -13,6 +12,20 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import { splitAcademicWorkloadTeachingClassNames } from '../application/teaching-class-format';
+import {
+  buildTeachingWeekMonthMarkValues,
+  buildTeachingWeekOptions,
+  parseAcademicWorkloadIsoDate,
+  pickNextSemesterId,
+  sortSemesters,
+  type TeachingWeekOption,
+} from '../application/workload-baseline';
+import {
+  buildAcademicWorkloadDepartmentSelectOptions,
+  DEFAULT_WORKLOAD_DEPARTMENT_ID,
+  ensureSelectedAcademicWorkloadDepartmentOption,
+} from '../application/workload-department-options';
 import {
   type AcademicAdjustedWorkloadReportEnvelope,
   type AcademicAdjustedWorkloadReportItem,
@@ -20,29 +33,17 @@ import {
   type AcademicWorkloadDepartmentOption,
   requestAcademicAdjustedWorkloadReport,
   requestAcademicWorkloadDepartmentOptions,
-} from './api';
+} from '../infrastructure/external-teacher-compensation-api';
 import {
   exportExternalTeacherCompensationExcel,
   type ExternalTeacherCompensationExcelRow,
-} from './excel-export';
+} from '../infrastructure/external-teacher-compensation-excel-export';
 
-import './page.css';
+import './external-teacher-compensation-page-content.css';
 
-type AcademicAdjustedWorkloadReportLoaderData = {
+export type ExternalTeacherCompensationPageContentProps = {
   canSelectWorkloadDepartment?: boolean;
   defaultWorkloadDepartmentId?: string | null;
-};
-
-type TeachingWeekOption = {
-  endDate: string;
-  label: string;
-  startDate: string;
-  value: number;
-};
-
-type DepartmentSelectOption = {
-  label: string;
-  value: string;
 };
 
 type ReportTableRow = {
@@ -55,11 +56,9 @@ type ReportTableRow = {
   staffTotalActualHours: number;
 };
 
-const DEFAULT_WORKLOAD_DEPARTMENT_ID = 'ORG0302';
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 976;
 const EXPORT_STATUS_RESET_DELAY_MS = 1800;
-const MILLISECONDS_PER_DAY = 86400000;
 
 const ENGAGEMENT_LABELS: Record<AcademicTeacherEngagementType, string> = {
   ADMINISTRATIVE_TEACHING: '行政兼课',
@@ -76,127 +75,12 @@ const TEXT_COLLATOR = new Intl.Collator('zh-Hans-CN', {
   sensitivity: 'base',
 });
 
-function addDays(date: Date, days: number) {
-  return new Date(date.getTime() + days * MILLISECONDS_PER_DAY);
-}
-
-function parseIsoDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
-
-  return new Date(Date.UTC(year, (month || 1) - 1, day || 1));
-}
-
-function formatIsoDate(date: Date) {
-  const year = date.getUTCFullYear();
-  const month = `${date.getUTCMonth() + 1}`.padStart(2, '0');
-  const day = `${date.getUTCDate()}`.padStart(2, '0');
-
-  return `${year}-${month}-${day}`;
-}
-
-function startOfWeek(date: Date) {
-  const weekday = (date.getUTCDay() + 6) % 7;
-
-  return addDays(date, -weekday);
-}
-
-function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
-}
-
-function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection: number | null) {
-  if (currentSelection !== null && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
-}
-
-function buildTeachingWeekOptions(semester: AcademicSemesterRecord | null) {
-  if (!semester) {
-    return [] as TeachingWeekOption[];
-  }
-
-  const firstTeachingWeekStart = startOfWeek(parseIsoDate(semester.firstTeachingDate));
-  const examWeekStart = startOfWeek(parseIsoDate(semester.examStartDate));
-  const lastTeachingWeekStart =
-    examWeekStart.getTime() > firstTeachingWeekStart.getTime()
-      ? addDays(examWeekStart, -7)
-      : firstTeachingWeekStart;
-  const weeks: TeachingWeekOption[] = [];
-
-  for (
-    let cursor = firstTeachingWeekStart, index = 1;
-    cursor.getTime() <= lastTeachingWeekStart.getTime();
-    cursor = addDays(cursor, 7), index += 1
-  ) {
-    weeks.push({
-      endDate: formatIsoDate(addDays(cursor, 6)),
-      label: `第 ${index} 周`,
-      startDate: formatIsoDate(cursor),
-      value: index,
-    });
-  }
-
-  return weeks;
-}
-
-function buildTeachingWeekMonthMarkValues(weeks: readonly TeachingWeekOption[]) {
-  if (weeks.length === 0) {
-    return [] as number[];
-  }
-
-  const firstWeek = weeks[0];
-  const lastWeek = weeks.at(-1);
-
-  if (!lastWeek) {
-    return [] as number[];
-  }
-
-  const firstDate = parseIsoDate(firstWeek.startDate);
-  const lastDate = parseIsoDate(lastWeek.endDate);
-  const monthMarkValues = new Set([firstWeek.value]);
-
-  for (
-    let cursor = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1));
-    cursor.getTime() <= lastDate.getTime();
-    cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1))
-  ) {
-    const monthStartWeek = weeks.find((week) => {
-      const weekStart = parseIsoDate(week.startDate);
-      const weekEnd = parseIsoDate(week.endDate);
-
-      return weekStart.getTime() <= cursor.getTime() && cursor.getTime() <= weekEnd.getTime();
-    });
-
-    if (monthStartWeek) {
-      monthMarkValues.add(monthStartWeek.value);
-    }
-  }
-
-  return weeks.filter((week) => monthMarkValues.has(week.value)).map((week) => week.value);
-}
-
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return TEXT_COLLATOR.compare(first || '', second || '');
 }
 
 function formatShortDate(value: string) {
-  const date = parseIsoDate(value);
+  const date = parseAcademicWorkloadIsoDate(value);
 
   return new Intl.DateTimeFormat('zh-CN', {
     day: 'numeric',
@@ -264,57 +148,6 @@ function formatSignedCompactDecimal(value: string | number | null | undefined) {
   }
 
   return formattedValue;
-}
-
-function splitTeachingClassNames(value: string | null | undefined) {
-  return (value ?? '')
-    .split(/[，,、;；]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function buildDepartmentSelectOptions(records: AcademicWorkloadDepartmentOption[]) {
-  const optionsByValue = new Map<string, DepartmentSelectOption>();
-
-  records.forEach((record) => {
-    const id = record.id.trim();
-
-    if (!id) {
-      return;
-    }
-
-    const name = record.departmentName?.trim() || record.shortName?.trim() || id;
-
-    optionsByValue.set(id, {
-      label: name,
-      value: id,
-    });
-  });
-
-  return Array.from(optionsByValue.values()).sort((left, right) =>
-    left.label.localeCompare(right.label, 'zh-CN'),
-  );
-}
-
-function ensureSelectedDepartmentOption(input: {
-  fallbackLabel: string;
-  options: DepartmentSelectOption[];
-  selectedDepartmentId: string;
-}) {
-  if (
-    !input.selectedDepartmentId ||
-    input.options.some((option) => option.value === input.selectedDepartmentId)
-  ) {
-    return input.options;
-  }
-
-  return [
-    {
-      label: input.fallbackLabel,
-      value: input.selectedDepartmentId,
-    },
-    ...input.options,
-  ];
 }
 
 function formatWeekDateRange(week: TeachingWeekOption | null) {
@@ -462,32 +295,32 @@ function renderMergedCell(children: ReactNode, row: ReportTableRow) {
 
 function getDetailCellClassName(row: ReportTableRow) {
   return row.detailRowIndex % 2 === 0
-    ? 'academic-adjusted-workload-report-detail-cell-even'
-    : 'academic-adjusted-workload-report-detail-cell-odd';
+    ? 'external-teacher-compensation-detail-cell-even'
+    : 'external-teacher-compensation-detail-cell-odd';
 }
 
 function getMarkedDetailCellClassName(row: ReportTableRow, markedRowKeys: ReadonlySet<string>) {
   return [
     getDetailCellClassName(row),
-    markedRowKeys.has(row.key) ? 'academic-adjusted-workload-report-detail-cell-marked' : '',
+    markedRowKeys.has(row.key) ? 'external-teacher-compensation-detail-cell-marked' : '',
   ]
     .filter(Boolean)
     .join(' ');
 }
 
 function renderTeachingClassName(value: string) {
-  const teachingClassNames = splitTeachingClassNames(value);
+  const teachingClassNames = splitAcademicWorkloadTeachingClassNames(value);
 
   if (teachingClassNames.length === 0) {
-    return <span className="academic-adjusted-workload-report-multiline">{EMPTY_TEXT}</span>;
+    return <span className="external-teacher-compensation-multiline">{EMPTY_TEXT}</span>;
   }
 
   return (
     <Tooltip title={value}>
-      <span className="academic-adjusted-workload-report-class-name">
+      <span className="external-teacher-compensation-class-name">
         {teachingClassNames.map((teachingClassName, index) => (
           <span
-            className="academic-adjusted-workload-report-class-name-item"
+            className="external-teacher-compensation-class-name-item"
             key={`${teachingClassName}-${index}`}
           >
             {teachingClassName}
@@ -502,10 +335,10 @@ function renderAdjustmentValue(item: AcademicAdjustedWorkloadReportItem) {
   const numberValue = parseReportNumber(item.adjustmentHours);
   const valueClassName =
     numberValue === null || numberValue === 0
-      ? 'academic-adjusted-workload-report-hour'
+      ? 'external-teacher-compensation-hour'
       : numberValue > 0
-        ? 'academic-adjusted-workload-report-hour academic-adjusted-workload-report-hour-plus'
-        : 'academic-adjusted-workload-report-hour academic-adjusted-workload-report-hour-minus';
+        ? 'external-teacher-compensation-hour external-teacher-compensation-hour-plus'
+        : 'external-teacher-compensation-hour external-teacher-compensation-hour-minus';
 
   return (
     <Tooltip
@@ -523,13 +356,13 @@ function renderReportSummary(totalActualHours: string) {
   return (
     <Table.Summary.Row>
       <Table.Summary.Cell
-        className="academic-adjusted-workload-report-total-label"
+        className="external-teacher-compensation-total-label"
         colSpan={9}
         index={0}
       >
         总实际课时
       </Table.Summary.Cell>
-      <Table.Summary.Cell className="academic-adjusted-workload-report-total-value" index={9}>
+      <Table.Summary.Cell className="external-teacher-compensation-total-value" index={9}>
         {formatCompactDecimal(totalActualHours)}
       </Table.Summary.Cell>
     </Table.Summary.Row>
@@ -573,7 +406,7 @@ function ReportMetric({
 }) {
   return (
     <div
-      className={`academic-adjusted-workload-report-metric academic-adjusted-workload-report-metric-${tone}`}
+      className={`external-teacher-compensation-metric external-teacher-compensation-metric-${tone}`}
     >
       <span>{label}</span>
       <strong>{value}</strong>
@@ -581,11 +414,12 @@ function ReportMetric({
   );
 }
 
-export function AcademicAdjustedWorkloadReportLabPage() {
-  const loaderData =
-    (useLoaderData() as AcademicAdjustedWorkloadReportLoaderData | null | undefined) ?? {};
-  const canSelectWorkloadDepartment = Boolean(loaderData.canSelectWorkloadDepartment);
-  const defaultScopedWorkloadDepartmentId = loaderData.defaultWorkloadDepartmentId?.trim() ?? '';
+export function ExternalTeacherCompensationPageContent({
+  canSelectWorkloadDepartment: rawCanSelectWorkloadDepartment = false,
+  defaultWorkloadDepartmentId = null,
+}: ExternalTeacherCompensationPageContentProps) {
+  const canSelectWorkloadDepartment = Boolean(rawCanSelectWorkloadDepartment);
+  const defaultScopedWorkloadDepartmentId = defaultWorkloadDepartmentId?.trim() ?? '';
   const initialWorkloadDepartmentId = canSelectWorkloadDepartment
     ? DEFAULT_WORKLOAD_DEPARTMENT_ID
     : defaultScopedWorkloadDepartmentId;
@@ -788,9 +622,9 @@ export function AcademicAdjustedWorkloadReportLabPage() {
     teachingWeekCount: teachingWeeks.length,
   });
   const departmentOptions = useMemo(() => {
-    const baseOptions = buildDepartmentSelectOptions(departmentRecords);
+    const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
 
-    return ensureSelectedDepartmentOption({
+    return ensureSelectedAcademicWorkloadDepartmentOption({
       fallbackLabel: canSelectWorkloadDepartment ? '默认归口系' : '当前归口系',
       options: baseOptions,
       selectedDepartmentId: workloadDepartmentId,
@@ -914,8 +748,8 @@ export function AcademicAdjustedWorkloadReportLabPage() {
     (row: ReportTableRow, options: { isMarkStart?: boolean } = {}) => ({
       className: [
         getMarkedDetailCellClassName(row, markedDetailRowKeys),
-        'academic-adjusted-workload-report-markable-cell',
-        options.isMarkStart ? 'academic-adjusted-workload-report-mark-start-cell' : '',
+        'external-teacher-compensation-markable-cell',
+        options.isMarkStart ? 'external-teacher-compensation-mark-start-cell' : '',
       ]
         .filter(Boolean)
         .join(' '),
@@ -986,7 +820,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
         render: (_, row) =>
           renderMergedCell(
             <Tooltip title={formatReportText(row.item.staffId)}>
-              <span className="academic-adjusted-workload-report-staff-name">
+              <span className="external-teacher-compensation-staff-name">
                 {formatReportText(row.item.staffName)}
               </span>
             </Tooltip>,
@@ -1006,7 +840,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
         key: 'courseName',
         onCell: getMarkableDetailCellProps,
         render: (_, row) => (
-          <span className="academic-adjusted-workload-report-course">
+          <span className="external-teacher-compensation-course">
             {formatReportText(row.item.courseName)}
           </span>
         ),
@@ -1050,7 +884,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
         key: 'actualHours',
         onCell: getMarkableDetailCellProps,
         render: (_, row) => (
-          <span className="academic-adjusted-workload-report-hour academic-adjusted-workload-report-hour-primary">
+          <span className="external-teacher-compensation-hour external-teacher-compensation-hour-primary">
             {formatCompactDecimal(row.item.actualHours)}
           </span>
         ),
@@ -1062,7 +896,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
         key: 'staffTotalActualHours',
         render: (_, row) =>
           renderMergedCell(
-            <span className="academic-adjusted-workload-report-total-value">
+            <span className="external-teacher-compensation-total-value">
               {formatCompactDecimal(row.staffTotalActualHours)}
             </span>,
             row,
@@ -1075,24 +909,24 @@ export function AcademicAdjustedWorkloadReportLabPage() {
   );
 
   return (
-    <div className="academic-adjusted-workload-report-page">
+    <div className="external-teacher-compensation-page">
       <DecoratedPageHeader
-        description="按学期课表预算口径与 occurrence 增删课生成预算课时、增删课和实际课时。"
+        description="查看外聘教师在所选学期和教学周范围内的兼课课时，可直接导出结算表。"
         icon={<FileTextOutlined />}
         title="兼职教师兼课金结算表"
       />
 
-      <section className="academic-adjusted-workload-report-panel">
+      <section className="external-teacher-compensation-panel">
         {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
         {departmentError ? <Alert message={departmentError} showIcon type="error" /> : null}
 
         {loadingSemesters ? (
           <Skeleton active paragraph={{ rows: 3 }} />
         ) : (
-          <div className="academic-adjusted-workload-report-query">
+          <div className="external-teacher-compensation-query">
             {reportEnvelope ? (
-              <section className="academic-adjusted-workload-report-overview">
-                <div className="academic-adjusted-workload-report-summary-heading">
+              <section className="external-teacher-compensation-overview">
+                <div className="external-teacher-compensation-summary-heading">
                   <div>
                     <h2>当前报表</h2>
                     <p>
@@ -1100,20 +934,9 @@ export function AcademicAdjustedWorkloadReportLabPage() {
                       {EXTERNAL_TEACHER_ENGAGEMENT_LABEL}
                     </p>
                   </div>
-                  <Button
-                    disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
-                    icon={<DownloadOutlined />}
-                    loading={exportingExcel}
-                    size="small"
-                    onClick={() => {
-                      void handleExportReportTable();
-                    }}
-                  >
-                    {exportButtonLabel}
-                  </Button>
                 </div>
 
-                <div className="academic-adjusted-workload-report-metrics academic-adjusted-workload-report-query-metrics">
+                <div className="external-teacher-compensation-metrics external-teacher-compensation-query-metrics">
                   <ReportMetric label="教师数" value={String(reportEnvelope.total.staffCount)} />
                   <ReportMetric label="课程行" value={String(reportEnvelope.total.itemCount)} />
                   <ReportMetric
@@ -1134,7 +957,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
               </section>
             ) : null}
 
-            <div className="academic-adjusted-workload-report-filters">
+            <div className="external-teacher-compensation-filters">
               <label>
                 <span>学期</span>
                 <Select
@@ -1175,21 +998,23 @@ export function AcademicAdjustedWorkloadReportLabPage() {
                 />
               </label>
 
-              <Button
-                disabled={!canLoadReport}
-                icon={<BarChartOutlined />}
-                type="primary"
-                loading={loadingReport}
-                onClick={() => {
-                  void loadReport();
-                }}
-              >
-                生成报表
-              </Button>
+              <div className="external-teacher-compensation-actions">
+                <Button
+                  disabled={!canLoadReport}
+                  icon={<BarChartOutlined />}
+                  type="primary"
+                  loading={loadingReport}
+                  onClick={() => {
+                    void loadReport();
+                  }}
+                >
+                  生成报表
+                </Button>
+              </div>
             </div>
 
-            <div className="academic-adjusted-workload-report-week-range">
-              <div className="academic-adjusted-workload-report-week-range-header">
+            <div className="external-teacher-compensation-week-range">
+              <div className="external-teacher-compensation-week-range-header">
                 <div>
                   <span>教学周范围</span>
                   <strong>{weekScopeLabel}</strong>
@@ -1225,13 +1050,13 @@ export function AcademicAdjustedWorkloadReportLabPage() {
                 }}
               />
 
-              <div className="academic-adjusted-workload-report-week-range-summary">
-                <div className="academic-adjusted-workload-report-week-boundary">
+              <div className="external-teacher-compensation-week-range-summary">
+                <div className="external-teacher-compensation-week-boundary">
                   <span>起始</span>
                   <strong>{selectedStartWeek?.label ?? '-'}</strong>
                   <small>{formatWeekDateRange(selectedStartWeek)}</small>
                 </div>
-                <div className="academic-adjusted-workload-report-week-boundary">
+                <div className="external-teacher-compensation-week-boundary">
                   <span>范围</span>
                   <strong>
                     {selectedTeachingWeekCount !== null
@@ -1246,7 +1071,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
                         : formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}
                   </small>
                 </div>
-                <div className="academic-adjusted-workload-report-week-boundary">
+                <div className="external-teacher-compensation-week-boundary">
                   <span>结束</span>
                   <strong>{selectedEndWeek?.label ?? '-'}</strong>
                   <small>{formatWeekDateRange(selectedEndWeek)}</small>
@@ -1262,7 +1087,7 @@ export function AcademicAdjustedWorkloadReportLabPage() {
       {loadingReport ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!loadingReport && reportEnvelope ? (
-        <div className="academic-adjusted-workload-report-result">
+        <div className="external-teacher-compensation-result">
           {!reportEnvelope.isValid ? (
             <Alert
               message="报表数据异常"
@@ -1287,17 +1112,32 @@ export function AcademicAdjustedWorkloadReportLabPage() {
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (
-            <div className="academic-adjusted-workload-report-table-shell">
-              <Table<ReportTableRow>
-                columns={columns}
-                dataSource={reportRows}
-                pagination={false}
-                rowKey={(row) => row.key}
-                scroll={{ x: REPORT_TABLE_BASE_WIDTH }}
-                size="small"
-                tableLayout="fixed"
-                summary={() => renderReportSummary(reportEnvelope.total.actualHours)}
-              />
+            <div className="external-teacher-compensation-table-section">
+              <div className="external-teacher-compensation-table-toolbar">
+                <Button
+                  disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                  icon={<DownloadOutlined />}
+                  loading={exportingExcel}
+                  size="small"
+                  onClick={() => {
+                    void handleExportReportTable();
+                  }}
+                >
+                  {exportButtonLabel}
+                </Button>
+              </div>
+              <div className="external-teacher-compensation-table-shell">
+                <Table<ReportTableRow>
+                  columns={columns}
+                  dataSource={reportRows}
+                  pagination={false}
+                  rowKey={(row) => row.key}
+                  scroll={{ x: REPORT_TABLE_BASE_WIDTH }}
+                  size="small"
+                  tableLayout="fixed"
+                  summary={() => renderReportSummary(reportEnvelope.total.actualHours)}
+                />
+              </div>
             </div>
           )}
         </div>

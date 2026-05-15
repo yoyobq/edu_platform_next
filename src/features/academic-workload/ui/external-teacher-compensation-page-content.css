@@ -1,5 +1,5 @@
-/* src/labs/academic-adjusted-workload-report/page.css */
-.academic-adjusted-workload-report-page {
+/* src/features/academic-workload/ui/external-teacher-compensation-page-content.css */
+.external-teacher-compensation-page {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -7,7 +7,7 @@
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-panel {
+.external-teacher-compensation-panel {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius-lg);
@@ -19,7 +19,7 @@
   padding: 16px;
 }
 
-.academic-adjusted-workload-report-query {
+.external-teacher-compensation-query {
   align-items: start;
   display: grid;
   gap: 14px;
@@ -28,7 +28,7 @@
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-overview {
+.external-teacher-compensation-overview {
   align-self: stretch;
   display: flex;
   flex-direction: column;
@@ -39,7 +39,7 @@
   padding-block: 4px;
 }
 
-.academic-adjusted-workload-report-filters {
+.external-teacher-compensation-filters {
   align-items: end;
   align-self: end;
   display: grid;
@@ -48,28 +48,24 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
 }
 
-.academic-adjusted-workload-report-filters label {
+.external-teacher-compensation-filters label {
   display: flex;
   flex-direction: column;
   gap: 6px;
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-filters label > span {
+.external-teacher-compensation-filters label > span {
   color: var(--ant-color-text-secondary);
   font-size: 13px;
   line-height: 1.35;
 }
 
-.academic-adjusted-workload-report-filters :where(.ant-select) {
+.external-teacher-compensation-filters :where(.ant-select) {
   width: 100%;
 }
 
-.academic-adjusted-workload-report-filters :where(.ant-btn) {
-  grid-column: 1 / -1;
-}
-
-.academic-adjusted-workload-report-week-range {
+.external-teacher-compensation-week-range {
   background: var(--ant-color-fill-quaternary);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
@@ -81,7 +77,20 @@
   padding: 12px 14px;
 }
 
-.academic-adjusted-workload-report-week-range-header {
+.external-teacher-compensation-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  grid-column: 1 / -1;
+  justify-content: stretch;
+  min-width: 0;
+}
+
+.external-teacher-compensation-actions :where(.ant-btn) {
+  width: 100%;
+}
+
+.external-teacher-compensation-week-range-header {
   align-items: center;
   display: grid;
   gap: 12px;
@@ -89,28 +98,28 @@
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-week-range-header > div {
+.external-teacher-compensation-week-range-header > div {
   display: flex;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-week-range-header span,
-.academic-adjusted-workload-report-week-boundary span {
+.external-teacher-compensation-week-range-header span,
+.external-teacher-compensation-week-boundary span {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-adjusted-workload-report-week-range-header strong,
-.academic-adjusted-workload-report-week-boundary strong {
+.external-teacher-compensation-week-range-header strong,
+.external-teacher-compensation-week-boundary strong {
   color: var(--ant-color-text);
   font-size: 14px;
   line-height: 1.35;
 }
 
-.academic-adjusted-workload-report-week-range-header :where(.ant-btn) {
+.external-teacher-compensation-week-range-header :where(.ant-btn) {
   align-items: center;
   display: inline-flex;
   flex: 0 0 auto;
@@ -119,18 +128,18 @@
   padding: 0;
 }
 
-.academic-adjusted-workload-report-week-range :where(.ant-slider) {
+.external-teacher-compensation-week-range :where(.ant-slider) {
   margin-block: 4px 14px;
   margin-inline: 8px;
 }
 
-.academic-adjusted-workload-report-week-range-summary {
+.external-teacher-compensation-week-range-summary {
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.academic-adjusted-workload-report-week-boundary {
+.external-teacher-compensation-week-boundary {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius);
@@ -141,7 +150,7 @@
   padding: 6px 8px;
 }
 
-.academic-adjusted-workload-report-week-boundary small {
+.external-teacher-compensation-week-boundary small {
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
@@ -150,7 +159,7 @@
   white-space: nowrap;
 }
 
-.academic-adjusted-workload-report-result {
+.external-teacher-compensation-result {
   display: flex;
   flex-direction: column;
   gap: 18px;
@@ -158,93 +167,108 @@
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-table-shell {
+.external-teacher-compensation-table-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.external-teacher-compensation-table-toolbar {
+  align-items: center;
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.external-teacher-compensation-table-shell {
   max-width: 100%;
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.academic-adjusted-workload-report-table-shell :where(.ant-table-wrapper) {
+.external-teacher-compensation-table-shell :where(.ant-table-wrapper) {
   max-width: 100%;
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-table-shell :where(.ant-table) {
+.external-teacher-compensation-table-shell :where(.ant-table) {
   font-size: 13px;
 }
 
-.academic-adjusted-workload-report-table-shell :where(.ant-table-thead > tr > th) {
+.external-teacher-compensation-table-shell :where(.ant-table-thead > tr > th) {
   font-weight: 500;
   line-height: 1.35;
 }
 
-.academic-adjusted-workload-report-table-shell :where(.ant-table-tbody > tr > td) {
+.external-teacher-compensation-table-shell :where(.ant-table-tbody > tr > td) {
   line-height: 1.35;
   vertical-align: middle;
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr
-  > .academic-adjusted-workload-report-detail-cell-even {
+  > .external-teacher-compensation-detail-cell-even {
   background: var(--ant-color-bg-container);
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr
-  > .academic-adjusted-workload-report-detail-cell-odd {
+  > .external-teacher-compensation-detail-cell-odd {
   background: var(--ant-color-fill-quaternary);
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr:hover
-  > .academic-adjusted-workload-report-detail-cell-even,
-.academic-adjusted-workload-report-table-shell
+  > .external-teacher-compensation-detail-cell-even,
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr:hover
-  > .academic-adjusted-workload-report-detail-cell-odd {
+  > .external-teacher-compensation-detail-cell-odd {
   background: var(--ant-color-fill-secondary);
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr
-  > .academic-adjusted-workload-report-markable-cell {
+  > .external-teacher-compensation-markable-cell {
   cursor: pointer;
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr
-  > .academic-adjusted-workload-report-detail-cell-marked,
-.academic-adjusted-workload-report-table-shell
+  > .external-teacher-compensation-detail-cell-marked,
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr:hover
-  > .academic-adjusted-workload-report-detail-cell-marked {
+  > .external-teacher-compensation-detail-cell-marked {
   background: var(--ant-color-warning-bg);
 }
 
-.academic-adjusted-workload-report-table-shell
+.external-teacher-compensation-table-shell
   .ant-table-tbody
   > tr
-  > .academic-adjusted-workload-report-mark-start-cell.academic-adjusted-workload-report-detail-cell-marked {
+  > .external-teacher-compensation-mark-start-cell.external-teacher-compensation-detail-cell-marked {
   box-shadow: inset 3px 0 0 var(--ant-color-warning);
 }
 
-.academic-adjusted-workload-report-detail-cell-marked .academic-adjusted-workload-report-course {
+.external-teacher-compensation-detail-cell-marked .external-teacher-compensation-course {
   color: var(--ant-color-warning-text-active);
 }
 
-.academic-adjusted-workload-report-table-shell :where(.ant-table-summary > tr > td) {
+.external-teacher-compensation-table-shell :where(.ant-table-summary > tr > td) {
   background: var(--ant-color-fill-tertiary);
   border-top: 1px solid var(--ant-color-border);
   font-weight: 600;
 }
 
-.academic-adjusted-workload-report-summary-heading {
+.external-teacher-compensation-summary-heading {
   align-items: center;
   display: flex;
   gap: 12px;
@@ -252,31 +276,31 @@
   min-width: 0;
 }
 
-.academic-adjusted-workload-report-summary-heading h2 {
+.external-teacher-compensation-summary-heading h2 {
   color: var(--ant-color-text);
   font-size: 18px;
   line-height: 1.35;
   margin: 0;
 }
 
-.academic-adjusted-workload-report-summary-heading p {
+.external-teacher-compensation-summary-heading p {
   color: var(--ant-color-text-secondary);
   font-size: 13px;
   line-height: 1.35;
   margin: 4px 0 0;
 }
 
-.academic-adjusted-workload-report-metrics {
+.external-teacher-compensation-metrics {
   display: grid;
   gap: 10px;
   grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
-.academic-adjusted-workload-report-query-metrics {
+.external-teacher-compensation-query-metrics {
   column-gap: 18px;
 }
 
-.academic-adjusted-workload-report-metric {
+.external-teacher-compensation-metric {
   background: transparent;
   border: 0;
   border-radius: 0;
@@ -287,103 +311,103 @@
   padding: 0;
 }
 
-.academic-adjusted-workload-report-metric span {
+.external-teacher-compensation-metric span {
   color: var(--ant-color-text-secondary);
   font-size: 12px;
   line-height: 1.35;
 }
 
-.academic-adjusted-workload-report-metric strong {
+.external-teacher-compensation-metric strong {
   color: var(--ant-color-text);
   font-size: 22px;
   line-height: 1.25;
 }
 
-.academic-adjusted-workload-report-metric-primary strong,
-.academic-adjusted-workload-report-hour-primary,
-.academic-adjusted-workload-report-total-value {
+.external-teacher-compensation-metric-primary strong,
+.external-teacher-compensation-hour-primary,
+.external-teacher-compensation-total-value {
   color: var(--ant-color-primary);
 }
 
-.academic-adjusted-workload-report-metric-danger strong,
-.academic-adjusted-workload-report-hour-minus {
+.external-teacher-compensation-metric-danger strong,
+.external-teacher-compensation-hour-minus {
   color: var(--ant-color-error);
 }
 
-.academic-adjusted-workload-report-hour-plus {
+.external-teacher-compensation-hour-plus {
   color: var(--ant-color-success);
 }
 
-.academic-adjusted-workload-report-staff-name,
-.academic-adjusted-workload-report-class-name,
-.academic-adjusted-workload-report-course,
-.academic-adjusted-workload-report-multiline {
+.external-teacher-compensation-staff-name,
+.external-teacher-compensation-class-name,
+.external-teacher-compensation-course,
+.external-teacher-compensation-multiline {
   color: var(--ant-color-text);
   line-height: 1.35;
   white-space: pre-line;
   word-break: break-word;
 }
 
-.academic-adjusted-workload-report-class-name {
+.external-teacher-compensation-class-name {
   align-items: flex-start;
   display: flex;
   flex-direction: column;
   gap: 0;
 }
 
-.academic-adjusted-workload-report-class-name-item {
+.external-teacher-compensation-class-name-item {
   display: block;
 }
 
-.academic-adjusted-workload-report-staff-name,
-.academic-adjusted-workload-report-course,
-.academic-adjusted-workload-report-hour,
-.academic-adjusted-workload-report-total-value {
+.external-teacher-compensation-staff-name,
+.external-teacher-compensation-course,
+.external-teacher-compensation-hour,
+.external-teacher-compensation-total-value {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
 }
 
-.academic-adjusted-workload-report-total-label {
+.external-teacher-compensation-total-label {
   color: var(--ant-color-text);
   text-align: center;
 }
 
-.academic-adjusted-workload-report-total-value {
+.external-teacher-compensation-total-value {
   text-align: right;
 }
 
 @media (max-width: 1080px) {
-  .academic-adjusted-workload-report-query,
-  .academic-adjusted-workload-report-filters {
+  .external-teacher-compensation-query,
+  .external-teacher-compensation-filters {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-adjusted-workload-report-overview,
-  .academic-adjusted-workload-report-filters,
-  .academic-adjusted-workload-report-week-range {
+  .external-teacher-compensation-overview,
+  .external-teacher-compensation-filters,
+  .external-teacher-compensation-week-range {
     grid-column: auto;
   }
 
-  .academic-adjusted-workload-report-week-range-header {
+  .external-teacher-compensation-week-range-header {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-adjusted-workload-report-week-range-summary {
+  .external-teacher-compensation-week-range-summary {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .academic-adjusted-workload-report-metrics {
+  .external-teacher-compensation-metrics {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 560px) {
-  .academic-adjusted-workload-report-summary-heading {
+  .external-teacher-compensation-summary-heading {
     align-items: flex-start;
     flex-direction: column;
   }
 
-  .academic-adjusted-workload-report-metrics {
+  .external-teacher-compensation-metrics {
     grid-template-columns: minmax(0, 1fr);
   }
 }

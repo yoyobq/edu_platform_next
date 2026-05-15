@@ -1,4 +1,4 @@
-// src/labs/academic-adjusted-workload-report/api.spec.ts
+// src/features/academic-workload/infrastructure/external-teacher-compensation-api.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, isGraphQLIngressErrorMock } = vi.hoisted(() => ({
@@ -11,12 +11,9 @@ vi.mock('@/shared/graphql', () => ({
   isGraphQLIngressError: isGraphQLIngressErrorMock,
 }));
 
-import {
-  requestAcademicAdjustedWorkloadReport,
-  requestAcademicWorkloadDepartmentOptions,
-} from './api';
+import { requestAcademicAdjustedWorkloadReport } from './external-teacher-compensation-api';
 
-describe('academic adjusted workload report lab api', () => {
+describe('external teacher compensation api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     isGraphQLIngressErrorMock.mockReset();
@@ -126,33 +123,6 @@ describe('academic adjusted workload report lab api', () => {
         teacherEngagementType: undefined,
         workloadDepartmentId: undefined,
       },
-    );
-  });
-
-  it('loads enabled workload department options', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
-      departments: [
-        {
-          departmentName: '计算机系',
-          id: 'D-01',
-          isEnabled: true,
-          shortName: '计科',
-        },
-      ],
-    });
-
-    await expect(requestAcademicWorkloadDepartmentOptions()).resolves.toEqual([
-      {
-        departmentName: '计算机系',
-        id: 'D-01',
-        isEnabled: true,
-        shortName: '计科',
-      },
-    ]);
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('query AcademicAdjustedWorkloadDepartmentOptions'),
-      { isEnabled: true, limit: 500 },
     );
   });
 

@@ -1,5 +1,7 @@
-// src/labs/academic-adjusted-workload-report/excel-export.ts
+// src/features/academic-workload/infrastructure/external-teacher-compensation-excel-export.ts
 import type { Cell, CellValue, Row, Worksheet } from 'exceljs';
+
+import { formatAcademicWorkloadTeachingClassMultiline } from '../application/teaching-class-format';
 
 type RichTextRun = {
   font?: Cell['font'];
@@ -287,17 +289,8 @@ function buildFormulaValue(formula: string, resultValue?: number | string | null
   return result === null ? { formula } : { formula, result };
 }
 
-function splitTeachingClassNames(value: string | null | undefined) {
-  return (value ?? '')
-    .split(/[，,、;；]/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
 function formatTeachingClassExcelValue(value: string) {
-  const teachingClassNames = splitTeachingClassNames(value);
-
-  return teachingClassNames.length === 0 ? EMPTY_TEXT : teachingClassNames.join('\n');
+  return formatAcademicWorkloadTeachingClassMultiline(value, EMPTY_TEXT);
 }
 
 function formatTermNumber(termNumber: number | null) {

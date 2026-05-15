@@ -88,6 +88,16 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileTextOutlined',
+            key: '/academic-affairs/external-teacher-compensation',
+            label: '外聘兼课金',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/external-teacher-compensation',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
         ]
       : []),
   ];
