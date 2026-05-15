@@ -65,18 +65,6 @@
   width: 100%;
 }
 
-.external-teacher-compensation-week-range {
-  background: var(--ant-color-fill-quaternary);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  grid-column: 1 / -1;
-  min-width: 0;
-  padding: 12px 14px;
-}
-
 .external-teacher-compensation-actions {
   align-items: center;
   display: flex;
@@ -88,75 +76,6 @@
 
 .external-teacher-compensation-actions :where(.ant-btn) {
   width: 100%;
-}
-
-.external-teacher-compensation-week-range-header {
-  align-items: center;
-  display: grid;
-  gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  min-width: 0;
-}
-
-.external-teacher-compensation-week-range-header > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.external-teacher-compensation-week-range-header span,
-.external-teacher-compensation-week-boundary span {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.external-teacher-compensation-week-range-header strong,
-.external-teacher-compensation-week-boundary strong {
-  color: var(--ant-color-text);
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.external-teacher-compensation-week-range-header :where(.ant-btn) {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 20px;
-  line-height: 1.35;
-  padding: 0;
-}
-
-.external-teacher-compensation-week-range :where(.ant-slider) {
-  margin-block: 4px 14px;
-  margin-inline: 8px;
-}
-
-.external-teacher-compensation-week-range-summary {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.external-teacher-compensation-week-boundary {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 8px;
-}
-
-.external-teacher-compensation-week-boundary small {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .external-teacher-compensation-result {
@@ -383,17 +302,8 @@
   }
 
   .external-teacher-compensation-overview,
-  .external-teacher-compensation-filters,
-  .external-teacher-compensation-week-range {
+  .external-teacher-compensation-filters {
     grid-column: auto;
-  }
-
-  .external-teacher-compensation-week-range-header {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .external-teacher-compensation-week-range-summary {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .external-teacher-compensation-metrics {

@@ -1,8 +1,7 @@
 // src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
-import type { SliderSingleProps } from 'antd';
-import { Alert, Button, Empty, Select, Skeleton, Slider, Table, Tooltip } from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Table, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -14,12 +13,9 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import { splitAcademicWorkloadTeachingClassNames } from '../application/teaching-class-format';
 import {
-  buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
-  parseAcademicWorkloadIsoDate,
   pickNextSemesterId,
   sortSemesters,
-  type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
   buildAcademicWorkloadDepartmentSelectOptions,
@@ -38,6 +34,13 @@ import {
   exportExternalTeacherCompensationExcel,
   type ExternalTeacherCompensationExcelRow,
 } from '../infrastructure/external-teacher-compensation-excel-export';
+
+import { TeachingWeekRangeControl } from './teaching-week-range-control';
+import {
+  formatTeachingWeekDateSpan,
+  type TeachingWeekRangeState,
+  useTeachingWeekRange,
+} from './teaching-week-range-state';
 
 import './external-teacher-compensation-page-content.css';
 
@@ -77,16 +80,6 @@ const TEXT_COLLATOR = new Intl.Collator('zh-Hans-CN', {
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return TEXT_COLLATOR.compare(first || '', second || '');
-}
-
-function formatShortDate(value: string) {
-  const date = parseAcademicWorkloadIsoDate(value);
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: 'numeric',
-    month: 'numeric',
-    timeZone: 'UTC',
-  }).format(date);
 }
 
 function formatReportText(value: string | number | null | undefined) {
@@ -150,57 +143,19 @@ function formatSignedCompactDecimal(value: string | number | null | undefined) {
   return formattedValue;
 }
 
-function formatWeekDateRange(week: TeachingWeekOption | null) {
-  if (!week) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(week.startDate)} - ${formatShortDate(week.endDate)}`;
-}
-
-function formatTeachingWeekDateSpan(
-  startWeek: TeachingWeekOption | null,
-  endWeek: TeachingWeekOption | null,
-) {
-  if (!startWeek || !endWeek) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(startWeek.startDate)} - ${formatShortDate(endWeek.endDate)}`;
-}
-
-function resolveWeekScopeLabel(input: {
-  endWeek: TeachingWeekOption | null;
-  isFullTeachingWeekRange: boolean;
-  startWeek: TeachingWeekOption | null;
-}) {
-  if (input.isFullTeachingWeekRange) {
+function resolveWeekScopeLabel(range: TeachingWeekRangeState) {
+  if (range.isFullTeachingWeekRange) {
     return '整学期';
   }
 
-  if (!input.startWeek) {
+  if (!range.selectedStartWeek) {
     return '未选择';
   }
-  if (!input.endWeek || input.startWeek.value === input.endWeek.value) {
-    return input.startWeek.label;
+  if (!range.selectedEndWeek || range.selectedStartWeek.value === range.selectedEndWeek.value) {
+    return range.selectedStartWeek.label;
   }
 
-  return `${input.startWeek.label} - ${input.endWeek.label}`;
-}
-
-function resolveSelectedTeachingWeekCount(input: {
-  endWeekIndex: number | null;
-  isFullTeachingWeekRange: boolean;
-  startWeekIndex: number | null;
-  teachingWeekCount: number;
-}) {
-  if (input.isFullTeachingWeekRange) {
-    return input.teachingWeekCount || null;
-  }
-
-  return input.startWeekIndex !== null && input.endWeekIndex !== null
-    ? input.endWeekIndex - input.startWeekIndex + 1
-    : null;
+  return `${range.selectedStartWeek.label} - ${range.selectedEndWeek.label}`;
 }
 
 function compareReportItems(
@@ -432,8 +387,6 @@ export function ExternalTeacherCompensationPageContent({
     [],
   );
   const [workloadDepartmentId, setWorkloadDepartmentId] = useState(initialWorkloadDepartmentId);
-  const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
-  const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -563,63 +516,8 @@ export function ExternalTeacherCompensationPageContent({
     () => buildTeachingWeekOptions(selectedSemester),
     [selectedSemester],
   );
-
-  useEffect(() => {
-    const firstWeek = teachingWeeks[0]?.value ?? null;
-    const lastWeek = teachingWeeks.at(-1)?.value ?? null;
-
-    setSelectedWeekStart((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return firstWeek;
-    });
-    setSelectedWeekEnd((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return lastWeek;
-    });
-  }, [teachingWeeks]);
-
-  const selectedStartWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekStart) ?? null,
-    [selectedWeekStart, teachingWeeks],
-  );
-  const selectedEndWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekEnd) ?? null,
-    [selectedWeekEnd, teachingWeeks],
-  );
-  const firstTeachingWeekValue = teachingWeeks[0]?.value ?? null;
-  const lastTeachingWeekValue = teachingWeeks.at(-1)?.value ?? null;
-  const weekRangeSliderValue: [number, number] | undefined =
-    firstTeachingWeekValue !== null && lastTeachingWeekValue !== null
-      ? [selectedWeekStart ?? firstTeachingWeekValue, selectedWeekEnd ?? lastTeachingWeekValue]
-      : undefined;
-  const isFullTeachingWeekRange =
-    selectedWeekStart !== null &&
-    selectedWeekEnd !== null &&
-    selectedWeekStart === firstTeachingWeekValue &&
-    selectedWeekEnd === lastTeachingWeekValue;
-  const weekRangeMarks = useMemo<SliderSingleProps['marks']>(() => {
-    if (firstTeachingWeekValue === null || lastTeachingWeekValue === null) {
-      return undefined;
-    }
-
-    return buildTeachingWeekMonthMarkValues(teachingWeeks).reduce<
-      NonNullable<SliderSingleProps['marks']>
-    >((marks, week) => {
-      marks[week] = String(week);
-      return marks;
-    }, {});
-  }, [firstTeachingWeekValue, lastTeachingWeekValue, teachingWeeks]);
-  const selectedTeachingWeekCount = resolveSelectedTeachingWeekCount({
-    endWeekIndex: selectedWeekEnd,
-    isFullTeachingWeekRange,
-    startWeekIndex: selectedWeekStart,
-    teachingWeekCount: teachingWeeks.length,
+  const teachingWeekRange = useTeachingWeekRange(teachingWeeks, {
+    onRangeChange: invalidateReport,
   });
   const departmentOptions = useMemo(() => {
     const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
@@ -635,11 +533,7 @@ export function ExternalTeacherCompensationPageContent({
     (workloadDepartmentId || '全部归口系');
   const semesterLabel =
     selectedSemester?.name ?? (selectedSemesterId ? `学期 ${selectedSemesterId}` : '未选择学期');
-  const weekScopeLabel = resolveWeekScopeLabel({
-    endWeek: selectedEndWeek,
-    isFullTeachingWeekRange,
-    startWeek: selectedStartWeek,
-  });
+  const weekScopeLabel = resolveWeekScopeLabel(teachingWeekRange);
   const reportRows = useMemo(
     () => buildReportRows(reportEnvelope?.items ?? []),
     [reportEnvelope?.items],
@@ -647,29 +541,36 @@ export function ExternalTeacherCompensationPageContent({
   const canLoadReport =
     Boolean(selectedSemesterId) &&
     (canSelectWorkloadDepartment || Boolean(workloadDepartmentId)) &&
-    selectedWeekStart !== null &&
-    selectedWeekEnd !== null;
+    teachingWeekRange.selectedWeekStart !== null &&
+    teachingWeekRange.selectedWeekEnd !== null;
 
   const resolveWeekRequestInput = useCallback(() => {
-    if (isFullTeachingWeekRange) {
+    if (teachingWeekRange.isFullTeachingWeekRange) {
       return {};
     }
 
-    if (selectedWeekStart === null || selectedWeekEnd === null) {
+    if (
+      teachingWeekRange.selectedWeekStart === null ||
+      teachingWeekRange.selectedWeekEnd === null
+    ) {
       throw new Error('请选择教学周范围。');
     }
 
-    if (selectedWeekStart === selectedWeekEnd) {
+    if (teachingWeekRange.selectedWeekStart === teachingWeekRange.selectedWeekEnd) {
       return {
-        startWeekIndex: selectedWeekStart,
+        startWeekIndex: teachingWeekRange.selectedWeekStart,
       };
     }
 
     return {
-      endWeekIndex: selectedWeekEnd,
-      startWeekIndex: selectedWeekStart,
+      endWeekIndex: teachingWeekRange.selectedWeekEnd,
+      startWeekIndex: teachingWeekRange.selectedWeekStart,
     };
-  }, [isFullTeachingWeekRange, selectedWeekEnd, selectedWeekStart]);
+  }, [
+    teachingWeekRange.isFullTeachingWeekRange,
+    teachingWeekRange.selectedWeekEnd,
+    teachingWeekRange.selectedWeekStart,
+  ]);
 
   const loadReport = useCallback(async () => {
     if (!selectedSemesterId) {
@@ -700,9 +601,7 @@ export function ExternalTeacherCompensationPageContent({
       }
     } catch (error) {
       if (latestRequestIdRef.current === requestId) {
-        setReportError(
-          error instanceof Error ? error.message : '暂时无法加载教师调整后工作量报表。',
-        );
+        setReportError(error instanceof Error ? error.message : '暂时无法加载外聘兼课金结算表。');
       }
     } finally {
       if (latestRequestIdRef.current === requestId) {
@@ -724,12 +623,6 @@ export function ExternalTeacherCompensationPageContent({
     hasAutoLoadedReportRef.current = true;
     void loadReport();
   }, [canLoadReport, loadReport, loadingSemesters]);
-
-  const handleResetWeekRange = () => {
-    invalidateReport();
-    setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
-    setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
-  };
 
   const toggleDetailMark = useCallback((rowKey: string) => {
     setMarkedDetailRowKeys((currentKeys) => {
@@ -767,10 +660,10 @@ export function ExternalTeacherCompensationPageContent({
     try {
       await exportExternalTeacherCompensationExcel({
         dateRange:
-          selectedStartWeek && selectedEndWeek
+          teachingWeekRange.selectedStartWeek && teachingWeekRange.selectedEndWeek
             ? {
-                endDate: selectedEndWeek.endDate,
-                startDate: selectedStartWeek.startDate,
+                endDate: teachingWeekRange.selectedEndWeek.endDate,
+                startDate: teachingWeekRange.selectedStartWeek.startDate,
               }
             : null,
         departmentName: selectedDepartmentLabel,
@@ -796,11 +689,11 @@ export function ExternalTeacherCompensationPageContent({
     reportEnvelope,
     reportRows,
     selectedDepartmentLabel,
-    selectedEndWeek,
     selectedSemester,
-    selectedStartWeek,
     semesterLabel,
     setTemporaryExportStatus,
+    teachingWeekRange.selectedEndWeek,
+    teachingWeekRange.selectedStartWeek,
     weekScopeLabel,
   ]);
   const exportButtonLabel =
@@ -1013,71 +906,24 @@ export function ExternalTeacherCompensationPageContent({
               </div>
             </div>
 
-            <div className="external-teacher-compensation-week-range">
-              <div className="external-teacher-compensation-week-range-header">
-                <div>
-                  <span>教学周范围</span>
-                  <strong>{weekScopeLabel}</strong>
-                </div>
-                <Button
-                  disabled={teachingWeeks.length === 0 || isFullTeachingWeekRange}
-                  size="small"
-                  type="link"
-                  onClick={handleResetWeekRange}
-                >
-                  全学期
-                </Button>
-              </div>
-
-              <Slider
-                disabled={!weekRangeSliderValue}
-                marks={weekRangeMarks}
-                max={lastTeachingWeekValue ?? 1}
-                min={firstTeachingWeekValue ?? 1}
-                range={{ draggableTrack: true }}
-                tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
-                value={weekRangeSliderValue}
-                onChange={(nextValue: number | number[]) => {
-                  if (!Array.isArray(nextValue)) {
-                    return;
-                  }
-
-                  const [nextStart, nextEnd] = nextValue;
-
-                  invalidateReport();
-                  setSelectedWeekStart(nextStart ?? null);
-                  setSelectedWeekEnd(nextEnd ?? null);
-                }}
-              />
-
-              <div className="external-teacher-compensation-week-range-summary">
-                <div className="external-teacher-compensation-week-boundary">
-                  <span>起始</span>
-                  <strong>{selectedStartWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedStartWeek)}</small>
-                </div>
-                <div className="external-teacher-compensation-week-boundary">
-                  <span>范围</span>
-                  <strong>
-                    {selectedTeachingWeekCount !== null
-                      ? `已选 ${selectedTeachingWeekCount} 周`
-                      : '-'}
-                  </strong>
-                  <small>
-                    {isFullTeachingWeekRange
-                      ? '不传周范围，后端按整学期统计'
-                      : selectedWeekStart === selectedWeekEnd
-                        ? '只传 startWeekIndex，后端按单周处理'
-                        : formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}
-                  </small>
-                </div>
-                <div className="external-teacher-compensation-week-boundary">
-                  <span>结束</span>
-                  <strong>{selectedEndWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedEndWeek)}</small>
-                </div>
-              </div>
-            </div>
+            <TeachingWeekRangeControl
+              range={teachingWeekRange}
+              rangeDescription={
+                teachingWeekRange.isFullTeachingWeekRange
+                  ? '按整学期统计'
+                  : teachingWeekRange.selectedWeekStart === teachingWeekRange.selectedWeekEnd
+                    ? '按单周统计'
+                    : formatTeachingWeekDateSpan(
+                        teachingWeekRange.selectedStartWeek,
+                        teachingWeekRange.selectedEndWeek,
+                      )
+              }
+              resetDisabled={
+                teachingWeekRange.teachingWeeks.length === 0 ||
+                teachingWeekRange.isFullTeachingWeekRange
+              }
+              valueLabel={weekScopeLabel}
+            />
           </div>
         )}
       </section>
@@ -1108,7 +954,7 @@ export function ExternalTeacherCompensationPageContent({
 
           {reportRows.length === 0 ? (
             <Empty
-              description="当前条件下没有调整后工作量报表数据。"
+              description="当前条件下没有外聘兼课金数据。"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (
@@ -1145,8 +991,8 @@ export function ExternalTeacherCompensationPageContent({
 
       {!loadingReport && !reportEnvelope && selectedSemesterId ? (
         <Alert
-          message="选择条件后生成调整后工作量报表"
-          description="周学时、周数、预算课时按课表预算口径；增删课按 occurrence 真源；实际课时为预算课时加 planned 增删课。"
+          message="选择条件后生成外聘兼课金结算表"
+          description="可按学期和教学周范围查看外聘教师兼课课时，确认后直接导出结算表。"
           showIcon
           type="info"
         />

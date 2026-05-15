@@ -48,89 +48,6 @@
   line-height: 1.35;
 }
 
-.academic-workload-week-range {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius-lg);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px 16px 12px;
-}
-
-.academic-workload-week-range-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.academic-workload-week-range-header > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.academic-workload-week-range-header :where(.ant-btn) {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 20px;
-  line-height: 1.35;
-  padding: 0;
-}
-
-.academic-workload-week-range :where(.ant-slider) {
-  margin-block: 4px 14px;
-  margin-inline: 8px;
-}
-
-.academic-workload-week-range-summary {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.9fr);
-}
-
-.academic-workload-week-boundary {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
-  column-gap: 8px;
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  min-width: 0;
-  padding: 6px 8px;
-  row-gap: 1px;
-}
-
-.academic-workload-week-boundary-label {
-  align-self: center;
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  grid-row: 1 / span 2;
-  line-height: 1.35;
-}
-
-.academic-workload-week-boundary small {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  line-height: 1.35;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.academic-workload-week-boundary strong {
-  color: var(--ant-color-text);
-  font-size: 14px;
-  line-height: 1.35;
-  min-width: 0;
-}
-
 .academic-workload-query-actions {
   display: grid;
   min-height: 32px;
@@ -157,10 +74,6 @@
 
 @media (max-width: 760px) {
   .academic-workload-query-layout {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .academic-workload-week-range-summary {
     grid-template-columns: minmax(0, 1fr);
   }
 }

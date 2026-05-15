@@ -1,0 +1,108 @@
+/* src/features/academic-workload/ui/teaching-week-range-control.css */
+.academic-workload-teaching-week-range {
+  background: var(--ant-color-fill-quaternary);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 12px 14px;
+}
+
+.academic-workload-teaching-week-range-card {
+  background: var(--ant-color-bg-container);
+  border-radius: var(--ant-border-radius-lg);
+  grid-column: auto;
+  padding: 14px 16px 12px;
+}
+
+.academic-workload-teaching-week-range-header {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.academic-workload-teaching-week-range-header > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.academic-workload-teaching-week-range-header span,
+.academic-workload-teaching-week-boundary span {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.academic-workload-teaching-week-range-header strong,
+.academic-workload-teaching-week-boundary strong {
+  color: var(--ant-color-text);
+  font-size: 14px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.academic-workload-teaching-week-range-header :where(.ant-btn) {
+  align-items: center;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 20px;
+  line-height: 1.35;
+  padding: 0;
+}
+
+.academic-workload-teaching-week-range :where(.ant-slider) {
+  margin-block: 4px 14px;
+  margin-inline: 8px;
+}
+
+.academic-workload-teaching-week-range-summary {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.academic-workload-teaching-week-boundary {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+}
+
+.academic-workload-teaching-week-range-card .academic-workload-teaching-week-boundary {
+  column-gap: 8px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  row-gap: 1px;
+}
+
+.academic-workload-teaching-week-range-card .academic-workload-teaching-week-boundary span {
+  align-self: center;
+  grid-row: 1 / span 2;
+}
+
+.academic-workload-teaching-week-boundary small {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .academic-workload-teaching-week-range-summary {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

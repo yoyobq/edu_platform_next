@@ -1,7 +1,6 @@
 // src/features/academic-workload/ui/academic-workload-page-content.tsx
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CarryOutOutlined } from '@ant-design/icons';
-import type { SliderSingleProps } from 'antd';
 import {
   Alert,
   Button,
@@ -9,7 +8,6 @@ import {
   Empty,
   Select,
   Skeleton,
-  Slider,
   Table,
   Tag,
   Tooltip,
@@ -38,16 +36,13 @@ import {
 import {
   type AcademicWorkloadTableViewFilter,
   buildAcademicWorkloadRangeSummary,
-  buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
   formatHours,
-  formatTeachingWeekRange,
   parseAcademicWorkloadIsoDate,
   pickNextSemesterId,
   resolveOccurrenceHourHundredths,
   resolvePeriodCount,
   sortSemesters,
-  type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
   type AcademicStableWorkloadCalcEffect,
@@ -56,6 +51,9 @@ import {
   requestAcademicStableWorkloadOccurrences,
   requestMyAcademicStableWorkloadOccurrences,
 } from '../infrastructure/academic-workload-api';
+
+import { TeachingWeekRangeControl } from './teaching-week-range-control';
+import { formatTeachingWeekRangeLabel, useTeachingWeekRange } from './teaching-week-range-state';
 
 import './academic-workload-page-content.css';
 
@@ -100,35 +98,6 @@ function formatLongDate(value: string) {
   return formattedValue.replace(/日(?=\S)/, '日 ');
 }
 
-function formatShortDate(value: string) {
-  const date = parseAcademicWorkloadIsoDate(value);
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: 'numeric',
-    month: 'numeric',
-    timeZone: 'UTC',
-  }).format(date);
-}
-
-function formatWeekDateRange(week: TeachingWeekOption | null) {
-  if (!week) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(week.startDate)} - ${formatShortDate(week.endDate)}`;
-}
-
-function formatTeachingWeekDateSpan(
-  startWeek: TeachingWeekOption | null,
-  endWeek: TeachingWeekOption | null,
-) {
-  if (!startWeek || !endWeek) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(startWeek.startDate)} - ${formatShortDate(endWeek.endDate)}`;
-}
-
 function resolveOccurrenceHours(item: AcademicStableWorkloadOccurrence) {
   return resolveOccurrenceHourHundredths(item);
 }
@@ -171,8 +140,6 @@ export function AcademicWorkloadPageContent({
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [staffId, setStaffId] = useState(defaultStaffId ?? '');
-  const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
-  const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
   const [tableViewFilter, setTableViewFilter] = useState<AcademicWorkloadTableViewFilter>('all');
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingOccurrences, setLoadingOccurrences] = useState(false);
@@ -314,26 +281,7 @@ export function AcademicWorkloadPageContent({
     () => buildTeachingWeekOptions(selectedSemester),
     [selectedSemester],
   );
-
-  useEffect(() => {
-    const firstWeek = teachingWeeks[0]?.value ?? null;
-    const lastWeek = teachingWeeks.at(-1)?.value ?? null;
-
-    setSelectedWeekStart((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return firstWeek;
-    });
-    setSelectedWeekEnd((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return lastWeek;
-    });
-  }, [teachingWeeks]);
+  const teachingWeekRange = useTeachingWeekRange(teachingWeeks);
 
   useEffect(() => {
     latestOccurrenceRequestIdRef.current += 1;
@@ -343,21 +291,7 @@ export function AcademicWorkloadPageContent({
     setLoadingOccurrences(false);
   }, [canManageWorkload, normalizedStaffId, selectedSemesterId]);
 
-  const selectedStartWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekStart) ?? null,
-    [selectedWeekStart, teachingWeeks],
-  );
-  const selectedEndWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekEnd) ?? null,
-    [selectedWeekEnd, teachingWeeks],
-  );
-
-  const effectiveRangeStart = selectedWeekStart ?? selectedEndWeek?.value ?? null;
-  const effectiveRangeEnd = selectedWeekEnd ?? selectedWeekStart ?? null;
-  const selectedTeachingWeekCount =
-    effectiveRangeStart !== null && effectiveRangeEnd !== null
-      ? effectiveRangeEnd - effectiveRangeStart + 1
-      : null;
+  const { effectiveRangeEnd, effectiveRangeStart } = teachingWeekRange;
 
   const workloadRangeSummary = useMemo(
     () =>
@@ -384,28 +318,7 @@ export function AcademicWorkloadPageContent({
   } = workloadRangeSummary;
 
   const ineffectiveRangeCount = ineffectiveRangeOccurrences.length;
-  const firstTeachingWeekValue = teachingWeeks[0]?.value ?? null;
-  const lastTeachingWeekValue = teachingWeeks.at(-1)?.value ?? null;
-  const weekRangeSliderValue: [number, number] | undefined =
-    firstTeachingWeekValue !== null && lastTeachingWeekValue !== null
-      ? [selectedWeekStart ?? firstTeachingWeekValue, selectedWeekEnd ?? lastTeachingWeekValue]
-      : undefined;
-  const weekRangeMarks = useMemo<SliderSingleProps['marks']>(() => {
-    if (firstTeachingWeekValue === null || lastTeachingWeekValue === null) {
-      return undefined;
-    }
-
-    const markedWeeks = buildTeachingWeekMonthMarkValues(teachingWeeks);
-
-    return markedWeeks.reduce<NonNullable<SliderSingleProps['marks']>>((marks, week) => {
-      marks[week] = String(week);
-      return marks;
-    }, {});
-  }, [firstTeachingWeekValue, lastTeachingWeekValue, teachingWeeks]);
-  const isFullTeachingWeekRange =
-    firstTeachingWeekValue === null ||
-    lastTeachingWeekValue === null ||
-    (effectiveRangeStart === firstTeachingWeekValue && effectiveRangeEnd === lastTeachingWeekValue);
+  const isFullTeachingWeekRange = teachingWeekRange.isFullTeachingWeekRange;
   const workloadFormulaTitle = isFullTeachingWeekRange ? '整学期' : '当前范围';
   const workloadStaffName = occurrenceEnvelope?.items[0]?.staffName || normalizedStaffId;
   const handleCalculate = useCallback(async () => {
@@ -441,11 +354,6 @@ export function AcademicWorkloadPageContent({
       }
     }
   }, [canManageWorkload, normalizedStaffId, selectedSemesterId]);
-
-  const handleResetRange = useCallback(() => {
-    setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
-    setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
-  }, [teachingWeeks]);
 
   const columns = useMemo<ColumnsType<AcademicStableWorkloadOccurrence>>(
     () => [
@@ -540,63 +448,7 @@ export function AcademicWorkloadPageContent({
           {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
 
           <div className="academic-workload-query-layout">
-            <div className="academic-workload-week-range">
-              <div className="academic-workload-week-range-header">
-                <div>
-                  <span className="academic-workload-field-label">教学周范围</span>
-                </div>
-                <Button
-                  disabled={teachingWeeks.length === 0}
-                  size="small"
-                  type="link"
-                  onClick={handleResetRange}
-                >
-                  全学期
-                </Button>
-              </div>
-
-              <Slider
-                disabled={!weekRangeSliderValue}
-                marks={weekRangeMarks}
-                max={lastTeachingWeekValue ?? 1}
-                min={firstTeachingWeekValue ?? 1}
-                range={{ draggableTrack: true }}
-                tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
-                value={weekRangeSliderValue}
-                onChange={(nextValue: number | number[]) => {
-                  if (!Array.isArray(nextValue)) {
-                    return;
-                  }
-
-                  const [nextStart, nextEnd] = nextValue;
-
-                  setSelectedWeekStart(nextStart ?? null);
-                  setSelectedWeekEnd(nextEnd ?? null);
-                }}
-              />
-
-              <div className="academic-workload-week-range-summary">
-                <div className="academic-workload-week-boundary">
-                  <span className="academic-workload-week-boundary-label">起始</span>
-                  <strong>{selectedStartWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedStartWeek)}</small>
-                </div>
-                <div className="academic-workload-week-boundary">
-                  <span className="academic-workload-week-boundary-label">范围</span>
-                  <strong>
-                    {selectedTeachingWeekCount !== null
-                      ? `已选 ${selectedTeachingWeekCount} 周`
-                      : '-'}
-                  </strong>
-                  <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
-                </div>
-                <div className="academic-workload-week-boundary">
-                  <span className="academic-workload-week-boundary-label">结束</span>
-                  <strong>{selectedEndWeek?.label ?? '-'}</strong>
-                  <small>{formatWeekDateRange(selectedEndWeek)}</small>
-                </div>
-              </div>
-            </div>
+            <TeachingWeekRangeControl range={teachingWeekRange} variant="card" />
 
             <div className="academic-workload-query-main">
               <div className="academic-workload-query-fields">
@@ -689,7 +541,7 @@ export function AcademicWorkloadPageContent({
                 <Tag color="blue">{workloadStaffName}</Tag>
               </div>
               <Typography.Text type="secondary">
-                {formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}
+                {formatTeachingWeekRangeLabel(teachingWeekRange)}
               </Typography.Text>
 
               <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(160px,1fr)_auto_minmax(160px,1fr)_auto_minmax(160px,1fr)_auto_minmax(160px,1fr)]">

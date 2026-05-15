@@ -1,8 +1,7 @@
 // src/features/academic-workload/ui/academic-workload-report-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
-import type { SliderSingleProps } from 'antd';
-import { Alert, Button, Empty, Select, Skeleton, Slider, Space, Table, Tabs, Tooltip } from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -23,13 +22,9 @@ import {
   splitAcademicWorkloadTeachingClassNames,
 } from '../application/teaching-class-format';
 import {
-  buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
-  formatTeachingWeekRange,
-  parseAcademicWorkloadIsoDate,
   pickNextSemesterId,
   sortSemesters,
-  type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
   buildAcademicWorkloadDepartmentSelectOptions,
@@ -47,6 +42,9 @@ import {
   type AcademicWorkloadReportExcelRow,
   exportAcademicWorkloadReportExcel,
 } from '../infrastructure/academic-workload-report-excel-export';
+
+import { TeachingWeekRangeControl } from './teaching-week-range-control';
+import { formatTeachingWeekRangeLabel, useTeachingWeekRange } from './teaching-week-range-state';
 
 import './academic-workload-report-page-content.css';
 
@@ -70,35 +68,6 @@ const REPORT_TABLE_BASE_WIDTH = 856;
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return (first || '').localeCompare(second || '', 'zh-Hans-CN');
-}
-
-function formatShortDate(value: string) {
-  const date = parseAcademicWorkloadIsoDate(value);
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    day: 'numeric',
-    month: 'numeric',
-    timeZone: 'UTC',
-  }).format(date);
-}
-
-function formatWeekDateRange(week: TeachingWeekOption | null) {
-  if (!week) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(week.startDate)} - ${formatShortDate(week.endDate)}`;
-}
-
-function formatTeachingWeekDateSpan(
-  startWeek: TeachingWeekOption | null,
-  endWeek: TeachingWeekOption | null,
-) {
-  if (!startWeek || !endWeek) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(startWeek.startDate)} - ${formatShortDate(endWeek.endDate)}`;
 }
 
 function formatReportText(value: string | number | null | undefined) {
@@ -341,8 +310,6 @@ export function AcademicWorkloadReportPageContent({
   const latestRequestIdRef = useRef(0);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
-  const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
   const [workloadDepartmentId, setWorkloadDepartmentId] = useState(initialWorkloadDepartmentId);
   const [departmentRecords, setDepartmentRecords] = useState<AcademicWorkloadDepartmentOption[]>(
     [],
@@ -475,61 +442,14 @@ export function AcademicWorkloadReportPageContent({
     () => buildTeachingWeekOptions(selectedSemester),
     [selectedSemester],
   );
-
-  useEffect(() => {
-    const firstWeek = teachingWeeks[0]?.value ?? null;
-    const lastWeek = teachingWeeks.at(-1)?.value ?? null;
-
-    setSelectedWeekStart((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return firstWeek;
-    });
-    setSelectedWeekEnd((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return lastWeek;
-    });
-  }, [teachingWeeks]);
+  const teachingWeekRange = useTeachingWeekRange(teachingWeeks, {
+    onRangeChange: invalidateReport,
+  });
 
   useEffect(() => {
     invalidateReport();
   }, [invalidateReport, selectedSemesterId]);
 
-  const selectedStartWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekStart) ?? null,
-    [selectedWeekStart, teachingWeeks],
-  );
-  const selectedEndWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekEnd) ?? null,
-    [selectedWeekEnd, teachingWeeks],
-  );
-  const firstTeachingWeekValue = teachingWeeks[0]?.value ?? null;
-  const lastTeachingWeekValue = teachingWeeks.at(-1)?.value ?? null;
-  const weekRangeSliderValue: [number, number] | undefined =
-    firstTeachingWeekValue !== null && lastTeachingWeekValue !== null
-      ? [selectedWeekStart ?? firstTeachingWeekValue, selectedWeekEnd ?? lastTeachingWeekValue]
-      : undefined;
-  const weekRangeMarks = useMemo<SliderSingleProps['marks']>(() => {
-    if (firstTeachingWeekValue === null || lastTeachingWeekValue === null) {
-      return undefined;
-    }
-
-    return buildTeachingWeekMonthMarkValues(teachingWeeks).reduce<
-      NonNullable<SliderSingleProps['marks']>
-    >((marks, week) => {
-      marks[week] = String(week);
-      return marks;
-    }, {});
-  }, [firstTeachingWeekValue, lastTeachingWeekValue, teachingWeeks]);
-  const selectedTeachingWeekCount =
-    selectedWeekStart !== null && selectedWeekEnd !== null
-      ? selectedWeekEnd - selectedWeekStart + 1
-      : null;
   const isExternalTeacherRangeMode = activeEngagementType === 'EXTERNAL_TEACHER';
   const departmentOptions = useMemo(() => {
     const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
@@ -567,12 +487,6 @@ export function AcademicWorkloadReportPageContent({
     [],
   );
 
-  const handleResetWeekRange = () => {
-    invalidateReport();
-    setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
-    setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
-  };
-
   const loadReport = useCallback(
     async (nextEngagementType: AcademicWorkloadEngagementFilter = activeEngagementType) => {
       if (!selectedSemesterId) {
@@ -593,9 +507,13 @@ export function AcademicWorkloadReportPageContent({
       try {
         const shouldUseTeachingWeekRange = nextEngagementType === 'EXTERNAL_TEACHER';
         const result = await requestAcademicWorkloadReport({
-          endDate: shouldUseTeachingWeekRange ? selectedEndWeek?.endDate : undefined,
+          endDate: shouldUseTeachingWeekRange
+            ? teachingWeekRange.selectedEndWeek?.endDate
+            : undefined,
           semesterId: selectedSemesterId,
-          startDate: shouldUseTeachingWeekRange ? selectedStartWeek?.startDate : undefined,
+          startDate: shouldUseTeachingWeekRange
+            ? teachingWeekRange.selectedStartWeek?.startDate
+            : undefined,
           teacherEngagementType: nextEngagementType === 'ALL' ? undefined : nextEngagementType,
           workloadDepartmentId,
         });
@@ -616,9 +534,9 @@ export function AcademicWorkloadReportPageContent({
     [
       activeEngagementType,
       canSelectWorkloadDepartment,
-      selectedEndWeek,
       selectedSemesterId,
-      selectedStartWeek,
+      teachingWeekRange.selectedEndWeek,
+      teachingWeekRange.selectedStartWeek,
       workloadDepartmentId,
     ],
   );
@@ -792,8 +710,8 @@ export function AcademicWorkloadReportPageContent({
                   <div>
                     <h2>当前预报</h2>
                     <p>
-                      {formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)} ·{' '}
-                      {selectedDepartmentLabel} · {activeEngagementLabel}
+                      {formatTeachingWeekRangeLabel(teachingWeekRange)} · {selectedDepartmentLabel}{' '}
+                      · {activeEngagementLabel}
                     </p>
                   </div>
                 </div>
@@ -858,65 +776,11 @@ export function AcademicWorkloadReportPageContent({
             </div>
 
             {isExternalTeacherRangeMode ? (
-              <div className="academic-workload-report-week-range">
-                <div className="academic-workload-report-week-range-header">
-                  <div>
-                    <span>外聘教师统计周范围</span>
-                    <strong>{formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}</strong>
-                  </div>
-                  <Button
-                    disabled={teachingWeeks.length === 0}
-                    size="small"
-                    type="link"
-                    onClick={handleResetWeekRange}
-                  >
-                    全学期
-                  </Button>
-                </div>
-
-                <Slider
-                  disabled={!weekRangeSliderValue}
-                  marks={weekRangeMarks}
-                  max={lastTeachingWeekValue ?? 1}
-                  min={firstTeachingWeekValue ?? 1}
-                  range={{ draggableTrack: true }}
-                  tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
-                  value={weekRangeSliderValue}
-                  onChange={(nextValue: number | number[]) => {
-                    if (!Array.isArray(nextValue)) {
-                      return;
-                    }
-
-                    const [nextStart, nextEnd] = nextValue;
-
-                    invalidateReport();
-                    setSelectedWeekStart(nextStart ?? null);
-                    setSelectedWeekEnd(nextEnd ?? null);
-                  }}
-                />
-
-                <div className="academic-workload-report-week-range-summary">
-                  <div className="academic-workload-report-week-boundary">
-                    <span>起始</span>
-                    <strong>{selectedStartWeek?.label ?? '-'}</strong>
-                    <small>{formatWeekDateRange(selectedStartWeek)}</small>
-                  </div>
-                  <div className="academic-workload-report-week-boundary">
-                    <span>范围</span>
-                    <strong>
-                      {selectedTeachingWeekCount !== null
-                        ? `已选 ${selectedTeachingWeekCount} 周`
-                        : '-'}
-                    </strong>
-                    <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
-                  </div>
-                  <div className="academic-workload-report-week-boundary">
-                    <span>结束</span>
-                    <strong>{selectedEndWeek?.label ?? '-'}</strong>
-                    <small>{formatWeekDateRange(selectedEndWeek)}</small>
-                  </div>
-                </div>
-              </div>
+              <TeachingWeekRangeControl
+                range={teachingWeekRange}
+                title="外聘教师统计周范围"
+                valueLabel={formatTeachingWeekRangeLabel(teachingWeekRange)}
+              />
             ) : null}
           </div>
         )}

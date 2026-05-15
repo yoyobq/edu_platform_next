@@ -160,10 +160,7 @@ export async function requestAcademicAdjustedWorkloadReport(
     return response.getAcademicAdjustedWorkloadReport;
   } catch (error) {
     throw new Error(
-      resolveAcademicAdjustedWorkloadReportErrorMessage(
-        error,
-        '暂时无法加载教师调整后工作量报表。',
-      ),
+      resolveAcademicAdjustedWorkloadReportErrorMessage(error, '暂时无法加载外聘兼课金结算表。'),
     );
   }
 }

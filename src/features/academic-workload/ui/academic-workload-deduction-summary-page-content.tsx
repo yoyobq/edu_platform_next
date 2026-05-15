@@ -9,20 +9,7 @@ import {
   useState,
 } from 'react';
 import { BarChartOutlined, DownloadOutlined, ScheduleOutlined } from '@ant-design/icons';
-import type { SliderSingleProps } from 'antd';
-import {
-  Alert,
-  Button,
-  Empty,
-  Select,
-  Skeleton,
-  Slider,
-  Switch,
-  Table,
-  Tabs,
-  Tag,
-  Tooltip,
-} from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Switch, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -45,9 +32,7 @@ import {
   splitAcademicWorkloadTeachingClassNames,
 } from '../application/teaching-class-format';
 import {
-  buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
-  formatTeachingWeekRange,
   parseAcademicWorkloadIsoDate,
   pickNextSemesterId,
   sortSemesters,
@@ -71,6 +56,9 @@ import {
   type AcademicWorkloadDeductionExcelRow,
   exportAcademicWorkloadDeductionExcel,
 } from '../infrastructure/academic-workload-deduction-summary-excel-export';
+
+import { TeachingWeekRangeControl } from './teaching-week-range-control';
+import { formatTeachingWeekRangeLabel, useTeachingWeekRange } from './teaching-week-range-state';
 
 import './academic-workload-deduction-summary-page-content.css';
 
@@ -145,35 +133,6 @@ const TEACHER_ENGAGEMENT_TYPE_TAG_COLORS: Record<AcademicTeacherEngagementType, 
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return (first || '').localeCompare(second || '', 'zh-Hans-CN');
-}
-
-function formatShortDate(value: string) {
-  const [, month, day] = value.split('-');
-
-  if (!month || !day) {
-    return value;
-  }
-
-  return `${Number(month)}月${Number(day)}日`;
-}
-
-function formatWeekDateRange(week: TeachingWeekOption | null) {
-  if (!week) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(week.startDate)} - ${formatShortDate(week.endDate)}`;
-}
-
-function formatTeachingWeekDateSpan(
-  startWeek: TeachingWeekOption | null,
-  endWeek: TeachingWeekOption | null,
-) {
-  if (!startWeek || !endWeek) {
-    return '未选择';
-  }
-
-  return `${formatShortDate(startWeek.startDate)} - ${formatShortDate(endWeek.endDate)}`;
 }
 
 function parseHourToHundredths(value: string | null | undefined) {
@@ -563,22 +522,10 @@ function collectDateColumns(rows: AcademicWorkloadDeductionTableRow[]) {
   return Array.from(dates).sort();
 }
 
-function getDetailCellClassName(row: AcademicWorkloadDeductionTableRow) {
-  return row.detailRowIndex % 2 === 0
-    ? 'academic-workload-deduction-summary-detail-cell-even'
-    : 'academic-workload-deduction-summary-detail-cell-odd';
-}
-
 function getDeductionRowClassName(row: AcademicWorkloadDeductionTableRow) {
   return row.detailRowIndex % 2 === 0
     ? 'academic-workload-deduction-summary-detail-row-even'
     : 'academic-workload-deduction-summary-detail-row-odd';
-}
-
-function getDetailCellProps(row: AcademicWorkloadDeductionTableRow) {
-  return {
-    className: getDetailCellClassName(row),
-  };
 }
 
 function renderMergedCell(
@@ -800,14 +747,12 @@ function buildDeductionColumns(
     {
       dataIndex: ['item', 'teachingClassName'],
       key: 'teachingClassName',
-      onCell: getDetailCellProps,
       render: (value: string) => renderTeachingClassName(value),
       title: '任课班级',
       width: 132,
     },
     {
       key: 'course',
-      onCell: getDetailCellProps,
       render: (_, row) => (
         <span className="academic-workload-deduction-summary-course">
           <strong>{row.item.courseName || '未命名课程'}</strong>
@@ -819,7 +764,6 @@ function buildDeductionColumns(
     {
       align: 'right',
       key: 'baselineWeeklyHours',
-      onCell: getDetailCellProps,
       render: (_, row) => renderHourCell(row.item.baselineWeeklyHours),
       title: renderStackedColumnTitle('周课', '时'),
       width: 68,
@@ -828,14 +772,12 @@ function buildDeductionColumns(
       align: 'right',
       dataIndex: ['item', 'baselineTeachingWeekCount'],
       key: 'baselineTeachingWeekCount',
-      onCell: getDetailCellProps,
       title: renderStackedColumnTitle('上课', '周数'),
       width: 68,
     },
     ...dateColumns.map((date) => ({
       align: 'right' as const,
       key: `date-${date}`,
-      onCell: getDetailCellProps,
       render: (_: unknown, row: AcademicWorkloadDeductionTableRow) => (
         <DateAdjustmentCell summary={row.dateSummaries[date]} />
       ),
@@ -847,7 +789,6 @@ function buildDeductionColumns(
     {
       align: 'right',
       key: 'subtotal',
-      onCell: getDetailCellProps,
       render: (_, row) => (
         <span className="academic-workload-deduction-summary-hour">
           {formatDeductedHundredths(row.tableSubtotalHundredths)}
@@ -950,8 +891,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [selectedWeekStart, setSelectedWeekStart] = useState<number | null>(null);
-  const [selectedWeekEnd, setSelectedWeekEnd] = useState<number | null>(null);
   const [workloadDepartmentId, setWorkloadDepartmentId] = useState(
     isAdminViewer ? DEFAULT_WORKLOAD_DEPARTMENT_ID : scopedDepartmentId,
   );
@@ -1089,57 +1028,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     () => buildTeachingWeekOptions(selectedSemester),
     [selectedSemester],
   );
-
-  useEffect(() => {
-    const firstWeek = teachingWeeks[0]?.value ?? null;
-    const lastWeek = teachingWeeks.at(-1)?.value ?? null;
-
-    setSelectedWeekStart((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return firstWeek;
-    });
-    setSelectedWeekEnd((currentValue) => {
-      if (currentValue !== null && teachingWeeks.some((week) => week.value === currentValue)) {
-        return currentValue;
-      }
-
-      return lastWeek;
-    });
-  }, [teachingWeeks]);
-
-  const selectedStartWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekStart) ?? null,
-    [selectedWeekStart, teachingWeeks],
-  );
-  const selectedEndWeek = useMemo(
-    () => teachingWeeks.find((week) => week.value === selectedWeekEnd) ?? null,
-    [selectedWeekEnd, teachingWeeks],
-  );
-  const firstTeachingWeekValue = teachingWeeks[0]?.value ?? null;
-  const lastTeachingWeekValue = teachingWeeks.at(-1)?.value ?? null;
-  const weekRangeSliderValue: [number, number] | undefined =
-    firstTeachingWeekValue !== null && lastTeachingWeekValue !== null
-      ? [selectedWeekStart ?? firstTeachingWeekValue, selectedWeekEnd ?? lastTeachingWeekValue]
-      : undefined;
-  const weekRangeMarks = useMemo<SliderSingleProps['marks']>(() => {
-    if (firstTeachingWeekValue === null || lastTeachingWeekValue === null) {
-      return undefined;
-    }
-
-    return buildTeachingWeekMonthMarkValues(teachingWeeks).reduce<
-      NonNullable<SliderSingleProps['marks']>
-    >((marks, week) => {
-      marks[week] = String(week);
-      return marks;
-    }, {});
-  }, [firstTeachingWeekValue, lastTeachingWeekValue, teachingWeeks]);
-  const selectedTeachingWeekCount =
-    selectedWeekStart !== null && selectedWeekEnd !== null
-      ? selectedWeekEnd - selectedWeekStart + 1
-      : null;
+  const teachingWeekRange = useTeachingWeekRange(teachingWeeks, {
+    onRangeChange: invalidateSummary,
+  });
   const isExternalTeacherRangeMode = activeEngagementType === 'EXTERNAL_TEACHER';
 
   const visibleDeductionItems = useMemo(
@@ -1217,9 +1108,13 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       try {
         const shouldUseTeachingWeekRange = nextEngagementType === 'EXTERNAL_TEACHER';
         const result = await requestAcademicWorkloadDeductionSummary({
-          endDate: shouldUseTeachingWeekRange ? selectedEndWeek?.endDate : undefined,
+          endDate: shouldUseTeachingWeekRange
+            ? teachingWeekRange.selectedEndWeek?.endDate
+            : undefined,
           semesterId: selectedSemesterId,
-          startDate: shouldUseTeachingWeekRange ? selectedStartWeek?.startDate : undefined,
+          startDate: shouldUseTeachingWeekRange
+            ? teachingWeekRange.selectedStartWeek?.startDate
+            : undefined,
           teacherEngagementType: nextEngagementType === 'ALL' ? undefined : nextEngagementType,
           workloadDepartmentId,
         });
@@ -1239,9 +1134,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     },
     [
       activeEngagementType,
-      selectedEndWeek,
       selectedSemesterId,
-      selectedStartWeek,
+      teachingWeekRange.selectedEndWeek,
+      teachingWeekRange.selectedStartWeek,
       workloadDepartmentId,
     ],
   );
@@ -1265,17 +1160,11 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   );
   const selectedDepartmentLabel =
     selectedDepartmentOption?.label ?? (workloadDepartmentId || '全部归口系');
-  const summaryContextLabel = `${formatTeachingWeekRange(
-    selectedStartWeek,
-    selectedEndWeek,
+  const summaryContextLabel = `${formatTeachingWeekRangeLabel(
+    teachingWeekRange,
   )} · ${selectedDepartmentLabel} · ${activeEngagementLabel}`;
   const shouldShowDepartmentSummary = isAdminViewer && visibleDepartmentSummaries.length > 1;
 
-  const handleResetWeekRange = () => {
-    invalidateSummary();
-    setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
-    setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
-  };
   const handleExportDeductionTable = useCallback(async () => {
     if (!canExportDeductionExcel || deductionRows.length === 0 || exportingExcel) {
       return;
@@ -1418,65 +1307,11 @@ export function AcademicWorkloadDeductionSummaryPageContent({
             </div>
 
             {isExternalTeacherRangeMode ? (
-              <div className="academic-workload-deduction-summary-week-range">
-                <div className="academic-workload-deduction-summary-week-range-header">
-                  <div>
-                    <span>外聘教师统计周范围</span>
-                    <strong>{formatTeachingWeekRange(selectedStartWeek, selectedEndWeek)}</strong>
-                  </div>
-                  <Button
-                    disabled={teachingWeeks.length === 0}
-                    size="small"
-                    type="link"
-                    onClick={handleResetWeekRange}
-                  >
-                    全学期
-                  </Button>
-                </div>
-
-                <Slider
-                  disabled={!weekRangeSliderValue}
-                  marks={weekRangeMarks}
-                  max={lastTeachingWeekValue ?? 1}
-                  min={firstTeachingWeekValue ?? 1}
-                  range={{ draggableTrack: true }}
-                  tooltip={{ formatter: (value) => (value ? `第 ${value} 周` : '') }}
-                  value={weekRangeSliderValue}
-                  onChange={(nextValue: number | number[]) => {
-                    if (!Array.isArray(nextValue)) {
-                      return;
-                    }
-
-                    const [nextStart, nextEnd] = nextValue;
-
-                    invalidateSummary();
-                    setSelectedWeekStart(nextStart ?? null);
-                    setSelectedWeekEnd(nextEnd ?? null);
-                  }}
-                />
-
-                <div className="academic-workload-deduction-summary-week-range-summary">
-                  <div className="academic-workload-deduction-summary-week-boundary">
-                    <span>起始</span>
-                    <strong>{selectedStartWeek?.label ?? '-'}</strong>
-                    <small>{formatWeekDateRange(selectedStartWeek)}</small>
-                  </div>
-                  <div className="academic-workload-deduction-summary-week-boundary">
-                    <span>范围</span>
-                    <strong>
-                      {selectedTeachingWeekCount !== null
-                        ? `已选 ${selectedTeachingWeekCount} 周`
-                        : '-'}
-                    </strong>
-                    <small>{formatTeachingWeekDateSpan(selectedStartWeek, selectedEndWeek)}</small>
-                  </div>
-                  <div className="academic-workload-deduction-summary-week-boundary">
-                    <span>结束</span>
-                    <strong>{selectedEndWeek?.label ?? '-'}</strong>
-                    <small>{formatWeekDateRange(selectedEndWeek)}</small>
-                  </div>
-                </div>
-              </div>
+              <TeachingWeekRangeControl
+                range={teachingWeekRange}
+                title="外聘教师统计周范围"
+                valueLabel={formatTeachingWeekRangeLabel(teachingWeekRange)}
+              />
             ) : null}
           </div>
         )}

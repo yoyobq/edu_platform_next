@@ -69,87 +69,6 @@
   grid-column: 1 / -1;
 }
 
-.academic-workload-report-week-range {
-  background: var(--ant-color-fill-quaternary);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  grid-column: 1 / -1;
-  min-width: 0;
-  padding: 12px 14px;
-}
-
-.academic-workload-report-week-range-header {
-  align-items: center;
-  display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  min-width: 0;
-}
-
-.academic-workload-report-week-range-header > div {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.academic-workload-report-week-range-header span,
-.academic-workload-report-week-boundary span {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  line-height: 1.35;
-}
-
-.academic-workload-report-week-range-header strong,
-.academic-workload-report-week-boundary strong {
-  color: var(--ant-color-text);
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.academic-workload-report-week-range-header :where(.ant-btn) {
-  align-items: center;
-  display: inline-flex;
-  flex: 0 0 auto;
-  height: 20px;
-  line-height: 1.35;
-  padding: 0;
-}
-
-.academic-workload-report-week-range :where(.ant-slider) {
-  margin-block: 4px 14px;
-  margin-inline: 8px;
-}
-
-.academic-workload-report-week-range-summary {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-
-.academic-workload-report-week-boundary {
-  background: var(--ant-color-bg-container);
-  border: 1px solid var(--ant-color-border-secondary);
-  border-radius: var(--ant-border-radius);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  padding: 6px 8px;
-}
-
-.academic-workload-report-week-boundary small {
-  color: var(--ant-color-text-tertiary);
-  font-size: 12px;
-  line-height: 1.35;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .academic-workload-report-result {
   display: flex;
   flex-direction: column;
@@ -320,13 +239,8 @@
   }
 
   .academic-workload-report-overview,
-  .academic-workload-report-filters,
-  .academic-workload-report-week-range {
+  .academic-workload-report-filters {
     grid-column: auto;
-  }
-
-  .academic-workload-report-week-range-summary {
-    grid-template-columns: minmax(0, 1fr);
   }
 
   .academic-workload-report-metrics {
