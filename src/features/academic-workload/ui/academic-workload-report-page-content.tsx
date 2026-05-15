@@ -1,6 +1,6 @@
 // src/features/academic-workload/ui/academic-workload-report-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, DownloadOutlined } from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
 import { Alert, Button, Empty, Select, Skeleton, Slider, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -774,8 +774,8 @@ export function AcademicWorkloadReportPageContent({
     <div className="academic-workload-report-page">
       <DecoratedPageHeader
         description="按归口系、教师类型和教学周范围生成教师工作量预报。"
-        icon={<BarChartOutlined />}
-        title="工作量预报"
+        icon={<FileTextOutlined />}
+        title="教师工作量预报统计表"
       />
 
       <section className="academic-workload-report-panel">

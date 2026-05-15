@@ -8,12 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  BarChartOutlined,
-  CarryOutOutlined,
-  CopyOutlined,
-  DownloadOutlined,
-} from '@ant-design/icons';
+import { BarChartOutlined, DownloadOutlined, ScheduleOutlined } from '@ant-design/icons';
 import type { SliderSingleProps } from 'antd';
 import {
   Alert,
@@ -22,7 +17,6 @@ import {
   Select,
   Skeleton,
   Slider,
-  Space,
   Switch,
   Table,
   Tabs,
@@ -724,14 +718,11 @@ function renderDeductionTableSummary(input: {
   );
 }
 
-function formatTeachingClassClipboardValue(value: string) {
+function formatTeachingClassExportValue(value: string) {
   return formatAcademicWorkloadTeachingClassMultiline(value, EMPTY_TEXT);
 }
 
-function formatDateColumnClipboardTitle(
-  value: string,
-  teachingWeeks: readonly TeachingWeekOption[],
-) {
+function formatDateColumnExportTitle(value: string, teachingWeeks: readonly TeachingWeekOption[]) {
   const teachingWeek = findTeachingWeekByDate(value, teachingWeeks);
 
   return [
@@ -739,62 +730,6 @@ function formatDateColumnClipboardTitle(
     teachingWeek ? `第${teachingWeek.value}周` : '第-周',
     formatDateColumnWeekday(value),
   ].join('\n');
-}
-
-function formatClipboardCell(value: string | number | null | undefined) {
-  const text = value === null || value === undefined ? '' : String(value);
-
-  if (!/["\n\r\t]/.test(text)) {
-    return text;
-  }
-
-  return `"${text.replaceAll('"', '""')}"`;
-}
-
-function buildDeductionTableClipboardText(input: {
-  dateColumns: string[];
-  rows: AcademicWorkloadDeductionTableRow[];
-  summaryLabel: string;
-  teachingWeeks: readonly TeachingWeekOption[];
-}) {
-  const headers = [
-    '序号',
-    '工号',
-    '姓名',
-    '任课班级',
-    '课程',
-    '周课时',
-    '上课周数',
-    ...input.dateColumns.map((date) => formatDateColumnClipboardTitle(date, input.teachingWeeks)),
-    '小计',
-    '合计',
-  ];
-  const bodyRows = input.rows.map((row) => [
-    row.staffRowIndex === 0 ? row.sequence : '',
-    row.staffRowIndex === 0 ? row.item.staffId : '',
-    row.staffRowIndex === 0 ? row.item.staffName : '',
-    formatTeachingClassClipboardValue(row.item.teachingClassName),
-    row.item.courseName || '未命名课程',
-    formatHourString(row.item.baselineWeeklyHours),
-    row.item.baselineTeachingWeekCount,
-    ...input.dateColumns.map((date) => {
-      const summary = row.dateSummaries[date];
-
-      return summary?.hasHourValue ? formatDeductedHundredths(summary.deductedHundredths) : '0';
-    }),
-    formatDeductedHundredths(row.tableSubtotalHundredths),
-    row.staffRowIndex === 0 ? formatDeductedHundredths(row.staffTotalHundredths) : '',
-  ]);
-  const summaryRow = Array.from<string>({ length: headers.length }).fill('');
-
-  summaryRow[0] = input.summaryLabel;
-  summaryRow[headers.length - 1] = formatDeductedHundredths(
-    getDeductionTableTotalHundredths(input.rows),
-  );
-
-  return [headers, ...bodyRows, summaryRow]
-    .map((row) => row.map(formatClipboardCell).join('\t'))
-    .join('\n');
 }
 
 function buildDeductionTableExcelRows(input: {
@@ -817,39 +752,12 @@ function buildDeductionTableExcelRows(input: {
     staffRowSpan: row.staffRowSpan,
     staffTotal: formatDeductedHundredths(row.staffTotalHundredths),
     subtotal: formatDeductedHundredths(row.tableSubtotalHundredths),
-    teachingClassName: formatTeachingClassClipboardValue(row.item.teachingClassName),
+    teachingClassName: formatTeachingClassExportValue(row.item.teachingClassName),
   }));
 }
 
 function buildDeductionExcelFileName(input: { engagementLabel: string; semesterLabel: string }) {
   return `教师扣课汇总-${input.semesterLabel}-${input.engagementLabel}.xlsx`;
-}
-
-async function copyTextToClipboard(text: string) {
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-
-  const textArea = document.createElement('textarea');
-
-  textArea.value = text;
-  textArea.setAttribute('readonly', 'true');
-  textArea.style.position = 'fixed';
-  textArea.style.insetBlockStart = '-9999px';
-  textArea.style.opacity = '0';
-  document.body.append(textArea);
-  textArea.select();
-
-  try {
-    const copied = document.execCommand('copy');
-
-    if (!copied) {
-      throw new Error('复制失败');
-    }
-  } finally {
-    textArea.remove();
-  }
 }
 
 function buildDeductionColumns(
@@ -1039,7 +947,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const isAdminViewer = Boolean(rawCanSelectWorkloadDepartment);
   const scopedDepartmentId = defaultWorkloadDepartmentId?.trim() || '';
   const latestRequestIdRef = useRef(0);
-  const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
@@ -1056,7 +963,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | 'idle'>('idle');
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
   const [semesterError, setSemesterError] = useState<string | null>(null);
@@ -1072,18 +978,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     setLoadingSummary(false);
   }, []);
 
-  const setTemporaryCopyStatus = useCallback((status: 'copied' | 'failed') => {
-    setCopyStatus(status);
-
-    if (copyStatusTimerRef.current) {
-      clearTimeout(copyStatusTimerRef.current);
-    }
-
-    copyStatusTimerRef.current = setTimeout(() => {
-      setCopyStatus('idle');
-      copyStatusTimerRef.current = null;
-    }, 1600);
-  }, []);
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
 
@@ -1099,10 +993,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
   useEffect(
     () => () => {
-      if (copyStatusTimerRef.current) {
-        clearTimeout(copyStatusTimerRef.current);
-      }
-
       if (exportStatusTimerRef.current) {
         clearTimeout(exportStatusTimerRef.current);
       }
@@ -1386,31 +1276,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     setSelectedWeekStart(teachingWeeks[0]?.value ?? null);
     setSelectedWeekEnd(teachingWeeks.at(-1)?.value ?? null);
   };
-  const handleCopyDeductionTable = useCallback(async () => {
-    if (deductionRows.length === 0) {
-      return;
-    }
-
-    try {
-      await copyTextToClipboard(
-        buildDeductionTableClipboardText({
-          dateColumns: deductionDateColumns,
-          rows: deductionRows,
-          summaryLabel: deductionSummaryLabel,
-          teachingWeeks,
-        }),
-      );
-      setTemporaryCopyStatus('copied');
-    } catch {
-      setTemporaryCopyStatus('failed');
-    }
-  }, [
-    deductionDateColumns,
-    deductionRows,
-    deductionSummaryLabel,
-    setTemporaryCopyStatus,
-    teachingWeeks,
-  ]);
   const handleExportDeductionTable = useCallback(async () => {
     if (!canExportDeductionExcel || deductionRows.length === 0 || exportingExcel) {
       return;
@@ -1421,7 +1286,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     try {
       await exportAcademicWorkloadDeductionExcel({
         dateHeaders: deductionDateColumns.map((date) =>
-          formatDateColumnClipboardTitle(date, teachingWeeks),
+          formatDateColumnExportTitle(date, teachingWeeks),
         ),
         departmentName: selectedDepartmentLabel,
         fileName: buildDeductionExcelFileName({
@@ -1457,8 +1322,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     setTemporaryExportStatus,
     teachingWeeks,
   ]);
-  const copyButtonLabel =
-    copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制';
   const exportButtonLabel =
     exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
@@ -1466,8 +1329,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     <div className="academic-workload-deduction-summary-page">
       <DecoratedPageHeader
         description="按归口系、教师类型和教学周范围汇总教师扣课课时。"
-        icon={<CarryOutOutlined />}
-        title="教师扣课汇总"
+        icon={<ScheduleOutlined />}
+        title="教师节假日扣课时统计表"
       />
 
       <section className="academic-workload-deduction-summary-panel">
@@ -1622,39 +1485,27 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       <Tabs
         activeKey={activeEngagementType}
         items={tabItems}
-        tabBarExtraContent={{
-          right: (
-            <Space size={8}>
-              <Button
-                disabled={
-                  !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
-                }
-                icon={<CopyOutlined />}
-                size="small"
-                onClick={() => {
-                  void handleCopyDeductionTable();
-                }}
-              >
-                {copyButtonLabel}
-              </Button>
-              {canExportDeductionExcel ? (
-                <Button
-                  disabled={
-                    !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
-                  }
-                  icon={<DownloadOutlined />}
-                  loading={exportingExcel}
-                  size="small"
-                  onClick={() => {
-                    void handleExportDeductionTable();
-                  }}
-                >
-                  {exportButtonLabel}
-                </Button>
-              ) : null}
-            </Space>
-          ),
-        }}
+        tabBarExtraContent={
+          canExportDeductionExcel
+            ? {
+                right: (
+                  <Button
+                    disabled={
+                      !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
+                    }
+                    icon={<DownloadOutlined />}
+                    loading={exportingExcel}
+                    size="small"
+                    onClick={() => {
+                      void handleExportDeductionTable();
+                    }}
+                  >
+                    {exportButtonLabel}
+                  </Button>
+                ),
+              }
+            : undefined
+        }
         onChange={handleEngagementTypeChange}
       />
 

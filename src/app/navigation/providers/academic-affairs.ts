@@ -70,7 +70,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CarryOutOutlined',
+            iconKey: 'FileTextOutlined',
             key: '/academic-affairs/academic-workload-report',
             label: '工作量预报',
             navMode: 'rail' as const,
@@ -80,9 +80,9 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CarryOutOutlined',
+            iconKey: 'ScheduleOutlined',
             key: '/academic-affairs/academic-workload-deduction-summary',
-            label: '扣课汇总',
+            label: '节假日扣课',
             navMode: 'rail' as const,
             path: '/academic-affairs/academic-workload-deduction-summary',
             primaryAccessGroup: 'ADMIN' as const,
