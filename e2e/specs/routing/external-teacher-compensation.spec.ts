@@ -13,6 +13,13 @@ const adminSession = {
   primaryAccessGroup: 'ADMIN' as const,
 };
 
+const fixedCurrentDate = new Date('2026-05-16T12:00:00.000Z');
+
+type AdjustedWorkloadReportVariables = {
+  endWeekIndex?: number;
+  startWeekIndex?: number;
+};
+
 async function fulfillGraphQL(route: Route, data: Record<string, unknown>) {
   await route.fulfill({
     body: JSON.stringify({ data }),
@@ -21,7 +28,10 @@ async function fulfillGraphQL(route: Route, data: Record<string, unknown>) {
   });
 }
 
-async function mockExternalTeacherCompensationGraphQL(page: Page) {
+async function mockExternalTeacherCompensationGraphQL(
+  page: Page,
+  reportRequests: AdjustedWorkloadReportVariables[],
+) {
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
       | { query?: string; variables?: Record<string, unknown> }
@@ -64,6 +74,16 @@ async function mockExternalTeacherCompensationGraphQL(page: Page) {
     }
 
     if (query.includes('query GetAcademicAdjustedWorkloadReport')) {
+      reportRequests.push({
+        endWeekIndex:
+          typeof payload?.variables?.endWeekIndex === 'number'
+            ? payload.variables.endWeekIndex
+            : undefined,
+        startWeekIndex:
+          typeof payload?.variables?.startWeekIndex === 'number'
+            ? payload.variables.startWeekIndex
+            : undefined,
+      });
       await fulfillGraphQL(route, {
         getAcademicAdjustedWorkloadReport: {
           invalidReason: null,
@@ -112,9 +132,12 @@ async function mockExternalTeacherCompensationGraphQL(page: Page) {
 }
 
 test('外聘兼课金 stable 页面可生成报表并导出 Excel', async ({ page }) => {
+  const reportRequests: AdjustedWorkloadReportVariables[] = [];
+
+  await page.clock.setFixedTime(fixedCurrentDate);
   await mockApiHealth(page);
   await mockAuthGraphQL(page, { currentSession: adminSession });
-  await mockExternalTeacherCompensationGraphQL(page);
+  await mockExternalTeacherCompensationGraphQL(page, reportRequests);
   await seedAuthSession(page, adminSession);
 
   await page.goto(routes.externalTeacherCompensation);
@@ -123,6 +146,16 @@ test('外聘兼课金 stable 页面可生成报表并导出 Excel', async ({ pag
   await expect(page.getByRole('heading', { name: '兼职教师兼课金结算表' })).toBeVisible();
   await expect(page.getByRole('cell', { name: '王老师' })).toBeVisible();
   await expect(page.getByRole('cell', { name: 'Web 前端开发' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '5月' })).toHaveAttribute('aria-selected', 'true');
+  expect(reportRequests[0]).toEqual({ endWeekIndex: 14, startWeekIndex: 11 });
+
+  await page.getByRole('tab', { name: '4月' }).click();
+  await expect(page.getByText('第 7 周 - 第 10 周', { exact: true })).toBeVisible();
+  await expect
+    .poll(() => reportRequests.at(-1), {
+      message: '4 月 tab should reload report with April teaching-week range',
+    })
+    .toEqual({ endWeekIndex: 10, startWeekIndex: 7 });
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /导出 Excel/ }).click();

@@ -62,6 +62,15 @@
   margin-inline: 8px;
 }
 
+.academic-workload-teaching-week-cross-month-mark {
+  background: var(--ant-color-text-tertiary);
+  border-radius: 50%;
+  display: inline-block;
+  height: 4px;
+  vertical-align: middle;
+  width: 4px;
+}
+
 .academic-workload-teaching-week-range-summary {
   display: grid;
   gap: 8px;

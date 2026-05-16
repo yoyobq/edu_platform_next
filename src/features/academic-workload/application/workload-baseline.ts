@@ -124,7 +124,7 @@ export function buildTeachingWeekMonthMarkValues(weeks: readonly TeachingWeekOpt
 
   const firstDate = parseAcademicWorkloadIsoDate(firstWeek.startDate);
   const lastDate = parseAcademicWorkloadIsoDate(lastWeek.endDate);
-  const monthMarkValues = new Set([firstWeek.value]);
+  const monthMarkValues = new Set<number>();
 
   for (
     let cursor = new Date(Date.UTC(firstDate.getUTCFullYear(), firstDate.getUTCMonth(), 1));
@@ -134,8 +134,15 @@ export function buildTeachingWeekMonthMarkValues(weeks: readonly TeachingWeekOpt
     const monthStartWeek = weeks.find((week) => {
       const weekStart = parseAcademicWorkloadIsoDate(week.startDate);
       const weekEnd = parseAcademicWorkloadIsoDate(week.endDate);
+      const month = cursor.getUTCMonth();
+      const year = cursor.getUTCFullYear();
 
-      return weekStart.getTime() <= cursor.getTime() && cursor.getTime() <= weekEnd.getTime();
+      return (
+        weekStart.getUTCFullYear() === year &&
+        weekEnd.getUTCFullYear() === year &&
+        weekStart.getUTCMonth() === month &&
+        weekEnd.getUTCMonth() === month
+      );
     });
 
     if (monthStartWeek) {
@@ -144,6 +151,20 @@ export function buildTeachingWeekMonthMarkValues(weeks: readonly TeachingWeekOpt
   }
 
   return weeks.filter((week) => monthMarkValues.has(week.value)).map((week) => week.value);
+}
+
+export function buildTeachingWeekCrossMonthMarkValues(weeks: readonly TeachingWeekOption[]) {
+  return weeks
+    .filter((week) => {
+      const weekStart = parseAcademicWorkloadIsoDate(week.startDate);
+      const weekEnd = parseAcademicWorkloadIsoDate(week.endDate);
+
+      return (
+        weekStart.getUTCFullYear() !== weekEnd.getUTCFullYear() ||
+        weekStart.getUTCMonth() !== weekEnd.getUTCMonth()
+      );
+    })
+    .map((week) => week.value);
 }
 
 export function formatTeachingWeekRange(

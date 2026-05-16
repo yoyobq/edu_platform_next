@@ -1,7 +1,7 @@
 // src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
 import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Select, Skeleton, Table, Tooltip } from 'antd';
+import { Alert, Button, Empty, Select, Skeleton, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -14,8 +14,10 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { splitAcademicWorkloadTeachingClassNames } from '../application/teaching-class-format';
 import {
   buildTeachingWeekOptions,
+  parseAcademicWorkloadIsoDate,
   pickNextSemesterId,
   sortSemesters,
+  type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
   buildAcademicWorkloadDepartmentSelectOptions,
@@ -59,9 +61,24 @@ type ReportTableRow = {
   staffTotalActualHours: number;
 };
 
+type CompensationRangeTab = {
+  endWeek: number | null;
+  key: string;
+  label: string;
+  startWeek: number | null;
+};
+
+type CompensationWeekRequestRange = {
+  isFullTeachingWeekRange: boolean;
+  selectedWeekEnd: number | null;
+  selectedWeekStart: number | null;
+};
+
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 976;
 const EXPORT_STATUS_RESET_DELAY_MS = 1800;
+const FULL_SEMESTER_TAB_KEY = 'semester';
+const CUSTOM_RANGE_TAB_KEY = 'custom';
 
 const ENGAGEMENT_LABELS: Record<AcademicTeacherEngagementType, string> = {
   ADMINISTRATIVE_TEACHING: '行政兼课',
@@ -156,6 +173,79 @@ function resolveWeekScopeLabel(range: TeachingWeekRangeState) {
   }
 
   return `${range.selectedStartWeek.label} - ${range.selectedEndWeek.label}`;
+}
+
+function buildCompensationMonthTabs(teachingWeeks: readonly TeachingWeekOption[]) {
+  const groups = new Map<string, { label: string; weeks: TeachingWeekOption[]; year: number }>();
+
+  teachingWeeks.forEach((week) => {
+    const startDate = parseAcademicWorkloadIsoDate(week.startDate);
+    const year = startDate.getUTCFullYear();
+    const month = startDate.getUTCMonth() + 1;
+    const key = `${year}-${String(month).padStart(2, '0')}`;
+    const group = groups.get(key) ?? {
+      label: `${month}月`,
+      weeks: [],
+      year,
+    };
+
+    group.weeks.push(week);
+    groups.set(key, group);
+  });
+
+  const years = new Set(Array.from(groups.values()).map((group) => group.year));
+
+  return Array.from(groups.entries()).map<CompensationRangeTab>(([key, group]) => ({
+    endWeek: group.weeks.at(-1)?.value ?? null,
+    key,
+    label: years.size > 1 ? `${group.year}年${group.label}` : group.label,
+    startWeek: group.weeks[0]?.value ?? null,
+  }));
+}
+
+function resolveRangeTabKey(input: {
+  isFullTeachingWeekRange: boolean;
+  selectedWeekEnd: number | null;
+  selectedWeekStart: number | null;
+  tabs: readonly CompensationRangeTab[];
+}) {
+  if (input.isFullTeachingWeekRange) {
+    return FULL_SEMESTER_TAB_KEY;
+  }
+
+  return (
+    input.tabs.find(
+      (tab) => tab.startWeek === input.selectedWeekStart && tab.endWeek === input.selectedWeekEnd,
+    )?.key ?? CUSTOM_RANGE_TAB_KEY
+  );
+}
+
+function resolveCurrentMonthRangeTab(tabs: readonly CompensationRangeTab[]) {
+  const now = new Date();
+  const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+  return tabs.find((tab) => tab.key === currentMonthKey) ?? null;
+}
+
+function resolveWeekRequestInput(input: CompensationWeekRequestRange) {
+  if (input.isFullTeachingWeekRange) {
+    return {};
+  }
+
+  if (input.selectedWeekStart === null || input.selectedWeekEnd === null) {
+    throw new Error('请选择教学周范围。');
+  }
+
+  if (input.selectedWeekStart === input.selectedWeekEnd) {
+    return {
+      startWeekIndex: input.selectedWeekStart,
+    };
+  }
+
+  return {
+    endWeekIndex: input.selectedWeekEnd,
+    startWeekIndex: input.selectedWeekStart,
+  };
 }
 
 function compareReportItems(
@@ -398,6 +488,7 @@ export function ExternalTeacherCompensationPageContent({
   const [markedDetailRowKeys, setMarkedDetailRowKeys] = useState<Set<string>>(() => new Set());
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
+  const [rangeInitializedSemesterId, setRangeInitializedSemesterId] = useState<number | null>(null);
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
@@ -519,6 +610,42 @@ export function ExternalTeacherCompensationPageContent({
   const teachingWeekRange = useTeachingWeekRange(teachingWeeks, {
     onRangeChange: invalidateReport,
   });
+  const {
+    firstTeachingWeekValue: rangeFirstTeachingWeekValue,
+    lastTeachingWeekValue: rangeLastTeachingWeekValue,
+    setTeachingWeekRange,
+  } = teachingWeekRange;
+  const compensationMonthTabs = useMemo(
+    () => buildCompensationMonthTabs(teachingWeeks),
+    [teachingWeeks],
+  );
+  const activeRangeTabKey = resolveRangeTabKey({
+    isFullTeachingWeekRange: teachingWeekRange.isFullTeachingWeekRange,
+    selectedWeekEnd: teachingWeekRange.selectedWeekEnd,
+    selectedWeekStart: teachingWeekRange.selectedWeekStart,
+    tabs: compensationMonthTabs,
+  });
+  const rangeTabItems = useMemo(
+    () => [
+      {
+        key: FULL_SEMESTER_TAB_KEY,
+        label: '整学期',
+      },
+      ...compensationMonthTabs.map((tab) => ({
+        key: tab.key,
+        label: tab.label,
+      })),
+      ...(activeRangeTabKey === CUSTOM_RANGE_TAB_KEY
+        ? [
+            {
+              key: CUSTOM_RANGE_TAB_KEY,
+              label: '自定义',
+            },
+          ]
+        : []),
+    ],
+    [activeRangeTabKey, compensationMonthTabs],
+  );
   const departmentOptions = useMemo(() => {
     const baseOptions = buildAcademicWorkloadDepartmentSelectOptions(departmentRecords);
 
@@ -538,81 +665,127 @@ export function ExternalTeacherCompensationPageContent({
     () => buildReportRows(reportEnvelope?.items ?? []),
     [reportEnvelope?.items],
   );
-  const canLoadReport =
-    Boolean(selectedSemesterId) &&
-    (canSelectWorkloadDepartment || Boolean(workloadDepartmentId)) &&
-    teachingWeekRange.selectedWeekStart !== null &&
-    teachingWeekRange.selectedWeekEnd !== null;
+  const canLoadReportWithRange = useCallback(
+    (range: CompensationWeekRequestRange, options: { requireInitializedRange: boolean }) =>
+      Boolean(selectedSemesterId) &&
+      (!options.requireInitializedRange || rangeInitializedSemesterId === selectedSemesterId) &&
+      (canSelectWorkloadDepartment || Boolean(workloadDepartmentId)) &&
+      range.selectedWeekStart !== null &&
+      range.selectedWeekEnd !== null,
+    [
+      canSelectWorkloadDepartment,
+      rangeInitializedSemesterId,
+      selectedSemesterId,
+      workloadDepartmentId,
+    ],
+  );
+  const currentWeekRequestRange = useMemo<CompensationWeekRequestRange>(
+    () => ({
+      isFullTeachingWeekRange: teachingWeekRange.isFullTeachingWeekRange,
+      selectedWeekEnd: teachingWeekRange.selectedWeekEnd,
+      selectedWeekStart: teachingWeekRange.selectedWeekStart,
+    }),
+    [
+      teachingWeekRange.isFullTeachingWeekRange,
+      teachingWeekRange.selectedWeekEnd,
+      teachingWeekRange.selectedWeekStart,
+    ],
+  );
+  const canLoadReport = canLoadReportWithRange(currentWeekRequestRange, {
+    requireInitializedRange: true,
+  });
 
-  const resolveWeekRequestInput = useCallback(() => {
-    if (teachingWeekRange.isFullTeachingWeekRange) {
-      return {};
-    }
+  const loadReport = useCallback(
+    async (overrideRange?: CompensationWeekRequestRange) => {
+      const requestRange = overrideRange ?? currentWeekRequestRange;
 
-    if (
-      teachingWeekRange.selectedWeekStart === null ||
-      teachingWeekRange.selectedWeekEnd === null
-    ) {
-      throw new Error('请选择教学周范围。');
-    }
+      if (!selectedSemesterId) {
+        return;
+      }
 
-    if (teachingWeekRange.selectedWeekStart === teachingWeekRange.selectedWeekEnd) {
-      return {
-        startWeekIndex: teachingWeekRange.selectedWeekStart,
-      };
-    }
+      if (!canSelectWorkloadDepartment && !workloadDepartmentId) {
+        setReportError('当前账号缺少工作量归口系，暂时无法生成报表。');
+        return;
+      }
 
-    return {
-      endWeekIndex: teachingWeekRange.selectedWeekEnd,
-      startWeekIndex: teachingWeekRange.selectedWeekStart,
-    };
-  }, [
-    teachingWeekRange.isFullTeachingWeekRange,
-    teachingWeekRange.selectedWeekEnd,
-    teachingWeekRange.selectedWeekStart,
-  ]);
+      if (
+        !canLoadReportWithRange(requestRange, {
+          requireInitializedRange: !overrideRange,
+        })
+      ) {
+        return;
+      }
 
-  const loadReport = useCallback(async () => {
+      const requestId = latestRequestIdRef.current + 1;
+      latestRequestIdRef.current = requestId;
+      setLoadingReport(true);
+      setReportError(null);
+      setReportEnvelope(null);
+
+      try {
+        const result = await requestAcademicAdjustedWorkloadReport({
+          semesterId: selectedSemesterId,
+          teacherEngagementType: EXTERNAL_TEACHER_ENGAGEMENT_TYPE,
+          workloadDepartmentId,
+          ...resolveWeekRequestInput(requestRange),
+        });
+
+        if (latestRequestIdRef.current === requestId) {
+          setReportEnvelope(result);
+        }
+      } catch (error) {
+        if (latestRequestIdRef.current === requestId) {
+          setReportError(error instanceof Error ? error.message : '暂时无法加载外聘兼课金结算表。');
+        }
+      } finally {
+        if (latestRequestIdRef.current === requestId) {
+          setLoadingReport(false);
+        }
+      }
+    },
+    [
+      canLoadReportWithRange,
+      canSelectWorkloadDepartment,
+      currentWeekRequestRange,
+      selectedSemesterId,
+      workloadDepartmentId,
+    ],
+  );
+
+  useEffect(() => {
     if (!selectedSemesterId) {
+      setRangeInitializedSemesterId(null);
       return;
     }
 
-    if (!canSelectWorkloadDepartment && !workloadDepartmentId) {
-      setReportError('当前账号缺少工作量归口系，暂时无法生成报表。');
+    if (rangeInitializedSemesterId === selectedSemesterId) {
       return;
     }
 
-    const requestId = latestRequestIdRef.current + 1;
-    latestRequestIdRef.current = requestId;
-    setLoadingReport(true);
-    setReportError(null);
-    setReportEnvelope(null);
-
-    try {
-      const result = await requestAcademicAdjustedWorkloadReport({
-        semesterId: selectedSemesterId,
-        teacherEngagementType: EXTERNAL_TEACHER_ENGAGEMENT_TYPE,
-        workloadDepartmentId,
-        ...resolveWeekRequestInput(),
-      });
-
-      if (latestRequestIdRef.current === requestId) {
-        setReportEnvelope(result);
-      }
-    } catch (error) {
-      if (latestRequestIdRef.current === requestId) {
-        setReportError(error instanceof Error ? error.message : '暂时无法加载外聘兼课金结算表。');
-      }
-    } finally {
-      if (latestRequestIdRef.current === requestId) {
-        setLoadingReport(false);
-      }
+    if (teachingWeeks.length === 0) {
+      setRangeInitializedSemesterId(selectedSemesterId);
+      return;
     }
+
+    const currentMonthTab = resolveCurrentMonthRangeTab(compensationMonthTabs);
+    const nextStartWeek = currentMonthTab?.startWeek ?? rangeFirstTeachingWeekValue;
+    const nextEndWeek = currentMonthTab?.endWeek ?? rangeLastTeachingWeekValue;
+
+    if (nextStartWeek === null || nextEndWeek === null) {
+      setRangeInitializedSemesterId(selectedSemesterId);
+      return;
+    }
+
+    setTeachingWeekRange(nextStartWeek, nextEndWeek);
+    setRangeInitializedSemesterId(selectedSemesterId);
   }, [
-    canSelectWorkloadDepartment,
-    resolveWeekRequestInput,
+    compensationMonthTabs,
+    rangeInitializedSemesterId,
     selectedSemesterId,
-    workloadDepartmentId,
+    rangeFirstTeachingWeekValue,
+    rangeLastTeachingWeekValue,
+    setTeachingWeekRange,
+    teachingWeeks.length,
   ]);
 
   useEffect(() => {
@@ -623,6 +796,47 @@ export function ExternalTeacherCompensationPageContent({
     hasAutoLoadedReportRef.current = true;
     void loadReport();
   }, [canLoadReport, loadReport, loadingSemesters]);
+
+  const handleRangeTabChange = (nextKey: string) => {
+    if (nextKey === CUSTOM_RANGE_TAB_KEY) {
+      return;
+    }
+
+    const nextRange =
+      nextKey === FULL_SEMESTER_TAB_KEY
+        ? {
+            isFullTeachingWeekRange: true,
+            selectedWeekEnd: rangeLastTeachingWeekValue,
+            selectedWeekStart: rangeFirstTeachingWeekValue,
+          }
+        : (() => {
+            const monthTab = compensationMonthTabs.find((tab) => tab.key === nextKey);
+
+            return monthTab
+              ? {
+                  isFullTeachingWeekRange: false,
+                  selectedWeekEnd: monthTab.endWeek,
+                  selectedWeekStart: monthTab.startWeek,
+                }
+              : null;
+          })();
+
+    if (!nextRange || nextRange.selectedWeekStart === null || nextRange.selectedWeekEnd === null) {
+      return;
+    }
+
+    setTeachingWeekRange(nextRange.selectedWeekStart, nextRange.selectedWeekEnd);
+
+    if (
+      !canLoadReportWithRange(nextRange, {
+        requireInitializedRange: false,
+      })
+    ) {
+      return;
+    }
+
+    void loadReport(nextRange);
+  };
 
   const toggleDetailMark = useCallback((rowKey: string) => {
     setMarkedDetailRowKeys((currentKeys) => {
@@ -928,6 +1142,31 @@ export function ExternalTeacherCompensationPageContent({
         )}
       </section>
 
+      {selectedSemesterId && rangeTabItems.length > 1 ? (
+        <div className="external-teacher-compensation-range-tabs">
+          <Tabs
+            activeKey={activeRangeTabKey}
+            items={rangeTabItems}
+            tabBarExtraContent={{
+              right: (
+                <Button
+                  disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                  icon={<DownloadOutlined />}
+                  loading={exportingExcel}
+                  size="small"
+                  onClick={() => {
+                    void handleExportReportTable();
+                  }}
+                >
+                  {exportButtonLabel}
+                </Button>
+              ),
+            }}
+            onChange={handleRangeTabChange}
+          />
+        </div>
+      ) : null}
+
       {reportError ? <Alert message={reportError} showIcon type="error" /> : null}
 
       {loadingReport ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
@@ -959,19 +1198,6 @@ export function ExternalTeacherCompensationPageContent({
             />
           ) : (
             <div className="external-teacher-compensation-table-section">
-              <div className="external-teacher-compensation-table-toolbar">
-                <Button
-                  disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
-                  icon={<DownloadOutlined />}
-                  loading={exportingExcel}
-                  size="small"
-                  onClick={() => {
-                    void handleExportReportTable();
-                  }}
-                >
-                  {exportButtonLabel}
-                </Button>
-              </div>
               <div className="external-teacher-compensation-table-shell">
                 <Table<ReportTableRow>
                   columns={columns}

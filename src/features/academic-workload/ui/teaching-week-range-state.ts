@@ -1,8 +1,9 @@
 // src/features/academic-workload/ui/teaching-week-range-state.ts
-import { useCallback, useMemo, useState } from 'react';
+import { createElement, useCallback, useMemo, useState } from 'react';
 import type { SliderSingleProps } from 'antd';
 
 import {
+  buildTeachingWeekCrossMonthMarkValues,
   buildTeachingWeekMonthMarkValues,
   formatTeachingWeekRange,
   parseAcademicWorkloadIsoDate,
@@ -99,12 +100,20 @@ export function useTeachingWeekRange(
       return undefined;
     }
 
-    return buildTeachingWeekMonthMarkValues(teachingWeeks).reduce<
-      NonNullable<SliderSingleProps['marks']>
-    >((nextMarks, week) => {
+    const nextMarks: NonNullable<SliderSingleProps['marks']> = {};
+
+    buildTeachingWeekCrossMonthMarkValues(teachingWeeks).forEach((week) => {
+      nextMarks[week] = {
+        label: createElement('span', {
+          className: 'academic-workload-teaching-week-cross-month-mark',
+        }),
+      };
+    });
+    buildTeachingWeekMonthMarkValues(teachingWeeks).forEach((week) => {
       nextMarks[week] = String(week);
-      return nextMarks;
-    }, {});
+    });
+
+    return nextMarks;
   }, [firstTeachingWeekValue, lastTeachingWeekValue, teachingWeeks]);
   const isFullTeachingWeekRange =
     firstTeachingWeekValue === null ||

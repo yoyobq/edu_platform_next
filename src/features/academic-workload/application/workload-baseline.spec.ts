@@ -6,6 +6,7 @@ import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   type AcademicWorkloadOccurrenceLike,
   buildAcademicWorkloadRangeSummary,
+  buildTeachingWeekCrossMonthMarkValues,
   buildTeachingWeekMonthMarkValues,
   buildTeachingWeekOptions,
   formatHours,
@@ -77,7 +78,7 @@ describe('academic workload baseline helpers', () => {
     ]);
   });
 
-  it('marks the first teaching week and calendar month start weeks', () => {
+  it('marks the first fully contained teaching week of each calendar month', () => {
     const weeks = buildTeachingWeekOptions(
       buildSemester({
         examStartDate: '2026-06-29',
@@ -85,7 +86,35 @@ describe('academic workload baseline helpers', () => {
       }),
     );
 
-    expect(buildTeachingWeekMonthMarkValues(weeks)).toEqual([1, 5, 9, 14]);
+    expect(buildTeachingWeekMonthMarkValues(weeks)).toEqual([1, 6, 10, 14]);
+  });
+
+  it('does not mark a cross-month teaching week as a month boundary', () => {
+    const weeks = buildTeachingWeekOptions(
+      buildSemester({
+        examStartDate: '2026-03-30',
+        firstTeachingDate: '2026-02-25',
+      }),
+    );
+
+    expect(weeks[0]).toEqual({
+      endDate: '2026-03-01',
+      label: '第 1 周',
+      startDate: '2026-02-23',
+      value: 1,
+    });
+    expect(buildTeachingWeekMonthMarkValues(weeks)).toEqual([2]);
+  });
+
+  it('marks cross-month teaching weeks separately', () => {
+    const weeks = buildTeachingWeekOptions(
+      buildSemester({
+        examStartDate: '2026-06-29',
+        firstTeachingDate: '2026-03-04',
+      }),
+    );
+
+    expect(buildTeachingWeekCrossMonthMarkValues(weeks)).toEqual([5, 9]);
   });
 
   it('calculates occurrence hours in hundredths from period count and coefficient', () => {

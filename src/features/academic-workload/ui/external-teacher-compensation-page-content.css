@@ -78,6 +78,11 @@
   width: 100%;
 }
 
+.external-teacher-compensation-range-tabs {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .external-teacher-compensation-result {
   display: flex;
   flex-direction: column;
