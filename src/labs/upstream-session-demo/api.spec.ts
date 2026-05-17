@@ -15,6 +15,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  fetchClassDirectory,
   fetchCurriculumPlanDetail,
   fetchLectureJournalList,
   fetchLectureJournalTeachingClassSamples,
@@ -128,6 +129,53 @@ describe('upstream-session-demo api', () => {
       {
         departmentId: 'ORG0302',
         sessionToken: 'rolling-token-003',
+      },
+    );
+  });
+
+  it('requests class directory with nullable filters', async () => {
+    const payload = {
+      classes: [
+        {
+          code: '1031501',
+          image: '',
+          name: '信息1501班',
+          text: '信息1501班',
+          value: '1031501',
+        },
+      ],
+      expiresAt: '2026-04-25T12:00:00.000Z',
+      upstreamSessionToken: 'rolling-token-005',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      fetchClassDirectory: payload,
+    });
+
+    await expect(
+      fetchClassDirectory({
+        annualMajorId: ' ',
+        departmentId: ' ORG0302 ',
+        schoolYear: ' ',
+        semester: ' ',
+        sessionToken: 'rolling-token-004',
+      }),
+    ).resolves.toEqual(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('$schoolYear: String');
+    expect(query).toContain('$semester: String');
+    expect(query).not.toContain('$schoolYear: String!');
+    expect(query).not.toContain('$semester: String!');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('FetchClassDirectory'),
+      {
+        annualMajorId: null,
+        departmentId: 'ORG0302',
+        schoolYear: null,
+        semester: null,
+        sessionToken: 'rolling-token-004',
       },
     );
   });

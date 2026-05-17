@@ -37,6 +37,10 @@ type MajorDirectoryResponse = {
   fetchMajorDirectory: MajorDirectoryResult;
 };
 
+type ClassDirectoryResponse = {
+  fetchClassDirectory: ClassDirectoryResult;
+};
+
 type CurriculumPlanListResponse = {
   fetchCurriculumPlanList: CurriculumPlanListResult;
 };
@@ -91,6 +95,18 @@ export type MajorDirectoryResult = {
     text: string;
     value: string;
   }[];
+  upstreamSessionToken: string;
+};
+
+export type ClassDirectoryResult = {
+  classes: {
+    code: string;
+    image: string;
+    name: string;
+    text: string;
+    value: string;
+  }[];
+  expiresAt: string;
   upstreamSessionToken: string;
 };
 
@@ -164,6 +180,34 @@ const FETCH_MAJOR_DIRECTORY_QUERY = `
       upstreamSessionToken
       expiresAt
       majors {
+        code
+        name
+        text
+        value
+        image
+      }
+    }
+  }
+`;
+
+const FETCH_CLASS_DIRECTORY_QUERY = `
+  query FetchClassDirectory(
+    $sessionToken: String!
+    $schoolYear: String
+    $semester: String
+    $departmentId: String!
+    $annualMajorId: String
+  ) {
+    fetchClassDirectory(
+      sessionToken: $sessionToken
+      schoolYear: $schoolYear
+      semester: $semester
+      departmentId: $departmentId
+      annualMajorId: $annualMajorId
+    ) {
+      upstreamSessionToken
+      expiresAt
+      classes {
         code
         name
         text
@@ -344,6 +388,33 @@ export async function fetchMajorDirectory(input: { departmentId: string; session
   });
 
   return response.fetchMajorDirectory;
+}
+
+export async function fetchClassDirectory(input: {
+  annualMajorId?: string | null;
+  departmentId: string;
+  schoolYear?: string | null;
+  semester?: string | null;
+  sessionToken: string;
+}) {
+  const response = await requestGraphQL<
+    ClassDirectoryResponse,
+    {
+      annualMajorId: string | null;
+      departmentId: string;
+      schoolYear: string | null;
+      semester: string | null;
+      sessionToken: string;
+    }
+  >(FETCH_CLASS_DIRECTORY_QUERY, {
+    annualMajorId: input.annualMajorId?.trim() || null,
+    departmentId: input.departmentId.trim(),
+    schoolYear: input.schoolYear?.trim() || null,
+    semester: input.semester?.trim() || null,
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchClassDirectory;
 }
 
 export async function fetchCurriculumPlanList(input: {

@@ -28,10 +28,12 @@ import {
 
 import { upstreamSessionDemoLabAccess } from './access';
 import {
+  type ClassDirectoryResult,
   type CurrentUpstreamDemoAccount,
   type CurriculumPlanDetailResult,
   type CurriculumPlanListResult,
   type DepartmentCurriculumPlanReviewStatus,
+  fetchClassDirectory,
   fetchCurrentUpstreamDemoAccount,
   fetchCurriculumPlanDetail,
   fetchCurriculumPlanList,
@@ -79,12 +81,20 @@ type MajorDirectoryFormValues = {
   departmentId: string;
 };
 
+type ClassListFormValues = {
+  annualMajorId?: string | null;
+  departmentId: string;
+  schoolYear?: string | null;
+  semester?: string | null;
+};
+
 type CurriculumPlanScope = 'personal' | 'department';
 type CurriculumPlanPanelKey = 'personal-curriculum-plan' | 'department-curriculum-plan';
 
 type PendingUpstreamAction =
   | { type: 'teacher-directory' }
   | { departmentId: string; type: 'major-directory' }
+  | { type: 'class-list'; values: ClassListFormValues }
   | { teachingClassId: string; type: 'lecture-journal' }
   | { type: 'verified-staff-identity' }
   | {
@@ -102,6 +112,7 @@ type UpstreamActionError = {
 
 const TEACHER_PREVIEW_LIMIT = 5;
 const MAJOR_PREVIEW_LIMIT = 8;
+const CLASS_PREVIEW_LIMIT = 8;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
@@ -177,6 +188,10 @@ const UPSTREAM_PANELS: Array<{
     label: '专业字典',
   },
   {
+    key: 'class-list',
+    label: '班级列表',
+  },
+  {
     key: 'verified-staff-identity',
     label: '教职工身份',
   },
@@ -219,6 +234,15 @@ function getDefaultDepartmentCurriculumPlanValues(): DepartmentCurriculumPlanFor
 function getDefaultMajorDirectoryValues(): MajorDirectoryFormValues {
   return {
     departmentId: 'ORG0302',
+  };
+}
+
+function getDefaultClassListValues(): ClassListFormValues {
+  return {
+    annualMajorId: undefined,
+    departmentId: 'ORG0302',
+    schoolYear: undefined,
+    semester: undefined,
   };
 }
 
@@ -276,6 +300,23 @@ function buildMajorDirectoryPreview(result: MajorDirectoryResult) {
     majorCount: result.majors.length,
     majors: result.majors.slice(0, MAJOR_PREVIEW_LIMIT),
     selectOptions: buildMajorSelectOptions(result).slice(0, MAJOR_PREVIEW_LIMIT),
+    upstreamSessionToken: result.upstreamSessionToken,
+  };
+}
+
+function buildClassSelectOptions(result: ClassDirectoryResult) {
+  return result.classes.map((item) => ({
+    label: item.name,
+    value: item.code,
+  }));
+}
+
+function buildClassListPreview(result: ClassDirectoryResult) {
+  return {
+    classCount: result.classes.length,
+    classes: result.classes.slice(0, CLASS_PREVIEW_LIMIT),
+    expiresAt: result.expiresAt,
+    selectOptions: buildClassSelectOptions(result).slice(0, CLASS_PREVIEW_LIMIT),
     upstreamSessionToken: result.upstreamSessionToken,
   };
 }
@@ -453,6 +494,7 @@ export function UpstreamSessionDemoLabPage() {
   const [departmentCurriculumPlanForm] = Form.useForm<DepartmentCurriculumPlanFormValues>();
   const [lectureJournalForm] = Form.useForm<LectureJournalFormValues>();
   const [majorDirectoryForm] = Form.useForm<MajorDirectoryFormValues>();
+  const [classListForm] = Form.useForm<ClassListFormValues>();
   const selectedPersonalClassName = Form.useWatch('className', personalCurriculumPlanForm);
   const selectedPersonalCourseName = Form.useWatch('courseName', personalCurriculumPlanForm);
   const selectedDepartmentClassName = Form.useWatch('className', departmentCurriculumPlanForm);
@@ -473,6 +515,7 @@ export function UpstreamSessionDemoLabPage() {
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [isLoadingMajorDirectory, setIsLoadingMajorDirectory] = useState(false);
+  const [isLoadingClassList, setIsLoadingClassList] = useState(false);
   const [isLoadingLectureJournal, setIsLoadingLectureJournal] = useState(false);
   const [isLoadingLectureJournalSamples, setIsLoadingLectureJournalSamples] = useState(false);
   const [isLoadingLectureJournalSemesters, setIsLoadingLectureJournalSemesters] = useState(true);
@@ -508,6 +551,7 @@ export function UpstreamSessionDemoLabPage() {
   const [majorDirectoryResult, setMajorDirectoryResult] = useState<MajorDirectoryResult | null>(
     null,
   );
+  const [classListResult, setClassListResult] = useState<ClassDirectoryResult | null>(null);
   const [lectureJournalResult, setLectureJournalResult] = useState<LectureJournalListResult | null>(
     null,
   );
@@ -605,6 +649,7 @@ export function UpstreamSessionDemoLabPage() {
       });
       setDirectoryResult(null);
       setMajorDirectoryResult(null);
+      setClassListResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -793,6 +838,17 @@ export function UpstreamSessionDemoLabPage() {
             setMajorDirectoryResult(result);
             return;
           }
+          case 'class-list': {
+            setIsLoadingClassList(true);
+            const result = await fetchClassDirectory({
+              ...action.values,
+              sessionToken: session.upstreamSessionToken,
+            });
+
+            persistSessionFromResult(session, result);
+            setClassListResult(result);
+            return;
+          }
           case 'lecture-journal': {
             setIsLoadingLectureJournal(true);
             const result = await fetchLectureJournalList({
@@ -873,6 +929,13 @@ export function UpstreamSessionDemoLabPage() {
               message: resolveUpstreamErrorMessage(error, '暂时无法读取专业字典。'),
             });
             return;
+          case 'class-list':
+            setClassListResult(null);
+            setActionError({
+              panel: 'class-list',
+              message: resolveUpstreamErrorMessage(error, '暂时无法读取班级列表。'),
+            });
+            return;
           case 'lecture-journal':
             setLectureJournalResult(null);
             setActionError({
@@ -918,6 +981,7 @@ export function UpstreamSessionDemoLabPage() {
 
         setIsLoadingDirectory(false);
         setIsLoadingMajorDirectory(false);
+        setIsLoadingClassList(false);
         setIsLoadingLectureJournal(false);
         setIsLoadingIdentity(false);
       }
@@ -974,6 +1038,7 @@ export function UpstreamSessionDemoLabPage() {
       });
       setDirectoryResult(null);
       setMajorDirectoryResult(null);
+      setClassListResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -1273,6 +1338,7 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingCurriculumPlanDetails.department ||
     isLoadingDirectory ||
     isLoadingMajorDirectory ||
+    isLoadingClassList ||
     isLoadingIdentity ||
     isLoadingLectureJournal;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
@@ -1283,6 +1349,8 @@ export function UpstreamSessionDemoLabPage() {
         return '读取教师字典';
       case 'major-directory':
         return '读取专业字典';
+      case 'class-list':
+        return '读取班级列表';
       case 'lecture-journal':
         return '读取教学日志';
       case 'verified-staff-identity':
@@ -1368,6 +1436,36 @@ export function UpstreamSessionDemoLabPage() {
     }
   }
 
+  async function handleClassListRequest() {
+    try {
+      const values = await classListForm.validateFields([
+        'schoolYear',
+        'semester',
+        'departmentId',
+        'annualMajorId',
+      ]);
+
+      await ensureSessionAndRun({
+        type: 'class-list',
+        values,
+      });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'errorFields' in error &&
+        Array.isArray(error.errorFields)
+      ) {
+        return;
+      }
+
+      setActionError({
+        panel: 'class-list',
+        message: resolveUpstreamErrorMessage(error, '暂时无法读取班级列表。'),
+      });
+    }
+  }
+
   async function handleLectureJournalRequest() {
     try {
       const values = await lectureJournalForm.validateFields(['semesterId', 'teachingClassId']);
@@ -1421,7 +1519,7 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>按需查询：</strong>
-              “专业字典”“教学日志”“个人教学计划”和“系部教学计划”标签页均支持按需查询；其中教学日志标签会先从真实教师学期课表中抽取少量教学班样本。
+              “专业字典”“班级列表”“教学日志”“个人教学计划”和“系部教学计划”标签页均支持按需查询；其中教学日志标签会先从真实教师学期课表中抽取少量教学班样本。
             </li>
             <li>
               <strong>Token 滚动：</strong>
@@ -1586,6 +1684,143 @@ export function UpstreamSessionDemoLabPage() {
               hasStoredSession
                 ? '输入部门 ID 后点击“查询专业”。'
                 : '登录 upstream 后即可读取专业字典。'
+            }
+          />
+        )}
+      </div>
+    );
+  }
+
+  function renderClassListPanel() {
+    const classSelectOptions = classListResult ? buildClassSelectOptions(classListResult) : [];
+
+    return (
+      <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchClassDirectory')}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
+
+        <Alert
+          type="info"
+          showIcon
+          title="参数说明"
+          description="departmentId 使用 org department 的 id 字段；schoolYear、semester 与 annualMajorId 当前都可选，不填时按 null 传给后端。后端从 upstream 的 data.dictoryDTOList 读取 code/name，exp 当前不进入前端选择器语义。"
+        />
+
+        <Form<ClassListFormValues>
+          form={classListForm}
+          initialValues={getDefaultClassListValues()}
+          layout="inline"
+          requiredMark={false}
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}
+        >
+          <Form.Item label="学年" name="schoolYear">
+            <Input
+              placeholder="可选"
+              style={{ width: 100 }}
+              onChange={() => {
+                setActionError(null);
+                setClassListResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item label="学期" name="semester">
+            <Input
+              placeholder="可选"
+              style={{ width: 70 }}
+              onChange={() => {
+                setActionError(null);
+                setClassListResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item
+            label="部门 ID"
+            name="departmentId"
+            rules={[{ required: true, message: '请输入部门 ID' }]}
+          >
+            <Input
+              placeholder="ORG0302"
+              style={{ width: 160 }}
+              onChange={() => {
+                setActionError(null);
+                setClassListResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item label="专业 ID" name="annualMajorId">
+            <Input
+              placeholder="可选，不填为 null"
+              style={{ width: 180 }}
+              onChange={() => {
+                setActionError(null);
+                setClassListResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              loading={isLoadingClassList}
+              onClick={() => {
+                void handleClassListRequest();
+              }}
+            >
+              查询班级
+            </Button>
+          </Form.Item>
+        </Form>
+
+        {isLoadingClassList ? (
+          <Alert type="info" showIcon title="正在读取班级列表..." />
+        ) : classListResult ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Tag variant="filled" color="processing">
+                班级总数：{classListResult.classes.length}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                过期时间：{formatDateTime(classListResult.expiresAt)}
+              </Tag>
+              <Tag variant="filled" color="blue">
+                预览条数：{Math.min(classListResult.classes.length, CLASS_PREVIEW_LIMIT)}
+              </Tag>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  void handleClassListRequest();
+                }}
+              >
+                刷新
+              </Button>
+            </div>
+
+            <Card size="small" title="选择器 options 预览">
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="按班级名称搜索"
+                style={{ maxWidth: '100%', width: 360 }}
+                options={classSelectOptions}
+              />
+            </Card>
+
+            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+              {JSON.stringify(buildClassListPreview(classListResult), null, 2)}
+            </pre>
+          </>
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasStoredSession
+                ? '填写查询条件后点击“查询班级”。'
+                : '登录 upstream 后即可读取班级列表。'
             }
           />
         )}
@@ -2168,6 +2403,8 @@ export function UpstreamSessionDemoLabPage() {
         return renderTeacherDirectoryPanel();
       case 'major-directory':
         return renderMajorDirectoryPanel();
+      case 'class-list':
+        return renderClassListPanel();
       case 'lecture-journal':
         return renderLectureJournalPanel();
       case 'verified-staff-identity':
@@ -2209,7 +2446,7 @@ export function UpstreamSessionDemoLabPage() {
           type="info"
           showIcon
           title="链路说明"
-          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、专业字典、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
+          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、专业字典、班级列表、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
 
@@ -2356,6 +2593,7 @@ export function UpstreamSessionDemoLabPage() {
             });
             setDirectoryResult(null);
             setMajorDirectoryResult(null);
+            setClassListResult(null);
             setVerifiedIdentityResult(null);
             setIsLoginModalOpen(false);
             setPendingAction(null);
