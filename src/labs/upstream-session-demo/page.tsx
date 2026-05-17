@@ -38,11 +38,13 @@ import {
   fetchDepartmentCurriculumPlanList,
   fetchLectureJournalList,
   fetchLectureJournalTeachingClassSamples,
+  fetchMajorDirectory,
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
   isExpiredUpstreamSessionError,
   type LectureJournalListResult,
   type LectureJournalTeachingClassRecord,
+  type MajorDirectoryResult,
   resolveUpstreamErrorMessage,
   type TeacherDirectoryResult,
   type VerifiedStaffIdentityResult,
@@ -73,11 +75,16 @@ type LectureJournalFormValues = {
   teachingClassId?: string;
 };
 
+type MajorDirectoryFormValues = {
+  departmentId: string;
+};
+
 type CurriculumPlanScope = 'personal' | 'department';
 type CurriculumPlanPanelKey = 'personal-curriculum-plan' | 'department-curriculum-plan';
 
 type PendingUpstreamAction =
   | { type: 'teacher-directory' }
+  | { departmentId: string; type: 'major-directory' }
   | { teachingClassId: string; type: 'lecture-journal' }
   | { type: 'verified-staff-identity' }
   | {
@@ -94,6 +101,7 @@ type UpstreamActionError = {
 };
 
 const TEACHER_PREVIEW_LIMIT = 5;
+const MAJOR_PREVIEW_LIMIT = 8;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
@@ -165,6 +173,10 @@ const UPSTREAM_PANELS: Array<{
     label: '教师字典',
   },
   {
+    key: 'major-directory',
+    label: '专业字典',
+  },
+  {
     key: 'verified-staff-identity',
     label: '教职工身份',
   },
@@ -201,6 +213,12 @@ function getDefaultDepartmentCurriculumPlanValues(): DepartmentCurriculumPlanFor
     schoolYear: '2025',
     semester: '2',
     teacherId: undefined,
+  };
+}
+
+function getDefaultMajorDirectoryValues(): MajorDirectoryFormValues {
+  return {
+    departmentId: 'ORG0302',
   };
 }
 
@@ -241,6 +259,23 @@ function buildTeacherDirectoryPreview(result: TeacherDirectoryResult) {
     expiresAt: result.expiresAt,
     teacherCount: result.teachers.length,
     teachers: result.teachers.slice(0, TEACHER_PREVIEW_LIMIT),
+    upstreamSessionToken: result.upstreamSessionToken,
+  };
+}
+
+function buildMajorSelectOptions(result: MajorDirectoryResult) {
+  return result.majors.map((major) => ({
+    label: major.name,
+    value: major.code,
+  }));
+}
+
+function buildMajorDirectoryPreview(result: MajorDirectoryResult) {
+  return {
+    expiresAt: result.expiresAt,
+    majorCount: result.majors.length,
+    majors: result.majors.slice(0, MAJOR_PREVIEW_LIMIT),
+    selectOptions: buildMajorSelectOptions(result).slice(0, MAJOR_PREVIEW_LIMIT),
     upstreamSessionToken: result.upstreamSessionToken,
   };
 }
@@ -417,6 +452,7 @@ export function UpstreamSessionDemoLabPage() {
   const [personalCurriculumPlanForm] = Form.useForm<PersonalCurriculumPlanFormValues>();
   const [departmentCurriculumPlanForm] = Form.useForm<DepartmentCurriculumPlanFormValues>();
   const [lectureJournalForm] = Form.useForm<LectureJournalFormValues>();
+  const [majorDirectoryForm] = Form.useForm<MajorDirectoryFormValues>();
   const selectedPersonalClassName = Form.useWatch('className', personalCurriculumPlanForm);
   const selectedPersonalCourseName = Form.useWatch('courseName', personalCurriculumPlanForm);
   const selectedDepartmentClassName = Form.useWatch('className', departmentCurriculumPlanForm);
@@ -436,6 +472,7 @@ export function UpstreamSessionDemoLabPage() {
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [isLoadingMajorDirectory, setIsLoadingMajorDirectory] = useState(false);
   const [isLoadingLectureJournal, setIsLoadingLectureJournal] = useState(false);
   const [isLoadingLectureJournalSamples, setIsLoadingLectureJournalSamples] = useState(false);
   const [isLoadingLectureJournalSemesters, setIsLoadingLectureJournalSemesters] = useState(true);
@@ -468,6 +505,9 @@ export function UpstreamSessionDemoLabPage() {
     department: null,
   });
   const [directoryResult, setDirectoryResult] = useState<TeacherDirectoryResult | null>(null);
+  const [majorDirectoryResult, setMajorDirectoryResult] = useState<MajorDirectoryResult | null>(
+    null,
+  );
   const [lectureJournalResult, setLectureJournalResult] = useState<LectureJournalListResult | null>(
     null,
   );
@@ -564,6 +604,7 @@ export function UpstreamSessionDemoLabPage() {
         department: null,
       });
       setDirectoryResult(null);
+      setMajorDirectoryResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -741,6 +782,17 @@ export function UpstreamSessionDemoLabPage() {
             setDirectoryResult(result);
             return;
           }
+          case 'major-directory': {
+            setIsLoadingMajorDirectory(true);
+            const result = await fetchMajorDirectory({
+              departmentId: action.departmentId,
+              sessionToken: session.upstreamSessionToken,
+            });
+
+            persistSessionFromResult(session, result);
+            setMajorDirectoryResult(result);
+            return;
+          }
           case 'lecture-journal': {
             setIsLoadingLectureJournal(true);
             const result = await fetchLectureJournalList({
@@ -814,6 +866,13 @@ export function UpstreamSessionDemoLabPage() {
               message: resolveUpstreamErrorMessage(error, '暂时无法读取教师字典。'),
             });
             return;
+          case 'major-directory':
+            setMajorDirectoryResult(null);
+            setActionError({
+              panel: 'major-directory',
+              message: resolveUpstreamErrorMessage(error, '暂时无法读取专业字典。'),
+            });
+            return;
           case 'lecture-journal':
             setLectureJournalResult(null);
             setActionError({
@@ -858,6 +917,7 @@ export function UpstreamSessionDemoLabPage() {
         }
 
         setIsLoadingDirectory(false);
+        setIsLoadingMajorDirectory(false);
         setIsLoadingLectureJournal(false);
         setIsLoadingIdentity(false);
       }
@@ -913,6 +973,7 @@ export function UpstreamSessionDemoLabPage() {
         department: null,
       });
       setDirectoryResult(null);
+      setMajorDirectoryResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -1211,6 +1272,7 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingCurriculumPlanDetails.personal ||
     isLoadingCurriculumPlanDetails.department ||
     isLoadingDirectory ||
+    isLoadingMajorDirectory ||
     isLoadingIdentity ||
     isLoadingLectureJournal;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
@@ -1219,6 +1281,8 @@ export function UpstreamSessionDemoLabPage() {
     switch (action?.type) {
       case 'teacher-directory':
         return '读取教师字典';
+      case 'major-directory':
+        return '读取专业字典';
       case 'lecture-journal':
         return '读取教学日志';
       case 'verified-staff-identity':
@@ -1279,6 +1343,31 @@ export function UpstreamSessionDemoLabPage() {
     }
   }
 
+  async function handleMajorDirectoryRequest() {
+    try {
+      const values = await majorDirectoryForm.validateFields(['departmentId']);
+
+      await ensureSessionAndRun({
+        departmentId: values.departmentId,
+        type: 'major-directory',
+      });
+    } catch (error) {
+      if (
+        error &&
+        typeof error === 'object' &&
+        'errorFields' in error &&
+        Array.isArray(error.errorFields)
+      ) {
+        return;
+      }
+
+      setActionError({
+        panel: 'major-directory',
+        message: resolveUpstreamErrorMessage(error, '暂时无法读取专业字典。'),
+      });
+    }
+  }
+
   async function handleLectureJournalRequest() {
     try {
       const values = await lectureJournalForm.validateFields(['semesterId', 'teachingClassId']);
@@ -1332,7 +1421,7 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>按需查询：</strong>
-              “教学日志”“个人教学计划”和“系部教学计划”标签页均支持按需查询；其中教学日志标签会先从真实教师学期课表中抽取少量教学班样本。
+              “专业字典”“教学日志”“个人教学计划”和“系部教学计划”标签页均支持按需查询；其中教学日志标签会先从真实教师学期课表中抽取少量教学班样本。
             </li>
             <li>
               <strong>Token 滚动：</strong>
@@ -1391,6 +1480,112 @@ export function UpstreamSessionDemoLabPage() {
             showIcon
             title={
               hasStoredSession ? '正在尝试读取数据...' : '登录 upstream 后即可自动读取教师字典。'
+            }
+          />
+        )}
+      </div>
+    );
+  }
+
+  function renderMajorDirectoryPanel() {
+    const majorSelectOptions = majorDirectoryResult
+      ? buildMajorSelectOptions(majorDirectoryResult)
+      : [];
+
+    return (
+      <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchMajorDirectory')}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
+
+        <Alert
+          type="info"
+          showIcon
+          title="参数说明"
+          description="departmentId 使用 org department 的 id 字段；当前示例默认使用 ORG0302。后端从 upstream 的 data.dictoryDTOList 读取 code/name，并映射为选择器可用的专业列表。"
+        />
+
+        <Form<MajorDirectoryFormValues>
+          form={majorDirectoryForm}
+          initialValues={getDefaultMajorDirectoryValues()}
+          layout="inline"
+          requiredMark={false}
+          style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}
+        >
+          <Form.Item
+            label="部门 ID"
+            name="departmentId"
+            rules={[{ required: true, message: '请输入部门 ID' }]}
+          >
+            <Input
+              placeholder="ORG0302"
+              style={{ width: 160 }}
+              onChange={() => {
+                setActionError(null);
+                setMajorDirectoryResult(null);
+              }}
+            />
+          </Form.Item>
+
+          <Form.Item>
+            <Button
+              type="primary"
+              loading={isLoadingMajorDirectory}
+              onClick={() => {
+                void handleMajorDirectoryRequest();
+              }}
+            >
+              查询专业
+            </Button>
+          </Form.Item>
+        </Form>
+
+        {isLoadingMajorDirectory ? (
+          <Alert type="info" showIcon title="正在读取专业字典..." />
+        ) : majorDirectoryResult ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Tag variant="filled" color="processing">
+                专业总数：{majorDirectoryResult.majors.length}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                过期时间：{formatDateTime(majorDirectoryResult.expiresAt)}
+              </Tag>
+              <Tag variant="filled" color="blue">
+                预览条数：{Math.min(majorDirectoryResult.majors.length, MAJOR_PREVIEW_LIMIT)}
+              </Tag>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  void handleMajorDirectoryRequest();
+                }}
+              >
+                刷新
+              </Button>
+            </div>
+
+            <Card size="small" title="选择器 options 预览">
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="按专业名称搜索"
+                style={{ maxWidth: '100%', width: 360 }}
+                options={majorSelectOptions}
+              />
+            </Card>
+
+            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+              {JSON.stringify(buildMajorDirectoryPreview(majorDirectoryResult), null, 2)}
+            </pre>
+          </>
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasStoredSession
+                ? '输入部门 ID 后点击“查询专业”。'
+                : '登录 upstream 后即可读取专业字典。'
             }
           />
         )}
@@ -1971,6 +2166,8 @@ export function UpstreamSessionDemoLabPage() {
         return renderIntroductionPanel();
       case 'teacher-directory':
         return renderTeacherDirectoryPanel();
+      case 'major-directory':
+        return renderMajorDirectoryPanel();
       case 'lecture-journal':
         return renderLectureJournalPanel();
       case 'verified-staff-identity':
@@ -2012,7 +2209,7 @@ export function UpstreamSessionDemoLabPage() {
           type="info"
           showIcon
           title="链路说明"
-          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
+          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、专业字典、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
 
@@ -2158,6 +2355,7 @@ export function UpstreamSessionDemoLabPage() {
               department: null,
             });
             setDirectoryResult(null);
+            setMajorDirectoryResult(null);
             setVerifiedIdentityResult(null);
             setIsLoginModalOpen(false);
             setPendingAction(null);

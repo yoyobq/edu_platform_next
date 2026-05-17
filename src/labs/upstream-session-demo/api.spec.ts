@@ -18,6 +18,7 @@ import {
   fetchCurriculumPlanDetail,
   fetchLectureJournalList,
   fetchLectureJournalTeachingClassSamples,
+  fetchMajorDirectory,
 } from './api';
 
 describe('upstream-session-demo api', () => {
@@ -92,6 +93,41 @@ describe('upstream-session-demo api', () => {
       {
         semesterId: 202601,
         staffId: 'STAFF-002',
+      },
+    );
+  });
+
+  it('requests major directory with a trimmed department id', async () => {
+    const payload = {
+      expiresAt: '2026-04-25T12:00:00.000Z',
+      majors: [
+        {
+          code: 'MAJOR-001',
+          image: '',
+          name: '软件技术',
+          text: '软件技术',
+          value: 'MAJOR-001',
+        },
+      ],
+      upstreamSessionToken: 'rolling-token-004',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      fetchMajorDirectory: payload,
+    });
+
+    await expect(
+      fetchMajorDirectory({
+        departmentId: ' ORG0302 ',
+        sessionToken: 'rolling-token-003',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('FetchMajorDirectory'),
+      {
+        departmentId: 'ORG0302',
+        sessionToken: 'rolling-token-003',
       },
     );
   });

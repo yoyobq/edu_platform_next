@@ -33,6 +33,10 @@ type TeacherDirectoryResponse = {
   fetchTeacherDirectory: TeacherDirectoryResult;
 };
 
+type MajorDirectoryResponse = {
+  fetchMajorDirectory: MajorDirectoryResult;
+};
+
 type CurriculumPlanListResponse = {
   fetchCurriculumPlanList: CurriculumPlanListResult;
 };
@@ -69,6 +73,18 @@ export type CurrentUpstreamDemoAccount = {
 export type TeacherDirectoryResult = {
   expiresAt: string;
   teachers: {
+    code: string;
+    image: string;
+    name: string;
+    text: string;
+    value: string;
+  }[];
+  upstreamSessionToken: string;
+};
+
+export type MajorDirectoryResult = {
+  expiresAt: string;
+  majors: {
     code: string;
     image: string;
     name: string;
@@ -138,6 +154,22 @@ const FETCH_TEACHER_DIRECTORY_QUERY = `
         value
       }
       upstreamSessionToken
+    }
+  }
+`;
+
+const FETCH_MAJOR_DIRECTORY_QUERY = `
+  query FetchMajorDirectory($sessionToken: String!, $departmentId: String!) {
+    fetchMajorDirectory(sessionToken: $sessionToken, departmentId: $departmentId) {
+      upstreamSessionToken
+      expiresAt
+      majors {
+        code
+        name
+        text
+        value
+        image
+      }
     }
   }
 `;
@@ -297,6 +329,21 @@ export async function fetchTeacherDirectory(input: { sessionToken: string }) {
   });
 
   return response.fetchTeacherDirectory;
+}
+
+export async function fetchMajorDirectory(input: { departmentId: string; sessionToken: string }) {
+  const response = await requestGraphQL<
+    MajorDirectoryResponse,
+    {
+      departmentId: string;
+      sessionToken: string;
+    }
+  >(FETCH_MAJOR_DIRECTORY_QUERY, {
+    departmentId: input.departmentId.trim(),
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchMajorDirectory;
 }
 
 export async function fetchCurriculumPlanList(input: {
