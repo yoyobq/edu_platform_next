@@ -57,6 +57,10 @@ import {
   exportAcademicWorkloadDeductionExcel,
 } from '../infrastructure/academic-workload-deduction-summary-excel-export';
 
+import {
+  type MarkableDetailCellPropsGetter,
+  useMarkableDetailCells,
+} from './markable-detail-cells';
 import { TeachingWeekRangeControl } from './teaching-week-range-control';
 import { formatTeachingWeekRangeLabel, useTeachingWeekRange } from './teaching-week-range-state';
 
@@ -113,6 +117,14 @@ const DEDUCTION_TABLE_BASE_WIDTH = 864;
 const DEDUCTION_DATE_COLUMN_WIDTH = 76;
 const EMPTY_TEXT = '-';
 const SPORTS_MEET_SOURCE_EVENT_TYPE = 'SPORTS_MEET';
+const DEFAULT_DEDUCTION_ENGAGEMENT_TYPE: EngagementTabKey = 'FULL_TIME_TEACHER';
+const ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
+  evenCell: 'academic-workload-deduction-summary-detail-row-even',
+  markedCell: 'academic-workload-deduction-summary-detail-cell-marked',
+  markableCell: 'academic-workload-deduction-summary-markable-cell',
+  markStartCell: 'academic-workload-deduction-summary-mark-start-cell',
+  oddCell: 'academic-workload-deduction-summary-detail-row-odd',
+};
 
 const DEDUCTION_REASON_LABELS: Record<string, string> = {
   ACTIVITY: '活动',
@@ -522,12 +534,6 @@ function collectDateColumns(rows: AcademicWorkloadDeductionTableRow[]) {
   return Array.from(dates).sort();
 }
 
-function getDeductionRowClassName(row: AcademicWorkloadDeductionTableRow) {
-  return row.detailRowIndex % 2 === 0
-    ? 'academic-workload-deduction-summary-detail-row-even'
-    : 'academic-workload-deduction-summary-detail-row-odd';
-}
-
 function renderMergedCell(
   children: ReactNode,
   row: AcademicWorkloadDeductionTableRow,
@@ -711,6 +717,7 @@ function buildDeductionColumns(
   dateColumns: string[],
   showTeacherTypeTag: boolean,
   teachingWeeks: readonly TeachingWeekOption[],
+  getMarkableDetailCellProps: MarkableDetailCellPropsGetter<AcademicWorkloadDeductionTableRow>,
 ) {
   const columns: ColumnsType<AcademicWorkloadDeductionTableRow> = [
     {
@@ -747,12 +754,14 @@ function buildDeductionColumns(
     {
       dataIndex: ['item', 'teachingClassName'],
       key: 'teachingClassName',
+      onCell: (row) => getMarkableDetailCellProps(row, { isMarkStart: true }),
       render: (value: string) => renderTeachingClassName(value),
       title: '任课班级',
       width: 132,
     },
     {
       key: 'course',
+      onCell: (row) => getMarkableDetailCellProps(row),
       render: (_, row) => (
         <span className="academic-workload-deduction-summary-course">
           <strong>{row.item.courseName || '未命名课程'}</strong>
@@ -764,6 +773,7 @@ function buildDeductionColumns(
     {
       align: 'right',
       key: 'baselineWeeklyHours',
+      onCell: (row) => getMarkableDetailCellProps(row),
       render: (_, row) => renderHourCell(row.item.baselineWeeklyHours),
       title: renderStackedColumnTitle('周课', '时'),
       width: 68,
@@ -772,12 +782,14 @@ function buildDeductionColumns(
       align: 'right',
       dataIndex: ['item', 'baselineTeachingWeekCount'],
       key: 'baselineTeachingWeekCount',
+      onCell: (row) => getMarkableDetailCellProps(row),
       title: renderStackedColumnTitle('上课', '周数'),
       width: 68,
     },
     ...dateColumns.map((date) => ({
       align: 'right' as const,
       key: `date-${date}`,
+      onCell: (row: AcademicWorkloadDeductionTableRow) => getMarkableDetailCellProps(row),
       render: (_: unknown, row: AcademicWorkloadDeductionTableRow) => (
         <DateAdjustmentCell summary={row.dateSummaries[date]} />
       ),
@@ -789,6 +801,7 @@ function buildDeductionColumns(
     {
       align: 'right',
       key: 'subtotal',
+      onCell: (row) => getMarkableDetailCellProps(row),
       render: (_, row) => (
         <span className="academic-workload-deduction-summary-hour">
           {formatDeductedHundredths(row.tableSubtotalHundredths)}
@@ -888,6 +901,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const isAdminViewer = Boolean(rawCanSelectWorkloadDepartment);
   const scopedDepartmentId = defaultWorkloadDepartmentId?.trim() || '';
   const latestRequestIdRef = useRef(0);
+  const hasAutoLoadedSummaryRef = useRef(false);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
@@ -897,7 +911,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [departmentRecords, setDepartmentRecords] = useState<AcademicWorkloadDepartmentOption[]>(
     [],
   );
-  const [activeEngagementType, setActiveEngagementType] = useState<EngagementTabKey>('ALL');
+  const [activeEngagementType, setActiveEngagementType] = useState<EngagementTabKey>(
+    DEFAULT_DEDUCTION_ENGAGEMENT_TYPE,
+  );
   const [showSportsMeetDeductions, setShowSportsMeetDeductions] = useState(true);
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
@@ -909,13 +925,18 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryEnvelope, setSummaryEnvelope] =
     useState<AcademicWorkloadDeductionSummaryEnvelope | null>(null);
+  const { clearMarkedDetailRows, getMarkableDetailCellProps } =
+    useMarkableDetailCells<AcademicWorkloadDeductionTableRow>(
+      ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES,
+    );
 
   const invalidateSummary = useCallback(() => {
     latestRequestIdRef.current += 1;
+    clearMarkedDetailRows();
     setSummaryEnvelope(null);
     setSummaryError(null);
     setLoadingSummary(false);
-  }, []);
+  }, [clearMarkedDetailRows]);
 
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
@@ -1067,8 +1088,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         deductionDateColumns,
         deferredActiveEngagementType === 'ALL',
         teachingWeeks,
+        getMarkableDetailCellProps,
       ),
-    [deferredActiveEngagementType, deductionDateColumns, teachingWeeks],
+    [deferredActiveEngagementType, deductionDateColumns, getMarkableDetailCellProps, teachingWeeks],
   );
   const deductionSummaryLabel = `${getEngagementTabLabel(deferredActiveEngagementType)}小计`;
 
@@ -1154,6 +1176,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const activeEngagementLabel = getEngagementTabLabel(activeEngagementType);
   const canExportDeductionExcel =
     activeEngagementType !== 'ALL' && activeEngagementType !== 'EXTERNAL_TEACHER';
+  const canLoadSummary =
+    Boolean(selectedSemesterId) && (isAdminViewer || Boolean(workloadDepartmentId));
   const semesterLabel = selectedSemester?.name ?? `学期 ${selectedSemesterId}`;
   const selectedDepartmentOption = departmentOptions.find(
     (option) => option.value === workloadDepartmentId,
@@ -1164,6 +1188,15 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     teachingWeekRange,
   )} · ${selectedDepartmentLabel} · ${activeEngagementLabel}`;
   const shouldShowDepartmentSummary = isAdminViewer && visibleDepartmentSummaries.length > 1;
+
+  useEffect(() => {
+    if (hasAutoLoadedSummaryRef.current || !canLoadSummary || loadingSemesters) {
+      return;
+    }
+
+    hasAutoLoadedSummaryRef.current = true;
+    void loadSummary();
+  }, [canLoadSummary, loadSummary, loadingSemesters]);
 
   const handleExportDeductionTable = useCallback(async () => {
     if (!canExportDeductionExcel || deductionRows.length === 0 || exportingExcel) {
@@ -1296,7 +1329,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
               <Button
                 icon={<BarChartOutlined />}
                 type="primary"
-                disabled={!selectedSemesterId}
+                disabled={!canLoadSummary}
                 loading={loadingSummary}
                 onClick={() => {
                   void loadSummary();
@@ -1402,7 +1435,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
                 columns={deductionColumns}
                 dataSource={deductionRows}
                 pagination={false}
-                rowClassName={getDeductionRowClassName}
                 rowKey={(row) => row.key}
                 scroll={{
                   x:

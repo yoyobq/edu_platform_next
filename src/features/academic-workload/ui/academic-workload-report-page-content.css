@@ -128,6 +128,35 @@
   background: var(--ant-color-fill-secondary);
 }
 
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-report-markable-cell {
+  cursor: pointer;
+}
+
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-report-detail-cell-marked,
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-report-detail-cell-marked {
+  background: var(--ant-color-warning-bg);
+}
+
+.academic-workload-report-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-report-mark-start-cell.academic-workload-report-detail-cell-marked {
+  box-shadow: inset 3px 0 0 var(--ant-color-warning);
+}
+
+.academic-workload-report-detail-cell-marked .academic-workload-report-course {
+  color: var(--ant-color-warning-text-active);
+}
+
 .academic-workload-report-table-shell :where(.ant-table-summary > tr > td) {
   background: var(--ant-color-fill-tertiary);
   border-top: 1px solid var(--ant-color-border);

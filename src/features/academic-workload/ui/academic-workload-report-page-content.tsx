@@ -43,6 +43,7 @@ import {
   exportAcademicWorkloadReportExcel,
 } from '../infrastructure/academic-workload-report-excel-export';
 
+import { useMarkableDetailCells } from './markable-detail-cells';
 import { TeachingWeekRangeControl } from './teaching-week-range-control';
 import { formatTeachingWeekRangeLabel, useTeachingWeekRange } from './teaching-week-range-state';
 
@@ -65,6 +66,14 @@ type AcademicWorkloadReportTableRow = {
 
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 856;
+const DEFAULT_REPORT_ENGAGEMENT_TYPE: AcademicWorkloadEngagementFilter = 'FULL_TIME_TEACHER';
+const ACADEMIC_WORKLOAD_REPORT_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
+  evenCell: 'academic-workload-report-detail-cell-even',
+  markedCell: 'academic-workload-report-detail-cell-marked',
+  markableCell: 'academic-workload-report-markable-cell',
+  markStartCell: 'academic-workload-report-mark-start-cell',
+  oddCell: 'academic-workload-report-detail-cell-odd',
+};
 
 function compareText(first: string | null | undefined, second: string | null | undefined) {
   return (first || '').localeCompare(second || '', 'zh-Hans-CN');
@@ -211,18 +220,6 @@ function renderReportMergedCell(children: ReactNode, row: AcademicWorkloadReport
   };
 }
 
-function getReportDetailCellClassName(row: AcademicWorkloadReportTableRow) {
-  return row.detailRowIndex % 2 === 0
-    ? 'academic-workload-report-detail-cell-even'
-    : 'academic-workload-report-detail-cell-odd';
-}
-
-function getReportDetailCellProps(row: AcademicWorkloadReportTableRow) {
-  return {
-    className: getReportDetailCellClassName(row),
-  };
-}
-
 function renderTeachingClassName(value: string) {
   const teachingClassNames = splitAcademicWorkloadTeachingClassNames(value);
 
@@ -308,6 +305,7 @@ export function AcademicWorkloadReportPageContent({
     ? DEFAULT_WORKLOAD_DEPARTMENT_ID
     : defaultScopedWorkloadDepartmentId;
   const latestRequestIdRef = useRef(0);
+  const hasAutoLoadedReportRef = useRef(false);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [workloadDepartmentId, setWorkloadDepartmentId] = useState(initialWorkloadDepartmentId);
@@ -315,7 +313,7 @@ export function AcademicWorkloadReportPageContent({
     [],
   );
   const [activeEngagementType, setActiveEngagementType] =
-    useState<AcademicWorkloadEngagementFilter>('ALL');
+    useState<AcademicWorkloadEngagementFilter>(DEFAULT_REPORT_ENGAGEMENT_TYPE);
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingReport, setLoadingReport] = useState(false);
@@ -326,13 +324,18 @@ export function AcademicWorkloadReportPageContent({
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
+  const { clearMarkedDetailRows, getMarkableDetailCellProps } =
+    useMarkableDetailCells<AcademicWorkloadReportTableRow>(
+      ACADEMIC_WORKLOAD_REPORT_MARKABLE_DETAIL_CELL_CLASS_NAMES,
+    );
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
+    clearMarkedDetailRows();
     setReportEnvelope(null);
     setReportError(null);
     setLoadingReport(false);
-  }, []);
+  }, [clearMarkedDetailRows]);
 
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
@@ -541,6 +544,15 @@ export function AcademicWorkloadReportPageContent({
     ],
   );
 
+  useEffect(() => {
+    if (hasAutoLoadedReportRef.current || !canLoadReport || loadingSemesters) {
+      return;
+    }
+
+    hasAutoLoadedReportRef.current = true;
+    void loadReport();
+  }, [canLoadReport, loadReport, loadingSemesters]);
+
   const handleEngagementTypeChange = (nextKey: string) => {
     const nextEngagementType = nextKey as AcademicWorkloadEngagementFilter;
 
@@ -618,7 +630,7 @@ export function AcademicWorkloadReportPageContent({
       {
         dataIndex: ['item', 'teachingClassName'],
         key: 'teachingClassName',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row, { isMarkStart: true }),
         render: (value: string) => renderTeachingClassName(value),
         title: '任课班级',
         width: 132,
@@ -626,7 +638,7 @@ export function AcademicWorkloadReportPageContent({
       {
         dataIndex: ['item', 'courseName'],
         key: 'courseName',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (value: string | null) => (
           <span className="academic-workload-report-course">{formatReportText(value)}</span>
         ),
@@ -637,7 +649,7 @@ export function AcademicWorkloadReportPageContent({
         align: 'right',
         dataIndex: ['item', 'weeklyHours'],
         key: 'weeklyHours',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (value: string) => formatReportText(value),
         title: '周课时',
         width: 68,
@@ -646,7 +658,7 @@ export function AcademicWorkloadReportPageContent({
         align: 'right',
         dataIndex: ['item', 'weekCount'],
         key: 'weekCount',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (value: number) => formatReportText(value),
         title: '周数',
         width: 68,
@@ -655,7 +667,7 @@ export function AcademicWorkloadReportPageContent({
         align: 'right',
         dataIndex: ['item', 'coefficient'],
         key: 'coefficient',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (value: string) => formatReportDecimal(value, 1),
         title: '系数',
         width: 68,
@@ -664,7 +676,7 @@ export function AcademicWorkloadReportPageContent({
         align: 'right',
         dataIndex: ['item', 'hours'],
         key: 'hours',
-        onCell: getReportDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (value: string) => (
           <span className="academic-workload-report-hour">{formatReportDecimal(value, 2)}</span>
         ),
@@ -685,7 +697,7 @@ export function AcademicWorkloadReportPageContent({
         width: 92,
       },
     ],
-    [],
+    [getMarkableDetailCellProps],
   );
 
   return (

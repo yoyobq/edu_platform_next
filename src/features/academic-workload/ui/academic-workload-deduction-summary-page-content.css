@@ -144,27 +144,58 @@
 
 .academic-workload-deduction-summary-table-shell
   .ant-table-tbody
-  > tr.academic-workload-deduction-summary-detail-row-even
-  > td {
+  > tr
+  > .academic-workload-deduction-summary-detail-row-even {
   background: var(--ant-color-bg-container);
 }
 
 .academic-workload-deduction-summary-table-shell
   .ant-table-tbody
-  > tr.academic-workload-deduction-summary-detail-row-odd
-  > td {
+  > tr
+  > .academic-workload-deduction-summary-detail-row-odd {
   background: var(--ant-color-fill-quaternary);
 }
 
 .academic-workload-deduction-summary-table-shell
   .ant-table-tbody
-  > tr.academic-workload-deduction-summary-detail-row-even:hover
-  > td,
+  > tr:hover
+  > .academic-workload-deduction-summary-detail-row-even,
 .academic-workload-deduction-summary-table-shell
   .ant-table-tbody
-  > tr.academic-workload-deduction-summary-detail-row-odd:hover
-  > td {
+  > tr:hover
+  > .academic-workload-deduction-summary-detail-row-odd {
   background: var(--ant-color-fill-secondary);
+}
+
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-deduction-summary-markable-cell {
+  cursor: pointer;
+}
+
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-deduction-summary-detail-cell-marked,
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr:hover
+  > .academic-workload-deduction-summary-detail-cell-marked {
+  background: var(--ant-color-warning-bg);
+}
+
+.academic-workload-deduction-summary-table-shell
+  .ant-table-tbody
+  > tr
+  > .academic-workload-deduction-summary-mark-start-cell.academic-workload-deduction-summary-detail-cell-marked {
+  box-shadow: inset 3px 0 0 var(--ant-color-warning);
+}
+
+.academic-workload-deduction-summary-detail-cell-marked
+  .academic-workload-deduction-summary-course
+  strong {
+  color: var(--ant-color-warning-text-active);
 }
 
 .academic-workload-deduction-summary-table-shell :where(.ant-table-summary > tr > td) {

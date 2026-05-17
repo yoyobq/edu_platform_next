@@ -37,6 +37,7 @@ import {
   type ExternalTeacherCompensationExcelRow,
 } from '../infrastructure/external-teacher-compensation-excel-export';
 
+import { useMarkableDetailCells } from './markable-detail-cells';
 import { TeachingWeekRangeControl } from './teaching-week-range-control';
 import {
   formatTeachingWeekDateSpan,
@@ -79,6 +80,13 @@ const REPORT_TABLE_BASE_WIDTH = 976;
 const EXPORT_STATUS_RESET_DELAY_MS = 1800;
 const FULL_SEMESTER_TAB_KEY = 'semester';
 const CUSTOM_RANGE_TAB_KEY = 'custom';
+const EXTERNAL_TEACHER_COMPENSATION_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
+  evenCell: 'external-teacher-compensation-detail-cell-even',
+  markedCell: 'external-teacher-compensation-detail-cell-marked',
+  markableCell: 'external-teacher-compensation-markable-cell',
+  markStartCell: 'external-teacher-compensation-mark-start-cell',
+  oddCell: 'external-teacher-compensation-detail-cell-odd',
+};
 
 const ENGAGEMENT_LABELS: Record<AcademicTeacherEngagementType, string> = {
   ADMINISTRATIVE_TEACHING: '行政兼课',
@@ -338,21 +346,6 @@ function renderMergedCell(children: ReactNode, row: ReportTableRow) {
   };
 }
 
-function getDetailCellClassName(row: ReportTableRow) {
-  return row.detailRowIndex % 2 === 0
-    ? 'external-teacher-compensation-detail-cell-even'
-    : 'external-teacher-compensation-detail-cell-odd';
-}
-
-function getMarkedDetailCellClassName(row: ReportTableRow, markedRowKeys: ReadonlySet<string>) {
-  return [
-    getDetailCellClassName(row),
-    markedRowKeys.has(row.key) ? 'external-teacher-compensation-detail-cell-marked' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
 function renderTeachingClassName(value: string) {
   const teachingClassNames = splitAcademicWorkloadTeachingClassNames(value);
 
@@ -485,19 +478,22 @@ export function ExternalTeacherCompensationPageContent({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportEnvelope, setReportEnvelope] =
     useState<AcademicAdjustedWorkloadReportEnvelope | null>(null);
-  const [markedDetailRowKeys, setMarkedDetailRowKeys] = useState<Set<string>>(() => new Set());
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
   const [rangeInitializedSemesterId, setRangeInitializedSemesterId] = useState<number | null>(null);
+  const { clearMarkedDetailRows, getMarkableDetailCellProps } =
+    useMarkableDetailCells<ReportTableRow>(
+      EXTERNAL_TEACHER_COMPENSATION_MARKABLE_DETAIL_CELL_CLASS_NAMES,
+    );
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
     setExportStatus('idle');
-    setMarkedDetailRowKeys(new Set());
+    clearMarkedDetailRows();
     setReportEnvelope(null);
     setReportError(null);
     setLoadingReport(false);
-  }, []);
+  }, [clearMarkedDetailRows]);
 
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
@@ -838,32 +834,6 @@ export function ExternalTeacherCompensationPageContent({
     void loadReport(nextRange);
   };
 
-  const toggleDetailMark = useCallback((rowKey: string) => {
-    setMarkedDetailRowKeys((currentKeys) => {
-      const nextKeys = new Set(currentKeys);
-
-      if (nextKeys.has(rowKey)) {
-        nextKeys.delete(rowKey);
-      } else {
-        nextKeys.add(rowKey);
-      }
-
-      return nextKeys;
-    });
-  }, []);
-  const getMarkableDetailCellProps = useCallback(
-    (row: ReportTableRow, options: { isMarkStart?: boolean } = {}) => ({
-      className: [
-        getMarkedDetailCellClassName(row, markedDetailRowKeys),
-        'external-teacher-compensation-markable-cell',
-        options.isMarkStart ? 'external-teacher-compensation-mark-start-cell' : '',
-      ]
-        .filter(Boolean)
-        .join(' '),
-      onClick: () => toggleDetailMark(row.key),
-    }),
-    [markedDetailRowKeys, toggleDetailMark],
-  );
   const handleExportReportTable = useCallback(async () => {
     if (!reportEnvelope || reportRows.length === 0 || exportingExcel) {
       return;
