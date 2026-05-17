@@ -945,7 +945,7 @@ export function ExternalTeacherCompensationPageContent({
       },
       {
         key: 'courseName',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => (
           <span className="external-teacher-compensation-course">
             {formatReportText(row.item.courseName)}
@@ -957,7 +957,7 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'weeklyHours',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => formatReportText(row.item.weeklyHours),
         title: '周学时',
         width: 68,
@@ -965,7 +965,7 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'weekCount',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => formatReportText(row.item.weekCount),
         title: '周数',
         width: 68,
@@ -973,7 +973,7 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'adjustmentHours',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => renderAdjustmentValue(row.item),
         title: '增删课',
         width: 78,
@@ -981,7 +981,7 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'coefficient',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => formatCompactDecimal(row.item.coefficient),
         title: '系数',
         width: 68,
@@ -989,7 +989,7 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'actualHours',
-        onCell: getMarkableDetailCellProps,
+        onCell: (row) => getMarkableDetailCellProps(row),
         render: (_, row) => (
           <span className="external-teacher-compensation-hour external-teacher-compensation-hour-primary">
             {formatCompactDecimal(row.item.actualHours)}

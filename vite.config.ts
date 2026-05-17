@@ -3,6 +3,8 @@ import react from '@vitejs/plugin-react';
 import path from 'node:path';
 import { defineConfig, loadEnv } from 'vite';
 
+const DEFAULT_BUILD_CHUNK_WARNING_LIMIT = 1000;
+
 function parseBoolean(value: string | undefined, fallback: boolean): boolean {
   if (value === undefined) {
     return fallback;
@@ -51,7 +53,10 @@ export default defineConfig(({ mode }) => {
   const devServerStrictPort = parseBoolean(env.DEV_SERVER_STRICT_PORT, false);
   const buildOutDir = env.BUILD_OUT_DIR || 'dist';
   const buildSourcemap = parseBoolean(env.BUILD_SOURCEMAP, false);
-  const buildChunkWarningLimit = parseInteger(env.BUILD_CHUNK_WARNING_LIMIT, 500);
+  const buildChunkWarningLimit = parseInteger(
+    env.BUILD_CHUNK_WARNING_LIMIT,
+    DEFAULT_BUILD_CHUNK_WARNING_LIMIT,
+  );
 
   return {
     envDir,
