@@ -200,6 +200,7 @@ describe('major-sync api', () => {
 
     expect(query).toContain('DryRunSyncMajorsFromUpstream');
     expect(query).toContain('dryRunSyncMajorsFromUpstream');
+    expect(query).toContain('previewedCount');
     expect(query).toContain('updatedCount');
     expect(query).toContain('shortName');
     expect(query).toContain('trainingYears');
@@ -222,6 +223,7 @@ describe('major-sync api', () => {
     const payload = {
       createdCount: 1,
       departmentId: 'ORG0302',
+      dryRun: false,
       existsCount: 1,
       expiresAt: '2026-05-18T12:00:00.000Z',
       fetchedCount: 3,
@@ -245,6 +247,7 @@ describe('major-sync api', () => {
           trainingYears: null,
         },
       ],
+      processedCount: 3,
       skippedCount: 0,
       updatedCount: 1,
       upstreamSessionToken: 'rolling-token-003',
@@ -265,10 +268,13 @@ describe('major-sync api', () => {
 
     expect(query).toContain('SyncMajorsFromUpstream');
     expect(query).toContain('syncMajorsFromUpstream');
+    expect(query).toContain('dryRun');
+    expect(query).toContain('processedCount');
     expect(query).toContain('updatedCount');
     expect(query).toContain('shortName');
     expect(query).toContain('trainingYears');
     expect(query).toContain('trainingLevel');
+    expect(query).not.toContain('previewedCount');
     expect(query).not.toContain('annualMajorId');
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('SyncMajorsFromUpstream'),

@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Select, Spin, Table, Tag, Tooltip } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Popconfirm,
+  Select,
+  Spin,
+  Table,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -22,11 +33,15 @@ import {
   fetchCurrentMajorSyncAccount,
   fetchMajorSyncDepartmentOptions,
   isExpiredUpstreamSessionError,
+  type MajorSyncCommitAction,
+  type MajorSyncCommitItem,
+  type MajorSyncCommitResult,
   type MajorSyncDepartmentOption,
   type MajorSyncDryRunAction,
   type MajorSyncDryRunItem,
   type MajorSyncDryRunResult,
   resolveMajorSyncErrorMessage,
+  syncMajorsFromUpstream,
 } from './api';
 import { majorSyncLabMeta } from './meta';
 
@@ -34,20 +49,31 @@ type MajorSyncFormValues = {
   departmentId: string;
 };
 
-type PendingDryRunRequest = {
+type MajorSyncRunMode = 'dryRun' | 'sync';
+
+type PendingMajorSyncRequest = {
+  mode: MajorSyncRunMode;
   values: MajorSyncFormValues;
 };
 
-const ACTION_LABELS: Record<MajorSyncDryRunAction, string> = {
+type MajorSyncResult = MajorSyncDryRunResult | MajorSyncCommitResult;
+type MajorSyncResultItem = MajorSyncDryRunItem | MajorSyncCommitItem;
+type MajorSyncResultAction = MajorSyncDryRunAction | MajorSyncCommitAction;
+
+const ACTION_LABELS: Record<MajorSyncResultAction, string> = {
   CREATE: '待新增',
+  CREATED: '已新增',
   UPDATE: '待修正',
+  UPDATED: '已修正',
   EXISTS: '已存在',
   SKIPPED_DUPLICATE_UPSTREAM_NAME: '上游重复',
 };
 
-const ACTION_COLORS: Record<MajorSyncDryRunAction, string> = {
+const ACTION_COLORS: Record<MajorSyncResultAction, string> = {
   CREATE: 'green',
+  CREATED: 'green',
   UPDATE: 'gold',
+  UPDATED: 'gold',
   EXISTS: 'blue',
   SKIPPED_DUPLICATE_UPSTREAM_NAME: 'orange',
 };
@@ -82,27 +108,44 @@ function getViewerRoleLabel(account: CurrentMajorSyncAccount | null) {
   return account.viewerRole === 'admin' ? 'ADMIN' : '学工行政';
 }
 
-function renderActionTag(action: MajorSyncDryRunAction) {
+function renderActionTag(action: MajorSyncResultAction) {
   return <Tag color={ACTION_COLORS[action]}>{ACTION_LABELS[action]}</Tag>;
 }
 
-function resolveResultMessage(result: MajorSyncDryRunResult) {
-  if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+function resolveResultMessage(result: MajorSyncResult) {
+  if (
+    result.dryRun &&
+    result.createdCount === 0 &&
+    result.updatedCount === 0 &&
+    result.skippedCount === 0
+  ) {
     return '本地专业及派生字段已覆盖上游本次返回的有效专业名。';
   }
 
-  return '本次仅预览，不会写入 org_major。';
+  if (result.dryRun) {
+    return '本次仅预览，不会写入 org_major。';
+  }
+
+  if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+    return '本次落库完成，本地专业无需新增或修正。';
+  }
+
+  return '本次已完成落库；majorName 未被修改，upstream annualMajorId 未写入本地。';
 }
 
 function formatNullableValue(value: number | string | null) {
   return value ?? <span className="text-text-secondary">-</span>;
 }
 
-const resultColumns: ColumnsType<MajorSyncDryRunItem> = [
+function isDryRunResult(result: MajorSyncResult): result is MajorSyncDryRunResult {
+  return result.dryRun;
+}
+
+const resultColumns: ColumnsType<MajorSyncResultItem> = [
   {
     dataIndex: 'action',
     key: 'action',
-    render: (action: MajorSyncDryRunAction) => renderActionTag(action),
+    render: (action: MajorSyncResultAction) => renderActionTag(action),
     title: '动作',
     width: 140,
   },
@@ -157,14 +200,14 @@ export function MajorSyncLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [result, setResult] = useState<MajorSyncDryRunResult | null>(null);
+  const [result, setResult] = useState<MajorSyncResult | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<MajorSyncDepartmentOption[]>([]);
-  const [pendingDryRunRequest, setPendingDryRunRequest] = useState<PendingDryRunRequest | null>(
-    null,
-  );
+  const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
+    useState<PendingMajorSyncRequest | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const {
     clear,
@@ -191,10 +234,11 @@ export function MajorSyncLabPage() {
     () => departmentOptions.find((department) => department.id === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
+  const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
-    setPendingDryRunRequest(null);
+    setPendingMajorSyncRequest(null);
   }, [clear]);
 
   const loadDepartments = useCallback(
@@ -288,26 +332,40 @@ export function MajorSyncLabPage() {
     rememberedCredentials,
   ]);
 
-  const performDryRun = useCallback(
-    async (session: StoredUpstreamSession, values: MajorSyncFormValues) => {
-      setIsPreviewing(true);
+  const performMajorSync = useCallback(
+    async (session: StoredUpstreamSession, values: MajorSyncFormValues, mode: MajorSyncRunMode) => {
+      const isDryRun = mode === 'dryRun';
+
+      if (isDryRun) {
+        setIsPreviewing(true);
+      } else {
+        setIsSyncing(true);
+      }
+
       setPreviewError(null);
       setResult(null);
-      setPendingDryRunRequest(null);
+      setPendingMajorSyncRequest(null);
 
       try {
-        const dryRunResult = await dryRunSyncMajorsFromUpstream({
+        const input = {
           departmentId: values.departmentId,
           upstreamSessionToken: session.upstreamSessionToken,
-        });
+        };
+        const syncResult = isDryRun
+          ? await dryRunSyncMajorsFromUpstream(input)
+          : await syncMajorsFromUpstream(input);
 
-        persistSessionFromResult(session, dryRunResult);
-        setResult(dryRunResult);
+        persistSessionFromResult(session, syncResult);
+        setResult(syncResult);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clearCurrentSession();
-          setPendingDryRunRequest({ values });
-          setLoginError('upstream 会话已失效，请重新登录后继续预览。');
+          setPendingMajorSyncRequest({ mode, values });
+          setLoginError(
+            isDryRun
+              ? 'upstream 会话已失效，请重新登录后继续预览。'
+              : 'upstream 会话已失效，请重新登录后继续落库。',
+          );
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
@@ -321,7 +379,11 @@ export function MajorSyncLabPage() {
 
         setPreviewError(resolveMajorSyncErrorMessage(error));
       } finally {
-        setIsPreviewing(false);
+        if (isDryRun) {
+          setIsPreviewing(false);
+        } else {
+          setIsSyncing(false);
+        }
       }
     },
     [
@@ -333,39 +395,42 @@ export function MajorSyncLabPage() {
     ],
   );
 
-  const handlePreview = useCallback(async () => {
-    const values = await form.validateFields();
+  const handleRunSync = useCallback(
+    async (mode: MajorSyncRunMode) => {
+      const values = await form.validateFields();
 
-    setPreviewError(null);
-    setLoginError(null);
+      setPreviewError(null);
+      setLoginError(null);
 
-    if (!currentAccount) {
-      setPreviewError('当前登录会话尚未恢复，请稍后重试。');
-      return;
-    }
+      if (!currentAccount) {
+        setPreviewError('当前登录会话尚未恢复，请稍后重试。');
+        return;
+      }
 
-    if (!storedSession) {
-      setPendingDryRunRequest({ values });
-      setIsLoginModalOpen(true);
-      loginForm.setFieldsValue(
-        buildUpstreamLoginCredentialsInitialValues({
-          lockedUserId: lockedUpstreamLoginUserId,
-          rememberedCredentials,
-        }),
-      );
-      return;
-    }
+      if (!storedSession) {
+        setPendingMajorSyncRequest({ mode, values });
+        setIsLoginModalOpen(true);
+        loginForm.setFieldsValue(
+          buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
+            rememberedCredentials,
+          }),
+        );
+        return;
+      }
 
-    await performDryRun(storedSession, values);
-  }, [
-    currentAccount,
-    form,
-    lockedUpstreamLoginUserId,
-    loginForm,
-    performDryRun,
-    rememberedCredentials,
-    storedSession,
-  ]);
+      await performMajorSync(storedSession, values, mode);
+    },
+    [
+      currentAccount,
+      form,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      performMajorSync,
+      rememberedCredentials,
+      storedSession,
+    ],
+  );
 
   const handleLoginFinish = useCallback(
     async (values: UpstreamLoginFormValues) => {
@@ -379,14 +444,18 @@ export function MajorSyncLabPage() {
 
       try {
         const nextStoredSession = await loginUpstream(values);
-        const nextPendingRequest = pendingDryRunRequest;
+        const nextPendingRequest = pendingMajorSyncRequest;
 
-        setPendingDryRunRequest(null);
+        setPendingMajorSyncRequest(null);
         setIsLoginModalOpen(false);
         loginForm.resetFields();
 
         if (nextPendingRequest) {
-          await performDryRun(nextStoredSession, nextPendingRequest.values);
+          await performMajorSync(
+            nextStoredSession,
+            nextPendingRequest.values,
+            nextPendingRequest.mode,
+          );
         }
       } catch (error) {
         setLoginError(resolveMajorSyncErrorMessage(error));
@@ -394,7 +463,7 @@ export function MajorSyncLabPage() {
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginForm, loginUpstream, pendingDryRunRequest, performDryRun],
+    [currentAccount, loginForm, loginUpstream, pendingMajorSyncRequest, performMajorSync],
   );
 
   if (isLoadingAccount) {
@@ -478,20 +547,31 @@ export function MajorSyncLabPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions}
+                disabled={hasNoDepartmentOptions || isSyncing}
                 loading={isPreviewing}
-                onClick={() => void handlePreview()}
+                onClick={() => void handleRunSync('dryRun')}
                 type="primary"
               >
                 预览同步
               </Button>
-              <Tooltip title="等待后端 commit 接口接入">
-                <span>
-                  <Button disabled>执行落库</Button>
-                </span>
-              </Tooltip>
+              <Popconfirm
+                cancelText="取消"
+                description="后端会重新拉取 upstream 专业列表，并创建或修正本地 org_major 派生字段。"
+                okButtonProps={{ loading: isSyncing }}
+                okText="确认落库"
+                title="确认执行专业同步？"
+                onConfirm={() => void handleRunSync('sync')}
+              >
+                <Button
+                  danger
+                  disabled={hasNoDepartmentOptions || isPreviewing}
+                  loading={isSyncing}
+                >
+                  执行落库
+                </Button>
+              </Popconfirm>
               <Button
-                disabled={isPreviewing}
+                disabled={isRunningSync}
                 onClick={() => {
                   clearCurrentSession();
                   setLoginError(null);
@@ -500,7 +580,7 @@ export function MajorSyncLabPage() {
                 清理 upstream token
               </Button>
               <Button
-                disabled={isPreviewing}
+                disabled={isRunningSync}
                 onClick={() => {
                   setIsLoginModalOpen(true);
                   setLoginError(null);
@@ -520,16 +600,24 @@ export function MajorSyncLabPage() {
         </div>
       </Card>
 
-      <Card title="预览结果">
+      <Card title="同步结果">
         {result ? (
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="运行模式">
-                {result.dryRun ? 'Dry-run 预览' : '未知'}
+                {result.dryRun ? 'Dry-run 预览' : '正式落库'}
               </Descriptions.Item>
               <Descriptions.Item label="目标系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
-              <Descriptions.Item label="previewedCount">{result.previewedCount}</Descriptions.Item>
+              {isDryRunResult(result) ? (
+                <Descriptions.Item label="previewedCount">
+                  {result.previewedCount}
+                </Descriptions.Item>
+              ) : (
+                <Descriptions.Item label="processedCount">
+                  {result.processedCount}
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="createdCount">{result.createdCount}</Descriptions.Item>
               <Descriptions.Item label="updatedCount">{result.updatedCount}</Descriptions.Item>
               <Descriptions.Item label="existsCount">{result.existsCount}</Descriptions.Item>
@@ -542,11 +630,11 @@ export function MajorSyncLabPage() {
 
             <Alert
               showIcon
-              type={result.skippedCount > 0 ? 'warning' : 'info'}
+              type={result.skippedCount > 0 ? 'warning' : result.dryRun ? 'info' : 'success'}
               message={resolveResultMessage(result)}
             />
 
-            <Table<MajorSyncDryRunItem>
+            <Table<MajorSyncResultItem>
               columns={resultColumns}
               dataSource={result.items}
               pagination={{ pageSize: 20, showSizeChanger: true }}
@@ -563,8 +651,8 @@ export function MajorSyncLabPage() {
           <Alert
             showIcon
             type="info"
-            message="还没有预览结果"
-            description="选择目标系并完成 upstream 授权后，这里会展示 dry-run 摘要和专业明细。"
+            message="还没有同步结果"
+            description="选择目标系并完成 upstream 授权后，这里会展示 dry-run 或正式落库的摘要和专业明细。"
           />
         )}
       </Card>
@@ -579,7 +667,7 @@ export function MajorSyncLabPage() {
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
-          setPendingDryRunRequest(null);
+          setPendingMajorSyncRequest(null);
           setLoginError(null);
         }}
         onFinish={handleLoginFinish}

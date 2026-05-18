@@ -59,6 +59,7 @@ export type MajorSyncCommitItem = MajorSyncItem<MajorSyncCommitAction>;
 type MajorSyncResultBase<Item> = {
   createdCount: number;
   departmentId: string;
+  dryRun: boolean;
   existsCount: number;
   expiresAt: string | null;
   fetchedCount: number;
@@ -69,12 +70,11 @@ type MajorSyncResultBase<Item> = {
 };
 
 export type MajorSyncDryRunResult = MajorSyncResultBase<MajorSyncDryRunItem> & {
-  dryRun: boolean;
   previewedCount: number;
 };
 
 export type MajorSyncCommitResult = MajorSyncResultBase<MajorSyncCommitItem> & {
-  previewedCount?: number;
+  processedCount: number;
 };
 
 export type DryRunSyncMajorsFromUpstreamInput = {
@@ -195,6 +195,7 @@ const DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
       expiresAt
       departmentId
       fetchedCount
+      previewedCount
       createdCount
       updatedCount
       existsCount
@@ -215,11 +216,12 @@ const DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
 const SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
   mutation SyncMajorsFromUpstream($input: SyncMajorsFromUpstreamInput!) {
     syncMajorsFromUpstream(input: $input) {
+      dryRun
       upstreamSessionToken
       expiresAt
       departmentId
       fetchedCount
-      previewedCount
+      processedCount
       createdCount
       updatedCount
       existsCount
