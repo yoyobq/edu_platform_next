@@ -11,6 +11,7 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import { compareExternalTeacherCompensationActualHours } from '../application/external-teacher-compensation';
 import { splitAcademicWorkloadTeachingClassNames } from '../application/teaching-class-format';
 import {
   buildTeachingWeekOptions,
@@ -78,6 +79,7 @@ type CompensationWeekRequestRange = {
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 976;
 const EXPORT_STATUS_RESET_DELAY_MS = 1800;
+const EXPORT_ACTUAL_HOURS_VALIDATION_PREVIEW_COUNT = 3;
 const FULL_SEMESTER_TAB_KEY = 'semester';
 const CUSTOM_RANGE_TAB_KEY = 'custom';
 const EXTERNAL_TEACHER_COMPENSATION_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
@@ -405,6 +407,47 @@ function renderReportSummary(totalActualHours: string) {
       </Table.Summary.Cell>
     </Table.Summary.Row>
   );
+}
+
+function buildReportRowLabel(row: ReportTableRow) {
+  return [
+    formatReportText(row.item.staffName),
+    formatReportText(row.item.teachingClassName),
+    formatReportText(row.item.courseName),
+  ].join(' / ');
+}
+
+function buildActualHoursValidationError(rows: ReportTableRow[]) {
+  const issues = rows
+    .map((row) => ({
+      comparison: compareExternalTeacherCompensationActualHours(row.item),
+      row,
+    }))
+    .filter(({ comparison }) => comparison.status !== 'matched');
+
+  if (issues.length === 0) {
+    return null;
+  }
+
+  const previewText = issues
+    .slice(0, EXPORT_ACTUAL_HOURS_VALIDATION_PREVIEW_COUNT)
+    .map(({ comparison, row }) => {
+      const rowLabel = buildReportRowLabel(row);
+
+      if (comparison.status === 'invalid') {
+        return `${rowLabel} 的 actualHours 或公式字段不是有效数字`;
+      }
+
+      return `${rowLabel} 后端 ${formatReportDecimal(
+        comparison.backendActualHours,
+        2,
+      )}，公式 ${formatReportDecimal(comparison.calculatedActualHours, 2)}`;
+    })
+    .join('；');
+  const remainingCount = issues.length - EXPORT_ACTUAL_HOURS_VALIDATION_PREVIEW_COUNT;
+  const remainingText = remainingCount > 0 ? `；另有 ${remainingCount} 行` : '';
+
+  return `导出已阻断：实际课时与公式计算结果不一致。${previewText}${remainingText}。`;
 }
 
 function buildExternalTeacherCompensationExcelRows(
@@ -839,6 +882,16 @@ export function ExternalTeacherCompensationPageContent({
       return;
     }
 
+    setReportError(null);
+
+    const actualHoursValidationError = buildActualHoursValidationError(reportRows);
+
+    if (actualHoursValidationError) {
+      setReportError(actualHoursValidationError);
+      setTemporaryExportStatus('failed');
+      return;
+    }
+
     setExportingExcel(true);
 
     try {
@@ -863,7 +916,8 @@ export function ExternalTeacherCompensationPageContent({
         termNumber: selectedSemester?.termNumber ?? null,
       });
       setTemporaryExportStatus('exported');
-    } catch {
+    } catch (error) {
+      setReportError(error instanceof Error ? error.message : '暂时无法导出外聘兼课金结算表。');
       setTemporaryExportStatus('failed');
     } finally {
       setExportingExcel(false);

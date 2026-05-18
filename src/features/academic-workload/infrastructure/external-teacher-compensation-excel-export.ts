@@ -80,6 +80,10 @@ const TERM_NUMBER_LABELS: Record<number, string> = {
   3: '三',
 };
 
+export function buildExternalTeacherCompensationActualHoursFormula(rowNumber: number) {
+  return `(E${rowNumber}*F${rowNumber}+G${rowNumber})*H${rowNumber}`;
+}
+
 function sanitizeWorksheetName(value: string) {
   const sanitizedValue = value.replace(/[:\\/?*[\]]/g, ' ').trim();
 
@@ -530,7 +534,7 @@ function getDetailRowValues(input: {
     toExcelNumber(input.row.adjustmentHours),
     toExcelNumber(input.row.coefficient),
     buildFormulaValue(
-      `E${rowNumber}*F${rowNumber}*H${rowNumber}+G${rowNumber}`,
+      buildExternalTeacherCompensationActualHoursFormula(rowNumber),
       input.row.actualHours,
     ),
     getTemplateDetailCellValue({
