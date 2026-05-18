@@ -74,12 +74,14 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
+  hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import { loadMajorSyncLabRouteModule, majorSyncLabAccess } from '@/labs/major-sync';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -528,6 +530,47 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function majorSyncLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(majorSyncLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(majorSyncLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasMajorSyncAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -1019,6 +1062,11 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
+          },
+          {
+            path: 'major-sync',
+            loader: majorSyncLabLoader,
+            lazy: loadMajorSyncLabRouteModule,
           },
           {
             path: 'upstream-session-demo',

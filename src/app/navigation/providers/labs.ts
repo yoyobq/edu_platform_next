@@ -1,4 +1,5 @@
 import type { AuthAccessGroup } from '@/shared/auth-access';
+import { hasMajorSyncAccess } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -42,6 +43,23 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             navMode: 'rail' as const,
             path: '/labs/invite-issuer',
             primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasMajorSyncAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'SyncOutlined',
+            key: '/labs/major-sync',
+            label: '专业同步',
+            navMode: 'rail' as const,
+            path: '/labs/major-sync',
+            primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
         ]

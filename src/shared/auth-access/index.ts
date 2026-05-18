@@ -5,6 +5,7 @@ export type AcademicViewerRole = 'admin' | 'authenticated' | 'staff';
 export type AcademicInternalViewerRole = Exclude<AcademicViewerRole, 'authenticated'>;
 
 export const ACADEMIC_OFFICER_SLOT_GROUP = 'ACADEMIC_OFFICER';
+export const STUDENT_AFFAIRS_OFFICER_SLOT_GROUP = 'STUDENT_AFFAIRS_OFFICER';
 export const TEACHING_GROUP_LEADER_SLOT_GROUP = 'TEACHING_GROUP_LEADER';
 
 export function isAuthAccessGroup(value: unknown): value is AuthAccessGroup {
@@ -102,6 +103,20 @@ export function hasStaffSemesterProfilesAccess(input: {
   slotGroup?: readonly string[];
 }) {
   return hasAdminOrAcademicOfficerAccess(input);
+}
+
+export function hasMajorSyncAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return accessGroup.includes('STAFF') && slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP);
 }
 
 export function canAccessPayloadCrypto(input: {

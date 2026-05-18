@@ -64,6 +64,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
+      '/labs/major-sync',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
@@ -109,6 +110,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
+      '/labs/major-sync',
       '/labs/upstream-session-demo',
     ]);
     expect(
@@ -140,6 +142,49 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(staffItems, 'labs')).toBeUndefined();
+  });
+
+  it('exposes the major sync lab to student affairs officers', () => {
+    const staffItems = getNavigationItems(
+      buildFilter({
+        accountId: 1004,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    );
+
+    expect(staffItems.map((item) => item.key)).toEqual([
+      '/',
+      'calendar-schedule',
+      'academic-assistant',
+      'labs',
+    ]);
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/major-sync',
+    ]);
+    expect(
+      canAccessNavigationPath(
+        '/labs/major-sync',
+        buildFilter({
+          accountId: 1004,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/major-sync',
+        buildFilter({
+          accountId: 1002,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['ACADEMIC_OFFICER'],
+        }),
+      ),
+    ).toBe(false);
   });
 
   it('keeps staff semester profiles hidden from teaching group leaders', () => {
@@ -384,6 +429,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
       '/labs/invite-issuer',
+      '/labs/major-sync',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
       '/admin/users',
