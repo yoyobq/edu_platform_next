@@ -38,6 +38,10 @@ export type ClassSyncDryRunAction =
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
   | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
 
+export type ClassSyncAnnualMajorClassListDryRunAction =
+  | ClassSyncDryRunAction
+  | 'SKIPPED_INVALID_UPSTREAM_GRADE';
+
 export type ClassSyncCommitAction =
   | 'CREATED'
   | 'UPDATED'
@@ -54,10 +58,16 @@ export type ClassSyncItem<Action extends string> = {
   departmentId: string;
   gradeYear: number | null;
   majorId: string | null;
+  majorName?: string | null;
   sortOrder: number | null;
 };
 
 export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction>;
+
+export type ClassSyncAnnualMajorClassListDryRunItem =
+  ClassSyncItem<ClassSyncAnnualMajorClassListDryRunAction> & {
+    majorName: string | null;
+  };
 
 export type ClassSyncCommitItem = ClassSyncItem<ClassSyncCommitAction>;
 
@@ -79,6 +89,11 @@ export type ClassSyncDryRunResult = ClassSyncResultBase<ClassSyncDryRunItem> & {
   previewedCount: number;
 };
 
+export type ClassSyncAnnualMajorClassListDryRunResult =
+  ClassSyncResultBase<ClassSyncAnnualMajorClassListDryRunItem> & {
+    previewedCount: number;
+  };
+
 export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
   processedCount: number;
 };
@@ -87,6 +102,8 @@ export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
   upstreamSessionToken: string;
 };
+
+export type DryRunSyncClassesFromAnnualMajorClassListInput = DryRunSyncClassesFromUpstreamInput;
 
 export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 
@@ -136,6 +153,10 @@ type StudentAffairsDepartmentScopeResponse = DepartmentsResponse & {
 
 type DryRunSyncClassesFromUpstreamResponse = {
   dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
+};
+
+type DryRunSyncClassesFromAnnualMajorClassListResponse = {
+  dryRunSyncClassesFromAnnualMajorClassList: ClassSyncAnnualMajorClassListDryRunResult;
 };
 
 type SyncClassesFromUpstreamResponse = {
@@ -213,6 +234,37 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
         classId
         className
         majorId
+        gradeYear
+        sortOrder
+        conflictReason
+      }
+    }
+  }
+`;
+
+const DRY_RUN_SYNC_CLASSES_FROM_ANNUAL_MAJOR_CLASS_LIST_MUTATION = `
+  mutation DryRunSyncClassesFromAnnualMajorClassList(
+    $input: DryRunSyncClassesFromAnnualMajorClassListInput!
+  ) {
+    dryRunSyncClassesFromAnnualMajorClassList(input: $input) {
+      dryRun
+      upstreamSessionToken
+      expiresAt
+      departmentId
+      fetchedCount
+      previewedCount
+      createdCount
+      updatedCount
+      existsCount
+      conflictCount
+      skippedCount
+      items {
+        action
+        departmentId
+        classId
+        className
+        majorId
+        majorName
         gradeYear
         sortOrder
         conflictReason
@@ -384,6 +436,21 @@ export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFrom
   });
 
   return response.dryRunSyncClassesFromUpstream;
+}
+
+export async function dryRunSyncClassesFromAnnualMajorClassList(
+  input: DryRunSyncClassesFromAnnualMajorClassListInput,
+) {
+  const response = await requestGraphQL<
+    DryRunSyncClassesFromAnnualMajorClassListResponse,
+    {
+      input: ReturnType<typeof normalizeDryRunInput>;
+    }
+  >(DRY_RUN_SYNC_CLASSES_FROM_ANNUAL_MAJOR_CLASS_LIST_MUTATION, {
+    input: normalizeDryRunInput(input),
+  });
+
+  return response.dryRunSyncClassesFromAnnualMajorClassList;
 }
 
 export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInput) {

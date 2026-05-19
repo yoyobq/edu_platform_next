@@ -28,6 +28,9 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  type ClassSyncAnnualMajorClassListDryRunAction,
+  type ClassSyncAnnualMajorClassListDryRunItem,
+  type ClassSyncAnnualMajorClassListDryRunResult,
   type ClassSyncCommitAction,
   type ClassSyncCommitItem,
   type ClassSyncCommitResult,
@@ -36,6 +39,7 @@ import {
   type ClassSyncDryRunItem,
   type ClassSyncDryRunResult,
   type CurrentClassSyncAccount,
+  dryRunSyncClassesFromAnnualMajorClassList,
   dryRunSyncClassesFromUpstream,
   fetchClassSyncDepartmentOptions,
   fetchCurrentClassSyncAccount,
@@ -49,16 +53,30 @@ type ClassSyncFormValues = {
   departmentId: string;
 };
 
-type ClassSyncRunMode = 'dryRun' | 'sync';
+type ClassSyncRunMode = 'dryRun' | 'annualMajorClassListDryRun' | 'sync';
 
 type PendingClassSyncRequest = {
   mode: ClassSyncRunMode;
   values: ClassSyncFormValues;
 };
 
-type ClassSyncResult = ClassSyncDryRunResult | ClassSyncCommitResult;
-type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncCommitItem;
-type ClassSyncResultAction = ClassSyncDryRunAction | ClassSyncCommitAction;
+type ClassSyncResult =
+  | ClassSyncDryRunResult
+  | ClassSyncAnnualMajorClassListDryRunResult
+  | ClassSyncCommitResult;
+type ClassSyncResultItem =
+  | ClassSyncDryRunItem
+  | ClassSyncAnnualMajorClassListDryRunItem
+  | ClassSyncCommitItem;
+type ClassSyncResultAction =
+  | ClassSyncDryRunAction
+  | ClassSyncAnnualMajorClassListDryRunAction
+  | ClassSyncCommitAction;
+
+type ClassSyncResultState = {
+  mode: ClassSyncRunMode;
+  data: ClassSyncResult;
+};
 
 const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   CONFLICT: '冲突',
@@ -67,6 +85,7 @@ const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   EXISTS: '已存在',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: '上游重复',
   SKIPPED_INVALID_UPSTREAM_CODE: '无效 code',
+  SKIPPED_INVALID_UPSTREAM_GRADE: '无效年级',
   UPDATE: '待更新',
   UPDATED: '已更新',
 };
@@ -78,6 +97,7 @@ const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
   EXISTS: 'blue',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: 'orange',
   SKIPPED_INVALID_UPSTREAM_CODE: 'orange',
+  SKIPPED_INVALID_UPSTREAM_GRADE: 'orange',
   UPDATE: 'gold',
   UPDATED: 'gold',
 };
@@ -116,7 +136,39 @@ function renderActionTag(action: ClassSyncResultAction) {
   return <Tag color={ACTION_COLORS[action]}>{ACTION_LABELS[action]}</Tag>;
 }
 
-function resolveResultMessage(result: ClassSyncResult) {
+function getExpiredSessionMessage(mode: ClassSyncRunMode) {
+  if (mode === 'sync') {
+    return 'upstream 会话已失效，请重新登录后继续落库。';
+  }
+
+  if (mode === 'annualMajorClassListDryRun') {
+    return 'upstream 会话已失效，请重新登录后继续年度专业班级列表预览。';
+  }
+
+  return 'upstream 会话已失效，请重新登录后继续预览。';
+}
+
+function getRunModeLabel(mode: ClassSyncRunMode, result: ClassSyncResult) {
+  if (mode === 'annualMajorClassListDryRun') {
+    return '年度专业班级列表 Dry-run';
+  }
+
+  return result.dryRun ? 'Dry-run 预览' : '正式落库';
+}
+
+function resolveResultMessage(result: ClassSyncResult, mode: ClassSyncRunMode) {
+  if (mode === 'annualMajorClassListDryRun') {
+    if (result.conflictCount > 0) {
+      return '本次年度专业班级列表预览存在班级唯一性冲突，需要人工处理。';
+    }
+
+    if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+      return '本地班级已覆盖年度专业班级列表本次返回的有效班级；当前接口仅预览，不写库。';
+    }
+
+    return '本次年度专业班级列表仅预览，不会写入 org_class，当前没有对应落库接口。';
+  }
+
   if (result.dryRun && result.conflictCount > 0) {
     return '本次预览存在班级唯一性冲突，需要人工处理后再落库。';
   }
@@ -141,15 +193,17 @@ function resolveResultMessage(result: ClassSyncResult) {
   return '本次已完成落库；更新只覆盖 className、gradeYear 和 sortOrder。';
 }
 
-function formatNullableValue(value: number | string | null) {
+function formatNullableValue(value: number | string | null | undefined) {
   return value ?? <span className="text-text-secondary">-</span>;
 }
 
-function isDryRunResult(result: ClassSyncResult): result is ClassSyncDryRunResult {
+function isPreviewResult(
+  result: ClassSyncResult,
+): result is ClassSyncDryRunResult | ClassSyncAnnualMajorClassListDryRunResult {
   return 'previewedCount' in result;
 }
 
-const resultColumns: ColumnsType<ClassSyncResultItem> = [
+const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
   {
     dataIndex: 'action',
     key: 'action',
@@ -206,6 +260,18 @@ const resultColumns: ColumnsType<ClassSyncResultItem> = [
   },
 ];
 
+const annualMajorClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
+  ...baseResultColumns.slice(0, 4),
+  {
+    dataIndex: 'majorName',
+    key: 'majorName',
+    render: (majorName: string | null | undefined) => formatNullableValue(majorName),
+    title: '上游专业名',
+    width: 220,
+  },
+  ...baseResultColumns.slice(4),
+];
+
 export function ClassSyncLabPage() {
   const [form] = Form.useForm<ClassSyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
@@ -215,11 +281,12 @@ export function ClassSyncLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isPreviewingAnnualMajorClassList, setIsPreviewingAnnualMajorClassList] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [result, setResult] = useState<ClassSyncResult | null>(null);
+  const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<ClassSyncDepartmentOption[]>([]);
   const [pendingClassSyncRequest, setPendingClassSyncRequest] =
     useState<PendingClassSyncRequest | null>(null);
@@ -249,7 +316,16 @@ export function ClassSyncLabPage() {
     () => departmentOptions.find((department) => department.id === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
-  const isRunningSync = isPreviewing || isSyncing;
+  const result = resultState?.data ?? null;
+  const resultMode = resultState?.mode ?? null;
+  const resultColumns = useMemo(
+    () =>
+      resultMode === 'annualMajorClassListDryRun'
+        ? annualMajorClassListResultColumns
+        : baseResultColumns,
+    [resultMode],
+  );
+  const isRunningSync = isPreviewing || isPreviewingAnnualMajorClassList || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -350,15 +426,18 @@ export function ClassSyncLabPage() {
   const performClassSync = useCallback(
     async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
+      const isAnnualMajorClassListDryRun = mode === 'annualMajorClassListDryRun';
 
       if (isDryRun) {
         setIsPreviewing(true);
+      } else if (isAnnualMajorClassListDryRun) {
+        setIsPreviewingAnnualMajorClassList(true);
       } else {
         setIsSyncing(true);
       }
 
       setPreviewError(null);
-      setResult(null);
+      setResultState(null);
       setPendingClassSyncRequest(null);
 
       try {
@@ -368,19 +447,20 @@ export function ClassSyncLabPage() {
         };
         const syncResult = isDryRun
           ? await dryRunSyncClassesFromUpstream(input)
-          : await syncClassesFromUpstream(input);
+          : isAnnualMajorClassListDryRun
+            ? await dryRunSyncClassesFromAnnualMajorClassList(input)
+            : await syncClassesFromUpstream(input);
 
         persistSessionFromResult(session, syncResult);
-        setResult(syncResult);
+        setResultState({
+          data: syncResult,
+          mode,
+        });
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clearCurrentSession();
           setPendingClassSyncRequest({ mode, values });
-          setLoginError(
-            isDryRun
-              ? 'upstream 会话已失效，请重新登录后继续预览。'
-              : 'upstream 会话已失效，请重新登录后继续落库。',
-          );
+          setLoginError(getExpiredSessionMessage(mode));
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
@@ -396,6 +476,8 @@ export function ClassSyncLabPage() {
       } finally {
         if (isDryRun) {
           setIsPreviewing(false);
+        } else if (isAnnualMajorClassListDryRun) {
+          setIsPreviewingAnnualMajorClassList(false);
         } else {
           setIsSyncing(false);
         }
@@ -562,12 +644,19 @@ export function ClassSyncLabPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions || isSyncing}
+                disabled={hasNoDepartmentOptions || isPreviewingAnnualMajorClassList || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
               >
                 预览同步
+              </Button>
+              <Button
+                disabled={hasNoDepartmentOptions || isPreviewing || isSyncing}
+                loading={isPreviewingAnnualMajorClassList}
+                onClick={() => void handleRunSync('annualMajorClassListDryRun')}
+              >
+                年度专业班级列表预览
               </Button>
               <Popconfirm
                 cancelText="取消"
@@ -579,7 +668,9 @@ export function ClassSyncLabPage() {
               >
                 <Button
                   danger
-                  disabled={hasNoDepartmentOptions || isPreviewing}
+                  disabled={
+                    hasNoDepartmentOptions || isPreviewing || isPreviewingAnnualMajorClassList
+                  }
                   loading={isSyncing}
                 >
                   执行落库
@@ -620,11 +711,11 @@ export function ClassSyncLabPage() {
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="运行模式">
-                {result.dryRun ? 'Dry-run 预览' : '正式落库'}
+                {resultMode ? getRunModeLabel(resultMode, result) : '未知'}
               </Descriptions.Item>
               <Descriptions.Item label="目标系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
-              {isDryRunResult(result) ? (
+              {isPreviewResult(result) ? (
                 <Descriptions.Item label="previewedCount">
                   {result.previewedCount}
                 </Descriptions.Item>
@@ -653,7 +744,7 @@ export function ClassSyncLabPage() {
                     ? 'info'
                     : 'success'
               }
-              message={resolveResultMessage(result)}
+              message={resolveResultMessage(result, resultMode ?? 'dryRun')}
             />
 
             <Table<ClassSyncResultItem>
@@ -665,7 +756,7 @@ export function ClassSyncLabPage() {
                   record.className
                 }:${index ?? 0}`
               }
-              scroll={{ x: 1400 }}
+              scroll={{ x: resultMode === 'annualMajorClassListDryRun' ? 1640 : 1400 }}
               size="small"
             />
           </div>
