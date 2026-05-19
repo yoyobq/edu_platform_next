@@ -38,8 +38,16 @@ export type ClassSyncDryRunAction =
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
   | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
 
-export type ClassSyncDryRunItem = {
-  action: ClassSyncDryRunAction;
+export type ClassSyncCommitAction =
+  | 'CREATED'
+  | 'UPDATED'
+  | 'EXISTS'
+  | 'CONFLICT'
+  | 'SKIPPED_INVALID_UPSTREAM_CODE'
+  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
+
+export type ClassSyncItem<Action extends string> = {
+  action: Action;
   classId: string | null;
   className: string;
   conflictReason: string | null;
@@ -49,7 +57,11 @@ export type ClassSyncDryRunItem = {
   sortOrder: number | null;
 };
 
-export type ClassSyncDryRunResult = {
+export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction>;
+
+export type ClassSyncCommitItem = ClassSyncItem<ClassSyncCommitAction>;
+
+type ClassSyncResultBase<Item> = {
   conflictCount: number;
   createdCount: number;
   departmentId: string;
@@ -57,17 +69,26 @@ export type ClassSyncDryRunResult = {
   existsCount: number;
   expiresAt: string | null;
   fetchedCount: number;
-  items: ClassSyncDryRunItem[];
-  previewedCount: number;
+  items: Item[];
   skippedCount: number;
   updatedCount: number;
   upstreamSessionToken: string | null;
+};
+
+export type ClassSyncDryRunResult = ClassSyncResultBase<ClassSyncDryRunItem> & {
+  previewedCount: number;
+};
+
+export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
+  processedCount: number;
 };
 
 export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
   upstreamSessionToken: string;
 };
+
+export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 
 type CurrentAccountResponse = {
   me: {
@@ -115,6 +136,10 @@ type StudentAffairsDepartmentScopeResponse = DepartmentsResponse & {
 
 type DryRunSyncClassesFromUpstreamResponse = {
   dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
+};
+
+type SyncClassesFromUpstreamResponse = {
+  syncClassesFromUpstream: ClassSyncCommitResult;
 };
 
 const CURRENT_ACCOUNT_QUERY = `
@@ -177,6 +202,34 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
       departmentId
       fetchedCount
       previewedCount
+      createdCount
+      updatedCount
+      existsCount
+      conflictCount
+      skippedCount
+      items {
+        action
+        departmentId
+        classId
+        className
+        majorId
+        gradeYear
+        sortOrder
+        conflictReason
+      }
+    }
+  }
+`;
+
+const SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
+  mutation SyncClassesFromUpstream($input: SyncClassesFromUpstreamInput!) {
+    syncClassesFromUpstream(input: $input) {
+      dryRun
+      upstreamSessionToken
+      expiresAt
+      departmentId
+      fetchedCount
+      processedCount
       createdCount
       updatedCount
       existsCount
@@ -333,6 +386,19 @@ export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFrom
   return response.dryRunSyncClassesFromUpstream;
 }
 
+export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInput) {
+  const response = await requestGraphQL<
+    SyncClassesFromUpstreamResponse,
+    {
+      input: ReturnType<typeof normalizeDryRunInput>;
+    }
+  >(SYNC_CLASSES_FROM_UPSTREAM_MUTATION, {
+    input: normalizeDryRunInput(input),
+  });
+
+  return response.syncClassesFromUpstream;
+}
+
 export function resolveClassSyncErrorMessage(error: unknown) {
-  return resolveUpstreamErrorMessage(error, '暂时无法预览班级同步。');
+  return resolveUpstreamErrorMessage(error, '暂时无法执行班级同步。');
 }

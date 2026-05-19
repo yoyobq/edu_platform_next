@@ -315,10 +315,6 @@ function normalizeDryRunInput(input: DryRunSyncMajorsFromUpstreamInput) {
   };
 }
 
-function normalizeSyncInput(input: SyncMajorsFromUpstreamInput) {
-  return normalizeDryRunInput(input);
-}
-
 export async function fetchCurrentMajorSyncAccount(): Promise<CurrentMajorSyncAccount> {
   try {
     const response = await requestGraphQL<CurrentAccountResponse, Record<string, never>>(
@@ -384,15 +380,15 @@ export async function syncMajorsFromUpstream(input: SyncMajorsFromUpstreamInput)
   const response = await requestGraphQL<
     SyncMajorsFromUpstreamResponse,
     {
-      input: ReturnType<typeof normalizeSyncInput>;
+      input: ReturnType<typeof normalizeDryRunInput>;
     }
   >(SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
-    input: normalizeSyncInput(input),
+    input: normalizeDryRunInput(input),
   });
 
   return response.syncMajorsFromUpstream;
 }
 
 export function resolveMajorSyncErrorMessage(error: unknown) {
-  return resolveUpstreamErrorMessage(error, '暂时无法预览专业同步。');
+  return resolveUpstreamErrorMessage(error, '暂时无法执行专业同步。');
 }

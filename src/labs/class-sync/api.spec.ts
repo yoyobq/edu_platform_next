@@ -20,6 +20,7 @@ import {
   dryRunSyncClassesFromUpstream,
   fetchClassSyncDepartmentOptions,
   fetchCurrentClassSyncAccount,
+  syncClassesFromUpstream,
 } from './api';
 
 describe('class-sync api', () => {
@@ -216,6 +217,78 @@ describe('class-sync api', () => {
         input: {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-001',
+        },
+      },
+    );
+  });
+
+  it('requests class commit sync with normalized input and processed fields', async () => {
+    const payload = {
+      conflictCount: 1,
+      createdCount: 1,
+      departmentId: 'ORG0302',
+      dryRun: false,
+      existsCount: 1,
+      expiresAt: '2026-05-19T12:00:00.000Z',
+      fetchedCount: 4,
+      items: [
+        {
+          action: 'CREATED',
+          classId: '1031501',
+          className: '信息1501班',
+          conflictReason: null,
+          departmentId: 'ORG0302',
+          gradeYear: 2015,
+          majorId: null,
+          sortOrder: 15,
+        },
+        {
+          action: 'CONFLICT',
+          classId: '1031502',
+          className: '信息1502班',
+          conflictReason: 'classId 已被其他专业占用。',
+          departmentId: 'ORG0302',
+          gradeYear: 2015,
+          majorId: null,
+          sortOrder: 15,
+        },
+      ],
+      processedCount: 3,
+      skippedCount: 1,
+      updatedCount: 1,
+      upstreamSessionToken: 'rolling-token-003',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      syncClassesFromUpstream: payload,
+    });
+
+    await expect(
+      syncClassesFromUpstream({
+        departmentId: ' ORG0302 ',
+        upstreamSessionToken: ' rolling-token-002 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('SyncClassesFromUpstream');
+    expect(query).toContain('syncClassesFromUpstream');
+    expect(query).toContain('processedCount');
+    expect(query).toContain('conflictCount');
+    expect(query).toContain('classId');
+    expect(query).toContain('gradeYear');
+    expect(query).toContain('sortOrder');
+    expect(query).toContain('conflictReason');
+    expect(query).not.toContain('previewedCount');
+    expect(query).not.toContain('annualMajorId');
+    expect(query).not.toContain('classCode');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('SyncClassesFromUpstream'),
+      {
+        input: {
+          departmentId: 'ORG0302',
+          upstreamSessionToken: 'rolling-token-002',
         },
       },
     );

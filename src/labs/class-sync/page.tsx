@@ -2,7 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TableOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Select, Spin, Table, Tag } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Popconfirm,
+  Select,
+  Spin,
+  Table,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -17,6 +28,9 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  type ClassSyncCommitAction,
+  type ClassSyncCommitItem,
+  type ClassSyncCommitResult,
   type ClassSyncDepartmentOption,
   type ClassSyncDryRunAction,
   type ClassSyncDryRunItem,
@@ -27,6 +41,7 @@ import {
   fetchCurrentClassSyncAccount,
   isExpiredUpstreamSessionError,
   resolveClassSyncErrorMessage,
+  syncClassesFromUpstream,
 } from './api';
 import { classSyncLabMeta } from './meta';
 
@@ -34,26 +49,37 @@ type ClassSyncFormValues = {
   departmentId: string;
 };
 
+type ClassSyncRunMode = 'dryRun' | 'sync';
+
 type PendingClassSyncRequest = {
+  mode: ClassSyncRunMode;
   values: ClassSyncFormValues;
 };
 
-const ACTION_LABELS: Record<ClassSyncDryRunAction, string> = {
+type ClassSyncResult = ClassSyncDryRunResult | ClassSyncCommitResult;
+type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncCommitItem;
+type ClassSyncResultAction = ClassSyncDryRunAction | ClassSyncCommitAction;
+
+const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   CONFLICT: '冲突',
   CREATE: '待新增',
+  CREATED: '已新增',
   EXISTS: '已存在',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: '上游重复',
   SKIPPED_INVALID_UPSTREAM_CODE: '无效 code',
   UPDATE: '待更新',
+  UPDATED: '已更新',
 };
 
-const ACTION_COLORS: Record<ClassSyncDryRunAction, string> = {
+const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
   CONFLICT: 'red',
   CREATE: 'green',
+  CREATED: 'green',
   EXISTS: 'blue',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: 'orange',
   SKIPPED_INVALID_UPSTREAM_CODE: 'orange',
   UPDATE: 'gold',
+  UPDATED: 'gold',
 };
 
 function formatDateTime(value: string | null | undefined) {
@@ -86,31 +112,48 @@ function getViewerRoleLabel(account: CurrentClassSyncAccount | null) {
   return account.viewerRole === 'admin' ? 'ADMIN' : '学工行政';
 }
 
-function renderActionTag(action: ClassSyncDryRunAction) {
+function renderActionTag(action: ClassSyncResultAction) {
   return <Tag color={ACTION_COLORS[action]}>{ACTION_LABELS[action]}</Tag>;
 }
 
-function resolveResultMessage(result: ClassSyncDryRunResult) {
-  if (result.conflictCount > 0) {
+function resolveResultMessage(result: ClassSyncResult) {
+  if (result.dryRun && result.conflictCount > 0) {
     return '本次预览存在班级唯一性冲突，需要人工处理后再落库。';
   }
 
-  if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+  if (
+    result.dryRun &&
+    result.createdCount === 0 &&
+    result.updatedCount === 0 &&
+    result.skippedCount === 0
+  ) {
     return '本地班级已覆盖上游本次返回的有效班级。';
   }
 
-  return '本次仅预览，不会写入 org_class。';
+  if (result.dryRun) {
+    return '本次仅预览，不会写入 org_class。';
+  }
+
+  if (result.conflictCount > 0 || result.skippedCount > 0) {
+    return '本次落库已完成；冲突和跳过项未写入。';
+  }
+
+  return '本次已完成落库；更新只覆盖 className、gradeYear 和 sortOrder。';
 }
 
 function formatNullableValue(value: number | string | null) {
   return value ?? <span className="text-text-secondary">-</span>;
 }
 
-const resultColumns: ColumnsType<ClassSyncDryRunItem> = [
+function isDryRunResult(result: ClassSyncResult): result is ClassSyncDryRunResult {
+  return 'previewedCount' in result;
+}
+
+const resultColumns: ColumnsType<ClassSyncResultItem> = [
   {
     dataIndex: 'action',
     key: 'action',
-    render: (action: ClassSyncDryRunAction) => renderActionTag(action),
+    render: (action: ClassSyncResultAction) => renderActionTag(action),
     title: '动作',
     width: 150,
   },
@@ -172,10 +215,11 @@ export function ClassSyncLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [result, setResult] = useState<ClassSyncDryRunResult | null>(null);
+  const [result, setResult] = useState<ClassSyncResult | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<ClassSyncDepartmentOption[]>([]);
   const [pendingClassSyncRequest, setPendingClassSyncRequest] =
     useState<PendingClassSyncRequest | null>(null);
@@ -205,6 +249,7 @@ export function ClassSyncLabPage() {
     () => departmentOptions.find((department) => department.id === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
+  const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -302,26 +347,40 @@ export function ClassSyncLabPage() {
     rememberedCredentials,
   ]);
 
-  const performDryRun = useCallback(
-    async (session: StoredUpstreamSession, values: ClassSyncFormValues) => {
-      setIsPreviewing(true);
+  const performClassSync = useCallback(
+    async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
+      const isDryRun = mode === 'dryRun';
+
+      if (isDryRun) {
+        setIsPreviewing(true);
+      } else {
+        setIsSyncing(true);
+      }
+
       setPreviewError(null);
       setResult(null);
       setPendingClassSyncRequest(null);
 
       try {
-        const dryRunResult = await dryRunSyncClassesFromUpstream({
+        const input = {
           departmentId: values.departmentId,
           upstreamSessionToken: session.upstreamSessionToken,
-        });
+        };
+        const syncResult = isDryRun
+          ? await dryRunSyncClassesFromUpstream(input)
+          : await syncClassesFromUpstream(input);
 
-        persistSessionFromResult(session, dryRunResult);
-        setResult(dryRunResult);
+        persistSessionFromResult(session, syncResult);
+        setResult(syncResult);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clearCurrentSession();
-          setPendingClassSyncRequest({ values });
-          setLoginError('upstream 会话已失效，请重新登录后继续预览。');
+          setPendingClassSyncRequest({ mode, values });
+          setLoginError(
+            isDryRun
+              ? 'upstream 会话已失效，请重新登录后继续预览。'
+              : 'upstream 会话已失效，请重新登录后继续落库。',
+          );
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
@@ -335,7 +394,11 @@ export function ClassSyncLabPage() {
 
         setPreviewError(resolveClassSyncErrorMessage(error));
       } finally {
-        setIsPreviewing(false);
+        if (isDryRun) {
+          setIsPreviewing(false);
+        } else {
+          setIsSyncing(false);
+        }
       }
     },
     [
@@ -347,39 +410,42 @@ export function ClassSyncLabPage() {
     ],
   );
 
-  const handlePreview = useCallback(async () => {
-    const values = await form.validateFields();
+  const handleRunSync = useCallback(
+    async (mode: ClassSyncRunMode) => {
+      const values = await form.validateFields();
 
-    setPreviewError(null);
-    setLoginError(null);
+      setPreviewError(null);
+      setLoginError(null);
 
-    if (!currentAccount) {
-      setPreviewError('当前登录会话尚未恢复，请稍后重试。');
-      return;
-    }
+      if (!currentAccount) {
+        setPreviewError('当前登录会话尚未恢复，请稍后重试。');
+        return;
+      }
 
-    if (!storedSession) {
-      setPendingClassSyncRequest({ values });
-      setIsLoginModalOpen(true);
-      loginForm.setFieldsValue(
-        buildUpstreamLoginCredentialsInitialValues({
-          lockedUserId: lockedUpstreamLoginUserId,
-          rememberedCredentials,
-        }),
-      );
-      return;
-    }
+      if (!storedSession) {
+        setPendingClassSyncRequest({ mode, values });
+        setIsLoginModalOpen(true);
+        loginForm.setFieldsValue(
+          buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
+            rememberedCredentials,
+          }),
+        );
+        return;
+      }
 
-    await performDryRun(storedSession, values);
-  }, [
-    currentAccount,
-    form,
-    lockedUpstreamLoginUserId,
-    loginForm,
-    performDryRun,
-    rememberedCredentials,
-    storedSession,
-  ]);
+      await performClassSync(storedSession, values, mode);
+    },
+    [
+      currentAccount,
+      form,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      performClassSync,
+      rememberedCredentials,
+      storedSession,
+    ],
+  );
 
   const handleLoginFinish = useCallback(
     async (values: UpstreamLoginFormValues) => {
@@ -400,7 +466,11 @@ export function ClassSyncLabPage() {
         loginForm.resetFields();
 
         if (nextPendingRequest) {
-          await performDryRun(nextStoredSession, nextPendingRequest.values);
+          await performClassSync(
+            nextStoredSession,
+            nextPendingRequest.values,
+            nextPendingRequest.mode,
+          );
         }
       } catch (error) {
         setLoginError(resolveClassSyncErrorMessage(error));
@@ -408,7 +478,7 @@ export function ClassSyncLabPage() {
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginForm, loginUpstream, pendingClassSyncRequest, performDryRun],
+    [currentAccount, loginForm, loginUpstream, pendingClassSyncRequest, performClassSync],
   );
 
   if (isLoadingAccount) {
@@ -452,7 +522,7 @@ export function ClassSyncLabPage() {
         </Descriptions>
       </Card>
 
-      <Card title="预览参数">
+      <Card title="同步参数">
         <div className="flex flex-col gap-4">
           {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
           {departmentOptionsError ? (
@@ -466,7 +536,7 @@ export function ClassSyncLabPage() {
             <Form.Item
               help={
                 selectedDepartment
-                  ? `本次将预览 ${selectedDepartment.label} 的 org_class 变更。`
+                  ? `本次将同步 ${selectedDepartment.label} 的 org_class 变更。`
                   : undefined
               }
               label="目标系"
@@ -492,15 +562,31 @@ export function ClassSyncLabPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions}
+                disabled={hasNoDepartmentOptions || isSyncing}
                 loading={isPreviewing}
-                onClick={() => void handlePreview()}
+                onClick={() => void handleRunSync('dryRun')}
                 type="primary"
               >
                 预览同步
               </Button>
+              <Popconfirm
+                cancelText="取消"
+                description="后端会重新拉取 upstream 班级列表，并创建或更新本地 org_class。"
+                okButtonProps={{ loading: isSyncing }}
+                okText="确认落库"
+                title="确认执行班级同步？"
+                onConfirm={() => void handleRunSync('sync')}
+              >
+                <Button
+                  danger
+                  disabled={hasNoDepartmentOptions || isPreviewing}
+                  loading={isSyncing}
+                >
+                  执行落库
+                </Button>
+              </Popconfirm>
               <Button
-                disabled={isPreviewing}
+                disabled={isRunningSync}
                 onClick={() => {
                   clearCurrentSession();
                   setLoginError(null);
@@ -509,7 +595,7 @@ export function ClassSyncLabPage() {
                 清理 upstream token
               </Button>
               <Button
-                disabled={isPreviewing}
+                disabled={isRunningSync}
                 onClick={() => {
                   setIsLoginModalOpen(true);
                   setLoginError(null);
@@ -529,16 +615,24 @@ export function ClassSyncLabPage() {
         </div>
       </Card>
 
-      <Card title="预览结果">
+      <Card title="同步结果">
         {result ? (
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="运行模式">
-                {result.dryRun ? 'Dry-run 预览' : '未知'}
+                {result.dryRun ? 'Dry-run 预览' : '正式落库'}
               </Descriptions.Item>
               <Descriptions.Item label="目标系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
-              <Descriptions.Item label="previewedCount">{result.previewedCount}</Descriptions.Item>
+              {isDryRunResult(result) ? (
+                <Descriptions.Item label="previewedCount">
+                  {result.previewedCount}
+                </Descriptions.Item>
+              ) : (
+                <Descriptions.Item label="processedCount">
+                  {result.processedCount}
+                </Descriptions.Item>
+              )}
               <Descriptions.Item label="createdCount">{result.createdCount}</Descriptions.Item>
               <Descriptions.Item label="updatedCount">{result.updatedCount}</Descriptions.Item>
               <Descriptions.Item label="existsCount">{result.existsCount}</Descriptions.Item>
@@ -552,11 +646,17 @@ export function ClassSyncLabPage() {
 
             <Alert
               showIcon
-              type={result.conflictCount > 0 || result.skippedCount > 0 ? 'warning' : 'info'}
+              type={
+                result.conflictCount > 0 || result.skippedCount > 0
+                  ? 'warning'
+                  : result.dryRun
+                    ? 'info'
+                    : 'success'
+              }
               message={resolveResultMessage(result)}
             />
 
-            <Table<ClassSyncDryRunItem>
+            <Table<ClassSyncResultItem>
               columns={resultColumns}
               dataSource={result.items}
               pagination={{ pageSize: 20, showSizeChanger: true }}
@@ -573,8 +673,8 @@ export function ClassSyncLabPage() {
           <Alert
             showIcon
             type="info"
-            message="还没有预览结果"
-            description="选择目标系并完成 upstream 授权后，这里会展示班级 dry-run 摘要和明细。"
+            message="还没有同步结果"
+            description="选择目标系并完成 upstream 授权后，这里会展示班级 dry-run 或正式落库的摘要和明细。"
           />
         )}
       </Card>
