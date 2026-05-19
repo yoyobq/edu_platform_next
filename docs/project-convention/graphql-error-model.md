@@ -82,10 +82,12 @@
 
 - top-level GraphQL `errors`
 - 未命中已知 Apollo transport 分类、但仍属于当前 GraphQL 执行失败的异常
+- `errors[].extensions.code === 'BAD_USER_INPUT'` 的非法输入错误，包括后端 usecase normalize 抛出的 `INPUT_NORMALIZE_*` 细分错误
 
 约束：
 
 - 不含已归入 `auth` 的 `UNAUTHENTICATED`
+- 不按 `extensions.errorCode` 或中文 `message` 做运行时分支；它们只用于展示、排查和日志
 
 默认用户提示：
 
@@ -103,12 +105,14 @@
 
 - `JWT_TOKEN_EXPIRED`
 - `JWT_TOKEN_INVALID`
+- `INVALID_REFRESH_TOKEN`
 
 说明：
 
 - 这几个值属于后端运行时错误约定，不是 GraphQL schema 内建枚举
 - 对齐来源以 `docs/backend/README.md` 指向的后端错误码与异常映射来源为准
 - 该信号只用于已登录态接口、`me`、受保护 mutation/query 等会话请求；`login` 的账号密码错误不应触发 refresh/logout
+- 当 refresh token 失败以 `extensions.code === 'UNAUTHENTICATED'` 返回时，auth/app 层应按会话不可用处理；共享层不对 `refresh` mutation 做 reactive refresh
 
 判断顺序固定为：
 

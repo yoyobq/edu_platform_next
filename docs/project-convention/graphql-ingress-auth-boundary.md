@@ -126,7 +126,8 @@
 
 - GraphQL top-level `errors[].extensions.code === 'UNAUTHENTICATED'` 表示“当前会话不可用”
 - 该判断只适用于已登录态接口、`me`、受保护 mutation/query 等会话请求
-- `login` 的账号密码错误、`refresh` 的 refresh token 失败不应触发共享层 refresh/logout
+- `login` 的账号密码错误不应触发共享层 refresh/logout
+- `refresh` 的 refresh token 失败属于 auth 主流程，不进入共享层 reactive refresh；调用方应按会话不可用处理
 - HTTP `401` 只作为 transport 层兜底
 - `TOKEN_INVALID` / `TOKEN_INVALID_AFTER_REFRESH` 只保留为前端兼容旧响应的 fallback，不再作为新契约扩展
 
@@ -141,9 +142,10 @@
 `INVALID_REFRESH_TOKEN` 较特殊：
 
 - 它发生在 `refresh` mutation 中
-- 后端当前未将其映射到 `UNAUTHENTICATED`
-- 前端会看到 `extensions.code = 'BAD_USER_INPUT'`
-- 因此它最终会落到 `GraphQLIngressError.type = 'graphql'`，而不是 `type = 'auth'`
+- 后端会返回 `extensions.code = 'UNAUTHENTICATED'`
+- `extensions.errorCode` 可能是 `INVALID_REFRESH_TOKEN`，但前端不依赖它作为运行时分支
+- 因此它最终会落到 `GraphQLIngressError.type = 'auth'`
+- 由于 `refresh` 本身通过 `authMode: 'none'` 与 `allowAuthRetry: false` 排除在共享层 reactive refresh 外，前端应由 auth/app 层把它当作会话不可用处理
 
 当前前端 auth 分类顺序跟随 Apollo 4 error class：
 
