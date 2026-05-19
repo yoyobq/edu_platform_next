@@ -12,6 +12,7 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
+  hasClassSyncAccess,
   hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
 } from './index';
@@ -91,6 +92,23 @@ describe('auth access policy helpers', () => {
       }),
     ).toBe(false);
     expect(hasMajorSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('keeps class sync aligned with major sync access', () => {
+    expect(hasClassSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasClassSyncAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasClassSyncAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(false);
+    expect(hasClassSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
   it('allows academic timetable manager selection to admins and academic staff slots', () => {

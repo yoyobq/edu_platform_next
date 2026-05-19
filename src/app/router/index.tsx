@@ -74,11 +74,13 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
+  hasClassSyncAccess,
   hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
+import { classSyncLabAccess, loadClassSyncLabRouteModule } from '@/labs/class-sync';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import { loadMajorSyncLabRouteModule, majorSyncLabAccess } from '@/labs/major-sync';
@@ -567,6 +569,47 @@ async function majorSyncLabLoader({ request }: LoaderFunctionArgs) {
 
   if (
     !hasMajorSyncAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function classSyncLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(classSyncLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(classSyncLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasClassSyncAccess({
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     })
@@ -1067,6 +1110,11 @@ const router = createBrowserRouter([
             path: 'major-sync',
             loader: majorSyncLabLoader,
             lazy: loadMajorSyncLabRouteModule,
+          },
+          {
+            path: 'class-sync',
+            loader: classSyncLabLoader,
+            lazy: loadClassSyncLabRouteModule,
           },
           {
             path: 'upstream-session-demo',

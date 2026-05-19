@@ -119,6 +119,13 @@ export function hasMajorSyncAccess(input: {
   return accessGroup.includes('STAFF') && slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP);
 }
 
+export function hasClassSyncAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasMajorSyncAccess(input);
+}
+
 export function canAccessPayloadCrypto(input: {
   accountId?: number | null;
   accessGroup?: readonly string[];
