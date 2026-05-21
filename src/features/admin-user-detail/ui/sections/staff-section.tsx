@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Form, Input, Radio, Select, Tag, Typography } from 'antd';
 
 import { WHITE_HOUSE_DEPARTMENT_OPTION_ID } from '@/shared/department';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
 import type { AdminUserDetail } from '../../application/get-admin-user-detail';
@@ -163,8 +164,8 @@ export function StaffSectionEditor({
         disabled={saving}
         key={`${detail.staff.id}-${detail.staff.updatedAt}-staff`}
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <EditableFormCard spanClassName="md:col-span-2">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<StaffSectionFormValues>
               label={<BilingualLabel title="在职状态" subtitle="Employment Status" />}
               name="employmentStatus"
@@ -233,7 +234,7 @@ export function StaffSectionEditor({
               <Input maxLength={64} />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<StaffSectionFormValues>
               label={<BilingualLabel title="备注" subtitle="Remark" />}
               name="remark"
@@ -242,7 +243,7 @@ export function StaffSectionEditor({
               <TextArea autoSize={{ minRows: 2, maxRows: 4 }} maxLength={255} />
             </Form.Item>
           </EditableFormCard>
-        </div>
+        </ResponsiveGrid>
       </Form>
     </EditableSectionShell>
   );

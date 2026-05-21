@@ -21,7 +21,6 @@ import {
   Menu,
   Segmented,
   Skeleton,
-  theme as antdTheme,
   Tooltip,
   Typography,
 } from 'antd';
@@ -47,6 +46,7 @@ import {
   useSidecarState,
   useTheme,
 } from '@/app/providers';
+import { createAppThemeConfig } from '@/app/theme';
 
 import { logout, useAuthSessionState } from '@/features/auth';
 
@@ -55,13 +55,13 @@ import {
   withWorkbenchSearch,
 } from '@/shared/third-workspace-demo/model';
 import { BrandLockup } from '@/shared/ui/brand';
+import { useWidthBand } from '@/shared/ui/responsive-layout';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
 import { AccountMenu } from './account-menu';
 import { EntryAccentGlyph } from './entry-accent-glyph';
 import { NavSidebar } from './nav-sidebar';
 import { useMediaQuery } from './use-media-query';
-import { useWidthBand } from './use-width-band';
 
 type AppLayoutProps = {
   currentAppEnv: 'dev' | 'test' | 'prod';
@@ -436,25 +436,10 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
   return (
     <ConfigProvider
-      theme={{
-        cssVar: {},
-        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
-        token: {
-          colorPrimary: '#1255CC',
-          colorError: '#D93025',
-          colorLink: '#1255CC',
-          fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
-          ...(isDark
-            ? {}
-            : {
-                colorBgLayout: '#F4F6FA',
-                colorBgContainer: '#FFFFFF',
-              }),
-          borderRadius: 8,
-          borderRadiusLG: 12,
-          borderRadiusSM: 4,
-        },
-      }}
+      theme={createAppThemeConfig({
+        fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
+        isDark,
+      })}
     >
       <AuthRefreshFeedbackBridge />
       <div className="h-screen overflow-hidden bg-bg-layout text-text">
@@ -537,8 +522,8 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   <BrandLockup variant="header" />
                 </div>
 
-                {menuItems.length > 0 && (
-                  <div className="hidden min-w-0 flex-1 lg:block">
+                {menuItems.length > 0 && mainWidthBand !== 'compact' && (
+                  <div className="min-w-0 flex-1">
                     <Menu
                       mode="horizontal"
                       selectedKeys={[getBaseURL(location.pathname, search)]}

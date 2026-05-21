@@ -21,6 +21,7 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
   buildAcademicCalendarEventQueryInput,
@@ -593,7 +594,7 @@ export function AcademicCalendarManagementPageContent({
         }
       >
         <div className="mb-4 flex flex-col gap-4">
-          <div className="grid gap-3 xl:grid-cols-4">
+          <ResponsiveGrid className="gap-3" columns={{ compact: 1, wide: 4 }}>
             <Input
               placeholder="筛选事件日期"
               type="date"
@@ -630,7 +631,7 @@ export function AcademicCalendarManagementPageContent({
               }
             />
             <Button onClick={() => setEventFilters(createEmptyEventFilters())}>重置筛选</Button>
-          </div>
+          </ResponsiveGrid>
         </div>
 
         {eventsError ? (
@@ -728,7 +729,7 @@ export function AcademicCalendarManagementPageContent({
           >
             <Input placeholder="例如：2025-2026 学年第二学期" />
           </Form.Item>
-          <div className="grid gap-4 md:grid-cols-2">
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="学年"
               name="schoolYear"
@@ -743,8 +744,8 @@ export function AcademicCalendarManagementPageContent({
             >
               <Select options={TERM_NUMBER_OPTIONS} />
             </Form.Item>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          </ResponsiveGrid>
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="开始日期"
               name="startDate"
@@ -759,8 +760,8 @@ export function AcademicCalendarManagementPageContent({
             >
               <Input type="date" />
             </Form.Item>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          </ResponsiveGrid>
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="教学开始日期"
               name="firstTeachingDate"
@@ -775,7 +776,7 @@ export function AcademicCalendarManagementPageContent({
             >
               <Input type="date" />
             </Form.Item>
-          </div>
+          </ResponsiveGrid>
           <Form.Item label="当前学期" name="isCurrent" valuePropName="checked">
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
@@ -855,7 +856,7 @@ export function AcademicCalendarManagementPageContent({
           >
             <Input placeholder="请输入事件标题" />
           </Form.Item>
-          <div className="grid gap-4 md:grid-cols-2">
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="事件日期"
               name="eventDate"
@@ -866,8 +867,8 @@ export function AcademicCalendarManagementPageContent({
             <Form.Item label="原始日期" name="originalDate">
               <Input type="date" />
             </Form.Item>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          </ResponsiveGrid>
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="时间段"
               name="dayPeriod"
@@ -882,8 +883,8 @@ export function AcademicCalendarManagementPageContent({
             >
               <Select options={EVENT_TYPE_OPTIONS} />
             </Form.Item>
-          </div>
-          <div className="grid gap-4 md:grid-cols-2">
+          </ResponsiveGrid>
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="记录状态"
               name="recordStatus"
@@ -898,7 +899,7 @@ export function AcademicCalendarManagementPageContent({
             >
               <Select options={TEACHING_CALC_EFFECT_OPTIONS} />
             </Form.Item>
-          </div>
+          </ResponsiveGrid>
           <Form.Item
             label="版本号"
             name="version"

@@ -2,6 +2,8 @@
 import { Alert, Button, Card, Empty, Popconfirm, Select, Table, Tag, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import {
   BACKFILL_ACTION_LABELS,
   BACKFILL_ACTION_TAG_COLORS,
@@ -139,7 +141,7 @@ export function StaffSemesterProfilesBackfillPanel({
       <div className="flex flex-col gap-4">
         {departmentError ? <Alert message={departmentError} showIcon type="warning" /> : null}
 
-        <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto]">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 'minmax(0, 1fr) auto' }}>
           <label className="flex flex-col gap-2">
             <Typography.Text strong>工作量归口系</Typography.Text>
             <Select
@@ -182,7 +184,7 @@ export function StaffSemesterProfilesBackfillPanel({
               </Button>
             </Popconfirm>
           </div>
-        </div>
+        </ResponsiveGrid>
 
         {hasCurrentBackfillBlocking ? (
           <Alert message="当前预览存在阻断项，确认补齐已禁用。" showIcon type="warning" />
@@ -190,7 +192,7 @@ export function StaffSemesterProfilesBackfillPanel({
 
         {backfillResult ? (
           <div className="flex flex-col gap-4">
-            <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+            <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 3, wide: 5 }}>
               <div className="rounded-block border border-border bg-bg-container p-3">
                 <Typography.Text type="secondary">候选教师</Typography.Text>
                 <div className="mt-1 text-xl font-semibold">{backfillResult.candidateCount}</div>
@@ -213,7 +215,7 @@ export function StaffSemesterProfilesBackfillPanel({
                   {backfillResult.alreadyExistingCount}
                 </div>
               </div>
-            </div>
+            </ResponsiveGrid>
 
             <Table<BackfillStaffSemesterProfilesFromCourseSchedulesItem>
               columns={backfillColumns}

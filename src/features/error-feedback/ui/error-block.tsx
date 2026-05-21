@@ -59,27 +59,29 @@ export function ErrorBlock({
           >
             {icon}
           </div>
-          <Flex vertical gap={6} align="center" className="error-block-content relative">
-            <span
-              className="error-block-status-code select-none"
-              style={{ color: toneStyle.codeColor }}
-            >
-              {statusCode}
-            </span>
-            <Typography.Title
-              level={4}
-              style={{
-                color: toneStyle.codeColor,
-                fontSize: 'var(--error-block-title-font-size)',
-                fontWeight: 'var(--error-block-title-font-weight)',
-                letterSpacing: 'var(--error-block-title-letter-spacing)',
-                marginBottom: 0,
-                textTransform: 'uppercase',
-              }}
-            >
-              {title}
-            </Typography.Title>
-          </Flex>
+          <div className="error-block-content relative">
+            <Flex vertical gap={6} align="center">
+              <span
+                className="error-block-status-code select-none"
+                style={{ color: toneStyle.codeColor }}
+              >
+                {statusCode}
+              </span>
+              <Typography.Title
+                level={4}
+                style={{
+                  color: toneStyle.codeColor,
+                  fontSize: 'var(--error-block-title-font-size)',
+                  fontWeight: 'var(--error-block-title-font-weight)',
+                  letterSpacing: 'var(--error-block-title-letter-spacing)',
+                  marginBottom: 0,
+                  textTransform: 'uppercase',
+                }}
+              >
+                {title}
+              </Typography.Title>
+            </Flex>
+          </div>
         </div>
 
         <Flex vertical gap={8} align="center">

@@ -12,6 +12,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
   type CourseScheduleSyncDepartmentOption,
@@ -522,7 +523,7 @@ export function SemesterCourseScheduleSyncPageContent({
         ) : null}
 
         <Form form={syncForm} layout="vertical">
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
             <Form.Item
               help={semesterOptionsError ?? undefined}
               label="学年"
@@ -593,7 +594,7 @@ export function SemesterCourseScheduleSyncPageContent({
             <Form.Item label="审核状态" name="reviewStatus">
               <Select allowClear options={REVIEW_STATUS_OPTIONS} placeholder="可选，不筛选则留空" />
             </Form.Item>
-          </div>
+          </ResponsiveGrid>
 
           <div className="flex flex-wrap gap-3">
             <Button

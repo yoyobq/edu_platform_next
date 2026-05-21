@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { CopyOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Form, Input, Radio, Space, Tag, Typography } from 'antd';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import { inviteIssuerLabAccess } from './access';
 import { adminRequestPasswordResetEmail, issueStaffInvite, issueStudentInvite } from './api';
 import { inviteIssuerLabMeta } from './meta';
@@ -118,7 +120,10 @@ export function InviteIssuerLabPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(320px,520px)_minmax(0,1fr)]">
+      <ResponsiveGrid
+        className="gap-4"
+        columns={{ compact: 1, wide: 'minmax(320px, 520px) minmax(0, 1fr)' }}
+      >
         <Card title="签发">
           <Form<InviteIssuerFormValues>
             form={form}
@@ -312,7 +317,7 @@ export function InviteIssuerLabPage() {
             </Typography.Paragraph>
           )}
         </Card>
-      </div>
+      </ResponsiveGrid>
     </div>
   );
 }

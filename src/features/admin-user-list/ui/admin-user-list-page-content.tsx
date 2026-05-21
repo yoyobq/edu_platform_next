@@ -18,6 +18,7 @@ import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/t
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 
 import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
+import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 
 import {
   ADMIN_USER_ACCOUNT_STATUSES,
@@ -774,8 +775,11 @@ export function AdminUserListPageContent({
       <div className="rounded-card shadow-card transition-shadow duration-200 hover:shadow-card-hover">
         <Card>
           <Flex vertical gap={16}>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
-              <div className="xl:col-span-2">
+            <ResponsiveGrid
+              className="gap-4"
+              columns={{ compact: 1, regular: 2, large: 4, wide: 5 }}
+            >
+              <ResponsiveGridItem span={{ wide: 2 }}>
                 <Input.Search
                   allowClear
                   placeholder="搜索登录名、邮箱、昵称或工号..."
@@ -783,7 +787,7 @@ export function AdminUserListPageContent({
                   onChange={(event) => setDraftQuery(event.target.value)}
                   onSearch={applyFilters}
                 />
-              </div>
+              </ResponsiveGridItem>
               <Select<AdminUserAccountStatus | undefined>
                 allowClear
                 placeholder="账户状态"
@@ -812,7 +816,7 @@ export function AdminUserListPageContent({
                 style={{ width: '100%' }}
                 onChange={(value) => setDraftHasStaff(value)}
               />
-            </div>
+            </ResponsiveGrid>
 
             <Flex align="center" justify="space-between">
               <Typography.Text

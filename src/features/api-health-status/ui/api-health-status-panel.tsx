@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react';
 import { Alert, Button, Card, Flex, Skeleton, Tag, Typography } from 'antd';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import {
   type ApiHealthCheckPort,
   type ApiHealthStatus,
@@ -109,7 +111,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
               </Tag>
             </Flex>
 
-            <div className="grid gap-4 md:grid-cols-2">
+            <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
               {state.results.map((result) => (
                 <Card key={result.id} title={result.title}>
                   <Flex vertical gap={12}>
@@ -142,7 +144,7 @@ export function ApiHealthStatusPanel({ healthCheckPort }: ApiHealthStatusPanelPr
                   </Flex>
                 </Card>
               ))}
-            </div>
+            </ResponsiveGrid>
           </Flex>
         )}
       </Flex>

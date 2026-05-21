@@ -111,43 +111,45 @@ export function WelcomePage() {
   }
 
   return (
-    <Flex vertical gap={24} className="mx-auto w-full max-w-3xl">
-      <div className="flex flex-col gap-3">
-        <Typography.Title level={2} style={{ marginBottom: 0 }}>
-          Welcome
-        </Typography.Title>
-        <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
-          当前账号已建立登录会话，但还不能直接进入正式业务主流程。先补齐最小资料，再继续回到
-          你的原目标页或默认工作台。
-        </Typography.Paragraph>
-      </div>
+    <div className="mx-auto w-full max-w-3xl">
+      <Flex vertical gap={24}>
+        <div className="flex flex-col gap-3">
+          <Typography.Title level={2} style={{ marginBottom: 0 }}>
+            Welcome
+          </Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 720 }}>
+            当前账号已建立登录会话，但还不能直接进入正式业务主流程。先补齐最小资料，再继续回到
+            你的原目标页或默认工作台。
+          </Typography.Paragraph>
+        </div>
 
-      <ProfileCompletionPanel
-        accessGroup={currentSnapshot.userInfo.accessGroup}
-        identityHint={currentSnapshot.account.identityHint}
-        isRefreshing={phase === 'refreshing'}
-      >
-        {currentSnapshot.primaryAccessGroup === 'ADMIN' ? (
-          <Alert
-            type="warning"
-            showIcon
-            title="当前会话仍处于历史 ADMIN 过渡态"
-            description="前台不会把 ADMIN 自动当成已完成身份；是否放行只认 needsProfileCompletion。"
+        <ProfileCompletionPanel
+          accessGroup={currentSnapshot.userInfo.accessGroup}
+          identityHint={currentSnapshot.account.identityHint}
+          isRefreshing={phase === 'refreshing'}
+        >
+          {currentSnapshot.primaryAccessGroup === 'ADMIN' ? (
+            <Alert
+              type="warning"
+              showIcon
+              title="当前会话仍处于历史 ADMIN 过渡态"
+              description="前台不会把 ADMIN 自动当成已完成身份；是否放行只认 needsProfileCompletion。"
+            />
+          ) : null}
+
+          <ProfileCompletionForm
+            errorMessage={submitError}
+            initialValues={{
+              name: currentSnapshot.identity?.name || currentSnapshot.displayName,
+              nickname: initialNickname,
+              targetIdentity: resolveInitialTargetIdentity(currentSnapshot.account.identityHint),
+            }}
+            onSubmit={handleSubmit}
+            submitting={isSubmitting}
+            submittingLabel={phase === 'refreshing' ? '正在刷新会话' : '正在提交'}
           />
-        ) : null}
-
-        <ProfileCompletionForm
-          errorMessage={submitError}
-          initialValues={{
-            name: currentSnapshot.identity?.name || currentSnapshot.displayName,
-            nickname: initialNickname,
-            targetIdentity: resolveInitialTargetIdentity(currentSnapshot.account.identityHint),
-          }}
-          onSubmit={handleSubmit}
-          submitting={isSubmitting}
-          submittingLabel={phase === 'refreshing' ? '正在刷新会话' : '正在提交'}
-        />
-      </ProfileCompletionPanel>
-    </Flex>
+        </ProfileCompletionPanel>
+      </Flex>
+    </div>
   );
 }

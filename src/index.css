@@ -55,6 +55,12 @@
   --color-ai-accent-bg-hover: color-mix(in srgb, #cc6b46 18%, var(--ant-color-bg-container, white));
   --color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 
+  /* Workbench custom item background tokens */
+  --color-workbench-custom-blue-bg: rgb(219 234 254 / 0.82);
+  --color-workbench-custom-green-bg: rgb(220 252 231 / 0.82);
+  --color-workbench-custom-purple-bg: rgb(243 232 255 / 0.82);
+  --color-workbench-custom-yellow-bg: rgb(254 249 195 / 0.82);
+
   /* Course category semantic colors */
   --course-category-theory-color: #1d4ed8;
   --course-category-theory-bg: #dbeafe;

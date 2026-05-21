@@ -1,11 +1,8 @@
-// src/app/layout/use-width-band.ts
+// src/shared/ui/responsive-layout/use-width-band.ts
 
-import { type RefObject, useEffect, useState } from 'react';
+import { type RefObject, useEffect, useMemo, useState } from 'react';
 
-type WidthBandRule<Band extends string> = {
-  max: number;
-  value: Band;
-};
+import type { WidthBandRule } from './types';
 
 function resolveWidthBand<Band extends string>(
   width: number,
@@ -50,8 +47,11 @@ export function useWidthBand<ElementType extends HTMLElement, Band extends strin
     return () => observer.disconnect();
   }, [elementRef]);
 
-  return {
-    width,
-    band: resolveWidthBand(width, rules, fallback),
-  };
+  return useMemo(
+    () => ({
+      width,
+      band: resolveWidthBand(width, rules, fallback),
+    }),
+    [fallback, rules, width],
+  );
 }

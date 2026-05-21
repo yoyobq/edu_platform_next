@@ -5,6 +5,8 @@ import { Card, Checkbox, Empty, Flex, Tag, Typography } from 'antd';
 
 import { isProjectLive } from '@/entities/project';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import { getVisibleProjects } from '../application/get-visible-projects';
 import { demoProjectCatalogRepository } from '../infrastructure/demo-project-repository';
 
@@ -37,7 +39,7 @@ export function ProjectStatusPanel() {
           </Flex>
 
           {visibleProjects.length > 0 ? (
-            <div className="grid gap-4 md:grid-cols-2">
+            <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
               {visibleProjects.map((project) => {
                 const isLive = isProjectLive(project);
 
@@ -66,7 +68,7 @@ export function ProjectStatusPanel() {
                   </Card>
                 );
               })}
-            </div>
+            </ResponsiveGrid>
           ) : (
             <Card>
               <Empty description="当前没有可展示的上线项目。" />

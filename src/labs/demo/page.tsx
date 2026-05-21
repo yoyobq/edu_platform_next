@@ -12,6 +12,7 @@ import {
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
 } from '@/shared/third-workspace-demo/model';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import { demoLabAccess } from './access';
 import { demoLabMeta } from './meta';
@@ -58,7 +59,10 @@ export function DemoLabPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,420px)]">
+      <ResponsiveGrid
+        className="gap-4"
+        columns={{ compact: 1, wide: 'minmax(0, 1.2fr) minmax(320px, 420px)' }}
+      >
         <Card title="候选结果物">
           <div className="flex flex-col gap-3">
             {THIRD_WORKSPACE_DEMO_ARTIFACTS.map((artifact) => {
@@ -158,7 +162,7 @@ export function DemoLabPage() {
             </div>
           ) : null}
         </Card>
-      </div>
+      </ResponsiveGrid>
     </div>
   );
 }

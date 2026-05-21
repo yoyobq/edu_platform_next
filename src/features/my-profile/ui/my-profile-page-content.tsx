@@ -20,6 +20,7 @@ import dayjs, { type Dayjs } from 'dayjs';
 
 import { WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
 import { HexAvatar } from '@/shared/hex-avatar';
+import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 
 import type {
   MyProfileBasicData,
@@ -111,7 +112,11 @@ function FieldItem({ label, children }: { label: string; children: React.ReactNo
 }
 
 function FieldGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">{children}</div>;
+  return (
+    <ResponsiveGrid className="gap-x-6 gap-y-6" columns={{ compact: 1, regular: 2, wide: 3 }}>
+      {children}
+    </ResponsiveGrid>
+  );
 }
 
 function displayValue(value: string | number | null | undefined): string {
@@ -478,7 +483,7 @@ function BasicTab({
           />
         ) : null}
 
-        <div className="grid gap-x-6 gap-y-6 md:grid-cols-2 xl:grid-cols-3">
+        <ResponsiveGrid className="gap-x-6 gap-y-6" columns={{ compact: 1, regular: 2, wide: 3 }}>
           <FieldItem label="昵称">
             <Form.Item name="nickname" noStyle>
               <Input variant="filled" />
@@ -513,26 +518,26 @@ function BasicTab({
               <Input placeholder="城市" variant="filled" />
             </Form.Item>
           </FieldItem>
-          <div className="md:col-span-2 xl:col-span-2">
+          <ResponsiveGridItem span={{ regular: 2, wide: 2 }}>
             <FieldItem label="详细地址">
               <Form.Item name="address" noStyle>
                 <Input placeholder="请输入详细地址" variant="filled" />
               </Form.Item>
             </FieldItem>
-          </div>
+          </ResponsiveGridItem>
           <FieldItem label="手机号">
             <Form.Item name="phone" noStyle>
               <Input placeholder="未绑定手机号" variant="filled" />
             </Form.Item>
           </FieldItem>
-          <div className="md:col-span-2 xl:col-span-3">
+          <ResponsiveGridItem span={{ regular: 2, wide: 'full' }}>
             <FieldItem label="个性签名">
               <Form.Item name="signature" noStyle>
                 <Input placeholder="介绍一下自己..." variant="filled" />
               </Form.Item>
             </FieldItem>
-          </div>
-        </div>
+          </ResponsiveGridItem>
+        </ResponsiveGrid>
 
         <div className="flex flex-col gap-4">
           <FieldItem label="标签">
@@ -566,7 +571,7 @@ function BasicTab({
         </div>
 
         <div className="border-t border-border pt-6">
-          <div className="grid gap-x-6 gap-y-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-3">
+          <ResponsiveGrid className="gap-x-6 gap-y-4" columns={{ compact: 1, regular: 2, wide: 3 }}>
             <FieldItem label="账户 ID">
               <Input
                 value={account.id}
@@ -591,7 +596,7 @@ function BasicTab({
                 readOnly
               />
             </FieldItem>
-          </div>
+          </ResponsiveGrid>
         </div>
       </div>
     </Form>
@@ -927,14 +932,14 @@ function SecurityTab({
   loginHistory: MyProfileBasicData['account']['recentLoginHistory'];
 }) {
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 2 }}>
       <div className="flex flex-col gap-6">
         <ChangeEmailCard currentLoginEmail={loginEmail} disabled={disableChangeLoginEmail} />
         <ResetPasswordCard currentLoginEmail={loginEmail} />
       </div>
 
       <RecentLoginCard loginHistory={loginHistory} />
-    </div>
+    </ResponsiveGrid>
   );
 }
 
@@ -1058,8 +1063,8 @@ export function MyProfilePageContent({
 
   return (
     <div className="mx-auto w-full max-w-[--width-content-readable] pb-6">
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
+      <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 3 }}>
+        <ResponsiveGridItem span={{ large: 2 }}>
           <div className="rounded-card shadow-card">
             <Card styles={{ body: { padding: 24 } }}>
               <div className="app-profile-tabs">
@@ -1099,12 +1104,12 @@ export function MyProfilePageContent({
               </div>
             </Card>
           </div>
-        </div>
+        </ResponsiveGridItem>
 
-        <div className="lg:col-span-1">
+        <ResponsiveGridItem>
           <ProfileSidebar data={data} loading={loading} />
-        </div>
-      </div>
+        </ResponsiveGridItem>
+      </ResponsiveGrid>
     </div>
   );
 }

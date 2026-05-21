@@ -26,39 +26,46 @@ function VerificationIntentShell({
   return (
     <div className="min-h-screen bg-bg-layout px-6 py-12 text-text">
       <div className="mx-auto flex min-h-[calc(100vh-6rem)] max-w-5xl items-center">
-        <Flex gap={32} className="w-full" wrap>
-          <Flex vertical gap={24} className="min-w-70 flex-1">
-            <BrandLockup variant="public-entry" />
-            <div>
-              <h1
-                style={{
-                  fontSize: 'var(--ant-font-size-heading-3)',
-                  fontWeight: 'var(--ant-font-weight-heading)',
-                  lineHeight: 'var(--ant-line-height-heading-3)',
-                  marginBottom: 12,
-                  marginTop: 8,
-                }}
-              >
-                {title}
-              </h1>
-              {typeof description === 'string' ? (
-                <Typography.Paragraph type="secondary" style={{ marginBottom: 0, maxWidth: 520 }}>
-                  {description}
-                </Typography.Paragraph>
-              ) : (
-                description
-              )}
+        <div className="w-full">
+          <Flex gap={32} wrap>
+            <div className="min-w-70 flex-1">
+              <Flex vertical gap={24}>
+                <BrandLockup variant="public-entry" />
+                <div>
+                  <h1
+                    style={{
+                      fontSize: 'var(--ant-font-size-heading-3)',
+                      fontWeight: 'var(--ant-font-weight-heading)',
+                      lineHeight: 'var(--ant-line-height-heading-3)',
+                      marginBottom: 12,
+                      marginTop: 8,
+                    }}
+                  >
+                    {title}
+                  </h1>
+                  {typeof description === 'string' ? (
+                    <Typography.Paragraph
+                      type="secondary"
+                      style={{ marginBottom: 0, maxWidth: 520 }}
+                    >
+                      {description}
+                    </Typography.Paragraph>
+                  ) : (
+                    description
+                  )}
+                </div>
+              </Flex>
+            </div>
+
+            <div className="min-w-85 flex-1">
+              <Card styles={{ body: { padding: 24 } }}>
+                <Flex vertical gap={24}>
+                  {children}
+                </Flex>
+              </Card>
             </div>
           </Flex>
-
-          <div className="min-w-85 flex-1">
-            <Card styles={{ body: { padding: 24 } }}>
-              <Flex vertical gap={24}>
-                {children}
-              </Flex>
-            </Card>
-          </div>
-        </Flex>
+        </div>
       </div>
     </div>
   );

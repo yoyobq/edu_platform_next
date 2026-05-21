@@ -26,6 +26,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 import {
   resolveStaffDirectoryCache,
   resolveStaffDirectoryTeacherStaffId,
@@ -544,7 +545,13 @@ export function AcademicWorkloadPageContent({
                 {formatTeachingWeekRangeLabel(teachingWeekRange)}
               </Typography.Text>
 
-              <div className="grid items-stretch gap-3 xl:grid-cols-[minmax(160px,1fr)_auto_minmax(160px,1fr)_auto_minmax(160px,1fr)_auto_minmax(160px,1fr)]">
+              <ResponsiveGrid
+                className="items-stretch gap-3"
+                columns={{
+                  compact: 1,
+                  wide: 'minmax(160px, 1fr) auto minmax(160px, 1fr) auto minmax(160px, 1fr) auto minmax(160px, 1fr)',
+                }}
+              >
                 <Card size="small">
                   <div className="academic-workload-metric-content">
                     <Typography.Text type="secondary">排课基线课时</Typography.Text>
@@ -640,7 +647,7 @@ export function AcademicWorkloadPageContent({
                     </Typography.Text>
                   </div>
                 </Card>
-              </div>
+              </ResponsiveGrid>
             </div>
           </div>
 

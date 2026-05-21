@@ -4,6 +4,7 @@ import { Alert, Button, Card, Flex, message, Skeleton, Tabs, Tag, Typography } f
 import { useLocation, useNavigate } from 'react-router';
 
 import { HexAvatar } from '@/shared/hex-avatar';
+import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 
 import type { AdminUserDetail } from '../application/get-admin-user-detail';
 import {
@@ -182,7 +183,7 @@ function DetailCardSkeleton({
         styles={{ body: { minHeight, padding: 24 } }}
       >
         <Flex vertical gap={24}>
-          <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
+          <ResponsiveGrid className="gap-x-6 gap-y-4" columns={{ compact: 1, regular: 2 }}>
             {fixedFields.map((field, index) => (
               <DetailFieldSkeleton
                 key={`fixed-${titleWidth}-${index}`}
@@ -190,13 +191,13 @@ function DetailCardSkeleton({
                 valueWidth={field.valueWidth}
               />
             ))}
-          </div>
+          </ResponsiveGrid>
 
           <div className="rounded-block border border-border p-4">
             <Flex align="center" gap={8} justify="flex-end">
               <SkeletonBar height={28} width={60} />
             </Flex>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <ResponsiveGrid className="mt-4 gap-4" columns={{ compact: 1, regular: 2 }}>
               {editableFields.map((field, index) => (
                 <DetailFieldSkeleton
                   key={`editable-${titleWidth}-${index}`}
@@ -204,11 +205,14 @@ function DetailCardSkeleton({
                   valueWidth={field.valueWidth}
                 />
               ))}
-            </div>
+            </ResponsiveGrid>
           </div>
 
           <div className="border-t border-border pt-4">
-            <div className="grid gap-x-6 gap-y-3 md:grid-cols-2 xl:grid-cols-4">
+            <ResponsiveGrid
+              className="gap-x-6 gap-y-3"
+              columns={{ compact: 1, regular: 2, wide: 4 }}
+            >
               {referenceFields.map((field, index) => (
                 <DetailFieldSkeleton
                   key={`reference-${titleWidth}-${index}`}
@@ -216,7 +220,7 @@ function DetailCardSkeleton({
                   valueWidth={field.valueWidth}
                 />
               ))}
-            </div>
+            </ResponsiveGrid>
           </div>
         </Flex>
       </Card>
@@ -270,12 +274,12 @@ function AdminUserDetailLoadingSkeleton() {
               <SkeletonBar height={16} width={220} />
             </Flex>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3 xl:grid-cols-4">
+            <ResponsiveGrid className="gap-x-6 gap-y-3" columns={{ compact: 2, wide: 4 }}>
               <DetailFieldSkeleton labelWidth={40} valueWidth={120} />
               <DetailFieldSkeleton labelWidth={40} valueWidth={96} />
               <DetailFieldSkeleton labelWidth={48} valueWidth={132} />
               <DetailFieldSkeleton labelWidth={56} valueWidth={108} />
-            </div>
+            </ResponsiveGrid>
 
             <Flex gap={6} wrap>
               <SkeletonBar height={22} width={68} />
@@ -286,8 +290,8 @@ function AdminUserDetailLoadingSkeleton() {
         </Flex>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <div className="flex flex-col gap-6 lg:col-span-2">
+      <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 3 }}>
+        <ResponsiveGridItem className="flex flex-col gap-6" span={{ large: 2 }}>
           <DetailCardSkeleton
             minHeight={360}
             titleWidth={124}
@@ -357,13 +361,13 @@ function AdminUserDetailLoadingSkeleton() {
               { labelWidth: 64, valueWidth: '48%' },
             ]}
           />
-        </div>
+        </ResponsiveGridItem>
 
         <div className="flex flex-col gap-6">
           <SidebarCardSkeleton minHeight={248} rows={5} titleWidth={82} />
           <SidebarCardSkeleton minHeight={272} rows={4} titleWidth={116} />
         </div>
-      </div>
+      </ResponsiveGrid>
     </>
   );
 }
@@ -747,7 +751,7 @@ export function AdminUserDetailPageContent({
                 </Typography.Text>
               </Flex>
 
-              <div className="grid grid-cols-2 gap-x-6 gap-y-2 xl:grid-cols-4">
+              <ResponsiveGrid className="gap-x-6 gap-y-2" columns={{ compact: 2, wide: 4 }}>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-xs text-text-secondary">部门</span>
                   <span className="text-sm">
@@ -766,7 +770,7 @@ export function AdminUserDetailPageContent({
                   <span className="text-xs text-text-secondary">真实姓名</span>
                   <span className="text-sm">{formatOptionalValue(result.staff.name)}</span>
                 </div>
-              </div>
+              </ResponsiveGrid>
 
               <Flex gap={4} wrap>
                 {(result.userInfo.tags ?? []).map((tag) => (
@@ -808,8 +812,8 @@ export function AdminUserDetailPageContent({
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2">
+        <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 3 }}>
+          <ResponsiveGridItem span={{ large: 2 }}>
             <div className="rounded-card shadow-card">
               <Card styles={{ body: { padding: '8px 24px 24px' } }}>
                 <div className="app-profile-tabs">
@@ -1033,7 +1037,7 @@ export function AdminUserDetailPageContent({
                 </div>
               </Card>
             </div>
-          </div>
+          </ResponsiveGridItem>
 
           <div className="flex flex-col gap-6">
             <div className="rounded-card shadow-card">
@@ -1116,7 +1120,7 @@ export function AdminUserDetailPageContent({
               </Card>
             </div>
           </div>
-        </div>
+        </ResponsiveGrid>
       )}
 
       {hasLoaded && isLoading && (

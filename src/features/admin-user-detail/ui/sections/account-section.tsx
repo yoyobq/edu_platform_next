@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { Flex, Form, Input, Radio, Tag, Typography } from 'antd';
 
 import type { AuthAccessGroup } from '@/shared/auth-access';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import type { AdminUserDetail } from '../../application/get-admin-user-detail';
 import {
@@ -147,8 +148,8 @@ export function AccountSectionEditor({
         disabled={saving}
         key={`${detail.account.id}-${detail.account.updatedAt}-account`}
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          <EditableFormCard spanClassName="md:col-span-2">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<AccountSectionFormValues>
               label={<BilingualLabel title="账户状态" subtitle="Account Status" />}
               name="status"
@@ -165,7 +166,7 @@ export function AccountSectionEditor({
               />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<AccountSectionFormValues>
               label={<BilingualLabel title="身份提示" subtitle="Identity Hint" />}
               name="identityHint"
@@ -184,7 +185,7 @@ export function AccountSectionEditor({
               </Typography.Text>
             </Flex>
           </EditableFormCard>
-        </div>
+        </ResponsiveGrid>
       </Form>
     </EditableSectionShell>
   );

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react';
 import { PlusOutlined, StopOutlined } from '@ant-design/icons';
 import { Alert, Button, Checkbox, Form, Input, Popconfirm, Select, Tag, Typography } from 'antd';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
 import type {
   AdminUserDetail,
@@ -394,7 +396,7 @@ export function StaffSlotSection({
             }}
             disabled={assigning}
           >
-            <div className="grid gap-x-6 gap-y-4 md:grid-cols-2">
+            <ResponsiveGrid className="gap-x-6 gap-y-4" columns={{ compact: 1, regular: 2 }}>
               <EditableFormCard>
                 <Form.Item<AssignStaffSlotFormValues>
                   label={<BilingualLabel compact title="Slot" subtitle="Slot Type" />}
@@ -464,18 +466,16 @@ export function StaffSlotSection({
                   <Checkbox>是</Checkbox>
                 </Form.Item>
               </EditableFormCard>
-              <div className="md:col-span-2">
-                <EditableFormCard>
-                  <Form.Item<AssignStaffSlotFormValues>
-                    label={<BilingualLabel compact title="备注" subtitle="Remark" />}
-                    name="remarks"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Input maxLength={255} />
-                  </Form.Item>
-                </EditableFormCard>
-              </div>
-            </div>
+              <EditableFormCard span={{ regular: 2 }}>
+                <Form.Item<AssignStaffSlotFormValues>
+                  label={<BilingualLabel compact title="备注" subtitle="Remark" />}
+                  name="remarks"
+                  style={{ marginBottom: 0 }}
+                >
+                  <Input maxLength={255} />
+                </Form.Item>
+              </EditableFormCard>
+            </ResponsiveGrid>
             <div className="mt-6 flex justify-end gap-2">
               <Button
                 onClick={() => {

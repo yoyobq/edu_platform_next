@@ -1,7 +1,10 @@
 // src/shared/third-workspace-demo/canvas.tsx
 
+import { useRef } from 'react';
 import { CloseOutlined } from '@ant-design/icons';
 import { Button, Card, Divider, Typography } from 'antd';
+
+import { ResponsiveGrid, useWidthBand } from '@/shared/ui/responsive-layout';
 
 import type { ThirdWorkspaceDemoArtifact } from './model';
 
@@ -12,8 +15,11 @@ export function ThirdWorkspaceDemoCanvas({
   artifact: ThirdWorkspaceDemoArtifact;
   onClose: () => void;
 }) {
+  const canvasRootRef = useRef<HTMLDivElement | null>(null);
+  const { band } = useWidthBand(canvasRootRef, [{ max: 639, value: 'compact' }], 'regular');
+
   return (
-    <div className="h-full w-full p-4 md:p-6">
+    <div ref={canvasRootRef} className={`h-full w-full ${band === 'compact' ? 'p-4' : 'p-6'}`}>
       <div className="h-full overflow-hidden rounded-surface shadow-surface">
         <Card
           data-testid="third-workspace-canvas"
@@ -48,7 +54,10 @@ export function ThirdWorkspaceDemoCanvas({
 
           <Divider />
 
-          <div className="grid flex-1 gap-6 overflow-y-auto lg:grid-cols-[minmax(0,1.5fr)_280px]">
+          <ResponsiveGrid
+            className="flex-1 gap-6 overflow-y-auto"
+            columns={{ compact: 1, large: 'minmax(0, 1.5fr) 280px' }}
+          >
             <div className="flex flex-col gap-4">
               {artifact.sections.map((section) => (
                 <Card key={section} size="small">
@@ -70,7 +79,7 @@ export function ThirdWorkspaceDemoCanvas({
                 </div>
               </Card>
             </div>
-          </div>
+          </ResponsiveGrid>
         </Card>
       </div>
     </div>

@@ -2,6 +2,8 @@ import { EditOutlined } from '@ant-design/icons';
 import { Alert, Button, Flex } from 'antd';
 import type { ReactNode } from 'react';
 
+import { ResponsiveGridItem, type ResponsiveValue } from '@/shared/ui/responsive-layout';
+
 export function EditableSectionShell({
   children,
   editLabel,
@@ -47,14 +49,14 @@ export function EditableSectionShell({
 
 export function EditableFormCard({
   children,
-  spanClassName,
+  span,
 }: {
   children: ReactNode;
-  spanClassName?: string;
+  span?: ResponsiveValue<number | 'full'>;
 }) {
   return (
-    <div className={spanClassName}>
+    <ResponsiveGridItem span={span}>
       <div className="flex h-full flex-col justify-start">{children}</div>
-    </div>
+    </ResponsiveGridItem>
   );
 }

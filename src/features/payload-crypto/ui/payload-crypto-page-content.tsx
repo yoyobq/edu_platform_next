@@ -19,6 +19,7 @@ import {
   type CodeHighlightThemeMode,
   createCodeHighlighterProps,
 } from '@/shared/ui/code-highlighter';
+import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 
 import {
   buildPayloadCryptoHistoryItem,
@@ -117,11 +118,11 @@ export function PayloadCryptoPageContent({
   const canProcess = Boolean(normalizedInput) && !loading;
   const showPasteOverlay = !normalizedInput && isPasteOverlayVisible;
   const isInputCompressed = Boolean(result) && !isInputExpanded;
-  const gridClassName = isInputExpanded
-    ? 'grid gap-4 xl:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]'
+  const gridColumns = isInputExpanded
+    ? { compact: 1, wide: 'minmax(0, 1.5fr) minmax(300px, 1fr)' }
     : isInputCompressed
-      ? 'grid gap-4 xl:grid-cols-[minmax(0,2.05fr)_minmax(220px,0.55fr)]'
-      : 'grid gap-4 xl:grid-cols-[minmax(0,1.75fr)_minmax(240px,0.75fr)]';
+      ? { compact: 1, wide: 'minmax(0, 2.05fr) minmax(220px, 0.55fr)' }
+      : { compact: 1, wide: 'minmax(0, 1.75fr) minmax(240px, 0.75fr)' };
   const inputAutoSize = useMemo(() => {
     if (isInputExpanded) {
       return { maxRows: 18, minRows: 8 };
@@ -366,8 +367,8 @@ export function PayloadCryptoPageContent({
           </div>
         </Card>
 
-        <div className={gridClassName}>
-          <div className="xl:order-2">
+        <ResponsiveGrid className="gap-4" columns={gridColumns}>
+          <ResponsiveGridItem order={{ wide: 2 }}>
             <Card
               title="输入载荷"
               extra={
@@ -545,57 +546,59 @@ export function PayloadCryptoPageContent({
                 </div>
               </div>
             </Card>
-          </div>
+          </ResponsiveGridItem>
 
-          <div ref={resultRef} className="xl:order-1">
-            <Card
-              title="结果"
-              extra={
-                <div className="flex items-center gap-2">
-                  <SunOutlined
-                    style={{
-                      color:
-                        codeThemeMode === 'light'
-                          ? 'var(--ant-color-warning)'
-                          : 'var(--ant-color-text-tertiary)',
-                      fontSize: 14,
-                    }}
-                  />
-                  <Switch
-                    aria-label="切换结果区明暗主题"
-                    checked={codeThemeMode === 'dark'}
-                    size="small"
-                    onChange={(checked) => setCodeThemeMode(checked ? 'dark' : 'light')}
-                  />
-                  <MoonOutlined
-                    style={{
-                      color:
-                        codeThemeMode === 'dark'
-                          ? 'var(--ant-color-text)'
-                          : 'var(--ant-color-text-tertiary)',
-                      fontSize: 14,
-                    }}
-                  />
-                </div>
-              }
-              styles={{
-                body: {
-                  padding: 8,
-                },
-              }}
-            >
-              {result ? (
-                <CodeHighlighter lang="json" {...codeHighlightProps}>
-                  {result}
-                </CodeHighlighter>
-              ) : (
-                <div className="flex h-full min-h-75 items-center justify-center">
-                  <Typography.Text type="secondary">暂无结果，请先执行加解密操作</Typography.Text>
-                </div>
-              )}
-            </Card>
-          </div>
-        </div>
+          <ResponsiveGridItem order={{ wide: 1 }}>
+            <div ref={resultRef}>
+              <Card
+                title="结果"
+                extra={
+                  <div className="flex items-center gap-2">
+                    <SunOutlined
+                      style={{
+                        color:
+                          codeThemeMode === 'light'
+                            ? 'var(--ant-color-warning)'
+                            : 'var(--ant-color-text-tertiary)',
+                        fontSize: 14,
+                      }}
+                    />
+                    <Switch
+                      aria-label="切换结果区明暗主题"
+                      checked={codeThemeMode === 'dark'}
+                      size="small"
+                      onChange={(checked) => setCodeThemeMode(checked ? 'dark' : 'light')}
+                    />
+                    <MoonOutlined
+                      style={{
+                        color:
+                          codeThemeMode === 'dark'
+                            ? 'var(--ant-color-text)'
+                            : 'var(--ant-color-text-tertiary)',
+                        fontSize: 14,
+                      }}
+                    />
+                  </div>
+                }
+                styles={{
+                  body: {
+                    padding: 8,
+                  },
+                }}
+              >
+                {result ? (
+                  <CodeHighlighter lang="json" {...codeHighlightProps}>
+                    {result}
+                  </CodeHighlighter>
+                ) : (
+                  <div className="flex h-full min-h-75 items-center justify-center">
+                    <Typography.Text type="secondary">暂无结果，请先执行加解密操作</Typography.Text>
+                  </div>
+                )}
+              </Card>
+            </div>
+          </ResponsiveGridItem>
+        </ResponsiveGrid>
       </div>
       <Modal
         cancelText="取消"

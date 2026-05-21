@@ -1,5 +1,5 @@
 export const DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR = 'var(--color-ai-accent-bg)';
-export const PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR = 'rgb(243 232 255 / 0.82)';
+export const PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR = 'var(--color-workbench-custom-purple-bg)';
 
 export const CUSTOM_ITEM_BACKGROUND_OPTIONS = [
   {
@@ -8,11 +8,11 @@ export const CUSTOM_ITEM_BACKGROUND_OPTIONS = [
   },
   {
     label: '蓝',
-    value: 'rgb(219 234 254 / 0.82)',
+    value: 'var(--color-workbench-custom-blue-bg)',
   },
   {
     label: '绿',
-    value: 'rgb(220 252 231 / 0.82)',
+    value: 'var(--color-workbench-custom-green-bg)',
   },
   {
     label: '紫',
@@ -20,6 +20,6 @@ export const CUSTOM_ITEM_BACKGROUND_OPTIONS = [
   },
   {
     label: '黄',
-    value: 'rgb(254 249 195 / 0.82)',
+    value: 'var(--color-workbench-custom-yellow-bg)',
   },
 ] as const;

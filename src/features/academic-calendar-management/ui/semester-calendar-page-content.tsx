@@ -31,6 +31,7 @@ import {
 } from 'antd';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { useWidthBand } from '@/shared/ui/responsive-layout';
 
 import {
   formatDateTime,
@@ -240,10 +241,16 @@ export function SemesterCalendarPageContent({
     null,
   );
   const [calendarScrollLeft, setCalendarScrollLeft] = useState(0);
+  const calendarSummaryRef = useRef<HTMLDivElement | null>(null);
   const calendarScrollRef = useRef<HTMLDivElement | null>(null);
   const currentWeekAnchorRef = useRef<HTMLDivElement | null>(null);
   const autoScrolledSemesterIdRef = useRef<number | null>(null);
   const eventRequestSequenceRef = useRef(createLatestRequestSequence());
+  const { band: calendarSummaryBand } = useWidthBand(
+    calendarSummaryRef,
+    [{ max: 1023, value: 'stacked' }],
+    'inline',
+  );
 
   const loadSemesters = useCallback(async () => {
     setSemestersLoading(true);
@@ -517,7 +524,12 @@ export function SemesterCalendarPageContent({
           <Empty description="当前学期没有可展示的周视图" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div
+              ref={calendarSummaryRef}
+              className={`flex gap-4 ${
+                calendarSummaryBand === 'inline' ? 'flex-row items-end justify-between' : 'flex-col'
+              }`}
+            >
               <div className="flex flex-wrap gap-2">
                 <Tag color="blue">教学周 {teachingWeekCount} 周</Tag>
                 <Tag color="gold">教学开始：{selectedSemester.firstTeachingDate}</Tag>

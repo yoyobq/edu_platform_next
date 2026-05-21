@@ -19,6 +19,8 @@ import {
   UpstreamLoginModal,
 } from '@/entities/upstream-session';
 
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+
 import {
   type ChangeLoginEmailIssuanceFormValues,
   getAdminUserDisplayName,
@@ -201,7 +203,7 @@ function StaffInvitePanel({
             size="large"
             onFinish={issueStaffInvite}
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
               <Form.Item
                 label="教师 ID"
                 name="staffId"
@@ -265,7 +267,7 @@ function StaffInvitePanel({
                   }}
                 />
               </Form.Item>
-            </div>
+            </ResponsiveGrid>
 
             <Form.Item
               label="被邀请邮箱"

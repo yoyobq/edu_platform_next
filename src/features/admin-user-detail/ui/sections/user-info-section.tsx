@@ -5,6 +5,7 @@ import { DatePicker, Flex, Form, Input, Radio, Tag, Typography } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 
 import type { AuthAccessGroup } from '@/shared/auth-access';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import type { AdminUserDetail } from '../../application/get-admin-user-detail';
 import {
@@ -223,7 +224,7 @@ export function UserInfoSectionEditor({
         disabled={saving}
         key={`${detail.userInfo.id}-${detail.userInfo.updatedAt}-user-info`}
       >
-        <div className="grid gap-4 md:grid-cols-2">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
           <EditableFormCard>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="昵称" subtitle="Nickname" />}
@@ -241,7 +242,7 @@ export function UserInfoSectionEditor({
               <Input maxLength={64} />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="用户状态" subtitle="User State" />}
               name="userState"
@@ -258,7 +259,7 @@ export function UserInfoSectionEditor({
               />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="访问组" subtitle="Access Group" />}
               style={{ marginBottom: 0 }}
@@ -308,7 +309,7 @@ export function UserInfoSectionEditor({
               <Input maxLength={32} />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="性别" subtitle="Gender" />}
               name="gender"
@@ -340,7 +341,7 @@ export function UserInfoSectionEditor({
               />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="地址" subtitle="Address" />}
               name="address"
@@ -367,7 +368,7 @@ export function UserInfoSectionEditor({
               <Input maxLength={128} />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="个性签名" subtitle="Signature" />}
               name="signature"
@@ -376,7 +377,7 @@ export function UserInfoSectionEditor({
               <TextArea autoSize={{ minRows: 2, maxRows: 4 }} maxLength={255} />
             </Form.Item>
           </EditableFormCard>
-          <EditableFormCard spanClassName="md:col-span-2">
+          <EditableFormCard span={{ regular: 2 }}>
             <Form.Item<UserInfoSectionFormValues>
               label={<BilingualLabel title="标签" subtitle="Tags" />}
               name="tags"
@@ -385,7 +386,7 @@ export function UserInfoSectionEditor({
               <UserTagsEditor />
             </Form.Item>
           </EditableFormCard>
-        </div>
+        </ResponsiveGrid>
       </Form>
     </EditableSectionShell>
   );

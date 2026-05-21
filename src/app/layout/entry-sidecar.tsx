@@ -15,8 +15,9 @@ import {
   useSidecarState,
 } from '@/app/providers';
 
+import { useWidthBand } from '@/shared/ui/responsive-layout';
+
 import { EntryAccentGlyph } from './entry-accent-glyph';
-import { useWidthBand } from './use-width-band';
 
 function readZIndexToken(tokenName: string, fallbackValue: number): number {
   if (typeof window === 'undefined') {

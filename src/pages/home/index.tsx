@@ -34,6 +34,7 @@ import {
   type VisibleHomeModuleContract,
 } from '@/shared/home-modules';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 import { requestOpenEntrySidecar } from '@/shared/workbench-events';
 
 import { WorkbenchCustomItemDragProvider } from './workbench-custom-item-dnd';
@@ -123,7 +124,7 @@ function HomeModuleCard({
         <div className="flex flex-col gap-3">
           <Typography.Text strong>{module.state.summary.headline}</Typography.Text>
           {module.state.summary.items && module.state.summary.items.length > 0 ? (
-            <div className="grid gap-3 md:grid-cols-2">
+            <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 2 }}>
               {module.state.summary.items.map((item) => (
                 <div
                   key={item.label}
@@ -135,7 +136,7 @@ function HomeModuleCard({
                   </Typography.Paragraph>
                 </div>
               ))}
-            </div>
+            </ResponsiveGrid>
           ) : null}
           {module.state.summary.badges && module.state.summary.badges.length > 0 ? (
             <Flex gap={8} wrap>
@@ -597,19 +598,19 @@ export function HomePage() {
           viewerRole={weeklyTimetableViewerRole}
         />
       ) : shouldShowModuleSkeleton ? (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
           {Array.from({ length: 3 }, (_, index) => (
             <Card key={`home-module-skeleton-${index}`}>
               <Skeleton active paragraph={{ rows: 4 }} />
             </Card>
           ))}
-        </div>
+        </ResponsiveGrid>
       ) : (
-        <div className="grid gap-4 xl:grid-cols-3">
+        <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
           {visibleModules.map((module) => (
             <HomeModuleCard key={module.id} module={module} onAction={handleAction} />
           ))}
-        </div>
+        </ResponsiveGrid>
       )}
     </Flex>
   );
