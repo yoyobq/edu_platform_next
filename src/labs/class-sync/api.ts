@@ -30,16 +30,13 @@ export type ClassSyncDepartmentOption = {
   shortName: string | null;
 };
 
-export type ClassSyncDirectoryDryRunAction =
+export type ClassSyncDryRunAction =
   | 'CREATE'
   | 'UPDATE'
   | 'EXISTS'
   | 'CONFLICT'
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
-  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
-
-export type ClassSyncDryRunAction =
-  | ClassSyncDirectoryDryRunAction
+  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE'
   | 'SKIPPED_INVALID_UPSTREAM_GRADE';
 
 export type ClassSyncCommitAction =
@@ -52,6 +49,7 @@ export type ClassSyncCommitAction =
 
 export type ClassSyncItem<Action extends string> = {
   action: Action;
+  classCode: string | null;
   classId: string | null;
   className: string;
   conflictReason: string | null;
@@ -63,10 +61,6 @@ export type ClassSyncItem<Action extends string> = {
 };
 
 export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction> & {
-  majorName: string | null;
-};
-
-export type ClassSyncDirectoryDryRunItem = ClassSyncItem<ClassSyncDirectoryDryRunAction> & {
   majorName: string | null;
 };
 
@@ -90,10 +84,6 @@ export type ClassSyncDryRunResult = ClassSyncResultBase<ClassSyncDryRunItem> & {
   previewedCount: number;
 };
 
-export type ClassSyncDirectoryDryRunResult = ClassSyncResultBase<ClassSyncDirectoryDryRunItem> & {
-  previewedCount: number;
-};
-
 export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
   processedCount: number;
 };
@@ -102,8 +92,6 @@ export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
   upstreamSessionToken: string;
 };
-
-export type DryRunSyncClassesFromUpstreamDirectoryInput = DryRunSyncClassesFromUpstreamInput;
 
 export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 
@@ -153,10 +141,6 @@ type StudentAffairsDepartmentScopeResponse = DepartmentsResponse & {
 
 type DryRunSyncClassesFromUpstreamResponse = {
   dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
-};
-
-type DryRunSyncClassesFromUpstreamDirectoryResponse = {
-  dryRunSyncClassesFromUpstreamDirectory: ClassSyncDirectoryDryRunResult;
 };
 
 type SyncClassesFromUpstreamResponse = {
@@ -232,37 +216,7 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
         action
         departmentId
         classId
-        className
-        majorId
-        majorName
-        gradeYear
-        sortOrder
-        conflictReason
-      }
-    }
-  }
-`;
-
-const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_DIRECTORY_MUTATION = `
-  mutation DryRunSyncClassesFromUpstreamDirectory(
-    $input: DryRunSyncClassesFromUpstreamDirectoryInput!
-  ) {
-    dryRunSyncClassesFromUpstreamDirectory(input: $input) {
-      dryRun
-      upstreamSessionToken
-      expiresAt
-      departmentId
-      fetchedCount
-      previewedCount
-      createdCount
-      updatedCount
-      existsCount
-      conflictCount
-      skippedCount
-      items {
-        action
-        departmentId
-        classId
+        classCode
         className
         majorId
         majorName
@@ -292,6 +246,7 @@ const SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
         action
         departmentId
         classId
+        classCode
         className
         majorId
         gradeYear
@@ -437,21 +392,6 @@ export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFrom
   });
 
   return response.dryRunSyncClassesFromUpstream;
-}
-
-export async function dryRunSyncClassesFromUpstreamDirectory(
-  input: DryRunSyncClassesFromUpstreamDirectoryInput,
-) {
-  const response = await requestGraphQL<
-    DryRunSyncClassesFromUpstreamDirectoryResponse,
-    {
-      input: ReturnType<typeof normalizeDryRunInput>;
-    }
-  >(DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_DIRECTORY_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
-
-  return response.dryRunSyncClassesFromUpstreamDirectory;
 }
 
 export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInput) {

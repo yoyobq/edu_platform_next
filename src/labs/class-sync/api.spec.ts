@@ -18,7 +18,6 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   dryRunSyncClassesFromUpstream,
-  dryRunSyncClassesFromUpstreamDirectory,
   fetchClassSyncDepartmentOptions,
   fetchCurrentClassSyncAccount,
   syncClassesFromUpstream,
@@ -165,6 +164,7 @@ describe('class-sync api', () => {
       items: [
         {
           action: 'CREATE',
+          classCode: 'upstream-class-code-1031501',
           classId: '1031501',
           className: '信息1501班',
           conflictReason: null,
@@ -176,6 +176,7 @@ describe('class-sync api', () => {
         },
         {
           action: 'SKIPPED_INVALID_UPSTREAM_GRADE',
+          classCode: 'upstream-class-code-103AB01',
           classId: '103AB01',
           className: '信息AB01班',
           conflictReason: 'INVALID_UPSTREAM_GRADE',
@@ -210,6 +211,7 @@ describe('class-sync api', () => {
     expect(query).toContain('previewedCount');
     expect(query).toContain('conflictCount');
     expect(query).toContain('classId');
+    expect(query).toContain('classCode');
     expect(query).toContain('majorId');
     expect(query).toContain('majorName');
     expect(query).toContain('gradeYear');
@@ -218,85 +220,8 @@ describe('class-sync api', () => {
     expect(query).not.toContain('DryRunSyncClassesFromAnnualMajorClassList');
     expect(query).not.toContain('dryRunSyncClassesFromUpstreamDirectory');
     expect(query).not.toContain('annualMajorId');
-    expect(query).not.toContain('classCode');
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('DryRunSyncClassesFromUpstream'),
-      {
-        input: {
-          departmentId: 'ORG0302',
-          upstreamSessionToken: 'rolling-token-001',
-        },
-      },
-    );
-  });
-
-  it('requests class directory dry-run with normalized input and preview fields', async () => {
-    const payload = {
-      conflictCount: 1,
-      createdCount: 1,
-      departmentId: 'ORG0302',
-      dryRun: true,
-      existsCount: 1,
-      expiresAt: '2026-05-19T12:00:00.000Z',
-      fetchedCount: 4,
-      items: [
-        {
-          action: 'CREATE',
-          classId: '1031501',
-          className: '信息1501班',
-          conflictReason: null,
-          departmentId: 'ORG0302',
-          gradeYear: 2015,
-          majorId: '103',
-          majorName: null,
-          sortOrder: 15,
-        },
-        {
-          action: 'CONFLICT',
-          classId: '1031502',
-          className: '信息1502班',
-          conflictReason: 'classId 已被其他专业占用。',
-          departmentId: 'ORG0302',
-          gradeYear: 2015,
-          majorId: null,
-          majorName: null,
-          sortOrder: 15,
-        },
-      ],
-      previewedCount: 3,
-      skippedCount: 1,
-      updatedCount: 1,
-      upstreamSessionToken: 'rolling-token-002',
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      dryRunSyncClassesFromUpstreamDirectory: payload,
-    });
-
-    await expect(
-      dryRunSyncClassesFromUpstreamDirectory({
-        departmentId: ' ORG0302 ',
-        upstreamSessionToken: ' rolling-token-001 ',
-      }),
-    ).resolves.toEqual(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-
-    expect(query).toContain('DryRunSyncClassesFromUpstreamDirectory');
-    expect(query).toContain('dryRunSyncClassesFromUpstreamDirectory');
-    expect(query).toContain('previewedCount');
-    expect(query).toContain('conflictCount');
-    expect(query).toContain('classId');
-    expect(query).toContain('majorId');
-    expect(query).toContain('majorName');
-    expect(query).toContain('gradeYear');
-    expect(query).toContain('sortOrder');
-    expect(query).toContain('conflictReason');
-    expect(query).not.toContain('DryRunSyncClassesFromAnnualMajorClassList');
-    expect(query).not.toContain('annualMajorId');
-    expect(query).not.toContain('classCode');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('DryRunSyncClassesFromUpstreamDirectory'),
       {
         input: {
           departmentId: 'ORG0302',
@@ -318,6 +243,7 @@ describe('class-sync api', () => {
       items: [
         {
           action: 'CREATED',
+          classCode: 'upstream-class-code-1031501',
           classId: '1031501',
           className: '信息1501班',
           conflictReason: null,
@@ -328,6 +254,7 @@ describe('class-sync api', () => {
         },
         {
           action: 'CONFLICT',
+          classCode: 'upstream-class-code-1031502',
           classId: '1031502',
           className: '信息1502班',
           conflictReason: 'classId 已被其他专业占用。',
@@ -361,12 +288,12 @@ describe('class-sync api', () => {
     expect(query).toContain('processedCount');
     expect(query).toContain('conflictCount');
     expect(query).toContain('classId');
+    expect(query).toContain('classCode');
     expect(query).toContain('gradeYear');
     expect(query).toContain('sortOrder');
     expect(query).toContain('conflictReason');
     expect(query).not.toContain('previewedCount');
     expect(query).not.toContain('annualMajorId');
-    expect(query).not.toContain('classCode');
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('SyncClassesFromUpstream'),
       {

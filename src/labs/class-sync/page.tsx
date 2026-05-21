@@ -13,6 +13,7 @@ import {
   Spin,
   Table,
   Tag,
+  Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -32,15 +33,11 @@ import {
   type ClassSyncCommitItem,
   type ClassSyncCommitResult,
   type ClassSyncDepartmentOption,
-  type ClassSyncDirectoryDryRunAction,
-  type ClassSyncDirectoryDryRunItem,
-  type ClassSyncDirectoryDryRunResult,
   type ClassSyncDryRunAction,
   type ClassSyncDryRunItem,
   type ClassSyncDryRunResult,
   type CurrentClassSyncAccount,
   dryRunSyncClassesFromUpstream,
-  dryRunSyncClassesFromUpstreamDirectory,
   fetchClassSyncDepartmentOptions,
   fetchCurrentClassSyncAccount,
   isExpiredUpstreamSessionError,
@@ -53,22 +50,16 @@ type ClassSyncFormValues = {
   departmentId: string;
 };
 
-type ClassSyncRunMode = 'dryRun' | 'directoryDryRun' | 'sync';
+type ClassSyncRunMode = 'dryRun' | 'sync';
 
 type PendingClassSyncRequest = {
   mode: ClassSyncRunMode;
   values: ClassSyncFormValues;
 };
 
-type ClassSyncResult =
-  | ClassSyncDryRunResult
-  | ClassSyncDirectoryDryRunResult
-  | ClassSyncCommitResult;
-type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncDirectoryDryRunItem | ClassSyncCommitItem;
-type ClassSyncResultAction =
-  | ClassSyncDryRunAction
-  | ClassSyncDirectoryDryRunAction
-  | ClassSyncCommitAction;
+type ClassSyncResult = ClassSyncDryRunResult | ClassSyncCommitResult;
+type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncCommitItem;
+type ClassSyncResultAction = ClassSyncDryRunAction | ClassSyncCommitAction;
 
 type ClassSyncResultState = {
   mode: ClassSyncRunMode;
@@ -98,6 +89,7 @@ const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
   UPDATE: 'gold',
   UPDATED: 'gold',
 };
+const CLASS_CODE_VISIBLE_LENGTH = 6;
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
@@ -138,20 +130,12 @@ function getExpiredSessionMessage(mode: ClassSyncRunMode) {
     return 'upstream 会话已失效，请重新登录后继续落库。';
   }
 
-  if (mode === 'directoryDryRun') {
-    return 'upstream 会话已失效，请重新登录后继续班级字典预览。';
-  }
-
   return 'upstream 会话已失效，请重新登录后继续上游班级列表预览。';
 }
 
 function getRunModeLabel(mode: ClassSyncRunMode, result: ClassSyncResult) {
   if (mode === 'dryRun') {
     return '上游班级列表 Dry-run';
-  }
-
-  if (mode === 'directoryDryRun') {
-    return '班级字典 Dry-run';
   }
 
   return result.dryRun ? 'Dry-run 预览' : '正式落库';
@@ -168,18 +152,6 @@ function resolveResultMessage(result: ClassSyncResult, mode: ClassSyncRunMode) {
     }
 
     return '本次上游班级列表仅预览，不会写入 org_class；落库仍使用班级字典同步接口。';
-  }
-
-  if (mode === 'directoryDryRun') {
-    if (result.conflictCount > 0) {
-      return '本次班级字典预览存在班级唯一性冲突，需要人工处理后再落库。';
-    }
-
-    if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
-      return '本地班级已覆盖上游班级字典本次返回的有效班级。';
-    }
-
-    return '本次班级字典仅预览，不会写入 org_class。';
   }
 
   if (result.dryRun && result.conflictCount > 0) {
@@ -210,9 +182,26 @@ function formatNullableValue(value: number | string | null | undefined) {
   return value ?? <span className="text-text-secondary">-</span>;
 }
 
-function isPreviewResult(
-  result: ClassSyncResult,
-): result is ClassSyncDryRunResult | ClassSyncDirectoryDryRunResult {
+function renderClassCodeValue(value: string | null | undefined) {
+  const classCode = value?.trim();
+
+  if (!classCode) {
+    return formatNullableValue(null);
+  }
+
+  const preview =
+    classCode.length > CLASS_CODE_VISIBLE_LENGTH
+      ? `${classCode.slice(0, CLASS_CODE_VISIBLE_LENGTH)}...`
+      : classCode;
+
+  return (
+    <Tooltip title={classCode}>
+      <span>{preview}</span>
+    </Tooltip>
+  );
+}
+
+function isPreviewResult(result: ClassSyncResult): result is ClassSyncDryRunResult {
   return 'previewedCount' in result;
 }
 
@@ -229,6 +218,13 @@ const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
     key: 'classId',
     render: (classId: string | null) => formatNullableValue(classId),
     title: '班级 ID',
+    width: 140,
+  },
+  {
+    dataIndex: 'classCode',
+    key: 'classCode',
+    render: (classCode: string | null) => renderClassCodeValue(classCode),
+    title: 'class_code',
     width: 140,
   },
   {
@@ -274,7 +270,7 @@ const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
 ];
 
 const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
-  ...baseResultColumns.slice(0, 4),
+  ...baseResultColumns.slice(0, 5),
   {
     dataIndex: 'majorName',
     key: 'majorName',
@@ -282,7 +278,7 @@ const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
     title: '上游专业名',
     width: 220,
   },
-  ...baseResultColumns.slice(4),
+  ...baseResultColumns.slice(5),
 ];
 
 export function ClassSyncLabPage() {
@@ -294,7 +290,6 @@ export function ClassSyncLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const [isPreviewingDirectory, setIsPreviewingDirectory] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
@@ -335,7 +330,7 @@ export function ClassSyncLabPage() {
     () => (resultMode === 'dryRun' ? upstreamClassListResultColumns : baseResultColumns),
     [resultMode],
   );
-  const isRunningSync = isPreviewing || isPreviewingDirectory || isSyncing;
+  const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -436,12 +431,9 @@ export function ClassSyncLabPage() {
   const performClassSync = useCallback(
     async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
-      const isDirectoryDryRun = mode === 'directoryDryRun';
 
       if (isDryRun) {
         setIsPreviewing(true);
-      } else if (isDirectoryDryRun) {
-        setIsPreviewingDirectory(true);
       } else {
         setIsSyncing(true);
       }
@@ -457,9 +449,7 @@ export function ClassSyncLabPage() {
         };
         const syncResult = isDryRun
           ? await dryRunSyncClassesFromUpstream(input)
-          : isDirectoryDryRun
-            ? await dryRunSyncClassesFromUpstreamDirectory(input)
-            : await syncClassesFromUpstream(input);
+          : await syncClassesFromUpstream(input);
 
         persistSessionFromResult(session, syncResult);
         setResultState({
@@ -486,8 +476,6 @@ export function ClassSyncLabPage() {
       } finally {
         if (isDryRun) {
           setIsPreviewing(false);
-        } else if (isDirectoryDryRun) {
-          setIsPreviewingDirectory(false);
         } else {
           setIsSyncing(false);
         }
@@ -654,19 +642,12 @@ export function ClassSyncLabPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions || isPreviewingDirectory || isSyncing}
+                disabled={hasNoDepartmentOptions || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
               >
                 预览同步
-              </Button>
-              <Button
-                disabled={hasNoDepartmentOptions || isPreviewing || isSyncing}
-                loading={isPreviewingDirectory}
-                onClick={() => void handleRunSync('directoryDryRun')}
-              >
-                旧班级字典预览
               </Button>
               <Popconfirm
                 cancelText="取消"
@@ -678,7 +659,7 @@ export function ClassSyncLabPage() {
               >
                 <Button
                   danger
-                  disabled={hasNoDepartmentOptions || isPreviewing || isPreviewingDirectory}
+                  disabled={hasNoDepartmentOptions || isPreviewing}
                   loading={isSyncing}
                 >
                   执行落库
@@ -761,10 +742,10 @@ export function ClassSyncLabPage() {
               pagination={{ pageSize: 20, showSizeChanger: true }}
               rowKey={(record, index) =>
                 `${record.action}:${record.departmentId}:${record.classId ?? 'invalid'}:${
-                  record.className
-                }:${index ?? 0}`
+                  record.classCode ?? 'no-code'
+                }:${record.className}:${index ?? 0}`
               }
-              scroll={{ x: resultMode === 'dryRun' ? 1640 : 1400 }}
+              scroll={{ x: resultMode === 'dryRun' ? 1780 : 1540 }}
               size="small"
             />
           </div>
