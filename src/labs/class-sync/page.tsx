@@ -28,19 +28,19 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
-  type ClassSyncAnnualMajorClassListDryRunAction,
-  type ClassSyncAnnualMajorClassListDryRunItem,
-  type ClassSyncAnnualMajorClassListDryRunResult,
   type ClassSyncCommitAction,
   type ClassSyncCommitItem,
   type ClassSyncCommitResult,
   type ClassSyncDepartmentOption,
+  type ClassSyncDirectoryDryRunAction,
+  type ClassSyncDirectoryDryRunItem,
+  type ClassSyncDirectoryDryRunResult,
   type ClassSyncDryRunAction,
   type ClassSyncDryRunItem,
   type ClassSyncDryRunResult,
   type CurrentClassSyncAccount,
-  dryRunSyncClassesFromAnnualMajorClassList,
   dryRunSyncClassesFromUpstream,
+  dryRunSyncClassesFromUpstreamDirectory,
   fetchClassSyncDepartmentOptions,
   fetchCurrentClassSyncAccount,
   isExpiredUpstreamSessionError,
@@ -53,7 +53,7 @@ type ClassSyncFormValues = {
   departmentId: string;
 };
 
-type ClassSyncRunMode = 'dryRun' | 'annualMajorClassListDryRun' | 'sync';
+type ClassSyncRunMode = 'dryRun' | 'directoryDryRun' | 'sync';
 
 type PendingClassSyncRequest = {
   mode: ClassSyncRunMode;
@@ -62,15 +62,12 @@ type PendingClassSyncRequest = {
 
 type ClassSyncResult =
   | ClassSyncDryRunResult
-  | ClassSyncAnnualMajorClassListDryRunResult
+  | ClassSyncDirectoryDryRunResult
   | ClassSyncCommitResult;
-type ClassSyncResultItem =
-  | ClassSyncDryRunItem
-  | ClassSyncAnnualMajorClassListDryRunItem
-  | ClassSyncCommitItem;
+type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncDirectoryDryRunItem | ClassSyncCommitItem;
 type ClassSyncResultAction =
   | ClassSyncDryRunAction
-  | ClassSyncAnnualMajorClassListDryRunAction
+  | ClassSyncDirectoryDryRunAction
   | ClassSyncCommitAction;
 
 type ClassSyncResultState = {
@@ -141,32 +138,48 @@ function getExpiredSessionMessage(mode: ClassSyncRunMode) {
     return 'upstream 会话已失效，请重新登录后继续落库。';
   }
 
-  if (mode === 'annualMajorClassListDryRun') {
-    return 'upstream 会话已失效，请重新登录后继续年度专业班级列表预览。';
+  if (mode === 'directoryDryRun') {
+    return 'upstream 会话已失效，请重新登录后继续班级字典预览。';
   }
 
-  return 'upstream 会话已失效，请重新登录后继续预览。';
+  return 'upstream 会话已失效，请重新登录后继续上游班级列表预览。';
 }
 
 function getRunModeLabel(mode: ClassSyncRunMode, result: ClassSyncResult) {
-  if (mode === 'annualMajorClassListDryRun') {
-    return '年度专业班级列表 Dry-run';
+  if (mode === 'dryRun') {
+    return '上游班级列表 Dry-run';
+  }
+
+  if (mode === 'directoryDryRun') {
+    return '班级字典 Dry-run';
   }
 
   return result.dryRun ? 'Dry-run 预览' : '正式落库';
 }
 
 function resolveResultMessage(result: ClassSyncResult, mode: ClassSyncRunMode) {
-  if (mode === 'annualMajorClassListDryRun') {
+  if (mode === 'dryRun') {
     if (result.conflictCount > 0) {
-      return '本次年度专业班级列表预览存在班级唯一性冲突，需要人工处理。';
+      return '本次上游班级列表预览存在班级唯一性冲突，需要人工处理。';
     }
 
     if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
-      return '本地班级已覆盖年度专业班级列表本次返回的有效班级；当前接口仅预览，不写库。';
+      return '本地班级已覆盖上游班级列表本次返回的有效班级；当前接口仅预览，不写库。';
     }
 
-    return '本次年度专业班级列表仅预览，不会写入 org_class，当前没有对应落库接口。';
+    return '本次上游班级列表仅预览，不会写入 org_class；落库仍使用班级字典同步接口。';
+  }
+
+  if (mode === 'directoryDryRun') {
+    if (result.conflictCount > 0) {
+      return '本次班级字典预览存在班级唯一性冲突，需要人工处理后再落库。';
+    }
+
+    if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+      return '本地班级已覆盖上游班级字典本次返回的有效班级。';
+    }
+
+    return '本次班级字典仅预览，不会写入 org_class。';
   }
 
   if (result.dryRun && result.conflictCount > 0) {
@@ -199,7 +212,7 @@ function formatNullableValue(value: number | string | null | undefined) {
 
 function isPreviewResult(
   result: ClassSyncResult,
-): result is ClassSyncDryRunResult | ClassSyncAnnualMajorClassListDryRunResult {
+): result is ClassSyncDryRunResult | ClassSyncDirectoryDryRunResult {
   return 'previewedCount' in result;
 }
 
@@ -260,7 +273,7 @@ const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
   },
 ];
 
-const annualMajorClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
+const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
   ...baseResultColumns.slice(0, 4),
   {
     dataIndex: 'majorName',
@@ -281,7 +294,7 @@ export function ClassSyncLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
-  const [isPreviewingAnnualMajorClassList, setIsPreviewingAnnualMajorClassList] = useState(false);
+  const [isPreviewingDirectory, setIsPreviewingDirectory] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
@@ -319,13 +332,10 @@ export function ClassSyncLabPage() {
   const result = resultState?.data ?? null;
   const resultMode = resultState?.mode ?? null;
   const resultColumns = useMemo(
-    () =>
-      resultMode === 'annualMajorClassListDryRun'
-        ? annualMajorClassListResultColumns
-        : baseResultColumns,
+    () => (resultMode === 'dryRun' ? upstreamClassListResultColumns : baseResultColumns),
     [resultMode],
   );
-  const isRunningSync = isPreviewing || isPreviewingAnnualMajorClassList || isSyncing;
+  const isRunningSync = isPreviewing || isPreviewingDirectory || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -426,12 +436,12 @@ export function ClassSyncLabPage() {
   const performClassSync = useCallback(
     async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
-      const isAnnualMajorClassListDryRun = mode === 'annualMajorClassListDryRun';
+      const isDirectoryDryRun = mode === 'directoryDryRun';
 
       if (isDryRun) {
         setIsPreviewing(true);
-      } else if (isAnnualMajorClassListDryRun) {
-        setIsPreviewingAnnualMajorClassList(true);
+      } else if (isDirectoryDryRun) {
+        setIsPreviewingDirectory(true);
       } else {
         setIsSyncing(true);
       }
@@ -447,8 +457,8 @@ export function ClassSyncLabPage() {
         };
         const syncResult = isDryRun
           ? await dryRunSyncClassesFromUpstream(input)
-          : isAnnualMajorClassListDryRun
-            ? await dryRunSyncClassesFromAnnualMajorClassList(input)
+          : isDirectoryDryRun
+            ? await dryRunSyncClassesFromUpstreamDirectory(input)
             : await syncClassesFromUpstream(input);
 
         persistSessionFromResult(session, syncResult);
@@ -476,8 +486,8 @@ export function ClassSyncLabPage() {
       } finally {
         if (isDryRun) {
           setIsPreviewing(false);
-        } else if (isAnnualMajorClassListDryRun) {
-          setIsPreviewingAnnualMajorClassList(false);
+        } else if (isDirectoryDryRun) {
+          setIsPreviewingDirectory(false);
         } else {
           setIsSyncing(false);
         }
@@ -644,7 +654,7 @@ export function ClassSyncLabPage() {
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions || isPreviewingAnnualMajorClassList || isSyncing}
+                disabled={hasNoDepartmentOptions || isPreviewingDirectory || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
@@ -653,14 +663,14 @@ export function ClassSyncLabPage() {
               </Button>
               <Button
                 disabled={hasNoDepartmentOptions || isPreviewing || isSyncing}
-                loading={isPreviewingAnnualMajorClassList}
-                onClick={() => void handleRunSync('annualMajorClassListDryRun')}
+                loading={isPreviewingDirectory}
+                onClick={() => void handleRunSync('directoryDryRun')}
               >
-                年度专业班级列表预览
+                旧班级字典预览
               </Button>
               <Popconfirm
                 cancelText="取消"
-                description="后端会重新拉取 upstream 班级列表，并创建或更新本地 org_class。"
+                description="后端会重新拉取 upstream 班级字典，并创建或更新本地 org_class。"
                 okButtonProps={{ loading: isSyncing }}
                 okText="确认落库"
                 title="确认执行班级同步？"
@@ -668,9 +678,7 @@ export function ClassSyncLabPage() {
               >
                 <Button
                   danger
-                  disabled={
-                    hasNoDepartmentOptions || isPreviewing || isPreviewingAnnualMajorClassList
-                  }
+                  disabled={hasNoDepartmentOptions || isPreviewing || isPreviewingDirectory}
                   loading={isSyncing}
                 >
                   执行落库
@@ -756,7 +764,7 @@ export function ClassSyncLabPage() {
                   record.className
                 }:${index ?? 0}`
               }
-              scroll={{ x: resultMode === 'annualMajorClassListDryRun' ? 1640 : 1400 }}
+              scroll={{ x: resultMode === 'dryRun' ? 1640 : 1400 }}
               size="small"
             />
           </div>

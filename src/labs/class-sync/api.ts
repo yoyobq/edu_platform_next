@@ -30,7 +30,7 @@ export type ClassSyncDepartmentOption = {
   shortName: string | null;
 };
 
-export type ClassSyncDryRunAction =
+export type ClassSyncDirectoryDryRunAction =
   | 'CREATE'
   | 'UPDATE'
   | 'EXISTS'
@@ -38,8 +38,8 @@ export type ClassSyncDryRunAction =
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
   | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
 
-export type ClassSyncAnnualMajorClassListDryRunAction =
-  | ClassSyncDryRunAction
+export type ClassSyncDryRunAction =
+  | ClassSyncDirectoryDryRunAction
   | 'SKIPPED_INVALID_UPSTREAM_GRADE';
 
 export type ClassSyncCommitAction =
@@ -62,12 +62,13 @@ export type ClassSyncItem<Action extends string> = {
   sortOrder: number | null;
 };
 
-export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction>;
+export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction> & {
+  majorName: string | null;
+};
 
-export type ClassSyncAnnualMajorClassListDryRunItem =
-  ClassSyncItem<ClassSyncAnnualMajorClassListDryRunAction> & {
-    majorName: string | null;
-  };
+export type ClassSyncDirectoryDryRunItem = ClassSyncItem<ClassSyncDirectoryDryRunAction> & {
+  majorName: string | null;
+};
 
 export type ClassSyncCommitItem = ClassSyncItem<ClassSyncCommitAction>;
 
@@ -89,10 +90,9 @@ export type ClassSyncDryRunResult = ClassSyncResultBase<ClassSyncDryRunItem> & {
   previewedCount: number;
 };
 
-export type ClassSyncAnnualMajorClassListDryRunResult =
-  ClassSyncResultBase<ClassSyncAnnualMajorClassListDryRunItem> & {
-    previewedCount: number;
-  };
+export type ClassSyncDirectoryDryRunResult = ClassSyncResultBase<ClassSyncDirectoryDryRunItem> & {
+  previewedCount: number;
+};
 
 export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
   processedCount: number;
@@ -103,7 +103,7 @@ export type DryRunSyncClassesFromUpstreamInput = {
   upstreamSessionToken: string;
 };
 
-export type DryRunSyncClassesFromAnnualMajorClassListInput = DryRunSyncClassesFromUpstreamInput;
+export type DryRunSyncClassesFromUpstreamDirectoryInput = DryRunSyncClassesFromUpstreamInput;
 
 export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 
@@ -155,8 +155,8 @@ type DryRunSyncClassesFromUpstreamResponse = {
   dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
 };
 
-type DryRunSyncClassesFromAnnualMajorClassListResponse = {
-  dryRunSyncClassesFromAnnualMajorClassList: ClassSyncAnnualMajorClassListDryRunResult;
+type DryRunSyncClassesFromUpstreamDirectoryResponse = {
+  dryRunSyncClassesFromUpstreamDirectory: ClassSyncDirectoryDryRunResult;
 };
 
 type SyncClassesFromUpstreamResponse = {
@@ -234,6 +234,7 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
         classId
         className
         majorId
+        majorName
         gradeYear
         sortOrder
         conflictReason
@@ -242,11 +243,11 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
   }
 `;
 
-const DRY_RUN_SYNC_CLASSES_FROM_ANNUAL_MAJOR_CLASS_LIST_MUTATION = `
-  mutation DryRunSyncClassesFromAnnualMajorClassList(
-    $input: DryRunSyncClassesFromAnnualMajorClassListInput!
+const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_DIRECTORY_MUTATION = `
+  mutation DryRunSyncClassesFromUpstreamDirectory(
+    $input: DryRunSyncClassesFromUpstreamDirectoryInput!
   ) {
-    dryRunSyncClassesFromAnnualMajorClassList(input: $input) {
+    dryRunSyncClassesFromUpstreamDirectory(input: $input) {
       dryRun
       upstreamSessionToken
       expiresAt
@@ -438,19 +439,19 @@ export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFrom
   return response.dryRunSyncClassesFromUpstream;
 }
 
-export async function dryRunSyncClassesFromAnnualMajorClassList(
-  input: DryRunSyncClassesFromAnnualMajorClassListInput,
+export async function dryRunSyncClassesFromUpstreamDirectory(
+  input: DryRunSyncClassesFromUpstreamDirectoryInput,
 ) {
   const response = await requestGraphQL<
-    DryRunSyncClassesFromAnnualMajorClassListResponse,
+    DryRunSyncClassesFromUpstreamDirectoryResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_SYNC_CLASSES_FROM_ANNUAL_MAJOR_CLASS_LIST_MUTATION, {
+  >(DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_DIRECTORY_MUTATION, {
     input: normalizeDryRunInput(input),
   });
 
-  return response.dryRunSyncClassesFromAnnualMajorClassList;
+  return response.dryRunSyncClassesFromUpstreamDirectory;
 }
 
 export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInput) {
