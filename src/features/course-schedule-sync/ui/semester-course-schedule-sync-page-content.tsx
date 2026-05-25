@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Input, Select, Spin } from 'antd';
+import { Alert, Button, Card, Descriptions, Form, Input, Popconfirm, Select, Spin } from 'antd';
 
 import {
   AcademicSemesterPeriodFormItems,
@@ -23,8 +23,6 @@ import {
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  UpstreamSessionControls,
-  UpstreamSessionStatusCard,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
@@ -90,8 +88,8 @@ function resolveResultSemanticMessage(result: CourseScheduleSyncResult) {
   }
 
   return result.failedCount > 0
-    ? '本次请求存在失败计数，但 GraphQL 请求整体成功。'
-    : '本次请求未返回失败计数。';
+    ? '本次落库存在失败计数，但 GraphQL 请求整体成功。'
+    : '本次已完成落库，未返回失败计数。';
 }
 
 export function SemesterCourseScheduleSyncPageContent({
@@ -117,7 +115,6 @@ export function SemesterCourseScheduleSyncPageContent({
   const {
     clear,
     clearRememberedCredentials,
-    keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
     rememberedCredentials,
@@ -139,22 +136,6 @@ export function SemesterCourseScheduleSyncPageContent({
     clear();
     setPendingSyncRequest(null);
   }, [clear]);
-
-  useEffect(() => {
-    if (!keepAliveFailure) {
-      return;
-    }
-
-    clearCurrentSession();
-    setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue(
-      buildUpstreamLoginCredentialsInitialValues({
-        fallbackUserId: keepAliveFailure.upstreamLoginId,
-        rememberedCredentials,
-      }),
-    );
-    setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues, mode: SyncRunMode) => {
@@ -193,7 +174,7 @@ export function SemesterCourseScheduleSyncPageContent({
           setLoginError(
             isDryRun
               ? 'upstream 会话已失效，请重新登录后继续预览。'
-              : 'upstream 会话已失效，请重新登录后继续同步。',
+              : 'upstream 会话已失效，请重新登录后继续落库。',
           );
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
@@ -373,7 +354,6 @@ export function SemesterCourseScheduleSyncPageContent({
   }
 
   const schoolYearOptions = buildAcademicSemesterSchoolYearOptions(semesterOptions);
-  const isRunningSync = isPreviewing || isSyncing;
 
   if (pageError) {
     return (
@@ -389,13 +369,6 @@ export function SemesterCourseScheduleSyncPageContent({
         description="按学年、学期和院系拉取教学计划并同步课程表到后台"
         icon={<SyncOutlined />}
         title="学期课表同步"
-      />
-
-      <UpstreamSessionStatusCard
-        accountDisplayName={currentAccount?.displayName}
-        extraItems={[{ label: '能力归属', value: '上游数据同步' }]}
-        upstreamExpiresAt={storedSession?.expiresAt}
-        upstreamLoginId={storedSession?.upstreamLoginId}
       />
 
       <Card title="同步参数">
@@ -454,34 +427,22 @@ export function SemesterCourseScheduleSyncPageContent({
               disabled={isLoadingOptions || isSyncing}
               loading={isPreviewing}
               onClick={() => void handleRunSync('dryRun')}
+              type="primary"
             >
               预览同步
             </Button>
-            <Button
-              disabled={isLoadingOptions || isPreviewing}
-              loading={isSyncing}
-              onClick={() => void handleRunSync('sync')}
-              type="primary"
+            <Popconfirm
+              cancelText="取消"
+              description="后端会重新拉取 upstream 教学计划，并创建或更新本地课程表。"
+              okButtonProps={{ loading: isSyncing }}
+              okText="确认落库"
+              title="确认执行学期课表同步？"
+              onConfirm={() => void handleRunSync('sync')}
             >
-              执行同步
-            </Button>
-            <UpstreamSessionControls
-              disabled={isRunningSync}
-              onClear={() => {
-                clearCurrentSession();
-                setLoginError(null);
-              }}
-              onRelogin={() => {
-                setIsLoginModalOpen(true);
-                setLoginError(null);
-                loginForm.setFieldsValue(
-                  buildUpstreamLoginCredentialsInitialValues({
-                    fallbackUserId: storedSession?.upstreamLoginId,
-                    rememberedCredentials,
-                  }),
-                );
-              }}
-            />
+              <Button danger disabled={isLoadingOptions || isPreviewing} loading={isSyncing}>
+                执行落库
+              </Button>
+            </Popconfirm>
           </div>
         </Form>
       </Card>
@@ -491,7 +452,7 @@ export function SemesterCourseScheduleSyncPageContent({
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="运行模式">
-                {result.dryRun ? 'Dry-run 预览' : '正式同步'}
+                {result.dryRun ? 'Dry-run 预览' : '正式落库'}
               </Descriptions.Item>
               <Descriptions.Item label="semesterId">{result.semesterId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
@@ -531,7 +492,7 @@ export function SemesterCourseScheduleSyncPageContent({
             showIcon
             type="warning"
             message="还没有同步结果"
-            description="填写参数并预览或执行同步后，这里会展示同步摘要和原始响应。"
+            description="填写参数并预览同步或执行落库后，这里会展示同步摘要和原始响应。"
           />
         )}
       </Card>

@@ -1,7 +1,7 @@
 // src/features/class-sync/ui/class-sync-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { TableOutlined } from '@ant-design/icons';
+import { SyncOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -17,14 +17,6 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 
 import {
-  AcademicSemesterPeriodFormItems,
-  type AcademicSemesterPeriodOption,
-  buildAcademicSemesterPeriodOptions,
-  buildAcademicSemesterSchoolYearOptions,
-  requestAcademicSemesters,
-  resolveAcademicSemesterPeriodValues,
-} from '@/entities/academic-semester';
-import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
   type DepartmentSelectOption,
@@ -39,8 +31,6 @@ import {
   type UpstreamAccountIdentity,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  UpstreamSessionControls,
-  UpstreamSessionStatusCard,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
@@ -63,8 +53,6 @@ import {
 
 type ClassSyncFormValues = {
   departmentId: string;
-  schoolYear: string;
-  semester: string;
 };
 
 type ClassSyncRunMode = 'dryRun' | 'sync';
@@ -288,11 +276,9 @@ export function ClassSyncPageContent({
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
-  const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingClassSyncRequest, setPendingClassSyncRequest] =
     useState<PendingClassSyncRequest | null>(null);
@@ -300,7 +286,6 @@ export function ClassSyncPageContent({
   const {
     clear,
     clearRememberedCredentials,
-    keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
     rememberedCredentials,
@@ -317,17 +302,12 @@ export function ClassSyncPageContent({
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
-  const schoolYearOptions = useMemo(
-    () => buildAcademicSemesterSchoolYearOptions(semesterOptions),
-    [semesterOptions],
-  );
   const result = resultState?.data ?? null;
   const resultMode = resultState?.mode ?? null;
   const resultColumns = useMemo(
     () => (resultMode === 'dryRun' ? upstreamClassListResultColumns : baseResultColumns),
     [resultMode],
   );
-  const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -336,41 +316,16 @@ export function ClassSyncPageContent({
 
   const loadOptions = useCallback(async () => {
     setIsLoadingOptions(true);
-    setSemesterOptionsError(null);
     setDepartmentOptionsError(null);
 
     try {
-      const [semesterResult, departmentResult] = await Promise.allSettled([
-        requestAcademicSemesters({ limit: 500 }),
-        fetchClassSyncDepartmentOptions(),
-      ]);
-      const nextSemesterOptions =
-        semesterResult.status === 'fulfilled'
-          ? buildAcademicSemesterPeriodOptions(semesterResult.value)
-          : [];
-      const nextOptions = ensureDepartmentSelectOption(
-        buildDepartmentSelectOptions(
-          departmentResult.status === 'fulfilled' ? departmentResult.value : [],
-        ),
-        { id: DEFAULT_DEPARTMENT_ID },
-      );
-      const nextSemesterOptionsError =
-        semesterResult.status === 'rejected'
-          ? semesterResult.reason instanceof Error
-            ? semesterResult.reason.message
-            : '暂时无法加载学期列表。'
-          : null;
-      const nextDepartmentOptionsError =
-        departmentResult.status === 'rejected'
-          ? departmentResult.reason instanceof Error
-            ? departmentResult.reason.message
-            : '暂时无法加载可选系部。'
-          : null;
+      const departments = await fetchClassSyncDepartmentOptions();
+      const nextOptions = ensureDepartmentSelectOption(buildDepartmentSelectOptions(departments), {
+        id: DEFAULT_DEPARTMENT_ID,
+      });
 
-      setSemesterOptions(nextSemesterOptions);
       setDepartmentOptions(nextOptions);
-      setSemesterOptionsError(nextSemesterOptionsError);
-      setDepartmentOptionsError(nextDepartmentOptionsError);
+      setDepartmentOptionsError(null);
 
       const currentValues = form.getFieldsValue();
 
@@ -379,10 +334,6 @@ export function ClassSyncPageContent({
           currentDepartmentId: currentValues.departmentId,
           defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
           options: nextOptions,
-        }),
-        ...resolveAcademicSemesterPeriodValues({
-          currentValues,
-          options: nextSemesterOptions,
         }),
       });
     } catch (error) {
@@ -411,22 +362,6 @@ export function ClassSyncPageContent({
     void loadOptions();
   }, [currentAccount, loadOptions]);
 
-  useEffect(() => {
-    if (!keepAliveFailure) {
-      return;
-    }
-
-    clearCurrentSession();
-    setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue(
-      buildUpstreamLoginCredentialsInitialValues({
-        fallbackUserId: keepAliveFailure.upstreamLoginId,
-        rememberedCredentials,
-      }),
-    );
-    setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
-
   const performClassSync = useCallback(
     async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
@@ -444,8 +379,6 @@ export function ClassSyncPageContent({
       try {
         const input = {
           departmentId: values.departmentId,
-          schoolYear: values.schoolYear,
-          semester: values.semester,
           upstreamSessionToken: session.upstreamSessionToken,
         };
         const syncResult = isDryRun
@@ -566,40 +499,19 @@ export function ClassSyncPageContent({
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
         description={PAGE_DESCRIPTION}
-        icon={<TableOutlined />}
+        icon={<SyncOutlined />}
         title="班级同步"
-      />
-
-      <UpstreamSessionStatusCard
-        accountDisplayName={currentAccount?.displayName}
-        extraItems={[{ label: '访问口径', value: 'ADMIN' }]}
-        upstreamExpiresAt={storedSession?.expiresAt}
-        upstreamLoginId={storedSession?.upstreamLoginId}
       />
 
       <Card title="同步参数">
         <div className="flex flex-col gap-4">
           {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
-          {semesterOptionsError ? (
-            <Alert showIcon type="warning" message={semesterOptionsError} />
-          ) : null}
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
 
           <Form<ClassSyncFormValues> form={form} layout="vertical" requiredMark={false}>
             <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
-              <AcademicSemesterPeriodFormItems
-                loading={isLoadingOptions}
-                schoolYearHelp={semesterOptionsError ?? undefined}
-                schoolYearOptions={schoolYearOptions}
-                schoolYearValidateStatus={semesterOptionsError ? 'warning' : undefined}
-                semesterHelp={
-                  semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined
-                }
-                semesterValidateStatus={semesterOptionsError ? 'warning' : undefined}
-              />
-
               <DepartmentFormItem
                 disabled={isLoadingOptions}
                 emptyText="当前没有可选院系"
@@ -639,23 +551,6 @@ export function ClassSyncPageContent({
                   执行落库
                 </Button>
               </Popconfirm>
-              <UpstreamSessionControls
-                disabled={isRunningSync}
-                onClear={() => {
-                  clearCurrentSession();
-                  setLoginError(null);
-                }}
-                onRelogin={() => {
-                  setIsLoginModalOpen(true);
-                  setLoginError(null);
-                  loginForm.setFieldsValue(
-                    buildUpstreamLoginCredentialsInitialValues({
-                      fallbackUserId: storedSession?.upstreamLoginId,
-                      rememberedCredentials,
-                    }),
-                  );
-                }}
-              />
             </div>
           </Form>
         </div>

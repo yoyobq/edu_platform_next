@@ -79,8 +79,6 @@ export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
 
 export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
-  schoolYear: string;
-  semester: string;
   upstreamSessionToken: string;
 };
 
@@ -208,8 +206,6 @@ function buildEnabledDepartmentOptions(departments: readonly DepartmentDTO[]) {
 function normalizeDryRunInput(input: DryRunSyncClassesFromUpstreamInput) {
   return {
     departmentId: normalizeRequiredTextValue(input.departmentId, { label: '系部' }),
-    schoolYear: normalizeRequiredTextValue(String(input.schoolYear || ''), { label: '学年' }),
-    semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
     upstreamSessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
       message: 'upstreamSessionToken 为必填。',
     }),

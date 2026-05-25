@@ -6,14 +6,6 @@ import { Alert, Button, Card, Descriptions, Form, Popconfirm, Spin, Table, Tag }
 import type { ColumnsType } from 'antd/es/table';
 
 import {
-  AcademicSemesterPeriodFormItems,
-  type AcademicSemesterPeriodOption,
-  buildAcademicSemesterPeriodOptions,
-  buildAcademicSemesterSchoolYearOptions,
-  requestAcademicSemesters,
-  resolveAcademicSemesterPeriodValues,
-} from '@/entities/academic-semester';
-import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
   type DepartmentSelectOption,
@@ -28,8 +20,6 @@ import {
   type UpstreamAccountIdentity,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  UpstreamSessionControls,
-  UpstreamSessionStatusCard,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
@@ -52,8 +42,6 @@ import {
 
 type MajorSyncFormValues = {
   departmentId: string;
-  schoolYear: string;
-  semester: string;
 };
 
 type MajorSyncRunMode = 'dryRun' | 'sync';
@@ -188,11 +176,9 @@ export function MajorSyncPageContent({
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [result, setResult] = useState<MajorSyncResult | null>(null);
-  const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
     useState<PendingMajorSyncRequest | null>(null);
@@ -200,7 +186,6 @@ export function MajorSyncPageContent({
   const {
     clear,
     clearRememberedCredentials,
-    keepAliveFailure,
     login: loginUpstream,
     persistSessionFromResult,
     rememberedCredentials,
@@ -217,11 +202,6 @@ export function MajorSyncPageContent({
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
-  const schoolYearOptions = useMemo(
-    () => buildAcademicSemesterSchoolYearOptions(semesterOptions),
-    [semesterOptions],
-  );
-  const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -230,41 +210,16 @@ export function MajorSyncPageContent({
 
   const loadOptions = useCallback(async () => {
     setIsLoadingOptions(true);
-    setSemesterOptionsError(null);
     setDepartmentOptionsError(null);
 
     try {
-      const [semesterResult, departmentResult] = await Promise.allSettled([
-        requestAcademicSemesters({ limit: 500 }),
-        fetchMajorSyncDepartmentOptions(),
-      ]);
-      const nextSemesterOptions =
-        semesterResult.status === 'fulfilled'
-          ? buildAcademicSemesterPeriodOptions(semesterResult.value)
-          : [];
-      const nextOptions = ensureDepartmentSelectOption(
-        buildDepartmentSelectOptions(
-          departmentResult.status === 'fulfilled' ? departmentResult.value : [],
-        ),
-        { id: DEFAULT_DEPARTMENT_ID },
-      );
-      const nextSemesterOptionsError =
-        semesterResult.status === 'rejected'
-          ? semesterResult.reason instanceof Error
-            ? semesterResult.reason.message
-            : '暂时无法加载学期列表。'
-          : null;
-      const nextDepartmentOptionsError =
-        departmentResult.status === 'rejected'
-          ? departmentResult.reason instanceof Error
-            ? departmentResult.reason.message
-            : '暂时无法加载可选系部。'
-          : null;
+      const departments = await fetchMajorSyncDepartmentOptions();
+      const nextOptions = ensureDepartmentSelectOption(buildDepartmentSelectOptions(departments), {
+        id: DEFAULT_DEPARTMENT_ID,
+      });
 
-      setSemesterOptions(nextSemesterOptions);
       setDepartmentOptions(nextOptions);
-      setSemesterOptionsError(nextSemesterOptionsError);
-      setDepartmentOptionsError(nextDepartmentOptionsError);
+      setDepartmentOptionsError(null);
 
       const currentValues = form.getFieldsValue();
 
@@ -273,10 +228,6 @@ export function MajorSyncPageContent({
           currentDepartmentId: currentValues.departmentId,
           defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
           options: nextOptions,
-        }),
-        ...resolveAcademicSemesterPeriodValues({
-          currentValues,
-          options: nextSemesterOptions,
         }),
       });
     } catch (error) {
@@ -305,22 +256,6 @@ export function MajorSyncPageContent({
     void loadOptions();
   }, [currentAccount, loadOptions]);
 
-  useEffect(() => {
-    if (!keepAliveFailure) {
-      return;
-    }
-
-    clearCurrentSession();
-    setLoginError(keepAliveFailure.message);
-    loginForm.setFieldsValue(
-      buildUpstreamLoginCredentialsInitialValues({
-        fallbackUserId: keepAliveFailure.upstreamLoginId,
-        rememberedCredentials,
-      }),
-    );
-    setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
-
   const performMajorSync = useCallback(
     async (session: StoredUpstreamSession, values: MajorSyncFormValues, mode: MajorSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
@@ -338,8 +273,6 @@ export function MajorSyncPageContent({
       try {
         const input = {
           departmentId: values.departmentId,
-          schoolYear: values.schoolYear,
-          semester: values.semester,
           upstreamSessionToken: session.upstreamSessionToken,
         };
         const syncResult = isDryRun
@@ -465,36 +398,15 @@ export function MajorSyncPageContent({
         title="专业同步"
       />
 
-      <UpstreamSessionStatusCard
-        accountDisplayName={currentAccount?.displayName}
-        extraItems={[{ label: '访问口径', value: 'ADMIN' }]}
-        upstreamExpiresAt={storedSession?.expiresAt}
-        upstreamLoginId={storedSession?.upstreamLoginId}
-      />
-
       <Card title="同步参数">
         <div className="flex flex-col gap-4">
           {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
-          {semesterOptionsError ? (
-            <Alert showIcon type="warning" message={semesterOptionsError} />
-          ) : null}
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
 
           <Form<MajorSyncFormValues> form={form} layout="vertical" requiredMark={false}>
             <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
-              <AcademicSemesterPeriodFormItems
-                loading={isLoadingOptions}
-                schoolYearHelp={semesterOptionsError ?? undefined}
-                schoolYearOptions={schoolYearOptions}
-                schoolYearValidateStatus={semesterOptionsError ? 'warning' : undefined}
-                semesterHelp={
-                  semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined
-                }
-                semesterValidateStatus={semesterOptionsError ? 'warning' : undefined}
-              />
-
               <DepartmentFormItem
                 disabled={isLoadingOptions}
                 emptyText="当前没有可选院系"
@@ -534,23 +446,6 @@ export function MajorSyncPageContent({
                   执行落库
                 </Button>
               </Popconfirm>
-              <UpstreamSessionControls
-                disabled={isRunningSync}
-                onClear={() => {
-                  clearCurrentSession();
-                  setLoginError(null);
-                }}
-                onRelogin={() => {
-                  setIsLoginModalOpen(true);
-                  setLoginError(null);
-                  loginForm.setFieldsValue(
-                    buildUpstreamLoginCredentialsInitialValues({
-                      fallbackUserId: storedSession?.upstreamLoginId,
-                      rememberedCredentials,
-                    }),
-                  );
-                }}
-              />
             </div>
           </Form>
         </div>

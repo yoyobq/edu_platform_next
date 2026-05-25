@@ -29,7 +29,7 @@ export const getUpstreamDataSyncNavigationItems: NavigationItemsProvider = (filt
         },
         {
           allowedAccessGroups: ['ADMIN'] as const,
-          iconKey: 'TableOutlined',
+          iconKey: 'SyncOutlined',
           key: '/upstream-data-sync/class-sync',
           label: '班级同步',
           navMode: 'rail' as const,

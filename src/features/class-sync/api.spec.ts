@@ -110,8 +110,6 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: ' ORG0302 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
         upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).resolves.toEqual(payload);
@@ -137,8 +135,6 @@ describe('class-sync api', () => {
       {
         input: {
           departmentId: 'ORG0302',
-          schoolYear: '2025',
-          semester: '1',
           upstreamSessionToken: 'rolling-token-001',
         },
       },
@@ -191,8 +187,6 @@ describe('class-sync api', () => {
     await expect(
       syncClassesFromUpstream({
         departmentId: ' ORG0302 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
         upstreamSessionToken: ' rolling-token-002 ',
       }),
     ).resolves.toEqual(payload);
@@ -215,8 +209,6 @@ describe('class-sync api', () => {
       {
         input: {
           departmentId: 'ORG0302',
-          schoolYear: '2025',
-          semester: '1',
           upstreamSessionToken: 'rolling-token-002',
         },
       },
@@ -227,8 +219,6 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: ' ',
-        schoolYear: '2025',
-        semester: '1',
         upstreamSessionToken: 'rolling-token-001',
       }),
     ).rejects.toThrow('请输入系部。');
@@ -236,26 +226,6 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: 'ORG0302',
-        schoolYear: ' ',
-        semester: '1',
-        upstreamSessionToken: 'rolling-token-001',
-      }),
-    ).rejects.toThrow('请输入学年。');
-
-    await expect(
-      dryRunSyncClassesFromUpstream({
-        departmentId: 'ORG0302',
-        schoolYear: '2025',
-        semester: ' ',
-        upstreamSessionToken: 'rolling-token-001',
-      }),
-    ).rejects.toThrow('请输入学期。');
-
-    await expect(
-      dryRunSyncClassesFromUpstream({
-        departmentId: 'ORG0302',
-        schoolYear: '2025',
-        semester: '1',
         upstreamSessionToken: ' ',
       }),
     ).rejects.toThrow('upstreamSessionToken 为必填。');
