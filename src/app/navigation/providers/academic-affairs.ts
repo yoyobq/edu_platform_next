@@ -35,20 +35,6 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
-    ...(filter.accessGroup.includes('ADMIN')
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN'] as const,
-            iconKey: 'SyncOutlined',
-            key: '/academic-affairs/semester-course-schedule-sync',
-            label: '学期课表同步',
-            navMode: 'rail' as const,
-            path: '/academic-affairs/semester-course-schedule-sync',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasStaffSemesterProfilesAccess({
       accessGroup: filter.accessGroup,
       slotGroup: filter.slotGroup,

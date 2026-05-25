@@ -36,12 +36,12 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
+      'upstream-data-sync',
       'labs',
       'system-management',
     ]);
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
-      '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
@@ -61,6 +61,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
+    ]);
+    expect(findGroup(items, 'upstream-data-sync')?.children.map((item) => item.key)).toEqual([
+      '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
@@ -88,13 +91,15 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
       [
         '/academic-affairs/academic-calendar',
-        '/academic-affairs/semester-course-schedule-sync',
         '/academic-affairs/staff-semester-profiles',
         '/academic-affairs/academic-workload-report',
         '/academic-affairs/academic-workload-deduction-summary',
         '/academic-affairs/external-teacher-compensation',
       ],
     );
+    expect(
+      findGroup(prodAdminItems, 'upstream-data-sync')?.children.map((item) => item.key),
+    ).toEqual(['/upstream-data-sync/semester-course-schedule-sync']);
     expect(
       findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
     ).toEqual([
@@ -279,7 +284,7 @@ describe('navigation catalog', () => {
       }),
     ).toBe(true);
     expect(
-      canAccessNavigationPath('/academic-affairs/semester-course-schedule-sync', {
+      canAccessNavigationPath('/upstream-data-sync/semester-course-schedule-sync', {
         accountId: 1002,
         primaryAccessGroup: 'STAFF',
         accessGroup: ['STAFF'],
@@ -448,11 +453,11 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
       '/academic-affairs/academic-calendar',
-      '/academic-affairs/semester-course-schedule-sync',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
+      '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
       '/labs/major-sync',
       '/labs/class-sync',

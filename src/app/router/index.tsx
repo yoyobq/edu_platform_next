@@ -332,7 +332,13 @@ async function semesterCalendarPageLoader(args: LoaderFunctionArgs) {
 }
 
 async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
-  return navigationPageLoader(args, '/academic-affairs/semester-course-schedule-sync');
+  return navigationPageLoader(args, '/upstream-data-sync/semester-course-schedule-sync');
+}
+
+function legacySemesterCourseScheduleSyncRedirect({ request }: LoaderFunctionArgs) {
+  const { url } = getRequestTarget(request);
+
+  return redirect(`/upstream-data-sync/semester-course-schedule-sync${url.search}`);
 }
 
 async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
@@ -1038,6 +1044,10 @@ const router = createBrowserRouter([
       },
       {
         path: '/academic-affairs/semester-course-schedule-sync',
+        loader: legacySemesterCourseScheduleSyncRedirect,
+      },
+      {
+        path: '/upstream-data-sync/semester-course-schedule-sync',
         loader: semesterCourseScheduleSyncPageLoader,
         Component: SemesterCourseScheduleSyncPage,
       },
@@ -1123,7 +1133,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'course-schedule-sync',
-            loader: () => redirect('/academic-affairs/semester-course-schedule-sync'),
+            loader: () => redirect('/upstream-data-sync/semester-course-schedule-sync'),
           },
         ],
       },
