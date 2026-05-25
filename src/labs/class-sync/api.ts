@@ -12,14 +12,10 @@ import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 
-export type ClassSyncViewerRole = 'admin' | 'studentAffairsOfficer';
-
 export type CurrentClassSyncAccount = {
   accessGroup: readonly string[];
   accountId: number;
   displayName: string;
-  staffId: string | null;
-  viewerRole: ClassSyncViewerRole;
 };
 
 export type ClassSyncDepartmentOption = {
@@ -98,16 +94,6 @@ export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 type CurrentAccountResponse = {
   me: {
     accountId: number;
-    identity:
-      | {
-          __typename: 'StaffType';
-          id: string;
-        }
-      | {
-          __typename: 'StudentType';
-          id: string;
-        }
-      | null;
     userInfo: {
       accessGroup: string[];
       nickname: string | null;
@@ -126,19 +112,6 @@ type DepartmentsResponse = {
   departments: DepartmentDTO[];
 };
 
-type StaffCurrentSlotPostDTO = {
-  id: number;
-  scope: {
-    departmentId: string | null;
-  };
-  slotCode: string;
-  status: string;
-};
-
-type StudentAffairsDepartmentScopeResponse = DepartmentsResponse & {
-  staffCurrentSlotPosts: StaffCurrentSlotPostDTO[];
-};
-
 type DryRunSyncClassesFromUpstreamResponse = {
   dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
 };
@@ -155,15 +128,6 @@ const CURRENT_ACCOUNT_QUERY = `
         accessGroup
         nickname
       }
-      identity {
-        __typename
-        ... on StaffType {
-          id
-        }
-        ... on StudentType {
-          id
-        }
-      }
     }
   }
 `;
@@ -175,25 +139,6 @@ const DEPARTMENTS_QUERY = `
       id
       isEnabled
       shortName
-    }
-  }
-`;
-
-const STUDENT_AFFAIRS_DEPARTMENT_SCOPE_QUERY = `
-  query ClassSyncStudentAffairsDepartmentScope($accountId: Int!, $limit: Int) {
-    departments(limit: $limit) {
-      departmentName
-      id
-      isEnabled
-      shortName
-    }
-    staffCurrentSlotPosts(accountId: $accountId) {
-      id
-      scope {
-        departmentId
-      }
-      slotCode
-      status
     }
   }
 `;
@@ -296,34 +241,6 @@ function buildEnabledDepartmentOptions(departments: readonly DepartmentDTO[]) {
     );
 }
 
-function buildStudentAffairsDepartmentOptions(response: StudentAffairsDepartmentScopeResponse) {
-  const departmentsById = new Map(
-    response.departments
-      .map(toDepartmentOption)
-      .filter((department): department is ClassSyncDepartmentOption => Boolean(department))
-      .map((department) => [department.id, department]),
-  );
-  const departmentIds = Array.from(
-    new Set(
-      response.staffCurrentSlotPosts
-        .filter((post) => post.slotCode === 'STUDENT_AFFAIRS_OFFICER' && post.status === 'ACTIVE')
-        .map((post) => post.scope.departmentId?.trim() || '')
-        .filter((departmentId) => departmentId.length > 0),
-    ),
-  );
-
-  return departmentIds.map(
-    (departmentId) =>
-      departmentsById.get(departmentId) ?? {
-        departmentName: departmentId,
-        id: departmentId,
-        isEnabled: true,
-        label: departmentId,
-        shortName: null,
-      },
-  );
-}
-
 function normalizeDryRunInput(input: DryRunSyncClassesFromUpstreamInput) {
   return {
     departmentId: normalizeRequiredTextValue(input.departmentId, { label: '系部' }),
@@ -345,37 +262,20 @@ export async function fetchCurrentClassSyncAccount(): Promise<CurrentClassSyncAc
       accessGroup,
       accountId: response.me.accountId,
       displayName: response.me.userInfo.nickname?.trim() || `account-${response.me.accountId}`,
-      staffId: response.me.identity?.__typename === 'StaffType' ? response.me.identity.id : null,
-      viewerRole: accessGroup.includes('ADMIN') ? 'admin' : 'studentAffairsOfficer',
     };
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
   }
 }
 
-export async function fetchClassSyncDepartmentOptions(input: {
-  accountId: number;
-  viewerRole: ClassSyncViewerRole;
-}) {
+export async function fetchClassSyncDepartmentOptions() {
   try {
-    if (input.viewerRole === 'admin') {
-      const response = await requestGraphQL<DepartmentsResponse, { limit: number }>(
-        DEPARTMENTS_QUERY,
-        { limit: 500 },
-      );
+    const response = await requestGraphQL<DepartmentsResponse, { limit: number }>(
+      DEPARTMENTS_QUERY,
+      { limit: 500 },
+    );
 
-      return buildEnabledDepartmentOptions(response.departments);
-    }
-
-    const response = await requestGraphQL<
-      StudentAffairsDepartmentScopeResponse,
-      { accountId: number; limit: number }
-    >(STUDENT_AFFAIRS_DEPARTMENT_SCOPE_QUERY, {
-      accountId: input.accountId,
-      limit: 500,
-    });
-
-    return buildStudentAffairsDepartmentOptions(response);
+    return buildEnabledDepartmentOptions(response.departments);
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载可选系部。'));
   }

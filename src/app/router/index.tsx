@@ -335,12 +335,6 @@ async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/upstream-data-sync/semester-course-schedule-sync');
 }
 
-function legacySemesterCourseScheduleSyncRedirect({ request }: LoaderFunctionArgs) {
-  const { url } = getRequestTarget(request);
-
-  return redirect(`/upstream-data-sync/semester-course-schedule-sync${url.search}`);
-}
-
 async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
   const snapshot = await ensureAuthenticatedSession(request);
 
@@ -1041,10 +1035,6 @@ const router = createBrowserRouter([
         path: '/calendar-schedule/semester-timetable',
         loader: semesterTimetablePageLoader,
         Component: SemesterTimetablePage,
-      },
-      {
-        path: '/academic-affairs/semester-course-schedule-sync',
-        loader: legacySemesterCourseScheduleSyncRedirect,
       },
       {
         path: '/upstream-data-sync/semester-course-schedule-sync',

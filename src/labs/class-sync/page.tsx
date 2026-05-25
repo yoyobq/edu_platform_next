@@ -20,9 +20,12 @@ import type { ColumnsType } from 'antd/es/table';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
+  UpstreamSessionControls,
+  UpstreamSessionStatusCard,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
@@ -90,36 +93,6 @@ const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
   UPDATED: 'gold',
 };
 const CLASS_CODE_VISIBLE_LENGTH = 6;
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) {
-    return '未返回';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
-
-function getViewerRoleLabel(account: CurrentClassSyncAccount | null) {
-  if (!account) {
-    return '未恢复';
-  }
-
-  return account.viewerRole === 'admin' ? 'ADMIN' : '学工行政';
-}
 
 function renderActionTag(action: ClassSyncResultAction) {
   return <Tag color={ACTION_COLORS[action]}>{ACTION_LABELS[action]}</Tag>;
@@ -311,10 +284,7 @@ export function ClassSyncLabPage() {
     account: currentAccount,
     keepAlive: true,
   });
-  const lockedUpstreamLoginUserId =
-    currentAccount?.viewerRole === 'studentAffairsOfficer' ? currentAccount.staffId : null;
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
   const hasNoDepartmentOptions =
@@ -337,37 +307,29 @@ export function ClassSyncLabPage() {
     setPendingClassSyncRequest(null);
   }, [clear]);
 
-  const loadDepartments = useCallback(
-    async (account: CurrentClassSyncAccount) => {
-      setIsLoadingDepartments(true);
-      setDepartmentOptionsError(null);
+  const loadDepartments = useCallback(async () => {
+    setIsLoadingDepartments(true);
+    setDepartmentOptionsError(null);
 
-      try {
-        const nextOptions = await fetchClassSyncDepartmentOptions({
-          accountId: account.accountId,
-          viewerRole: account.viewerRole,
-        });
+    try {
+      const nextOptions = await fetchClassSyncDepartmentOptions();
 
-        setDepartmentOptions(nextOptions);
+      setDepartmentOptions(nextOptions);
 
-        const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
-        const preferredDepartment =
-          nextOptions.find((department) => department.id === currentDepartmentId) ?? nextOptions[0];
+      const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
+      const preferredDepartment =
+        nextOptions.find((department) => department.id === currentDepartmentId) ?? nextOptions[0];
 
-        form.setFieldsValue({
-          departmentId: preferredDepartment?.id,
-        });
-      } catch (error) {
-        setDepartmentOptions([]);
-        setDepartmentOptionsError(
-          error instanceof Error ? error.message : '暂时无法加载可选系部。',
-        );
-      } finally {
-        setIsLoadingDepartments(false);
-      }
-    },
-    [form],
-  );
+      form.setFieldsValue({
+        departmentId: preferredDepartment?.id,
+      });
+    } catch (error) {
+      setDepartmentOptions([]);
+      setDepartmentOptionsError(error instanceof Error ? error.message : '暂时无法加载可选系部。');
+    } finally {
+      setIsLoadingDepartments(false);
+    }
+  }, [form]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -386,7 +348,7 @@ export function ClassSyncLabPage() {
 
         setCurrentAccount(account);
         setIsLoadingAccount(false);
-        await loadDepartments(account);
+        await loadDepartments();
       } catch (error) {
         if (isCancelled) {
           return;
@@ -415,18 +377,11 @@ export function ClassSyncLabPage() {
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: keepAliveFailure.upstreamLoginId,
-        lockedUserId: lockedUpstreamLoginUserId,
         rememberedCredentials,
       }),
     );
     setIsLoginModalOpen(true);
-  }, [
-    clearCurrentSession,
-    keepAliveFailure,
-    lockedUpstreamLoginUserId,
-    loginForm,
-    rememberedCredentials,
-  ]);
+  }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
 
   const performClassSync = useCallback(
     async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
@@ -465,7 +420,6 @@ export function ClassSyncLabPage() {
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
               fallbackUserId: session.upstreamLoginId,
-              lockedUserId: lockedUpstreamLoginUserId,
               rememberedCredentials,
             }),
           );
@@ -481,13 +435,7 @@ export function ClassSyncLabPage() {
         }
       }
     },
-    [
-      clearCurrentSession,
-      lockedUpstreamLoginUserId,
-      loginForm,
-      persistSessionFromResult,
-      rememberedCredentials,
-    ],
+    [clearCurrentSession, loginForm, persistSessionFromResult, rememberedCredentials],
   );
 
   const handleRunSync = useCallback(
@@ -507,7 +455,6 @@ export function ClassSyncLabPage() {
         setIsLoginModalOpen(true);
         loginForm.setFieldsValue(
           buildUpstreamLoginCredentialsInitialValues({
-            lockedUserId: lockedUpstreamLoginUserId,
             rememberedCredentials,
           }),
         );
@@ -516,15 +463,7 @@ export function ClassSyncLabPage() {
 
       await performClassSync(storedSession, values, mode);
     },
-    [
-      currentAccount,
-      form,
-      lockedUpstreamLoginUserId,
-      loginForm,
-      performClassSync,
-      rememberedCredentials,
-      storedSession,
-    ],
+    [currentAccount, form, loginForm, performClassSync, rememberedCredentials, storedSession],
   );
 
   const handleLoginFinish = useCallback(
@@ -585,22 +524,12 @@ export function ClassSyncLabPage() {
         title="班级同步"
       />
 
-      <Card title="当前状态">
-        <Descriptions bordered size="small" column={2}>
-          <Descriptions.Item label="当前账号">
-            {currentAccount?.displayName || '未恢复'}
-          </Descriptions.Item>
-          <Descriptions.Item label="访问口径">
-            {getViewerRoleLabel(currentAccount)}
-          </Descriptions.Item>
-          <Descriptions.Item label="upstream 登录名">
-            {storedSession?.upstreamLoginId || '未保存'}
-          </Descriptions.Item>
-          <Descriptions.Item label="upstream token 过期时间">
-            {formatDateTime(storedSession?.expiresAt)}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
+      <UpstreamSessionStatusCard
+        accountDisplayName={currentAccount?.displayName}
+        extraItems={[{ label: '访问口径', value: 'ADMIN' }]}
+        upstreamExpiresAt={storedSession?.expiresAt}
+        upstreamLoginId={storedSession?.upstreamLoginId}
+      />
 
       <Card title="同步参数">
         <div className="flex flex-col gap-4">
@@ -665,31 +594,23 @@ export function ClassSyncLabPage() {
                   执行落库
                 </Button>
               </Popconfirm>
-              <Button
+              <UpstreamSessionControls
                 disabled={isRunningSync}
-                onClick={() => {
+                onClear={() => {
                   clearCurrentSession();
                   setLoginError(null);
                 }}
-              >
-                清理 upstream token
-              </Button>
-              <Button
-                disabled={isRunningSync}
-                onClick={() => {
+                onRelogin={() => {
                   setIsLoginModalOpen(true);
                   setLoginError(null);
                   loginForm.setFieldsValue(
                     buildUpstreamLoginCredentialsInitialValues({
                       fallbackUserId: storedSession?.upstreamLoginId,
-                      lockedUserId: lockedUpstreamLoginUserId,
                       rememberedCredentials,
                     }),
                   );
                 }}
-              >
-                重新登录 upstream
-              </Button>
+              />
             </div>
           </Form>
         </div>
@@ -720,7 +641,7 @@ export function ClassSyncLabPage() {
               <Descriptions.Item label="skippedCount">{result.skippedCount}</Descriptions.Item>
               <Descriptions.Item label="items">{result.items.length}</Descriptions.Item>
               <Descriptions.Item label="续签 token 过期时间">
-                {formatDateTime(result.expiresAt)}
+                {formatUpstreamSessionDateTime(result.expiresAt)}
               </Descriptions.Item>
             </Descriptions>
 
@@ -764,7 +685,6 @@ export function ClassSyncLabPage() {
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
-        lockedUserId={lockedUpstreamLoginUserId}
         open={isLoginModalOpen}
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {

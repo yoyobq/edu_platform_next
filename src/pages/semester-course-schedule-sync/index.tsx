@@ -8,9 +8,6 @@ export function SemesterCourseScheduleSyncPage() {
   const authSession = useAuthSessionState();
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
   const snapshot = authSession.snapshot;
-  const isAdmin = snapshot?.userInfo.accessGroup.includes('ADMIN') === true;
-  const staffId = snapshot?.identity?.kind === 'STAFF' ? snapshot.identity.id : null;
-  const lockedUpstreamLoginUserId = !isAdmin ? staffId : null;
 
   if (loaderData?.isForbidden) {
     return <Error403 />;
@@ -27,7 +24,6 @@ export function SemesterCourseScheduleSyncPage() {
           : null
       }
       isAuthenticating={authSession.status === 'restoring' || authSession.status === 'hydrating'}
-      lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
     />
   );
 }

@@ -1,16 +1,12 @@
 // src/app/navigation/providers/upstream-data-sync.ts
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import { hasUpstreamDataSyncAccess } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
-function hasUpstreamDataSyncNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
-  return input.accessGroup?.includes('ADMIN') ?? false;
-}
-
 export const getUpstreamDataSyncNavigationItems: NavigationItemsProvider = (filter) => {
   if (
-    !hasUpstreamDataSyncNavigationAccess({
+    !hasUpstreamDataSyncAccess({
       accessGroup: filter.accessGroup,
     })
   ) {

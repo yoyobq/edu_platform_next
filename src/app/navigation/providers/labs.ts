@@ -53,13 +53,13 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
     })
       ? [
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'SyncOutlined',
             key: '/labs/major-sync',
             label: '专业同步',
             navMode: 'rail' as const,
             path: '/labs/major-sync',
-            primaryAccessGroup: 'STAFF' as const,
+            primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
         ]
@@ -70,13 +70,13 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
     })
       ? [
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'TableOutlined',
             key: '/labs/class-sync',
             label: '班级同步',
             navMode: 'rail' as const,
             path: '/labs/class-sync',
-            primaryAccessGroup: 'STAFF' as const,
+            primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
         ]

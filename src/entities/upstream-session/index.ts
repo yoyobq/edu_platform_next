@@ -14,6 +14,7 @@ export type {
   UpstreamSessionKeepAliveFailure,
 } from './application/upstream-session-controller';
 export { useUpstreamSession } from './application/upstream-session-controller';
+export { formatUpstreamSessionDateTime } from './application/upstream-session-format';
 export type {
   PersistUpstreamSessionFromResult,
   RollingUpstreamSessionResult,
@@ -29,3 +30,8 @@ export {
 } from './infrastructure/upstream-session-api';
 export type { StoredUpstreamSession } from './infrastructure/upstream-session-storage';
 export { type UpstreamLoginFormValues, UpstreamLoginModal } from './ui/upstream-login-modal';
+export { UpstreamSessionControls } from './ui/upstream-session-controls';
+export {
+  UpstreamSessionStatusCard,
+  type UpstreamSessionStatusCardItem,
+} from './ui/upstream-session-status-card';

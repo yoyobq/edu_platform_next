@@ -28,27 +28,21 @@ describe('major-sync api', () => {
     executeGraphQLMock.mockReset();
   });
 
-  it('maps the current account into the major sync viewer role', async () => {
+  it('maps the current account into the major sync account shape', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       me: {
         accountId: 42,
-        identity: {
-          __typename: 'StaffType',
-          id: 'STAFF-001',
-        },
         userInfo: {
-          accessGroup: ['STAFF'],
+          accessGroup: ['ADMIN'],
           nickname: '王老师',
         },
       },
     });
 
     await expect(fetchCurrentMajorSyncAccount()).resolves.toEqual({
-      accessGroup: ['STAFF'],
+      accessGroup: ['ADMIN'],
       accountId: 42,
       displayName: '王老师',
-      staffId: 'STAFF-001',
-      viewerRole: 'studentAffairsOfficer',
     });
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(
@@ -75,12 +69,7 @@ describe('major-sync api', () => {
       ],
     });
 
-    await expect(
-      fetchMajorSyncDepartmentOptions({
-        accountId: 1,
-        viewerRole: 'admin',
-      }),
-    ).resolves.toEqual([
+    await expect(fetchMajorSyncDepartmentOptions()).resolves.toEqual([
       {
         departmentName: '信息工程系',
         id: 'ORG0302',
@@ -93,68 +82,6 @@ describe('major-sync api', () => {
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('MajorSyncDepartments'),
       {
-        limit: 500,
-      },
-    );
-  });
-
-  it('scopes department options to active student affairs posts', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
-      departments: [
-        {
-          departmentName: '信息工程系',
-          id: 'ORG0302',
-          isEnabled: true,
-          shortName: null,
-        },
-      ],
-      staffCurrentSlotPosts: [
-        {
-          id: 1,
-          scope: {
-            departmentId: 'ORG0302',
-          },
-          slotCode: 'STUDENT_AFFAIRS_OFFICER',
-          status: 'ACTIVE',
-        },
-        {
-          id: 2,
-          scope: {
-            departmentId: 'ORG0302',
-          },
-          slotCode: 'STUDENT_AFFAIRS_OFFICER',
-          status: 'ACTIVE',
-        },
-        {
-          id: 3,
-          scope: {
-            departmentId: 'ORG0401',
-          },
-          slotCode: 'ACADEMIC_OFFICER',
-          status: 'ACTIVE',
-        },
-      ],
-    });
-
-    await expect(
-      fetchMajorSyncDepartmentOptions({
-        accountId: 42,
-        viewerRole: 'studentAffairsOfficer',
-      }),
-    ).resolves.toEqual([
-      {
-        departmentName: '信息工程系',
-        id: 'ORG0302',
-        isEnabled: true,
-        label: '信息工程系',
-        shortName: null,
-      },
-    ]);
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('MajorSyncStudentAffairsDepartmentScope'),
-      {
-        accountId: 42,
         limit: 500,
       },
     );

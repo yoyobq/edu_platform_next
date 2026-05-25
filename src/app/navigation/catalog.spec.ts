@@ -151,7 +151,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')).toBeUndefined();
   });
 
-  it('exposes major and class sync labs to student affairs officers', () => {
+  it('keeps sync labs hidden from student affairs officers', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1004,
@@ -165,12 +165,8 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
-      'labs',
     ]);
-    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/major-sync',
-      '/labs/class-sync',
-    ]);
+    expect(findGroup(staffItems, 'labs')).toBeUndefined();
     expect(
       canAccessNavigationPath(
         '/labs/major-sync',
@@ -181,7 +177,7 @@ describe('navigation catalog', () => {
           slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/class-sync',
@@ -192,7 +188,7 @@ describe('navigation catalog', () => {
           slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/major-sync',

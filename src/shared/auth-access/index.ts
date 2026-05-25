@@ -105,18 +105,17 @@ export function hasStaffSemesterProfilesAccess(input: {
   return hasAdminOrAcademicOfficerAccess(input);
 }
 
+export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN');
+}
+
 export function hasMajorSyncAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
-  const accessGroup = input.accessGroup ?? [];
-  const slotGroup = input.slotGroup ?? [];
-
-  if (accessGroup.includes('ADMIN')) {
-    return true;
-  }
-
-  return accessGroup.includes('STAFF') && slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP);
+  return hasUpstreamDataSyncAccess(input);
 }
 
 export function hasClassSyncAccess(input: {

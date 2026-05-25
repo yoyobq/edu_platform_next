@@ -15,6 +15,7 @@ import {
   hasClassSyncAccess,
   hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
+  hasUpstreamDataSyncAccess,
 } from './index';
 
 describe('auth access policy helpers', () => {
@@ -71,14 +72,21 @@ describe('auth access policy helpers', () => {
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
-  it('allows major sync to admins and student affairs officers only', () => {
+  it('allows upstream sync capabilities to admins only', () => {
+    expect(hasUpstreamDataSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasUpstreamDataSyncAccess({
+        accessGroup: ['STAFF'],
+      }),
+    ).toBe(false);
+
     expect(hasMajorSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
     expect(
       hasMajorSyncAccess({
         accessGroup: ['STAFF'],
         slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       hasMajorSyncAccess({
         accessGroup: ['STAFF'],
@@ -92,16 +100,14 @@ describe('auth access policy helpers', () => {
       }),
     ).toBe(false);
     expect(hasMajorSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
-  });
 
-  it('keeps class sync aligned with major sync access', () => {
     expect(hasClassSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
     expect(
       hasClassSyncAccess({
         accessGroup: ['STAFF'],
         slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       hasClassSyncAccess({
         accessGroup: ['STAFF'],
