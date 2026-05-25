@@ -543,23 +543,11 @@ async function majorSyncLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
+  await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(majorSyncLabAccess)) {
-      return null;
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -576,7 +564,12 @@ async function majorSyncLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Forbidden', { status: 403 });
   }
 
-  return null;
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
+  };
 }
 
 async function classSyncLabLoader({ request }: LoaderFunctionArgs) {
@@ -584,23 +577,11 @@ async function classSyncLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Not Found', { status: 404 });
   }
 
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
+  await restoreSession({ waitForPending: true });
 
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(classSyncLabAccess)) {
-      return null;
-    }
-
     throw redirect(buildLoginRedirectURL(request));
   }
 
@@ -617,7 +598,12 @@ async function classSyncLabLoader({ request }: LoaderFunctionArgs) {
     throw new Response('Forbidden', { status: 403 });
   }
 
-  return null;
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
+  };
 }
 
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {

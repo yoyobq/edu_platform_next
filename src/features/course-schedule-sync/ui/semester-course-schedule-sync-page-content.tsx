@@ -3,6 +3,13 @@ import { SyncOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Input, Select, Spin } from 'antd';
 
 import {
+  AcademicSemesterPeriodFormItems,
+  type AcademicSemesterPeriodOption,
+  buildAcademicSemesterPeriodOptions,
+  buildAcademicSemesterSchoolYearOptions,
+  resolveAcademicSemesterPeriodValues,
+} from '@/entities/academic-semester';
+import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
   type DepartmentSelectOption,
@@ -26,7 +33,6 @@ import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
   type CourseScheduleSyncResult,
-  type CourseScheduleSyncSemesterOption,
   type DepartmentCurriculumPlanReviewStatus,
   dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
@@ -51,14 +57,6 @@ type PendingSyncRequest = {
   values: SyncFormValues;
 };
 
-type SemesterOption = {
-  id: number;
-  isCurrent: boolean;
-  label: string;
-  schoolYear: string;
-  semester: string;
-};
-
 type SemesterCourseScheduleSyncCurrentAccount = {
   accountId: number;
   displayName: string;
@@ -81,37 +79,6 @@ const REVIEW_STATUS_OPTIONS: Array<{
 ];
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
-
-function sortSemesterOptions(options: SemesterOption[]) {
-  return [...options].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return Number(right.schoolYear) - Number(left.schoolYear);
-    }
-
-    return Number(right.semester) - Number(left.semester);
-  });
-}
-
-function getUniqueSchoolYearOptions(options: SemesterOption[]) {
-  const seen = new Set<string>();
-
-  return options.reduce<Array<{ label: string; value: string }>>((result, option) => {
-    if (seen.has(option.schoolYear)) {
-      return result;
-    }
-
-    seen.add(option.schoolYear);
-    result.push({
-      label: `${option.schoolYear}-${Number(option.schoolYear) + 1} 学年`,
-      value: option.schoolYear,
-    });
-    return result;
-  }, []);
-}
 
 function formatOptionalCount(value: number | undefined) {
   return typeof value === 'number' ? value : '未返回';
@@ -144,7 +111,7 @@ export function SemesterCourseScheduleSyncPageContent({
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [result, setResult] = useState<CourseScheduleSyncResult | null>(null);
-  const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
+  const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingSyncRequest, setPendingSyncRequest] = useState<PendingSyncRequest | null>(null);
   const {
@@ -308,15 +275,7 @@ export function SemesterCourseScheduleSyncPageContent({
 
         const nextSemesterOptions =
           semesterResult.status === 'fulfilled'
-            ? sortSemesterOptions(
-                semesterResult.value.map((semester: CourseScheduleSyncSemesterOption) => ({
-                  id: semester.id,
-                  isCurrent: semester.isCurrent,
-                  label: `${semester.schoolYear}-${semester.schoolYear + 1} 学年第${semester.termNumber}学期`,
-                  schoolYear: String(semester.schoolYear),
-                  semester: String(semester.termNumber),
-                })),
-              )
+            ? buildAcademicSemesterPeriodOptions(semesterResult.value)
             : [];
         const fetchedDepartmentOptions =
           departmentResult.status === 'fulfilled'
@@ -344,8 +303,6 @@ export function SemesterCourseScheduleSyncPageContent({
         setDepartmentOptionsError(nextDepartmentOptionsError);
 
         const currentValues = syncForm.getFieldsValue();
-        const preferredSemester = nextSemesterOptions[0];
-
         syncForm.setFieldsValue({
           departmentId: resolveDepartmentDefaultId({
             currentDepartmentId: currentValues.departmentId,
@@ -353,8 +310,10 @@ export function SemesterCourseScheduleSyncPageContent({
             options: nextDepartmentOptions,
           }),
           reviewStatus: currentValues.reviewStatus,
-          schoolYear: currentValues.schoolYear || preferredSemester?.schoolYear,
-          semester: currentValues.semester || preferredSemester?.semester,
+          ...resolveAcademicSemesterPeriodValues({
+            currentValues,
+            options: nextSemesterOptions,
+          }),
           teacherId: currentValues.teacherId,
         });
       } finally {
@@ -413,7 +372,7 @@ export function SemesterCourseScheduleSyncPageContent({
     );
   }
 
-  const schoolYearOptions = getUniqueSchoolYearOptions(semesterOptions);
+  const schoolYearOptions = buildAcademicSemesterSchoolYearOptions(semesterOptions);
   const isRunningSync = isPreviewing || isSyncing;
 
   if (pageError) {
@@ -452,40 +411,16 @@ export function SemesterCourseScheduleSyncPageContent({
 
         <Form form={syncForm} layout="vertical">
           <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
-            <Form.Item
-              help={semesterOptionsError ?? undefined}
-              label="学年"
-              name="schoolYear"
-              rules={[{ required: true, message: '请选择学年' }]}
-              validateStatus={semesterOptionsError ? 'warning' : undefined}
-            >
-              <Select
-                disabled={isLoadingOptions || schoolYearOptions.length === 0}
-                loading={isLoadingOptions}
-                optionFilterProp="label"
-                options={schoolYearOptions}
-                placeholder="选择学年"
-                showSearch
-              />
-            </Form.Item>
-
-            <Form.Item
-              help={semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined}
-              label="学期"
-              name="semester"
-              rules={[{ required: true, message: '请选择学期' }]}
-              validateStatus={semesterOptionsError ? 'warning' : undefined}
-            >
-              <Select
-                disabled={isLoadingOptions || schoolYearOptions.length === 0}
-                loading={isLoadingOptions}
-                options={[
-                  { label: '第 1 学期', value: '1' },
-                  { label: '第 2 学期', value: '2' },
-                ]}
-                placeholder="选择学期"
-              />
-            </Form.Item>
+            <AcademicSemesterPeriodFormItems
+              loading={isLoadingOptions}
+              schoolYearHelp={semesterOptionsError ?? undefined}
+              schoolYearOptions={schoolYearOptions}
+              schoolYearValidateStatus={semesterOptionsError ? 'warning' : undefined}
+              semesterHelp={
+                semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined
+              }
+              semesterValidateStatus={semesterOptionsError ? 'warning' : undefined}
+            />
 
             <DepartmentFormItem
               disabled={isLoadingOptions}

@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Popconfirm, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useLoaderData } from 'react-router';
 
+import {
+  AcademicSemesterPeriodFormItems,
+  type AcademicSemesterPeriodOption,
+  buildAcademicSemesterPeriodOptions,
+  buildAcademicSemesterSchoolYearOptions,
+  requestAcademicSemesters,
+  resolveAcademicSemesterPeriodValues,
+} from '@/entities/academic-semester';
 import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
@@ -17,6 +26,7 @@ import {
   canUseRememberedUpstreamLoginCredentials,
   formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
+  type UpstreamAccountIdentity,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
   UpstreamSessionControls,
@@ -25,11 +35,10 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
-  type CurrentMajorSyncAccount,
   dryRunSyncMajorsFromUpstream,
-  fetchCurrentMajorSyncAccount,
   fetchMajorSyncDepartmentOptions,
   isExpiredUpstreamSessionError,
   type MajorSyncCommitAction,
@@ -41,10 +50,11 @@ import {
   resolveMajorSyncErrorMessage,
   syncMajorsFromUpstream,
 } from './api';
-import { majorSyncLabMeta } from './meta';
 
 type MajorSyncFormValues = {
   departmentId: string;
+  schoolYear: string;
+  semester: string;
 };
 
 type MajorSyncRunMode = 'dryRun' | 'sync';
@@ -58,7 +68,18 @@ type MajorSyncResult = MajorSyncDryRunResult | MajorSyncCommitResult;
 type MajorSyncResultItem = MajorSyncDryRunItem | MajorSyncCommitItem;
 type MajorSyncResultAction = MajorSyncDryRunAction | MajorSyncCommitAction;
 
+type MajorSyncLabLoaderData = {
+  currentAccount: UpstreamAccountIdentity;
+} | null;
+
+type MajorSyncPageContentProps = {
+  currentAccount: UpstreamAccountIdentity | null;
+  isAuthenticating: boolean;
+};
+
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
+const PAGE_DESCRIPTION =
+  '预览从 upstream 专业字典同步到本地 org_major 的新增、已存在和重复跳过项。';
 
 const ACTION_LABELS: Record<MajorSyncResultAction, string> = {
   CREATE: '待新增',
@@ -162,19 +183,32 @@ const resultColumns: ColumnsType<MajorSyncResultItem> = [
 ];
 
 export function MajorSyncLabPage() {
+  const loaderData = useLoaderData() as MajorSyncLabLoaderData;
+
+  return (
+    <MajorSyncPageContent
+      currentAccount={loaderData?.currentAccount ?? null}
+      isAuthenticating={false}
+    />
+  );
+}
+
+export function MajorSyncPageContent({
+  currentAccount,
+  isAuthenticating,
+}: MajorSyncPageContentProps) {
   const [form] = Form.useForm<MajorSyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const [currentAccount, setCurrentAccount] = useState<CurrentMajorSyncAccount | null>(null);
-  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
-  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [result, setResult] = useState<MajorSyncResult | null>(null);
+  const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
     useState<PendingMajorSyncRequest | null>(null);
@@ -199,6 +233,10 @@ export function MajorSyncLabPage() {
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
+  const schoolYearOptions = useMemo(
+    () => buildAcademicSemesterSchoolYearOptions(semesterOptions),
+    [semesterOptions],
+  );
   const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
@@ -206,25 +244,55 @@ export function MajorSyncLabPage() {
     setPendingMajorSyncRequest(null);
   }, [clear]);
 
-  const loadDepartments = useCallback(async () => {
-    setIsLoadingDepartments(true);
+  const loadOptions = useCallback(async () => {
+    setIsLoadingOptions(true);
+    setSemesterOptionsError(null);
     setDepartmentOptionsError(null);
 
     try {
+      const [semesterResult, departmentResult] = await Promise.allSettled([
+        requestAcademicSemesters({ limit: 500 }),
+        fetchMajorSyncDepartmentOptions(),
+      ]);
+      const nextSemesterOptions =
+        semesterResult.status === 'fulfilled'
+          ? buildAcademicSemesterPeriodOptions(semesterResult.value)
+          : [];
       const nextOptions = ensureDepartmentSelectOption(
-        buildDepartmentSelectOptions(await fetchMajorSyncDepartmentOptions()),
+        buildDepartmentSelectOptions(
+          departmentResult.status === 'fulfilled' ? departmentResult.value : [],
+        ),
         { id: DEFAULT_DEPARTMENT_ID },
       );
+      const nextSemesterOptionsError =
+        semesterResult.status === 'rejected'
+          ? semesterResult.reason instanceof Error
+            ? semesterResult.reason.message
+            : '暂时无法加载学期列表。'
+          : null;
+      const nextDepartmentOptionsError =
+        departmentResult.status === 'rejected'
+          ? departmentResult.reason instanceof Error
+            ? departmentResult.reason.message
+            : '暂时无法加载可选系部。'
+          : null;
 
+      setSemesterOptions(nextSemesterOptions);
       setDepartmentOptions(nextOptions);
+      setSemesterOptionsError(nextSemesterOptionsError);
+      setDepartmentOptionsError(nextDepartmentOptionsError);
 
-      const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
+      const currentValues = form.getFieldsValue();
 
       form.setFieldsValue({
         departmentId: resolveDepartmentDefaultId({
-          currentDepartmentId,
+          currentDepartmentId: currentValues.departmentId,
           defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
           options: nextOptions,
+        }),
+        ...resolveAcademicSemesterPeriodValues({
+          currentValues,
+          options: nextSemesterOptions,
         }),
       });
     } catch (error) {
@@ -240,45 +308,18 @@ export function MajorSyncLabPage() {
       });
       setDepartmentOptionsError(error instanceof Error ? error.message : '暂时无法加载可选系部。');
     } finally {
-      setIsLoadingDepartments(false);
+      setIsLoadingOptions(false);
     }
   }, [form]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function bootstrapPage() {
-      setIsLoadingAccount(true);
-      setPageError(null);
-      setPreviewError(null);
-
-      try {
-        const account = await fetchCurrentMajorSyncAccount();
-
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(account);
-        setIsLoadingAccount(false);
-        await loadDepartments();
-      } catch (error) {
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(null);
-        setPageError(error instanceof Error ? error.message : '暂时无法确认当前登录账号。');
-        setIsLoadingAccount(false);
-      }
+    if (!currentAccount) {
+      return;
     }
 
-    void bootstrapPage();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [loadDepartments]);
+    setPreviewError(null);
+    void loadOptions();
+  }, [currentAccount, loadOptions]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -313,6 +354,8 @@ export function MajorSyncLabPage() {
       try {
         const input = {
           departmentId: values.departmentId,
+          schoolYear: values.schoolYear,
+          semester: values.semester,
           upstreamSessionToken: session.upstreamSessionToken,
         };
         const syncResult = isDryRun
@@ -414,7 +457,7 @@ export function MajorSyncLabPage() {
     [currentAccount, loginForm, loginUpstream, pendingMajorSyncRequest, performMajorSync],
   );
 
-  if (isLoadingAccount) {
+  if (isAuthenticating) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spin size="large" />
@@ -422,10 +465,10 @@ export function MajorSyncLabPage() {
     );
   }
 
-  if (pageError) {
+  if (!currentAccount) {
     return (
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-        <Alert showIcon type="error" message={pageError} />
+        <Alert showIcon type="error" message="当前登录会话已失效，请重新登录后再试。" />
       </div>
     );
   }
@@ -433,7 +476,7 @@ export function MajorSyncLabPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
-        description={majorSyncLabMeta.purpose}
+        description={PAGE_DESCRIPTION}
         icon={<SyncOutlined />}
         title="专业同步"
       />
@@ -445,34 +488,50 @@ export function MajorSyncLabPage() {
         upstreamLoginId={storedSession?.upstreamLoginId}
       />
 
-      <Card title="预览参数">
+      <Card title="同步参数">
         <div className="flex flex-col gap-4">
           {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
+          {semesterOptionsError ? (
+            <Alert showIcon type="warning" message={semesterOptionsError} />
+          ) : null}
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
 
           <Form<MajorSyncFormValues> form={form} layout="vertical" requiredMark={false}>
-            <DepartmentFormItem
-              disabled={isLoadingDepartments}
-              emptyText="当前没有可选院系"
-              help={
-                selectedDepartment
-                  ? `本次将预览 ${selectedDepartment.label} 的 org_major 变更。`
-                  : undefined
-              }
-              label="目标院系"
-              loading={isLoadingDepartments}
-              name="departmentId"
-              options={departmentOptions}
-              placeholder="选择目标院系"
-              required
-              validateStatus={departmentOptionsError ? 'warning' : undefined}
-            />
+            <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
+              <AcademicSemesterPeriodFormItems
+                loading={isLoadingOptions}
+                schoolYearHelp={semesterOptionsError ?? undefined}
+                schoolYearOptions={schoolYearOptions}
+                schoolYearValidateStatus={semesterOptionsError ? 'warning' : undefined}
+                semesterHelp={
+                  semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined
+                }
+                semesterValidateStatus={semesterOptionsError ? 'warning' : undefined}
+              />
+
+              <DepartmentFormItem
+                disabled={isLoadingOptions}
+                emptyText="当前没有可选院系"
+                help={
+                  selectedDepartment
+                    ? `本次将预览 ${selectedDepartment.label} 的 org_major 变更。`
+                    : undefined
+                }
+                label="目标院系"
+                loading={isLoadingOptions}
+                name="departmentId"
+                options={departmentOptions}
+                placeholder="选择目标院系"
+                required
+                validateStatus={departmentOptionsError ? 'warning' : undefined}
+              />
+            </ResponsiveGrid>
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={isLoadingDepartments || isSyncing}
+                disabled={isLoadingOptions || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
@@ -487,7 +546,7 @@ export function MajorSyncLabPage() {
                 title="确认执行专业同步？"
                 onConfirm={() => void handleRunSync('sync')}
               >
-                <Button danger disabled={isLoadingDepartments || isPreviewing} loading={isSyncing}>
+                <Button danger disabled={isLoadingOptions || isPreviewing} loading={isSyncing}>
                   执行落库
                 </Button>
               </Popconfirm>

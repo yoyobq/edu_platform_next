@@ -12,17 +12,10 @@ import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 
-export type CurrentClassSyncAccount = {
-  accessGroup: readonly string[];
-  accountId: number;
-  displayName: string;
-};
-
 export type ClassSyncDepartmentOption = {
   departmentName: string;
   id: string;
   isEnabled: boolean;
-  label: string;
   shortName: string | null;
 };
 
@@ -86,20 +79,12 @@ export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
 
 export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
+  schoolYear: string;
+  semester: string;
   upstreamSessionToken: string;
 };
 
 export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
-
-type CurrentAccountResponse = {
-  me: {
-    accountId: number;
-    userInfo: {
-      accessGroup: string[];
-      nickname: string | null;
-    };
-  };
-};
 
 type DepartmentDTO = {
   departmentName: string;
@@ -119,18 +104,6 @@ type DryRunSyncClassesFromUpstreamResponse = {
 type SyncClassesFromUpstreamResponse = {
   syncClassesFromUpstream: ClassSyncCommitResult;
 };
-
-const CURRENT_ACCOUNT_QUERY = `
-  query ClassSyncCurrentAccount {
-    me {
-      accountId
-      userInfo {
-        accessGroup
-        nickname
-      }
-    }
-  }
-`;
 
 const DEPARTMENTS_QUERY = `
   query ClassSyncDepartments($limit: Int) {
@@ -209,14 +182,6 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   return executeGraphQL(query, variables);
 }
 
-function buildDepartmentLabel(
-  department: Pick<DepartmentDTO, 'departmentName' | 'id' | 'shortName'>,
-) {
-  const name = department.departmentName?.trim() || department.id;
-
-  return department.shortName?.trim() ? `${name} (${department.shortName.trim()})` : name;
-}
-
 function toDepartmentOption(department: DepartmentDTO): ClassSyncDepartmentOption | null {
   const id = department.id.trim();
 
@@ -228,7 +193,6 @@ function toDepartmentOption(department: DepartmentDTO): ClassSyncDepartmentOptio
     departmentName: department.departmentName?.trim() || id,
     id,
     isEnabled: department.isEnabled,
-    label: buildDepartmentLabel({ ...department, id }),
     shortName: department.shortName?.trim() || null,
   };
 }
@@ -244,28 +208,12 @@ function buildEnabledDepartmentOptions(departments: readonly DepartmentDTO[]) {
 function normalizeDryRunInput(input: DryRunSyncClassesFromUpstreamInput) {
   return {
     departmentId: normalizeRequiredTextValue(input.departmentId, { label: '系部' }),
+    schoolYear: normalizeRequiredTextValue(String(input.schoolYear || ''), { label: '学年' }),
+    semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
     upstreamSessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
       message: 'upstreamSessionToken 为必填。',
     }),
   };
-}
-
-export async function fetchCurrentClassSyncAccount(): Promise<CurrentClassSyncAccount> {
-  try {
-    const response = await requestGraphQL<CurrentAccountResponse, Record<string, never>>(
-      CURRENT_ACCOUNT_QUERY,
-      {},
-    );
-    const accessGroup = response.me.userInfo.accessGroup;
-
-    return {
-      accessGroup,
-      accountId: response.me.accountId,
-      displayName: response.me.userInfo.nickname?.trim() || `account-${response.me.accountId}`,
-    };
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
-  }
 }
 
 export async function fetchClassSyncDepartmentOptions() {

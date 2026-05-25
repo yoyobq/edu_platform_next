@@ -19,36 +19,12 @@ vi.mock('@/shared/graphql', () => ({
 import {
   dryRunSyncClassesFromUpstream,
   fetchClassSyncDepartmentOptions,
-  fetchCurrentClassSyncAccount,
   syncClassesFromUpstream,
 } from './api';
 
 describe('class-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
-  });
-
-  it('maps the current account into the class sync account shape', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
-      me: {
-        accountId: 42,
-        userInfo: {
-          accessGroup: ['ADMIN'],
-          nickname: '王老师',
-        },
-      },
-    });
-
-    await expect(fetchCurrentClassSyncAccount()).resolves.toEqual({
-      accessGroup: ['ADMIN'],
-      accountId: 42,
-      displayName: '王老师',
-    });
-
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('ClassSyncCurrentAccount'),
-      {},
-    );
   });
 
   it('loads enabled departments for admin viewers', async () => {
@@ -74,7 +50,6 @@ describe('class-sync api', () => {
         departmentName: '信息工程系',
         id: 'ORG0302',
         isEnabled: true,
-        label: '信息工程系 (信息)',
         shortName: '信息',
       },
     ]);
@@ -135,6 +110,8 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: ' ORG0302 ',
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
         upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).resolves.toEqual(payload);
@@ -160,6 +137,8 @@ describe('class-sync api', () => {
       {
         input: {
           departmentId: 'ORG0302',
+          schoolYear: '2025',
+          semester: '1',
           upstreamSessionToken: 'rolling-token-001',
         },
       },
@@ -212,6 +191,8 @@ describe('class-sync api', () => {
     await expect(
       syncClassesFromUpstream({
         departmentId: ' ORG0302 ',
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
         upstreamSessionToken: ' rolling-token-002 ',
       }),
     ).resolves.toEqual(payload);
@@ -234,6 +215,8 @@ describe('class-sync api', () => {
       {
         input: {
           departmentId: 'ORG0302',
+          schoolYear: '2025',
+          semester: '1',
           upstreamSessionToken: 'rolling-token-002',
         },
       },
@@ -244,6 +227,8 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: ' ',
+        schoolYear: '2025',
+        semester: '1',
         upstreamSessionToken: 'rolling-token-001',
       }),
     ).rejects.toThrow('请输入系部。');
@@ -251,6 +236,26 @@ describe('class-sync api', () => {
     await expect(
       dryRunSyncClassesFromUpstream({
         departmentId: 'ORG0302',
+        schoolYear: ' ',
+        semester: '1',
+        upstreamSessionToken: 'rolling-token-001',
+      }),
+    ).rejects.toThrow('请输入学年。');
+
+    await expect(
+      dryRunSyncClassesFromUpstream({
+        departmentId: 'ORG0302',
+        schoolYear: '2025',
+        semester: ' ',
+        upstreamSessionToken: 'rolling-token-001',
+      }),
+    ).rejects.toThrow('请输入学期。');
+
+    await expect(
+      dryRunSyncClassesFromUpstream({
+        departmentId: 'ORG0302',
+        schoolYear: '2025',
+        semester: '1',
         upstreamSessionToken: ' ',
       }),
     ).rejects.toThrow('upstreamSessionToken 为必填。');

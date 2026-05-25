@@ -15,7 +15,16 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useLoaderData } from 'react-router';
 
+import {
+  AcademicSemesterPeriodFormItems,
+  type AcademicSemesterPeriodOption,
+  buildAcademicSemesterPeriodOptions,
+  buildAcademicSemesterSchoolYearOptions,
+  requestAcademicSemesters,
+  resolveAcademicSemesterPeriodValues,
+} from '@/entities/academic-semester';
 import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
@@ -28,6 +37,7 @@ import {
   canUseRememberedUpstreamLoginCredentials,
   formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
+  type UpstreamAccountIdentity,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
   UpstreamSessionControls,
@@ -36,6 +46,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
   type ClassSyncCommitAction,
@@ -44,18 +55,17 @@ import {
   type ClassSyncDryRunAction,
   type ClassSyncDryRunItem,
   type ClassSyncDryRunResult,
-  type CurrentClassSyncAccount,
   dryRunSyncClassesFromUpstream,
   fetchClassSyncDepartmentOptions,
-  fetchCurrentClassSyncAccount,
   isExpiredUpstreamSessionError,
   resolveClassSyncErrorMessage,
   syncClassesFromUpstream,
 } from './api';
-import { classSyncLabMeta } from './meta';
 
 type ClassSyncFormValues = {
   departmentId: string;
+  schoolYear: string;
+  semester: string;
 };
 
 type ClassSyncRunMode = 'dryRun' | 'sync';
@@ -74,7 +84,18 @@ type ClassSyncResultState = {
   data: ClassSyncResult;
 };
 
+type ClassSyncLabLoaderData = {
+  currentAccount: UpstreamAccountIdentity;
+} | null;
+
+type ClassSyncPageContentProps = {
+  currentAccount: UpstreamAccountIdentity | null;
+  isAuthenticating: boolean;
+};
+
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
+const PAGE_DESCRIPTION =
+  '预览从 upstream 班级列表同步到本地 org_class 的新增、更新、已存在和冲突项。';
 
 const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   CONFLICT: '冲突',
@@ -262,19 +283,32 @@ const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
 ];
 
 export function ClassSyncLabPage() {
+  const loaderData = useLoaderData() as ClassSyncLabLoaderData;
+
+  return (
+    <ClassSyncPageContent
+      currentAccount={loaderData?.currentAccount ?? null}
+      isAuthenticating={false}
+    />
+  );
+}
+
+export function ClassSyncPageContent({
+  currentAccount,
+  isAuthenticating,
+}: ClassSyncPageContentProps) {
   const [form] = Form.useForm<ClassSyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const [currentAccount, setCurrentAccount] = useState<CurrentClassSyncAccount | null>(null);
-  const [isLoadingAccount, setIsLoadingAccount] = useState(true);
-  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
+  const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [pageError, setPageError] = useState<string | null>(null);
+  const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
+  const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingClassSyncRequest, setPendingClassSyncRequest] =
     useState<PendingClassSyncRequest | null>(null);
@@ -299,6 +333,10 @@ export function ClassSyncLabPage() {
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
+  const schoolYearOptions = useMemo(
+    () => buildAcademicSemesterSchoolYearOptions(semesterOptions),
+    [semesterOptions],
+  );
   const result = resultState?.data ?? null;
   const resultMode = resultState?.mode ?? null;
   const resultColumns = useMemo(
@@ -312,25 +350,55 @@ export function ClassSyncLabPage() {
     setPendingClassSyncRequest(null);
   }, [clear]);
 
-  const loadDepartments = useCallback(async () => {
-    setIsLoadingDepartments(true);
+  const loadOptions = useCallback(async () => {
+    setIsLoadingOptions(true);
+    setSemesterOptionsError(null);
     setDepartmentOptionsError(null);
 
     try {
+      const [semesterResult, departmentResult] = await Promise.allSettled([
+        requestAcademicSemesters({ limit: 500 }),
+        fetchClassSyncDepartmentOptions(),
+      ]);
+      const nextSemesterOptions =
+        semesterResult.status === 'fulfilled'
+          ? buildAcademicSemesterPeriodOptions(semesterResult.value)
+          : [];
       const nextOptions = ensureDepartmentSelectOption(
-        buildDepartmentSelectOptions(await fetchClassSyncDepartmentOptions()),
+        buildDepartmentSelectOptions(
+          departmentResult.status === 'fulfilled' ? departmentResult.value : [],
+        ),
         { id: DEFAULT_DEPARTMENT_ID },
       );
+      const nextSemesterOptionsError =
+        semesterResult.status === 'rejected'
+          ? semesterResult.reason instanceof Error
+            ? semesterResult.reason.message
+            : '暂时无法加载学期列表。'
+          : null;
+      const nextDepartmentOptionsError =
+        departmentResult.status === 'rejected'
+          ? departmentResult.reason instanceof Error
+            ? departmentResult.reason.message
+            : '暂时无法加载可选系部。'
+          : null;
 
+      setSemesterOptions(nextSemesterOptions);
       setDepartmentOptions(nextOptions);
+      setSemesterOptionsError(nextSemesterOptionsError);
+      setDepartmentOptionsError(nextDepartmentOptionsError);
 
-      const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
+      const currentValues = form.getFieldsValue();
 
       form.setFieldsValue({
         departmentId: resolveDepartmentDefaultId({
-          currentDepartmentId,
+          currentDepartmentId: currentValues.departmentId,
           defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
           options: nextOptions,
+        }),
+        ...resolveAcademicSemesterPeriodValues({
+          currentValues,
+          options: nextSemesterOptions,
         }),
       });
     } catch (error) {
@@ -346,45 +414,18 @@ export function ClassSyncLabPage() {
       });
       setDepartmentOptionsError(error instanceof Error ? error.message : '暂时无法加载可选系部。');
     } finally {
-      setIsLoadingDepartments(false);
+      setIsLoadingOptions(false);
     }
   }, [form]);
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function bootstrapPage() {
-      setIsLoadingAccount(true);
-      setPageError(null);
-      setPreviewError(null);
-
-      try {
-        const account = await fetchCurrentClassSyncAccount();
-
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(account);
-        setIsLoadingAccount(false);
-        await loadDepartments();
-      } catch (error) {
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(null);
-        setPageError(error instanceof Error ? error.message : '暂时无法确认当前登录账号。');
-        setIsLoadingAccount(false);
-      }
+    if (!currentAccount) {
+      return;
     }
 
-    void bootstrapPage();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [loadDepartments]);
+    setPreviewError(null);
+    void loadOptions();
+  }, [currentAccount, loadOptions]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -419,6 +460,8 @@ export function ClassSyncLabPage() {
       try {
         const input = {
           departmentId: values.departmentId,
+          schoolYear: values.schoolYear,
+          semester: values.semester,
           upstreamSessionToken: session.upstreamSessionToken,
         };
         const syncResult = isDryRun
@@ -519,7 +562,7 @@ export function ClassSyncLabPage() {
     [currentAccount, loginForm, loginUpstream, pendingClassSyncRequest, performClassSync],
   );
 
-  if (isLoadingAccount) {
+  if (isAuthenticating) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <Spin size="large" />
@@ -527,10 +570,10 @@ export function ClassSyncLabPage() {
     );
   }
 
-  if (pageError) {
+  if (!currentAccount) {
     return (
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-        <Alert showIcon type="error" message={pageError} />
+        <Alert showIcon type="error" message="当前登录会话已失效，请重新登录后再试。" />
       </div>
     );
   }
@@ -538,7 +581,7 @@ export function ClassSyncLabPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
-        description={classSyncLabMeta.purpose}
+        description={PAGE_DESCRIPTION}
         icon={<TableOutlined />}
         title="班级同步"
       />
@@ -553,31 +596,47 @@ export function ClassSyncLabPage() {
       <Card title="同步参数">
         <div className="flex flex-col gap-4">
           {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
+          {semesterOptionsError ? (
+            <Alert showIcon type="warning" message={semesterOptionsError} />
+          ) : null}
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
 
           <Form<ClassSyncFormValues> form={form} layout="vertical" requiredMark={false}>
-            <DepartmentFormItem
-              disabled={isLoadingDepartments}
-              emptyText="当前没有可选院系"
-              help={
-                selectedDepartment
-                  ? `本次将同步 ${selectedDepartment.label} 的 org_class 变更。`
-                  : undefined
-              }
-              label="目标院系"
-              loading={isLoadingDepartments}
-              name="departmentId"
-              options={departmentOptions}
-              placeholder="选择目标院系"
-              required
-              validateStatus={departmentOptionsError ? 'warning' : undefined}
-            />
+            <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
+              <AcademicSemesterPeriodFormItems
+                loading={isLoadingOptions}
+                schoolYearHelp={semesterOptionsError ?? undefined}
+                schoolYearOptions={schoolYearOptions}
+                schoolYearValidateStatus={semesterOptionsError ? 'warning' : undefined}
+                semesterHelp={
+                  semesterOptionsError ? '学期依赖学期列表，请先处理上方提示。' : undefined
+                }
+                semesterValidateStatus={semesterOptionsError ? 'warning' : undefined}
+              />
+
+              <DepartmentFormItem
+                disabled={isLoadingOptions}
+                emptyText="当前没有可选院系"
+                help={
+                  selectedDepartment
+                    ? `本次将同步 ${selectedDepartment.label} 的 org_class 变更。`
+                    : undefined
+                }
+                label="目标院系"
+                loading={isLoadingOptions}
+                name="departmentId"
+                options={departmentOptions}
+                placeholder="选择目标院系"
+                required
+                validateStatus={departmentOptionsError ? 'warning' : undefined}
+              />
+            </ResponsiveGrid>
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={isLoadingDepartments || isSyncing}
+                disabled={isLoadingOptions || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
@@ -592,7 +651,7 @@ export function ClassSyncLabPage() {
                 title="确认执行班级同步？"
                 onConfirm={() => void handleRunSync('sync')}
               >
-                <Button danger disabled={isLoadingDepartments || isPreviewing} loading={isSyncing}>
+                <Button danger disabled={isLoadingOptions || isPreviewing} loading={isSyncing}>
                   执行落库
                 </Button>
               </Popconfirm>
