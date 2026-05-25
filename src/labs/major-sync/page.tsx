@@ -2,20 +2,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Descriptions,
-  Form,
-  Popconfirm,
-  Select,
-  Spin,
-  Table,
-  Tag,
-} from 'antd';
+import { Alert, Button, Card, Descriptions, Form, Popconfirm, Spin, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import {
+  buildDepartmentSelectOptions,
+  DepartmentFormItem,
+  type DepartmentSelectOption,
+  ensureDepartmentSelectOption,
+  resolveDepartmentDefaultId,
+} from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -39,7 +35,6 @@ import {
   type MajorSyncCommitAction,
   type MajorSyncCommitItem,
   type MajorSyncCommitResult,
-  type MajorSyncDepartmentOption,
   type MajorSyncDryRunAction,
   type MajorSyncDryRunItem,
   type MajorSyncDryRunResult,
@@ -62,6 +57,8 @@ type PendingMajorSyncRequest = {
 type MajorSyncResult = MajorSyncDryRunResult | MajorSyncCommitResult;
 type MajorSyncResultItem = MajorSyncDryRunItem | MajorSyncCommitItem;
 type MajorSyncResultAction = MajorSyncDryRunAction | MajorSyncCommitAction;
+
+const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 
 const ACTION_LABELS: Record<MajorSyncResultAction, string> = {
   CREATE: '待新增',
@@ -178,7 +175,7 @@ export function MajorSyncLabPage() {
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [result, setResult] = useState<MajorSyncResult | null>(null);
-  const [departmentOptions, setDepartmentOptions] = useState<MajorSyncDepartmentOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
     useState<PendingMajorSyncRequest | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -197,11 +194,9 @@ export function MajorSyncLabPage() {
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     rememberedCredentials,
   });
-  const hasNoDepartmentOptions =
-    !isLoadingDepartments && !departmentOptionsError && departmentOptions.length === 0;
   const selectedDepartmentId = Form.useWatch('departmentId', form);
   const selectedDepartment = useMemo(
-    () => departmentOptions.find((department) => department.id === selectedDepartmentId) ?? null,
+    () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
   const isRunningSync = isPreviewing || isSyncing;
@@ -216,19 +211,33 @@ export function MajorSyncLabPage() {
     setDepartmentOptionsError(null);
 
     try {
-      const nextOptions = await fetchMajorSyncDepartmentOptions();
+      const nextOptions = ensureDepartmentSelectOption(
+        buildDepartmentSelectOptions(await fetchMajorSyncDepartmentOptions()),
+        { id: DEFAULT_DEPARTMENT_ID },
+      );
 
       setDepartmentOptions(nextOptions);
 
       const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
-      const preferredDepartment =
-        nextOptions.find((department) => department.id === currentDepartmentId) ?? nextOptions[0];
 
       form.setFieldsValue({
-        departmentId: preferredDepartment?.id,
+        departmentId: resolveDepartmentDefaultId({
+          currentDepartmentId,
+          defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
+          options: nextOptions,
+        }),
       });
     } catch (error) {
-      setDepartmentOptions([]);
+      const fallbackOptions = ensureDepartmentSelectOption([], { id: DEFAULT_DEPARTMENT_ID });
+
+      setDepartmentOptions(fallbackOptions);
+      form.setFieldsValue({
+        departmentId: resolveDepartmentDefaultId({
+          currentDepartmentId: form.getFieldValue('departmentId') as string | undefined,
+          defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
+          options: fallbackOptions,
+        }),
+      });
       setDepartmentOptionsError(error instanceof Error ? error.message : '暂时无法加载可选系部。');
     } finally {
       setIsLoadingDepartments(false);
@@ -442,41 +451,28 @@ export function MajorSyncLabPage() {
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
-          {hasNoDepartmentOptions ? (
-            <Alert showIcon type="warning" message="当前账号没有可用于专业同步的系部范围。" />
-          ) : null}
 
           <Form<MajorSyncFormValues> form={form} layout="vertical" requiredMark={false}>
-            <Form.Item
+            <DepartmentFormItem
+              disabled={isLoadingDepartments}
+              emptyText="当前没有可选院系"
               help={
                 selectedDepartment
                   ? `本次将预览 ${selectedDepartment.label} 的 org_major 变更。`
                   : undefined
               }
-              label="目标系"
+              label="目标院系"
+              loading={isLoadingDepartments}
               name="departmentId"
-              rules={[{ required: true, message: '请选择目标系' }]}
-              validateStatus={
-                departmentOptionsError || hasNoDepartmentOptions ? 'warning' : undefined
-              }
-            >
-              <Select
-                disabled={isLoadingDepartments || departmentOptions.length === 0}
-                loading={isLoadingDepartments}
-                notFoundContent={hasNoDepartmentOptions ? '当前没有可选系部' : undefined}
-                optionFilterProp="label"
-                options={departmentOptions.map((department) => ({
-                  label: department.label,
-                  value: department.id,
-                }))}
-                placeholder="选择目标系"
-                showSearch
-              />
-            </Form.Item>
+              options={departmentOptions}
+              placeholder="选择目标院系"
+              required
+              validateStatus={departmentOptionsError ? 'warning' : undefined}
+            />
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions || isSyncing}
+                disabled={isLoadingDepartments || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
@@ -491,11 +487,7 @@ export function MajorSyncLabPage() {
                 title="确认执行专业同步？"
                 onConfirm={() => void handleRunSync('sync')}
               >
-                <Button
-                  danger
-                  disabled={hasNoDepartmentOptions || isPreviewing}
-                  loading={isSyncing}
-                >
+                <Button danger disabled={isLoadingDepartments || isPreviewing} loading={isSyncing}>
                   执行落库
                 </Button>
               </Popconfirm>
@@ -528,7 +520,7 @@ export function MajorSyncLabPage() {
               <Descriptions.Item label="运行模式">
                 {result.dryRun ? 'Dry-run 预览' : '正式落库'}
               </Descriptions.Item>
-              <Descriptions.Item label="目标系">{result.departmentId}</Descriptions.Item>
+              <Descriptions.Item label="目标院系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
               {isDryRunResult(result) ? (
                 <Descriptions.Item label="previewedCount">
@@ -573,7 +565,7 @@ export function MajorSyncLabPage() {
             showIcon
             type="info"
             message="还没有同步结果"
-            description="选择目标系并完成 upstream 授权后，这里会展示 dry-run 或正式落库的摘要和专业明细。"
+            description="选择目标院系并完成 upstream 授权后，这里会展示 dry-run 或正式落库的摘要和专业明细。"
           />
         )}
       </Card>

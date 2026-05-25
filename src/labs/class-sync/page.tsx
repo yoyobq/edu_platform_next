@@ -9,7 +9,6 @@ import {
   Descriptions,
   Form,
   Popconfirm,
-  Select,
   Spin,
   Table,
   Tag,
@@ -17,6 +16,13 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import {
+  buildDepartmentSelectOptions,
+  DepartmentFormItem,
+  type DepartmentSelectOption,
+  ensureDepartmentSelectOption,
+  resolveDepartmentDefaultId,
+} from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -35,7 +41,6 @@ import {
   type ClassSyncCommitAction,
   type ClassSyncCommitItem,
   type ClassSyncCommitResult,
-  type ClassSyncDepartmentOption,
   type ClassSyncDryRunAction,
   type ClassSyncDryRunItem,
   type ClassSyncDryRunResult,
@@ -68,6 +73,8 @@ type ClassSyncResultState = {
   mode: ClassSyncRunMode;
   data: ClassSyncResult;
 };
+
+const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 
 const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   CONFLICT: '冲突',
@@ -268,7 +275,7 @@ export function ClassSyncLabPage() {
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
-  const [departmentOptions, setDepartmentOptions] = useState<ClassSyncDepartmentOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingClassSyncRequest, setPendingClassSyncRequest] =
     useState<PendingClassSyncRequest | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -287,11 +294,9 @@ export function ClassSyncLabPage() {
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     rememberedCredentials,
   });
-  const hasNoDepartmentOptions =
-    !isLoadingDepartments && !departmentOptionsError && departmentOptions.length === 0;
   const selectedDepartmentId = Form.useWatch('departmentId', form);
   const selectedDepartment = useMemo(
-    () => departmentOptions.find((department) => department.id === selectedDepartmentId) ?? null,
+    () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
   const result = resultState?.data ?? null;
@@ -312,19 +317,33 @@ export function ClassSyncLabPage() {
     setDepartmentOptionsError(null);
 
     try {
-      const nextOptions = await fetchClassSyncDepartmentOptions();
+      const nextOptions = ensureDepartmentSelectOption(
+        buildDepartmentSelectOptions(await fetchClassSyncDepartmentOptions()),
+        { id: DEFAULT_DEPARTMENT_ID },
+      );
 
       setDepartmentOptions(nextOptions);
 
       const currentDepartmentId = form.getFieldValue('departmentId') as string | undefined;
-      const preferredDepartment =
-        nextOptions.find((department) => department.id === currentDepartmentId) ?? nextOptions[0];
 
       form.setFieldsValue({
-        departmentId: preferredDepartment?.id,
+        departmentId: resolveDepartmentDefaultId({
+          currentDepartmentId,
+          defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
+          options: nextOptions,
+        }),
       });
     } catch (error) {
-      setDepartmentOptions([]);
+      const fallbackOptions = ensureDepartmentSelectOption([], { id: DEFAULT_DEPARTMENT_ID });
+
+      setDepartmentOptions(fallbackOptions);
+      form.setFieldsValue({
+        departmentId: resolveDepartmentDefaultId({
+          currentDepartmentId: form.getFieldValue('departmentId') as string | undefined,
+          defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
+          options: fallbackOptions,
+        }),
+      });
       setDepartmentOptionsError(error instanceof Error ? error.message : '暂时无法加载可选系部。');
     } finally {
       setIsLoadingDepartments(false);
@@ -537,41 +556,28 @@ export function ClassSyncLabPage() {
           {departmentOptionsError ? (
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
-          {hasNoDepartmentOptions ? (
-            <Alert showIcon type="warning" message="当前账号没有可用于班级同步的系部范围。" />
-          ) : null}
 
           <Form<ClassSyncFormValues> form={form} layout="vertical" requiredMark={false}>
-            <Form.Item
+            <DepartmentFormItem
+              disabled={isLoadingDepartments}
+              emptyText="当前没有可选院系"
               help={
                 selectedDepartment
                   ? `本次将同步 ${selectedDepartment.label} 的 org_class 变更。`
                   : undefined
               }
-              label="目标系"
+              label="目标院系"
+              loading={isLoadingDepartments}
               name="departmentId"
-              rules={[{ required: true, message: '请选择目标系' }]}
-              validateStatus={
-                departmentOptionsError || hasNoDepartmentOptions ? 'warning' : undefined
-              }
-            >
-              <Select
-                disabled={isLoadingDepartments || departmentOptions.length === 0}
-                loading={isLoadingDepartments}
-                notFoundContent={hasNoDepartmentOptions ? '当前没有可选系部' : undefined}
-                optionFilterProp="label"
-                options={departmentOptions.map((department) => ({
-                  label: department.label,
-                  value: department.id,
-                }))}
-                placeholder="选择目标系"
-                showSearch
-              />
-            </Form.Item>
+              options={departmentOptions}
+              placeholder="选择目标院系"
+              required
+              validateStatus={departmentOptionsError ? 'warning' : undefined}
+            />
 
             <div className="flex flex-wrap gap-3">
               <Button
-                disabled={hasNoDepartmentOptions || isSyncing}
+                disabled={isLoadingDepartments || isSyncing}
                 loading={isPreviewing}
                 onClick={() => void handleRunSync('dryRun')}
                 type="primary"
@@ -586,11 +592,7 @@ export function ClassSyncLabPage() {
                 title="确认执行班级同步？"
                 onConfirm={() => void handleRunSync('sync')}
               >
-                <Button
-                  danger
-                  disabled={hasNoDepartmentOptions || isPreviewing}
-                  loading={isSyncing}
-                >
+                <Button danger disabled={isLoadingDepartments || isPreviewing} loading={isSyncing}>
                   执行落库
                 </Button>
               </Popconfirm>
@@ -623,7 +625,7 @@ export function ClassSyncLabPage() {
               <Descriptions.Item label="运行模式">
                 {resultMode ? getRunModeLabel(resultMode, result) : '未知'}
               </Descriptions.Item>
-              <Descriptions.Item label="目标系">{result.departmentId}</Descriptions.Item>
+              <Descriptions.Item label="目标院系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
               {isPreviewResult(result) ? (
                 <Descriptions.Item label="previewedCount">
@@ -675,7 +677,7 @@ export function ClassSyncLabPage() {
             showIcon
             type="info"
             message="还没有同步结果"
-            description="选择目标系并完成 upstream 授权后，这里会展示班级 dry-run 或正式落库的摘要和明细。"
+            description="选择目标院系并完成 upstream 授权后，这里会展示班级 dry-run 或正式落库的摘要和明细。"
           />
         )}
       </Card>

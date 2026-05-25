@@ -1,7 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Descriptions, Form, Input, Select, Spin } from 'antd';
 
+import {
+  buildDepartmentSelectOptions,
+  DepartmentFormItem,
+  type DepartmentSelectOption,
+  ensureDepartmentSelectOption,
+  resolveDepartmentDefaultId,
+} from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -18,7 +25,6 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
-  type CourseScheduleSyncDepartmentOption,
   type CourseScheduleSyncResult,
   type CourseScheduleSyncSemesterOption,
   type DepartmentCurriculumPlanReviewStatus,
@@ -53,11 +59,6 @@ type SemesterOption = {
   semester: string;
 };
 
-type DepartmentOption = {
-  id: string;
-  label: string;
-};
-
 type SemesterCourseScheduleSyncCurrentAccount = {
   accountId: number;
   displayName: string;
@@ -80,20 +81,6 @@ const REVIEW_STATUS_OPTIONS: Array<{
 ];
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
-
-function ensureDefaultDepartmentOption(options: DepartmentOption[]) {
-  if (options.some((option) => option.id === DEFAULT_DEPARTMENT_ID)) {
-    return options;
-  }
-
-  return [
-    {
-      id: DEFAULT_DEPARTMENT_ID,
-      label: DEFAULT_DEPARTMENT_ID,
-    },
-    ...options,
-  ];
-}
 
 function sortSemesterOptions(options: SemesterOption[]) {
   return [...options].sort((left, right) => {
@@ -158,7 +145,7 @@ export function SemesterCourseScheduleSyncPageContent({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [result, setResult] = useState<CourseScheduleSyncResult | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<SemesterOption[]>([]);
-  const [departmentOptions, setDepartmentOptions] = useState<DepartmentOption[]>([]);
+  const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [pendingSyncRequest, setPendingSyncRequest] = useState<PendingSyncRequest | null>(null);
   const {
     clear,
@@ -175,8 +162,11 @@ export function SemesterCourseScheduleSyncPageContent({
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     rememberedCredentials,
   });
-  const hasNoDepartmentOptions =
-    !isLoadingOptions && !departmentOptionsError && departmentOptions.length === 0;
+  const selectedDepartmentId = Form.useWatch('departmentId', syncForm);
+  const selectedDepartment = useMemo(
+    () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
+    [departmentOptions, selectedDepartmentId],
+  );
 
   const clearCurrentSession = useCallback(() => {
     clear();
@@ -330,20 +320,11 @@ export function SemesterCourseScheduleSyncPageContent({
             : [];
         const fetchedDepartmentOptions =
           departmentResult.status === 'fulfilled'
-            ? departmentResult.value
-                .filter(
-                  (department: CourseScheduleSyncDepartmentOption) =>
-                    department.id !== '' && department.isEnabled,
-                )
-                .map((department: CourseScheduleSyncDepartmentOption) => ({
-                  id: department.id,
-                  label: `${department.departmentName}${department.shortName ? ` (${department.shortName})` : ''}`,
-                }))
+            ? buildDepartmentSelectOptions(departmentResult.value)
             : [];
-        const nextDepartmentOptions =
-          departmentResult.status === 'fulfilled'
-            ? ensureDefaultDepartmentOption(fetchedDepartmentOptions)
-            : fetchedDepartmentOptions;
+        const nextDepartmentOptions = ensureDepartmentSelectOption(fetchedDepartmentOptions, {
+          id: DEFAULT_DEPARTMENT_ID,
+        });
         const nextSemesterOptionsError =
           semesterResult.status === 'rejected'
             ? semesterResult.reason instanceof Error
@@ -364,13 +345,13 @@ export function SemesterCourseScheduleSyncPageContent({
 
         const currentValues = syncForm.getFieldsValue();
         const preferredSemester = nextSemesterOptions[0];
-        const preferredDepartment =
-          nextDepartmentOptions.find((option) => option.id === DEFAULT_DEPARTMENT_ID) ??
-          nextDepartmentOptions[0];
 
         syncForm.setFieldsValue({
-          departmentId:
-            currentValues.departmentId || preferredDepartment?.id || DEFAULT_DEPARTMENT_ID,
+          departmentId: resolveDepartmentDefaultId({
+            currentDepartmentId: currentValues.departmentId,
+            defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
+            options: nextDepartmentOptions,
+          }),
           reviewStatus: currentValues.reviewStatus,
           schoolYear: currentValues.schoolYear || preferredSemester?.schoolYear,
           semester: currentValues.semester || preferredSemester?.semester,
@@ -506,33 +487,23 @@ export function SemesterCourseScheduleSyncPageContent({
               />
             </Form.Item>
 
-            <Form.Item
+            <DepartmentFormItem
+              disabled={isLoadingOptions}
+              emptyText="当前没有可选院系"
               help={
                 departmentOptionsError ??
-                (hasNoDepartmentOptions
-                  ? '当前未返回可选院系，请检查后端 departments 数据或查询权限。'
+                (selectedDepartment
+                  ? `本次将同步 ${selectedDepartment.label} 的学期课表。`
                   : undefined)
               }
-              label="院系"
+              label="目标院系"
+              loading={isLoadingOptions}
               name="departmentId"
-              rules={[{ required: true, message: '请选择院系' }]}
-              validateStatus={
-                departmentOptionsError || hasNoDepartmentOptions ? 'warning' : undefined
-              }
-            >
-              <Select
-                disabled={isLoadingOptions || departmentOptions.length === 0}
-                loading={isLoadingOptions}
-                notFoundContent={hasNoDepartmentOptions ? '当前未返回可选院系' : undefined}
-                optionFilterProp="label"
-                options={departmentOptions.map((option) => ({
-                  label: option.label,
-                  value: option.id,
-                }))}
-                placeholder="选择院系"
-                showSearch
-              />
-            </Form.Item>
+              options={departmentOptions}
+              placeholder="选择目标院系"
+              required
+              validateStatus={departmentOptionsError ? 'warning' : undefined}
+            />
 
             <Form.Item label="教师 ID" name="teacherId">
               <Input placeholder="可选，仅同步指定教师" />
@@ -545,14 +516,14 @@ export function SemesterCourseScheduleSyncPageContent({
 
           <div className="flex flex-wrap gap-3">
             <Button
-              disabled={isSyncing}
+              disabled={isLoadingOptions || isSyncing}
               loading={isPreviewing}
               onClick={() => void handleRunSync('dryRun')}
             >
               预览同步
             </Button>
             <Button
-              disabled={isPreviewing}
+              disabled={isLoadingOptions || isPreviewing}
               loading={isSyncing}
               onClick={() => void handleRunSync('sync')}
               type="primary"
