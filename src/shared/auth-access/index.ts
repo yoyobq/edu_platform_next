@@ -111,20 +111,6 @@ export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAc
   return accessGroup.includes('ADMIN');
 }
 
-export function hasMajorSyncAccess(input: {
-  accessGroup?: readonly AuthAccessGroup[];
-  slotGroup?: readonly string[];
-}) {
-  return hasUpstreamDataSyncAccess(input);
-}
-
-export function hasClassSyncAccess(input: {
-  accessGroup?: readonly AuthAccessGroup[];
-  slotGroup?: readonly string[];
-}) {
-  return hasMajorSyncAccess(input);
-}
-
 export function canAccessPayloadCrypto(input: {
   accountId?: number | null;
   accessGroup?: readonly string[];

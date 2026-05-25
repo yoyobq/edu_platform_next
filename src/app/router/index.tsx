@@ -21,12 +21,14 @@ import { AcademicWorkloadDeductionSummaryPage } from '@/pages/academic-workload-
 import { AcademicWorkloadReportPage } from '@/pages/academic-workload-report';
 import { AdminUserDetailPage } from '@/pages/admin-user-detail';
 import { AdminUsersPage } from '@/pages/admin-users';
+import { ClassSyncPage } from '@/pages/class-sync';
 import { ErrorPreviewPage } from '@/pages/error-preview';
 import { ExternalTeacherCompensationPage } from '@/pages/external-teacher-compensation';
 import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
 import { IntegratedPlanCorrectionsPage } from '@/pages/integrated-plan-corrections';
 import { LoginPage } from '@/pages/login';
+import { MajorSyncPage } from '@/pages/major-sync';
 import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
 import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
 import { ProfilePage } from '@/pages/profile';
@@ -74,16 +76,12 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
-  hasClassSyncAccess,
-  hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import { classSyncLabAccess, loadClassSyncLabRouteModule } from '@/labs/class-sync';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import { loadMajorSyncLabRouteModule, majorSyncLabAccess } from '@/labs/major-sync';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -335,6 +333,14 @@ async function semesterCourseScheduleSyncPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/upstream-data-sync/semester-course-schedule-sync');
 }
 
+async function majorSyncPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/upstream-data-sync/major-sync');
+}
+
+async function classSyncPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/upstream-data-sync/class-sync');
+}
+
 async function semesterTimetablePageLoader({ request }: LoaderFunctionArgs) {
   const snapshot = await ensureAuthenticatedSession(request);
 
@@ -536,74 +542,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   return null;
-}
-
-async function majorSyncLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(majorSyncLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  await restoreSession({ waitForPending: true });
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (
-    !hasMajorSyncAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return {
-    currentAccount: {
-      accountId: snapshot.accountId,
-      displayName: snapshot.displayName,
-    },
-  };
-}
-
-async function classSyncLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(classSyncLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  await restoreSession({ waitForPending: true });
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (
-    !hasClassSyncAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return {
-    currentAccount: {
-      accountId: snapshot.accountId,
-      displayName: snapshot.displayName,
-    },
-  };
 }
 
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
@@ -1023,6 +961,16 @@ const router = createBrowserRouter([
         Component: SemesterTimetablePage,
       },
       {
+        path: '/upstream-data-sync/major-sync',
+        loader: majorSyncPageLoader,
+        Component: MajorSyncPage,
+      },
+      {
+        path: '/upstream-data-sync/class-sync',
+        loader: classSyncPageLoader,
+        Component: ClassSyncPage,
+      },
+      {
         path: '/upstream-data-sync/semester-course-schedule-sync',
         loader: semesterCourseScheduleSyncPageLoader,
         Component: SemesterCourseScheduleSyncPage,
@@ -1093,23 +1041,9 @@ const router = createBrowserRouter([
             lazy: loadInviteIssuerLabRouteModule,
           },
           {
-            path: 'major-sync',
-            loader: majorSyncLabLoader,
-            lazy: loadMajorSyncLabRouteModule,
-          },
-          {
-            path: 'class-sync',
-            loader: classSyncLabLoader,
-            lazy: loadClassSyncLabRouteModule,
-          },
-          {
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'course-schedule-sync',
-            loader: () => redirect('/upstream-data-sync/semester-course-schedule-sync'),
           },
         ],
       },

@@ -63,12 +63,12 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(items, 'upstream-data-sync')?.children.map((item) => item.key)).toEqual([
+      '/upstream-data-sync/major-sync',
+      '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
-      '/labs/major-sync',
-      '/labs/class-sync',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
     ]);
@@ -99,7 +99,11 @@ describe('navigation catalog', () => {
     );
     expect(
       findGroup(prodAdminItems, 'upstream-data-sync')?.children.map((item) => item.key),
-    ).toEqual(['/upstream-data-sync/semester-course-schedule-sync']);
+    ).toEqual([
+      '/upstream-data-sync/major-sync',
+      '/upstream-data-sync/class-sync',
+      '/upstream-data-sync/semester-course-schedule-sync',
+    ]);
     expect(
       findGroup(prodAdminItems, 'calendar-schedule')?.children.map((item) => item.key),
     ).toEqual([
@@ -116,8 +120,6 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
-      '/labs/major-sync',
-      '/labs/class-sync',
       '/labs/upstream-session-demo',
     ]);
     expect(
@@ -151,7 +153,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')).toBeUndefined();
   });
 
-  it('keeps sync labs hidden from student affairs officers', () => {
+  it('keeps upstream sync pages hidden from student affairs officers', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1004,
@@ -169,7 +171,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')).toBeUndefined();
     expect(
       canAccessNavigationPath(
-        '/labs/major-sync',
+        '/upstream-data-sync/major-sync',
         buildFilter({
           accountId: 1004,
           primaryAccessGroup: 'STAFF',
@@ -180,7 +182,7 @@ describe('navigation catalog', () => {
     ).toBe(false);
     expect(
       canAccessNavigationPath(
-        '/labs/class-sync',
+        '/upstream-data-sync/class-sync',
         buildFilter({
           accountId: 1004,
           primaryAccessGroup: 'STAFF',
@@ -191,7 +193,7 @@ describe('navigation catalog', () => {
     ).toBe(false);
     expect(
       canAccessNavigationPath(
-        '/labs/major-sync',
+        '/upstream-data-sync/major-sync',
         buildFilter({
           accountId: 1002,
           primaryAccessGroup: 'STAFF',
@@ -202,7 +204,7 @@ describe('navigation catalog', () => {
     ).toBe(false);
     expect(
       canAccessNavigationPath(
-        '/labs/class-sync',
+        '/upstream-data-sync/class-sync',
         buildFilter({
           accountId: 1002,
           primaryAccessGroup: 'STAFF',
@@ -453,10 +455,10 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
+      '/upstream-data-sync/major-sync',
+      '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
-      '/labs/major-sync',
-      '/labs/class-sync',
       '/labs/upstream-session-demo',
       '/sandbox/playground',
       '/admin/users',

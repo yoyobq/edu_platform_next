@@ -12,8 +12,6 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
-  hasClassSyncAccess,
-  hasMajorSyncAccess,
   hasStaffSemesterProfilesAccess,
   hasUpstreamDataSyncAccess,
 } from './index';
@@ -79,42 +77,6 @@ describe('auth access policy helpers', () => {
         accessGroup: ['STAFF'],
       }),
     ).toBe(false);
-
-    expect(hasMajorSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
-    expect(
-      hasMajorSyncAccess({
-        accessGroup: ['STAFF'],
-        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
-      }),
-    ).toBe(false);
-    expect(
-      hasMajorSyncAccess({
-        accessGroup: ['STAFF'],
-        slotGroup: ['ACADEMIC_OFFICER'],
-      }),
-    ).toBe(false);
-    expect(
-      hasMajorSyncAccess({
-        accessGroup: ['STAFF'],
-        slotGroup: ['TEACHING_GROUP_LEADER'],
-      }),
-    ).toBe(false);
-    expect(hasMajorSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
-
-    expect(hasClassSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
-    expect(
-      hasClassSyncAccess({
-        accessGroup: ['STAFF'],
-        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
-      }),
-    ).toBe(false);
-    expect(
-      hasClassSyncAccess({
-        accessGroup: ['STAFF'],
-        slotGroup: ['ACADEMIC_OFFICER'],
-      }),
-    ).toBe(false);
-    expect(hasClassSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
   it('allows academic timetable manager selection to admins and academic staff slots', () => {

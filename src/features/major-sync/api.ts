@@ -1,4 +1,4 @@
-// src/labs/major-sync/api.ts
+// src/features/major-sync/api.ts
 
 import type { OperationVariables } from '@apollo/client';
 

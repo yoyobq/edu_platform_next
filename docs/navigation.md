@@ -38,7 +38,7 @@
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`
-- `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/semester-course-schedule-sync`
+- `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：`/labs/invite-issuer`、`/labs/upstream-session-demo`

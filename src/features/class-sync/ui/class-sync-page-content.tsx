@@ -1,10 +1,20 @@
-// src/labs/major-sync/page.tsx
+// src/features/class-sync/ui/class-sync-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { SyncOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Popconfirm, Spin, Table, Tag } from 'antd';
+import { TableOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Popconfirm,
+  Spin,
+  Table,
+  Tag,
+  Tooltip,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   AcademicSemesterPeriodFormItems,
@@ -38,141 +48,214 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
-  dryRunSyncMajorsFromUpstream,
-  fetchMajorSyncDepartmentOptions,
+  type ClassSyncCommitAction,
+  type ClassSyncCommitItem,
+  type ClassSyncCommitResult,
+  type ClassSyncDryRunAction,
+  type ClassSyncDryRunItem,
+  type ClassSyncDryRunResult,
+  dryRunSyncClassesFromUpstream,
+  fetchClassSyncDepartmentOptions,
   isExpiredUpstreamSessionError,
-  type MajorSyncCommitAction,
-  type MajorSyncCommitItem,
-  type MajorSyncCommitResult,
-  type MajorSyncDryRunAction,
-  type MajorSyncDryRunItem,
-  type MajorSyncDryRunResult,
-  resolveMajorSyncErrorMessage,
-  syncMajorsFromUpstream,
-} from './api';
+  resolveClassSyncErrorMessage,
+  syncClassesFromUpstream,
+} from '../api';
 
-type MajorSyncFormValues = {
+type ClassSyncFormValues = {
   departmentId: string;
   schoolYear: string;
   semester: string;
 };
 
-type MajorSyncRunMode = 'dryRun' | 'sync';
+type ClassSyncRunMode = 'dryRun' | 'sync';
 
-type PendingMajorSyncRequest = {
-  mode: MajorSyncRunMode;
-  values: MajorSyncFormValues;
+type PendingClassSyncRequest = {
+  mode: ClassSyncRunMode;
+  values: ClassSyncFormValues;
 };
 
-type MajorSyncResult = MajorSyncDryRunResult | MajorSyncCommitResult;
-type MajorSyncResultItem = MajorSyncDryRunItem | MajorSyncCommitItem;
-type MajorSyncResultAction = MajorSyncDryRunAction | MajorSyncCommitAction;
+type ClassSyncResult = ClassSyncDryRunResult | ClassSyncCommitResult;
+type ClassSyncResultItem = ClassSyncDryRunItem | ClassSyncCommitItem;
+type ClassSyncResultAction = ClassSyncDryRunAction | ClassSyncCommitAction;
 
-type MajorSyncLabLoaderData = {
-  currentAccount: UpstreamAccountIdentity;
-} | null;
+type ClassSyncResultState = {
+  mode: ClassSyncRunMode;
+  data: ClassSyncResult;
+};
 
-type MajorSyncPageContentProps = {
+type ClassSyncPageContentProps = {
   currentAccount: UpstreamAccountIdentity | null;
   isAuthenticating: boolean;
 };
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const PAGE_DESCRIPTION =
-  '预览从 upstream 专业字典同步到本地 org_major 的新增、已存在和重复跳过项。';
+  '预览从 upstream 班级列表同步到本地 org_class 的新增、更新、已存在和冲突项。';
 
-const ACTION_LABELS: Record<MajorSyncResultAction, string> = {
+const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
+  CONFLICT: '冲突',
   CREATE: '待新增',
   CREATED: '已新增',
-  UPDATE: '待修正',
-  UPDATED: '已修正',
   EXISTS: '已存在',
-  SKIPPED_DUPLICATE_UPSTREAM_NAME: '上游重复',
+  SKIPPED_DUPLICATE_UPSTREAM_CODE: '上游重复',
+  SKIPPED_INVALID_UPSTREAM_CODE: '无效 code',
+  SKIPPED_INVALID_UPSTREAM_GRADE: '无效年级',
+  UPDATE: '待更新',
+  UPDATED: '已更新',
 };
 
-const ACTION_COLORS: Record<MajorSyncResultAction, string> = {
+const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
+  CONFLICT: 'red',
   CREATE: 'green',
   CREATED: 'green',
+  EXISTS: 'blue',
+  SKIPPED_DUPLICATE_UPSTREAM_CODE: 'orange',
+  SKIPPED_INVALID_UPSTREAM_CODE: 'orange',
+  SKIPPED_INVALID_UPSTREAM_GRADE: 'orange',
   UPDATE: 'gold',
   UPDATED: 'gold',
-  EXISTS: 'blue',
-  SKIPPED_DUPLICATE_UPSTREAM_NAME: 'orange',
 };
+const CLASS_CODE_VISIBLE_LENGTH = 6;
 
-function renderActionTag(action: MajorSyncResultAction) {
+function renderActionTag(action: ClassSyncResultAction) {
   return <Tag color={ACTION_COLORS[action]}>{ACTION_LABELS[action]}</Tag>;
 }
 
-function resolveResultMessage(result: MajorSyncResult) {
+function getExpiredSessionMessage(mode: ClassSyncRunMode) {
+  if (mode === 'sync') {
+    return 'upstream 会话已失效，请重新登录后继续落库。';
+  }
+
+  return 'upstream 会话已失效，请重新登录后继续上游班级列表预览。';
+}
+
+function getRunModeLabel(mode: ClassSyncRunMode, result: ClassSyncResult) {
+  if (mode === 'dryRun') {
+    return '上游班级列表 Dry-run';
+  }
+
+  return result.dryRun ? 'Dry-run 预览' : '正式落库';
+}
+
+function resolveResultMessage(result: ClassSyncResult, mode: ClassSyncRunMode) {
+  if (mode === 'dryRun') {
+    if (result.conflictCount > 0) {
+      return '本次上游班级列表预览存在班级唯一性冲突，需要人工处理。';
+    }
+
+    if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
+      return '本地班级已覆盖上游班级列表本次返回的有效班级；当前接口仅预览，不写库。';
+    }
+
+    return '本次上游班级列表仅预览，不会写入 org_class；落库仍使用班级字典同步接口。';
+  }
+
+  if (result.dryRun && result.conflictCount > 0) {
+    return '本次预览存在班级唯一性冲突，需要人工处理后再落库。';
+  }
+
   if (
     result.dryRun &&
     result.createdCount === 0 &&
     result.updatedCount === 0 &&
     result.skippedCount === 0
   ) {
-    return '本地专业及派生字段已覆盖上游本次返回的有效专业名。';
+    return '本地班级已覆盖上游本次返回的有效班级。';
   }
 
   if (result.dryRun) {
-    return '本次仅预览，不会写入 org_major。';
+    return '本次仅预览，不会写入 org_class。';
   }
 
-  if (result.createdCount === 0 && result.updatedCount === 0 && result.skippedCount === 0) {
-    return '本次落库完成，本地专业无需新增或修正。';
+  if (result.conflictCount > 0 || result.skippedCount > 0) {
+    return '本次落库已完成；冲突和跳过项未写入。';
   }
 
-  return '本次已完成落库；majorName 未被修改，upstream annualMajorId 未写入本地。';
+  return '本次已完成落库；更新只覆盖 className、gradeYear 和 sortOrder。';
 }
 
-function formatNullableValue(value: number | string | null) {
+function formatNullableValue(value: number | string | null | undefined) {
   return value ?? <span className="text-text-secondary">-</span>;
 }
 
-function isDryRunResult(result: MajorSyncResult): result is MajorSyncDryRunResult {
-  return result.dryRun;
+function renderClassCodeValue(value: string | null | undefined) {
+  const classCode = value?.trim();
+
+  if (!classCode) {
+    return formatNullableValue(null);
+  }
+
+  const preview =
+    classCode.length > CLASS_CODE_VISIBLE_LENGTH
+      ? `${classCode.slice(0, CLASS_CODE_VISIBLE_LENGTH)}...`
+      : classCode;
+
+  return (
+    <Tooltip title={classCode}>
+      <span>{preview}</span>
+    </Tooltip>
+  );
 }
 
-const resultColumns: ColumnsType<MajorSyncResultItem> = [
+function isPreviewResult(result: ClassSyncResult): result is ClassSyncDryRunResult {
+  return 'previewedCount' in result;
+}
+
+const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
   {
     dataIndex: 'action',
     key: 'action',
-    render: (action: MajorSyncResultAction) => renderActionTag(action),
+    render: (action: ClassSyncResultAction) => renderActionTag(action),
     title: '动作',
+    width: 150,
+  },
+  {
+    dataIndex: 'classId',
+    key: 'classId',
+    render: (classId: string | null) => formatNullableValue(classId),
+    title: '班级 ID',
     width: 140,
   },
   {
-    dataIndex: 'majorName',
-    key: 'majorName',
-    title: '上游专业名',
-    width: 260,
+    dataIndex: 'classCode',
+    key: 'classCode',
+    render: (classCode: string | null) => renderClassCodeValue(classCode),
+    title: 'class_code',
+    width: 140,
   },
   {
-    dataIndex: 'shortName',
-    key: 'shortName',
-    render: (shortName: string | null) => formatNullableValue(shortName),
-    title: '专业简称',
+    dataIndex: 'className',
+    key: 'className',
+    title: '班级名称',
     width: 220,
-  },
-  {
-    dataIndex: 'trainingYears',
-    key: 'trainingYears',
-    render: (trainingYears: number | null) => formatNullableValue(trainingYears),
-    title: '学制',
-    width: 110,
-  },
-  {
-    dataIndex: 'trainingLevel',
-    key: 'trainingLevel',
-    render: (trainingLevel: string | null) => formatNullableValue(trainingLevel),
-    title: '培养目标',
-    width: 140,
   },
   {
     dataIndex: 'majorId',
     key: 'majorId',
     render: (majorId: string | null) => formatNullableValue(majorId),
-    title: '本地专业 ID',
-    width: 220,
+    title: '专业 ID',
+    width: 140,
+  },
+  {
+    dataIndex: 'gradeYear',
+    key: 'gradeYear',
+    render: (gradeYear: number | null) => formatNullableValue(gradeYear),
+    title: '入学年份',
+    width: 120,
+  },
+  {
+    dataIndex: 'sortOrder',
+    key: 'sortOrder',
+    render: (sortOrder: number | null) => formatNullableValue(sortOrder),
+    title: '排序值',
+    width: 110,
+  },
+  {
+    dataIndex: 'conflictReason',
+    key: 'conflictReason',
+    render: (conflictReason: string | null) => formatNullableValue(conflictReason),
+    title: '冲突/跳过原因',
+    width: 280,
   },
   {
     dataIndex: 'departmentId',
@@ -182,22 +265,23 @@ const resultColumns: ColumnsType<MajorSyncResultItem> = [
   },
 ];
 
-export function MajorSyncLabPage() {
-  const loaderData = useLoaderData() as MajorSyncLabLoaderData;
+const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
+  ...baseResultColumns.slice(0, 5),
+  {
+    dataIndex: 'majorName',
+    key: 'majorName',
+    render: (majorName: string | null | undefined) => formatNullableValue(majorName),
+    title: '上游专业名',
+    width: 220,
+  },
+  ...baseResultColumns.slice(5),
+];
 
-  return (
-    <MajorSyncPageContent
-      currentAccount={loaderData?.currentAccount ?? null}
-      isAuthenticating={false}
-    />
-  );
-}
-
-export function MajorSyncPageContent({
+export function ClassSyncPageContent({
   currentAccount,
   isAuthenticating,
-}: MajorSyncPageContentProps) {
-  const [form] = Form.useForm<MajorSyncFormValues>();
+}: ClassSyncPageContentProps) {
+  const [form] = Form.useForm<ClassSyncFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -207,11 +291,11 @@ export function MajorSyncPageContent({
   const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [result, setResult] = useState<MajorSyncResult | null>(null);
+  const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
-  const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
-    useState<PendingMajorSyncRequest | null>(null);
+  const [pendingClassSyncRequest, setPendingClassSyncRequest] =
+    useState<PendingClassSyncRequest | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const {
     clear,
@@ -237,11 +321,17 @@ export function MajorSyncPageContent({
     () => buildAcademicSemesterSchoolYearOptions(semesterOptions),
     [semesterOptions],
   );
+  const result = resultState?.data ?? null;
+  const resultMode = resultState?.mode ?? null;
+  const resultColumns = useMemo(
+    () => (resultMode === 'dryRun' ? upstreamClassListResultColumns : baseResultColumns),
+    [resultMode],
+  );
   const isRunningSync = isPreviewing || isSyncing;
 
   const clearCurrentSession = useCallback(() => {
     clear();
-    setPendingMajorSyncRequest(null);
+    setPendingClassSyncRequest(null);
   }, [clear]);
 
   const loadOptions = useCallback(async () => {
@@ -252,7 +342,7 @@ export function MajorSyncPageContent({
     try {
       const [semesterResult, departmentResult] = await Promise.allSettled([
         requestAcademicSemesters({ limit: 500 }),
-        fetchMajorSyncDepartmentOptions(),
+        fetchClassSyncDepartmentOptions(),
       ]);
       const nextSemesterOptions =
         semesterResult.status === 'fulfilled'
@@ -337,8 +427,8 @@ export function MajorSyncPageContent({
     setIsLoginModalOpen(true);
   }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
 
-  const performMajorSync = useCallback(
-    async (session: StoredUpstreamSession, values: MajorSyncFormValues, mode: MajorSyncRunMode) => {
+  const performClassSync = useCallback(
+    async (session: StoredUpstreamSession, values: ClassSyncFormValues, mode: ClassSyncRunMode) => {
       const isDryRun = mode === 'dryRun';
 
       if (isDryRun) {
@@ -348,8 +438,8 @@ export function MajorSyncPageContent({
       }
 
       setPreviewError(null);
-      setResult(null);
-      setPendingMajorSyncRequest(null);
+      setResultState(null);
+      setPendingClassSyncRequest(null);
 
       try {
         const input = {
@@ -359,20 +449,19 @@ export function MajorSyncPageContent({
           upstreamSessionToken: session.upstreamSessionToken,
         };
         const syncResult = isDryRun
-          ? await dryRunSyncMajorsFromUpstream(input)
-          : await syncMajorsFromUpstream(input);
+          ? await dryRunSyncClassesFromUpstream(input)
+          : await syncClassesFromUpstream(input);
 
         persistSessionFromResult(session, syncResult);
-        setResult(syncResult);
+        setResultState({
+          data: syncResult,
+          mode,
+        });
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clearCurrentSession();
-          setPendingMajorSyncRequest({ mode, values });
-          setLoginError(
-            isDryRun
-              ? 'upstream 会话已失效，请重新登录后继续预览。'
-              : 'upstream 会话已失效，请重新登录后继续落库。',
-          );
+          setPendingClassSyncRequest({ mode, values });
+          setLoginError(getExpiredSessionMessage(mode));
           setIsLoginModalOpen(true);
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
@@ -383,7 +472,7 @@ export function MajorSyncPageContent({
           return;
         }
 
-        setPreviewError(resolveMajorSyncErrorMessage(error));
+        setPreviewError(resolveClassSyncErrorMessage(error));
       } finally {
         if (isDryRun) {
           setIsPreviewing(false);
@@ -396,7 +485,7 @@ export function MajorSyncPageContent({
   );
 
   const handleRunSync = useCallback(
-    async (mode: MajorSyncRunMode) => {
+    async (mode: ClassSyncRunMode) => {
       const values = await form.validateFields();
 
       setPreviewError(null);
@@ -408,7 +497,7 @@ export function MajorSyncPageContent({
       }
 
       if (!storedSession) {
-        setPendingMajorSyncRequest({ mode, values });
+        setPendingClassSyncRequest({ mode, values });
         setIsLoginModalOpen(true);
         loginForm.setFieldsValue(
           buildUpstreamLoginCredentialsInitialValues({
@@ -418,9 +507,9 @@ export function MajorSyncPageContent({
         return;
       }
 
-      await performMajorSync(storedSession, values, mode);
+      await performClassSync(storedSession, values, mode);
     },
-    [currentAccount, form, loginForm, performMajorSync, rememberedCredentials, storedSession],
+    [currentAccount, form, loginForm, performClassSync, rememberedCredentials, storedSession],
   );
 
   const handleLoginFinish = useCallback(
@@ -435,26 +524,26 @@ export function MajorSyncPageContent({
 
       try {
         const nextStoredSession = await loginUpstream(values);
-        const nextPendingRequest = pendingMajorSyncRequest;
+        const nextPendingRequest = pendingClassSyncRequest;
 
-        setPendingMajorSyncRequest(null);
+        setPendingClassSyncRequest(null);
         setIsLoginModalOpen(false);
         loginForm.resetFields();
 
         if (nextPendingRequest) {
-          await performMajorSync(
+          await performClassSync(
             nextStoredSession,
             nextPendingRequest.values,
             nextPendingRequest.mode,
           );
         }
       } catch (error) {
-        setLoginError(resolveMajorSyncErrorMessage(error));
+        setLoginError(resolveClassSyncErrorMessage(error));
       } finally {
         setIsSubmittingLogin(false);
       }
     },
-    [currentAccount, loginForm, loginUpstream, pendingMajorSyncRequest, performMajorSync],
+    [currentAccount, loginForm, loginUpstream, pendingClassSyncRequest, performClassSync],
   );
 
   if (isAuthenticating) {
@@ -477,8 +566,8 @@ export function MajorSyncPageContent({
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
         description={PAGE_DESCRIPTION}
-        icon={<SyncOutlined />}
-        title="专业同步"
+        icon={<TableOutlined />}
+        title="班级同步"
       />
 
       <UpstreamSessionStatusCard
@@ -498,7 +587,7 @@ export function MajorSyncPageContent({
             <Alert showIcon type="warning" message={departmentOptionsError} />
           ) : null}
 
-          <Form<MajorSyncFormValues> form={form} layout="vertical" requiredMark={false}>
+          <Form<ClassSyncFormValues> form={form} layout="vertical" requiredMark={false}>
             <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
               <AcademicSemesterPeriodFormItems
                 loading={isLoadingOptions}
@@ -516,7 +605,7 @@ export function MajorSyncPageContent({
                 emptyText="当前没有可选院系"
                 help={
                   selectedDepartment
-                    ? `本次将预览 ${selectedDepartment.label} 的 org_major 变更。`
+                    ? `本次将同步 ${selectedDepartment.label} 的 org_class 变更。`
                     : undefined
                 }
                 label="目标院系"
@@ -540,10 +629,10 @@ export function MajorSyncPageContent({
               </Button>
               <Popconfirm
                 cancelText="取消"
-                description="后端会重新拉取 upstream 专业列表，并创建或修正本地 org_major 派生字段。"
+                description="后端会重新拉取 upstream 班级字典，并创建或更新本地 org_class。"
                 okButtonProps={{ loading: isSyncing }}
                 okText="确认落库"
-                title="确认执行专业同步？"
+                title="确认执行班级同步？"
                 onConfirm={() => void handleRunSync('sync')}
               >
                 <Button danger disabled={isLoadingOptions || isPreviewing} loading={isSyncing}>
@@ -577,11 +666,11 @@ export function MajorSyncPageContent({
           <div className="flex flex-col gap-6">
             <Descriptions bordered size="small" column={3}>
               <Descriptions.Item label="运行模式">
-                {result.dryRun ? 'Dry-run 预览' : '正式落库'}
+                {resultMode ? getRunModeLabel(resultMode, result) : '未知'}
               </Descriptions.Item>
               <Descriptions.Item label="目标院系">{result.departmentId}</Descriptions.Item>
               <Descriptions.Item label="fetchedCount">{result.fetchedCount}</Descriptions.Item>
-              {isDryRunResult(result) ? (
+              {isPreviewResult(result) ? (
                 <Descriptions.Item label="previewedCount">
                   {result.previewedCount}
                 </Descriptions.Item>
@@ -593,6 +682,7 @@ export function MajorSyncPageContent({
               <Descriptions.Item label="createdCount">{result.createdCount}</Descriptions.Item>
               <Descriptions.Item label="updatedCount">{result.updatedCount}</Descriptions.Item>
               <Descriptions.Item label="existsCount">{result.existsCount}</Descriptions.Item>
+              <Descriptions.Item label="conflictCount">{result.conflictCount}</Descriptions.Item>
               <Descriptions.Item label="skippedCount">{result.skippedCount}</Descriptions.Item>
               <Descriptions.Item label="items">{result.items.length}</Descriptions.Item>
               <Descriptions.Item label="续签 token 过期时间">
@@ -602,20 +692,26 @@ export function MajorSyncPageContent({
 
             <Alert
               showIcon
-              type={result.skippedCount > 0 ? 'warning' : result.dryRun ? 'info' : 'success'}
-              message={resolveResultMessage(result)}
+              type={
+                result.conflictCount > 0 || result.skippedCount > 0
+                  ? 'warning'
+                  : result.dryRun
+                    ? 'info'
+                    : 'success'
+              }
+              message={resolveResultMessage(result, resultMode ?? 'dryRun')}
             />
 
-            <Table<MajorSyncResultItem>
+            <Table<ClassSyncResultItem>
               columns={resultColumns}
               dataSource={result.items}
               pagination={{ pageSize: 20, showSizeChanger: true }}
               rowKey={(record, index) =>
-                `${record.action}:${record.departmentId}:${record.majorName}:${
-                  record.majorId ?? 'new'
-                }:${index ?? 0}`
+                `${record.action}:${record.departmentId}:${record.classId ?? 'invalid'}:${
+                  record.classCode ?? 'no-code'
+                }:${record.className}:${index ?? 0}`
               }
-              scroll={{ x: 1280 }}
+              scroll={{ x: resultMode === 'dryRun' ? 1780 : 1540 }}
               size="small"
             />
           </div>
@@ -624,7 +720,7 @@ export function MajorSyncPageContent({
             showIcon
             type="info"
             message="还没有同步结果"
-            description="选择目标院系并完成 upstream 授权后，这里会展示 dry-run 或正式落库的摘要和专业明细。"
+            description="选择目标院系并完成 upstream 授权后，这里会展示班级 dry-run 或正式落库的摘要和明细。"
           />
         )}
       </Card>
@@ -638,7 +734,7 @@ export function MajorSyncPageContent({
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
-          setPendingMajorSyncRequest(null);
+          setPendingClassSyncRequest(null);
           setLoginError(null);
         }}
         onFinish={handleLoginFinish}
