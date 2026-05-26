@@ -20,6 +20,7 @@ import {
   fetchLectureJournalList,
   fetchLectureJournalTeachingClassSamples,
   fetchMajorDirectory,
+  fetchPreviousClassAdviserClasses,
 } from './api';
 
 describe('upstream-session-demo api', () => {
@@ -176,6 +177,40 @@ describe('upstream-session-demo api', () => {
         schoolYear: null,
         semester: null,
         sessionToken: 'rolling-token-004',
+      },
+    );
+  });
+
+  it('requests previous class adviser classes with the upstream session token', async () => {
+    const payload = {
+      classes: [
+        {
+          code: '1031301',
+          image: '',
+          name: '信息1301班',
+          text: '信息1301班',
+          value: '1031301',
+        },
+      ],
+      count: 1,
+      expiresAt: '2026-05-26T12:00:00.000Z',
+      upstreamSessionToken: 'rolling-token-006',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      fetchPreviousClassAdviserClasses: payload,
+    });
+
+    await expect(
+      fetchPreviousClassAdviserClasses({
+        sessionToken: 'rolling-token-005',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('FetchPreviousClassAdviserClasses'),
+      {
+        sessionToken: 'rolling-token-005',
       },
     );
   });

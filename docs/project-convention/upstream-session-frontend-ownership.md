@@ -51,6 +51,7 @@
 - `fetchVerifiedStaffIdentity({ sessionToken })`
 - `fetchMajorDirectory({ sessionToken, departmentId })`
 - `fetchClassDirectory({ sessionToken, departmentId, schoolYear?, semester?, annualMajorId? })`
+- `fetchPreviousClassAdviserClasses({ sessionToken })`
 - 业务页面自己的 upstream 代理接口，例如教学日志对账查询/保存
 - shared Staff Directory Cache 的显式填充接口 `populateStaffDirectory`
 
@@ -93,7 +94,7 @@
 1. 先确认当前本站登录账号
 2. 读取当前账号绑定的本地 upstream token
 3. 若没有 token，显示 upstream 用户名/密码登录表单
-4. 若已有 token，示例 tab 会按需或自动调用后端读取教师字典、专业字典、班级列表、教职工身份等 upstream 数据
+4. 若已有 token，示例 tab 会按需或自动调用后端读取教师字典、专业字典、班级列表、历史班主任、教职工身份等 upstream 数据
 5. 成功后展示后端返回的原始 JSON
 6. 若响应里带新的 `upstreamSessionToken`，立即覆盖本地旧 token
 7. 启用 keepAlive 时，按 `expiresAt` 提前刷新 token
@@ -106,6 +107,7 @@
 - 后端代查 upstream
 - 按部门 ID 读取 upstream 专业字典，并展示 `{ label: name, value: code }` 选择器映射
 - 按部门与可选学年、学期、专业 ID 读取 upstream 班级列表，并展示 `{ label: name, value: code }` 选择器映射
+- 基于当前 upstream 登录用户读取历史班主任班级，并展示 `{ label: name, value: code }` 选择器映射；该数据不是任课班级，也不写入本地班主任任职表
 - 当前 upstream 班级列表接口中的 `schoolYear` 与 `semester` 是兼容字段，按已验证行为不参与结果过滤；前端保留这两个参数但不依赖它们，空值按 `null` 传递，不需要遍历历史学期
 - 前端按后端返回结果滚动更新 token
 - 前端主动 keepAlive 刷新 token

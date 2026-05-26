@@ -41,6 +41,10 @@ type ClassDirectoryResponse = {
   fetchClassDirectory: ClassDirectoryResult;
 };
 
+type PreviousClassAdviserClassesResponse = {
+  fetchPreviousClassAdviserClasses: PreviousClassAdviserClassesResult;
+};
+
 type CurriculumPlanListResponse = {
   fetchCurriculumPlanList: CurriculumPlanListResult;
 };
@@ -106,6 +110,19 @@ export type ClassDirectoryResult = {
     text: string;
     value: string;
   }[];
+  expiresAt: string;
+  upstreamSessionToken: string;
+};
+
+export type PreviousClassAdviserClassesResult = {
+  classes: {
+    code: string;
+    image: string;
+    name: string;
+    text: string;
+    value: string;
+  }[];
+  count: number;
   expiresAt: string;
   upstreamSessionToken: string;
 };
@@ -207,6 +224,23 @@ const FETCH_CLASS_DIRECTORY_QUERY = `
     ) {
       upstreamSessionToken
       expiresAt
+      classes {
+        code
+        name
+        text
+        value
+        image
+      }
+    }
+  }
+`;
+
+const FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY = `
+  query FetchPreviousClassAdviserClasses($sessionToken: String!) {
+    fetchPreviousClassAdviserClasses(sessionToken: $sessionToken) {
+      upstreamSessionToken
+      expiresAt
+      count
       classes {
         code
         name
@@ -415,6 +449,19 @@ export async function fetchClassDirectory(input: {
   });
 
   return response.fetchClassDirectory;
+}
+
+export async function fetchPreviousClassAdviserClasses(input: { sessionToken: string }) {
+  const response = await requestGraphQL<
+    PreviousClassAdviserClassesResponse,
+    {
+      sessionToken: string;
+    }
+  >(FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY, {
+    sessionToken: input.sessionToken,
+  });
+
+  return response.fetchPreviousClassAdviserClasses;
 }
 
 export async function fetchCurriculumPlanList(input: {

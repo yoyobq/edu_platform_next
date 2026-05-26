@@ -41,12 +41,14 @@ import {
   fetchLectureJournalList,
   fetchLectureJournalTeachingClassSamples,
   fetchMajorDirectory,
+  fetchPreviousClassAdviserClasses,
   fetchTeacherDirectory,
   fetchVerifiedStaffIdentity,
   isExpiredUpstreamSessionError,
   type LectureJournalListResult,
   type LectureJournalTeachingClassRecord,
   type MajorDirectoryResult,
+  type PreviousClassAdviserClassesResult,
   resolveUpstreamErrorMessage,
   type TeacherDirectoryResult,
   type VerifiedStaffIdentityResult,
@@ -95,6 +97,7 @@ type PendingUpstreamAction =
   | { type: 'teacher-directory' }
   | { departmentId: string; type: 'major-directory' }
   | { type: 'class-list'; values: ClassListFormValues }
+  | { type: 'previous-class-adviser-classes' }
   | { teachingClassId: string; type: 'lecture-journal' }
   | { type: 'verified-staff-identity' }
   | {
@@ -113,6 +116,7 @@ type UpstreamActionError = {
 const TEACHER_PREVIEW_LIMIT = 5;
 const MAJOR_PREVIEW_LIMIT = 8;
 const CLASS_PREVIEW_LIMIT = 8;
+const PREVIOUS_CLASS_ADVISER_PREVIEW_LIMIT = 8;
 const LECTURE_JOURNAL_SAMPLE_LIMIT = 8;
 const CURRICULUM_PLAN_PANEL_BY_SCOPE: Record<CurriculumPlanScope, CurriculumPlanPanelKey> = {
   personal: 'personal-curriculum-plan',
@@ -190,6 +194,10 @@ const UPSTREAM_PANELS: Array<{
   {
     key: 'class-list',
     label: '班级列表',
+  },
+  {
+    key: 'previous-class-adviser-classes',
+    label: '历史班主任',
   },
   {
     key: 'verified-staff-identity',
@@ -317,6 +325,26 @@ function buildClassListPreview(result: ClassDirectoryResult) {
     classes: result.classes.slice(0, CLASS_PREVIEW_LIMIT),
     expiresAt: result.expiresAt,
     selectOptions: buildClassSelectOptions(result).slice(0, CLASS_PREVIEW_LIMIT),
+    upstreamSessionToken: result.upstreamSessionToken,
+  };
+}
+
+function buildPreviousClassAdviserSelectOptions(result: PreviousClassAdviserClassesResult) {
+  return result.classes.map((item) => ({
+    label: item.name,
+    value: item.code,
+  }));
+}
+
+function buildPreviousClassAdviserPreview(result: PreviousClassAdviserClassesResult) {
+  return {
+    classCount: result.count,
+    classes: result.classes.slice(0, PREVIOUS_CLASS_ADVISER_PREVIEW_LIMIT),
+    expiresAt: result.expiresAt,
+    selectOptions: buildPreviousClassAdviserSelectOptions(result).slice(
+      0,
+      PREVIOUS_CLASS_ADVISER_PREVIEW_LIMIT,
+    ),
     upstreamSessionToken: result.upstreamSessionToken,
   };
 }
@@ -516,6 +544,8 @@ export function UpstreamSessionDemoLabPage() {
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [isLoadingMajorDirectory, setIsLoadingMajorDirectory] = useState(false);
   const [isLoadingClassList, setIsLoadingClassList] = useState(false);
+  const [isLoadingPreviousClassAdviserClasses, setIsLoadingPreviousClassAdviserClasses] =
+    useState(false);
   const [isLoadingLectureJournal, setIsLoadingLectureJournal] = useState(false);
   const [isLoadingLectureJournalSamples, setIsLoadingLectureJournalSamples] = useState(false);
   const [isLoadingLectureJournalSemesters, setIsLoadingLectureJournalSemesters] = useState(true);
@@ -552,6 +582,8 @@ export function UpstreamSessionDemoLabPage() {
     null,
   );
   const [classListResult, setClassListResult] = useState<ClassDirectoryResult | null>(null);
+  const [previousClassAdviserClassesResult, setPreviousClassAdviserClassesResult] =
+    useState<PreviousClassAdviserClassesResult | null>(null);
   const [lectureJournalResult, setLectureJournalResult] = useState<LectureJournalListResult | null>(
     null,
   );
@@ -650,6 +682,7 @@ export function UpstreamSessionDemoLabPage() {
       setDirectoryResult(null);
       setMajorDirectoryResult(null);
       setClassListResult(null);
+      setPreviousClassAdviserClassesResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -849,6 +882,16 @@ export function UpstreamSessionDemoLabPage() {
             setClassListResult(result);
             return;
           }
+          case 'previous-class-adviser-classes': {
+            setIsLoadingPreviousClassAdviserClasses(true);
+            const result = await fetchPreviousClassAdviserClasses({
+              sessionToken: session.upstreamSessionToken,
+            });
+
+            persistSessionFromResult(session, result);
+            setPreviousClassAdviserClassesResult(result);
+            return;
+          }
           case 'lecture-journal': {
             setIsLoadingLectureJournal(true);
             const result = await fetchLectureJournalList({
@@ -936,6 +979,13 @@ export function UpstreamSessionDemoLabPage() {
               message: resolveUpstreamErrorMessage(error, '暂时无法读取班级列表。'),
             });
             return;
+          case 'previous-class-adviser-classes':
+            setPreviousClassAdviserClassesResult(null);
+            setActionError({
+              panel: 'previous-class-adviser-classes',
+              message: resolveUpstreamErrorMessage(error, '暂时无法读取历史班主任班级。'),
+            });
+            return;
           case 'lecture-journal':
             setLectureJournalResult(null);
             setActionError({
@@ -982,6 +1032,7 @@ export function UpstreamSessionDemoLabPage() {
         setIsLoadingDirectory(false);
         setIsLoadingMajorDirectory(false);
         setIsLoadingClassList(false);
+        setIsLoadingPreviousClassAdviserClasses(false);
         setIsLoadingLectureJournal(false);
         setIsLoadingIdentity(false);
       }
@@ -1039,6 +1090,7 @@ export function UpstreamSessionDemoLabPage() {
       setDirectoryResult(null);
       setMajorDirectoryResult(null);
       setClassListResult(null);
+      setPreviousClassAdviserClassesResult(null);
       setLectureJournalResult(null);
       setLectureJournalTeachingClassSamples([]);
       setVerifiedIdentityResult(null);
@@ -1191,6 +1243,12 @@ export function UpstreamSessionDemoLabPage() {
     if (activePanelKey === 'teacher-directory' && !directoryResult && !isLoadingDirectory) {
       void performAction(storedSession, { type: 'teacher-directory' });
     } else if (
+      activePanelKey === 'previous-class-adviser-classes' &&
+      !previousClassAdviserClassesResult &&
+      !isLoadingPreviousClassAdviserClasses
+    ) {
+      void performAction(storedSession, { type: 'previous-class-adviser-classes' });
+    } else if (
       activePanelKey === 'verified-staff-identity' &&
       !verifiedIdentityResult &&
       !isLoadingIdentity
@@ -1207,8 +1265,10 @@ export function UpstreamSessionDemoLabPage() {
     activePanelKey,
     storedSession,
     directoryResult,
+    previousClassAdviserClassesResult,
     verifiedIdentityResult,
     isLoadingDirectory,
+    isLoadingPreviousClassAdviserClasses,
     isLoadingIdentity,
     isLoadingCurrentAccount,
     performAction,
@@ -1339,6 +1399,7 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingDirectory ||
     isLoadingMajorDirectory ||
     isLoadingClassList ||
+    isLoadingPreviousClassAdviserClasses ||
     isLoadingIdentity ||
     isLoadingLectureJournal;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
@@ -1351,6 +1412,8 @@ export function UpstreamSessionDemoLabPage() {
         return '读取专业字典';
       case 'class-list':
         return '读取班级列表';
+      case 'previous-class-adviser-classes':
+        return '读取历史班主任班级';
       case 'lecture-journal':
         return '读取教学日志';
       case 'verified-staff-identity':
@@ -1514,8 +1577,8 @@ export function UpstreamSessionDemoLabPage() {
             </li>
             <li>
               <strong>自动读取：</strong>
-              在登录状态下，切换至“教师字典”或“教职工身份”标签页时，页面会<strong>自动触发</strong>
-              后端请求并读取最新数据。
+              在登录状态下，切换至“教师字典”“历史班主任”或“教职工身份”标签页时，页面会
+              <strong>自动触发</strong>后端请求并读取最新数据。
             </li>
             <li>
               <strong>按需查询：</strong>
@@ -1821,6 +1884,83 @@ export function UpstreamSessionDemoLabPage() {
               hasStoredSession
                 ? '填写查询条件后点击“查询班级”。'
                 : '登录 upstream 后即可读取班级列表。'
+            }
+          />
+        )}
+      </div>
+    );
+  }
+
+  function renderPreviousClassAdviserClassesPanel() {
+    const classSelectOptions = previousClassAdviserClassesResult
+      ? buildPreviousClassAdviserSelectOptions(previousClassAdviserClassesResult)
+      : [];
+
+    return (
+      <div className="flex flex-col gap-4">
+        {renderUpstreamInterfaceTag('fetchPreviousClassAdviserClasses')}
+        {activePanelError ? <Alert type="warning" showIcon title={activePanelError} /> : null}
+
+        <Alert
+          type="info"
+          showIcon
+          title="数据边界"
+          description="该接口基于当前 upstream 登录用户读取历史班主任信息；它不是任课班级列表，也不会写入本地班主任任职表。"
+        />
+
+        {isLoadingPreviousClassAdviserClasses ? (
+          <Alert type="info" showIcon title="正在读取历史班主任班级..." />
+        ) : previousClassAdviserClassesResult ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <Tag variant="filled" color="processing">
+                班级总数：{previousClassAdviserClassesResult.count}
+              </Tag>
+              <Tag variant="filled" color="cyan">
+                过期时间：{formatDateTime(previousClassAdviserClassesResult.expiresAt)}
+              </Tag>
+              <Tag variant="filled" color="blue">
+                预览条数：
+                {Math.min(
+                  previousClassAdviserClassesResult.classes.length,
+                  PREVIOUS_CLASS_ADVISER_PREVIEW_LIMIT,
+                )}
+              </Tag>
+              <Button
+                size="small"
+                type="link"
+                onClick={() => void ensureSessionAndRun({ type: 'previous-class-adviser-classes' })}
+              >
+                刷新
+              </Button>
+            </div>
+
+            <Card size="small" title="选择器 options 预览">
+              <Select
+                showSearch
+                optionFilterProp="label"
+                placeholder="按班级名称搜索"
+                style={{ maxWidth: '100%', width: 360 }}
+                options={classSelectOptions}
+              />
+            </Card>
+
+            <pre className="overflow-x-auto rounded-block border border-border-secondary bg-bg-layout p-4 text-sm leading-6 text-text">
+              {JSON.stringify(
+                buildPreviousClassAdviserPreview(previousClassAdviserClassesResult),
+                null,
+                2,
+              )}
+            </pre>
+          </>
+        ) : (
+          <Alert
+            type="info"
+            showIcon
+            title={
+              hasStoredSession
+                ? '正在尝试读取数据...'
+                : '登录 upstream 后即可自动读取历史班主任班级。'
             }
           />
         )}
@@ -2405,6 +2545,8 @@ export function UpstreamSessionDemoLabPage() {
         return renderMajorDirectoryPanel();
       case 'class-list':
         return renderClassListPanel();
+      case 'previous-class-adviser-classes':
+        return renderPreviousClassAdviserClassesPanel();
       case 'lecture-journal':
         return renderLectureJournalPanel();
       case 'verified-staff-identity':
@@ -2446,7 +2588,7 @@ export function UpstreamSessionDemoLabPage() {
           type="info"
           showIcon
           title="链路说明"
-          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、专业字典、班级列表、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
+          description="当前页演示前端持有 upstream token、后端代访问 upstream 的链路。登录成功后，切换到教师字典、专业字典、班级列表、历史班主任、教职工身份或教学日志都能继续测试；其中教学日志会先借助本地课表抽取真实教学班样本。任一 upstream 请求若返回滚动 token，页面都会立即覆盖本地旧 token。"
         />
       </div>
 
@@ -2594,6 +2736,7 @@ export function UpstreamSessionDemoLabPage() {
             setDirectoryResult(null);
             setMajorDirectoryResult(null);
             setClassListResult(null);
+            setPreviousClassAdviserClassesResult(null);
             setVerifiedIdentityResult(null);
             setIsLoginModalOpen(false);
             setPendingAction(null);
