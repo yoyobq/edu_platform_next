@@ -358,7 +358,7 @@ export function SemesterCourseScheduleSyncPageContent({
   if (pageError) {
     return (
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-        <Alert showIcon type="error" message={pageError} />
+        <Alert showIcon type="error" title={pageError} />
       </div>
     );
   }
@@ -377,7 +377,7 @@ export function SemesterCourseScheduleSyncPageContent({
             <Alert
               showIcon
               type={syncError.includes('academic semester') ? 'warning' : 'error'}
-              message={syncError}
+              title={syncError}
             />
           </div>
         ) : null}
@@ -478,7 +478,7 @@ export function SemesterCourseScheduleSyncPageContent({
             <Alert
               showIcon
               type={result.dryRun ? 'info' : result.failedCount > 0 ? 'warning' : 'success'}
-              message={resolveResultSemanticMessage(result)}
+              title={resolveResultSemanticMessage(result)}
             />
 
             <div className="flex flex-col gap-3">
@@ -491,7 +491,7 @@ export function SemesterCourseScheduleSyncPageContent({
           <Alert
             showIcon
             type="warning"
-            message="还没有同步结果"
+            title="还没有同步结果"
             description="填写参数并预览同步或执行落库后，这里会展示同步摘要和原始响应。"
           />
         )}

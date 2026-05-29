@@ -446,7 +446,7 @@ export function AcademicWorkloadPageContent({
         </div>
       ) : (
         <div className="academic-workload-query-card">
-          {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+          {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
 
           <div className="academic-workload-query-layout">
             <TeachingWeekRangeControl range={teachingWeekRange} variant="card" />
@@ -504,7 +504,7 @@ export function AcademicWorkloadPageContent({
         </div>
       )}
 
-      {workloadError ? <Alert message={workloadError} showIcon type="error" /> : null}
+      {workloadError ? <Alert title={workloadError} showIcon type="error" /> : null}
 
       {loadingOccurrences ? <Skeleton active paragraph={{ rows: 6 }} /> : null}
 
@@ -512,7 +512,7 @@ export function AcademicWorkloadPageContent({
         <div className="flex flex-col gap-6">
           {!occurrenceEnvelope.isValid ? (
             <Alert
-              message="结果数据异常"
+              title="结果数据异常"
               description={
                 occurrenceEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'
               }
@@ -523,7 +523,7 @@ export function AcademicWorkloadPageContent({
 
           {!occurrenceEnvelope.isComplete ? (
             <Alert
-              message="结果可能不完整"
+              title="结果可能不完整"
               description={
                 occurrenceEnvelope.truncationReason ??
                 '当前条件返回的数据未覆盖完整范围，请谨慎使用汇总值。'
@@ -708,7 +708,7 @@ export function AcademicWorkloadPageContent({
       (isSelfServiceViewer || normalizedStaffId) &&
       selectedSemesterId ? (
         <Alert
-          message="准备完成"
+          title="准备完成"
           description="点击“计算工作量”后，将展示当前条件下的工作量明细与汇总。"
           showIcon
           type="success"

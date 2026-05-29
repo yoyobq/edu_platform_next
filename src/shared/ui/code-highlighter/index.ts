@@ -4,7 +4,10 @@ import type { CSSProperties } from 'react';
 export type CodeHighlightThemeMode = 'dark' | 'light';
 
 type PrismStyle = Record<string, CSSProperties>;
-type SharedCodeHighlighterProps = Pick<CodeHighlighterProps, 'highlightProps' | 'style' | 'styles'>;
+type SharedCodeHighlighterProps = Pick<
+  CodeHighlighterProps,
+  'highlightProps' | 'prismLightMode' | 'style' | 'styles'
+>;
 
 const sharedCodeTagStyle: CSSProperties = {
   background: 'transparent',
@@ -164,6 +167,7 @@ export function createCodeHighlighterProps(
 ): SharedCodeHighlighterProps {
   return {
     highlightProps: createCodeHighlightProps(mode),
+    prismLightMode: false,
     style: sharedCodeHighlighterStyle,
     styles: sharedCodeHighlighterStyles,
   };

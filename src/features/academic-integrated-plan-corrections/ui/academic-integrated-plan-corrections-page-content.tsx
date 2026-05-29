@@ -615,12 +615,12 @@ function SuggestionPanel({
       </div>
 
       {suggestion.blockingIssue ? (
-        <Alert message={`阻塞：${suggestion.blockingIssue}`} showIcon type="warning" />
+        <Alert title={`阻塞：${suggestion.blockingIssue}`} showIcon type="warning" />
       ) : null}
       {hasPlanDetailExtra(suggestion.diffs) ? (
         <Alert
           description={PLAN_DETAIL_EXTRA_WARNING_TEXT}
-          message="计划明细多填"
+          title="计划明细多填"
           showIcon
           type="warning"
         />
@@ -655,13 +655,13 @@ function AlignmentItemCard({ item }: { item: IntegratedPlanCorrectionItem }) {
       </header>
 
       <Alert
-        message={resolveAlignmentActionText(item)}
+        title={resolveAlignmentActionText(item)}
         showIcon
         type={item.alignmentStatus === 'MATCHED' && item.diffs.length === 0 ? 'success' : 'warning'}
       />
 
       {item.blockingIssue ? (
-        <Alert message={`阻塞：${item.blockingIssue}`} showIcon type="error" />
+        <Alert title={`阻塞：${item.blockingIssue}`} showIcon type="error" />
       ) : null}
 
       <PlanComparison currentPlan={item.currentPlan} suggested={item.suggested} />
@@ -700,7 +700,7 @@ function RepairGroupCard({
       {group.blockingIssue ? (
         <Alert
           description="该组不能作为普通修正建议自动处理，需要管理人员先确认阻塞原因。"
-          message={`阻塞：${group.blockingIssue}`}
+          title={`阻塞：${group.blockingIssue}`}
           showIcon
           type="error"
         />
@@ -708,7 +708,7 @@ function RepairGroupCard({
       {hasPlanDetailExtra(group.diffs) ? (
         <Alert
           description="这通常是后续错位的根因：计划里多填了一个真实课表/校历下不存在的周次。请优先删除该计划明细或调整周次。"
-          message="优先处理计划明细多填项"
+          title="优先处理计划明细多填项"
           showIcon
           type="warning"
         />
@@ -1217,8 +1217,8 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
 
           {semesterError || queryError ? (
             <div className="integrated-plan-corrections-side-alerts">
-              {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-              {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
+              {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
+              {queryError ? <Alert title={queryError} showIcon type="error" /> : null}
             </div>
           ) : null}
 

@@ -50,7 +50,7 @@ export function StaffSemesterProfilesFiltersCard({
         <Skeleton active paragraph={{ rows: 5 }} />
       ) : (
         <div className="flex flex-col gap-4">
-          {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+          {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
 
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
@@ -137,7 +137,7 @@ export function StaffSemesterProfilesFiltersCard({
           </div>
 
           {profileOptionsError ? (
-            <Alert message={profileOptionsError} showIcon type="warning" />
+            <Alert title={profileOptionsError} showIcon type="warning" />
           ) : null}
 
           <div className="flex flex-wrap justify-end gap-3">

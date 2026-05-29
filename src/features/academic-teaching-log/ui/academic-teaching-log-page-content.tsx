@@ -868,11 +868,11 @@ const JournalDraftCard = memo(function JournalDraftCard({
         item.expectedOccurrences.length > 0) ? (
         <div className="lecture-journal-integrated-state">
           {visibleBlockingIssue ? (
-            <Alert message={`阻塞原因：${visibleBlockingIssue}`} showIcon type="error" />
+            <Alert title={`阻塞原因：${visibleBlockingIssue}`} showIcon type="error" />
           ) : null}
           {visibleWarnings.length > 0 ? (
             <Alert
-              message={
+              title={
                 <span className="lecture-journal-integrated-warning-text">
                   {visibleWarnings.map((warning) => (
                     <Tag color="warning" key={warning}>
@@ -891,7 +891,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
 
       {isFutureCourse && !isFilled ? (
         <div className="lecture-journal-integrated-state">
-          <Alert message="课程尚未开始，暂不开放填写。" showIcon type="info" />
+          <Alert title="课程尚未开始，暂不开放填写。" showIcon type="info" />
         </div>
       ) : null}
 
@@ -2566,7 +2566,7 @@ export function AcademicTeachingLogPageContent({
           </div>
           {hasMissingStaffFilter ? (
             <div className="lecture-journal-filter-alert">
-              <Alert message={missingStaffFilterMessage} showIcon type="warning" />
+              <Alert title={missingStaffFilterMessage} showIcon type="warning" />
             </div>
           ) : null}
         </div>
@@ -2574,14 +2574,14 @@ export function AcademicTeachingLogPageContent({
 
       {hasControlAlerts ? (
         <div className="lecture-journal-control-alerts">
-          {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
+          {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
           {staffDirectoryError ? (
-            <Alert message={staffDirectoryError} showIcon type="warning" />
+            <Alert title={staffDirectoryError} showIcon type="warning" />
           ) : null}
         </div>
       ) : null}
 
-      {queryError ? <Alert message={queryError} showIcon type="error" /> : null}
+      {queryError ? <Alert title={queryError} showIcon type="error" /> : null}
       {isLoadingReconciliation ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
       {!isLoadingReconciliation && reconciliationResult ? (
@@ -2723,21 +2723,21 @@ export function AcademicTeachingLogPageContent({
                       </span>
                     ) : undefined
                   }
-                  message={sessionStaffMismatchWarningMessage}
+                  title={sessionStaffMismatchWarningMessage}
                   showIcon
                   type="warning"
                 />
               ) : null}
               {pageLevelPrefillBlockingIssue ? (
-                <Alert message={pageLevelPrefillBlockingIssue} showIcon type="error" />
+                <Alert title={pageLevelPrefillBlockingIssue} showIcon type="error" />
               ) : null}
               {hasGenericFillAvailabilityIssue ? (
-                <Alert message="当前填写前检查未通过。" showIcon type="error" />
+                <Alert title="当前填写前检查未通过。" showIcon type="error" />
               ) : null}
               {visiblePageLevelPrefillWarnings.length ? (
                 <Alert
                   description={visiblePageLevelPrefillWarnings.join('；')}
-                  message="填写前检查提示"
+                  title="填写前检查提示"
                   showIcon
                   type="warning"
                 />

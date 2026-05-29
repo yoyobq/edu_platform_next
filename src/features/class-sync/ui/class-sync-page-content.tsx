@@ -490,7 +490,7 @@ export function ClassSyncPageContent({
   if (!currentAccount) {
     return (
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-        <Alert showIcon type="error" message="当前登录会话已失效，请重新登录后再试。" />
+        <Alert showIcon type="error" title="当前登录会话已失效，请重新登录后再试。" />
       </div>
     );
   }
@@ -505,9 +505,9 @@ export function ClassSyncPageContent({
 
       <Card title="同步参数">
         <div className="flex flex-col gap-4">
-          {previewError ? <Alert showIcon type="error" message={previewError} /> : null}
+          {previewError ? <Alert showIcon type="error" title={previewError} /> : null}
           {departmentOptionsError ? (
-            <Alert showIcon type="warning" message={departmentOptionsError} />
+            <Alert showIcon type="warning" title={departmentOptionsError} />
           ) : null}
 
           <Form<ClassSyncFormValues> form={form} layout="vertical" requiredMark={false}>
@@ -594,7 +594,7 @@ export function ClassSyncPageContent({
                     ? 'info'
                     : 'success'
               }
-              message={resolveResultMessage(result, resultMode ?? 'dryRun')}
+              title={resolveResultMessage(result, resultMode ?? 'dryRun')}
             />
 
             <Table<ClassSyncResultItem>
@@ -614,7 +614,7 @@ export function ClassSyncPageContent({
           <Alert
             showIcon
             type="info"
-            message="还没有同步结果"
+            title="还没有同步结果"
             description="选择目标院系并完成 upstream 授权后，这里会展示班级 dry-run 或正式落库的摘要和明细。"
           />
         )}

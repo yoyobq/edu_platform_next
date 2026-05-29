@@ -1,5 +1,5 @@
 // src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -339,12 +339,9 @@ function buildReportRows(items: AcademicAdjustedWorkloadReportItem[]) {
   return rows;
 }
 
-function renderMergedCell(children: ReactNode, row: ReportTableRow) {
+function getMergedCellProps(row: ReportTableRow) {
   return {
-    children,
-    props: {
-      rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
-    },
+    rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
   };
 }
 
@@ -942,21 +939,21 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'center',
         key: 'sequence',
-        render: (_, row) => renderMergedCell(row.sequence, row),
+        onCell: getMergedCellProps,
+        render: (_, row) => row.sequence,
         title: '序号',
         width: 64,
       },
       {
         key: 'staffName',
-        render: (_, row) =>
-          renderMergedCell(
-            <Tooltip title={formatReportText(row.item.staffId)}>
-              <span className="external-teacher-compensation-staff-name">
-                {formatReportText(row.item.staffName)}
-              </span>
-            </Tooltip>,
-            row,
-          ),
+        onCell: getMergedCellProps,
+        render: (_, row) => (
+          <Tooltip title={formatReportText(row.item.staffId)}>
+            <span className="external-teacher-compensation-staff-name">
+              {formatReportText(row.item.staffName)}
+            </span>
+          </Tooltip>
+        ),
         title: '姓名',
         width: 92,
       },
@@ -1025,13 +1022,12 @@ export function ExternalTeacherCompensationPageContent({
       {
         align: 'right',
         key: 'staffTotalActualHours',
-        render: (_, row) =>
-          renderMergedCell(
-            <span className="external-teacher-compensation-total-value">
-              {formatCompactDecimal(row.staffTotalActualHours)}
-            </span>,
-            row,
-          ),
+        onCell: getMergedCellProps,
+        render: (_, row) => (
+          <span className="external-teacher-compensation-total-value">
+            {formatCompactDecimal(row.staffTotalActualHours)}
+          </span>
+        ),
         title: '总实际课时',
         width: 112,
       },
@@ -1048,8 +1044,8 @@ export function ExternalTeacherCompensationPageContent({
       />
 
       <section className="external-teacher-compensation-panel">
-        {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-        {departmentError ? <Alert message={departmentError} showIcon type="error" /> : null}
+        {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
+        {departmentError ? <Alert title={departmentError} showIcon type="error" /> : null}
 
         {loadingSemesters ? (
           <Skeleton active paragraph={{ rows: 3 }} />
@@ -1191,7 +1187,7 @@ export function ExternalTeacherCompensationPageContent({
         </div>
       ) : null}
 
-      {reportError ? <Alert message={reportError} showIcon type="error" /> : null}
+      {reportError ? <Alert title={reportError} showIcon type="error" /> : null}
 
       {loadingReport ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
@@ -1199,7 +1195,7 @@ export function ExternalTeacherCompensationPageContent({
         <div className="external-teacher-compensation-result">
           {!reportEnvelope.isValid ? (
             <Alert
-              message="报表数据异常"
+              title="报表数据异常"
               description={reportEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'}
               showIcon
               type="error"
@@ -1208,7 +1204,7 @@ export function ExternalTeacherCompensationPageContent({
 
           {!reportEnvelope.isComplete ? (
             <Alert
-              message="报表可能不完整"
+              title="报表可能不完整"
               description={reportEnvelope.truncationReason ?? '当前结果被截断，请谨慎使用。'}
               showIcon
               type="warning"
@@ -1241,7 +1237,7 @@ export function ExternalTeacherCompensationPageContent({
 
       {!loadingReport && !reportEnvelope && selectedSemesterId ? (
         <Alert
-          message="选择条件后生成外聘兼课金结算表"
+          title="选择条件后生成外聘兼课金结算表"
           description="可按学期和教学周范围查看外聘教师兼课课时，确认后直接导出结算表。"
           showIcon
           type="info"

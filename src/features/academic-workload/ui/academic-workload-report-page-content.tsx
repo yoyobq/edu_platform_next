@@ -1,5 +1,5 @@
 // src/features/academic-workload/ui/academic-workload-report-page-content.tsx
-import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -211,12 +211,9 @@ function buildAcademicWorkloadReportRows(
   return rows;
 }
 
-function renderReportMergedCell(children: ReactNode, row: AcademicWorkloadReportTableRow) {
+function getReportMergedCellProps(row: AcademicWorkloadReportTableRow) {
   return {
-    children,
-    props: {
-      rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
-    },
+    rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
   };
 }
 
@@ -611,19 +608,19 @@ export function AcademicWorkloadReportPageContent({
       {
         align: 'center',
         key: 'sequence',
-        render: (_, row) => renderReportMergedCell(row.sequence, row),
+        onCell: getReportMergedCellProps,
+        render: (_, row) => row.sequence,
         title: '序号',
         width: 64,
       },
       {
         key: 'staffName',
-        render: (_, row) =>
-          renderReportMergedCell(
-            <span className="academic-workload-report-staff-name">
-              {formatReportText(row.item.staffName)}
-            </span>,
-            row,
-          ),
+        onCell: getReportMergedCellProps,
+        render: (_, row) => (
+          <span className="academic-workload-report-staff-name">
+            {formatReportText(row.item.staffName)}
+          </span>
+        ),
         title: '姓名',
         width: 92,
       },
@@ -686,13 +683,12 @@ export function AcademicWorkloadReportPageContent({
       {
         align: 'right',
         key: 'totalHours',
-        render: (_, row) =>
-          renderReportMergedCell(
-            <span className="academic-workload-report-total-value">
-              {formatReportDecimal(row.staffTotalHours, 2)}
-            </span>,
-            row,
-          ),
+        onCell: getReportMergedCellProps,
+        render: (_, row) => (
+          <span className="academic-workload-report-total-value">
+            {formatReportDecimal(row.staffTotalHours, 2)}
+          </span>
+        ),
         title: '总课时',
         width: 92,
       },
@@ -709,8 +705,8 @@ export function AcademicWorkloadReportPageContent({
       />
 
       <section className="academic-workload-report-panel">
-        {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-        {departmentError ? <Alert message={departmentError} showIcon type="error" /> : null}
+        {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
+        {departmentError ? <Alert title={departmentError} showIcon type="error" /> : null}
 
         {loadingSemesters ? (
           <Skeleton active paragraph={{ rows: 3 }} />
@@ -821,7 +817,7 @@ export function AcademicWorkloadReportPageContent({
         onChange={handleEngagementTypeChange}
       />
 
-      {reportError ? <Alert message={reportError} showIcon type="error" /> : null}
+      {reportError ? <Alert title={reportError} showIcon type="error" /> : null}
 
       {loadingReport ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
@@ -829,7 +825,7 @@ export function AcademicWorkloadReportPageContent({
         <div className="academic-workload-report-result">
           {!reportEnvelope.isValid ? (
             <Alert
-              message="预报数据异常"
+              title="预报数据异常"
               description={reportEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'}
               showIcon
               type="error"
@@ -838,7 +834,7 @@ export function AcademicWorkloadReportPageContent({
 
           {!reportEnvelope.isComplete ? (
             <Alert
-              message="预报可能不完整"
+              title="预报可能不完整"
               description={reportEnvelope.truncationReason ?? '当前结果被截断，请谨慎使用。'}
               showIcon
               type="warning"
@@ -869,7 +865,7 @@ export function AcademicWorkloadReportPageContent({
 
       {!loadingReport && !reportEnvelope && selectedSemesterId ? (
         <Alert
-          message="选择条件后生成工作量预报"
+          title="选择条件后生成工作量预报"
           description="预报按教师合并序号、姓名和总课时，表尾总课时使用后端合计。"
           showIcon
           type="info"

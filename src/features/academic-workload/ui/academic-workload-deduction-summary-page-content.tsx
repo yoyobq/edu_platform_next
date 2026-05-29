@@ -1,13 +1,5 @@
 // src/features/academic-workload/ui/academic-workload-deduction-summary-page-content.tsx
-import {
-  type ReactNode,
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Switch, Table, Tabs, Tag, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -534,17 +526,9 @@ function collectDateColumns(rows: AcademicWorkloadDeductionTableRow[]) {
   return Array.from(dates).sort();
 }
 
-function renderMergedCell(
-  children: ReactNode,
-  row: AcademicWorkloadDeductionTableRow,
-  className?: string,
-) {
+function getMergedCellProps(row: AcademicWorkloadDeductionTableRow) {
   return {
-    children,
-    props: {
-      className,
-      rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
-    },
+    rowSpan: row.staffRowIndex === 0 ? row.staffRowSpan : 0,
   };
 }
 
@@ -723,31 +707,32 @@ function buildDeductionColumns(
     {
       align: 'center',
       key: 'sequence',
-      render: (_, row) => renderMergedCell(row.sequence, row),
+      onCell: getMergedCellProps,
+      render: (_, row) => row.sequence,
       title: '序号',
       width: 64,
     },
     {
       align: 'center',
       key: 'staffId',
-      render: (_, row) => renderMergedCell(row.item.staffId, row),
+      onCell: getMergedCellProps,
+      render: (_, row) => row.item.staffId,
       title: '工号',
       width: 76,
     },
     {
       key: 'staffName',
-      render: (_, row) =>
-        renderMergedCell(
-          <span className="academic-workload-deduction-summary-staff">
-            <strong>{row.item.staffName}</strong>
-            {showTeacherTypeTag ? (
-              <Tag color={TEACHER_ENGAGEMENT_TYPE_TAG_COLORS[row.item.teacherEngagementType]}>
-                {ACADEMIC_WORKLOAD_ENGAGEMENT_LABELS[row.item.teacherEngagementType]}
-              </Tag>
-            ) : null}
-          </span>,
-          row,
-        ),
+      onCell: getMergedCellProps,
+      render: (_, row) => (
+        <span className="academic-workload-deduction-summary-staff">
+          <strong>{row.item.staffName}</strong>
+          {showTeacherTypeTag ? (
+            <Tag color={TEACHER_ENGAGEMENT_TYPE_TAG_COLORS[row.item.teacherEngagementType]}>
+              {ACADEMIC_WORKLOAD_ENGAGEMENT_LABELS[row.item.teacherEngagementType]}
+            </Tag>
+          ) : null}
+        </span>
+      ),
       title: '姓名',
       width: 92,
     },
@@ -813,13 +798,12 @@ function buildDeductionColumns(
     {
       align: 'right',
       key: 'staffTotal',
-      render: (_, row) =>
-        renderMergedCell(
-          <span className="academic-workload-deduction-summary-hour">
-            {formatDeductedHundredths(row.staffTotalHundredths)}
-          </span>,
-          row,
-        ),
+      onCell: getMergedCellProps,
+      render: (_, row) => (
+        <span className="academic-workload-deduction-summary-hour">
+          {formatDeductedHundredths(row.staffTotalHundredths)}
+        </span>
+      ),
       title: '合计',
       width: 92,
     },
@@ -1256,8 +1240,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       />
 
       <section className="academic-workload-deduction-summary-panel">
-        {semesterError ? <Alert message={semesterError} showIcon type="error" /> : null}
-        {departmentError ? <Alert message={departmentError} showIcon type="error" /> : null}
+        {semesterError ? <Alert title={semesterError} showIcon type="error" /> : null}
+        {departmentError ? <Alert title={departmentError} showIcon type="error" /> : null}
 
         {loadingSemesters ? (
           <Skeleton active paragraph={{ rows: 3 }} />
@@ -1377,7 +1361,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         onChange={handleEngagementTypeChange}
       />
 
-      {summaryError ? <Alert message={summaryError} showIcon type="error" /> : null}
+      {summaryError ? <Alert title={summaryError} showIcon type="error" /> : null}
 
       {loadingSummary ? <Skeleton active paragraph={{ rows: 8 }} /> : null}
 
@@ -1385,7 +1369,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         <div className="academic-workload-deduction-summary-result">
           {!summaryEnvelope.isValid ? (
             <Alert
-              message="结果数据异常"
+              title="结果数据异常"
               description={summaryEnvelope.invalidReason ?? '当前条件返回的数据不可用于汇总。'}
               showIcon
               type="error"
@@ -1394,7 +1378,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
           {!summaryEnvelope.isComplete ? (
             <Alert
-              message="结果可能不完整"
+              title="结果可能不完整"
               description={summaryEnvelope.truncationReason ?? '当前结果被截断，请谨慎使用。'}
               showIcon
               type="warning"
@@ -1458,7 +1442,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
       {!loadingSummary && !summaryEnvelope && selectedSemesterId ? (
         <Alert
-          message="选择条件后生成汇总表"
+          title="选择条件后生成汇总表"
           description="表格将按教师合并工号、姓名和教师合计。"
           showIcon
           type="info"

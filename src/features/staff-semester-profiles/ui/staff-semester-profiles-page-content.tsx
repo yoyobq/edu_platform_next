@@ -770,7 +770,7 @@ export function StaffSemesterProfilesPageContent({
       ) : null}
 
       <div className="flex flex-col gap-4">
-        {profileError ? <Alert message={profileError} showIcon type="error" /> : null}
+        {profileError ? <Alert title={profileError} showIcon type="error" /> : null}
 
         <Table<StaffSemesterProfile>
           columns={columns}
@@ -789,7 +789,7 @@ export function StaffSemesterProfilesPageContent({
             pageSize: profileResponse?.pageSize ?? queryState.limit,
             pageSizeOptions: [10, 20, 50, 100],
             className: 'px-4 py-3 m-0',
-            position: ['bottomCenter'],
+            placement: ['bottomCenter'],
             size: 'small',
             showSizeChanger: true,
             showTotal: (value) => `共 ${value} 条`,
@@ -866,7 +866,7 @@ export function StaffSemesterProfilesPageContent({
             </Form>
 
             {editableFieldCount === 0 ? (
-              <Alert message="当前账号没有可编辑字段。" showIcon type="warning" />
+              <Alert title="当前账号没有可编辑字段。" showIcon type="warning" />
             ) : null}
 
             <div className="flex justify-end gap-2">

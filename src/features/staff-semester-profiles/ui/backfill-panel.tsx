@@ -139,7 +139,7 @@ export function StaffSemesterProfilesBackfillPanel({
       }
     >
       <div className="flex flex-col gap-4">
-        {departmentError ? <Alert message={departmentError} showIcon type="warning" /> : null}
+        {departmentError ? <Alert title={departmentError} showIcon type="warning" /> : null}
 
         <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 'minmax(0, 1fr) auto' }}>
           <label className="flex flex-col gap-2">
@@ -187,7 +187,7 @@ export function StaffSemesterProfilesBackfillPanel({
         </ResponsiveGrid>
 
         {hasCurrentBackfillBlocking ? (
-          <Alert message="当前预览存在阻断项，确认补齐已禁用。" showIcon type="warning" />
+          <Alert title="当前预览存在阻断项，确认补齐已禁用。" showIcon type="warning" />
         ) : null}
 
         {backfillResult ? (

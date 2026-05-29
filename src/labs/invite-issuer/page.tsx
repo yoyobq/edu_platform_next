@@ -242,7 +242,7 @@ export function InviteIssuerLabPage() {
                 type="info"
                 showIcon
                 style={{ marginBottom: 24 }}
-                message="将按账号 ID 触发密码找回邮件"
+                title="将按账号 ID 触发密码找回邮件"
                 description="后端会在 verification payload 中写入 preview.kind=legacy-user-password-reset、nickname 和 loginEmailMasked。邮件里的 token 仍由后端签发并发送给注册邮箱，用户打开链接后继续走现有 resetPassword(token, newPassword)。"
               />
             ) : null}

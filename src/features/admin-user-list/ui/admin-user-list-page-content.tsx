@@ -936,7 +936,7 @@ export function AdminUserListPageContent({
                     total: totalCount,
                     size: 'small',
                     className: 'px-4 py-3 m-0',
-                    position: ['bottomCenter'],
+                    placement: ['bottomCenter'],
                   }}
                   locale={{
                     emptyText: (

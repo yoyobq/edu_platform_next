@@ -358,7 +358,7 @@ export function AccountMenu({
             placement="rightTop"
             trigger="click"
             content={accountListMenu}
-            overlayInnerStyle={{ padding: 0 }}
+            styles={{ container: { padding: 0 } }}
           >
             <button
               type="button"
@@ -412,7 +412,7 @@ export function AccountMenu({
               placement="rightBottom"
               trigger="click"
               content={logoutAccountMenu}
-              overlayInnerStyle={{ padding: 0 }}
+              styles={{ container: { padding: 0 } }}
             >
               <button
                 type="button"
@@ -525,7 +525,7 @@ export function AccountMenu({
           <Alert
             type="error"
             showIcon
-            message={addAccountError}
+            title={addAccountError}
             style={{ marginBottom: 16, marginTop: 8 }}
           />
         ) : null}
