@@ -14,15 +14,19 @@ function formatBaseURL(hostname, portNumber) {
 
 console.log(`[E2E Server] bootstrap: starting Vite on ${formatBaseURL(host, port)}`);
 
+const viteEnv = {
+  ...process.env,
+  VITE_APP_ENV: process.env.PLAYWRIGHT_APP_ENV || 'test',
+};
+
+delete viteEnv.NO_COLOR;
+
 const viteProcess = spawn(
   process.execPath,
   [viteCliPath, '--mode', 'test', '--host', host, '--port', port, '--strictPort'],
   {
     cwd: process.cwd(),
-    env: {
-      ...process.env,
-      VITE_APP_ENV: process.env.PLAYWRIGHT_APP_ENV || 'test',
-    },
+    env: viteEnv,
     stdio: ['ignore', 'pipe', 'pipe'],
   },
 );

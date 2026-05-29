@@ -40,6 +40,8 @@ if (mergedNoProxy) {
   process.env.no_proxy = mergedNoProxy;
 }
 
+delete process.env.NO_COLOR;
+
 export default defineConfig({
   testDir: './e2e/specs',
   fullyParallel: true,
@@ -57,7 +59,6 @@ export default defineConfig({
         env: {
           ...process.env,
           ...fileEnv,
-          FORCE_COLOR: '0',
           PLAYWRIGHT_APP_ENV: appEnv,
           PLAYWRIGHT_HOST: host,
           PLAYWRIGHT_NO_PROXY_APPEND: noProxyAppend,
