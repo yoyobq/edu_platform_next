@@ -7,6 +7,7 @@ import { expect, test } from '../../test';
 const WORKBENCH_TODOS_STORAGE_KEY = 'edu-mate:home-workbench-other-todos:v1:1001';
 const WORKBENCH_TIMETABLE_STORAGE_KEY =
   'edu-mate:timetable-custom-items:v1:/:weekly:101:2026-05-04';
+const fixedWorkbenchDate = new Date('2026-05-05T12:00:00.000Z');
 
 async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
   await page.route('**/graphql', async (route) => {
@@ -85,6 +86,46 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
       return;
     }
 
+    if (query.includes('query ListMyAcademicSemesterPlannedTimetable')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            listMyAcademicSemesterPlannedTimetable: {
+              invalidReason: null,
+              isComplete: true,
+              isValid: true,
+              items: [
+                {
+                  calcEffect: 'NORMAL',
+                  classroomName: 'A101',
+                  coefficient: '1',
+                  courseCategory: 'THEORY',
+                  courseName: '测试课程',
+                  date: '2026-05-04',
+                  isEffective: true,
+                  logicalDayOfWeek: 1,
+                  periodEnd: 1,
+                  periodStart: 1,
+                  physicalDayOfWeek: 1,
+                  scheduleId: 9001,
+                  semesterId: 101,
+                  slotId: 9101,
+                  staffId: 'staff-1001',
+                  staffName: '测试老师',
+                  teachingClassName: '测试班级',
+                  weekIndex: 1,
+                },
+              ],
+              truncationReason: null,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
     await route.fallback();
   });
 }
@@ -118,6 +159,7 @@ test('当 accessGroup 包含 ADMIN 时，应优先进入管理默认模板', asy
 });
 
 test('其他待办可以拖拽到周课表空格，并同步本地存储', async ({ page }) => {
+  await page.clock.setFixedTime(fixedWorkbenchDate);
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {

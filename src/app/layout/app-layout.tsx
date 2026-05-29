@@ -93,9 +93,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const navigate = useNavigate();
   const authSession = useAuthSessionState();
   const { close, isOpen, measuredWidth, open } = useSidecarState();
-  const mainRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const wasOpenRef = useRef(isOpen);
+  const [mainElement, setMainElement] = useState<HTMLDivElement | null>(null);
   const [showShortcutHint, setShowShortcutHint] = useState(() =>
     typeof document !== 'undefined' ? document.hasFocus() : false,
   );
@@ -115,8 +115,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const hasExplicitChildren = typeof children !== 'undefined';
   const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
   const revalidator = useRevalidator();
+  const mainMeasureRef = useMemo(() => ({ current: mainElement }), [mainElement]);
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
-    mainRef,
+    mainMeasureRef,
     [
       { max: 720, value: 'compact' },
       { max: 1100, value: 'comfortable' },
@@ -144,6 +145,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         : null,
     [activeSnapshot, currentAppEnv],
   );
+  const setMainRef = useCallback((node: HTMLDivElement | null) => {
+    setMainElement(node);
+  }, []);
 
   // Activate nav mode based on effective navigation access when session becomes authenticated.
   useEffect(() => {
@@ -241,8 +245,10 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         previousMainWidth !== null &&
         previousMainWidth >= NAV_MAIN_MIN_WIDTH_WITH_FULL &&
         mainWidth < NAV_MAIN_MIN_WIDTH_WITH_FULL;
+      const isConstrainedBelowFullThreshold =
+        externalConstraintChanged && mainWidth < NAV_MAIN_MIN_WIDTH_WITH_FULL;
 
-      if (shouldAllowAutoFold && crossedBelowFullThreshold) {
+      if (shouldAllowAutoFold && (crossedBelowFullThreshold || isConstrainedBelowFullThreshold)) {
         previousMainWidthRef.current = mainWidth;
         previousViewportWidthRef.current = viewportWidth;
         previousSidecarOpenRef.current = isOpen;
@@ -255,6 +261,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
     if (
       navMode === 'rail' &&
+      !isOpen &&
       prefersPinnedFull &&
       mainWidth >= NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL
     ) {
@@ -463,7 +470,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   data-layout-scroll-container="main"
                   style={{ padding: '0 24px 32px', overflowY: 'auto' }}
                 >
-                  <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
+                  <div ref={setMainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                     <Flex
                       vertical
                       gap={mainWidthBand === 'compact' ? 16 : 24}
@@ -603,7 +610,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                 data-layout-scroll-container="main"
                 style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
               >
-                <div ref={mainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
+                <div ref={setMainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                   <Flex
                     vertical
                     gap={mainWidthBand === 'compact' ? 16 : 24}
@@ -641,7 +648,11 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           </Layout>
         )}
 
-        <div data-layout-layer="third-workspace-root" aria-hidden="true">
+        <div
+          data-layout-layer="third-workspace-root"
+          data-workspace-state="closed"
+          aria-hidden="true"
+        >
           <div data-workspace-mount="artifacts-canvas" />
         </div>
 

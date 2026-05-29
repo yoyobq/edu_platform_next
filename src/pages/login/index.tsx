@@ -14,7 +14,6 @@ import {
   readAuthRefreshFeedbackFlash,
   resolveAuthenticatedRedirectTarget,
   resolveLoginRedirectTarget,
-  restoreSession,
   useAuthSessionState,
 } from '@/features/auth';
 
@@ -166,18 +165,9 @@ export function LoginPage() {
                           type: 'PASSWORD',
                         });
 
-                        const restoredSnapshot = await restoreSession({ waitForPending: true });
-
-                        if (!restoredSnapshot) {
-                          throw new Error('登录成功，但账户信息同步失败，请重试。');
-                        }
-
                         navigate(
-                          resolveAuthenticatedRedirectTarget(
+                          resolveLoginRedirectTarget(
                             new URLSearchParams(location.search).get('redirect'),
-                            {
-                              needsProfileCompletion: restoredSnapshot.needsProfileCompletion,
-                            },
                           ),
                           { replace: true },
                         );

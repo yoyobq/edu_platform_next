@@ -10,6 +10,10 @@ test('accessGroup 含 ADMIN 但主身份不是 ADMIN 时，也应显示 admin �
 
   await expect(page.getByText('管理默认模板')).toBeVisible();
   await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await page.getByRole('menuitem', { name: '系统管理' }).click();
+  await expect(page.getByRole('menuitem', { name: '用户管理' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '认证码签发' })).toBeVisible();
 });
 
 test('无 ADMIN 权限时，应显示首页导航但不显示 admin 导航', async ({ page }) => {

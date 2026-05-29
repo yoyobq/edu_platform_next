@@ -144,7 +144,7 @@ test('未登录访问 /welcome 时，会按受保护页规则跳到登录页', a
   await expect(page).toHaveURL(
     new RegExp(`/login\\?redirect=${encodeURIComponent(routes.welcome)}$`),
   );
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
 });
 
 test('登录成功且仍需补全时，应先进入 /welcome 而不是首页', async ({ page }) => {

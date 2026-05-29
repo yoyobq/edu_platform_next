@@ -127,7 +127,7 @@ async function fulfillGraphQLError(route: Route, message: string, code?: string)
 async function expectAuthenticatedUserMenu(
   page: Page,
   displayName: string,
-  identity: string = 'admin',
+  identity: string = 'Admin',
 ) {
   const userMenuButton = page.getByRole('button', { name: '用户菜单' });
 
@@ -207,7 +207,11 @@ test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', as
   await page.getByLabel('邮箱').fill('tester@example.com');
   await page.getByRole('button', { name: '发送重置邮件' }).click();
 
-  await expect(page.getByText('若该账户存在，我们已发送重置邮件。')).toBeVisible();
+  await expect(
+    page.getByText(
+      '如果邮箱匹配已有账户，重置邮件会发送到该邮箱。请在邮件有效期内打开链接并设置新密码',
+    ),
+  ).toBeVisible();
   expect(forgotPasswordAuthHeader).toBeNull();
 });
 

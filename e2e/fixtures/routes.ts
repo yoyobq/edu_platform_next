@@ -12,7 +12,6 @@ export const routes = {
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
   labsPayloadCrypto: '/labs/payload-crypto',
-  labsSemesterCalendar: '/labs/semester-calendar',
   labsStaffSemesterProfiles: '/labs/staff-semester-profiles',
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',
   login: '/login',

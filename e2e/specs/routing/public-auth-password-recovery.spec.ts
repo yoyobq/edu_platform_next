@@ -260,7 +260,11 @@ test('登录页应提供忘记密码入口，并能完成统一反馈', async ({
   await page.getByLabel('邮箱').fill('tester@example.com');
   await page.getByRole('button', { name: '发送重置邮件' }).click();
 
-  await expect(page.getByText('若该账户存在，我们已发送重置邮件。')).toBeVisible();
+  await expect(
+    page.getByText(
+      '如果邮箱匹配已有账户，重置邮件会发送到该邮箱。请在邮件有效期内打开链接并设置新密码',
+    ),
+  ).toBeVisible();
   await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
 });
 
@@ -312,7 +316,7 @@ test('forgot-password 返回登录时，不应触发 restore -> me', async ({ pa
   await page.getByRole('button', { name: '返回登录' }).click();
 
   await expect(page).toHaveURL(/\/login\?skipRestore=1$/);
-  await expect(page.getByRole('heading', { name: '登录后再进入工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
   expect(meRequestCount).toBe(0);
   expect(refreshRequestCount).toBe(0);
 });
@@ -467,7 +471,9 @@ test('legacy user password reset payload 应展示老用户回归文案', async 
 
   await page.goto(routes.resetPassword('legacy-reset-token-active'));
 
-  await expect(page.getByRole('heading', { name: '老朋友，欢迎回来，请设置新密码' })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '老用户 老师，欢迎回来，请设置新密码' }),
+  ).toBeVisible();
   await expect(page.getByText('欢迎回来。我们更新了密码策略')).toBeVisible();
   await expect(page.getByText('le***@example.com')).toBeVisible();
   await expect(page.getByText('修改完成后，就可以返回登录页继续使用。')).toBeVisible();
@@ -523,7 +529,7 @@ test('reset-password 返回登录时，不应触发 restore -> me', async ({ pag
   await page.getByRole('button', { name: '前往登录' }).click();
 
   await expect(page).toHaveURL(/\/login\?skipRestore=1$/);
-  await expect(page.getByRole('heading', { name: '登录后再进入工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
   expect(meRequestCount).toBe(0);
   expect(refreshRequestCount).toBe(0);
 });

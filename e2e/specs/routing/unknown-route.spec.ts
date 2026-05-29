@@ -22,7 +22,7 @@ test('已登录会话访问不存在的页面时，不应停留在 loading', asy
 
   await page.goto('/this-page-does-not-exist');
 
-  await expect(page.getByRole('banner')).toBeVisible();
+  await expect(page.getByRole('complementary')).toBeVisible();
   await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '账户登录' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '账号登录' })).toHaveCount(0);
 });

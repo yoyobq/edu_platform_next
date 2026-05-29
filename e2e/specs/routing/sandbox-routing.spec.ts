@@ -7,7 +7,7 @@ test('test 环境下未登录访问 sandbox 时，应先跳登录并保留原目
   await page.goto('/sandbox/playground');
 
   await expect(page).toHaveURL(/\/login\?redirect=%2Fsandbox%2Fplayground$/);
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
 });
 
 test('test 环境下具备会话时，应允许进入 sandbox 演练场', async ({ page }) => {
@@ -65,5 +65,5 @@ test('prod 环境下访问 sandbox 时，应先按环境规则返回 404', async
 
   await expect(page).toHaveURL(/\/sandbox\/playground$/);
   await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: '账户登录' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '账号登录' })).toHaveCount(0);
 });

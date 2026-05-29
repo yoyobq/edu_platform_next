@@ -310,15 +310,15 @@ test('正式学期校历页应支持切换学期并刷新周视图内容', async
   await expect(page.getByText('春季运动会')).toHaveCount(0);
 });
 
-test('普通 staff 与 guest 访问正式学期校历页时应显示 403', async ({ page }) => {
-  await seedProtectedSession(page, {
+test('普通 staff 可访问正式学期校历页，guest 访问时应显示 403', async ({ page }) => {
+  await seedSemesterCalendarPage(page, {
     accessGroup: ['STAFF'],
     displayName: 'staff-user',
     primaryAccessGroup: 'STAFF',
   });
 
   await page.goto(routes.semesterCalendar);
-  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '学期校历' })).toBeVisible();
 
   await seedProtectedSession(page, {
     accessGroup: ['GUEST'],

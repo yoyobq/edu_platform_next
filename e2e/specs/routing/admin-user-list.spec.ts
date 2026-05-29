@@ -8,7 +8,7 @@ test('未登录访问 admin 用户列表时，应跳到携带 redirect 的登录
   await expect(page).toHaveURL(
     new RegExp(`/login\\?redirect=${encodeURIComponent(routes.adminUsers)}$`),
   );
-  await expect(page.getByRole('heading', { name: '账户登录' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
 });
 
 test('非 admin 访问 admin 用户列表时，应显示 403', async ({ page }) => {

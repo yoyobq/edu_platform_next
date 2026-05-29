@@ -116,7 +116,7 @@ function HomeModuleCard({
   onAction: (action: HomeModuleAction) => void;
 }) {
   const secondaryActions = module.entry.secondaryActions ?? [];
-  let stateContent: ReactNode = null;
+  let stateContent: ReactNode;
 
   if (module.state.kind === 'ready') {
     stateContent = (

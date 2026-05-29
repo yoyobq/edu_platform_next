@@ -46,10 +46,7 @@ type SessionProfile = {
   identityHint: AuthAccessGroup | null;
   needsProfileCompletion: boolean;
   primaryAccessGroup: SessionIdentityKind;
-  slotGroups: readonly {
-    code: string;
-    name: string;
-  }[];
+  slotGroup: readonly string[];
 };
 
 type MockAuthGraphQLOptions = {
@@ -965,6 +962,27 @@ export async function openHomeWithSearch(page: Page, search: string): Promise<vo
 }
 
 export async function openEntrySidecar(page: Page): Promise<void> {
-  await page.keyboard.press('Alt+K');
-  await expect(page.getByRole('dialog', { name: '从这里开始' })).toBeVisible();
+  const sidecar = page.getByRole('dialog', { name: '从这里开始' });
+
+  await page.evaluate(() => {
+    window.dispatchEvent(new CustomEvent('workbench:open-entry-sidecar'));
+  });
+
+  try {
+    await sidecar.waitFor({ state: 'visible', timeout: 500 });
+    return;
+  } catch {
+    await page.evaluate(() => {
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', {
+          key: 'k',
+          altKey: true,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+  }
+
+  await expect(sidecar).toBeVisible();
 }

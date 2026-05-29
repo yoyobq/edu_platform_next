@@ -136,6 +136,7 @@ export function EntrySidecar() {
 
   return (
     <Drawer
+      aria-label="从这里开始"
       open={isOpen}
       title={
         <div className="flex items-center gap-2">

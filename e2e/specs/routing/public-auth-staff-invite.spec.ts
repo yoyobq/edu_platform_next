@@ -4,6 +4,8 @@ import { routes } from '../../fixtures/routes';
 import { mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
 
+const fixedWorkbenchDate = new Date('2026-05-05T12:00:00.000Z');
+
 type InviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
 type TransportFailureKind = 'graphql' | 'http' | 'network';
 
@@ -433,6 +435,8 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
 });
 
 test('有效 staff invite 设置登录名后，应可使用登录名完成登录', async ({ page }) => {
+  await page.clock.setFixedTime(fixedWorkbenchDate);
+
   let consumeInput: Record<string, unknown> | null = null;
   let loginInput: Record<string, unknown> | null = null;
 

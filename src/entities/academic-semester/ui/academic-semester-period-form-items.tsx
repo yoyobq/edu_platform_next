@@ -47,7 +47,7 @@ export function AcademicSemesterPeriodFormItems({
           disabled={selectDisabled}
           loading={loading}
           optionFilterProp="label"
-          options={schoolYearOptions}
+          options={[...schoolYearOptions]}
           placeholder="选择学年"
           showSearch
         />
