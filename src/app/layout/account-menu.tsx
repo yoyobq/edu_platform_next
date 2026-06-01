@@ -28,6 +28,7 @@ import { type AuthSessionSnapshot, logout } from '@/features/auth';
 import {
   type AccountSwitchLabSession,
   createAccountSwitchLabSession,
+  isAccountSwitchLabAccountMismatchError,
   restoreAccountSwitchLabSession,
 } from '@/shared/account-switch/api';
 import {
@@ -72,7 +73,12 @@ function formatAccessGroupLabel(value: string) {
 }
 
 function getAccountDisplayName(session: AccountSwitchLabSession) {
-  return session.userInfo.nickname || session.displayName || `#${session.accountId}`;
+  return (
+    session.identity?.name ||
+    session.userInfo.nickname ||
+    session.displayName ||
+    `#${session.accountId}`
+  );
 }
 
 function getAccountLoginEmail(session: AccountSwitchLabSession) {
@@ -212,7 +218,10 @@ export function AccountMenu({
       commitAccountRecords(buildSwitchAccountRecords(restoredSession));
       await replaceCurrentSession(restoredSession);
     } catch (error) {
-      if (isGraphQLIngressError(error) && error.type === 'auth') {
+      if (
+        (isGraphQLIngressError(error) && error.type === 'auth') ||
+        isAccountSwitchLabAccountMismatchError(error)
+      ) {
         openReauthModal(session);
         return;
       }
@@ -340,7 +349,10 @@ export function AccountMenu({
         );
         await replaceCurrentSession(restoredFallbackSession);
       } catch (error) {
-        if (isGraphQLIngressError(error) && error.type === 'auth') {
+        if (
+          (isGraphQLIngressError(error) && error.type === 'auth') ||
+          isAccountSwitchLabAccountMismatchError(error)
+        ) {
           openReauthModal(fallbackSession, 'logout-fallback', nextRecords);
           return;
         }

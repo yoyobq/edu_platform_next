@@ -178,6 +178,9 @@ describe('upstream-session-demo api', () => {
         semester: null,
         sessionToken: 'rolling-token-004',
       },
+      {
+        authMode: 'none',
+      },
     );
   });
 

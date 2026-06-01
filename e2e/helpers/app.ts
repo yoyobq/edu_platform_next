@@ -9,20 +9,15 @@ type SessionIdentityKind = AuthAccessGroup;
 type StaffIdentitySeed = {
   kind: 'STAFF';
   departmentId?: string | null;
-  employmentStatus?: string;
   id?: string;
-  jobTitle?: string | null;
-  name?: string;
-  remark?: string | null;
 };
 
 type StudentIdentitySeed = {
-  classId?: number | null;
+  currentClassCode?: string | null;
+  currentClassId?: string | null;
   id?: string;
   kind: 'STUDENT';
-  name?: string;
-  remarks?: string | null;
-  studentStatus?: string;
+  upstreamId?: string | null;
 };
 
 type SessionIdentitySeed = StaffIdentitySeed | StudentIdentitySeed | null;
@@ -33,6 +28,7 @@ export type SeedAuthSessionOptions = {
   displayName?: string;
   identity?: SessionIdentitySeed;
   identityHint?: AuthAccessGroup | null;
+  identityName?: string;
   needsProfileCompletion?: boolean;
   primaryAccessGroup?: SessionIdentityKind;
   slotGroup?: readonly string[];
@@ -44,6 +40,7 @@ type SessionProfile = {
   displayName: string;
   identity: SessionIdentitySeed;
   identityHint: AuthAccessGroup | null;
+  identityName: string;
   needsProfileCompletion: boolean;
   primaryAccessGroup: SessionIdentityKind;
   slotGroup: readonly string[];
@@ -65,7 +62,6 @@ type MockAuthGraphQLOptions = {
 };
 
 export const AUTH_STORAGE_KEY = AUTH_SESSION_STORAGE_KEY;
-const DEFAULT_TIMESTAMP = '2026-04-03T00:00:00.000Z';
 
 type AdminUserListSeed = {
   account: {
@@ -180,6 +176,8 @@ function buildSessionProfile(options: SeedAuthSessionOptions = {}): SessionProfi
           : null),
     identityHint:
       options.identityHint === undefined ? primaryAccessGroup : (options.identityHint ?? null),
+    identityName:
+      options.identityName ?? options.displayName ?? `${primaryAccessGroup.toLowerCase()}-user`,
     needsProfileCompletion:
       options.needsProfileCompletion ??
       (defaultAccessGroup.includes('REGISTRANT') ||
@@ -218,28 +216,21 @@ function buildPersistedSession(profile: SessionProfile) {
     identity:
       profile.identity?.kind === 'STAFF'
         ? {
-            accountId: profile.accountId,
-            createdAt: DEFAULT_TIMESTAMP,
             departmentId: profile.identity.departmentId ?? 'staff-department',
-            employmentStatus: profile.identity.employmentStatus ?? 'ACTIVE',
             id: profile.identity.id ?? `staff-${profile.accountId}`,
-            jobTitle: profile.identity.jobTitle ?? null,
             kind: 'STAFF',
-            name: profile.identity.name ?? profile.displayName,
-            remark: profile.identity.remark ?? null,
-            updatedAt: DEFAULT_TIMESTAMP,
+            name: profile.identityName,
+            slotGroup: profile.slotGroup,
           }
         : profile.identity?.kind === 'STUDENT'
           ? {
-              accountId: profile.accountId,
-              classId: profile.identity.classId ?? null,
-              createdAt: DEFAULT_TIMESTAMP,
+              currentClassCode: profile.identity.currentClassCode ?? null,
+              currentClassId: profile.identity.currentClassId ?? null,
               id: profile.identity.id ?? `student-${profile.accountId}`,
               kind: 'STUDENT',
-              name: profile.identity.name ?? profile.displayName,
-              remarks: profile.identity.remarks ?? null,
-              studentStatus: profile.identity.studentStatus ?? 'ENROLLED',
-              updatedAt: DEFAULT_TIMESTAMP,
+              name: profile.identityName,
+              slotGroup: profile.slotGroup,
+              upstreamId: profile.identity.upstreamId ?? null,
             }
           : null,
     needsProfileCompletion: profile.needsProfileCompletion,
@@ -261,47 +252,55 @@ function buildMePayload(profile: SessionProfile) {
     account: {
       id: profile.accountId,
       identityHint: profile.identityHint,
-      loginEmail: `${profile.displayName}@example.com`,
-      loginName: profile.displayName,
-      status: 'ACTIVE',
     },
     accountId: profile.accountId,
     identity:
       profile.identity?.kind === 'STAFF'
         ? {
             __typename: 'StaffType',
-            accountId: profile.accountId,
-            createdAt: DEFAULT_TIMESTAMP,
             departmentId: profile.identity.departmentId ?? 'staff-department',
-            employmentStatus: profile.identity.employmentStatus ?? 'ACTIVE',
             id: profile.identity.id ?? `staff-${profile.accountId}`,
-            jobTitle: profile.identity.jobTitle ?? null,
-            name: profile.identity.name ?? profile.displayName,
-            remark: profile.identity.remark ?? null,
-            updatedAt: DEFAULT_TIMESTAMP,
+            name: profile.identityName,
+            slotGroup: profile.slotGroup,
           }
         : profile.identity?.kind === 'STUDENT'
           ? {
               __typename: 'StudentType',
-              accountId: profile.accountId,
-              classId: profile.identity.classId ?? null,
-              createdAt: DEFAULT_TIMESTAMP,
+              currentClassCode: profile.identity.currentClassCode ?? null,
+              currentClassId: profile.identity.currentClassId ?? null,
               id: profile.identity.id ?? `student-${profile.accountId}`,
-              name: profile.identity.name ?? profile.displayName,
-              remarks: profile.identity.remarks ?? null,
-              studentStatus: profile.identity.studentStatus ?? 'ENROLLED',
-              updatedAt: DEFAULT_TIMESTAMP,
+              name: profile.identityName,
+              slotGroup: profile.slotGroup,
+              upstreamId: profile.identity.upstreamId ?? null,
             }
           : null,
     needsProfileCompletion: profile.needsProfileCompletion,
-    slotGroup: profile.slotGroup,
     userInfo: {
       accessGroup: profile.accessGroup,
-      avatarUrl: null,
-      email: `${profile.displayName}@example.com`,
       nickname: profile.displayName,
     },
   };
+}
+
+function buildMyProfileIdentityPayload(profile: SessionProfile) {
+  return profile.identity?.kind === 'STAFF'
+    ? {
+        __typename: 'MyProfileStaffIdentityDTO',
+        accountId: profile.accountId,
+        id: profile.identity.id ?? `staff-${profile.accountId}`,
+        name: profile.identityName,
+      }
+    : profile.identity?.kind === 'STUDENT'
+      ? {
+          __typename: 'MyProfileStudentIdentityDTO',
+          accountId: profile.accountId,
+          currentClassCode: profile.identity.currentClassCode ?? null,
+          currentClassId: profile.identity.currentClassId ?? null,
+          id: profile.identity.id ?? `student-${profile.accountId}`,
+          name: profile.identityName,
+          upstreamId: profile.identity.upstreamId ?? null,
+        }
+      : null;
 }
 
 async function fulfillGraphQLError(route: Route, message: string) {
@@ -828,6 +827,19 @@ export async function mockAuthGraphQL(
         body: JSON.stringify({
           data: {
             me: buildMePayload(currentProfile),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('myProfileIdentity')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            myProfileIdentity: buildMyProfileIdentityPayload(currentProfile),
           },
         }),
         contentType: 'application/json',

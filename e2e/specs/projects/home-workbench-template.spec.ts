@@ -168,8 +168,8 @@ test('其他待办可以拖拽到周课表空格，并同步本地存储', async
       identity: {
         id: 'staff-1001',
         kind: 'STAFF',
-        name: '测试老师',
       },
+      identityName: '测试老师',
       primaryAccessGroup: 'STAFF',
     },
   });
@@ -180,8 +180,8 @@ test('其他待办可以拖拽到周课表空格，并同步本地存储', async
     identity: {
       id: 'staff-1001',
       kind: 'STAFF',
-      name: '测试老师',
     },
+    identityName: '测试老师',
     primaryAccessGroup: 'STAFF',
   });
   await page.addInitScript(

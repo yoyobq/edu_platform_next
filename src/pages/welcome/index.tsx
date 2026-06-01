@@ -27,6 +27,10 @@ function resolveInitialTargetIdentity(
   return undefined;
 }
 
+function isSyntheticAccountName(accountId: number, value: string | null | undefined) {
+  return value?.trim() === `account-${accountId}`;
+}
+
 export function WelcomePage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -54,9 +58,12 @@ export function WelcomePage() {
   const currentSnapshot = snapshot;
   const isSubmitting = phase === 'submitting' || phase === 'refreshing';
   const initialNickname =
-    currentSnapshot.userInfo.nickname === currentSnapshot.primaryAccessGroup.toLowerCase()
+    !currentSnapshot.userInfo.nickname.trim() ||
+    currentSnapshot.userInfo.nickname === currentSnapshot.primaryAccessGroup.toLowerCase() ||
+    isSyntheticAccountName(currentSnapshot.accountId, currentSnapshot.userInfo.nickname)
       ? ''
       : currentSnapshot.userInfo.nickname;
+  const initialRealName = currentSnapshot.identity?.name?.trim() ?? '';
 
   async function handleSubmit(values: ProfileCompletionFormValues) {
     setSubmitError(null);
@@ -140,7 +147,7 @@ export function WelcomePage() {
           <ProfileCompletionForm
             errorMessage={submitError}
             initialValues={{
-              name: currentSnapshot.identity?.name || currentSnapshot.displayName,
+              name: initialRealName,
               nickname: initialNickname,
               targetIdentity: resolveInitialTargetIdentity(currentSnapshot.account.identityHint),
             }}

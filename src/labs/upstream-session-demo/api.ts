@@ -5,26 +5,35 @@ import {
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
 type CurrentAccountResponse = {
   me: {
     accountId: number;
+    account: {
+      id: number;
+      identityHint: string | null;
+    };
     identity:
       | {
           __typename: 'StaffType';
+          departmentId: string | null;
           id: string;
+          slotGroup: readonly string[] | null;
         }
       | {
           __typename: 'StudentType';
+          currentClassCode: string | null;
+          currentClassId: string | null;
           id: string;
+          slotGroup: readonly string[] | null;
+          upstreamId: string | null;
         }
       | null;
     userInfo: {
       accessGroup: string[];
-      nickname: string | null;
     };
   };
 };
@@ -354,17 +363,26 @@ const CURRENT_ACCOUNT_QUERY = `
   query Me {
     me {
       accountId
+      account {
+        id
+        identityHint
+      }
       userInfo {
         accessGroup
-        nickname
       }
       identity {
         __typename
         ... on StaffType {
+          departmentId
           id
+          slotGroup
         }
         ... on StudentType {
+          currentClassCode
+          currentClassId
           id
+          slotGroup
+          upstreamId
         }
       }
     }
@@ -374,8 +392,11 @@ const CURRENT_ACCOUNT_QUERY = `
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    authMode?: GraphQLAuthMode;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstreamDemoAccount> {
@@ -388,7 +409,7 @@ export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstream
     return {
       accessGroup: response.me.userInfo.accessGroup,
       accountId: response.me.accountId,
-      displayName: response.me.userInfo.nickname?.trim() || `account-${response.me.accountId}`,
+      displayName: `account-${response.me.accountId}`,
       staffId: response.me.identity?.__typename === 'StaffType' ? response.me.identity.id : null,
     };
   } catch (error) {
@@ -440,13 +461,19 @@ export async function fetchClassDirectory(input: {
       semester: string | null;
       sessionToken: string;
     }
-  >(FETCH_CLASS_DIRECTORY_QUERY, {
-    annualMajorId: input.annualMajorId?.trim() || null,
-    departmentId: input.departmentId.trim(),
-    schoolYear: input.schoolYear?.trim() || null,
-    semester: input.semester?.trim() || null,
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_CLASS_DIRECTORY_QUERY,
+    {
+      annualMajorId: input.annualMajorId?.trim() || null,
+      departmentId: input.departmentId.trim(),
+      schoolYear: input.schoolYear?.trim() || null,
+      semester: input.semester?.trim() || null,
+      sessionToken: input.sessionToken,
+    },
+    {
+      authMode: 'none',
+    },
+  );
 
   return response.fetchClassDirectory;
 }

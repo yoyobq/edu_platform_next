@@ -16,9 +16,9 @@ const completedStaffSession = {
   displayName: 'teacher-li',
   identity: {
     kind: 'STAFF' as const,
-    name: '李老师',
   },
   identityHint: 'STAFF' as const,
+  identityName: '李老师',
   needsProfileCompletion: false,
   primaryAccessGroup: 'STAFF' as const,
 };

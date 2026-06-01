@@ -4,8 +4,6 @@ import { routes } from '../../fixtures/routes';
 import { AUTH_STORAGE_KEY, mockApiHealth } from '../../helpers/app';
 import { expect, test } from '../../test';
 
-const DEFAULT_TIMESTAMP = '2026-04-03T00:00:00.000Z';
-
 type SessionSeed = {
   accessGroup?: readonly string[];
   accessToken: string;
@@ -16,12 +14,13 @@ type SessionSeed = {
         departmentId?: string | null;
         id?: string;
         kind: 'STAFF';
-        name?: string;
       }
     | {
+        currentClassCode?: string | null;
+        currentClassId?: string | null;
         id?: string;
         kind: 'STUDENT';
-        name?: string;
+        upstreamId?: string | null;
       }
     | null;
   identityHint?: string | null;
@@ -45,28 +44,21 @@ function buildPersistedSession(seed: SessionSeed) {
     identity:
       seed.identity?.kind === 'STAFF'
         ? {
-            accountId: seed.accountId ?? 9527,
-            createdAt: DEFAULT_TIMESTAMP,
             departmentId: seed.identity.departmentId ?? 'staff-department',
-            employmentStatus: 'ACTIVE',
             id: seed.identity.id ?? `staff-${seed.accountId ?? 9527}`,
-            jobTitle: null,
             kind: 'STAFF',
-            name: seed.identity.name ?? seed.displayName,
-            remark: null,
-            updatedAt: DEFAULT_TIMESTAMP,
+            name: seed.displayName,
+            slotGroup: [],
           }
         : seed.identity?.kind === 'STUDENT'
           ? {
-              accountId: seed.accountId ?? 9527,
-              classId: null,
-              createdAt: DEFAULT_TIMESTAMP,
+              currentClassCode: seed.identity.currentClassCode ?? null,
+              currentClassId: seed.identity.currentClassId ?? null,
               id: seed.identity.id ?? `student-${seed.accountId ?? 9527}`,
               kind: 'STUDENT',
-              name: seed.identity.name ?? seed.displayName,
-              remarks: null,
-              studentStatus: 'ENROLLED',
-              updatedAt: DEFAULT_TIMESTAMP,
+              name: seed.displayName,
+              slotGroup: [],
+              upstreamId: seed.identity.upstreamId ?? null,
             }
           : null,
     needsProfileCompletion: seed.needsProfileCompletion ?? false,
@@ -201,7 +193,7 @@ test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', as
   });
 
   await page.goto(routes.home);
-  await expectAuthenticatedUserMenu(page, 'admin-user');
+  await expectAuthenticatedUserMenu(page, 'account-9527');
 
   await page.goto(routes.forgotPassword);
   await page.getByLabel('邮箱').fill('tester@example.com');
@@ -598,7 +590,7 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
   });
 
   await page.goto(routes.home);
-  await expectAuthenticatedUserMenu(page, 'root-admin');
+  await expectAuthenticatedUserMenu(page, 'account-1');
 
   // auth 主流程 restore -> me 失败 -> 走 auth 自己的 refresh -> 再 me 成功
   // shared retry 不应介入（refreshRequestCount 应为 1，来自 auth 自身的 restore 逻辑）
@@ -726,7 +718,7 @@ test('restore 触发 refresh 后，后续 me 请求应显式使用 refresh 返�
 
   await page.goto(routes.home);
 
-  await expectAuthenticatedUserMenu(page, 'refreshed-admin');
+  await expectAuthenticatedUserMenu(page, 'account-9527');
   expect(meAuthHeaders).toEqual(['Bearer stale-access-token', 'Bearer fresh-access-token']);
   expect(refreshAuthHeader).toBeNull();
 });

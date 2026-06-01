@@ -19,44 +19,30 @@ type SessionQueryDTO = {
   account: {
     id: number;
     identityHint: string | null;
-    loginEmail: string | null;
-    loginName: string | null;
-    status: string;
   };
   accountId: number;
   identity:
     | {
         __typename: 'StaffType';
-        accountId: number;
-        createdAt: string;
         departmentId: string | null;
-        employmentStatus: string;
         id: string;
-        jobTitle: string | null;
-        name: string;
-        remark: string | null;
-        updatedAt: string;
+        name: string | null;
+        slotGroup: readonly string[] | null;
       }
     | {
         __typename: 'StudentType';
-        accountId: number;
-        classId: number | null;
-        createdAt: string;
+        currentClassCode: string | null;
+        currentClassId: string | null;
         id: string;
-        name: string;
-        remarks: string | null;
-        studentStatus: string;
-        updatedAt: string;
+        name: string | null;
+        slotGroup: readonly string[] | null;
+        upstreamId: string | null;
       }
     | null;
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: readonly string[];
-    avatarUrl: string | null;
-    email: string | null;
     nickname: string | null;
-    signature: string | null;
-    tags: readonly string[] | null;
   };
 };
 
@@ -97,40 +83,26 @@ const ME_QUERY = `
       account {
         id
         identityHint
-        loginEmail
-        loginName
-        status
       }
       userInfo {
         accessGroup
-        avatarUrl
-        email
         nickname
-        signature
-        tags
       }
       identity {
         __typename
         ... on StaffType {
-          accountId
-          createdAt
           departmentId
-          employmentStatus
           id
-          jobTitle
           name
-          remark
-          updatedAt
+          slotGroup
         }
         ... on StudentType {
-          accountId
-          classId
-          createdAt
+          currentClassCode
+          currentClassId
           id
           name
-          remarks
-          studentStatus
-          updatedAt
+          slotGroup
+          upstreamId
         }
       }
       needsProfileCompletion

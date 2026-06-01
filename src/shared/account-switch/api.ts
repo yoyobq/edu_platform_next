@@ -4,26 +4,19 @@ import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 export type AccountSwitchLabIdentity =
   | {
       kind: 'STAFF';
-      accountId: number;
-      createdAt: string;
       departmentId: string | null;
-      employmentStatus: string;
       id: string;
-      jobTitle: string | null;
-      name: string;
-      remark: string | null;
-      updatedAt: string;
+      name: string | null;
+      slotGroup: readonly string[];
     }
   | {
       kind: 'STUDENT';
-      accountId: number;
-      classId: number | null;
-      createdAt: string;
+      currentClassCode: string | null;
+      currentClassId: string | null;
       id: string;
-      name: string;
-      remarks: string | null;
-      studentStatus: string;
-      updatedAt: string;
+      name: string | null;
+      slotGroup: readonly string[];
+      upstreamId: string | null;
     };
 
 export type AccountSwitchLabSession = {
@@ -62,44 +55,30 @@ type SessionQueryDTO = {
   account: {
     id: number;
     identityHint: unknown;
-    loginEmail: unknown;
-    loginName: unknown;
-    status: unknown;
   };
   accountId: number;
   identity:
     | {
         __typename: 'StaffType';
-        accountId: number;
-        createdAt: string;
-        departmentId: string | null;
-        employmentStatus: string;
-        id: string;
-        jobTitle: string | null;
-        name: string;
-        remark: string | null;
-        updatedAt: string;
+        departmentId: unknown;
+        id: unknown;
+        name: unknown;
+        slotGroup: unknown;
       }
     | {
         __typename: 'StudentType';
-        accountId: number;
-        classId: number | null;
-        createdAt: string;
-        id: string;
-        name: string;
-        remarks: string | null;
-        studentStatus: string;
-        updatedAt: string;
+        currentClassCode: unknown;
+        currentClassId: unknown;
+        id: unknown;
+        name: unknown;
+        slotGroup: unknown;
+        upstreamId: unknown;
       }
     | null;
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: unknown;
-    avatarUrl: unknown;
-    email: unknown;
     nickname: unknown;
-    signature: unknown;
-    tags: unknown;
   };
 };
 
@@ -149,40 +128,26 @@ const ME_QUERY = `
       account {
         id
         identityHint
-        loginEmail
-        loginName
-        status
       }
       userInfo {
         accessGroup
-        avatarUrl
-        email
         nickname
-        signature
-        tags
       }
       identity {
         __typename
         ... on StaffType {
-          accountId
-          createdAt
           departmentId
-          employmentStatus
           id
-          jobTitle
           name
-          remark
-          updatedAt
+          slotGroup
         }
         ... on StudentType {
-          accountId
-          classId
-          createdAt
+          currentClassCode
+          currentClassId
           id
           name
-          remarks
-          studentStatus
-          updatedAt
+          slotGroup
+          upstreamId
         }
       }
       needsProfileCompletion
@@ -210,53 +175,6 @@ function normalizeSlotGroup(value: unknown): readonly string[] {
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
 }
 
-function normalizeStringList(value: unknown): readonly string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-
-  return Array.from(
-    new Set(
-      value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()),
-    ),
-  ).filter((item) => item.length > 0);
-}
-
-function decodeBase64Url(value: string) {
-  const normalizedValue = value.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedValue = normalizedValue.padEnd(Math.ceil(normalizedValue.length / 4) * 4, '=');
-
-  return atob(paddedValue);
-}
-
-function parseTokenClaims(accessToken: string) {
-  const [, payloadSegment] = accessToken.split('.');
-
-  if (!payloadSegment) {
-    return {
-      accessGroup: [] as readonly AuthAccessGroup[],
-      slotGroup: [] as readonly string[],
-    };
-  }
-
-  try {
-    const payload = JSON.parse(decodeBase64Url(payloadSegment)) as {
-      accessGroup?: unknown;
-      slotGroup?: unknown;
-    };
-
-    return {
-      accessGroup: normalizeAccessGroup(payload.accessGroup),
-      slotGroup: normalizeSlotGroup(payload.slotGroup),
-    };
-  } catch {
-    return {
-      accessGroup: [] as readonly AuthAccessGroup[],
-      slotGroup: [] as readonly string[],
-    };
-  }
-}
-
 function normalizeIdentity(value: SessionQueryDTO['identity']): AccountSwitchLabIdentity | null {
   if (!value) {
     return null;
@@ -265,29 +183,26 @@ function normalizeIdentity(value: SessionQueryDTO['identity']): AccountSwitchLab
   if (value.__typename === 'StaffType') {
     return {
       kind: 'STAFF',
-      accountId: value.accountId,
-      createdAt: value.createdAt,
-      departmentId: value.departmentId,
-      employmentStatus: value.employmentStatus,
-      id: value.id,
-      jobTitle: value.jobTitle,
-      name: value.name,
-      remark: value.remark,
-      updatedAt: value.updatedAt,
+      departmentId: normalizeOptionalString(value.departmentId),
+      id: normalizeOptionalString(value.id) ?? '',
+      name: normalizeOptionalString(value.name),
+      slotGroup: normalizeSlotGroup(value.slotGroup),
     };
   }
 
   return {
     kind: 'STUDENT',
-    accountId: value.accountId,
-    classId: value.classId,
-    createdAt: value.createdAt,
-    id: value.id,
-    name: value.name,
-    remarks: value.remarks,
-    studentStatus: value.studentStatus,
-    updatedAt: value.updatedAt,
+    currentClassCode: normalizeOptionalString(value.currentClassCode),
+    currentClassId: normalizeOptionalString(value.currentClassId),
+    id: normalizeOptionalString(value.id) ?? '',
+    name: normalizeOptionalString(value.name),
+    slotGroup: normalizeSlotGroup(value.slotGroup),
+    upstreamId: normalizeOptionalString(value.upstreamId),
   };
+}
+
+function resolveSessionSlotGroup(identity: AccountSwitchLabIdentity | null) {
+  return identity?.slotGroup ?? [];
 }
 
 function resolvePrimaryAccessGroup(input: {
@@ -312,32 +227,24 @@ function resolvePrimaryAccessGroup(input: {
 }
 
 function resolveDisplayName(input: {
-  account: SessionQueryDTO['account'];
+  accountId: number;
   identity: AccountSwitchLabIdentity | null;
-  nickname: string | null;
-  primaryAccessGroup: AuthAccessGroup;
 }) {
-  if (input.nickname) {
-    return input.nickname;
-  }
-
-  if (input.identity?.name) {
-    return input.identity.name;
-  }
-
-  return normalizeOptionalString(input.account.loginName) || input.primaryAccessGroup.toLowerCase();
+  return input.identity?.name ?? `account-${input.accountId}`;
 }
 
 function mapSession(tokens: SessionTokensDTO, session: SessionQueryDTO): AccountSwitchLabSession {
-  const parsedClaims = parseTokenClaims(tokens.accessToken);
   const identity = normalizeIdentity(session.identity);
   const accessGroup = normalizeAccessGroup(session.userInfo.accessGroup);
-  const effectiveAccessGroup = accessGroup.length > 0 ? accessGroup : parsedClaims.accessGroup;
   const primaryAccessGroup = resolvePrimaryAccessGroup({
-    accessGroup: effectiveAccessGroup,
+    accessGroup,
     identity,
   });
-  const nickname = normalizeOptionalString(session.userInfo.nickname);
+  const displayName = resolveDisplayName({
+    accountId: session.accountId,
+    identity,
+  });
+  const nickname = normalizeOptionalString(session.userInfo.nickname) ?? '';
 
   return {
     accessToken: tokens.accessToken,
@@ -346,32 +253,52 @@ function mapSession(tokens: SessionTokensDTO, session: SessionQueryDTO): Account
       identityHint: isAuthAccessGroup(session.account.identityHint)
         ? session.account.identityHint
         : null,
-      loginEmail: normalizeOptionalString(session.account.loginEmail),
-      loginName: normalizeOptionalString(session.account.loginName),
-      status: typeof session.account.status === 'string' ? session.account.status : 'ACTIVE',
+      loginEmail: null,
+      loginName: null,
+      status: 'ACTIVE',
     },
     accountId: session.accountId,
-    displayName: resolveDisplayName({
-      account: session.account,
-      identity,
-      nickname,
-      primaryAccessGroup,
-    }),
+    displayName,
     identity,
     isAuthenticated: true,
     needsProfileCompletion: session.needsProfileCompletion === true,
     primaryAccessGroup,
     refreshToken: tokens.refreshToken,
-    slotGroup: parsedClaims.slotGroup,
+    slotGroup: resolveSessionSlotGroup(identity),
     userInfo: {
-      accessGroup: effectiveAccessGroup,
-      avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
-      email: normalizeOptionalString(session.userInfo.email),
-      nickname: nickname ?? primaryAccessGroup.toLowerCase(),
-      signature: normalizeOptionalString(session.userInfo.signature),
-      tags: normalizeStringList(session.userInfo.tags),
+      accessGroup,
+      avatarUrl: null,
+      email: null,
+      nickname,
+      signature: null,
+      tags: [],
     },
   };
+}
+
+export class AccountSwitchLabAccountMismatchError extends Error {
+  constructor(input: { expectedAccountId: number; receivedAccountId: number }) {
+    super(`账号恢复结果不一致：期望 ${input.expectedAccountId}，实际 ${input.receivedAccountId}。`);
+    this.name = 'AccountSwitchLabAccountMismatchError';
+  }
+}
+
+export function isAccountSwitchLabAccountMismatchError(
+  error: unknown,
+): error is AccountSwitchLabAccountMismatchError {
+  return error instanceof AccountSwitchLabAccountMismatchError;
+}
+
+function assertRestoredAccountMatches(
+  restoredSession: AccountSwitchLabSession,
+  requestedSession: AccountSwitchLabSession,
+) {
+  if (restoredSession.accountId !== requestedSession.accountId) {
+    throw new AccountSwitchLabAccountMismatchError({
+      expectedAccountId: requestedSession.accountId,
+      receivedAccountId: restoredSession.accountId,
+    });
+  }
 }
 
 export function canUseAccountSwitchLabSession(session: AccountSwitchLabSession) {
@@ -453,12 +380,22 @@ export async function restoreAccountSwitchLabSession(session: AccountSwitchLabSe
   };
 
   try {
-    return await fetchAccountSwitchLabSession(tokens);
+    const restoredSession = await fetchAccountSwitchLabSession(tokens);
+
+    assertRestoredAccountMatches(restoredSession, session);
+
+    return restoredSession;
   } catch (error) {
     if (!isGraphQLIngressError(error) || error.type !== 'auth') {
       throw error;
     }
   }
 
-  return fetchAccountSwitchLabSession(await refreshAccountSwitchLabTokens(session.refreshToken));
+  const refreshedSession = await fetchAccountSwitchLabSession(
+    await refreshAccountSwitchLabTokens(session.refreshToken),
+  );
+
+  assertRestoredAccountMatches(refreshedSession, session);
+
+  return refreshedSession;
 }

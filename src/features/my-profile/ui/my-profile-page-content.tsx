@@ -637,7 +637,9 @@ function StudentIdentitySection({ student }: { student: MyProfileStudentIdentity
           {STUDENT_STATUS_LABELS[student.studentStatus] ?? student.studentStatus}
         </Tag>
       </FieldItem>
-      <FieldItem label="班级 ID">{displayValue(student.classId)}</FieldItem>
+      <FieldItem label="当前班级 ID">{displayValue(student.currentClassId)}</FieldItem>
+      <FieldItem label="当前班级编码">{displayValue(student.currentClassCode)}</FieldItem>
+      <FieldItem label="上游学生 ID">{displayValue(student.upstreamId)}</FieldItem>
     </FieldGrid>
   );
 }

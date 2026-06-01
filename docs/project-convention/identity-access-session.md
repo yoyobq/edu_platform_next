@@ -44,6 +44,8 @@
 当前前端 token 主权明确为：
 
 - `accessToken` 与 `refreshToken` 由前端当前会话负责持有
+- `accessToken` 只用于 `Authorization: Bearer <accessToken>` 调用已登录态接口
+- `refreshToken` 只用于 `refresh` mutation，不允许拿 refresh token 调业务接口
 - 只要后端要求鉴权，请求发起方就必须带上当前有效 `accessToken`
 - 后端不替前端保存“浏览器当前会话”这一层语义
 - GraphQL runtime、HTTP client、SDK wrapper 都不是 token 真源，只是请求时消费 token 的技术承载层
@@ -154,19 +156,20 @@
 - `accessToken` / `refreshToken`：当前本站 auth session 的 token，不代表上游系统会话
 - `accountId`：当前认证账户 ID
 - `account`：认证主体与账户侧信息
-- `displayName`：壳层、账号菜单与协作上下文使用的稳定展示名
-- `userInfo`：公共资料与 `accessGroup`
-- `identity`：当前主身份的详情补充；仅在存在独立身份实体时返回
+- `displayName`：壳层、账号菜单与协作上下文使用的稳定展示名；可由 `identity.name` 派生，也可退回 `account-${accountId}`，不作为真实姓名真源
+- `userInfo`：公共资料与 `accessGroup`；其中 `nickname` 可作为展示退避源，但不是真实姓名真源
+- `identity`：当前主身份的详情补充；仅在存在独立身份实体时返回；真实姓名取 `identity.name`
 - `isAuthenticated`：hydrated snapshot 的字面量标记，当前固定为 `true`
 - `needsProfileCompletion`：是否必须先进入 `/welcome` 完成资料补全
 - `primaryAccessGroup`：当前一级导航和主身份语义来源
-- `slotGroup`：来自 access token 的增量授权摘要
+- `slotGroup`：来自 `me.identity.slotGroup` 的当前会话职责槽位摘要；无 `identity` 时为空数组
 
 注意：
 
 - pending session 不是“会话快照”
 - `needsProfileCompletion`、`accountId`、`identity`、`userInfo` 等字段只有在 `me` 完成后才可信
 - 因此 `hydrating` 阶段只允许开壳，不允许把 pending session 当成完整业务身份输入
+- 前端不得把 `displayName`、`nickname` 或 JWT payload 当作真实姓名来源；staff / student 的真实姓名都以 `me.identity.name` 为准
 
 ## 当前身份与授权摘要
 
@@ -185,11 +188,17 @@
 - `StaffType`
 - `StudentType`
 
+当前前端只消费 `identity` 中与会话、展示和菜单有关的字段：
+
+- staff：`id`、`name`、`departmentId`、`slotGroup`
+- student：`id`、`name`、`upstreamId`、`currentClassId`、`currentClassCode`、`slotGroup`
+
 当前前端规则为：
 
 - `ADMIN / GUEST / REGISTRANT` 不要求存在独立 `identity`
 - `REGISTRANT` 是登录后资料补全的过渡态，不等于 `GUEST`
 - `STAFF / STUDENT` 的业务主视角由 `identity` 详情补充
+- `currentClassId / currentClassCode` 都允许为 `null`，只作为当前读侧投影展示，不代表班级归属真相
 - 前端不得因实体缺失自行推断 `GUEST`
 - `GUEST` 只能由后端显式给出
 
@@ -199,6 +208,11 @@
 - `slotGroup`：全局增量授权摘要，回答“还能多做什么”
 - `identityHint`：后端账户侧提示字段，不是前端权威身份输入
 - `activeRole`：仅允许作为前端本地展示偏好，不参与授权
+
+`slotGroup` 有两处口径：
+
+- JWT payload 中的 `slotGroup`：服务端对当前 access token 做授权判断时使用；可能要等 refresh 或重新登录后才更新
+- `me.identity.slotGroup`：后端实时解析出的当前职责槽位；前端展示、菜单和页面分流优先使用这一处
 
 ## 当前自助/管理视角口径
 
@@ -278,9 +292,10 @@
 
 当前前端规则为：
 
-- access token 只承载粗粒度鉴权输入，不承载 `identity`
-- 前端可以直接消费 `accessGroup / slotGroup`
-- 前端不得根据 token 自行推断正式 `identity`
+- access token 只承载会话级鉴权输入，不承载完整用户资料或正式身份详情
+- 前端不得从 JWT payload 解析用户资料、真实姓名、正式 `identity` 或菜单展示数据
+- 前端展示与菜单所需的 `accessGroup / slotGroup / identity` 均以 `me` 水合后的 snapshot 为准
+- 前端允许解析标准 `exp` 作为主动 refresh 的轻量启发；解析失败不得合成任何身份字段，也不得阻塞当前 snapshot
 - 正式菜单最终消费 hydrated snapshot，而不是 `hydrating` 阶段的 pending token
 
 ## 当前前端异常处理
@@ -288,7 +303,7 @@
 - token 过期或无效：强制登出
 - `me` 失败：先尝试 `refresh -> me`
 - `refresh` 成功后 `me` 再失败：强制登出
-- 关键 claim 缺失：强制登出
+- JWT payload 缺失前端展示字段：不由前端补造；以 `me` 成功与否为准
 - 后端未明确给出 `GUEST` 时，前端不得进入 `GUEST` 流程
 
 ## 当前前端落地状态

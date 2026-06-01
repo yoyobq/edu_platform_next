@@ -21,44 +21,30 @@ type AuthSessionResultDTO = {
   account: {
     id: number;
     identityHint: unknown;
-    loginEmail: unknown;
-    loginName: unknown;
-    status: unknown;
   };
   accountId: number;
   identity:
     | {
         __typename: 'StaffType';
-        accountId: number;
-        createdAt: string;
-        departmentId: string | null;
-        employmentStatus: string;
-        id: string;
-        jobTitle: string | null;
-        name: string;
-        remark: string | null;
-        updatedAt: string;
+        departmentId: unknown;
+        id: unknown;
+        name: unknown;
+        slotGroup: unknown;
       }
     | {
         __typename: 'StudentType';
-        accountId: number;
-        classId: number | null;
-        createdAt: string;
-        id: string;
-        name: string;
-        remarks: string | null;
-        studentStatus: string;
-        updatedAt: string;
+        currentClassCode: unknown;
+        currentClassId: unknown;
+        id: unknown;
+        name: unknown;
+        slotGroup: unknown;
+        upstreamId: unknown;
       }
     | null;
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: unknown;
-    avatarUrl: unknown;
-    email: unknown;
     nickname: unknown;
-    signature: unknown;
-    tags: unknown;
   };
 };
 
@@ -81,11 +67,6 @@ type PersistedPendingAuthSessionDTO = {
   refreshToken: string;
   stage: 'pending';
   version: 3;
-};
-
-type ParsedAccessTokenClaims = {
-  accessGroup: readonly AuthAccessGroup[];
-  slotGroup: readonly AuthSlotGroup[];
 };
 
 function normalizeOptionalString(value: unknown) {
@@ -122,41 +103,6 @@ function normalizeStringList(value: unknown): readonly string[] {
   ).filter((item) => item.length > 0);
 }
 
-function decodeBase64Url(value: string) {
-  const normalizedValue = value.replace(/-/g, '+').replace(/_/g, '/');
-  const paddedValue = normalizedValue.padEnd(Math.ceil(normalizedValue.length / 4) * 4, '=');
-
-  return atob(paddedValue);
-}
-
-function parseAccessTokenClaims(accessToken: string): ParsedAccessTokenClaims {
-  const [, payloadSegment] = accessToken.split('.');
-
-  if (!payloadSegment) {
-    return {
-      accessGroup: [],
-      slotGroup: [],
-    };
-  }
-
-  try {
-    const payload = JSON.parse(decodeBase64Url(payloadSegment)) as {
-      accessGroup?: unknown;
-      slotGroup?: unknown;
-    };
-
-    return {
-      accessGroup: normalizeAccessGroup(payload.accessGroup),
-      slotGroup: normalizeSlotGroup(payload.slotGroup),
-    };
-  } catch {
-    return {
-      accessGroup: [],
-      slotGroup: [],
-    };
-  }
-}
-
 function normalizeIdentity(value: AuthSessionResultDTO['identity']): AuthSessionIdentity | null {
   if (!value) {
     return null;
@@ -165,61 +111,79 @@ function normalizeIdentity(value: AuthSessionResultDTO['identity']): AuthSession
   if (value.__typename === 'StaffType') {
     return {
       kind: 'STAFF',
-      accountId: value.accountId,
-      createdAt: value.createdAt,
-      departmentId: value.departmentId,
-      employmentStatus: value.employmentStatus,
-      id: value.id,
-      jobTitle: value.jobTitle,
-      name: value.name,
-      remark: value.remark,
-      updatedAt: value.updatedAt,
+      departmentId: normalizeOptionalString(value.departmentId),
+      id: normalizeOptionalString(value.id) ?? '',
+      name: normalizeOptionalString(value.name),
+      slotGroup: normalizeSlotGroup(value.slotGroup),
     };
   }
 
   return {
     kind: 'STUDENT',
-    accountId: value.accountId,
-    classId: value.classId,
-    createdAt: value.createdAt,
-    id: value.id,
-    name: value.name,
-    remarks: value.remarks,
-    studentStatus: value.studentStatus,
-    updatedAt: value.updatedAt,
+    currentClassCode: normalizeOptionalString(value.currentClassCode),
+    currentClassId: normalizeOptionalString(value.currentClassId),
+    id: normalizeOptionalString(value.id) ?? '',
+    name: normalizeOptionalString(value.name),
+    slotGroup: normalizeSlotGroup(value.slotGroup),
+    upstreamId: normalizeOptionalString(value.upstreamId),
   };
 }
 
-function resolveDisplayName(input: {
-  account: AuthSessionResultDTO['account'];
-  identity: AuthSessionIdentity | null;
-  nickname: string | null;
-  primaryAccessGroup: AuthAccessGroup;
-}) {
-  if (input.nickname) {
-    return input.nickname;
+function normalizePersistedIdentity(value: unknown): AuthSessionIdentity | null {
+  if (!value || typeof value !== 'object' || !('kind' in value)) {
+    return null;
   }
 
-  if (input.identity?.name) {
-    return input.identity.name;
+  const identity = value as Record<string, unknown>;
+
+  if (identity.kind === 'STAFF') {
+    return {
+      kind: 'STAFF',
+      departmentId: normalizeOptionalString(identity.departmentId),
+      id: normalizeOptionalString(identity.id) ?? '',
+      name: normalizeOptionalString(identity.name),
+      slotGroup: normalizeSlotGroup(identity.slotGroup),
+    };
   }
 
-  return normalizeOptionalString(input.account.loginName) || input.primaryAccessGroup.toLowerCase();
+  if (identity.kind === 'STUDENT') {
+    return {
+      kind: 'STUDENT',
+      currentClassCode: normalizeOptionalString(identity.currentClassCode),
+      currentClassId: normalizeOptionalString(identity.currentClassId),
+      id: normalizeOptionalString(identity.id) ?? '',
+      name: normalizeOptionalString(identity.name),
+      slotGroup: normalizeSlotGroup(identity.slotGroup),
+      upstreamId: normalizeOptionalString(identity.upstreamId),
+    };
+  }
+
+  return null;
+}
+
+function resolveSessionSlotGroup(identity: AuthSessionIdentity | null): readonly AuthSlotGroup[] {
+  return identity?.slotGroup ?? [];
+}
+
+function resolveDisplayName(input: { accountId: number; identity: AuthSessionIdentity | null }) {
+  return input.identity?.name ?? `account-${input.accountId}`;
 }
 
 export function mapSessionResultToSessionSnapshot(
   tokens: AuthSessionTokensDTO,
   session: AuthSessionResultDTO,
 ): AuthSessionSnapshot {
-  const parsedClaims = parseAccessTokenClaims(tokens.accessToken);
   const identity = normalizeIdentity(session.identity);
   const accessGroup = normalizeAccessGroup(session.userInfo.accessGroup);
-  const effectiveAccessGroup = accessGroup.length > 0 ? accessGroup : parsedClaims.accessGroup;
   const primaryAccessGroup = resolvePrimaryAccessGroup({
-    accessGroup: effectiveAccessGroup,
+    accessGroup,
     identity,
   });
-  const nickname = normalizeOptionalString(session.userInfo.nickname);
+  const displayName = resolveDisplayName({
+    accountId: session.accountId,
+    identity,
+  });
+  const nickname = normalizeOptionalString(session.userInfo.nickname) ?? '';
 
   return {
     accessToken: tokens.accessToken,
@@ -228,30 +192,25 @@ export function mapSessionResultToSessionSnapshot(
       identityHint: isAuthAccessGroup(session.account.identityHint)
         ? session.account.identityHint
         : null,
-      loginEmail: normalizeOptionalString(session.account.loginEmail),
-      loginName: normalizeOptionalString(session.account.loginName),
-      status: typeof session.account.status === 'string' ? session.account.status : 'ACTIVE',
+      loginEmail: null,
+      loginName: null,
+      status: 'ACTIVE',
     },
     accountId: session.accountId,
-    displayName: resolveDisplayName({
-      account: session.account,
-      identity,
-      nickname,
-      primaryAccessGroup,
-    }),
+    displayName,
     identity,
     isAuthenticated: true,
     needsProfileCompletion: session.needsProfileCompletion === true,
     primaryAccessGroup,
     refreshToken: tokens.refreshToken,
-    slotGroup: parsedClaims.slotGroup,
+    slotGroup: resolveSessionSlotGroup(identity),
     userInfo: {
-      accessGroup: effectiveAccessGroup,
-      avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
-      email: normalizeOptionalString(session.userInfo.email),
-      nickname: nickname ?? primaryAccessGroup.toLowerCase(),
-      signature: normalizeOptionalString(session.userInfo.signature),
-      tags: normalizeStringList(session.userInfo.tags),
+      accessGroup,
+      avatarUrl: null,
+      email: null,
+      nickname,
+      signature: null,
+      tags: [],
     },
   };
 }
@@ -335,6 +294,8 @@ export function deserializeStoredSession(rawValue: string): AuthStoredSession | 
   }
 
   const accessGroup = normalizeAccessGroup(value.userInfo.accessGroup);
+  const identity = normalizePersistedIdentity(value.identity);
+  const slotGroup = normalizeSlotGroup(value.slotGroup);
 
   return {
     accessToken: value.accessToken,
@@ -349,23 +310,17 @@ export function deserializeStoredSession(rawValue: string): AuthStoredSession | 
     },
     accountId: value.accountId,
     displayName: value.displayName.trim() || 'guest',
-    identity:
-      value.identity && typeof value.identity === 'object' && 'kind' in value.identity
-        ? (value.identity as AuthSessionIdentity)
-        : null,
+    identity,
     isAuthenticated: true,
     needsProfileCompletion: value.needsProfileCompletion,
     primaryAccessGroup: isAuthAccessGroup(value.primaryAccessGroup)
       ? value.primaryAccessGroup
       : resolvePrimaryAccessGroup({
           accessGroup,
-          identity:
-            value.identity && typeof value.identity === 'object' && 'kind' in value.identity
-              ? (value.identity as AuthSessionIdentity)
-              : null,
+          identity,
         }),
     refreshToken: value.refreshToken,
-    slotGroup: normalizeSlotGroup(value.slotGroup),
+    slotGroup,
     userInfo: {
       accessGroup,
       avatarUrl: normalizeOptionalString(value.userInfo.avatarUrl),
@@ -374,10 +329,7 @@ export function deserializeStoredSession(rawValue: string): AuthStoredSession | 
         normalizeOptionalString(value.userInfo.nickname) ??
         resolvePrimaryAccessGroup({
           accessGroup,
-          identity:
-            value.identity && typeof value.identity === 'object' && 'kind' in value.identity
-              ? (value.identity as AuthSessionIdentity)
-              : null,
+          identity,
         }).toLowerCase(),
       signature: normalizeOptionalString(value.userInfo.signature),
       tags: normalizeStringList(value.userInfo.tags),

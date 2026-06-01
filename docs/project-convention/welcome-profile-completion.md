@@ -49,6 +49,8 @@
 ## 表单与复用边界
 
 - `/welcome` 当前消费 `features/profile-completion` 的最小资料表单能力
+- 实名字段预填只允许使用 `me.identity.name`
+- `displayName`、`nickname` 和 `account-${accountId}` 兜底展示名都不能当作实名预填来源
 - 可复用内容只限：
   - 字段 contract
   - 表单 schema

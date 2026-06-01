@@ -45,9 +45,6 @@ export type VerificationIssuanceCurrentAccount = {
 type CurrentAccountResponse = {
   me: {
     accountId: number;
-    userInfo: {
-      nickname: string | null;
-    };
   } | null;
 };
 
@@ -86,9 +83,6 @@ const CURRENT_ACCOUNT_QUERY = `
   query Me {
     me {
       accountId
-      userInfo {
-        nickname
-      }
     }
   }
 `;
@@ -254,7 +248,7 @@ export async function fetchVerificationIssuanceCurrentAccount(): Promise<Verific
 
     return {
       accountId: response.me.accountId,
-      displayName: response.me.userInfo.nickname || `account-${response.me.accountId}`,
+      displayName: `account-${response.me.accountId}`,
     };
   } catch (error) {
     throw new Error(resolveVerificationIssuanceErrorMessage(error, '暂时无法读取当前账号。'));

@@ -133,8 +133,10 @@ const MY_PROFILE_IDENTITY_QUERY = `
         id
         accountId
         name
-        classId
+        currentClassCode
+        currentClassId
         studentStatus
+        upstreamId
       }
     }
   }
@@ -155,8 +157,10 @@ export type MyProfileStudentIdentity = {
   id: string;
   accountId: number;
   name: string;
-  classId: number | null;
+  currentClassCode: string | null;
+  currentClassId: string | null;
   studentStatus: string;
+  upstreamId: string | null;
 };
 
 export type MyProfileIdentityData = MyProfileStaffIdentity | MyProfileStudentIdentity;

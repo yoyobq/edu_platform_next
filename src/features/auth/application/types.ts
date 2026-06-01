@@ -10,26 +10,19 @@ export type AuthSlotGroup = string;
 export type AuthSessionIdentity =
   | {
       kind: 'STAFF';
-      accountId: number;
-      createdAt: string;
       departmentId: string | null;
-      employmentStatus: string;
       id: string;
-      jobTitle: string | null;
-      name: string;
-      remark: string | null;
-      updatedAt: string;
+      name: string | null;
+      slotGroup: readonly AuthSlotGroup[];
     }
   | {
       kind: 'STUDENT';
-      accountId: number;
-      classId: number | null;
-      createdAt: string;
+      currentClassCode: string | null;
+      currentClassId: string | null;
       id: string;
-      name: string;
-      remarks: string | null;
-      studentStatus: string;
-      updatedAt: string;
+      name: string | null;
+      slotGroup: readonly AuthSlotGroup[];
+      upstreamId: string | null;
     };
 
 export type AuthSessionAccount = {
