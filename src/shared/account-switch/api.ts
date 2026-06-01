@@ -1,5 +1,5 @@
 import { type AuthAccessGroup, isAuthAccessGroup } from '@/shared/auth-access';
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export type AccountSwitchLabIdentity =
   | {
@@ -111,6 +111,10 @@ type MeQueryResponse = {
   me: SessionQueryDTO;
 };
 
+type RefreshMutationResponse = {
+  refresh: SessionTokensDTO;
+};
+
 type LoginInput = {
   audience: 'DESKTOP';
   loginName: string;
@@ -123,6 +127,15 @@ const ACCOUNT_SWITCH_ALLOWED_ACCESS_GROUPS = ['ADMIN', 'STAFF'] as const;
 const LOGIN_MUTATION = `
   mutation Login($input: AuthLoginInput!) {
     login(input: $input) {
+      accessToken
+      refreshToken
+    }
+  }
+`;
+
+const REFRESH_MUTATION = `
+  mutation Refresh($input: AuthRefreshInput!) {
+    refresh(input: $input) {
       accessToken
       refreshToken
     }
@@ -375,6 +388,42 @@ function assertCanUseAccountSwitchLabSession(session: AccountSwitchLabSession) {
   throw new Error('账号切换只允许添加 Admin 或 Staff 账号。');
 }
 
+async function fetchAccountSwitchLabSession(tokens: SessionTokensDTO) {
+  const meResponse = await executeGraphQL<MeQueryResponse, Record<string, never>>(
+    ME_QUERY,
+    {},
+    {
+      accessToken: tokens.accessToken,
+      allowAuthRetry: false,
+    },
+  );
+  const session = mapSession(tokens, meResponse.me);
+
+  assertCanUseAccountSwitchLabSession(session);
+
+  return session;
+}
+
+async function refreshAccountSwitchLabTokens(refreshToken: string) {
+  const response = await executeGraphQL<
+    RefreshMutationResponse,
+    { input: { refreshToken: string } }
+  >(
+    REFRESH_MUTATION,
+    {
+      input: {
+        refreshToken,
+      },
+    },
+    {
+      allowAuthRetry: false,
+      authMode: 'none',
+    },
+  );
+
+  return response.refresh;
+}
+
 export async function createAccountSwitchLabSession(input: {
   loginName: string;
   loginPassword: string;
@@ -393,18 +442,23 @@ export async function createAccountSwitchLabSession(input: {
       authMode: 'none',
     },
   );
-  const meResponse = await executeGraphQL<MeQueryResponse, Record<string, never>>(
-    ME_QUERY,
-    {},
-    {
-      accessToken: loginResponse.login.accessToken,
-      allowAuthRetry: false,
-    },
-  );
 
-  const session = mapSession(loginResponse.login, meResponse.me);
+  return fetchAccountSwitchLabSession(loginResponse.login);
+}
 
-  assertCanUseAccountSwitchLabSession(session);
+export async function restoreAccountSwitchLabSession(session: AccountSwitchLabSession) {
+  const tokens = {
+    accessToken: session.accessToken,
+    refreshToken: session.refreshToken,
+  };
 
-  return session;
+  try {
+    return await fetchAccountSwitchLabSession(tokens);
+  } catch (error) {
+    if (!isGraphQLIngressError(error) || error.type !== 'auth') {
+      throw error;
+    }
+  }
+
+  return fetchAccountSwitchLabSession(await refreshAccountSwitchLabTokens(session.refreshToken));
 }

@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
 import {
@@ -9,6 +9,10 @@ import {
   type SeedAuthSessionOptions,
 } from '../../helpers/app';
 import { expect, test } from '../../test';
+
+const ACCOUNT_SWITCH_STORAGE_KEY = 'aigc-friendly-frontend.labs.account-switch.v1';
+
+type AccountSwitchTestSession = ReturnType<typeof buildAccountSwitchTestSession>;
 
 function layoutBanner(page: Page) {
   return page.getByRole('banner');
@@ -55,6 +59,210 @@ function createJwtWithExpOffsetMs(offsetMs: number) {
   ).toString('base64url');
 
   return `${header}.${payload}.signature`;
+}
+
+function buildAccountSwitchTestSession(input: {
+  accessToken: string;
+  accountId: number;
+  displayName: string;
+  primaryAccessGroup: 'ADMIN' | 'STAFF';
+  refreshToken: string;
+}) {
+  const identity =
+    input.primaryAccessGroup === 'STAFF'
+      ? {
+          accountId: input.accountId,
+          createdAt: '2026-04-03T00:00:00.000Z',
+          departmentId: 'staff-department',
+          employmentStatus: 'ACTIVE',
+          id: `staff-${input.accountId}`,
+          jobTitle: null,
+          kind: 'STAFF' as const,
+          name: input.displayName,
+          remark: null,
+          updatedAt: '2026-04-03T00:00:00.000Z',
+        }
+      : null;
+
+  return {
+    accessToken: input.accessToken,
+    account: {
+      id: input.accountId,
+      identityHint: input.primaryAccessGroup,
+      loginEmail: `${input.displayName}@example.com`,
+      loginName: input.displayName,
+      status: 'ACTIVE',
+    },
+    accountId: input.accountId,
+    displayName: input.displayName,
+    identity,
+    isAuthenticated: true,
+    needsProfileCompletion: false,
+    primaryAccessGroup: input.primaryAccessGroup,
+    refreshToken: input.refreshToken,
+    slotGroup: [],
+    userInfo: {
+      accessGroup: [input.primaryAccessGroup],
+      avatarUrl: null,
+      email: `${input.displayName}@example.com`,
+      nickname: input.displayName,
+      signature: null,
+      tags: [],
+    },
+    version: 2,
+  };
+}
+
+function buildMePayload(session: AccountSwitchTestSession) {
+  return {
+    account: session.account,
+    accountId: session.accountId,
+    identity: session.identity
+      ? {
+          __typename: 'StaffType',
+          accountId: session.identity.accountId,
+          createdAt: session.identity.createdAt,
+          departmentId: session.identity.departmentId,
+          employmentStatus: session.identity.employmentStatus,
+          id: session.identity.id,
+          jobTitle: session.identity.jobTitle,
+          name: session.identity.name,
+          remark: session.identity.remark,
+          updatedAt: session.identity.updatedAt,
+        }
+      : null,
+    needsProfileCompletion: session.needsProfileCompletion,
+    userInfo: session.userInfo,
+  };
+}
+
+async function fulfillGraphQLAuthError(route: Route) {
+  await route.fulfill({
+    body: JSON.stringify({
+      errors: [{ message: 'TOKEN_INVALID' }],
+    }),
+    contentType: 'application/json',
+    status: 200,
+  });
+}
+
+async function mockAccountSwitchReauthGraphQL(page: Page) {
+  const adminSession = buildAccountSwitchTestSession({
+    accessToken: 'admin-access-token',
+    accountId: 9527,
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+    refreshToken: 'admin-refresh-token',
+  });
+  const staleStaffSession = buildAccountSwitchTestSession({
+    accessToken: 'staff-access-token-stale',
+    accountId: 1001,
+    displayName: 'staff-user',
+    primaryAccessGroup: 'STAFF',
+    refreshToken: 'staff-refresh-token-stale',
+  });
+  const freshStaffSession = buildAccountSwitchTestSession({
+    accessToken: 'staff-access-token-fresh',
+    accountId: 1001,
+    displayName: 'staff-user',
+    primaryAccessGroup: 'STAFF',
+    refreshToken: 'staff-refresh-token-fresh',
+  });
+
+  await page.addInitScript(
+    ({ authKey, currentSession, switchKey, targetSession }) => {
+      if (!window.localStorage.getItem(authKey)) {
+        window.localStorage.setItem(authKey, JSON.stringify(currentSession));
+      }
+
+      if (!window.localStorage.getItem(switchKey)) {
+        window.localStorage.setItem(
+          switchKey,
+          JSON.stringify([
+            {
+              addedAt: '2026-04-03T00:00:00.000Z',
+              session: targetSession,
+            },
+          ]),
+        );
+      }
+    },
+    {
+      authKey: AUTH_STORAGE_KEY,
+      currentSession: adminSession,
+      switchKey: ACCOUNT_SWITCH_STORAGE_KEY,
+      targetSession: staleStaffSession,
+    },
+  );
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: { refreshToken?: unknown } } }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+    const authorization = route.request().headers().authorization ?? '';
+
+    if (query.includes('query Me')) {
+      if (authorization.includes(staleStaffSession.accessToken)) {
+        await fulfillGraphQLAuthError(route);
+        return;
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            me: buildMePayload(
+              authorization.includes(freshStaffSession.accessToken)
+                ? freshStaffSession
+                : adminSession,
+            ),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      if (payload?.variables?.input?.refreshToken === staleStaffSession.refreshToken) {
+        await fulfillGraphQLAuthError(route);
+        return;
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refresh: {
+              accessToken: adminSession.accessToken,
+              refreshToken: adminSession.refreshToken,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation Login')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            login: {
+              accessToken: freshStaffSession.accessToken,
+              refreshToken: freshStaffSession.refreshToken,
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
 }
 
 async function replaceStoredAccessToken(page: Page, accessToken: string) {
@@ -166,6 +374,33 @@ test('本地 access token 失效时，应走 refresh 后恢复会话', async ({ 
 
   await expect(page).toHaveURL(/\/$/);
   await expectAuthenticatedUserMenu(page, 'refreshed-admin');
+});
+
+test('切换到失效账号时，应弹出轻量登录框而不是跳回登录页', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAccountSwitchReauthGraphQL(page);
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await page.getByRole('button', { name: /admin-user/ }).click();
+  await page.getByRole('button', { name: /staff-user/ }).click();
+
+  const reauthDialog = page.getByRole('dialog', { name: '重新登录账号' });
+
+  await expect(reauthDialog).toBeVisible();
+  await expect(reauthDialog.getByText('staff-user 登录已失效，请重新登录后继续。')).toBeVisible();
+  await expect(page).not.toHaveURL(/\/login/);
+
+  await reauthDialog.getByLabel('密码').fill('password');
+  await reauthDialog.getByRole('button', { name: '登录并切换' }).click();
+
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
+  await expectAuthenticatedUserMenu(page, 'staff-user', 'Staff');
 });
 
 test('refresh 成功后 me 再失败时，应保留当前工作台会话', async ({ page }) => {

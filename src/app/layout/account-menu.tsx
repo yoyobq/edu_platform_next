@@ -28,6 +28,7 @@ import { type AuthSessionSnapshot, logout } from '@/features/auth';
 import {
   type AccountSwitchLabSession,
   createAccountSwitchLabSession,
+  restoreAccountSwitchLabSession,
 } from '@/shared/account-switch/api';
 import {
   type AccountSwitchLabRecord,
@@ -36,10 +37,21 @@ import {
   writeAccountSwitchLabRecords,
   writeCurrentAuthSession,
 } from '@/shared/account-switch/storage';
-import { getGraphQLClient } from '@/shared/graphql';
+import { getGraphQLClient, isGraphQLIngressError } from '@/shared/graphql';
 import { HexAvatar } from '@/shared/hex-avatar';
 
 const ACCOUNT_SWITCH_LIMIT = 2;
+
+type AccountCredentialsFormValues = {
+  loginName: string;
+  loginPassword: string;
+};
+
+type AccountReauthRequest = {
+  mode: 'logout-fallback' | 'switch';
+  nextRecords: AccountSwitchLabRecord[] | null;
+  session: AccountSwitchLabSession;
+};
 
 type AccountMenuProps = {
   activeSnapshot: AuthSessionSnapshot;
@@ -89,6 +101,14 @@ function buildAccountSessions(
   return sessions;
 }
 
+function getSwitchFailureMessage(error: unknown) {
+  if (isGraphQLIngressError(error) && error.type === 'auth') {
+    return '这个账号登录已失效，请重新登录后继续。';
+  }
+
+  return error instanceof Error ? error.message : '切换账号失败，请稍后再试。';
+}
+
 export function AccountMenu({
   activeSnapshot,
   controlSize,
@@ -102,7 +122,8 @@ export function AccountMenu({
 }: AccountMenuProps) {
   const navigate = useNavigate();
   const [addAccountModalOpen, setAddAccountModalOpen] = useState(false);
-  const [addAccountForm] = Form.useForm<{ loginName: string; loginPassword: string }>();
+  const [reauthRequest, setReauthRequest] = useState<AccountReauthRequest | null>(null);
+  const [addAccountForm] = Form.useForm<AccountCredentialsFormValues>();
   const [accountRecords, setAccountRecords] = useState<AccountSwitchLabRecord[]>(() =>
     readAccountSwitchLabRecords(),
   );
@@ -119,6 +140,7 @@ export function AccountMenu({
     ? '同步中'
     : formatAccessGroupLabel(activeSnapshot.primaryAccessGroup);
   const hasReachedAccountSwitchLimit = accountSessions.length >= ACCOUNT_SWITCH_LIMIT;
+  const isAccountCredentialModalOpen = addAccountModalOpen || Boolean(reauthRequest);
 
   function commitAccountRecords(nextRecords: AccountSwitchLabRecord[]) {
     writeAccountSwitchLabRecords(nextRecords);
@@ -129,6 +151,54 @@ export function AccountMenu({
     return accountSessions.find((candidate) => candidate.accountId !== session.accountId) ?? null;
   }
 
+  function buildSwitchAccountRecords(nextActiveSession: AccountSwitchLabSession) {
+    const retainedRecords = readAccountSwitchLabRecords().filter((record) =>
+      [activeSnapshot.accountId, nextActiveSession.accountId].includes(record.session.accountId),
+    );
+
+    return upsertAccountSwitchLabRecord(
+      upsertAccountSwitchLabRecord(retainedRecords, activeSnapshot),
+      nextActiveSession,
+    );
+  }
+
+  async function replaceCurrentSession(session: AccountSwitchLabSession) {
+    writeCurrentAuthSession(session);
+
+    try {
+      await getGraphQLClient().clearStore();
+    } finally {
+      writeCurrentAuthSession(session);
+    }
+
+    window.location.reload();
+  }
+
+  function closeAccountCredentialModal() {
+    setAddAccountModalOpen(false);
+    setReauthRequest(null);
+    setAddAccountError(null);
+    addAccountForm.resetFields();
+  }
+
+  function openReauthModal(
+    session: AccountSwitchLabSession,
+    mode: AccountReauthRequest['mode'] = 'switch',
+    nextRecords: AccountSwitchLabRecord[] | null = null,
+  ) {
+    setAddAccountModalOpen(false);
+    setReauthRequest({
+      mode,
+      nextRecords,
+      session,
+    });
+    setAddAccountError(`${getAccountDisplayName(session)} 登录已失效，请重新登录后继续。`);
+    addAccountForm.setFieldsValue({
+      loginName: session.account.loginName || session.account.loginEmail || '',
+      loginPassword: '',
+    });
+  }
+
   async function switchToSession(session: AccountSwitchLabSession) {
     if (activeSnapshot.accountId === session.accountId) {
       return;
@@ -137,9 +207,17 @@ export function AccountMenu({
     setSwitchingAccountId(session.accountId);
 
     try {
-      await getGraphQLClient().clearStore();
-      writeCurrentAuthSession(session);
-      window.location.reload();
+      const restoredSession = await restoreAccountSwitchLabSession(session);
+
+      commitAccountRecords(buildSwitchAccountRecords(restoredSession));
+      await replaceCurrentSession(restoredSession);
+    } catch (error) {
+      if (isGraphQLIngressError(error) && error.type === 'auth') {
+        openReauthModal(session);
+        return;
+      }
+
+      messageApi.error(getSwitchFailureMessage(error));
     } finally {
       setSwitchingAccountId(null);
     }
@@ -176,8 +254,7 @@ export function AccountMenu({
       const nextRecords = upsertAccountSwitchLabRecord(baseRecords, session);
 
       commitAccountRecords(nextRecords);
-      setAddAccountModalOpen(false);
-      addAccountForm.resetFields();
+      closeAccountCredentialModal();
       modalApi.confirm({
         title: '切换到新账号？',
         content: `已添加 ${getAccountDisplayName(session)}，现在切换过去吗？`,
@@ -192,6 +269,54 @@ export function AccountMenu({
     }
   }
 
+  async function handleReauthAccount(request: AccountReauthRequest) {
+    const values = await addAccountForm.validateFields();
+
+    setAddAccountSubmitting(true);
+    setAddAccountError(null);
+
+    try {
+      const session = await createAccountSwitchLabSession({
+        loginName: values.loginName,
+        loginPassword: values.loginPassword,
+      });
+
+      if (session.accountId !== request.session.accountId) {
+        setAddAccountError(`请登录 ${getAccountDisplayName(request.session)} 对应的账号。`);
+        return;
+      }
+
+      if (request.mode === 'logout-fallback') {
+        commitAccountRecords(
+          upsertAccountSwitchLabRecord(
+            (request.nextRecords ?? []).filter(
+              (record) => record.session.accountId === session.accountId,
+            ),
+            session,
+          ),
+        );
+      } else {
+        commitAccountRecords(buildSwitchAccountRecords(session));
+      }
+
+      closeAccountCredentialModal();
+      await replaceCurrentSession(session);
+    } catch (error) {
+      setAddAccountError(error instanceof Error ? error.message : '重新登录失败。');
+    } finally {
+      setAddAccountSubmitting(false);
+    }
+  }
+
+  async function handleAccountCredentialSubmit() {
+    if (reauthRequest) {
+      await handleReauthAccount(reauthRequest);
+      return;
+    }
+
+    await handleAddAccount();
+  }
+
   async function logoutAccount(session: AccountSwitchLabSession) {
     const nextRecords = accountRecords.filter(
       (record) => record.session.accountId !== session.accountId,
@@ -199,17 +324,41 @@ export function AccountMenu({
     const isActiveAccount = activeSnapshot.accountId === session.accountId;
     const fallbackSession = isActiveAccount ? getFallbackSessionAfterLogout(session) : null;
 
-    commitAccountRecords(nextRecords);
-
     if (isActiveAccount && fallbackSession) {
-      await getGraphQLClient().clearStore();
-      writeCurrentAuthSession(fallbackSession);
-      window.location.reload();
+      setSwitchingAccountId(fallbackSession.accountId);
+
+      try {
+        const restoredFallbackSession = await restoreAccountSwitchLabSession(fallbackSession);
+
+        commitAccountRecords(
+          upsertAccountSwitchLabRecord(
+            nextRecords.filter(
+              (record) => record.session.accountId === restoredFallbackSession.accountId,
+            ),
+            restoredFallbackSession,
+          ),
+        );
+        await replaceCurrentSession(restoredFallbackSession);
+      } catch (error) {
+        if (isGraphQLIngressError(error) && error.type === 'auth') {
+          openReauthModal(fallbackSession, 'logout-fallback', nextRecords);
+          return;
+        }
+
+        messageApi.error(getSwitchFailureMessage(error));
+      } finally {
+        setSwitchingAccountId(null);
+      }
+
       return;
     }
 
+    commitAccountRecords(nextRecords);
+
     if (isActiveAccount) {
-      await getGraphQLClient().clearStore();
+      await getGraphQLClient()
+        .clearStore()
+        .catch(() => undefined);
       logout();
       navigate('/login', { replace: true });
     }
@@ -277,6 +426,9 @@ export function AccountMenu({
               }
 
               setAddAccountModalOpen(true);
+              setReauthRequest(null);
+              setAddAccountError(null);
+              addAccountForm.resetFields();
             }}
           >
             <PlusOutlined />
@@ -508,22 +660,19 @@ export function AccountMenu({
         {renderTrigger()}
       </Dropdown>
       <Modal
-        title="增加另一个账号"
-        open={addAccountModalOpen}
-        okText="添加账号"
+        title={reauthRequest ? '重新登录账号' : '增加另一个账号'}
+        open={isAccountCredentialModalOpen}
+        okText={reauthRequest ? '登录并切换' : '添加账号'}
         cancelText="取消"
         confirmLoading={addAccountSubmitting}
-        okButtonProps={{ disabled: hasReachedAccountSwitchLimit }}
-        onCancel={() => {
-          setAddAccountModalOpen(false);
-          setAddAccountError(null);
-          addAccountForm.resetFields();
-        }}
-        onOk={() => void handleAddAccount()}
+        forceRender
+        okButtonProps={{ disabled: !reauthRequest && hasReachedAccountSwitchLimit }}
+        onCancel={closeAccountCredentialModal}
+        onOk={() => void handleAccountCredentialSubmit()}
       >
         {addAccountError ? (
           <Alert
-            type="error"
+            type={reauthRequest ? 'warning' : 'error'}
             showIcon
             title={addAccountError}
             style={{ marginBottom: 16, marginTop: 8 }}
@@ -549,7 +698,7 @@ export function AccountMenu({
             rules={[{ required: true, message: '请输入密码。' }]}
             style={{ marginBottom: 0 }}
           >
-            <Input.Password autoComplete="new-password" />
+            <Input.Password autoComplete={reauthRequest ? 'current-password' : 'new-password'} />
           </Form.Item>
         </Form>
       </Modal>
