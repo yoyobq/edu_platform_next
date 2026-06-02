@@ -229,7 +229,9 @@ export function UpstreamLoginModal({
                     color: 'var(--ant-color-error)',
                   }}
                 >
-                  <CloseCircleOutlined className="mt-0.5 shrink-0" />
+                  <span className="mt-0.5 shrink-0">
+                    <CloseCircleOutlined />
+                  </span>
                   <span>{loginError}</span>
                 </div>
               ) : null}
@@ -254,7 +256,7 @@ export function UpstreamLoginModal({
                     autoComplete="off"
                     disabled={Boolean(normalizedLockedUserId)}
                     placeholder="学号或工号"
-                    prefix={<UserOutlined className="text-text-quaternary" />}
+                    prefix={<UserOutlined style={{ color: token.colorTextQuaternary }} />}
                     size="large"
                     suffix={
                       normalizedLockedUserId ? (
@@ -268,7 +270,7 @@ export function UpstreamLoginModal({
                   extra={
                     hasRememberedCredentials ? (
                       <Flex align="center" gap={8}>
-                        <CheckCircleOutlined className="text-success" />
+                        <CheckCircleOutlined style={{ color: token.colorSuccess }} />
                         <span className="text-[0.8125rem] leading-5 text-text-tertiary">
                           已填入本机保存的凭证
                         </span>
@@ -294,7 +296,7 @@ export function UpstreamLoginModal({
                   <Input.Password
                     autoComplete="new-password"
                     placeholder="校园网登录密码"
-                    prefix={<KeyOutlined className="text-text-quaternary" />}
+                    prefix={<KeyOutlined style={{ color: token.colorTextQuaternary }} />}
                     size="large"
                   />
                 </Form.Item>

@@ -537,7 +537,7 @@ export function AccountMenu({
                 <div className="truncate text-sm font-semibold">{activeSnapshot.displayName}</div>
                 <div className="truncate text-xs text-text-secondary">{identityLabel}</div>
               </div>
-              <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+              <RightOutlined style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 10 }} />
             </button>
           </Popover>
         </div>
@@ -584,7 +584,7 @@ export function AccountMenu({
               >
                 <LogoutOutlined />
                 <span className="min-w-0 flex-1 text-left">退出账户</span>
-                <RightOutlined className="text-text-tertiary" style={{ fontSize: 10 }} />
+                <RightOutlined style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 10 }} />
               </button>
             </Popover>
           ) : (

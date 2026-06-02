@@ -85,7 +85,9 @@ export function StaffEmploymentStatusQuickSwitch({
                         {ADMIN_USER_EMPLOYMENT_STATUS_LABELS[status]}
                       </Tag>
                     </div>
-                    {isActive && <CheckOutlined className="text-[10px] text-primary" />}
+                    {isActive && (
+                      <CheckOutlined style={{ color: 'var(--ant-color-primary)', fontSize: 10 }} />
+                    )}
                   </div>
                 </Button>
               </div>
@@ -123,7 +125,9 @@ export function StaffEmploymentStatusQuickSwitch({
         >
           {ADMIN_USER_EMPLOYMENT_STATUS_LABELS[value]}
         </Tag>
-        <CaretDownOutlined className="text-[10px] text-text-secondary opacity-40 transition-opacity duration-200 group-hover:opacity-100" />
+        <span className="inline-flex text-text-secondary opacity-40 transition-opacity duration-200 group-hover:opacity-100">
+          <CaretDownOutlined style={{ color: 'currentColor', fontSize: 10 }} />
+        </span>
       </div>
     </Popover>
   );
