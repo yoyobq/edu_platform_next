@@ -53,7 +53,7 @@ import { logout, useAuthSessionState } from '@/features/auth';
 import {
   THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
   withWorkbenchSearch,
-} from '@/shared/third-workspace-demo/model';
+} from '@/shared/third-workspace-demo';
 import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';

@@ -2,7 +2,7 @@
 
 import { getNavigationLeafItems, type NavigationFilter } from '@/app/navigation';
 
-import { withWorkbenchSearch } from '@/shared/third-workspace-demo/model';
+import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
 
 import type { EntryCard } from './entry-card';
 

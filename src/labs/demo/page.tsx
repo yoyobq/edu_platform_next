@@ -11,7 +11,7 @@ import {
   THIRD_WORKSPACE_DEMO_ARTIFACTS,
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo/model';
+} from '@/shared/third-workspace-demo';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import { demoLabAccess } from './access';

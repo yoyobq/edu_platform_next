@@ -2,8 +2,7 @@
 
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
-import { isGraphQLIngressError } from '@/shared/graphql/errors';
+import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { AuthApiPort } from '../application/ports';
 import type { AuthLoginInput, AuthSessionSnapshot } from '../application/types';
