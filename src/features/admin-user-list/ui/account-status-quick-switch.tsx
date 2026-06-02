@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CaretDownOutlined } from '@ant-design/icons';
+import { CaretDownOutlined, CheckOutlined } from '@ant-design/icons';
 import { Button, Popover, Tag, Typography } from 'antd';
 
 import {
@@ -90,9 +90,7 @@ export function AccountStatusQuickSwitch({
                         {ADMIN_USER_ACCOUNT_STATUS_LABELS[status]}
                       </Tag>
                     </div>
-                    {isActive && (
-                      <div className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_4px_rgba(24,144,255,0.5)]" />
-                    )}
+                    {isActive && <CheckOutlined className="text-[10px] text-primary" />}
                   </div>
                 </Button>
               </div>

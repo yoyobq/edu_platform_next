@@ -47,6 +47,22 @@
   --color-ai-accent-bg-hover: color-mix(in srgb, #cc6b46 18%, var(--ant-color-bg-container, white));
   --color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 
+  /* Dark Prism code syntax colors */
+  --color-code-syntax-dark-bg: #1e1e1e;
+  --color-code-syntax-dark-fg: #d4d4d4;
+  --color-code-syntax-dark-muted: #808080;
+  --color-code-syntax-dark-comment: #6a9955;
+  --color-code-syntax-dark-property: #9cdcfe;
+  --color-code-syntax-dark-tag: #569cd6;
+  --color-code-syntax-dark-number: #b5cea8;
+  --color-code-syntax-dark-entity: #4fc1ff;
+  --color-code-syntax-dark-string: #ce9178;
+  --color-code-syntax-dark-selector: #d7ba7d;
+  --color-code-syntax-dark-builtin: #4ec9b0;
+  --color-code-syntax-dark-keyword: #c586c0;
+  --color-code-syntax-dark-function: #dcdcaa;
+  --color-code-syntax-dark-regex: #d16969;
+
   /* Course category semantic colors */
   --course-category-theory-color: #1d4ed8;
   --course-category-theory-bg: #dbeafe;

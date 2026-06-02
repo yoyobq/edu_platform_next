@@ -10,8 +10,15 @@ const COLOR_FAMILIES: ColorFamily[] = [
 ];
 
 const HUE_OFFSETS = [-8, 0, 8] as const;
+const HEX_AVATAR_TONES = {
+  bg: { lightness: 92, saturation: 42 },
+  fg: { lightness: 50, saturation: 68 },
+  fg2: { lightness: 62, saturation: 60 },
+} as const;
 const RING_1_EXACT_ENABLED = 2;
 const RING_2_MIN_ENABLED = 5;
+
+type HexAvatarTone = (typeof HEX_AVATAR_TONES)[keyof typeof HEX_AVATAR_TONES];
 
 function cellKey(q: number, r: number) {
   return `${q},${r}`;
@@ -69,6 +76,50 @@ function readBit(hashBytes: Uint8Array, bitIndex: number) {
   const byteIndex = Math.floor(bitIndex / 8) % hashBytes.length;
   const bitOffset = bitIndex % 8;
   return ((hashBytes[byteIndex] >> bitOffset) & 1) === 1;
+}
+
+function toHexChannel(value: number) {
+  return Math.round(value).toString(16).padStart(2, '0');
+}
+
+function normalizeHue(hue: number) {
+  return ((hue % 360) + 360) % 360;
+}
+
+function buildHueToneColor(hue: number, tone: HexAvatarTone) {
+  const saturation = tone.saturation / 100;
+  const lightness = tone.lightness / 100;
+  const chroma = (1 - Math.abs(2 * lightness - 1)) * saturation;
+  const huePrime = normalizeHue(hue) / 60;
+  const secondary = chroma * (1 - Math.abs((huePrime % 2) - 1));
+  const lightnessMatch = lightness - chroma / 2;
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+
+  if (huePrime < 1) {
+    red = chroma;
+    green = secondary;
+  } else if (huePrime < 2) {
+    red = secondary;
+    green = chroma;
+  } else if (huePrime < 3) {
+    green = chroma;
+    blue = secondary;
+  } else if (huePrime < 4) {
+    green = secondary;
+    blue = chroma;
+  } else if (huePrime < 5) {
+    red = secondary;
+    blue = chroma;
+  } else {
+    red = chroma;
+    blue = secondary;
+  }
+
+  return `#${toHexChannel((red + lightnessMatch) * 255)}${toHexChannel(
+    (green + lightnessMatch) * 255,
+  )}${toHexChannel((blue + lightnessMatch) * 255)}`;
 }
 
 function reflectAcrossVerticalAxis(cell: Pick<HexCell, 'q' | 'r'>) {
@@ -288,9 +339,9 @@ export function buildHexAvatarSpecV1(hashBytes: Uint8Array): HexAvatarSpec {
   const offsetIndex = hashBytes[13] % HUE_OFFSETS.length;
   const hue = family.baseHue + HUE_OFFSETS[offsetIndex];
 
-  const fg = `hsl(${hue}, 68%, 50%)`;
-  const fg2 = `hsl(${hue}, 60%, 62%)`;
-  const bg = `hsl(${hue}, 42%, 92%)`;
+  const fg = buildHueToneColor(hue, HEX_AVATAR_TONES.fg);
+  const fg2 = buildHueToneColor(hue, HEX_AVATAR_TONES.fg2);
+  const bg = buildHueToneColor(hue, HEX_AVATAR_TONES.bg);
 
   const ring1Cells = cloneCells(RING_1_TEMPLATE);
   const ring2Cells = cloneCells(RING_2_TEMPLATE);

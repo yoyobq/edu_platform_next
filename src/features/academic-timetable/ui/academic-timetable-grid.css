@@ -195,7 +195,11 @@
 }
 
 .academic-timetable-entry-inactive {
-  background: linear-gradient(180deg, rgba(140, 140, 140, 0.14) 0%, rgba(140, 140, 140, 0.2) 100%);
+  background: linear-gradient(
+    180deg,
+    var(--ant-color-fill-quaternary) 0%,
+    var(--ant-color-fill-tertiary) 100%
+  );
   border-color: var(--ant-color-border);
   box-shadow: none;
 }
@@ -290,17 +294,17 @@
 }
 
 .academic-timetable-entry-status-default {
-  background: rgba(22, 119, 255, 0.12);
+  background: var(--ant-color-primary-bg);
   color: var(--ant-color-primary);
 }
 
 .academic-timetable-entry-status-active {
-  background: rgba(82, 196, 26, 0.14);
-  color: #3f8600;
+  background: var(--ant-color-success-bg);
+  color: var(--ant-color-success-text);
 }
 
 .academic-timetable-entry-status-inactive {
-  background: rgba(140, 140, 140, 0.14);
+  background: var(--ant-color-fill-tertiary);
   color: var(--ant-color-text-secondary);
 }
 

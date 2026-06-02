@@ -80,9 +80,17 @@
 
 此 token 用于 Sidecar 外壳、AI 生成区块等需要轻微 Claude Coral 色调边框的场景。深色模式下 `--ant-color-border` 自动跟随 `darkAlgorithm`，混合结果自动适配。
 
-补充说明：此 token 尚未在 `index.css` 中定义，需追加到 `@theme inline` 块。参见 [index-css.md](./index-css.md)。
+补充说明：此 token 已在 `src/index.css` 的 `@theme inline` 块中定义。参见 [index-css.md](./index-css.md)。
 
 **Token 封口规则**：不因局部页面临时新增视觉 token。若某个模式无法由现有 token 支撑，应先回到既有 token 体系中重组，而非发明新变量。课程类别色属于跨页面业务语义 token，必须走下方统一定义。
+
+---
+
+## 代码高亮
+
+代码块语法色统一定义在 `src/index.css` 的 `--color-code-syntax-dark-*` token 中。
+
+当前只为 `@/shared/ui/code-highlighter` 的深色 Prism 主题服务；组件代码只能消费这些 CSS 变量，不在 TS/TSX 内联 hex。浅色主题继续使用 `@ant-design/x` 的默认 `customOneLight`。
 
 ---
 

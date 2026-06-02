@@ -16,10 +16,10 @@ const sharedCodeTagStyle: CSSProperties = {
 };
 
 const sharedPreStyle: CSSProperties = {
-  borderRadius: '0.3em',
+  borderRadius: 'var(--ant-border-radius-sm)',
   margin: 0,
   overflow: 'auto',
-  padding: '1em',
+  padding: 'var(--ant-padding-sm)',
 };
 
 const sharedCodeHighlighterStyle: CSSProperties = {
@@ -36,106 +36,123 @@ const sharedCodeHighlighterStyles: NonNullable<CodeHighlighterProps['styles']> =
   },
 };
 
+const darkCodeSyntaxColor = {
+  background: 'var(--color-code-syntax-dark-bg)',
+  builtin: 'var(--color-code-syntax-dark-builtin)',
+  comment: 'var(--color-code-syntax-dark-comment)',
+  entity: 'var(--color-code-syntax-dark-entity)',
+  foreground: 'var(--color-code-syntax-dark-fg)',
+  function: 'var(--color-code-syntax-dark-function)',
+  keyword: 'var(--color-code-syntax-dark-keyword)',
+  muted: 'var(--color-code-syntax-dark-muted)',
+  number: 'var(--color-code-syntax-dark-number)',
+  property: 'var(--color-code-syntax-dark-property)',
+  regex: 'var(--color-code-syntax-dark-regex)',
+  selector: 'var(--color-code-syntax-dark-selector)',
+  string: 'var(--color-code-syntax-dark-string)',
+  tag: 'var(--color-code-syntax-dark-tag)',
+} as const;
+
 const darkCodeHighlightStyle: PrismStyle = {
   'pre[class*="language-"]': {
-    background: '#1e1e1e',
-    color: '#d4d4d4',
+    background: darkCodeSyntaxColor.background,
+    color: darkCodeSyntaxColor.foreground,
     margin: 0,
   },
   'code[class*="language-"]': {
     background: 'transparent',
-    color: '#d4d4d4',
+    color: darkCodeSyntaxColor.foreground,
     textShadow: 'none',
   },
   comment: {
-    color: '#6a9955',
+    color: darkCodeSyntaxColor.comment,
     fontStyle: 'italic',
   },
   prolog: {
-    color: '#808080',
+    color: darkCodeSyntaxColor.muted,
   },
   doctype: {
-    color: '#808080',
+    color: darkCodeSyntaxColor.muted,
   },
   cdata: {
-    color: '#808080',
+    color: darkCodeSyntaxColor.muted,
   },
   punctuation: {
-    color: '#d4d4d4',
+    color: darkCodeSyntaxColor.foreground,
   },
   property: {
-    color: '#9cdcfe',
+    color: darkCodeSyntaxColor.property,
   },
   tag: {
-    color: '#569cd6',
+    color: darkCodeSyntaxColor.tag,
   },
   boolean: {
-    color: '#569cd6',
+    color: darkCodeSyntaxColor.tag,
   },
   number: {
-    color: '#b5cea8',
+    color: darkCodeSyntaxColor.number,
   },
   constant: {
-    color: '#4fc1ff',
+    color: darkCodeSyntaxColor.entity,
   },
   symbol: {
-    color: '#b5cea8',
+    color: darkCodeSyntaxColor.number,
   },
   deleted: {
-    color: '#ce9178',
+    color: darkCodeSyntaxColor.string,
   },
   selector: {
-    color: '#d7ba7d',
+    color: darkCodeSyntaxColor.selector,
   },
   'attr-name': {
-    color: '#9cdcfe',
+    color: darkCodeSyntaxColor.property,
   },
   string: {
-    color: '#ce9178',
+    color: darkCodeSyntaxColor.string,
   },
   char: {
-    color: '#ce9178',
+    color: darkCodeSyntaxColor.string,
   },
   builtin: {
-    color: '#4ec9b0',
+    color: darkCodeSyntaxColor.builtin,
   },
   inserted: {
-    color: '#b5cea8',
+    color: darkCodeSyntaxColor.number,
   },
   operator: {
-    color: '#d4d4d4',
+    color: darkCodeSyntaxColor.foreground,
   },
   entity: {
-    color: '#4fc1ff',
+    color: darkCodeSyntaxColor.entity,
     cursor: 'help',
   },
   url: {
-    color: '#d7ba7d',
+    color: darkCodeSyntaxColor.selector,
   },
   atrule: {
-    color: '#c586c0',
+    color: darkCodeSyntaxColor.keyword,
   },
   'attr-value': {
-    color: '#ce9178',
+    color: darkCodeSyntaxColor.string,
   },
   keyword: {
-    color: '#c586c0',
+    color: darkCodeSyntaxColor.keyword,
   },
   function: {
-    color: '#dcdcaa',
+    color: darkCodeSyntaxColor.function,
   },
   'class-name': {
-    color: '#4ec9b0',
+    color: darkCodeSyntaxColor.builtin,
   },
   regex: {
-    color: '#d16969',
+    color: darkCodeSyntaxColor.regex,
   },
   important: {
-    color: '#c586c0',
+    color: darkCodeSyntaxColor.keyword,
     fontWeight: 700,
   },
   variable: {
-    color: '#9cdcfe',
+    color: darkCodeSyntaxColor.property,
   },
   bold: {
     fontWeight: 700,

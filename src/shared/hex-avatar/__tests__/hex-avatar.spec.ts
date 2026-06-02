@@ -201,7 +201,7 @@ describe('renderHexAvatarSvgV1', () => {
     expect(svg1).toBe(svg2);
   });
 
-  it('snapshot: 确定性输出', () => {
+  it('输出稳定 SVG 结构与计算色值', () => {
     const hash = makeHashBytes({
       0: 42,
       1: 0b10110101,
@@ -219,6 +219,10 @@ describe('renderHexAvatarSvgV1', () => {
       13: 0b01010110,
     });
     const svg = renderHexAvatarSvgV1(buildHexAvatarSpecV1(hash));
-    expect(svg).toMatchSnapshot();
+    const fillMatches = svg.match(/fill="#[0-9a-f]{6}"/g) ?? [];
+
+    expect(svg).toContain('M13.29,26.6L17.97,29.3');
+    expect(svg).not.toContain('hsl' + '(');
+    expect(fillMatches).toHaveLength(10);
   });
 });

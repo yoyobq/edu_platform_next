@@ -55,6 +55,22 @@
   --color-ai-accent-bg-hover: color-mix(in srgb, #cc6b46 18%, var(--ant-color-bg-container, white));
   --color-ai-accent-border: color-mix(in srgb, #cc6b46 25%, var(--ant-color-border));
 
+  /* Dark Prism code syntax colors */
+  --color-code-syntax-dark-bg: #1e1e1e;
+  --color-code-syntax-dark-fg: #d4d4d4;
+  --color-code-syntax-dark-muted: #808080;
+  --color-code-syntax-dark-comment: #6a9955;
+  --color-code-syntax-dark-property: #9cdcfe;
+  --color-code-syntax-dark-tag: #569cd6;
+  --color-code-syntax-dark-number: #b5cea8;
+  --color-code-syntax-dark-entity: #4fc1ff;
+  --color-code-syntax-dark-string: #ce9178;
+  --color-code-syntax-dark-selector: #d7ba7d;
+  --color-code-syntax-dark-builtin: #4ec9b0;
+  --color-code-syntax-dark-keyword: #c586c0;
+  --color-code-syntax-dark-function: #dcdcaa;
+  --color-code-syntax-dark-regex: #d16969;
+
   /* Workbench custom item background tokens */
   --color-workbench-custom-blue-bg: rgb(219 234 254 / 0.82);
   --color-workbench-custom-green-bg: rgb(220 252 231 / 0.82);
@@ -314,9 +330,13 @@ html.disable-motion *::after {
 .login-page-shell {
   --login-page-frame-layer: 1;
 
-  background-color: #f6f1eb;
+  background-color: color-mix(in srgb, var(--color-ai-accent-bg) 70%, var(--ant-color-bg-layout));
   background-image:
-    radial-gradient(circle at 12% 2%, color-mix(in srgb, white 68%, transparent), transparent 28%),
+    radial-gradient(
+      circle at 12% 2%,
+      color-mix(in srgb, var(--ant-color-bg-container) 68%, transparent),
+      transparent 28%
+    ),
     radial-gradient(
       circle at 76% 24%,
       color-mix(in srgb, var(--ant-color-primary) 5%, transparent),
@@ -343,7 +363,22 @@ html.disable-motion *::after {
 }
 
 .login-page-shell::after {
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 1680 190' xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none'%3E%3Cpath d='M0 124C178 154 326 58 532 82C724 104 866 160 1042 190H0V124Z' fill='%23f6eadf' fill-opacity='.74'/%3E%3Cpath d='M0 36C88 122 238 162 390 132C516 108 610 126 692 190H0V36Z' fill='%23ead3be' fill-opacity='.46'/%3E%3Cpath d='M0 76C112 144 278 166 420 139C548 115 632 140 716 190H0V76Z' fill='%23dfb38f' fill-opacity='.3'/%3E%3C/svg%3E");
+  background-image:
+    radial-gradient(
+      150% 105% at 14% 100%,
+      color-mix(in srgb, var(--color-ai-accent-bg) 74%, transparent) 0 36%,
+      transparent 37%
+    ),
+    radial-gradient(
+      120% 90% at 34% 100%,
+      color-mix(in srgb, var(--color-ai-accent-border) 46%, transparent) 0 32%,
+      transparent 33%
+    ),
+    linear-gradient(
+      to top,
+      color-mix(in srgb, var(--color-ai-accent-bg-hover) 62%, transparent),
+      transparent 78%
+    );
   background-position: left bottom;
   background-repeat: no-repeat;
   background-size: 100% 100%;
@@ -451,9 +486,9 @@ html.disable-motion *::after {
 
 .login-hero-image-shell {
   background: color-mix(in srgb, var(--ant-color-bg-container) 94%, var(--color-ai-accent));
-  border: 1px solid color-mix(in srgb, white 70%, var(--ant-color-border));
+  border: 1px solid color-mix(in srgb, var(--ant-color-bg-container) 70%, var(--ant-color-border));
   border-radius: 24px;
-  box-shadow: 0 18px 44px -30px color-mix(in srgb, var(--color-ai-accent) 58%, black);
+  box-shadow: var(--shadow-surface);
   overflow: hidden;
   padding: 5px;
   position: relative;
@@ -469,7 +504,7 @@ html.disable-motion *::after {
 }
 
 .login-story-copy {
-  color: rgba(17, 24, 39, 0.78);
+  color: color-mix(in srgb, var(--ant-color-text) 78%, var(--ant-color-text-secondary));
   font-size: 21px;
   font-weight: 500;
   line-height: 1.78;
@@ -488,7 +523,7 @@ html.disable-motion *::after {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: 16px;
-  box-shadow: 0 13px 30px -24px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--shadow-card);
   color: var(--ant-color-text-secondary);
   display: flex;
   font-size: 16px;
@@ -506,33 +541,33 @@ html.disable-motion *::after {
 }
 
 .login-feature-chip:nth-child(1) .anticon {
-  color: #d56b12;
+  color: var(--ant-color-warning);
 }
 
 .login-feature-chip:nth-child(2) .anticon {
-  color: #e46f2f;
+  color: var(--color-ai-accent);
 }
 
 .login-feature-chip:nth-child(3) .anticon {
-  color: #1769ff;
+  color: var(--ant-color-primary);
 }
 
 .login-feature-chip:nth-child(1) {
-  background: color-mix(in srgb, #d56b12 5%, var(--ant-color-bg-container));
-  border-color: color-mix(in srgb, #d56b12 18%, var(--ant-color-border-secondary));
-  color: color-mix(in srgb, #8a3f08 28%, var(--ant-color-text));
+  background: var(--ant-color-warning-bg);
+  border-color: var(--ant-color-warning-border);
+  color: var(--ant-color-warning-text);
 }
 
 .login-feature-chip:nth-child(2) {
-  background: color-mix(in srgb, #e46f2f 5%, var(--ant-color-bg-container));
-  border-color: color-mix(in srgb, #e46f2f 18%, var(--ant-color-border-secondary));
-  color: color-mix(in srgb, #8f3d18 28%, var(--ant-color-text));
+  background: var(--color-ai-accent-bg);
+  border-color: var(--color-ai-accent-border);
+  color: var(--ant-color-text);
 }
 
 .login-feature-chip:nth-child(3) {
-  background: color-mix(in srgb, #1769ff 4%, var(--ant-color-bg-container));
-  border-color: color-mix(in srgb, #1769ff 16%, var(--ant-color-border-secondary));
-  color: color-mix(in srgb, #164eb8 28%, var(--ant-color-text));
+  background: var(--ant-color-primary-bg);
+  border-color: var(--ant-color-primary-border);
+  color: var(--ant-color-primary-text);
 }
 
 .login-form-column {
@@ -569,9 +604,13 @@ html.disable-motion *::after {
 
 .login-card-shell > .ant-card {
   background: color-mix(in srgb, var(--ant-color-bg-container) 97%, var(--color-ai-accent));
-  border-color: color-mix(in srgb, var(--ant-color-border-secondary) 72%, white);
+  border-color: color-mix(
+    in srgb,
+    var(--ant-color-border-secondary) 72%,
+    var(--ant-color-bg-container)
+  );
   border-radius: 24px;
-  box-shadow: 0 22px 54px -34px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-surface);
 }
 
 .login-card-shell .ant-form-item-label > label {
