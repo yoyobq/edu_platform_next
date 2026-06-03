@@ -70,6 +70,7 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-roster-membership-reconciliation',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -121,13 +122,14 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-roster-membership-reconciliation',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
     ).toEqual(['/admin/users', '/admin/verification-issuance', '/errors/preview']);
   });
 
-  it('keeps labs hidden for regular staff', () => {
+  it('shows the roster reconciliation lab for regular staff', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1001,
@@ -140,6 +142,7 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
+      'labs',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -150,7 +153,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-roster-membership-reconciliation',
+    ]);
   });
 
   it('keeps upstream sync pages hidden from student affairs officers', () => {
@@ -167,8 +172,11 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
+      'labs',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-roster-membership-reconciliation',
+    ]);
     expect(
       canAccessNavigationPath(
         '/upstream-data-sync/major-sync',
@@ -230,7 +238,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-roster-membership-reconciliation',
+    ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
       '/calendar-schedule/weekly-timetable',
@@ -253,6 +263,7 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
+      'labs',
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
@@ -271,7 +282,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-roster-membership-reconciliation',
+    ]);
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
         accountId: 1002,
@@ -429,6 +442,18 @@ describe('navigation catalog', () => {
     ).toBe(false);
     expect(canAccessNavigationPath('/labs/academic-workload', buildFilter())).toBe(false);
     expect(
+      canAccessNavigationPath('/labs/student-roster-membership-reconciliation', buildFilter()),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-roster-membership-reconciliation',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
       canAccessNavigationPath(
         '/labs/academic-workload-deduction-summary',
         buildFilter({
@@ -460,6 +485,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-roster-membership-reconciliation',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',

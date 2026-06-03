@@ -41,7 +41,7 @@
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
-- `labs`：`/labs/invite-issuer`、`/labs/upstream-session-demo`
+- `labs`：`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/student-roster-membership-reconciliation`
 - `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：

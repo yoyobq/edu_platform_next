@@ -83,6 +83,10 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
+  loadStudentRosterMembershipReconciliationLabRouteModule,
+  studentRosterMembershipReconciliationLabAccess,
+} from '@/labs/student-roster-membership-reconciliation';
+import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
@@ -538,6 +542,42 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function studentRosterMembershipReconciliationLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(studentRosterMembershipReconciliationLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(studentRosterMembershipReconciliationLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(studentRosterMembershipReconciliationLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -1044,6 +1084,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'student-roster-membership-reconciliation',
+            loader: studentRosterMembershipReconciliationLabLoader,
+            lazy: loadStudentRosterMembershipReconciliationLabRouteModule,
           },
         ],
       },
