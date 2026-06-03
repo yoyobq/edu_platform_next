@@ -534,7 +534,9 @@ export function AccountMenu({
                 size={44}
               />
               <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-semibold">{activeSnapshot.displayName}</div>
+                <div className="truncate text-sm font-semibold">
+                  {getAccountDisplayName(activeSnapshot)}
+                </div>
                 <div className="truncate text-xs text-text-secondary">{identityLabel}</div>
               </div>
               <RightOutlined style={{ color: 'var(--ant-color-text-tertiary)', fontSize: 10 }} />
@@ -655,7 +657,9 @@ export function AccountMenu({
           />
           {isSidebar ? (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-medium">{activeSnapshot.displayName}</div>
+              <div className="truncate text-sm font-medium">
+                {getAccountDisplayName(activeSnapshot)}
+              </div>
               <div className="truncate text-xs text-text-secondary">{identityLabel}</div>
             </div>
           ) : null}
