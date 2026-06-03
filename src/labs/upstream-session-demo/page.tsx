@@ -152,6 +152,14 @@ const DEPARTMENT_CURRICULUM_PLAN_REVIEW_STATUS_OPTIONS: Array<{
   },
 ];
 
+function resolveUpstreamRefreshFailureMessage(error: unknown) {
+  if (isExpiredUpstreamSessionError(error)) {
+    return 'upstream 会话已失效，请重新登录后继续。';
+  }
+
+  return resolveUpstreamErrorMessage(error, 'upstream 会话刷新失败，请重新登录后继续。');
+}
+
 type CurriculumPlanRecord = {
   className: string;
   courseName: string;
@@ -606,6 +614,7 @@ export function UpstreamSessionDemoLabPage() {
     login: loginUpstream,
     persistSessionFromResult,
     rememberedCredentials,
+    refreshSession,
     session: storedSession,
   } = useUpstreamSession({
     account: currentAccount,
@@ -689,6 +698,31 @@ export function UpstreamSessionDemoLabPage() {
       setActionError(error ?? null);
     },
     [clear],
+  );
+
+  const promptUpstreamLogin = useCallback(
+    ({
+      action,
+      message,
+      session,
+    }: {
+      action?: PendingUpstreamAction;
+      message: string;
+      session: StoredUpstreamSession;
+    }) => {
+      clearCurrentSession();
+      setPendingAction(action ?? null);
+      setLoginError(message);
+      setIsLoginModalOpen(true);
+      form.setFieldsValue(
+        buildUpstreamLoginCredentialsInitialValues({
+          fallbackUserId: session.upstreamLoginId,
+          lockedUserId: lockedUpstreamLoginUserId,
+          rememberedCredentials,
+        }),
+      );
+    },
+    [clearCurrentSession, form, lockedUpstreamLoginUserId, rememberedCredentials],
   );
 
   useEffect(() => {
@@ -787,13 +821,13 @@ export function UpstreamSessionDemoLabPage() {
         [scope]: true,
       }));
 
-      try {
+      const loadDetailWithSession = async (currentSession: StoredUpstreamSession) => {
         const result = await fetchCurriculumPlanDetail({
           planId,
-          sessionToken: session.upstreamSessionToken,
+          sessionToken: currentSession.upstreamSessionToken,
         });
 
-        persistSessionFromResult(session, result);
+        persistSessionFromResult(currentSession, result);
         setCurriculumPlanDetailResult((current) => ({
           ...current,
           [scope]: {
@@ -801,21 +835,9 @@ export function UpstreamSessionDemoLabPage() {
             result,
           },
         }));
-      } catch (error) {
-        if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-          setLoginError('upstream 会话已失效，请重新登录后继续。');
-          setIsLoginModalOpen(true);
-          form.setFieldsValue(
-            buildUpstreamLoginCredentialsInitialValues({
-              fallbackUserId: session.upstreamLoginId,
-              lockedUserId: lockedUpstreamLoginUserId,
-              rememberedCredentials,
-            }),
-          );
-          return;
-        }
+      };
 
+      const handleLoadError = (error: unknown) => {
         setCurriculumPlanDetailResult((current) => ({
           ...current,
           [scope]: {
@@ -830,6 +852,42 @@ export function UpstreamSessionDemoLabPage() {
             `暂时无法读取${CURRICULUM_PLAN_SCOPE_LABEL[scope]}详情。`,
           ),
         });
+      };
+
+      try {
+        await loadDetailWithSession(session);
+      } catch (error) {
+        if (isExpiredUpstreamSessionError(error)) {
+          let refreshedSession: StoredUpstreamSession;
+
+          try {
+            refreshedSession = await refreshSession(session);
+          } catch (refreshError) {
+            promptUpstreamLogin({
+              message: resolveUpstreamRefreshFailureMessage(refreshError),
+              session,
+            });
+            return;
+          }
+
+          try {
+            await loadDetailWithSession(refreshedSession);
+            return;
+          } catch (retryError) {
+            if (isExpiredUpstreamSessionError(retryError)) {
+              promptUpstreamLogin({
+                message: 'upstream 会话已失效，请重新登录后继续。',
+                session: refreshedSession,
+              });
+              return;
+            }
+
+            handleLoadError(retryError);
+            return;
+          }
+        }
+
+        handleLoadError(error);
       } finally {
         setIsLoadingCurriculumPlanDetails((current) => ({
           ...current,
@@ -837,26 +895,20 @@ export function UpstreamSessionDemoLabPage() {
         }));
       }
     },
-    [
-      clearCurrentSession,
-      form,
-      lockedUpstreamLoginUserId,
-      persistSessionFromResult,
-      rememberedCredentials,
-    ],
+    [persistSessionFromResult, promptUpstreamLogin, refreshSession],
   );
 
   const performAction = useCallback(
     async (session: StoredUpstreamSession, action: PendingUpstreamAction) => {
-      try {
+      const runActionWithSession = async (currentSession: StoredUpstreamSession) => {
         switch (action.type) {
           case 'teacher-directory': {
             setIsLoadingDirectory(true);
             const result = await fetchTeacherDirectory({
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setDirectoryResult(result);
             return;
           }
@@ -864,10 +916,10 @@ export function UpstreamSessionDemoLabPage() {
             setIsLoadingMajorDirectory(true);
             const result = await fetchMajorDirectory({
               departmentId: action.departmentId,
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setMajorDirectoryResult(result);
             return;
           }
@@ -875,41 +927,41 @@ export function UpstreamSessionDemoLabPage() {
             setIsLoadingClassList(true);
             const result = await fetchClassDirectory({
               ...action.values,
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setClassListResult(result);
             return;
           }
           case 'previous-class-adviser-classes': {
             setIsLoadingPreviousClassAdviserClasses(true);
             const result = await fetchPreviousClassAdviserClasses({
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setPreviousClassAdviserClassesResult(result);
             return;
           }
           case 'lecture-journal': {
             setIsLoadingLectureJournal(true);
             const result = await fetchLectureJournalList({
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
               teachingClassId: action.teachingClassId,
             });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setLectureJournalResult(result);
             return;
           }
           case 'verified-staff-identity': {
             setIsLoadingIdentity(true);
             const result = await fetchVerifiedStaffIdentity({
-              sessionToken: session.upstreamSessionToken,
+              sessionToken: currentSession.upstreamSessionToken,
             });
 
-            persistSessionFromVerifiedIdentity(session, result);
+            persistSessionFromVerifiedIdentity(currentSession, result);
             setVerifiedIdentityResult(result);
             return;
           }
@@ -926,14 +978,14 @@ export function UpstreamSessionDemoLabPage() {
               action.scope === 'personal'
                 ? await fetchCurriculumPlanList({
                     ...(action.values as PersonalCurriculumPlanFormValues),
-                    sessionToken: session.upstreamSessionToken,
+                    sessionToken: currentSession.upstreamSessionToken,
                   })
                 : await fetchDepartmentCurriculumPlanList({
                     ...(action.values as DepartmentCurriculumPlanFormValues),
-                    sessionToken: session.upstreamSessionToken,
+                    sessionToken: currentSession.upstreamSessionToken,
                   });
 
-            persistSessionFromResult(session, result);
+            persistSessionFromResult(currentSession, result);
             setCurriculumPlanResult((current) => ({
               ...current,
               [action.scope]: result,
@@ -941,22 +993,9 @@ export function UpstreamSessionDemoLabPage() {
             return;
           }
         }
-      } catch (error) {
-        if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-          setPendingAction(action);
-          setLoginError('upstream 会话已失效，请重新登录后继续。');
-          setIsLoginModalOpen(true);
-          form.setFieldsValue(
-            buildUpstreamLoginCredentialsInitialValues({
-              fallbackUserId: storedSession?.upstreamLoginId,
-              lockedUserId: lockedUpstreamLoginUserId,
-              rememberedCredentials,
-            }),
-          );
-          return;
-        }
+      };
 
+      const handleActionError = (error: unknown) => {
         switch (action.type) {
           case 'teacher-directory':
             setDirectoryResult(null);
@@ -1021,6 +1060,44 @@ export function UpstreamSessionDemoLabPage() {
             });
             return;
         }
+      };
+
+      try {
+        await runActionWithSession(session);
+      } catch (error) {
+        if (isExpiredUpstreamSessionError(error)) {
+          let refreshedSession: StoredUpstreamSession;
+
+          try {
+            refreshedSession = await refreshSession(session);
+          } catch (refreshError) {
+            promptUpstreamLogin({
+              action,
+              message: resolveUpstreamRefreshFailureMessage(refreshError),
+              session,
+            });
+            return;
+          }
+
+          try {
+            await runActionWithSession(refreshedSession);
+            return;
+          } catch (retryError) {
+            if (isExpiredUpstreamSessionError(retryError)) {
+              promptUpstreamLogin({
+                action,
+                message: 'upstream 会话已失效，请重新登录后继续。',
+                session: refreshedSession,
+              });
+              return;
+            }
+
+            handleActionError(retryError);
+            return;
+          }
+        }
+
+        handleActionError(error);
       } finally {
         if (action.type === 'curriculum-plan') {
           setIsLoadingCurriculumPlans((current) => ({
@@ -1041,11 +1118,8 @@ export function UpstreamSessionDemoLabPage() {
       activePanelKey,
       persistSessionFromResult,
       persistSessionFromVerifiedIdentity,
-      clearCurrentSession,
-      form,
-      lockedUpstreamLoginUserId,
-      rememberedCredentials,
-      storedSession?.upstreamLoginId,
+      promptUpstreamLogin,
+      refreshSession,
     ],
   );
 

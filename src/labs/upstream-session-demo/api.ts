@@ -484,9 +484,15 @@ export async function fetchPreviousClassAdviserClasses(input: { sessionToken: st
     {
       sessionToken: string;
     }
-  >(FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY, {
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY,
+    {
+      sessionToken: input.sessionToken,
+    },
+    {
+      authMode: 'none',
+    },
+  );
 
   return response.fetchPreviousClassAdviserClasses;
 }
