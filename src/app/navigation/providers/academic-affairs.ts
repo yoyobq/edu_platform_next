@@ -180,9 +180,9 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'TeamOutlined',
+            iconKey: 'ReconciliationOutlined',
             key: '/academic-affairs/student-roster-membership-reconciliation',
-            label: '学生名册归属核对',
+            label: '班级名册对齐',
             navMode: 'rail' as const,
             path: '/academic-affairs/student-roster-membership-reconciliation',
             primaryAccessGroup: 'STAFF' as const,

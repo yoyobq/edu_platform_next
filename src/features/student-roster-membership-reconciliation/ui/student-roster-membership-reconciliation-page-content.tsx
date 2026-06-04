@@ -1,7 +1,7 @@
 // src/features/student-roster-membership-reconciliation/ui/student-roster-membership-reconciliation-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReloadOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons';
+import { ReconciliationOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -68,6 +68,7 @@ import {
 } from '../application/result-view-model';
 import { resolveRosterSyncPermissionStrategy } from '../application/roster-sync-permission';
 import type {
+  ClaimClassAdviserForRosterSyncResult,
   CurrentRosterMembershipAccount,
   PreviousClassAdviserClassesResult,
   StudentRosterMembershipConfirmationInput,
@@ -105,8 +106,12 @@ type StudentRosterMembershipReconciliationPageContentProps = {
   slotGroup?: readonly string[];
 };
 
-const PAGE_DESCRIPTION =
-  '按单个本地班级核对 upstream roster 与本地 member_student_class_membership / decision 的归属差异。';
+type ClassAdviserClaimNotice = {
+  description: string;
+  title: string;
+};
+
+const PAGE_DESCRIPTION = '按单个本地班级对齐校园网班级名册与本地学生班级归属。';
 
 const RESULT_TABLE_DEFAULT_PAGE_SIZE = 8;
 
@@ -149,6 +154,26 @@ function resolveClassAdviserClaimFailureMessage(reason: string | null | undefine
 
 function isSuccessfulClassAdviserClaimReason(reason: string | null | undefined) {
   return reason === 'CLAIMED' || reason === 'ALREADY_CLAIMED';
+}
+
+function resolveClassAdviserClaimNotice(
+  result: ClaimClassAdviserForRosterSyncResult,
+): ClassAdviserClaimNotice | null {
+  if (result.reason === 'CLAIMED') {
+    return {
+      description: '已根据校园网历史班主任信息完成本地任职认定，并刷新当前登录会话。',
+      title: '已获得该班班主任身份',
+    };
+  }
+
+  if (result.reason === 'ALREADY_CLAIMED') {
+    return {
+      description: '本地已存在该班班主任任职，并已刷新当前登录会话。',
+      title: '已确认该班班主任身份',
+    };
+  }
+
+  return null;
 }
 
 function formatNullableValue(value: number | string | null | undefined) {
@@ -378,6 +403,8 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [pageError, setPageError] = useState<string | null>(null);
   const [classListError, setClassListError] = useState<string | null>(null);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
+  const [classAdviserClaimNotice, setClassAdviserClaimNotice] =
+    useState<ClassAdviserClaimNotice | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingRosterAction | null>(null);
   const [hasAutoLoadedClassList, setHasAutoLoadedClassList] = useState(false);
@@ -517,6 +544,7 @@ export function StudentRosterMembershipReconciliationPageContent({
       setClassListResult(null);
       setSelectedClassCode(undefined);
       setReconciliationResult(null);
+      setClassAdviserClaimNotice(null);
       setHasAutoLoadedClassList(false);
       setConfirmationDrafts({});
       setEndDecisionDrafts({});
@@ -588,6 +616,7 @@ export function StudentRosterMembershipReconciliationPageContent({
               return result.classes.at(-1)?.code;
             });
             setReconciliationResult(null);
+            setClassAdviserClaimNotice(null);
             setConfirmationDrafts({});
             setEndDecisionDrafts({});
             setPreRegisteredReviewDrafts({});
@@ -598,8 +627,12 @@ export function StudentRosterMembershipReconciliationPageContent({
           case 'dry-run': {
             setIsPreviewing(true);
             setReconciliationError(null);
+            setClassAdviserClaimNotice(null);
 
-            const runDryRunWithSession = async (sessionForDryRun: StoredUpstreamSession) => {
+            const runDryRunWithSession = async (
+              sessionForDryRun: StoredUpstreamSession,
+              claimNotice: ClassAdviserClaimNotice | null = null,
+            ) => {
               const result = await dryRunReconcileStudentRosterMembership({
                 classCode: action.classCode,
                 upstreamSessionToken: sessionForDryRun.upstreamSessionToken,
@@ -607,6 +640,7 @@ export function StudentRosterMembershipReconciliationPageContent({
 
               persistSessionFromResult(sessionForDryRun, result);
               applyReconciliationResult(result);
+              setClassAdviserClaimNotice(claimNotice);
             };
             const claimAndRefreshSession = async (sessionToClaim: StoredUpstreamSession) => {
               const claimResult = await claimClassAdviserForRosterSync({
@@ -632,7 +666,10 @@ export function StudentRosterMembershipReconciliationPageContent({
                 throw new Error('班主任认定已完成，但当前登录会话刷新失败，请重新登录后重试。');
               }
 
-              return claimedSession;
+              return {
+                notice: resolveClassAdviserClaimNotice(claimResult),
+                session: claimedSession,
+              };
             };
             const permissionStrategy = resolveRosterSyncPermissionStrategy({
               accessGroup,
@@ -640,8 +677,8 @@ export function StudentRosterMembershipReconciliationPageContent({
             });
 
             if (permissionStrategy === 'claim-before-dry-run') {
-              const claimedSession = await claimAndRefreshSession(currentSession);
-              await runDryRunWithSession(claimedSession);
+              const claimed = await claimAndRefreshSession(currentSession);
+              await runDryRunWithSession(claimed.session, claimed.notice);
               return;
             }
 
@@ -654,8 +691,8 @@ export function StudentRosterMembershipReconciliationPageContent({
                   throw dryRunError;
                 }
 
-                const claimedSession = await claimAndRefreshSession(currentSession);
-                await runDryRunWithSession(claimedSession);
+                const claimed = await claimAndRefreshSession(currentSession);
+                await runDryRunWithSession(claimed.session, claimed.notice);
                 return;
               }
             }
@@ -1333,6 +1370,7 @@ export function StudentRosterMembershipReconciliationPageContent({
                     onChange={(value) => {
                       setSelectedClassCode(value);
                       setReconciliationResult(null);
+                      setClassAdviserClaimNotice(null);
                       setConfirmationDrafts({});
                       setEndDecisionDrafts({});
                       setPreRegisteredReviewDrafts({});
@@ -1518,6 +1556,21 @@ export function StudentRosterMembershipReconciliationPageContent({
       return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
     }
 
+    if (classAdviserClaimNotice) {
+      return (
+        <Alert
+          type="success"
+          showIcon
+          title={classAdviserClaimNotice.title}
+          description={
+            hasCommitWork
+              ? `${classAdviserClaimNotice.description} 预读结果不会写库，确认差异后可提交核对结果。`
+              : `${classAdviserClaimNotice.description} 当前没有需要写库的变更，无需提交核对结果。`
+          }
+        />
+      );
+    }
+
     if (!hasCommitWork) {
       return <Alert type="info" showIcon title="当前没有需要写库的变更。无需提交核对结果。" />;
     }
@@ -1579,8 +1632,8 @@ export function StudentRosterMembershipReconciliationPageContent({
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
         description={PAGE_DESCRIPTION}
-        icon={<TeamOutlined />}
-        title="学生名册归属核对"
+        icon={<ReconciliationOutlined />}
+        title="班级名册归属对齐"
       />
       {pageError ? <Alert type="error" showIcon title={pageError} /> : null}
       {renderClassListCard()}
