@@ -694,10 +694,7 @@ export function AdminUserDetailPageContent({
   }
 
   return (
-    <div
-      className="mx-auto flex flex-col gap-6 pb-6"
-      style={{ maxWidth: 'var(--width-content-readable)' }}
-    >
+    <div className="flex w-full flex-col gap-6 pb-6">
       {messageContextHolder}
 
       <Flex align="center" gap={12}>
