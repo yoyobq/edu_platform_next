@@ -49,6 +49,15 @@ export type StudentRosterMembershipReasonCode =
   | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
   | 'CLASS_MEMBERSHIP_CORRECTION';
 
+export type StudentStatus =
+  | 'PRE_REGISTERED'
+  | 'NOT_CHECKED_IN'
+  | 'ENROLLED'
+  | 'OFF_CAMPUS_INTERNSHIP'
+  | 'SUSPENDED'
+  | 'GRADUATED'
+  | 'DROPPED';
+
 export type UpstreamRosterPresence = 'RETURNED' | 'MISSING' | 'UNKNOWN';
 
 export type StudentRosterMembershipReconciliationItem = {
@@ -59,6 +68,7 @@ export type StudentRosterMembershipReconciliationItem = {
   classCode: string;
   className: string;
   currentClassCode: string | null;
+  currentClassName: string | null;
   currentMembershipId: string | null;
   isEnrolled: string | null;
   isInSchool: string | null;
@@ -70,6 +80,7 @@ export type StudentRosterMembershipReconciliationItem = {
   rowIndex: number | null;
   studentId: string | null;
   studentName: string | null;
+  studentStatus: StudentStatus | null;
   upstreamClassCode: string | null;
   upstreamClassName: string | null;
   upstreamPresence: UpstreamRosterPresence;
@@ -204,6 +215,7 @@ const STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS = `
       className
       studentId
       studentName
+      studentStatus
       upstreamPresence
       upstreamStudentId
       upstreamClassCode
@@ -212,6 +224,7 @@ const STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS = `
       isInSchool
       currentMembershipId
       currentClassCode
+      currentClassName
       activeDecisionId
       activeDecisionOutcome
       recommendedDecisionOutcome

@@ -45,6 +45,7 @@ import {
   type StudentRosterMembershipEndDecisionInput,
   type StudentRosterMembershipReconciliationItem,
   type StudentRosterMembershipReconciliationResult,
+  type StudentStatus,
 } from './api';
 import {
   buildCommitConfirmations,
@@ -102,7 +103,17 @@ const PRIMARY_STATUS_TAG_STYLE = {
   color: 'var(--ant-color-primary)',
 };
 
-type CampusNetworkStatusTagTone = 'default' | 'primary' | 'warning';
+const STUDENT_STATUS_LABELS: Record<StudentStatus, string> = {
+  DROPPED: '退学',
+  ENROLLED: '在读',
+  GRADUATED: '已毕业',
+  NOT_CHECKED_IN: '确认未报到',
+  OFF_CAMPUS_INTERNSHIP: '下厂/校外实习',
+  PRE_REGISTERED: '预报到',
+  SUSPENDED: '暂离',
+};
+
+type StatusTagTone = 'default' | 'error' | 'primary' | 'success' | 'warning';
 
 function resolveUpstreamRefreshFailureMessage(error: unknown) {
   if (isExpiredUpstreamSessionError(error)) {
@@ -227,7 +238,7 @@ function getInSchoolStatusLabel(value: string | null) {
   return '-';
 }
 
-function getReportedStatusTagTone(value: string | null): CampusNetworkStatusTagTone {
+function getReportedStatusTagTone(value: string | null): StatusTagTone {
   if (value === '0') {
     return 'warning';
   }
@@ -239,7 +250,7 @@ function getReportedStatusTagTone(value: string | null): CampusNetworkStatusTagT
   return 'default';
 }
 
-function getInSchoolStatusTagTone(value: string | null): CampusNetworkStatusTagTone {
+function getInSchoolStatusTagTone(value: string | null): StatusTagTone {
   if (value === '0') {
     return 'warning';
   }
@@ -251,12 +262,37 @@ function getInSchoolStatusTagTone(value: string | null): CampusNetworkStatusTagT
   return 'default';
 }
 
-function renderCampusNetworkStatusTag(label: string, tone: CampusNetworkStatusTagTone) {
+function getStudentStatusTagTone(status: StudentStatus): StatusTagTone {
+  switch (status) {
+    case 'ENROLLED':
+      return 'primary';
+    case 'OFF_CAMPUS_INTERNSHIP':
+      return 'success';
+    case 'PRE_REGISTERED':
+    case 'SUSPENDED':
+      return 'warning';
+    case 'DROPPED':
+      return 'error';
+    case 'GRADUATED':
+    case 'NOT_CHECKED_IN':
+      return 'default';
+  }
+}
+
+function renderStatusTag(label: string, tone: StatusTagTone) {
   if (tone === 'primary') {
     return <Tag style={PRIMARY_STATUS_TAG_STYLE}>{label}</Tag>;
   }
 
   return tone === 'default' ? <Tag>{label}</Tag> : <Tag color={tone}>{label}</Tag>;
+}
+
+function renderStudentStatusTag(status: StudentStatus | null) {
+  if (!status) {
+    return null;
+  }
+
+  return renderStatusTag(STUDENT_STATUS_LABELS[status], getStudentStatusTagTone(status));
 }
 
 function renderMetadataLine(label: string, value: number | string | null | undefined) {
@@ -905,7 +941,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
   }
 
   function renderEnrollmentStatusTags(item: StudentRosterMembershipReconciliationItem) {
-    const reportedTag = renderCampusNetworkStatusTag(
+    const reportedTag = renderStatusTag(
       getReportedStatusLabel(item.isEnrolled),
       getReportedStatusTagTone(item.isEnrolled),
     );
@@ -919,7 +955,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
         ) : (
           reportedTag
         )}
-        {renderCampusNetworkStatusTag(
+        {renderStatusTag(
           getInSchoolStatusLabel(item.isInSchool),
           getInSchoolStatusTagTone(item.isInSchool),
         )}
@@ -987,15 +1023,28 @@ export function StudentRosterMembershipReconciliationLabPage() {
   function renderLocalMembershipCell(item: StudentRosterMembershipReconciliationItem) {
     const hasMembershipConflict =
       Boolean(item.currentClassCode) && item.currentClassCode !== item.classCode;
+    const currentClassLabel =
+      item.currentClassName ?? (item.currentClassCode === item.classCode ? item.className : null);
+    const studentStatusTag = renderStudentStatusTag(item.studentStatus);
 
     if (!hasMembershipConflict) {
-      return <span className="font-medium text-text">{item.className}</span>;
+      return (
+        <div className="flex flex-col gap-1">
+          {currentClassLabel ? (
+            <span className="font-medium text-text">{currentClassLabel}</span>
+          ) : (
+            <span className="text-text-secondary">暂无本地归属</span>
+          )}
+          {studentStatusTag ? <div className="flex flex-wrap gap-1">{studentStatusTag}</div> : null}
+        </div>
+      );
     }
 
     return (
       <div className="flex flex-col gap-1">
         {renderMetadataLine('目标班级', item.className)}
-        {renderMetadataLine('当前归属', item.currentClassCode)}
+        {renderMetadataLine('当前归属', item.currentClassName ?? item.currentClassCode)}
+        {studentStatusTag ? <div className="flex flex-wrap gap-1">{studentStatusTag}</div> : null}
       </div>
     );
   }
@@ -1121,6 +1170,9 @@ export function StudentRosterMembershipReconciliationLabPage() {
         <Descriptions.Item label="在校状态">
           {getInSchoolStatusLabel(item.isInSchool)}
         </Descriptions.Item>
+        <Descriptions.Item label="本地学生状态">
+          {renderStudentStatusTag(item.studentStatus) ?? '-'}
+        </Descriptions.Item>
         <Descriptions.Item label="IS_ENROLLED">
           {formatNullableValue(item.isEnrolled)}
         </Descriptions.Item>
@@ -1129,6 +1181,9 @@ export function StudentRosterMembershipReconciliationLabPage() {
         </Descriptions.Item>
         <Descriptions.Item label="当前 membership">
           {formatNullableValue(item.currentMembershipId)}
+        </Descriptions.Item>
+        <Descriptions.Item label="当前归属班级">
+          {formatNullableValue(item.currentClassName ?? item.currentClassCode)}
         </Descriptions.Item>
         <Descriptions.Item label="当前裁定">
           {renderDecisionOutcome(item.activeDecisionOutcome)}

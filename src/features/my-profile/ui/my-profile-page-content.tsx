@@ -56,9 +56,10 @@ const STUDENT_STATUS_LABELS: Record<string, string> = {
   DROPPED: '退学',
   ENROLLED: '在读',
   GRADUATED: '已毕业',
-  NOT_CHECKED_IN: '未报到',
+  NOT_CHECKED_IN: '确认未报到',
+  OFF_CAMPUS_INTERNSHIP: '下厂/校外实习',
   PRE_REGISTERED: '预报到',
-  SUSPENDED: '休学',
+  SUSPENDED: '暂离',
 };
 
 type ChangeEmailFormValues = {
@@ -85,6 +86,7 @@ function getStatusTagColor(status: string) {
   switch (status) {
     case 'ACTIVE':
     case 'ENROLLED':
+    case 'OFF_CAMPUS_INTERNSHIP':
       return 'success';
     case 'PRE_REGISTERED':
     case 'PENDING':
@@ -642,7 +644,11 @@ function StudentIdentitySection({ student }: { student: MyProfileStudentIdentity
       ? '学生已在上游名册中，但尚未正式报到'
       : student.studentStatus === 'NOT_CHECKED_IN'
         ? '已确认未正式报到且不再报到'
-        : null;
+        : student.studentStatus === 'OFF_CAMPUS_INTERNSHIP'
+          ? '正常教学环节，不属于暂离状态'
+          : student.studentStatus === 'SUSPENDED'
+            ? '休学、兵役等暂离状态'
+            : null;
 
   return (
     <FieldGrid>
