@@ -545,7 +545,7 @@ html.disable-motion *::after {
 }
 
 .login-feature-chip:nth-child(2) .anticon {
-  color: var(--color-ai-accent);
+  color: var(--ant-color-info);
 }
 
 .login-feature-chip:nth-child(3) .anticon {
@@ -559,9 +559,9 @@ html.disable-motion *::after {
 }
 
 .login-feature-chip:nth-child(2) {
-  background: var(--color-ai-accent-bg);
-  border-color: var(--color-ai-accent-border);
-  color: var(--ant-color-text);
+  background: var(--ant-color-info-bg);
+  border-color: var(--ant-color-info-border);
+  color: var(--ant-color-info-text);
 }
 
 .login-feature-chip:nth-child(3) {
