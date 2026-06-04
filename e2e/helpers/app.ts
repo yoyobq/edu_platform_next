@@ -252,6 +252,9 @@ function buildMePayload(profile: SessionProfile) {
     account: {
       id: profile.accountId,
       identityHint: profile.identityHint,
+      loginEmail: `${profile.displayName}@example.com`,
+      loginName: profile.displayName,
+      status: 'ACTIVE',
     },
     accountId: profile.accountId,
     identity:
@@ -277,7 +280,11 @@ function buildMePayload(profile: SessionProfile) {
     needsProfileCompletion: profile.needsProfileCompletion,
     userInfo: {
       accessGroup: profile.accessGroup,
+      avatarUrl: null,
+      email: `${profile.displayName}@example.com`,
       nickname: profile.displayName,
+      signature: null,
+      tags: [],
     },
   };
 }

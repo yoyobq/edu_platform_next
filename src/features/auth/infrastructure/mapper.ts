@@ -21,6 +21,9 @@ type AuthSessionResultDTO = {
   account: {
     id: number;
     identityHint: unknown;
+    loginEmail: unknown;
+    loginName: unknown;
+    status: unknown;
   };
   accountId: number;
   identity:
@@ -44,7 +47,11 @@ type AuthSessionResultDTO = {
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: unknown;
+    avatarUrl: unknown;
+    email: unknown;
     nickname: unknown;
+    signature: unknown;
+    tags: unknown;
   };
 };
 
@@ -192,9 +199,9 @@ export function mapSessionResultToSessionSnapshot(
       identityHint: isAuthAccessGroup(session.account.identityHint)
         ? session.account.identityHint
         : null,
-      loginEmail: null,
-      loginName: null,
-      status: 'ACTIVE',
+      loginEmail: normalizeOptionalString(session.account.loginEmail),
+      loginName: normalizeOptionalString(session.account.loginName),
+      status: normalizeOptionalString(session.account.status) ?? 'ACTIVE',
     },
     accountId: session.accountId,
     displayName,
@@ -206,11 +213,11 @@ export function mapSessionResultToSessionSnapshot(
     slotGroup: resolveSessionSlotGroup(identity),
     userInfo: {
       accessGroup,
-      avatarUrl: null,
-      email: null,
+      avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
+      email: normalizeOptionalString(session.userInfo.email),
       nickname,
-      signature: null,
-      tags: [],
+      signature: normalizeOptionalString(session.userInfo.signature),
+      tags: normalizeStringList(session.userInfo.tags),
     },
   };
 }

@@ -55,6 +55,9 @@ type SessionQueryDTO = {
   account: {
     id: number;
     identityHint: unknown;
+    loginEmail: unknown;
+    loginName: unknown;
+    status: unknown;
   };
   accountId: number;
   identity:
@@ -78,7 +81,11 @@ type SessionQueryDTO = {
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: unknown;
+    avatarUrl: unknown;
+    email: unknown;
     nickname: unknown;
+    signature: unknown;
+    tags: unknown;
   };
 };
 
@@ -128,10 +135,17 @@ const ME_QUERY = `
       account {
         id
         identityHint
+        loginEmail
+        loginName
+        status
       }
       userInfo {
         accessGroup
+        avatarUrl
+        email
         nickname
+        signature
+        tags
       }
       identity {
         __typename
@@ -173,6 +187,18 @@ function normalizeSlotGroup(value: unknown): readonly string[] {
   }
 
   return value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+}
+
+function normalizeStringList(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value.filter((item): item is string => typeof item === 'string').map((item) => item.trim()),
+    ),
+  ).filter((item) => item.length > 0);
 }
 
 function normalizeIdentity(value: SessionQueryDTO['identity']): AccountSwitchLabIdentity | null {
@@ -253,9 +279,9 @@ function mapSession(tokens: SessionTokensDTO, session: SessionQueryDTO): Account
       identityHint: isAuthAccessGroup(session.account.identityHint)
         ? session.account.identityHint
         : null,
-      loginEmail: null,
-      loginName: null,
-      status: 'ACTIVE',
+      loginEmail: normalizeOptionalString(session.account.loginEmail),
+      loginName: normalizeOptionalString(session.account.loginName),
+      status: normalizeOptionalString(session.account.status) ?? 'ACTIVE',
     },
     accountId: session.accountId,
     displayName,
@@ -267,11 +293,11 @@ function mapSession(tokens: SessionTokensDTO, session: SessionQueryDTO): Account
     slotGroup: resolveSessionSlotGroup(identity),
     userInfo: {
       accessGroup,
-      avatarUrl: null,
-      email: null,
+      avatarUrl: normalizeOptionalString(session.userInfo.avatarUrl),
+      email: normalizeOptionalString(session.userInfo.email),
       nickname,
-      signature: null,
-      tags: [],
+      signature: normalizeOptionalString(session.userInfo.signature),
+      tags: normalizeStringList(session.userInfo.tags),
     },
   };
 }

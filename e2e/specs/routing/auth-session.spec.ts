@@ -113,6 +113,9 @@ function buildMePayload(session: AccountSwitchTestSession) {
     account: {
       id: session.account.id,
       identityHint: session.account.identityHint,
+      loginEmail: session.account.loginEmail,
+      loginName: session.account.loginName,
+      status: session.account.status,
     },
     accountId: session.accountId,
     identity: session.identity
@@ -127,7 +130,11 @@ function buildMePayload(session: AccountSwitchTestSession) {
     needsProfileCompletion: session.needsProfileCompletion,
     userInfo: {
       accessGroup: session.userInfo.accessGroup,
+      avatarUrl: session.userInfo.avatarUrl,
+      email: session.userInfo.email,
       nickname: session.userInfo.nickname,
+      signature: session.userInfo.signature,
+      tags: session.userInfo.tags,
     },
   };
 }

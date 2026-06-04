@@ -1,4 +1,4 @@
-import { type CSSProperties, useMemo, useState } from 'react';
+import { type CSSProperties, useEffect, useMemo, useState } from 'react';
 import {
   LogoutOutlined,
   MoonOutlined,
@@ -81,8 +81,22 @@ function getAccountDisplayName(session: AccountSwitchLabSession) {
   );
 }
 
+function getAccountEmailValue(session: AccountSwitchLabSession) {
+  const loginName = session.account.loginName?.trim() ?? '';
+
+  return (
+    session.account.loginEmail ||
+    session.userInfo.email ||
+    (loginName.includes('@') ? loginName : null)
+  );
+}
+
 function getAccountLoginEmail(session: AccountSwitchLabSession) {
-  return session.account.loginEmail || session.userInfo.email || '未设置邮箱';
+  return getAccountEmailValue(session) || '未设置邮箱';
+}
+
+function shouldRefreshAccountSwitchSessionDisplay(session: AccountSwitchLabSession) {
+  return !getAccountEmailValue(session);
 }
 
 function buildAccountSessions(
@@ -147,6 +161,54 @@ export function AccountMenu({
     : formatAccessGroupLabel(activeSnapshot.primaryAccessGroup);
   const hasReachedAccountSwitchLimit = accountSessions.length >= ACCOUNT_SWITCH_LIMIT;
   const isAccountCredentialModalOpen = addAccountModalOpen || Boolean(reauthRequest);
+
+  useEffect(() => {
+    const recordsToRefresh = accountRecords.filter((record) =>
+      shouldRefreshAccountSwitchSessionDisplay(record.session),
+    );
+
+    if (recordsToRefresh.length === 0) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    void Promise.allSettled(
+      recordsToRefresh.map((record) => restoreAccountSwitchLabSession(record.session)),
+    ).then((results) => {
+      if (isCancelled) {
+        return;
+      }
+
+      const restoredSessions = results
+        .filter((result): result is PromiseFulfilledResult<AccountSwitchLabSession> => {
+          return (
+            result.status === 'fulfilled' && !shouldRefreshAccountSwitchSessionDisplay(result.value)
+          );
+        })
+        .map((result) => result.value);
+
+      if (restoredSessions.length === 0) {
+        return;
+      }
+
+      try {
+        const nextRecords = restoredSessions.reduce(
+          (records, session) => upsertAccountSwitchLabRecord(records, session),
+          readAccountSwitchLabRecords(),
+        );
+
+        writeAccountSwitchLabRecords(nextRecords);
+        setAccountRecords(nextRecords);
+      } catch {
+        // Display hydration must not block normal account switching.
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [accountRecords]);
 
   function commitAccountRecords(nextRecords: AccountSwitchLabRecord[]) {
     writeAccountSwitchLabRecords(nextRecords);

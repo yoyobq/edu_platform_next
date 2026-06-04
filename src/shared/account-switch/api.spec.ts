@@ -14,6 +14,7 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   type AccountSwitchLabSession,
+  createAccountSwitchLabSession,
   isAccountSwitchLabAccountMismatchError,
   restoreAccountSwitchLabSession,
 } from './api';
@@ -55,11 +56,16 @@ function buildSession(overrides: Partial<AccountSwitchLabSession> = {}): Account
 }
 
 function buildMePayload(input: { accountId: number; accessGroup: 'ADMIN' | 'STAFF' }) {
+  const prefix = `${input.accessGroup.toLowerCase()}-${input.accountId}`;
+
   return {
     me: {
       account: {
         id: input.accountId,
         identityHint: input.accessGroup,
+        loginEmail: `${prefix}@example.com`,
+        loginName: prefix,
+        status: 'ACTIVE',
       },
       accountId: input.accountId,
       identity:
@@ -75,7 +81,11 @@ function buildMePayload(input: { accountId: number; accessGroup: 'ADMIN' | 'STAF
       needsProfileCompletion: false,
       userInfo: {
         accessGroup: [input.accessGroup],
-        nickname: `${input.accessGroup.toLowerCase()}-${input.accountId}`,
+        avatarUrl: `https://example.com/${prefix}.png`,
+        email: `profile-${prefix}@example.com`,
+        nickname: prefix,
+        signature: `signature-${prefix}`,
+        tags: ['staff', ' staff ', ''],
       },
     },
   };
@@ -88,6 +98,32 @@ describe('account switch api', () => {
     isGraphQLIngressErrorMock.mockImplementation((error: unknown) =>
       Boolean(error && typeof error === 'object' && 'type' in error),
     );
+  });
+
+  it('hydrates email fields from me payload when creating account switch session', async () => {
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        login: {
+          accessToken: 'staff-access-token',
+          refreshToken: 'staff-refresh-token',
+        },
+      })
+      .mockResolvedValueOnce(buildMePayload({ accessGroup: 'STAFF', accountId: 1001 }));
+
+    const session = await createAccountSwitchLabSession({
+      loginName: 'staff-1001',
+      loginPassword: 'password',
+    });
+    const meQuery = executeGraphQLMock.mock.calls[1]?.[0] as string;
+
+    expect(meQuery).toContain('loginEmail');
+    expect(meQuery).toContain('email');
+    expect(session.account.loginEmail).toBe('staff-1001@example.com');
+    expect(session.account.loginName).toBe('staff-1001');
+    expect(session.userInfo.email).toBe('profile-staff-1001@example.com');
+    expect(session.userInfo.avatarUrl).toBe('https://example.com/staff-1001.png');
+    expect(session.userInfo.signature).toBe('signature-staff-1001');
+    expect(session.userInfo.tags).toEqual(['staff']);
   });
 
   it('rejects restored sessions whose account id does not match the requested account', async () => {

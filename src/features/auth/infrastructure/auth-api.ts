@@ -18,6 +18,9 @@ type SessionQueryDTO = {
   account: {
     id: number;
     identityHint: string | null;
+    loginEmail: string | null;
+    loginName: string | null;
+    status: string;
   };
   accountId: number;
   identity:
@@ -41,7 +44,11 @@ type SessionQueryDTO = {
   needsProfileCompletion: boolean;
   userInfo: {
     accessGroup: readonly string[];
+    avatarUrl: string | null;
+    email: string | null;
     nickname: string | null;
+    signature: string | null;
+    tags: readonly string[] | null;
   };
 };
 
@@ -82,10 +89,17 @@ const ME_QUERY = `
       account {
         id
         identityHint
+        loginEmail
+        loginName
+        status
       }
       userInfo {
         accessGroup
+        avatarUrl
+        email
         nickname
+        signature
+        tags
       }
       identity {
         __typename
