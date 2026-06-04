@@ -43,6 +43,7 @@ export type StudentRosterMembershipDecisionOutcome = 'INCLUDE' | 'EXCLUDE';
 
 export type StudentRosterMembershipReasonCode =
   | 'DROPPED_CONFIRMED'
+  | 'NOT_CHECKED_IN_CONFIRMED'
   | 'TRANSFERRED_OUT_CONFIRMED'
   | 'TRANSFERRED_IN_CONFIRMED'
   | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'

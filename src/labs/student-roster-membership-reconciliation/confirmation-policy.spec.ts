@@ -9,8 +9,11 @@ import {
   buildDefaultConfirmationDraft,
   buildDefaultConfirmationDrafts,
   buildDefaultEndDecisionDrafts,
+  buildDefaultPreRegisteredReviewDrafts,
+  buildPreRegisteredReviewCommitPayload,
   canEndDecision,
   getConfirmationDecisionOptions,
+  mergeCommitEndDecisions,
   REASON_CODE_LABELS,
 } from './confirmation-policy';
 
@@ -52,13 +55,13 @@ describe('student roster membership confirmation policy', () => {
       {
         decisionOutcome: 'INCLUDE',
         defaultReasonCode: 'TRANSFERRED_IN_CONFIRMED',
-        label: '确认属于本班',
+        label: '在本班就读',
         reasonOptions: ['TRANSFERRED_IN_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
       },
       {
         decisionOutcome: 'EXCLUDE',
         defaultReasonCode: 'UPSTREAM_ROSTER_ERROR_CONFIRMED',
-        label: '确认不属于本班',
+        label: '不在本班就读',
         reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
       },
     ]);
@@ -89,6 +92,7 @@ describe('student roster membership confirmation policy', () => {
       label: '结束当前归属',
       reasonOptions: [
         'TRANSFERRED_OUT_CONFIRMED',
+        'NOT_CHECKED_IN_CONFIRMED',
         'DROPPED_CONFIRMED',
         'CLASS_MEMBERSHIP_CORRECTION',
       ],
@@ -96,7 +100,8 @@ describe('student roster membership confirmation policy', () => {
   });
 
   it('distinguishes not reported from active class membership history in reason labels', () => {
-    expect(REASON_CODE_LABELS.DROPPED_CONFIRMED).toBe('确认未报到或退学（保留历史归属）');
+    expect(REASON_CODE_LABELS.NOT_CHECKED_IN_CONFIRMED).toBe('确认未报到且不来了');
+    expect(REASON_CODE_LABELS.DROPPED_CONFIRMED).toBe('确认报到后退学');
   });
 
   it('falls back to the action default when recommendation is outside the allowed reason set', () => {
@@ -185,6 +190,181 @@ describe('student roster membership confirmation policy', () => {
       {
         decisionId: '12',
         endReason: 'upstream 已恢复返回',
+      },
+    ]);
+  });
+
+  it('builds optional NOT_CHECKED_IN and DROPPED confirmations for reviewed IS_ENROLLED=0 auto items', () => {
+    const preRegisteredItem = buildItem({
+      isEnrolled: '0',
+      key: 'pre-registered',
+      requiresConfirmation: false,
+      studentId: '20240001',
+    });
+    const notCheckedInItem = buildItem({
+      isEnrolled: '0',
+      key: 'not-checked-in',
+      requiresConfirmation: false,
+      studentId: '20240002',
+    });
+    const droppedItem = buildItem({
+      activeDecisionId: 'decision-1',
+      isEnrolled: '0',
+      key: 'dropped',
+      requiresConfirmation: false,
+      studentId: '20240003',
+    });
+    const ignoredRequiredItem = buildItem({
+      isEnrolled: '0',
+      key: 'required',
+      recommendedReasonCode: 'DROPPED_CONFIRMED',
+      requiresConfirmation: true,
+      studentId: '20240004',
+    });
+
+    expect(
+      buildPreRegisteredReviewCommitPayload(
+        [preRegisteredItem, notCheckedInItem, droppedItem, ignoredRequiredItem],
+        {
+          dropped: {
+            note: ' 已确认报到后退学 ',
+            outcome: 'DROPPED',
+          },
+          'not-checked-in': {
+            note: ' 已确认不再报到 ',
+            outcome: 'NOT_CHECKED_IN',
+          },
+          'pre-registered': {
+            outcome: 'PRE_REGISTERED',
+          },
+          required: {
+            outcome: 'DROPPED',
+          },
+        },
+      ),
+    ).toEqual({
+      confirmations: [
+        {
+          decisionOutcome: 'EXCLUDE',
+          reasonCode: 'NOT_CHECKED_IN_CONFIRMED',
+          reasonText: '已确认不再报到',
+          studentId: '20240002',
+        },
+        {
+          decisionOutcome: 'EXCLUDE',
+          reasonCode: 'DROPPED_CONFIRMED',
+          reasonText: '已确认报到后退学',
+          studentId: '20240003',
+        },
+      ],
+      endDecisions: [
+        {
+          decisionId: 'decision-1',
+          endReason: '已确认报到后退学',
+        },
+      ],
+      invalidItems: [],
+      overriddenItems: [notCheckedInItem, droppedItem],
+    });
+  });
+
+  it('defaults optional IS_ENROLLED=0 review items to PRE_REGISTERED without confirmations', () => {
+    const preRegisteredItem = buildItem({
+      isEnrolled: '0',
+      key: 'pre-registered',
+      requiresConfirmation: false,
+      studentId: '20240001',
+    });
+    const drafts = buildDefaultPreRegisteredReviewDrafts([preRegisteredItem]);
+
+    expect(drafts).toEqual({
+      'pre-registered': {
+        outcome: 'PRE_REGISTERED',
+      },
+    });
+    expect(buildPreRegisteredReviewCommitPayload([preRegisteredItem], drafts)).toEqual({
+      confirmations: [],
+      endDecisions: [],
+      invalidItems: [],
+      overriddenItems: [],
+    });
+  });
+
+  it('does not treat SUPPRESSED IS_ENROLLED=0 rows as optional pre-registered reviews', () => {
+    const suppressedItem = buildItem({
+      activeDecisionId: 'decision-1',
+      activeDecisionOutcome: 'EXCLUDE',
+      category: 'SUPPRESSED',
+      isEnrolled: '0',
+      key: 'suppressed',
+      requiresConfirmation: false,
+    });
+
+    expect(buildDefaultPreRegisteredReviewDrafts([suppressedItem])).toEqual({});
+    expect(
+      buildPreRegisteredReviewCommitPayload([suppressedItem], {
+        suppressed: {
+          outcome: 'DROPPED',
+        },
+      }),
+    ).toEqual({
+      confirmations: [],
+      endDecisions: [],
+      invalidItems: [],
+      overriddenItems: [],
+    });
+  });
+
+  it('reports invalid optional EXCLUDE confirmations when studentId is missing', () => {
+    const invalidItem = buildItem({
+      isEnrolled: '0',
+      key: 'invalid',
+      requiresConfirmation: false,
+      studentId: null,
+    });
+
+    expect(
+      buildPreRegisteredReviewCommitPayload([invalidItem], {
+        invalid: {
+          outcome: 'DROPPED',
+        },
+      }),
+    ).toEqual({
+      confirmations: [],
+      endDecisions: [],
+      invalidItems: [invalidItem],
+      overriddenItems: [invalidItem],
+    });
+  });
+
+  it('deduplicates end decisions while preserving explicit end reasons', () => {
+    expect(
+      mergeCommitEndDecisions(
+        [
+          {
+            decisionId: '12',
+            endReason: undefined,
+          },
+        ],
+        [
+          {
+            decisionId: '12',
+            endReason: '人工确认退学',
+          },
+          {
+            decisionId: '13',
+            endReason: undefined,
+          },
+        ],
+      ),
+    ).toEqual([
+      {
+        decisionId: '12',
+        endReason: '人工确认退学',
+      },
+      {
+        decisionId: '13',
+        endReason: undefined,
       },
     ]);
   });

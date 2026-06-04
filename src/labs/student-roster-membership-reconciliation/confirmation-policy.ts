@@ -26,6 +26,13 @@ export type EndDecisionDraft = {
   selected: boolean;
 };
 
+export type PreRegisteredReviewOutcome = 'PRE_REGISTERED' | 'NOT_CHECKED_IN' | 'DROPPED';
+
+export type PreRegisteredReviewDraft = {
+  note?: string;
+  outcome?: PreRegisteredReviewOutcome;
+};
+
 export const CATEGORY_LABELS = {
   AUTO_APPLY: '自动处理',
   DIFFERENCE: '归属差异',
@@ -41,23 +48,29 @@ export const CATEGORY_COLORS = {
 } as const;
 
 export const ACTION_LABELS: Record<string, string> = {
-  END_INCLUDE_DECISION_AVAILABLE: '可结束 INCLUDE 裁定',
+  END_INCLUDE_DECISION_AVAILABLE: '可结束保留裁定',
   ENSURE_MEMBERSHIP: '建立/刷新归属',
   MISSING_REQUIRES_CONFIRMATION: '需确认缺失',
   NO_CHANGE: '无变化',
-  SUPPRESSED_BY_EXCLUDE_DECISION: 'EXCLUDE 裁定压制',
-  SUPPRESSED_BY_INCLUDE_DECISION: 'INCLUDE 裁定保留',
+  SUPPRESSED_BY_EXCLUDE_DECISION: '本地排除裁定压制',
+  SUPPRESSED_BY_INCLUDE_DECISION: '本地保留裁定保留',
   TRANSFER_IN_REQUIRES_CONFIRMATION: '需确认转入',
 };
 
 export const DECISION_OUTCOME_LABELS: Record<StudentRosterMembershipDecisionOutcome, string> = {
-  EXCLUDE: '确认不属于本班',
-  INCLUDE: '确认属于本班',
+  EXCLUDE: '不在本班就读',
+  INCLUDE: '在本班就读',
 };
+
+export const DECISION_OUTCOME_COLORS = {
+  EXCLUDE: 'orange',
+  INCLUDE: 'blue',
+} as const;
 
 export const REASON_CODE_LABELS: Record<StudentRosterMembershipReasonCode, string> = {
   CLASS_MEMBERSHIP_CORRECTION: '班级归属修正',
-  DROPPED_CONFIRMED: '确认未报到或退学（保留历史归属）',
+  DROPPED_CONFIRMED: '确认报到后退学',
+  NOT_CHECKED_IN_CONFIRMED: '确认未报到且不来了',
   TRANSFERRED_IN_CONFIRMED: '确认转入',
   TRANSFERRED_OUT_CONFIRMED: '确认转出',
   UPSTREAM_ROSTER_ERROR_CONFIRMED: '确认 upstream 名册异常',
@@ -67,13 +80,13 @@ const TRANSFER_IN_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
   {
     decisionOutcome: 'INCLUDE',
     defaultReasonCode: 'TRANSFERRED_IN_CONFIRMED',
-    label: '确认属于本班',
+    label: '在本班就读',
     reasonOptions: ['TRANSFERRED_IN_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
   },
   {
     decisionOutcome: 'EXCLUDE',
     defaultReasonCode: 'UPSTREAM_ROSTER_ERROR_CONFIRMED',
-    label: '确认不属于本班',
+    label: '不在本班就读',
     reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
   },
 ];
@@ -85,6 +98,7 @@ const MISSING_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
     label: '结束当前归属',
     reasonOptions: [
       'TRANSFERRED_OUT_CONFIRMED',
+      'NOT_CHECKED_IN_CONFIRMED',
       'DROPPED_CONFIRMED',
       'CLASS_MEMBERSHIP_CORRECTION',
     ],
@@ -92,7 +106,7 @@ const MISSING_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
   {
     decisionOutcome: 'INCLUDE',
     defaultReasonCode: 'UPSTREAM_ROSTER_ERROR_CONFIRMED',
-    label: '确认仍属于本班',
+    label: '仍在本班就读',
     reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
   },
 ];
@@ -115,6 +129,28 @@ export function getConfirmationDecisionOptions(action: string): ConfirmationDeci
 
 export function canEndDecision(item: StudentRosterMembershipReconciliationItem) {
   return item.action === 'END_INCLUDE_DECISION_AVAILABLE' && Boolean(item.activeDecisionId);
+}
+
+export function isPreRegisteredUpstreamStatus(item: StudentRosterMembershipReconciliationItem) {
+  return item.isEnrolled === '0';
+}
+
+export function requiresNotReportedOrDroppedConfirmation(
+  item: StudentRosterMembershipReconciliationItem,
+) {
+  return (
+    item.requiresConfirmation &&
+    (item.recommendedReasonCode === 'NOT_CHECKED_IN_CONFIRMED' ||
+      item.recommendedReasonCode === 'DROPPED_CONFIRMED')
+  );
+}
+
+export function requiresPreRegisteredLocalReview(item: StudentRosterMembershipReconciliationItem) {
+  return (
+    isPreRegisteredUpstreamStatus(item) &&
+    !item.requiresConfirmation &&
+    item.category !== 'SUPPRESSED'
+  );
 }
 
 export function buildDefaultConfirmationDraft(
@@ -169,6 +205,25 @@ export function buildDefaultEndDecisionDrafts(
   }, {});
 }
 
+export function buildDefaultPreRegisteredReviewDrafts(
+  items: readonly StudentRosterMembershipReconciliationItem[],
+  options?: {
+    resolveItemKey?: (item: StudentRosterMembershipReconciliationItem) => string;
+  },
+) {
+  const resolveItemKey = options?.resolveItemKey ?? ((item) => item.key);
+
+  return items.reduce<Record<string, PreRegisteredReviewDraft>>((drafts, item) => {
+    if (requiresPreRegisteredLocalReview(item)) {
+      drafts[resolveItemKey(item)] = {
+        outcome: 'PRE_REGISTERED',
+      };
+    }
+
+    return drafts;
+  }, {});
+}
+
 export function buildCommitConfirmations(
   items: readonly StudentRosterMembershipReconciliationItem[],
   drafts: Record<string, ConfirmationDraft>,
@@ -202,6 +257,64 @@ export function buildCommitConfirmations(
   };
 }
 
+export function buildPreRegisteredReviewCommitPayload(
+  items: readonly StudentRosterMembershipReconciliationItem[],
+  drafts: Record<string, PreRegisteredReviewDraft>,
+  options?: {
+    resolveItemKey?: (item: StudentRosterMembershipReconciliationItem) => string;
+  },
+) {
+  const resolveItemKey = options?.resolveItemKey ?? ((item) => item.key);
+  const confirmations: StudentRosterMembershipConfirmationInput[] = [];
+  const endDecisions: StudentRosterMembershipEndDecisionInput[] = [];
+  const invalidItems: StudentRosterMembershipReconciliationItem[] = [];
+  const overriddenItems: StudentRosterMembershipReconciliationItem[] = [];
+
+  for (const item of items) {
+    if (!requiresPreRegisteredLocalReview(item)) {
+      continue;
+    }
+
+    const draft = drafts[resolveItemKey(item)];
+
+    if (draft?.outcome !== 'NOT_CHECKED_IN' && draft?.outcome !== 'DROPPED') {
+      continue;
+    }
+
+    overriddenItems.push(item);
+
+    if (!item.studentId) {
+      invalidItems.push(item);
+      continue;
+    }
+
+    const reasonCode: StudentRosterMembershipReasonCode =
+      draft.outcome === 'NOT_CHECKED_IN' ? 'NOT_CHECKED_IN_CONFIRMED' : 'DROPPED_CONFIRMED';
+    const reasonText = draft.note?.trim() || undefined;
+
+    confirmations.push({
+      decisionOutcome: 'EXCLUDE',
+      reasonCode,
+      reasonText,
+      studentId: item.studentId,
+    });
+
+    if (item.activeDecisionId) {
+      endDecisions.push({
+        decisionId: item.activeDecisionId,
+        endReason: reasonText,
+      });
+    }
+  }
+
+  return {
+    confirmations,
+    endDecisions,
+    invalidItems,
+    overriddenItems,
+  };
+}
+
 export function buildCommitEndDecisions(
   items: readonly StudentRosterMembershipReconciliationItem[],
   drafts: Record<string, EndDecisionDraft>,
@@ -220,4 +333,25 @@ export function buildCommitEndDecisions(
 
     return endDecisions;
   }, []);
+}
+
+export function mergeCommitEndDecisions(
+  ...decisionGroups: readonly StudentRosterMembershipEndDecisionInput[][]
+) {
+  const merged = new Map<string, StudentRosterMembershipEndDecisionInput>();
+
+  for (const decision of decisionGroups.flat()) {
+    const current = merged.get(decision.decisionId);
+
+    if (!current) {
+      merged.set(decision.decisionId, decision);
+      continue;
+    }
+
+    if (!current.endReason && decision.endReason) {
+      merged.set(decision.decisionId, decision);
+    }
+  }
+
+  return [...merged.values()];
 }

@@ -14,6 +14,7 @@ import {
   Skeleton,
   Tabs,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
@@ -55,6 +56,8 @@ const STUDENT_STATUS_LABELS: Record<string, string> = {
   DROPPED: '退学',
   ENROLLED: '在读',
   GRADUATED: '已毕业',
+  NOT_CHECKED_IN: '未报到',
+  PRE_REGISTERED: '预报到',
   SUSPENDED: '休学',
 };
 
@@ -83,8 +86,10 @@ function getStatusTagColor(status: string) {
     case 'ACTIVE':
     case 'ENROLLED':
       return 'success';
+    case 'PRE_REGISTERED':
     case 'PENDING':
       return 'processing';
+    case 'NOT_CHECKED_IN':
     case 'INACTIVE':
     case 'LEFT':
     case 'GRADUATED':
@@ -628,14 +633,27 @@ function StaffIdentitySection({
 }
 
 function StudentIdentitySection({ student }: { student: MyProfileStudentIdentity }) {
+  const studentStatusLabel = STUDENT_STATUS_LABELS[student.studentStatus] ?? student.studentStatus;
+  const studentStatusTag = (
+    <Tag color={getStatusTagColor(student.studentStatus)}>{studentStatusLabel}</Tag>
+  );
+  const studentStatusTooltip =
+    student.studentStatus === 'PRE_REGISTERED'
+      ? '学生已在上游名册中，但尚未正式报到'
+      : student.studentStatus === 'NOT_CHECKED_IN'
+        ? '已确认未正式报到且不再报到'
+        : null;
+
   return (
     <FieldGrid>
       <FieldItem label="学号">{student.id}</FieldItem>
       <FieldItem label="姓名">{student.name}</FieldItem>
       <FieldItem label="学籍状态">
-        <Tag color={getStatusTagColor(student.studentStatus)}>
-          {STUDENT_STATUS_LABELS[student.studentStatus] ?? student.studentStatus}
-        </Tag>
+        {studentStatusTooltip ? (
+          <Tooltip title={studentStatusTooltip}>{studentStatusTag}</Tooltip>
+        ) : (
+          studentStatusTag
+        )}
       </FieldItem>
       <FieldItem label="当前班级 ID">{displayValue(student.currentClassId)}</FieldItem>
       <FieldItem label="当前班级编码">{displayValue(student.currentClassCode)}</FieldItem>

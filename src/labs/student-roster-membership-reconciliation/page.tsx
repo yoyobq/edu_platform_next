@@ -1,7 +1,7 @@
 // src/labs/student-roster-membership-reconciliation/page.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReloadOutlined, TeamOutlined } from '@ant-design/icons';
+import { ReloadOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -15,14 +15,15 @@ import {
   Select,
   Spin,
   Table,
+  Tabs,
   Tag,
+  Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
-  formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -40,7 +41,6 @@ import {
   isExpiredUpstreamSessionError,
   type PreviousClassAdviserClassesResult,
   resolveStudentRosterMembershipErrorMessage,
-  type StudentRosterMembershipCategory,
   type StudentRosterMembershipConfirmationInput,
   type StudentRosterMembershipEndDecisionInput,
   type StudentRosterMembershipReconciliationItem,
@@ -51,16 +51,33 @@ import {
   buildCommitEndDecisions,
   buildDefaultConfirmationDrafts,
   buildDefaultEndDecisionDrafts,
+  buildDefaultPreRegisteredReviewDrafts,
+  buildPreRegisteredReviewCommitPayload,
   canEndDecision,
   CATEGORY_COLORS,
   CATEGORY_LABELS,
   type ConfirmationDraft,
+  DECISION_OUTCOME_COLORS,
   DECISION_OUTCOME_LABELS,
   type EndDecisionDraft,
   getActionLabel,
   getConfirmationDecisionOptions,
+  mergeCommitEndDecisions,
+  type PreRegisteredReviewDraft,
+  type PreRegisteredReviewOutcome,
   REASON_CODE_LABELS,
+  requiresPreRegisteredLocalReview,
 } from './confirmation-policy';
+import {
+  buildRosterReviewItems,
+  countRosterReviewItemsByKind,
+  filterRosterReviewItems,
+  ROSTER_REVIEW_KIND_COLORS,
+  ROSTER_REVIEW_KIND_LABELS,
+  ROSTER_REVIEW_KIND_ORDER,
+  type RosterReviewItem,
+  type RosterReviewKind,
+} from './result-view-model';
 
 type PendingRosterAction =
   | { type: 'load-class-list' }
@@ -72,18 +89,20 @@ type PendingRosterAction =
       type: 'commit';
     };
 
-type ResultFilterKey = 'focus' | 'requires-confirmation' | 'all' | StudentRosterMembershipCategory;
+type ResultFilterKey = 'focus' | 'all' | RosterReviewKind;
 
 const PAGE_DESCRIPTION =
   '按单个本地班级核对 upstream roster 与本地 member_student_class_membership / decision 的归属差异。';
 
-const RESULT_CATEGORY_ORDER: StudentRosterMembershipCategory[] = [
-  'DIFFERENCE',
-  'UNPROCESSABLE',
-  'SUPPRESSED',
-  'AUTO_APPLY',
-];
 const RESULT_TABLE_DEFAULT_PAGE_SIZE = 8;
+
+const PRIMARY_STATUS_TAG_STYLE = {
+  backgroundColor: 'var(--ant-color-primary-bg)',
+  borderColor: 'var(--ant-color-primary-bg)',
+  color: 'var(--ant-color-primary)',
+};
+
+type CampusNetworkStatusTagTone = 'default' | 'primary' | 'warning';
 
 function resolveUpstreamRefreshFailureMessage(error: unknown) {
   if (isExpiredUpstreamSessionError(error)) {
@@ -105,10 +124,61 @@ function renderActionTag(action: string) {
   return <Tag>{getActionLabel(action)}</Tag>;
 }
 
+function getCommitImpactTagColor(reviewItem: RosterReviewItem) {
+  if (reviewItem.kind === 'required-confirmation') {
+    return 'gold';
+  }
+
+  if (reviewItem.kind === 'enrollment-review') {
+    return 'warning';
+  }
+
+  if (reviewItem.kind === 'local-decision' && canEndDecision(reviewItem.item)) {
+    return 'blue';
+  }
+
+  if (reviewItem.kind === 'automatic' && reviewItem.item.action !== 'NO_CHANGE') {
+    return 'green';
+  }
+
+  return 'default';
+}
+
+function renderDefaultOperationTag(reviewItem: RosterReviewItem) {
+  return (
+    <Tag color={ROSTER_REVIEW_KIND_COLORS[reviewItem.kind]}>{reviewItem.defaultOperationLabel}</Tag>
+  );
+}
+
+function renderCommitImpactTag(reviewItem: RosterReviewItem) {
+  return <Tag color={getCommitImpactTagColor(reviewItem)}>{reviewItem.commitImpactLabel}</Tag>;
+}
+
+function getDecisionOutcomeButtonProps(
+  outcome: StudentRosterMembershipConfirmationInput['decisionOutcome'],
+  isSelected: boolean,
+) {
+  if (outcome === 'INCLUDE') {
+    return isSelected
+      ? {
+          type: 'primary' as const,
+        }
+      : {
+          color: 'primary' as const,
+          variant: 'outlined' as const,
+        };
+  }
+
+  return {
+    color: 'orange' as const,
+    variant: isSelected ? ('solid' as const) : ('outlined' as const),
+  };
+}
+
 function getPendingActionLabel(action: PendingRosterAction | null) {
   switch (action?.type) {
     case 'load-class-list':
-      return '读取历史班主任班级';
+      return '读取历史班主任信息';
     case 'dry-run':
       return '预览学生名册归属差异';
     case 'commit':
@@ -133,13 +203,9 @@ function getResultRowKey(item: StudentRosterMembershipReconciliationItem) {
   ].join(':');
 }
 
-function hasUpstreamStatusSignal(item: StudentRosterMembershipReconciliationItem) {
-  return item.isEnrolled === '0' || item.isInSchool === '0';
-}
-
 function getReportedStatusLabel(value: string | null) {
   if (value === '0') {
-    return '未报到';
+    return '未报到/预报到';
   }
 
   if (value === '1') {
@@ -161,30 +227,36 @@ function getInSchoolStatusLabel(value: string | null) {
   return '-';
 }
 
-function isFocusResultItem(item: StudentRosterMembershipReconciliationItem) {
-  return (
-    item.requiresConfirmation ||
-    item.category === 'DIFFERENCE' ||
-    item.category === 'UNPROCESSABLE' ||
-    hasUpstreamStatusSignal(item) ||
-    canEndDecision(item)
-  );
+function getReportedStatusTagTone(value: string | null): CampusNetworkStatusTagTone {
+  if (value === '0') {
+    return 'warning';
+  }
+
+  if (value === '1') {
+    return 'primary';
+  }
+
+  return 'default';
 }
 
-function filterResultItems(
-  items: readonly StudentRosterMembershipReconciliationItem[],
-  filter: ResultFilterKey,
-) {
-  switch (filter) {
-    case 'focus':
-      return items.filter(isFocusResultItem);
-    case 'requires-confirmation':
-      return items.filter((item) => item.requiresConfirmation);
-    case 'all':
-      return [...items];
-    default:
-      return items.filter((item) => item.category === filter);
+function getInSchoolStatusTagTone(value: string | null): CampusNetworkStatusTagTone {
+  if (value === '0') {
+    return 'warning';
   }
+
+  if (value === '1') {
+    return 'primary';
+  }
+
+  return 'default';
+}
+
+function renderCampusNetworkStatusTag(label: string, tone: CampusNetworkStatusTagTone) {
+  if (tone === 'primary') {
+    return <Tag style={PRIMARY_STATUS_TAG_STYLE}>{label}</Tag>;
+  }
+
+  return tone === 'default' ? <Tag>{label}</Tag> : <Tag color={tone}>{label}</Tag>;
 }
 
 function renderMetadataLine(label: string, value: number | string | null | undefined) {
@@ -198,7 +270,18 @@ function renderMetadataLine(label: string, value: number | string | null | undef
 function renderDecisionOutcome(
   outcome: StudentRosterMembershipReconciliationItem['recommendedDecisionOutcome'],
 ) {
-  return outcome ? DECISION_OUTCOME_LABELS[outcome] : '-';
+  return outcome ? renderDecisionOutcomeTag(outcome) : '-';
+}
+
+function renderDecisionOutcomeTag(
+  outcome: NonNullable<StudentRosterMembershipReconciliationItem['recommendedDecisionOutcome']>,
+  prefix?: string,
+) {
+  const label = DECISION_OUTCOME_LABELS[outcome];
+
+  return (
+    <Tag color={DECISION_OUTCOME_COLORS[outcome]}>{prefix ? `${prefix}：${label}` : label}</Tag>
+  );
 }
 
 function renderReasonCode(
@@ -221,6 +304,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingRosterAction | null>(null);
+  const [hasAutoLoadedClassList, setHasAutoLoadedClassList] = useState(false);
   const [resultFilter, setResultFilter] = useState<ResultFilterKey>('focus');
   const [resultTablePage, setResultTablePage] = useState(1);
   const [resultTablePageSize, setResultTablePageSize] = useState(RESULT_TABLE_DEFAULT_PAGE_SIZE);
@@ -234,6 +318,9 @@ export function StudentRosterMembershipReconciliationLabPage() {
     {},
   );
   const [endDecisionDrafts, setEndDecisionDrafts] = useState<Record<string, EndDecisionDraft>>({});
+  const [preRegisteredReviewDrafts, setPreRegisteredReviewDrafts] = useState<
+    Record<string, PreRegisteredReviewDraft>
+  >({});
   const {
     clear,
     clearRememberedCredentials,
@@ -260,52 +347,72 @@ export function StudentRosterMembershipReconciliationLabPage() {
   );
   const selectedClass =
     classListResult?.classes.find((item) => item.code === selectedClassCode) ?? null;
-  const requiredConfirmationItems = useMemo(
-    () => reconciliationResult?.items.filter((item) => item.requiresConfirmation) ?? [],
+  const reviewItems = useMemo(
+    () => buildRosterReviewItems(reconciliationResult?.items ?? [], getResultRowKey),
     [reconciliationResult],
   );
-  const focusResultItems = useMemo(
-    () => reconciliationResult?.items.filter(isFocusResultItem) ?? [],
+  const reviewCounts = useMemo(() => countRosterReviewItemsByKind(reviewItems), [reviewItems]);
+  const focusReviewItems = useMemo(
+    () => filterRosterReviewItems(reviewItems, 'focus'),
+    [reviewItems],
+  );
+  const localReviewPreRegisteredItems = useMemo(
+    () => reconciliationResult?.items.filter(requiresPreRegisteredLocalReview) ?? [],
     [reconciliationResult],
   );
-  const visibleReconciliationItems = useMemo(
-    () => filterResultItems(reconciliationResult?.items ?? [], resultFilter),
-    [reconciliationResult, resultFilter],
+  const visibleReviewItems = useMemo(
+    () => filterRosterReviewItems(reviewItems, resultFilter),
+    [resultFilter, reviewItems],
   );
   const resultFilterOptions = useMemo(() => {
-    const items = reconciliationResult?.items ?? [];
-
     return [
       {
-        label: `重点项 ${focusResultItems.length}`,
+        label: `人工复核项 ${focusReviewItems.length}`,
         value: 'focus',
       },
+      ...ROSTER_REVIEW_KIND_ORDER.filter((kind) => reviewCounts[kind] > 0).map((kind) => ({
+        label: `${ROSTER_REVIEW_KIND_LABELS[kind]} ${reviewCounts[kind]}`,
+        value: kind,
+      })),
       {
-        label: `需确认 ${requiredConfirmationItems.length}`,
-        value: 'requires-confirmation',
-      },
-      {
-        label: `全部 ${items.length}`,
+        label: `全部 ${reviewItems.length}`,
         value: 'all',
       },
-      ...RESULT_CATEGORY_ORDER.map((category) => ({
-        label: `${CATEGORY_LABELS[category]} ${items.filter((item) => item.category === category).length}`,
-        value: category,
-      })),
     ];
-  }, [focusResultItems.length, reconciliationResult, requiredConfirmationItems.length]);
+  }, [focusReviewItems.length, reviewCounts, reviewItems.length]);
   const commitConfirmations = useMemo(
     () => buildCommitConfirmations(reconciliationResult?.items ?? [], confirmationDrafts),
     [confirmationDrafts, reconciliationResult],
   );
-  const commitEndDecisions = useMemo(
+  const selectedEndDecisions = useMemo(
     () => buildCommitEndDecisions(reconciliationResult?.items ?? [], endDecisionDrafts),
     [endDecisionDrafts, reconciliationResult],
+  );
+  const preRegisteredReviewCommitPayload = useMemo(
+    () =>
+      buildPreRegisteredReviewCommitPayload(
+        reconciliationResult?.items ?? [],
+        preRegisteredReviewDrafts,
+        {
+          resolveItemKey: getResultRowKey,
+        },
+      ),
+    [preRegisteredReviewDrafts, reconciliationResult],
+  );
+  const commitConfirmationsPayload = useMemo(
+    () => [...commitConfirmations.confirmations, ...preRegisteredReviewCommitPayload.confirmations],
+    [commitConfirmations.confirmations, preRegisteredReviewCommitPayload.confirmations],
+  );
+  const commitEndDecisions = useMemo(
+    () =>
+      mergeCommitEndDecisions(selectedEndDecisions, preRegisteredReviewCommitPayload.endDecisions),
+    [preRegisteredReviewCommitPayload.endDecisions, selectedEndDecisions],
   );
   const isRunningAction = isLoadingClassList || isPreviewing || isCommitting;
   const canCommit =
     Boolean(reconciliationResult) &&
     commitConfirmations.invalidItems.length === 0 &&
+    preRegisteredReviewCommitPayload.invalidItems.length === 0 &&
     !isRunningAction;
 
   const applyReconciliationResult = useCallback(
@@ -313,7 +420,15 @@ export function StudentRosterMembershipReconciliationLabPage() {
       setReconciliationResult(result);
       setConfirmationDrafts(buildDefaultConfirmationDrafts(result.items));
       setEndDecisionDrafts(buildDefaultEndDecisionDrafts(result.items));
-      setResultFilter(result.items.some(isFocusResultItem) ? 'focus' : 'all');
+      setPreRegisteredReviewDrafts(
+        buildDefaultPreRegisteredReviewDrafts(result.items, {
+          resolveItemKey: getResultRowKey,
+        }),
+      );
+      const nextReviewItems = buildRosterReviewItems(result.items, getResultRowKey);
+      setResultFilter(
+        filterRosterReviewItems(nextReviewItems, 'focus').length > 0 ? 'focus' : 'all',
+      );
       setResultTablePage(1);
     },
     [],
@@ -325,8 +440,10 @@ export function StudentRosterMembershipReconciliationLabPage() {
       setClassListResult(null);
       setSelectedClassCode(undefined);
       setReconciliationResult(null);
+      setHasAutoLoadedClassList(false);
       setConfirmationDrafts({});
       setEndDecisionDrafts({});
+      setPreRegisteredReviewDrafts({});
       setResultFilter('focus');
       setResultTablePage(1);
       setClassListError(null);
@@ -386,14 +503,17 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
             persistSessionFromResult(currentSession, result);
             setClassListResult(result);
-            setSelectedClassCode((currentClassCode) =>
-              result.classes.some((item) => item.code === currentClassCode)
-                ? currentClassCode
-                : undefined,
-            );
+            setSelectedClassCode((currentClassCode) => {
+              if (result.classes.some((item) => item.code === currentClassCode)) {
+                return currentClassCode;
+              }
+
+              return result.classes.at(-1)?.code;
+            });
             setReconciliationResult(null);
             setConfirmationDrafts({});
             setEndDecisionDrafts({});
+            setPreRegisteredReviewDrafts({});
             setResultFilter('focus');
             setResultTablePage(1);
             return;
@@ -557,15 +677,39 @@ export function StudentRosterMembershipReconciliationLabPage() {
   }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
 
   useEffect(() => {
-    const maxPage = Math.max(1, Math.ceil(visibleReconciliationItems.length / resultTablePageSize));
+    if (!currentAccount || !storedSession || hasAutoLoadedClassList || classListResult) {
+      return;
+    }
+
+    setHasAutoLoadedClassList(true);
+    void performAction(storedSession, {
+      type: 'load-class-list',
+    });
+  }, [classListResult, currentAccount, hasAutoLoadedClassList, performAction, storedSession]);
+
+  useEffect(() => {
+    const maxPage = Math.max(1, Math.ceil(visibleReviewItems.length / resultTablePageSize));
 
     setResultTablePage((currentPage) => Math.min(currentPage, maxPage));
-  }, [resultTablePageSize, visibleReconciliationItems.length]);
+  }, [resultTablePageSize, visibleReviewItems.length]);
 
   async function handleLoadClassList() {
     await ensureSessionAndRun({
       type: 'load-class-list',
     });
+  }
+
+  function handleSwitchUpstreamAccount() {
+    setPendingAction({
+      type: 'load-class-list',
+    });
+    setIsLoginModalOpen(true);
+    setLoginError(null);
+    loginForm.setFieldsValue(
+      buildUpstreamLoginCredentialsInitialValues({
+        rememberedCredentials,
+      }),
+    );
   }
 
   async function handleDryRun() {
@@ -591,9 +735,14 @@ export function StudentRosterMembershipReconciliationLabPage() {
       return;
     }
 
+    if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
+      setReconciliationError('存在无法提交的 IS_ENROLLED=0 改判项，请检查学生编号。');
+      return;
+    }
+
     await ensureSessionAndRun({
       classCode: selectedClassCode,
-      confirmations: commitConfirmations.confirmations,
+      confirmations: commitConfirmationsPayload,
       endDecisions: commitEndDecisions,
       type: 'commit',
     });
@@ -619,6 +768,18 @@ export function StudentRosterMembershipReconciliationLabPage() {
     }));
   }
 
+  function updatePreRegisteredReviewDraft(
+    item: StudentRosterMembershipReconciliationItem,
+    updater: (draft: PreRegisteredReviewDraft | undefined) => PreRegisteredReviewDraft,
+  ) {
+    const key = getResultRowKey(item);
+
+    setPreRegisteredReviewDrafts((current) => ({
+      ...current,
+      [key]: updater(current[key]),
+    }));
+  }
+
   function renderConfirmationEditor(item: StudentRosterMembershipReconciliationItem) {
     if (!item.requiresConfirmation) {
       return null;
@@ -637,29 +798,28 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
     return (
       <div className="flex min-w-[320px] flex-col gap-2">
-        <Radio.Group
-          optionType="button"
-          value={draft.decisionOutcome}
-          options={options.map((option) => ({
-            label: option.label,
-            value: option.decisionOutcome,
-          }))}
-          onChange={(event) => {
-            const nextOption = options.find(
-              (option) => option.decisionOutcome === event.target.value,
+        <div className="flex flex-wrap gap-2">
+          {options.map((option) => {
+            const isSelected = option.decisionOutcome === draft.decisionOutcome;
+
+            return (
+              <Button
+                key={option.decisionOutcome}
+                htmlType="button"
+                {...getDecisionOutcomeButtonProps(option.decisionOutcome, isSelected)}
+                onClick={() => {
+                  updateConfirmationDraft(item, (current) => ({
+                    decisionOutcome: option.decisionOutcome,
+                    reasonCode: option.defaultReasonCode,
+                    reasonText: current?.reasonText,
+                  }));
+                }}
+              >
+                {option.label}
+              </Button>
             );
-
-            if (!nextOption) {
-              return;
-            }
-
-            updateConfirmationDraft(item, (current) => ({
-              decisionOutcome: nextOption.decisionOutcome,
-              reasonCode: nextOption.defaultReasonCode,
-              reasonText: current?.reasonText,
-            }));
-          }}
-        />
+          })}
+        </div>
         <Select
           value={draft.reasonCode}
           options={(selectedOption?.reasonOptions ?? []).map((reasonCode) => ({
@@ -710,7 +870,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
             }));
           }}
         >
-          结束 INCLUDE 裁定
+          结束保留裁定
         </Checkbox>
         {draft.selected ? (
           <Input.TextArea
@@ -731,107 +891,227 @@ export function StudentRosterMembershipReconciliationLabPage() {
     );
   }
 
-  function renderPresenceTag(
+  function renderCampusNetworkReturnTag(
     presence: StudentRosterMembershipReconciliationItem['upstreamPresence'],
   ) {
-    const color = presence === 'RETURNED' ? 'green' : presence === 'MISSING' ? 'orange' : 'default';
+    if (presence === 'RETURNED') {
+      return null;
+    }
 
-    return <Tag color={color}>{presence}</Tag>;
+    const color = presence === 'MISSING' ? 'warning' : 'default';
+    const label = presence === 'MISSING' ? '校园网名单未返回' : '校园网状态未知';
+
+    return <Tag color={color}>{label}</Tag>;
   }
 
   function renderEnrollmentStatusTags(item: StudentRosterMembershipReconciliationItem) {
+    const reportedTag = renderCampusNetworkStatusTag(
+      getReportedStatusLabel(item.isEnrolled),
+      getReportedStatusTagTone(item.isEnrolled),
+    );
+
     return (
       <div className="flex flex-wrap gap-1">
-        <Tag color={item.isEnrolled === '0' ? 'orange' : 'default'}>
-          报到 {getReportedStatusLabel(item.isEnrolled)}
-        </Tag>
-        <Tag color={item.isInSchool === '0' ? 'orange' : 'default'}>
-          在校 {getInSchoolStatusLabel(item.isInSchool)}
-        </Tag>
-        {hasUpstreamStatusSignal(item) ? <Tag color="orange">报到/在校状态</Tag> : null}
+        {item.isEnrolled === '0' ? (
+          <Tooltip title="上游 IS_ENROLLED=0，可能是未报到且不来了，也可能仍处于预报到">
+            {reportedTag}
+          </Tooltip>
+        ) : (
+          reportedTag
+        )}
+        {renderCampusNetworkStatusTag(
+          getInSchoolStatusLabel(item.isInSchool),
+          getInSchoolStatusTagTone(item.isInSchool),
+        )}
       </div>
     );
   }
 
-  function renderStudentCell(item: StudentRosterMembershipReconciliationItem) {
+  function renderStudentCell(reviewItem: RosterReviewItem) {
+    const item = reviewItem.item;
+    const displayName = getStudentDisplayName(item);
+    const shouldShowStudentId = Boolean(item.studentId && item.studentId !== displayName);
+
     return (
       <div className="flex flex-col gap-1">
-        <span className="font-medium text-text">{getStudentDisplayName(item)}</span>
+        <span className="font-medium text-text">{displayName}</span>
+        {shouldShowStudentId ? (
+          <span className="tabular-nums text-text-secondary">{item.studentId}</span>
+        ) : null}
+      </div>
+    );
+  }
+
+  function shouldShowReviewBusinessText(reviewItem: RosterReviewItem) {
+    const item = reviewItem.item;
+
+    if (reviewItem.kind === 'local-decision' && !canEndDecision(item)) {
+      return false;
+    }
+
+    if (reviewItem.kind === 'automatic' && item.action === 'NO_CHANGE') {
+      return false;
+    }
+
+    return true;
+  }
+
+  function renderReviewSummaryCell(reviewItem: RosterReviewItem) {
+    const shouldShowBusinessText = shouldShowReviewBusinessText(reviewItem);
+    const currentDecisionTag = reviewItem.item.activeDecisionOutcome
+      ? renderDecisionOutcomeTag(reviewItem.item.activeDecisionOutcome, '当前裁定')
+      : null;
+
+    return (
+      <div className="flex flex-col gap-2">
+        {currentDecisionTag ? (
+          <div className="flex flex-wrap gap-1">{currentDecisionTag}</div>
+        ) : null}
         <div className="flex flex-wrap gap-1">
-          {renderCategoryTag(item.category)}
-          {renderActionTag(item.action)}
-          {item.requiresConfirmation ? <Tag color="gold">需确认</Tag> : null}
-          {canEndDecision(item) ? <Tag color="blue">可结束裁定</Tag> : null}
-          {hasUpstreamStatusSignal(item) ? <Tag color="orange">未报到/不在校</Tag> : null}
+          {reviewItem.item.recommendedDecisionOutcome
+            ? renderDecisionOutcomeTag(reviewItem.item.recommendedDecisionOutcome, '建议')
+            : null}
+          {renderDefaultOperationTag(reviewItem)}
+          {renderCommitImpactTag(reviewItem)}
         </div>
-        {renderMetadataLine('studentId', item.studentId)}
-        {renderMetadataLine('upstreamStudentId', item.upstreamStudentId)}
+        {shouldShowBusinessText ? (
+          <span className="font-medium text-text">{reviewItem.businessSummary}</span>
+        ) : null}
+        {shouldShowBusinessText && reviewItem.businessDetail ? (
+          <span className="text-text-secondary">{reviewItem.businessDetail}</span>
+        ) : null}
       </div>
     );
   }
 
-  function renderMembershipComparison(item: StudentRosterMembershipReconciliationItem) {
-    return (
-      <div className="grid gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-text">本地归属</span>
-          {renderMetadataLine('目标班级', `${item.className} / ${item.classCode}`)}
-          {renderMetadataLine('当前归属', item.currentClassCode)}
-          {renderMetadataLine('membership', item.currentMembershipId)}
-        </div>
-        <div className="flex flex-col gap-1">
-          <span className="font-medium text-text">上游返回</span>
-          <span>{renderPresenceTag(item.upstreamPresence)}</span>
-          {renderMetadataLine('上游班级', item.upstreamClassName)}
-          {renderMetadataLine('上游 code', item.upstreamClassCode)}
-          {renderEnrollmentStatusTags(item)}
-        </div>
-      </div>
-    );
-  }
+  function renderLocalMembershipCell(item: StudentRosterMembershipReconciliationItem) {
+    const hasMembershipConflict =
+      Boolean(item.currentClassCode) && item.currentClassCode !== item.classCode;
 
-  function renderDecisionCell(item: StudentRosterMembershipReconciliationItem) {
+    if (!hasMembershipConflict) {
+      return <span className="font-medium text-text">{item.className}</span>;
+    }
+
     return (
       <div className="flex flex-col gap-1">
-        {renderMetadataLine('当前裁定', renderDecisionOutcome(item.activeDecisionOutcome))}
-        {renderMetadataLine('decisionId', item.activeDecisionId)}
-        {renderMetadataLine('推荐裁定', renderDecisionOutcome(item.recommendedDecisionOutcome))}
-        {renderMetadataLine('推荐原因', renderReasonCode(item.recommendedReasonCode))}
-        {renderMetadataLine('后端说明', item.reason)}
+        {renderMetadataLine('目标班级', item.className)}
+        {renderMetadataLine('当前归属', item.currentClassCode)}
       </div>
     );
   }
 
-  function renderOperationCell(item: StudentRosterMembershipReconciliationItem) {
-    const editor = renderConfirmationEditor(item) ?? renderEndDecisionEditor(item);
-
-    if (editor) {
-      return editor;
-    }
-
-    if (item.category === 'UNPROCESSABLE') {
-      return <Tag color="orange">仅观察</Tag>;
-    }
-
-    if (item.category === 'SUPPRESSED') {
-      return <Tag color="blue">已被裁定压制</Tag>;
-    }
-
-    if (hasUpstreamStatusSignal(item)) {
-      return <Tag color="orange">仅观察报到/在校状态</Tag>;
-    }
-
-    return <Tag color="green">无需人工确认</Tag>;
+  function renderCampusNetworkStatusCell(item: StudentRosterMembershipReconciliationItem) {
+    return (
+      <div className="flex flex-col gap-1">
+        {renderCampusNetworkReturnTag(item.upstreamPresence)}
+        <span className="text-text-secondary">{formatNullableValue(item.upstreamClassName)}</span>
+        {renderEnrollmentStatusTags(item)}
+      </div>
+    );
   }
 
-  function renderExpandedObservationDetails(item: StudentRosterMembershipReconciliationItem) {
+  function renderPreRegisteredReviewEditor(item: StudentRosterMembershipReconciliationItem) {
+    if (!requiresPreRegisteredLocalReview(item)) {
+      return null;
+    }
+
+    const draft = preRegisteredReviewDrafts[getResultRowKey(item)] ?? {
+      outcome: 'PRE_REGISTERED',
+    };
+
+    return (
+      <div className="flex min-w-[280px] flex-col gap-2">
+        <span className="text-text-secondary">
+          IS_ENROLLED=0 需要人工判断是新生预报到、未报到且不来了，还是报到后退学。
+        </span>
+        <Radio.Group
+          optionType="button"
+          value={draft.outcome}
+          options={[
+            {
+              label: '按预报到处理',
+              value: 'PRE_REGISTERED',
+            },
+            {
+              label: '未报到且不来了',
+              value: 'NOT_CHECKED_IN',
+            },
+            {
+              label: '报到后退学',
+              value: 'DROPPED',
+            },
+          ]}
+          onChange={(event) => {
+            updatePreRegisteredReviewDraft(item, (current) => ({
+              note: current?.note,
+              outcome: event.target.value as PreRegisteredReviewOutcome,
+            }));
+          }}
+        />
+        {draft.outcome === 'PRE_REGISTERED' ? (
+          <Tag color="warning">默认处理，不提交 confirmation</Tag>
+        ) : null}
+        {draft.outcome === 'NOT_CHECKED_IN' ? (
+          <Tag color="orange">提交 EXCLUDE + NOT_CHECKED_IN_CONFIRMED</Tag>
+        ) : null}
+        {draft.outcome === 'DROPPED' ? (
+          <Tag color="orange">提交 EXCLUDE + DROPPED_CONFIRMED</Tag>
+        ) : null}
+        {(draft.outcome === 'NOT_CHECKED_IN' || draft.outcome === 'DROPPED') &&
+        item.activeDecisionId ? (
+          <Tag color="purple">同次结束旧裁定 {item.activeDecisionId}</Tag>
+        ) : null}
+        <Input.TextArea
+          autoSize={{ maxRows: 3, minRows: 2 }}
+          maxLength={255}
+          placeholder="可选备注，选择未报到且不来了或报到后退学时会作为确认说明提交"
+          showCount
+          value={draft.note}
+          onChange={(event) => {
+            updatePreRegisteredReviewDraft(item, (current) => ({
+              note: event.target.value,
+              outcome: current?.outcome,
+            }));
+          }}
+        />
+      </div>
+    );
+  }
+
+  function renderOperationCell(reviewItem: RosterReviewItem) {
+    const item = reviewItem.item;
+    const editor =
+      renderConfirmationEditor(item) ??
+      renderPreRegisteredReviewEditor(item) ??
+      renderEndDecisionEditor(item);
+
+    return (
+      <div className="flex flex-col gap-3">
+        {renderReviewSummaryCell(reviewItem)}
+        {editor}
+      </div>
+    );
+  }
+
+  function renderExpandedObservationDetails(reviewItem: RosterReviewItem) {
+    const item = reviewItem.item;
+
     return (
       <Descriptions bordered size="small" column={3}>
+        <Descriptions.Item label="业务分组">
+          {ROSTER_REVIEW_KIND_LABELS[reviewItem.kind]}
+        </Descriptions.Item>
+        <Descriptions.Item label="默认处理">
+          {renderDefaultOperationTag(reviewItem)}
+        </Descriptions.Item>
+        <Descriptions.Item label="提交影响">{renderCommitImpactTag(reviewItem)}</Descriptions.Item>
         <Descriptions.Item label="key">{item.key}</Descriptions.Item>
         <Descriptions.Item label="上游行号">{formatNullableValue(item.rowIndex)}</Descriptions.Item>
-        <Descriptions.Item label="分类">{CATEGORY_LABELS[item.category]}</Descriptions.Item>
-        <Descriptions.Item label="动作">{getActionLabel(item.action)}</Descriptions.Item>
-        <Descriptions.Item label="upstream 出现">{item.upstreamPresence}</Descriptions.Item>
+        <Descriptions.Item label="分类">{renderCategoryTag(item.category)}</Descriptions.Item>
+        <Descriptions.Item label="动作">{renderActionTag(item.action)}</Descriptions.Item>
+        <Descriptions.Item label="校园网返回">
+          {renderCampusNetworkReturnTag(item.upstreamPresence) ?? '已返回'}
+        </Descriptions.Item>
         <Descriptions.Item label="upstreamStudentId">
           {formatNullableValue(item.upstreamStudentId)}
         </Descriptions.Item>
@@ -850,230 +1130,130 @@ export function StudentRosterMembershipReconciliationLabPage() {
         <Descriptions.Item label="当前 membership">
           {formatNullableValue(item.currentMembershipId)}
         </Descriptions.Item>
+        <Descriptions.Item label="当前裁定">
+          {renderDecisionOutcome(item.activeDecisionOutcome)}
+        </Descriptions.Item>
         <Descriptions.Item label="active decision">
           {formatNullableValue(item.activeDecisionId)}
         </Descriptions.Item>
+        <Descriptions.Item label="推荐裁定">
+          {renderDecisionOutcome(item.recommendedDecisionOutcome)}
+        </Descriptions.Item>
         <Descriptions.Item label="推荐原因码">
-          {formatNullableValue(item.recommendedReasonCode)}
+          {renderReasonCode(item.recommendedReasonCode)}
         </Descriptions.Item>
         <Descriptions.Item label="后端说明">{formatNullableValue(item.reason)}</Descriptions.Item>
       </Descriptions>
     );
   }
 
-  const resultColumns: ColumnsType<StudentRosterMembershipReconciliationItem> = [
+  const resultColumns: ColumnsType<RosterReviewItem> = [
     {
       fixed: 'left',
       key: 'student',
       render: (_, item) => renderStudentCell(item),
-      title: '学生与状态',
-      width: 260,
+      title: '学生',
+      width: 160,
     },
     {
-      key: 'comparison',
-      render: (_, item) => renderMembershipComparison(item),
-      title: '归属对比',
-      width: 340,
+      key: 'local-membership',
+      render: (_, item) => renderLocalMembershipCell(item.item),
+      title: '本地归属',
+      width: 220,
     },
     {
-      key: 'decision',
-      render: (_, item) => renderDecisionCell(item),
-      title: '裁定与原因',
-      width: 280,
+      key: 'campus-network-status',
+      render: (_, item) => renderCampusNetworkStatusCell(item.item),
+      title: '校园网状态',
+      width: 220,
     },
     {
       key: 'operation',
       render: (_, item) => renderOperationCell(item),
-      title: '人工处理',
-      width: 340,
+      title: '处理方式',
+      width: 520,
     },
   ];
-
-  function renderSessionCard() {
-    return (
-      <Card title="上游会话">
-        <div className="flex flex-col gap-4">
-          <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="当前账号">
-              {currentAccount?.displayName ?? '-'}
-            </Descriptions.Item>
-            <Descriptions.Item label="upstream token">
-              {storedSession ? '已持有' : '未持有'}
-            </Descriptions.Item>
-            <Descriptions.Item label="过期时间">
-              {formatUpstreamSessionDateTime(storedSession?.expiresAt ?? null)}
-            </Descriptions.Item>
-            <Descriptions.Item label="sessionStrategy">
-              {reconciliationResult?.sessionStrategy ?? '-'}
-            </Descriptions.Item>
-          </Descriptions>
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="primary"
-              disabled={isRunningAction}
-              onClick={() => {
-                setPendingAction(null);
-                setIsLoginModalOpen(true);
-                loginForm.setFieldsValue(
-                  buildUpstreamLoginCredentialsInitialValues({
-                    rememberedCredentials,
-                  }),
-                );
-              }}
-            >
-              {storedSession ? '重新登录 upstream' : '登录 upstream'}
-            </Button>
-            <Button
-              icon={<ReloadOutlined />}
-              disabled={!storedSession || isRunningAction}
-              loading={isLoadingClassList}
-              onClick={() => void ensureSessionAndRun({ type: 'load-class-list' })}
-            >
-              刷新班级
-            </Button>
-            <Button
-              danger
-              disabled={!storedSession || isRunningAction}
-              onClick={() => {
-                clearCurrentSession();
-                setLoginError(null);
-              }}
-            >
-              清空 Token
-            </Button>
-          </div>
-        </div>
-      </Card>
-    );
-  }
 
   function renderClassListCard() {
     return (
       <Card title="班级选择">
         <div className="flex flex-col gap-4">
           {classListError ? <Alert type="warning" showIcon title={classListError} /> : null}
-          <Alert
-            type="info"
-            showIcon
-            title="先从当前 upstream 登录用户的历史班主任班级中选择班级"
-            description="classCode 必须已同步到本地 org_class.class_code；如果列表中的班级还没有本地班级，请先走班级同步。"
-          />
-          <div className="flex flex-wrap gap-3">
-            <Button
-              icon={<ReloadOutlined />}
-              loading={isLoadingClassList}
-              disabled={isRunningAction && !isLoadingClassList}
-              onClick={() => void handleLoadClassList()}
-            >
-              读取历史班主任班级
-            </Button>
-          </div>
           {classListResult ? (
             <>
-              <div className="flex flex-wrap gap-2">
-                <Tag color="processing">历史班主任班级数：{classListResult.count}</Tag>
-                <Tag color="cyan">
-                  token 过期：{formatUpstreamSessionDateTime(classListResult.expiresAt)}
-                </Tag>
-              </div>
-              <Select
-                showSearch
-                optionFilterProp="label"
-                placeholder="选择要核对的班级"
-                value={selectedClassCode}
-                options={classOptions}
-                style={{ maxWidth: '100%', width: 420 }}
-                onChange={(value) => {
-                  setSelectedClassCode(value);
-                  setReconciliationResult(null);
-                  setConfirmationDrafts({});
-                  setEndDecisionDrafts({});
-                  setResultFilter('focus');
-                  setResultTablePage(1);
-                  setReconciliationError(null);
-                }}
-              />
-              <div className="flex flex-wrap gap-3">
-                <Button
-                  type="primary"
-                  loading={isPreviewing}
-                  disabled={!selectedClassCode || isRunningAction}
-                  onClick={() => void handleDryRun()}
-                >
-                  Dry-run 核对
-                </Button>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="flex min-w-80 flex-1 flex-col gap-1">
+                  <span className="text-xs text-text-secondary">核对班级</span>
+                  <Select
+                    showSearch
+                    optionFilterProp="label"
+                    placeholder="选择要核对的班级"
+                    value={selectedClassCode}
+                    options={classOptions}
+                    style={{ width: '100%' }}
+                    onChange={(value) => {
+                      setSelectedClassCode(value);
+                      setReconciliationResult(null);
+                      setConfirmationDrafts({});
+                      setEndDecisionDrafts({});
+                      setPreRegisteredReviewDrafts({});
+                      setResultFilter('focus');
+                      setResultTablePage(1);
+                      setReconciliationError(null);
+                    }}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="primary"
+                    loading={isPreviewing}
+                    disabled={!selectedClassCode || isRunningAction}
+                    onClick={() => void handleDryRun()}
+                  >
+                    预读校园网学生花名册并核对
+                  </Button>
+                  <Button
+                    icon={<ReloadOutlined />}
+                    loading={isLoadingClassList}
+                    disabled={isRunningAction && !isLoadingClassList}
+                    onClick={() => void handleLoadClassList()}
+                  >
+                    重新读取历史班主任信息
+                  </Button>
+                  <Button
+                    type="link"
+                    icon={<SwapOutlined />}
+                    disabled={isRunningAction}
+                    onClick={handleSwitchUpstreamAccount}
+                  >
+                    切换校园网账号
+                  </Button>
+                </div>
               </div>
             </>
           ) : (
-            <Alert
-              type="info"
-              showIcon
-              title={
-                storedSession
-                  ? '读取历史班主任班级后选择目标班级。'
-                  : '登录 upstream 后即可读取历史班主任班级。'
-              }
-            />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                icon={<ReloadOutlined />}
+                loading={isLoadingClassList}
+                disabled={isRunningAction && !isLoadingClassList}
+                onClick={() => void handleLoadClassList()}
+              >
+                读取历史班主任信息
+              </Button>
+              <Button
+                type="link"
+                icon={<SwapOutlined />}
+                disabled={isRunningAction}
+                onClick={handleSwitchUpstreamAccount}
+              >
+                切换校园网账号
+              </Button>
+            </div>
           )}
         </div>
       </Card>
-    );
-  }
-
-  function renderResultSummary() {
-    if (!reconciliationResult) {
-      return null;
-    }
-
-    return (
-      <Descriptions bordered size="small" column={4}>
-        <Descriptions.Item label="模式">
-          {reconciliationResult.dryRun ? 'Dry-run' : 'Commit'}
-        </Descriptions.Item>
-        <Descriptions.Item label="写入状态">
-          {reconciliationResult.committed ? '已写库' : '未写库'}
-        </Descriptions.Item>
-        <Descriptions.Item label="需要重新确认">
-          {reconciliationResult.requiresReconfirm ? '是' : '否'}
-        </Descriptions.Item>
-        <Descriptions.Item label="traceId">{reconciliationResult.traceId}</Descriptions.Item>
-        <Descriptions.Item label="班级">
-          {reconciliationResult.className} / {reconciliationResult.classCode}
-        </Descriptions.Item>
-        <Descriptions.Item label="目标班核对行数">
-          {reconciliationResult.fetchedCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="自动处理">
-          {reconciliationResult.autoAppliedCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="归属差异">
-          {reconciliationResult.differenceCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="本地裁定">
-          {reconciliationResult.suppressedCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="不可处理">
-          {reconciliationResult.unprocessableCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="需确认">
-          {reconciliationResult.confirmationRequiredCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="token 过期">
-          {formatUpstreamSessionDateTime(reconciliationResult.expiresAt)}
-        </Descriptions.Item>
-        <Descriptions.Item label="新建归属">
-          {reconciliationResult.createdMembershipCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="刷新归属">
-          {reconciliationResult.touchedMembershipCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="结束归属">
-          {reconciliationResult.endedMembershipCount}
-        </Descriptions.Item>
-        <Descriptions.Item label="裁定 +/-">
-          +{reconciliationResult.createdDecisionCount} / -{reconciliationResult.endedDecisionCount}
-        </Descriptions.Item>
-      </Descriptions>
     );
   }
 
@@ -1084,22 +1264,21 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
     return (
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Radio.Group
-            optionType="button"
-            value={resultFilter}
-            options={resultFilterOptions}
-            onChange={(event) => {
-              setResultFilter(event.target.value as ResultFilterKey);
-              setResultTablePage(1);
-            }}
-          />
-          <Tag>当前显示：{visibleReconciliationItems.length}</Tag>
-        </div>
-        {visibleReconciliationItems.length > 0 ? (
-          <Table<StudentRosterMembershipReconciliationItem>
+        <Tabs
+          activeKey={resultFilter}
+          items={resultFilterOptions.map((option) => ({
+            key: option.value,
+            label: option.label,
+          }))}
+          onChange={(key) => {
+            setResultFilter(key as ResultFilterKey);
+            setResultTablePage(1);
+          }}
+        />
+        {visibleReviewItems.length > 0 ? (
+          <Table<RosterReviewItem>
             columns={resultColumns}
-            dataSource={visibleReconciliationItems}
+            dataSource={visibleReviewItems}
             expandable={{
               expandedRowRender: renderExpandedObservationDetails,
             }}
@@ -1108,14 +1287,14 @@ export function StudentRosterMembershipReconciliationLabPage() {
               pageSize: resultTablePageSize,
               showSizeChanger: true,
               showTotal: (total) => `共 ${total} 项`,
-              total: visibleReconciliationItems.length,
+              total: visibleReviewItems.length,
               onChange: (page, pageSize) => {
                 setResultTablePage(page);
                 setResultTablePageSize(pageSize);
               },
             }}
-            rowKey={getResultRowKey}
-            scroll={{ x: 1220 }}
+            rowKey="rowKey"
+            scroll={{ x: 1120 }}
             size="middle"
           />
         ) : (
@@ -1130,56 +1309,81 @@ export function StudentRosterMembershipReconciliationLabPage() {
     );
   }
 
-  function renderResultCard() {
+  function renderResultStatusAlert() {
+    if (!reconciliationResult) {
+      return null;
+    }
+
+    if (reconciliationResult.requiresReconfirm) {
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          title="本次 commit 未写库"
+          description="后端重新计算后发现 roster 或本地事实已变化。当前页面已替换为最新结果，请重新确认后再提交。"
+        />
+      );
+    }
+
+    if (reconciliationResult.committed) {
+      return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
+    }
+
+    return <Alert type="info" showIcon title="预读结果不会写库。确认差异后可提交核对结果。" />;
+  }
+
+  function renderReconciliationResultSection() {
     return (
-      <Card title="核对结果">
-        <div className="flex flex-col gap-5">
-          {reconciliationError ? (
-            <Alert
-              type={reconciliationResult?.requiresReconfirm ? 'warning' : 'error'}
-              showIcon
-              title={reconciliationError}
-            />
-          ) : null}
-          {commitConfirmations.invalidItems.length > 0 ? (
-            <Alert
-              type="warning"
-              showIcon
-              title="存在无法提交的确认项"
-              description="后端要求 requiresConfirmation=true 的项必须完整提交；请检查这些项是否缺少 studentId 或确认策略。"
-            />
-          ) : null}
-          {reconciliationResult ? (
-            <>
-              {renderResultSummary()}
-              <div className="flex flex-wrap gap-2">
-                <Tag color="gold">需确认：{requiredConfirmationItems.length}</Tag>
-                <Tag color="blue">已生成确认：{commitConfirmations.confirmations.length}</Tag>
-                <Tag color="purple">结束裁定：{commitEndDecisions.length}</Tag>
-              </div>
-              {reconciliationResult.requiresReconfirm ? (
-                <Alert
-                  type="warning"
-                  showIcon
-                  title="本次 commit 未写库"
-                  description="后端重新计算后发现 roster 或本地事实已变化。当前页面已替换为最新结果，请重新确认后再提交。"
-                />
-              ) : reconciliationResult.committed ? (
-                <Alert type="success" showIcon title="本次核对已提交并写库。" />
-              ) : (
-                <Alert
-                  type="info"
-                  showIcon
-                  title="Dry-run 结果不会写库。确认差异后可提交核对结果。"
-                />
-              )}
-              <div className="flex flex-wrap gap-3">
+      <div className="flex flex-col gap-5">
+        {reconciliationError ? (
+          <Alert
+            type={reconciliationResult?.requiresReconfirm ? 'warning' : 'error'}
+            showIcon
+            title={reconciliationError}
+          />
+        ) : null}
+        {commitConfirmations.invalidItems.length > 0 ? (
+          <Alert
+            type="warning"
+            showIcon
+            title="存在无法提交的确认项"
+            description="后端要求 requiresConfirmation=true 的项必须完整提交；请检查这些项是否缺少 studentId 或确认策略。"
+          />
+        ) : null}
+        {reconciliationResult ? (
+          <>
+            {preRegisteredReviewCommitPayload.invalidItems.length > 0 ? (
+              <Alert
+                type="warning"
+                showIcon
+                title="存在无法提交的 IS_ENROLLED=0 改判项"
+                description="选择未报到且不来了或报到后退学会提交 EXCLUDE confirmation；这些项必须有 studentId。"
+              />
+            ) : null}
+            {localReviewPreRegisteredItems.length > 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="IS_ENROLLED=0 默认按预报到处理"
+                description="这些学生不需要逐项点选也能提交；只有人工改成未报到且不来了或报到后退学时，才会额外提交 EXCLUDE confirmation。"
+              />
+            ) : null}
+            {preRegisteredReviewCommitPayload.overriddenItems.length > 0 ? (
+              <Alert
+                type="info"
+                showIcon
+                title="已生成 IS_ENROLLED=0 改判确认"
+                description="这些自动项会额外提交 EXCLUDE + NOT_CHECKED_IN_CONFIRMED 或 EXCLUDE + DROPPED_CONFIRMED；如已有本地裁定，会同次提交 endDecisions 结束旧裁定。"
+              />
+            ) : null}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
+              <div className="flex flex-wrap justify-end gap-2">
                 <Popconfirm
                   cancelText="取消"
-                  description="后端会重新拉取 upstream roster 并重新计算差异；本次只提交确认意图，不提交 dry-run 明细。"
                   okButtonProps={{ loading: isCommitting }}
-                  okText="确认提交"
-                  title="提交学生名册归属核对？"
+                  okText="提交"
+                  title="确认提交核对结果？"
                   onConfirm={() => void handleCommit()}
                 >
                   <Button danger loading={isCommitting} disabled={!canCommit}>
@@ -1191,12 +1395,14 @@ export function StudentRosterMembershipReconciliationLabPage() {
                   disabled={!selectedClassCode || isRunningAction}
                   onClick={() => void handleDryRun()}
                 >
-                  重新 dry-run
+                  重新预读并核对
                 </Button>
               </div>
-              {renderObservationTable()}
-            </>
-          ) : (
+            </div>
+            {renderObservationTable()}
+          </>
+        ) : (
+          <div className="max-w-3xl">
             <Alert
               type="info"
               showIcon
@@ -1207,9 +1413,9 @@ export function StudentRosterMembershipReconciliationLabPage() {
                   : '请先读取班级列表并选择班级。'
               }
             />
-          )}
-        </div>
-      </Card>
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -1241,9 +1447,8 @@ export function StudentRosterMembershipReconciliationLabPage() {
         title="学生名册归属核对"
       />
       {pageError ? <Alert type="error" showIcon title={pageError} /> : null}
-      {renderSessionCard()}
       {renderClassListCard()}
-      {renderResultCard()}
+      {renderReconciliationResultSection()}
 
       <UpstreamLoginModal
         description={
@@ -1251,7 +1456,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
             ? `当前操作需要有效的 upstream token。登录成功后，页面会自动继续${getPendingActionLabel(
                 pendingAction,
               )}。`
-            : '当前流程需要有效的 upstream token。登录成功后即可读取历史班主任班级。'
+            : '当前流程需要有效的 upstream token。登录成功后即可读取历史班主任信息。'
         }
         form={loginForm}
         hasRememberedCredentials={canUseRememberedCredentials}
@@ -1285,6 +1490,11 @@ export function StudentRosterMembershipReconciliationLabPage() {
             });
             if (nextPendingAction) {
               await performAction(nextSession, nextPendingAction);
+            } else {
+              setHasAutoLoadedClassList(true);
+              await performAction(nextSession, {
+                type: 'load-class-list',
+              });
             }
           } catch (error) {
             setLoginError(resolveStudentRosterMembershipErrorMessage(error));
