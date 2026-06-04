@@ -317,6 +317,33 @@ describe('student roster membership confirmation policy', () => {
     });
   });
 
+  it('does not treat IS_ENROLLED=0 class-change rows as optional pre-registered reviews', () => {
+    const classChangeItem = buildItem({
+      category: 'UNPROCESSABLE',
+      currentClassCode: '1031201',
+      currentClassName: '信息1201班',
+      isEnrolled: '0',
+      key: 'class-change',
+      reason:
+        '上游 roster 返回该学生且 IS_ENROLLED=0，但本地当前归属在其他班；当前版本不自动迁入或退学',
+      requiresConfirmation: false,
+    });
+
+    expect(buildDefaultPreRegisteredReviewDrafts([classChangeItem])).toEqual({});
+    expect(
+      buildPreRegisteredReviewCommitPayload([classChangeItem], {
+        'class-change': {
+          outcome: 'DROPPED',
+        },
+      }),
+    ).toEqual({
+      confirmations: [],
+      endDecisions: [],
+      invalidItems: [],
+      overriddenItems: [],
+    });
+  });
+
   it('reports invalid optional EXCLUDE confirmations when studentId is missing', () => {
     const invalidItem = buildItem({
       isEnrolled: '0',

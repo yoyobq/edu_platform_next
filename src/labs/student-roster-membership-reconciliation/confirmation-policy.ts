@@ -147,9 +147,9 @@ export function requiresNotReportedOrDroppedConfirmation(
 
 export function requiresPreRegisteredLocalReview(item: StudentRosterMembershipReconciliationItem) {
   return (
+    item.category === 'AUTO_APPLY' &&
     isPreRegisteredUpstreamStatus(item) &&
-    !item.requiresConfirmation &&
-    item.category !== 'SUPPRESSED'
+    !item.requiresConfirmation
   );
 }
 

@@ -141,6 +141,7 @@ describe('student roster membership result view model', () => {
         }),
         buildItem({
           category: 'UNPROCESSABLE',
+          isEnrolled: '0',
           key: 'data-issue',
         }),
       ],
@@ -157,6 +158,31 @@ describe('student roster membership result view model', () => {
       'enrollment-review': 1,
       'local-decision': 0,
       'required-confirmation': 0,
+    });
+  });
+
+  it('keeps IS_ENROLLED=0 class-change rows as data issues', () => {
+    const reviewItems = buildRosterReviewItems(
+      [
+        buildItem({
+          category: 'UNPROCESSABLE',
+          currentClassCode: '1031201',
+          currentClassName: '信息1201班',
+          isEnrolled: '0',
+          key: 'class-change-not-enrolled',
+          reason:
+            '上游 roster 返回该学生且 IS_ENROLLED=0，但本地当前归属在其他班；当前版本不自动迁入或退学',
+        }),
+      ],
+      (item) => item.key,
+    );
+
+    expect(reviewItems[0]).toMatchObject({
+      businessSummary:
+        '上游 roster 返回该学生且 IS_ENROLLED=0，但本地当前归属在其他班；当前版本不自动迁入或退学',
+      commitImpactLabel: '不会自动写库',
+      defaultOperationLabel: '仅观察',
+      kind: 'data-issue',
     });
   });
 
