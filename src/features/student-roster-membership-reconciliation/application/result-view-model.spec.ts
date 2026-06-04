@@ -1,13 +1,13 @@
-// src/labs/student-roster-membership-reconciliation/result-view-model.spec.ts
+// src/features/student-roster-membership-reconciliation/application/result-view-model.spec.ts
 
 import { describe, expect, it } from 'vitest';
 
-import type { StudentRosterMembershipReconciliationItem } from './api';
 import {
   buildRosterReviewItems,
   countRosterReviewItemsByKind,
   filterRosterReviewItems,
 } from './result-view-model';
+import type { StudentRosterMembershipReconciliationItem } from './types';
 
 function buildItem(
   overrides: Partial<StudentRosterMembershipReconciliationItem>,

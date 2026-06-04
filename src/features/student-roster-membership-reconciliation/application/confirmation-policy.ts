@@ -1,4 +1,4 @@
-// src/labs/student-roster-membership-reconciliation/confirmation-policy.ts
+// src/features/student-roster-membership-reconciliation/application/confirmation-policy.ts
 
 import type {
   StudentRosterMembershipConfirmationInput,
@@ -6,7 +6,7 @@ import type {
   StudentRosterMembershipEndDecisionInput,
   StudentRosterMembershipReasonCode,
   StudentRosterMembershipReconciliationItem,
-} from './api';
+} from './types';
 
 export type ConfirmationDecisionOption = {
   decisionOutcome: StudentRosterMembershipDecisionOutcome;

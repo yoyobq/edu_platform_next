@@ -60,20 +60,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'TeamOutlined',
-            key: '/labs/student-roster-membership-reconciliation',
-            label: '学生名册归属核对',
-            navMode: 'rail' as const,
-            path: '/labs/student-roster-membership-reconciliation',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
   ];
 
   if (children.length === 0) {

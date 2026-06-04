@@ -5,6 +5,8 @@ export type AcademicViewerRole = 'admin' | 'authenticated' | 'staff';
 export type AcademicInternalViewerRole = Exclude<AcademicViewerRole, 'authenticated'>;
 
 export const ACADEMIC_OFFICER_SLOT_GROUP = 'ACADEMIC_OFFICER';
+export const CLASS_ADVISER_SLOT_GROUP = 'CLASS_ADVISER';
+export const COUNSELOR_SLOT_GROUP = 'COUNSELOR';
 export const STUDENT_AFFAIRS_OFFICER_SLOT_GROUP = 'STUDENT_AFFAIRS_OFFICER';
 export const TEACHING_GROUP_LEADER_SLOT_GROUP = 'TEACHING_GROUP_LEADER';
 
@@ -103,6 +105,14 @@ export function hasStaffSemesterProfilesAccess(input: {
   slotGroup?: readonly string[];
 }) {
   return hasAdminOrAcademicOfficerAccess(input);
+}
+
+export function hasStudentRosterMembershipReconciliationAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
 }
 
 export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {

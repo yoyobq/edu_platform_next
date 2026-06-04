@@ -36,6 +36,7 @@ import { SemesterCalendarPage } from '@/pages/semester-calendar';
 import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
 import { SemesterTimetablePage } from '@/pages/semester-timetable';
 import { StaffSemesterProfilesPage } from '@/pages/staff-semester-profiles';
+import { StudentRosterMembershipReconciliationPage } from '@/pages/student-roster-membership-reconciliation';
 import {
   InviteIntentPage,
   MagicLinkIntentPage,
@@ -77,15 +78,12 @@ import {
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentRosterMembershipReconciliationAccess,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  loadStudentRosterMembershipReconciliationLabRouteModule,
-  studentRosterMembershipReconciliationLabAccess,
-} from '@/labs/student-roster-membership-reconciliation';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -548,42 +546,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function studentRosterMembershipReconciliationLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(studentRosterMembershipReconciliationLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(studentRosterMembershipReconciliationLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(studentRosterMembershipReconciliationLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
-}
-
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
   const snapshot = getAuthSessionSnapshot();
@@ -624,6 +586,33 @@ async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionAr
       displayName: snapshot.displayName,
     },
     viewerRole,
+  };
+}
+
+async function studentRosterMembershipReconciliationPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasStudentRosterMembershipReconciliationAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    isForbidden: false,
   };
 }
 
@@ -1046,6 +1035,11 @@ const router = createBrowserRouter([
         Component: IntegratedPlanCorrectionsPage,
       },
       {
+        path: '/academic-affairs/student-roster-membership-reconciliation',
+        loader: studentRosterMembershipReconciliationPageLoader,
+        Component: StudentRosterMembershipReconciliationPage,
+      },
+      {
         path: '/academic-assistant/academic-workload',
         loader: academicWorkloadPageLoader,
         Component: AcademicWorkloadPage,
@@ -1087,8 +1081,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'student-roster-membership-reconciliation',
-            loader: studentRosterMembershipReconciliationLabLoader,
-            lazy: loadStudentRosterMembershipReconciliationLabRouteModule,
+            loader: () => redirect('/academic-affairs/student-roster-membership-reconciliation'),
           },
         ],
       },

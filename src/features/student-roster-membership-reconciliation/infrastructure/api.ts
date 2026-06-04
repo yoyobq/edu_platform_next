@@ -1,4 +1,4 @@
-// src/labs/student-roster-membership-reconciliation/api.ts
+// src/features/student-roster-membership-reconciliation/infrastructure/api.ts
 
 import type { OperationVariables } from '@apollo/client';
 
@@ -13,126 +13,17 @@ import {
 } from '@/shared/form-normalization';
 import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 
+import type {
+  ClaimClassAdviserForRosterSyncInput,
+  ClaimClassAdviserForRosterSyncResult,
+  CommitStudentRosterMembershipReconciliationInput,
+  CurrentRosterMembershipAccount,
+  DryRunReconcileStudentRosterMembershipInput,
+  PreviousClassAdviserClassesResult,
+  StudentRosterMembershipReconciliationResult,
+} from '../application/types';
+
 export { isExpiredUpstreamSessionError };
-
-export type CurrentRosterMembershipAccount = {
-  accountId: number;
-  displayName: string;
-};
-
-export type PreviousClassAdviserClassesResult = {
-  classes: {
-    code: string;
-    image: string;
-    name: string;
-    text: string;
-    value: string;
-  }[];
-  count: number;
-  expiresAt: string;
-  upstreamSessionToken: string;
-};
-
-export type StudentRosterMembershipCategory =
-  | 'AUTO_APPLY'
-  | 'DIFFERENCE'
-  | 'SUPPRESSED'
-  | 'UNPROCESSABLE';
-
-export type StudentRosterMembershipDecisionOutcome = 'INCLUDE' | 'EXCLUDE';
-
-export type StudentRosterMembershipReasonCode =
-  | 'DROPPED_CONFIRMED'
-  | 'NOT_CHECKED_IN_CONFIRMED'
-  | 'TRANSFERRED_OUT_CONFIRMED'
-  | 'TRANSFERRED_IN_CONFIRMED'
-  | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
-  | 'CLASS_MEMBERSHIP_CORRECTION';
-
-export type StudentStatus =
-  | 'PRE_REGISTERED'
-  | 'NOT_CHECKED_IN'
-  | 'ENROLLED'
-  | 'OFF_CAMPUS_INTERNSHIP'
-  | 'SUSPENDED'
-  | 'GRADUATED'
-  | 'DROPPED';
-
-export type UpstreamRosterPresence = 'RETURNED' | 'MISSING' | 'UNKNOWN';
-
-export type StudentRosterMembershipReconciliationItem = {
-  action: string;
-  activeDecisionId: string | null;
-  activeDecisionOutcome: StudentRosterMembershipDecisionOutcome | null;
-  category: StudentRosterMembershipCategory;
-  classCode: string;
-  className: string;
-  currentClassCode: string | null;
-  currentClassName: string | null;
-  currentMembershipId: string | null;
-  isEnrolled: string | null;
-  isInSchool: string | null;
-  key: string;
-  reason: string | null;
-  recommendedDecisionOutcome: StudentRosterMembershipDecisionOutcome | null;
-  recommendedReasonCode: StudentRosterMembershipReasonCode | null;
-  requiresConfirmation: boolean;
-  rowIndex: number | null;
-  studentId: string | null;
-  studentName: string | null;
-  studentStatus: StudentStatus | null;
-  upstreamClassCode: string | null;
-  upstreamClassName: string | null;
-  upstreamPresence: UpstreamRosterPresence;
-  upstreamStudentId: string | null;
-};
-
-export type StudentRosterMembershipReconciliationResult = {
-  autoAppliedCount: number;
-  classCode: string;
-  className: string;
-  committed: boolean;
-  confirmationRequiredCount: number;
-  createdDecisionCount: number;
-  createdMembershipCount: number;
-  differenceCount: number;
-  dryRun: boolean;
-  endedDecisionCount: number;
-  endedMembershipCount: number;
-  expiresAt: string;
-  fetchedCount: number;
-  items: StudentRosterMembershipReconciliationItem[];
-  requiresReconfirm: boolean;
-  sessionStrategy: string;
-  suppressedCount: number;
-  touchedMembershipCount: number;
-  traceId: string;
-  unprocessableCount: number;
-  upstreamSessionToken: string;
-};
-
-export type DryRunReconcileStudentRosterMembershipInput = {
-  classCode: string;
-  upstreamSessionToken: string;
-};
-
-export type StudentRosterMembershipConfirmationInput = {
-  decisionOutcome: StudentRosterMembershipDecisionOutcome;
-  reasonCode: StudentRosterMembershipReasonCode;
-  reasonText?: string;
-  studentId: string;
-};
-
-export type StudentRosterMembershipEndDecisionInput = {
-  decisionId: string;
-  endReason?: string;
-};
-
-export type CommitStudentRosterMembershipReconciliationInput =
-  DryRunReconcileStudentRosterMembershipInput & {
-    confirmations?: StudentRosterMembershipConfirmationInput[];
-    endDecisions?: StudentRosterMembershipEndDecisionInput[];
-  };
 
 type CurrentAccountResponse = {
   me: {
@@ -149,6 +40,10 @@ type PreviousClassAdviserClassesResponse = {
 
 type DryRunReconcileStudentRosterMembershipResponse = {
   dryRunReconcileStudentRosterMembership: StudentRosterMembershipReconciliationResult;
+};
+
+type ClaimClassAdviserForRosterSyncResponse = {
+  claimClassAdviserForRosterSync: ClaimClassAdviserForRosterSyncResult;
 };
 
 type CommitStudentRosterMembershipReconciliationResponse = {
@@ -246,6 +141,21 @@ const DRY_RUN_RECONCILE_STUDENT_ROSTER_MEMBERSHIP_MUTATION = `
   }
 `;
 
+const CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION = `
+  mutation ClaimClassAdviserForRosterSync($input: ClaimClassAdviserForRosterSyncInput!) {
+    claimClassAdviserForRosterSync(input: $input) {
+      claimed
+      changed
+      reason
+      classCode
+      className
+      fetchedCount
+      upstreamSessionToken
+      expiresAt
+    }
+  }
+`;
+
 const COMMIT_STUDENT_ROSTER_MEMBERSHIP_RECONCILIATION_MUTATION = `
   ${STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS}
 
@@ -275,6 +185,10 @@ function normalizeDryRunInput(input: DryRunReconcileStudentRosterMembershipInput
       message: 'upstreamSessionToken 为必填。',
     }),
   };
+}
+
+function normalizeClaimClassAdviserInput(input: ClaimClassAdviserForRosterSyncInput) {
+  return normalizeDryRunInput(input);
 }
 
 function normalizeCommitInput(input: CommitStudentRosterMembershipReconciliationInput) {
@@ -345,6 +259,19 @@ export async function dryRunReconcileStudentRosterMembership(
   });
 
   return response.dryRunReconcileStudentRosterMembership;
+}
+
+export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserForRosterSyncInput) {
+  const response = await requestGraphQL<
+    ClaimClassAdviserForRosterSyncResponse,
+    {
+      input: ReturnType<typeof normalizeClaimClassAdviserInput>;
+    }
+  >(CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION, {
+    input: normalizeClaimClassAdviserInput(input),
+  });
+
+  return response.claimClassAdviserForRosterSync;
 }
 
 export async function commitStudentRosterMembershipReconciliation(

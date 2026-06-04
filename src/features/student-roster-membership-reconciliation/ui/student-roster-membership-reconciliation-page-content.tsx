@@ -1,4 +1,4 @@
-// src/labs/student-roster-membership-reconciliation/page.tsx
+// src/features/student-roster-membership-reconciliation/ui/student-roster-membership-reconciliation-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReloadOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons';
@@ -30,23 +30,14 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import {
+  type AuthAccessGroup,
+  COUNSELOR_SLOT_GROUP,
+  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
+} from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
-import {
-  commitStudentRosterMembershipReconciliation,
-  type CurrentRosterMembershipAccount,
-  dryRunReconcileStudentRosterMembership,
-  fetchCurrentRosterMembershipAccount,
-  fetchPreviousClassAdviserClasses,
-  isExpiredUpstreamSessionError,
-  type PreviousClassAdviserClassesResult,
-  resolveStudentRosterMembershipErrorMessage,
-  type StudentRosterMembershipConfirmationInput,
-  type StudentRosterMembershipEndDecisionInput,
-  type StudentRosterMembershipReconciliationItem,
-  type StudentRosterMembershipReconciliationResult,
-  type StudentStatus,
-} from './api';
+import { hasAutomaticRosterCommitWork } from '../application/commit-work';
 import {
   buildCommitConfirmations,
   buildCommitEndDecisions,
@@ -68,7 +59,7 @@ import {
   type PreRegisteredReviewOutcome,
   REASON_CODE_LABELS,
   requiresPreRegisteredLocalReview,
-} from './confirmation-policy';
+} from '../application/confirmation-policy';
 import {
   buildRosterReviewItems,
   countRosterReviewItemsByKind,
@@ -78,7 +69,25 @@ import {
   ROSTER_REVIEW_KIND_ORDER,
   type RosterReviewItem,
   type RosterReviewKind,
-} from './result-view-model';
+} from '../application/result-view-model';
+import type {
+  CurrentRosterMembershipAccount,
+  PreviousClassAdviserClassesResult,
+  StudentRosterMembershipConfirmationInput,
+  StudentRosterMembershipEndDecisionInput,
+  StudentRosterMembershipReconciliationItem,
+  StudentRosterMembershipReconciliationResult,
+  StudentStatus,
+} from '../application/types';
+import {
+  claimClassAdviserForRosterSync,
+  commitStudentRosterMembershipReconciliation,
+  dryRunReconcileStudentRosterMembership,
+  fetchCurrentRosterMembershipAccount,
+  fetchPreviousClassAdviserClasses,
+  isExpiredUpstreamSessionError,
+  resolveStudentRosterMembershipErrorMessage,
+} from '../infrastructure/api';
 
 type PendingRosterAction =
   | { type: 'load-class-list' }
@@ -91,6 +100,12 @@ type PendingRosterAction =
     };
 
 type ResultFilterKey = 'focus' | 'all' | RosterReviewKind;
+
+type StudentRosterMembershipReconciliationPageContentProps = {
+  accessGroup?: readonly AuthAccessGroup[];
+  refreshSiteSession?: () => Promise<void>;
+  slotGroup?: readonly string[];
+};
 
 const PAGE_DESCRIPTION =
   '按单个本地班级核对 upstream roster 与本地 member_student_class_membership / decision 的归属差异。';
@@ -121,6 +136,35 @@ function resolveUpstreamRefreshFailureMessage(error: unknown) {
   }
 
   return resolveStudentRosterMembershipErrorMessage(error);
+}
+
+function shouldClaimClassAdviserBeforeDryRun(input: {
+  accessGroup: readonly AuthAccessGroup[];
+  slotGroup: readonly string[];
+}) {
+  if (input.accessGroup.includes('ADMIN')) {
+    return false;
+  }
+
+  return !(
+    input.slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
+    input.slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP)
+  );
+}
+
+function resolveClassAdviserClaimFailureMessage(reason: string | null | undefined) {
+  switch (reason) {
+    case 'HISTORY_NOT_MATCHED':
+      return '当前校园网账号未被识别为该班历史班主任，未继续同步。';
+    case 'EMPTY_ROSTER':
+      return '目标班暂无可同步学生，未自动认定班主任。';
+    default:
+      return '未能自动认定班主任，未继续同步。';
+  }
+}
+
+function isSuccessfulClassAdviserClaimReason(reason: string | null | undefined) {
+  return reason === 'CLAIMED' || reason === 'ALREADY_CLAIMED';
 }
 
 function formatNullableValue(value: number | string | null | undefined) {
@@ -334,7 +378,11 @@ function renderReasonCode(
   return reasonCode ? REASON_CODE_LABELS[reasonCode] : '-';
 }
 
-export function StudentRosterMembershipReconciliationLabPage() {
+export function StudentRosterMembershipReconciliationPageContent({
+  accessGroup = [],
+  refreshSiteSession,
+  slotGroup = [],
+}: StudentRosterMembershipReconciliationPageContentProps) {
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [currentAccount, setCurrentAccount] = useState<CurrentRosterMembershipAccount | null>(null);
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
@@ -448,9 +496,14 @@ export function StudentRosterMembershipReconciliationLabPage() {
       mergeCommitEndDecisions(selectedEndDecisions, preRegisteredReviewCommitPayload.endDecisions),
     [preRegisteredReviewCommitPayload.endDecisions, selectedEndDecisions],
   );
+  const hasCommitWork =
+    commitConfirmationsPayload.length > 0 ||
+    commitEndDecisions.length > 0 ||
+    hasAutomaticRosterCommitWork(reconciliationResult?.items ?? []);
   const isRunningAction = isLoadingClassList || isPreviewing || isCommitting;
   const canCommit =
     Boolean(reconciliationResult) &&
+    hasCommitWork &&
     commitConfirmations.invalidItems.length === 0 &&
     preRegisteredReviewCommitPayload.invalidItems.length === 0 &&
     !isRunningAction;
@@ -561,12 +614,44 @@ export function StudentRosterMembershipReconciliationLabPage() {
           case 'dry-run': {
             setIsPreviewing(true);
             setReconciliationError(null);
+            let sessionForDryRun = currentSession;
+
+            if (
+              shouldClaimClassAdviserBeforeDryRun({
+                accessGroup,
+                slotGroup,
+              })
+            ) {
+              const claimResult = await claimClassAdviserForRosterSync({
+                classCode: action.classCode,
+                upstreamSessionToken: currentSession.upstreamSessionToken,
+              });
+              sessionForDryRun = persistSessionFromResult(currentSession, claimResult);
+
+              if (
+                !claimResult.claimed &&
+                !isSuccessfulClassAdviserClaimReason(claimResult.reason)
+              ) {
+                throw new Error(resolveClassAdviserClaimFailureMessage(claimResult.reason));
+              }
+
+              if (!refreshSiteSession) {
+                throw new Error('班主任认定已完成，但当前登录会话尚未刷新，请重新登录后重试。');
+              }
+
+              try {
+                await refreshSiteSession();
+              } catch {
+                throw new Error('班主任认定已完成，但当前登录会话刷新失败，请重新登录后重试。');
+              }
+            }
+
             const result = await dryRunReconcileStudentRosterMembership({
               classCode: action.classCode,
-              upstreamSessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: sessionForDryRun.upstreamSessionToken,
             });
 
-            persistSessionFromResult(currentSession, result);
+            persistSessionFromResult(sessionForDryRun, result);
             applyReconciliationResult(result);
             return;
           }
@@ -634,11 +719,14 @@ export function StudentRosterMembershipReconciliationLabPage() {
       }
     },
     [
+      accessGroup,
       applyReconciliationResult,
       handleActionError,
       persistSessionFromResult,
       promptUpstreamLogin,
+      refreshSiteSession,
       refreshSession,
+      slotGroup,
     ],
   );
 
@@ -777,6 +865,11 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
     if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
       setReconciliationError('存在无法提交的预报到改判项，请检查学生编号。');
+      return;
+    }
+
+    if (!hasCommitWork) {
+      setReconciliationError(null);
       return;
     }
 
@@ -1282,8 +1375,8 @@ export function StudentRosterMembershipReconciliationLabPage() {
                         title="确认提交核对结果？"
                         onConfirm={() => void handleCommit()}
                       >
-                        <Button danger loading={isCommitting} disabled={!canCommit}>
-                          提交核对结果
+                        <Button danger={hasCommitWork} loading={isCommitting} disabled={!canCommit}>
+                          {hasCommitWork ? '提交核对结果' : '无需提交'}
                         </Button>
                       </Popconfirm>
                       <Button
@@ -1415,6 +1508,10 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
     if (reconciliationResult.committed) {
       return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
+    }
+
+    if (!hasCommitWork) {
+      return <Alert type="info" showIcon title="当前没有需要写库的变更。无需提交核对结果。" />;
     }
 
     return <Alert type="info" showIcon title="预读结果不会写库。确认差异后可提交核对结果。" />;

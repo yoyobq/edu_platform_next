@@ -7,6 +7,7 @@ import {
   hasAcademicWorkloadAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentRosterMembershipReconciliationAccess,
 } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
@@ -168,6 +169,22 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '一体化对齐',
             navMode: 'rail' as const,
             path: '/academic-affairs/integrated-plan-corrections',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStudentRosterMembershipReconciliationAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'TeamOutlined',
+            key: '/academic-affairs/student-roster-membership-reconciliation',
+            label: '学生名册归属核对',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/student-roster-membership-reconciliation',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

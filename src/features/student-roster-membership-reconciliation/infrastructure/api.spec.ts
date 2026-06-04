@@ -1,4 +1,4 @@
-// src/labs/student-roster-membership-reconciliation/api.spec.ts
+// src/features/student-roster-membership-reconciliation/infrastructure/api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,6 +17,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  claimClassAdviserForRosterSync,
   commitStudentRosterMembershipReconciliation,
   dryRunReconcileStudentRosterMembership,
   fetchPreviousClassAdviserClasses,
@@ -127,6 +128,42 @@ describe('student roster membership reconciliation api', () => {
     });
     expect(JSON.stringify(variables)).not.toContain('classListCodes');
     expect(JSON.stringify(variables)).not.toContain('departmentIds');
+  });
+
+  it('claims class adviser authority before roster sync with normalized input', async () => {
+    const payload = {
+      changed: true,
+      claimed: true,
+      classCode: '1031301',
+      className: '信息1301班',
+      expiresAt: '2026-06-03T12:00:00.000Z',
+      fetchedCount: 42,
+      reason: 'CLAIMED',
+      upstreamSessionToken: '{"token":"rolling"}',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      claimClassAdviserForRosterSync: payload,
+    });
+
+    await expect(
+      claimClassAdviserForRosterSync({
+        classCode: ' 1031301 ',
+        upstreamSessionToken: ' {"token":"current"} ',
+      }),
+    ).resolves.toEqual(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+
+    expect(query).toContain('ClaimClassAdviserForRosterSyncInput');
+    expect(query).toContain('claimClassAdviserForRosterSync');
+    expect(variables).toEqual({
+      input: {
+        classCode: '1031301',
+        upstreamSessionToken: '{"token":"current"}',
+      },
+    });
   });
 
   it('commits confirmations and end decisions without dry-run item details', async () => {

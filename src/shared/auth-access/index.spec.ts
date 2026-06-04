@@ -13,6 +13,7 @@ import {
   hasAcademicWorkloadManagerAccess,
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentRosterMembershipReconciliationAccess,
   hasUpstreamDataSyncAccess,
 } from './index';
 
@@ -77,6 +78,14 @@ describe('auth access policy helpers', () => {
         accessGroup: ['STAFF'],
       }),
     ).toBe(false);
+  });
+
+  it('allows roster membership reconciliation entry to admins and staff', () => {
+    expect(hasStudentRosterMembershipReconciliationAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasStudentRosterMembershipReconciliationAccess({ accessGroup: ['STAFF'] })).toBe(true);
+    expect(hasStudentRosterMembershipReconciliationAccess({ accessGroup: ['STUDENT'] })).toBe(
+      false,
+    );
   });
 
   it('allows academic timetable manager selection to admins and academic staff slots', () => {

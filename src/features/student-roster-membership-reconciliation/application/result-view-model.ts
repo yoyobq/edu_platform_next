@@ -1,6 +1,5 @@
-// src/labs/student-roster-membership-reconciliation/result-view-model.ts
+// src/features/student-roster-membership-reconciliation/application/result-view-model.ts
 
-import type { StudentRosterMembershipReconciliationItem } from './api';
 import {
   canEndDecision,
   getActionLabel,
@@ -8,6 +7,7 @@ import {
   REASON_CODE_LABELS,
   requiresPreRegisteredLocalReview,
 } from './confirmation-policy';
+import type { StudentRosterMembershipReconciliationItem } from './types';
 
 export type RosterReviewKind =
   | 'required-confirmation'

@@ -1,8 +1,7 @@
-// src/labs/student-roster-membership-reconciliation/confirmation-policy.spec.ts
+// src/features/student-roster-membership-reconciliation/application/confirmation-policy.spec.ts
 
 import { describe, expect, it } from 'vitest';
 
-import type { StudentRosterMembershipReconciliationItem } from './api';
 import {
   buildCommitConfirmations,
   buildCommitEndDecisions,
@@ -16,6 +15,7 @@ import {
   mergeCommitEndDecisions,
   REASON_CODE_LABELS,
 } from './confirmation-policy';
+import type { StudentRosterMembershipReconciliationItem } from './types';
 
 function buildItem(
   overrides: Partial<StudentRosterMembershipReconciliationItem>,
