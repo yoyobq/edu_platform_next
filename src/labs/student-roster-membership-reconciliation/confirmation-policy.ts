@@ -70,7 +70,7 @@ export const DECISION_OUTCOME_COLORS = {
 export const REASON_CODE_LABELS: Record<StudentRosterMembershipReasonCode, string> = {
   CLASS_MEMBERSHIP_CORRECTION: '班级归属修正',
   DROPPED_CONFIRMED: '确认报到后退学',
-  NOT_CHECKED_IN_CONFIRMED: '确认未报到且不来了',
+  NOT_CHECKED_IN_CONFIRMED: '确认未报到且不再报到',
   TRANSFERRED_IN_CONFIRMED: '确认转入',
   TRANSFERRED_OUT_CONFIRMED: '确认转出',
   UPSTREAM_ROSTER_ERROR_CONFIRMED: '确认 upstream 名册异常',

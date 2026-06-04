@@ -102,7 +102,7 @@ describe('student roster membership confirmation policy', () => {
   });
 
   it('distinguishes not reported from active class membership history in reason labels', () => {
-    expect(REASON_CODE_LABELS.NOT_CHECKED_IN_CONFIRMED).toBe('确认未报到且不来了');
+    expect(REASON_CODE_LABELS.NOT_CHECKED_IN_CONFIRMED).toBe('确认未报到且不再报到');
     expect(REASON_CODE_LABELS.DROPPED_CONFIRMED).toBe('确认报到后退学');
   });
 

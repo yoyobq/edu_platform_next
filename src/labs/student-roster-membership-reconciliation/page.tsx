@@ -156,12 +156,20 @@ function getCommitImpactTagColor(reviewItem: RosterReviewItem) {
 }
 
 function renderDefaultOperationTag(reviewItem: RosterReviewItem) {
+  if (reviewItem.kind === 'enrollment-review') {
+    return null;
+  }
+
   return (
     <Tag color={ROSTER_REVIEW_KIND_COLORS[reviewItem.kind]}>{reviewItem.defaultOperationLabel}</Tag>
   );
 }
 
 function renderCommitImpactTag(reviewItem: RosterReviewItem) {
+  if (reviewItem.kind === 'enrollment-review') {
+    return null;
+  }
+
   return <Tag color={getCommitImpactTagColor(reviewItem)}>{reviewItem.commitImpactLabel}</Tag>;
 }
 
@@ -216,7 +224,7 @@ function getResultRowKey(item: StudentRosterMembershipReconciliationItem) {
 
 function getReportedStatusLabel(value: string | null) {
   if (value === '0') {
-    return '未报到/预报到';
+    return '未正式报到';
   }
 
   if (value === '1') {
@@ -391,10 +399,6 @@ export function StudentRosterMembershipReconciliationLabPage() {
   const focusReviewItems = useMemo(
     () => filterRosterReviewItems(reviewItems, 'focus'),
     [reviewItems],
-  );
-  const localReviewPreRegisteredItems = useMemo(
-    () => reconciliationResult?.items.filter(requiresPreRegisteredLocalReview) ?? [],
-    [reconciliationResult],
   );
   const visibleReviewItems = useMemo(
     () => filterRosterReviewItems(reviewItems, resultFilter),
@@ -772,7 +776,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
     }
 
     if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
-      setReconciliationError('存在无法提交的 IS_ENROLLED=0 改判项，请检查学生编号。');
+      setReconciliationError('存在无法提交的预报到改判项，请检查学生编号。');
       return;
     }
 
@@ -949,9 +953,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
     return (
       <div className="flex flex-wrap gap-1">
         {item.isEnrolled === '0' ? (
-          <Tooltip title="上游 IS_ENROLLED=0，可能是未报到且不来了，也可能仍处于预报到">
-            {reportedTag}
-          </Tooltip>
+          <Tooltip title="校园网显示未报到，实际情况可能并不一致。">{reportedTag}</Tooltip>
         ) : (
           reportedTag
         )}
@@ -1023,18 +1025,12 @@ export function StudentRosterMembershipReconciliationLabPage() {
   function renderLocalMembershipCell(item: StudentRosterMembershipReconciliationItem) {
     const hasMembershipConflict =
       Boolean(item.currentClassCode) && item.currentClassCode !== item.classCode;
-    const currentClassLabel =
-      item.currentClassName ?? (item.currentClassCode === item.classCode ? item.className : null);
     const studentStatusTag = renderStudentStatusTag(item.studentStatus);
 
     if (!hasMembershipConflict) {
       return (
         <div className="flex flex-col gap-1">
-          {currentClassLabel ? (
-            <span className="font-medium text-text">{currentClassLabel}</span>
-          ) : (
-            <span className="text-text-secondary">暂无本地归属</span>
-          )}
+          <span className="font-medium text-text">{item.currentClassName ?? item.className}</span>
           {studentStatusTag ? <div className="flex flex-wrap gap-1">{studentStatusTag}</div> : null}
         </div>
       );
@@ -1070,23 +1066,20 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
     return (
       <div className="flex min-w-[280px] flex-col gap-2">
-        <span className="text-text-secondary">
-          IS_ENROLLED=0 需要人工判断是新生预报到、未报到且不来了，还是报到后退学。
-        </span>
         <Radio.Group
           optionType="button"
           value={draft.outcome}
           options={[
             {
-              label: '按预报到处理',
+              label: '保留预报到',
               value: 'PRE_REGISTERED',
             },
             {
-              label: '未报到且不来了',
+              label: '确认不再报到',
               value: 'NOT_CHECKED_IN',
             },
             {
-              label: '报到后退学',
+              label: '确认已退学',
               value: 'DROPPED',
             },
           ]}
@@ -1097,32 +1090,21 @@ export function StudentRosterMembershipReconciliationLabPage() {
             }));
           }}
         />
-        {draft.outcome === 'PRE_REGISTERED' ? (
-          <Tag color="warning">默认处理，不提交 confirmation</Tag>
+        {draft.outcome !== 'PRE_REGISTERED' ? (
+          <Input.TextArea
+            autoSize={{ maxRows: 3, minRows: 2 }}
+            maxLength={255}
+            placeholder="可选处理说明"
+            showCount
+            value={draft.note}
+            onChange={(event) => {
+              updatePreRegisteredReviewDraft(item, (current) => ({
+                note: event.target.value,
+                outcome: current?.outcome,
+              }));
+            }}
+          />
         ) : null}
-        {draft.outcome === 'NOT_CHECKED_IN' ? (
-          <Tag color="orange">提交 EXCLUDE + NOT_CHECKED_IN_CONFIRMED</Tag>
-        ) : null}
-        {draft.outcome === 'DROPPED' ? (
-          <Tag color="orange">提交 EXCLUDE + DROPPED_CONFIRMED</Tag>
-        ) : null}
-        {(draft.outcome === 'NOT_CHECKED_IN' || draft.outcome === 'DROPPED') &&
-        item.activeDecisionId ? (
-          <Tag color="purple">同次结束旧裁定 {item.activeDecisionId}</Tag>
-        ) : null}
-        <Input.TextArea
-          autoSize={{ maxRows: 3, minRows: 2 }}
-          maxLength={255}
-          placeholder="可选备注，选择未报到且不来了或报到后退学时会作为确认说明提交"
-          showCount
-          value={draft.note}
-          onChange={(event) => {
-            updatePreRegisteredReviewDraft(item, (current) => ({
-              note: event.target.value,
-              outcome: current?.outcome,
-            }));
-          }}
-        />
       </div>
     );
   }
@@ -1207,13 +1189,13 @@ export function StudentRosterMembershipReconciliationLabPage() {
       fixed: 'left',
       key: 'student',
       render: (_, item) => renderStudentCell(item),
-      title: '学生',
+      title: '学生信息',
       width: 160,
     },
     {
       key: 'local-membership',
       render: (_, item) => renderLocalMembershipCell(item.item),
-      title: '本地归属',
+      title: '本地归属与状态',
       width: 220,
     },
     {
@@ -1232,7 +1214,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
 
   function renderClassListCard() {
     return (
-      <Card title="班级选择">
+      <Card title="班级选择与核对">
         <div className="flex flex-col gap-4">
           {classListError ? <Alert type="warning" showIcon title={classListError} /> : null}
           {classListResult ? (
@@ -1260,14 +1242,16 @@ export function StudentRosterMembershipReconciliationLabPage() {
                   />
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="primary"
-                    loading={isPreviewing}
-                    disabled={!selectedClassCode || isRunningAction}
-                    onClick={() => void handleDryRun()}
-                  >
-                    预读校园网学生花名册并核对
-                  </Button>
+                  {!reconciliationResult ? (
+                    <Button
+                      type="primary"
+                      loading={isPreviewing}
+                      disabled={!selectedClassCode || isRunningAction}
+                      onClick={() => void handleDryRun()}
+                    >
+                      预读校园网学生花名册并核对
+                    </Button>
+                  ) : null}
                   <Button
                     icon={<ReloadOutlined />}
                     loading={isLoadingClassList}
@@ -1286,6 +1270,33 @@ export function StudentRosterMembershipReconciliationLabPage() {
                   </Button>
                 </div>
               </div>
+              {reconciliationResult ? (
+                <div className="border-t border-border pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      <Popconfirm
+                        cancelText="取消"
+                        okButtonProps={{ loading: isCommitting }}
+                        okText="提交"
+                        title="确认提交核对结果？"
+                        onConfirm={() => void handleCommit()}
+                      >
+                        <Button danger loading={isCommitting} disabled={!canCommit}>
+                          提交核对结果
+                        </Button>
+                      </Popconfirm>
+                      <Button
+                        icon={<ReloadOutlined />}
+                        disabled={!selectedClassCode || isRunningAction}
+                        onClick={() => void handleDryRun()}
+                      >
+                        重新预读并核对
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -1380,6 +1391,28 @@ export function StudentRosterMembershipReconciliationLabPage() {
       );
     }
 
+    if (commitConfirmations.invalidItems.length > 0) {
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          title="存在无法提交的确认项"
+          description="后端要求必须确认的项需要完整提交；请检查这些项是否缺少学生编号或确认策略。"
+        />
+      );
+    }
+
+    if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          title="存在无法提交的预报到改判项"
+          description="改判为不再报到或退学时，必须能定位本地学生编号；请检查学生编号。"
+        />
+      );
+    }
+
     if (reconciliationResult.committed) {
       return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
     }
@@ -1397,65 +1430,8 @@ export function StudentRosterMembershipReconciliationLabPage() {
             title={reconciliationError}
           />
         ) : null}
-        {commitConfirmations.invalidItems.length > 0 ? (
-          <Alert
-            type="warning"
-            showIcon
-            title="存在无法提交的确认项"
-            description="后端要求 requiresConfirmation=true 的项必须完整提交；请检查这些项是否缺少 studentId 或确认策略。"
-          />
-        ) : null}
         {reconciliationResult ? (
-          <>
-            {preRegisteredReviewCommitPayload.invalidItems.length > 0 ? (
-              <Alert
-                type="warning"
-                showIcon
-                title="存在无法提交的 IS_ENROLLED=0 改判项"
-                description="选择未报到且不来了或报到后退学会提交 EXCLUDE confirmation；这些项必须有 studentId。"
-              />
-            ) : null}
-            {localReviewPreRegisteredItems.length > 0 ? (
-              <Alert
-                type="info"
-                showIcon
-                title="IS_ENROLLED=0 默认按预报到处理"
-                description="这些学生不需要逐项点选也能提交；只有人工改成未报到且不来了或报到后退学时，才会额外提交 EXCLUDE confirmation。"
-              />
-            ) : null}
-            {preRegisteredReviewCommitPayload.overriddenItems.length > 0 ? (
-              <Alert
-                type="info"
-                showIcon
-                title="已生成 IS_ENROLLED=0 改判确认"
-                description="这些自动项会额外提交 EXCLUDE + NOT_CHECKED_IN_CONFIRMED 或 EXCLUDE + DROPPED_CONFIRMED；如已有本地裁定，会同次提交 endDecisions 结束旧裁定。"
-              />
-            ) : null}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
-              <div className="flex flex-wrap justify-end gap-2">
-                <Popconfirm
-                  cancelText="取消"
-                  okButtonProps={{ loading: isCommitting }}
-                  okText="提交"
-                  title="确认提交核对结果？"
-                  onConfirm={() => void handleCommit()}
-                >
-                  <Button danger loading={isCommitting} disabled={!canCommit}>
-                    提交核对结果
-                  </Button>
-                </Popconfirm>
-                <Button
-                  icon={<ReloadOutlined />}
-                  disabled={!selectedClassCode || isRunningAction}
-                  onClick={() => void handleDryRun()}
-                >
-                  重新预读并核对
-                </Button>
-              </div>
-            </div>
-            {renderObservationTable()}
-          </>
+          <>{renderObservationTable()}</>
         ) : (
           <div className="max-w-3xl">
             <Alert

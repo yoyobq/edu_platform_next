@@ -88,13 +88,15 @@ describe('student roster membership result view model', () => {
     ]);
     expect(reviewItems[0]).toMatchObject({
       blocking: true,
-      commitImpactLabel: 'commit 时提交 confirmation',
+      commitImpactLabel: '提交时记录确认',
       defaultOperationLabel: '提交所选确认',
     });
     expect(reviewItems[1]).toMatchObject({
       blocking: false,
-      commitImpactLabel: '默认写 PRE_REGISTERED；改判才提交 EXCLUDE',
-      defaultOperationLabel: '默认按预报到处理',
+      businessDetail: '请人工判断：保留新生预报到状态，或确认该生不再报到、已经退学。',
+      businessSummary: '校园网显示该生未报到，实际情况可能并不一致。',
+      commitImpactLabel: '改判后记录裁定',
+      defaultOperationLabel: '保留预报到',
     });
   });
 
@@ -180,7 +182,7 @@ describe('student roster membership result view model', () => {
     expect(reviewItems[0]).toMatchObject({
       businessSummary:
         '上游 roster 返回该学生且 IS_ENROLLED=0，但本地当前归属在其他班；当前版本不自动迁入或退学',
-      commitImpactLabel: '不会自动写库',
+      commitImpactLabel: '不自动处理',
       defaultOperationLabel: '仅观察',
       kind: 'data-issue',
     });
@@ -204,7 +206,7 @@ describe('student roster membership result view model', () => {
       blocking: false,
       businessDetail: null,
       businessSummary: '已有本地裁定，上游返回不会自动覆盖；本次不重复提醒。',
-      commitImpactLabel: '不修改本地数据库',
+      commitImpactLabel: '本地裁定不变',
       defaultOperationLabel: '保持当前裁定',
       kind: 'local-decision',
     });

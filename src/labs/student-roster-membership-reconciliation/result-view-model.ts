@@ -31,7 +31,7 @@ export type RosterReviewItem = {
 export const ROSTER_REVIEW_KIND_LABELS: Record<RosterReviewKind, string> = {
   automatic: '自动处理',
   'data-issue': '数据异常',
-  'enrollment-review': '未报到/预报到',
+  'enrollment-review': '预报到复核',
   'local-decision': '本地裁定',
   'required-confirmation': '必须确认',
 };
@@ -126,7 +126,7 @@ function buildBusinessSummary(
     case 'required-confirmation':
       return buildRequiredConfirmationSummary(item);
     case 'enrollment-review':
-      return '上游 IS_ENROLLED=0；不改判则按预报到保留，可人工改为未报到或退学。';
+      return '校园网显示该生未报到，实际情况可能并不一致。';
     case 'local-decision':
       if (canEndDecision(item)) {
         return '已有本地保留裁定，且上游已恢复返回，可选择结束该裁定。';
@@ -142,8 +142,8 @@ function buildBusinessSummary(
 
       if (item.action === 'ENSURE_MEMBERSHIP') {
         return isPreRegisteredUpstreamStatus(item)
-          ? '上游返回未报到/预报到学生，commit 时默认建立或刷新当前班归属。'
-          : '上游返回当前班学生，commit 时自动建立或刷新当前班归属。';
+          ? '校园网显示该生未报到，提交后建立或刷新当前班预报到归属。'
+          : '上游返回当前班学生，提交后建立或刷新当前班归属。';
       }
 
       return getActionLabel(item.action);
@@ -158,7 +158,7 @@ function buildBusinessDetail(
     case 'required-confirmation':
       return buildRequiredConfirmationDetail(item);
     case 'enrollment-review':
-      return '默认不提交 confirmation；只有人工选择未报到或退学时才提交 EXCLUDE。';
+      return '请人工判断：保留新生预报到状态，或确认该生不再报到、已经退学。';
     case 'local-decision':
       return null;
     case 'data-issue':
@@ -180,7 +180,7 @@ function buildDefaultOperationLabel(
     case 'required-confirmation':
       return '提交所选确认';
     case 'enrollment-review':
-      return '默认按预报到处理';
+      return '保留预报到';
     case 'local-decision':
       return canEndDecision(item) ? '可结束裁定' : '保持当前裁定';
     case 'data-issue':
@@ -196,15 +196,15 @@ function buildCommitImpactLabel(
 ) {
   switch (kind) {
     case 'required-confirmation':
-      return 'commit 时提交 confirmation';
+      return '提交时记录确认';
     case 'enrollment-review':
-      return '默认写 PRE_REGISTERED；改判才提交 EXCLUDE';
+      return '改判后记录裁定';
     case 'local-decision':
-      return canEndDecision(item) ? '勾选后提交 endDecision' : '不修改本地数据库';
+      return canEndDecision(item) ? '勾选后结束裁定' : '本地裁定不变';
     case 'data-issue':
-      return '不会自动写库';
+      return '不自动处理';
     case 'automatic':
-      return item.action === 'NO_CHANGE' ? '无需写入' : 'commit 时自动处理';
+      return item.action === 'NO_CHANGE' ? '无需记录决策' : '提交时自动处理';
   }
 }
 
