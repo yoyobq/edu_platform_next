@@ -57,7 +57,7 @@ export const DECISION_OUTCOME_LABELS: Record<StudentRosterMembershipDecisionOutc
 
 export const REASON_CODE_LABELS: Record<StudentRosterMembershipReasonCode, string> = {
   CLASS_MEMBERSHIP_CORRECTION: '班级归属修正',
-  DROPPED_CONFIRMED: '确认退学（保留历史归属）',
+  DROPPED_CONFIRMED: '确认未报到或退学（保留历史归属）',
   TRANSFERRED_IN_CONFIRMED: '确认转入',
   TRANSFERRED_OUT_CONFIRMED: '确认转出',
   UPSTREAM_ROSTER_ERROR_CONFIRMED: '确认 upstream 名册异常',

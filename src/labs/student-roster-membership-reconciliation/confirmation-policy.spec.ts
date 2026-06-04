@@ -11,6 +11,7 @@ import {
   buildDefaultEndDecisionDrafts,
   canEndDecision,
   getConfirmationDecisionOptions,
+  REASON_CODE_LABELS,
 } from './confirmation-policy';
 
 function buildItem(
@@ -92,6 +93,10 @@ describe('student roster membership confirmation policy', () => {
         'CLASS_MEMBERSHIP_CORRECTION',
       ],
     });
+  });
+
+  it('distinguishes not reported from active class membership history in reason labels', () => {
+    expect(REASON_CODE_LABELS.DROPPED_CONFIRMED).toBe('确认未报到或退学（保留历史归属）');
   });
 
   it('falls back to the action default when recommendation is outside the allowed reason set', () => {

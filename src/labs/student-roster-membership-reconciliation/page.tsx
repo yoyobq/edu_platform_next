@@ -133,8 +133,32 @@ function getResultRowKey(item: StudentRosterMembershipReconciliationItem) {
   ].join(':');
 }
 
-function hasInactiveEnrollmentSignal(item: StudentRosterMembershipReconciliationItem) {
+function hasUpstreamStatusSignal(item: StudentRosterMembershipReconciliationItem) {
   return item.isEnrolled === '0' || item.isInSchool === '0';
+}
+
+function getReportedStatusLabel(value: string | null) {
+  if (value === '0') {
+    return '未报到';
+  }
+
+  if (value === '1') {
+    return '已报到';
+  }
+
+  return '-';
+}
+
+function getInSchoolStatusLabel(value: string | null) {
+  if (value === '0') {
+    return '不在校';
+  }
+
+  if (value === '1') {
+    return '在校';
+  }
+
+  return '-';
 }
 
 function isFocusResultItem(item: StudentRosterMembershipReconciliationItem) {
@@ -142,7 +166,7 @@ function isFocusResultItem(item: StudentRosterMembershipReconciliationItem) {
     item.requiresConfirmation ||
     item.category === 'DIFFERENCE' ||
     item.category === 'UNPROCESSABLE' ||
-    hasInactiveEnrollmentSignal(item) ||
+    hasUpstreamStatusSignal(item) ||
     canEndDecision(item)
   );
 }
@@ -719,12 +743,12 @@ export function StudentRosterMembershipReconciliationLabPage() {
     return (
       <div className="flex flex-wrap gap-1">
         <Tag color={item.isEnrolled === '0' ? 'orange' : 'default'}>
-          在籍 {item.isEnrolled ?? '-'}
+          报到 {getReportedStatusLabel(item.isEnrolled)}
         </Tag>
         <Tag color={item.isInSchool === '0' ? 'orange' : 'default'}>
-          在校 {item.isInSchool ?? '-'}
+          在校 {getInSchoolStatusLabel(item.isInSchool)}
         </Tag>
-        {hasInactiveEnrollmentSignal(item) ? <Tag color="orange">学籍状态信号</Tag> : null}
+        {hasUpstreamStatusSignal(item) ? <Tag color="orange">报到/在校状态</Tag> : null}
       </div>
     );
   }
@@ -738,7 +762,7 @@ export function StudentRosterMembershipReconciliationLabPage() {
           {renderActionTag(item.action)}
           {item.requiresConfirmation ? <Tag color="gold">需确认</Tag> : null}
           {canEndDecision(item) ? <Tag color="blue">可结束裁定</Tag> : null}
-          {hasInactiveEnrollmentSignal(item) ? <Tag color="orange">非在籍/非在校</Tag> : null}
+          {hasUpstreamStatusSignal(item) ? <Tag color="orange">未报到/不在校</Tag> : null}
         </div>
         {renderMetadataLine('studentId', item.studentId)}
         {renderMetadataLine('upstreamStudentId', item.upstreamStudentId)}
@@ -793,8 +817,8 @@ export function StudentRosterMembershipReconciliationLabPage() {
       return <Tag color="blue">已被裁定压制</Tag>;
     }
 
-    if (hasInactiveEnrollmentSignal(item)) {
-      return <Tag color="orange">仅观察学籍状态</Tag>;
+    if (hasUpstreamStatusSignal(item)) {
+      return <Tag color="orange">仅观察报到/在校状态</Tag>;
     }
 
     return <Tag color="green">无需人工确认</Tag>;
@@ -810,6 +834,12 @@ export function StudentRosterMembershipReconciliationLabPage() {
         <Descriptions.Item label="upstream 出现">{item.upstreamPresence}</Descriptions.Item>
         <Descriptions.Item label="upstreamStudentId">
           {formatNullableValue(item.upstreamStudentId)}
+        </Descriptions.Item>
+        <Descriptions.Item label="报到状态">
+          {getReportedStatusLabel(item.isEnrolled)}
+        </Descriptions.Item>
+        <Descriptions.Item label="在校状态">
+          {getInSchoolStatusLabel(item.isInSchool)}
         </Descriptions.Item>
         <Descriptions.Item label="IS_ENROLLED">
           {formatNullableValue(item.isEnrolled)}
