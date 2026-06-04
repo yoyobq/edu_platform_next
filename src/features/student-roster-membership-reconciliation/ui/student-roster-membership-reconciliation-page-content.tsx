@@ -30,11 +30,7 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
-import {
-  type AuthAccessGroup,
-  COUNSELOR_SLOT_GROUP,
-  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
-} from '@/shared/auth-access';
+import type { AuthAccessGroup } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import { hasAutomaticRosterCommitWork } from '../application/commit-work';
@@ -70,6 +66,7 @@ import {
   type RosterReviewItem,
   type RosterReviewKind,
 } from '../application/result-view-model';
+import { resolveRosterSyncPermissionStrategy } from '../application/roster-sync-permission';
 import type {
   CurrentRosterMembershipAccount,
   PreviousClassAdviserClassesResult,
@@ -88,6 +85,7 @@ import {
   isExpiredUpstreamSessionError,
   resolveStudentRosterMembershipErrorMessage,
 } from '../infrastructure/api';
+import { isRosterMembershipPermissionError } from '../infrastructure/api-errors';
 
 type PendingRosterAction =
   | { type: 'load-class-list' }
@@ -136,20 +134,6 @@ function resolveUpstreamRefreshFailureMessage(error: unknown) {
   }
 
   return resolveStudentRosterMembershipErrorMessage(error);
-}
-
-function shouldClaimClassAdviserBeforeDryRun(input: {
-  accessGroup: readonly AuthAccessGroup[];
-  slotGroup: readonly string[];
-}) {
-  if (input.accessGroup.includes('ADMIN')) {
-    return false;
-  }
-
-  return !(
-    input.slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
-    input.slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP)
-  );
 }
 
 function resolveClassAdviserClaimFailureMessage(reason: string | null | undefined) {
@@ -614,19 +598,22 @@ export function StudentRosterMembershipReconciliationPageContent({
           case 'dry-run': {
             setIsPreviewing(true);
             setReconciliationError(null);
-            let sessionForDryRun = currentSession;
 
-            if (
-              shouldClaimClassAdviserBeforeDryRun({
-                accessGroup,
-                slotGroup,
-              })
-            ) {
+            const runDryRunWithSession = async (sessionForDryRun: StoredUpstreamSession) => {
+              const result = await dryRunReconcileStudentRosterMembership({
+                classCode: action.classCode,
+                upstreamSessionToken: sessionForDryRun.upstreamSessionToken,
+              });
+
+              persistSessionFromResult(sessionForDryRun, result);
+              applyReconciliationResult(result);
+            };
+            const claimAndRefreshSession = async (sessionToClaim: StoredUpstreamSession) => {
               const claimResult = await claimClassAdviserForRosterSync({
                 classCode: action.classCode,
-                upstreamSessionToken: currentSession.upstreamSessionToken,
+                upstreamSessionToken: sessionToClaim.upstreamSessionToken,
               });
-              sessionForDryRun = persistSessionFromResult(currentSession, claimResult);
+              const claimedSession = persistSessionFromResult(sessionToClaim, claimResult);
 
               if (
                 !claimResult.claimed &&
@@ -644,15 +631,36 @@ export function StudentRosterMembershipReconciliationPageContent({
               } catch {
                 throw new Error('班主任认定已完成，但当前登录会话刷新失败，请重新登录后重试。');
               }
-            }
 
-            const result = await dryRunReconcileStudentRosterMembership({
-              classCode: action.classCode,
-              upstreamSessionToken: sessionForDryRun.upstreamSessionToken,
+              return claimedSession;
+            };
+            const permissionStrategy = resolveRosterSyncPermissionStrategy({
+              accessGroup,
+              slotGroup,
             });
 
-            persistSessionFromResult(sessionForDryRun, result);
-            applyReconciliationResult(result);
+            if (permissionStrategy === 'claim-before-dry-run') {
+              const claimedSession = await claimAndRefreshSession(currentSession);
+              await runDryRunWithSession(claimedSession);
+              return;
+            }
+
+            if (permissionStrategy === 'dry-run-before-claim') {
+              try {
+                await runDryRunWithSession(currentSession);
+                return;
+              } catch (dryRunError) {
+                if (!isRosterMembershipPermissionError(dryRunError)) {
+                  throw dryRunError;
+                }
+
+                const claimedSession = await claimAndRefreshSession(currentSession);
+                await runDryRunWithSession(claimedSession);
+                return;
+              }
+            }
+
+            await runDryRunWithSession(currentSession);
             return;
           }
           case 'commit': {
