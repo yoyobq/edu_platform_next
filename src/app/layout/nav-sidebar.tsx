@@ -66,21 +66,29 @@ function resolveIcon(iconKey: string): React.ReactNode {
   return IconComponent ? <IconComponent /> : null;
 }
 
-function toMenuItems(items: readonly NavigationMetaItem[], collapsed: boolean): ItemType[] {
+function shouldShowMenuIcon(depth: number) {
+  return depth === 0;
+}
+
+function toMenuItems(
+  items: readonly NavigationMetaItem[],
+  collapsed: boolean,
+  depth = 0,
+): ItemType[] {
   return items.map((item) => {
     if (isNavigationGroupItem(item)) {
       return {
         key: item.key,
-        icon: resolveIcon(item.iconKey),
+        icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
         label: item.label,
         title: collapsed ? item.label : undefined,
-        children: toMenuItems(item.children, collapsed),
+        children: toMenuItems(item.children, collapsed, depth + 1),
       };
     }
 
     return {
       key: item.key,
-      icon: resolveIcon(item.iconKey),
+      icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
       label: item.label,
       title: collapsed ? item.label : undefined,
     };
