@@ -247,19 +247,6 @@ function getDecisionOutcomeButtonProps(
   };
 }
 
-function getPendingActionLabel(action: PendingRosterAction | null) {
-  switch (action?.type) {
-    case 'load-class-list':
-      return '读取历史班主任信息';
-    case 'dry-run':
-      return '预览学生名册归属差异';
-    case 'commit':
-      return '提交学生名册归属核对';
-    default:
-      return '执行学生名册归属核对';
-  }
-}
-
 function getStudentDisplayName(item: StudentRosterMembershipReconciliationItem) {
   return item.studentName || item.studentId || item.upstreamStudentId || item.key;
 }
@@ -1618,7 +1605,7 @@ export function StudentRosterMembershipReconciliationPageContent({
 
   if (!currentAccount) {
     return (
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
+      <div className="flex flex-col gap-6">
         <Alert
           type="error"
           showIcon
@@ -1629,9 +1616,10 @@ export function StudentRosterMembershipReconciliationPageContent({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
+    <div className="flex flex-col gap-6">
       <DecoratedPageHeader
         description={PAGE_DESCRIPTION}
+        colorScheme="purple"
         icon={<ReconciliationOutlined />}
         title="班级名册归属对齐"
       />
@@ -1640,22 +1628,11 @@ export function StudentRosterMembershipReconciliationPageContent({
       {renderReconciliationResultSection()}
 
       <UpstreamLoginModal
-        description={
-          pendingAction
-            ? `当前操作需要有效的 upstream token。登录成功后，页面会自动继续${getPendingActionLabel(
-                pendingAction,
-              )}。`
-            : '当前流程需要有效的 upstream token。登录成功后即可读取历史班主任信息。'
-        }
         form={loginForm}
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
-        okText="登录并继续"
         open={isLoginModalOpen}
-        title={
-          pendingAction ? `${getPendingActionLabel(pendingAction)}前登录 upstream` : '登录 upstream'
-        }
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);

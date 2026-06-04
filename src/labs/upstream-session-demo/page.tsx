@@ -1478,27 +1478,6 @@ export function UpstreamSessionDemoLabPage() {
     isLoadingLectureJournal;
   const activePanelError = actionError?.panel === activePanelKey ? actionError.message : null;
 
-  function getPendingActionLabel(action: PendingUpstreamAction | null) {
-    switch (action?.type) {
-      case 'teacher-directory':
-        return '读取教师字典';
-      case 'major-directory':
-        return '读取专业字典';
-      case 'class-list':
-        return '读取班级列表';
-      case 'previous-class-adviser-classes':
-        return '读取历史班主任班级';
-      case 'lecture-journal':
-        return '读取教学日志';
-      case 'verified-staff-identity':
-        return '读取教职工身份';
-      case 'curriculum-plan':
-        return `读取${CURRICULUM_PLAN_SCOPE_LABEL[action.scope]}列表`;
-      default:
-        return '读取上游数据';
-    }
-  }
-
   async function handleCurriculumPlanRequest(scope: CurriculumPlanScope) {
     try {
       if (scope === 'personal') {
@@ -2772,17 +2751,12 @@ export function UpstreamSessionDemoLabPage() {
       </div>
 
       <UpstreamLoginModal
-        description={`当前操作需要有效的 upstream token。登录成功后，页面会自动继续${getPendingActionLabel(
-          pendingAction,
-        )}。`}
         form={form}
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
         lockedUserId={lockedUpstreamLoginUserId}
-        okText="登录并继续"
         open={isLoginModalOpen}
-        title={`${getPendingActionLabel(pendingAction)}前登录 upstream`}
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {
           setIsLoginModalOpen(false);
