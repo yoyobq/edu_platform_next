@@ -50,6 +50,18 @@ export function isGraphQLIngressError(error: unknown): error is GraphQLIngressEr
   return error instanceof GraphQLIngressError;
 }
 
+export function hasGraphQLErrorCode(error: unknown, errorCode: string): boolean {
+  if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
+    return false;
+  }
+
+  return error.graphqlErrors.some((graphqlError) => {
+    const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
+
+    return extensions?.code === errorCode || extensions?.errorCode === errorCode;
+  });
+}
+
 function resolveIsRetryable(type: GraphQLIngressErrorType, statusCode?: number): boolean {
   if (type === 'network') {
     return true;

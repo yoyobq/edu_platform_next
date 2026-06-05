@@ -392,6 +392,8 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [classAdviserClaimNotice, setClassAdviserClaimNotice] =
     useState<ClassAdviserClaimNotice | null>(null);
+  const [postCommitRefreshNotice, setPostCommitRefreshNotice] =
+    useState<ClassAdviserClaimNotice | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingRosterAction | null>(null);
   const [hasAutoLoadedClassList, setHasAutoLoadedClassList] = useState(false);
@@ -532,6 +534,7 @@ export function StudentRosterMembershipReconciliationPageContent({
       setSelectedClassCode(undefined);
       setReconciliationResult(null);
       setClassAdviserClaimNotice(null);
+      setPostCommitRefreshNotice(null);
       setHasAutoLoadedClassList(false);
       setConfirmationDrafts({});
       setEndDecisionDrafts({});
@@ -604,6 +607,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             });
             setReconciliationResult(null);
             setClassAdviserClaimNotice(null);
+            setPostCommitRefreshNotice(null);
             setConfirmationDrafts({});
             setEndDecisionDrafts({});
             setPreRegisteredReviewDrafts({});
@@ -615,6 +619,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             setIsPreviewing(true);
             setReconciliationError(null);
             setClassAdviserClaimNotice(null);
+            setPostCommitRefreshNotice(null);
 
             const runDryRunWithSession = async (
               sessionForDryRun: StoredUpstreamSession,
@@ -690,18 +695,65 @@ export function StudentRosterMembershipReconciliationPageContent({
           case 'commit': {
             setIsCommitting(true);
             setReconciliationError(null);
+            setClassAdviserClaimNotice(null);
+            setPostCommitRefreshNotice(null);
             const result = await commitUpstreamStudentRosterReconciliation({
               classCode: action.classCode,
               confirmations: action.confirmations,
               endDecisions: action.endDecisions,
               upstreamSessionToken: currentSession.upstreamSessionToken,
             });
+            const committedSession = persistSessionFromResult(currentSession, result);
 
-            persistSessionFromResult(currentSession, result);
             applyReconciliationResult(result);
 
             if (result.requiresReconfirm) {
               setReconciliationError('数据已变化，本次未写库。请根据最新结果重新确认。');
+              return;
+            }
+
+            if (!result.committed) {
+              return;
+            }
+
+            const refreshAfterCommit = async (sessionForRefresh: StoredUpstreamSession) => {
+              setIsPreviewing(true);
+              const refreshedResult = await dryRunReconcileUpstreamStudentRoster({
+                classCode: action.classCode,
+                upstreamSessionToken: sessionForRefresh.upstreamSessionToken,
+              });
+
+              persistSessionFromResult(sessionForRefresh, refreshedResult);
+              applyReconciliationResult(refreshedResult);
+              setPostCommitRefreshNotice({
+                description: '已重新预读校园网学生花名册，并展示最新归属差异。',
+                title: '已提交并刷新核对结果',
+              });
+            };
+
+            try {
+              await refreshAfterCommit(committedSession);
+            } catch (refreshError) {
+              if (isExpiredUpstreamSessionError(refreshError)) {
+                try {
+                  const refreshedSession = await refreshSession(committedSession);
+                  await refreshAfterCommit(refreshedSession);
+                  return;
+                } catch (retryError) {
+                  setReconciliationError(
+                    `本次核对已提交并写库，但自动重新预读失败：${resolveStudentRosterMembershipErrorMessage(
+                      retryError,
+                    )}`,
+                  );
+                  return;
+                }
+              }
+
+              setReconciliationError(
+                `本次核对已提交并写库，但自动重新预读失败：${resolveStudentRosterMembershipErrorMessage(
+                  refreshError,
+                )}`,
+              );
             }
             return;
           }
@@ -1358,6 +1410,7 @@ export function StudentRosterMembershipReconciliationPageContent({
                       setSelectedClassCode(value);
                       setReconciliationResult(null);
                       setClassAdviserClaimNotice(null);
+                      setPostCommitRefreshNotice(null);
                       setConfirmationDrafts({});
                       setEndDecisionDrafts({});
                       setPreRegisteredReviewDrafts({});
@@ -1541,6 +1594,17 @@ export function StudentRosterMembershipReconciliationPageContent({
 
     if (reconciliationResult.committed) {
       return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
+    }
+
+    if (postCommitRefreshNotice) {
+      return (
+        <Alert
+          type="success"
+          showIcon
+          title={postCommitRefreshNotice.title}
+          description={postCommitRefreshNotice.description}
+        />
+      );
     }
 
     if (classAdviserClaimNotice) {

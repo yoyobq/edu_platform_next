@@ -10,11 +10,17 @@ type LoginFormValues = {
 
 type LoginFormProps = {
   errorMessage: string | null;
+  initialLoginName?: string | null;
   onSubmit: (values: LoginFormValues) => Promise<void>;
   submitting: boolean;
 };
 
-export function LoginForm({ errorMessage, onSubmit, submitting }: LoginFormProps) {
+export function LoginForm({
+  errorMessage,
+  initialLoginName,
+  onSubmit,
+  submitting,
+}: LoginFormProps) {
   return (
     <Form<LoginFormValues>
       layout="vertical"
@@ -22,6 +28,9 @@ export function LoginForm({ errorMessage, onSubmit, submitting }: LoginFormProps
       onFinish={onSubmit}
       autoComplete="on"
       size="large"
+      initialValues={{
+        loginName: initialLoginName ?? undefined,
+      }}
     >
       {errorMessage ? (
         <Form.Item>

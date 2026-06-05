@@ -17,6 +17,30 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
+import { hasGraphQLErrorCode } from '@/shared/graphql';
+
+type LoginLocationState = {
+  loginName?: string;
+};
+
+function readLoginNameFromLocationState(state: unknown) {
+  if (!state || typeof state !== 'object') {
+    return null;
+  }
+
+  const loginName = (state as LoginLocationState).loginName;
+
+  return typeof loginName === 'string' && loginName.trim() ? loginName.trim() : null;
+}
+
+function resolveLoginSubmitErrorMessage(error: unknown) {
+  if (hasGraphQLErrorCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')) {
+    return '请先验证登录邮箱。';
+  }
+
+  return error instanceof Error ? error.message : '登录失败。';
+}
+
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,6 +61,7 @@ export function LoginPage() {
       needsProfileCompletion: authSession.snapshot?.needsProfileCompletion ?? false,
     },
   );
+  const initialLoginName = readLoginNameFromLocationState(location.state);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(max-width: 860px)');
@@ -152,6 +177,7 @@ export function LoginPage() {
 
                   <LoginForm
                     errorMessage={submitError ?? authSession.lastError}
+                    initialLoginName={initialLoginName}
                     submitting={submitting}
                     onSubmit={async (values) => {
                       setSubmitting(true);
@@ -172,7 +198,7 @@ export function LoginPage() {
                           { replace: true },
                         );
                       } catch (error) {
-                        setSubmitError(error instanceof Error ? error.message : '登录失败。');
+                        setSubmitError(resolveLoginSubmitErrorMessage(error));
                       } finally {
                         setSubmitting(false);
                       }

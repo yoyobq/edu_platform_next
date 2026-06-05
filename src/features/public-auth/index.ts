@@ -8,25 +8,34 @@ export type { PublicAuthApiPort, PublicAuthPorts } from './application/ports';
 export type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  LoginEmailVerificationReason,
+  LoginEmailVerificationResult,
   PasswordResetIntentKind,
   PasswordResetPreview,
   PublicInviteInfo,
   PublicInviteIntentResult,
+  ResendLoginEmailVerificationResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
   StaffInviteIdentityResult,
   StaffInviteInfo,
   StaffInviteIntentResult,
+  StudentRegistrationConsumptionResult,
+  StudentRegistrationInput,
+  StudentRegistrationLinkInfo,
+  StudentRegistrationLinkInfoResult,
+  StudentRegistrationLinkReason,
   VerificationFailureReason,
   VerificationIntentResult,
 } from './application/types';
 export { ForgotPasswordForm } from './ui/forgot-password-form';
+export { LoginEmailVerificationIntentPanel } from './ui/login-email-verification-intent-panel';
 export { ResetPasswordForm } from './ui/reset-password-form';
 export type { ResetPasswordIntentPanelCopy } from './ui/reset-password-intent-panel';
 export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 export { StaffInviteIntentPanel } from './ui/staff-invite-intent-panel';
-export { StudentInviteIntentPanel } from './ui/student-invite-intent-panel';
+export { StudentRegistrationLinkPanel } from './ui/student-registration-link-panel';
 export { VerifyEmailIntentPanel } from './ui/verify-email-intent-panel';
 
 const publicAuthPorts: PublicAuthPorts = {

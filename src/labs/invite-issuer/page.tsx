@@ -5,17 +5,16 @@ import { Alert, Button, Card, Form, Input, Radio, Space, Tag, Typography } from 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import { inviteIssuerLabAccess } from './access';
-import { adminRequestPasswordResetEmail, issueStaffInvite, issueStudentInvite } from './api';
+import { adminRequestPasswordResetEmail, issueStaffInvite } from './api';
 import { inviteIssuerLabMeta } from './meta';
 
-type InviteIssuerType = 'staff' | 'student' | 'welcomeBack';
+type InviteIssuerType = 'staff' | 'welcomeBack';
 
 type InviteIssuerFormValues = {
   accountId?: string;
   inviteType: InviteIssuerType;
   invitedEmail: string;
   staffId?: string;
-  studentId?: string;
 };
 
 type InviteIssueResult = {
@@ -26,12 +25,11 @@ type InviteIssueResult = {
   recordId: number | null;
   secondaryLink: string | null;
   token: string | null;
-  type: 'INVITE_STAFF' | 'INVITE_STUDENT' | 'PASSWORD_RESET' | null;
+  type: 'INVITE_STAFF' | 'PASSWORD_RESET' | null;
 };
 
 const inviteTypeOptions = [
   { label: '教职工邀请', value: 'staff' },
-  { label: '学生邀请', value: 'student' },
   { label: '老用户回归', value: 'welcomeBack' },
 ] satisfies readonly { label: string; value: InviteIssuerType }[];
 
@@ -85,10 +83,6 @@ export function InviteIssuerLabPage() {
       return '老用户回归邮件已触发';
     }
 
-    if (result?.type === 'INVITE_STUDENT') {
-      return '学生邀请已签发';
-    }
-
     return '教职工邀请已签发';
   }, [result?.type]);
 
@@ -114,8 +108,7 @@ export function InviteIssuerLabPage() {
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             这是临时联调工具，不承担正式管理后台职责。当前直接调用后端 `inviteStaff` /
-            `inviteStudent` / `adminRequestPasswordResetEmail` mutation，并把返回 token
-            或预期入口组装成可核对的链接。
+            `adminRequestPasswordResetEmail` mutation，并把返回 token 或预期入口组装成可核对的链接。
           </Typography.Paragraph>
         </div>
       </Card>
@@ -164,23 +157,11 @@ export function InviteIssuerLabPage() {
                   return;
                 }
 
-                const issued =
-                  values.inviteType === 'student'
-                    ? await issueStudentInvite({
-                        invitedEmail: values.invitedEmail.trim(),
-                        studentId: values.studentId?.trim() || undefined,
-                      })
-                    : await issueStaffInvite({
-                        invitedEmail: values.invitedEmail.trim(),
-                        staffId: values.staffId?.trim() || undefined,
-                      });
-
-                const invitePath =
-                  issued.token && issued.type === 'INVITE_STUDENT'
-                    ? `/invite/student/${issued.token}`
-                    : issued.token
-                      ? `/invite/staff/${issued.token}`
-                      : null;
+                const issued = await issueStaffInvite({
+                  invitedEmail: values.invitedEmail.trim(),
+                  staffId: values.staffId?.trim() || undefined,
+                });
+                const invitePath = issued.token ? `/invite/staff/${issued.token}` : null;
 
                 setResult({
                   accountId: null,
@@ -247,11 +228,7 @@ export function InviteIssuerLabPage() {
               />
             ) : null}
 
-            {inviteType === 'student' ? (
-              <Form.Item label="学生 ID" name="studentId">
-                <Input placeholder="可选，按后端当前 contract 传 studentId" />
-              </Form.Item>
-            ) : inviteType === 'staff' ? (
+            {inviteType === 'staff' ? (
               <Form.Item label="教职工 ID" name="staffId">
                 <Input placeholder="可选，按后端当前 contract 传 staffId" />
               </Form.Item>

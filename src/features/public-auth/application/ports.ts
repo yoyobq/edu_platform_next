@@ -1,11 +1,16 @@
 import type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  LoginEmailVerificationResult,
   PublicInviteIntentResult,
+  ResendLoginEmailVerificationResult,
   ResetPasswordResult,
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
+  StudentRegistrationConsumptionResult,
+  StudentRegistrationInput,
+  StudentRegistrationLinkInfoResult,
   VerificationIntentResult,
 } from './types';
 
@@ -26,6 +31,16 @@ export type PublicAuthApiPort = {
     inviteType: 'staff' | 'student';
     verificationCode: string;
   }) => Promise<PublicInviteIntentResult>;
+  getStudentRegistrationLinkInfo: (input: {
+    token: string;
+  }) => Promise<StudentRegistrationLinkInfoResult>;
+  consumeStudentRegistrationLink: (
+    input: StudentRegistrationInput,
+  ) => Promise<StudentRegistrationConsumptionResult>;
+  verifyLoginEmail: (input: { token: string }) => Promise<LoginEmailVerificationResult>;
+  resendLoginEmailVerification: (input: {
+    loginEmail: string;
+  }) => Promise<ResendLoginEmailVerificationResult>;
   loginUpstreamSession: (input: { password: string; userId: string }) => Promise<{
     expiresAt: string;
     upstreamSessionToken: string;

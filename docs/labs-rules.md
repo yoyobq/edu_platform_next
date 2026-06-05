@@ -107,7 +107,7 @@ export const demoLabMeta = {
 - `/labs/demo`
   - 用于第三工作区跳层 demo
 - `/labs/invite-issuer`
-  - 用于临时调用 `inviteStaff` / `inviteStudent` 生成联调 invite link
+  - 用于临时调用 `inviteStaff` 生成 staff invite link，或触发老用户回归改密邮件
   - 属于实验性联调工具，不承担正式管理后台职责
   - 若后续出现正式管理入口，应优先迁入正式区拥有者切片，而不是继续扩展该 labs 页面
 - `/labs/upstream-session-demo`

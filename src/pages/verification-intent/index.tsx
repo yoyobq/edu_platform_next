@@ -4,11 +4,12 @@ import { useParams, useSearchParams } from 'react-router';
 
 import { logout, readStoredAuthSession } from '@/features/auth';
 import {
+  LoginEmailVerificationIntentPanel,
   type PasswordResetPreview,
   ResetPasswordIntentPanel,
   type ResetPasswordIntentPanelCopy,
   StaffInviteIntentPanel,
-  StudentInviteIntentPanel,
+  StudentRegistrationLinkPanel,
   VerifyEmailIntentPanel,
 } from '@/features/public-auth';
 
@@ -243,34 +244,6 @@ export function InviteIntentPage() {
     );
   }
 
-  if (normalizedInviteType === 'student') {
-    return (
-      <InviteFlowShell>
-        <Flex vertical gap={8} align="center" style={{ textAlign: 'center' }}>
-          <BrandLockup variant="public-entry" />
-          <h1
-            style={{
-              fontSize: 'var(--ant-font-size-heading-3)',
-              fontWeight: 'var(--ant-font-weight-heading)',
-              lineHeight: 'var(--ant-line-height-3)',
-              margin: 0,
-            }}
-          >
-            学生邀请
-          </h1>
-          <Typography.Text type="secondary">
-            请先确认邀请链接状态。邀请链接签发后 48 小时内有效。
-          </Typography.Text>
-        </Flex>
-        <div className="shadow-card">
-          <Card styles={{ body: { padding: '32px 24px' } }}>
-            <StudentInviteIntentPanel verificationCode={verificationCode} />
-          </Card>
-        </div>
-      </InviteFlowShell>
-    );
-  }
-
   return (
     <VerificationIntentShell
       title="邀请入口"
@@ -302,6 +275,32 @@ export function VerifyEmailIntentPage() {
         onConsumeSuccess={storedSession ? async () => logout() : undefined}
         verificationCode={verificationCode}
       />
+    </VerificationIntentShell>
+  );
+}
+
+export function StudentRegistrationPage() {
+  const { token = '' } = useParams();
+
+  return (
+    <VerificationIntentShell
+      title="学生注册"
+      description="请按页面提示完成身份核验并设置平台账号。注册成功后，需要先验证登录邮箱。"
+    >
+      <StudentRegistrationLinkPanel token={token} />
+    </VerificationIntentShell>
+  );
+}
+
+export function VerifyAccountEmailIntentPage() {
+  const { token = '' } = useParams();
+
+  return (
+    <VerificationIntentShell
+      title="验证登录邮箱"
+      description="系统会验证邮件中的链接。验证完成后，就可以使用该登录邮箱登录。"
+    >
+      <LoginEmailVerificationIntentPanel token={token} />
     </VerificationIntentShell>
   );
 }

@@ -8,7 +8,7 @@ type IssueInviteResponse = {
   recordId?: number | null;
   success: boolean;
   token?: string | null;
-  type?: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
+  type?: 'INVITE_STAFF' | null;
 };
 
 type AdminRequestPasswordResetEmailResponse = {
@@ -21,7 +21,7 @@ type IssueInviteResult = {
   message: string | null;
   recordId: number | null;
   token: string | null;
-  type: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
+  type: 'INVITE_STAFF' | null;
 };
 
 type AdminRequestPasswordResetEmailResult = {
@@ -32,19 +32,6 @@ type AdminRequestPasswordResetEmailResult = {
 const INVITE_STAFF_MUTATION = `
   mutation InviteStaff($input: InviteStaffInput!) {
     inviteStaff(input: $input) {
-      expiresAt
-      message
-      recordId
-      success
-      token
-      type
-    }
-  }
-`;
-
-const INVITE_STUDENT_MUTATION = `
-  mutation InviteStudent($input: InviteStudentInput!) {
-    inviteStudent(input: $input) {
       expiresAt
       message
       recordId
@@ -132,32 +119,6 @@ export async function issueStaffInvite(input: { invitedEmail: string; staffId?: 
     return normalizeIssueInviteResult(response.inviteStaff);
   } catch (error) {
     throw new Error(resolveErrorMessage(error, '暂时无法签发教职工邀请。'));
-  }
-}
-
-export async function issueStudentInvite(input: { invitedEmail: string; studentId?: string }) {
-  try {
-    const response = await requestGraphQL<
-      {
-        inviteStudent: IssueInviteResponse;
-      },
-      {
-        input: {
-          invitedEmail: string;
-          studentId?: string;
-        };
-      }
-    >(INVITE_STUDENT_MUTATION, {
-      input,
-    });
-
-    if (!response.inviteStudent.success) {
-      throw new Error(response.inviteStudent.message || '暂时无法签发学生邀请。');
-    }
-
-    return normalizeIssueInviteResult(response.inviteStudent);
-  } catch (error) {
-    throw new Error(resolveErrorMessage(error, '暂时无法签发学生邀请。'));
   }
 }
 

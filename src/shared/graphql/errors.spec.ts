@@ -4,7 +4,7 @@ import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import type { GraphQLFormattedError } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { toGraphQLIngressError } from './errors';
+import { GraphQLIngressError, hasGraphQLErrorCode, toGraphQLIngressError } from './errors';
 
 function buildCombinedGraphQLError(
   extensions: Record<string, unknown>,
@@ -45,5 +45,26 @@ describe('GraphQL ingress errors', () => {
 
     expect(error.type).toBe('graphql');
     expect(error.userMessage).toBe('请求处理失败，请稍后重试。');
+  });
+
+  it('matches GraphQL extension code and errorCode values', () => {
+    const error = new GraphQLIngressError({
+      type: 'graphql',
+      message: '请求处理失败',
+      graphqlErrors: [
+        {
+          message: '请求处理失败',
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            errorCode: 'STUDENT_REGISTRATION_IDENTITY_MISMATCH',
+          },
+        },
+      ],
+    });
+
+    expect(hasGraphQLErrorCode(error, 'BAD_USER_INPUT')).toBe(true);
+    expect(hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH')).toBe(true);
+    expect(hasGraphQLErrorCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')).toBe(false);
+    expect(hasGraphQLErrorCode(new Error('plain'), 'BAD_USER_INPUT')).toBe(false);
   });
 });

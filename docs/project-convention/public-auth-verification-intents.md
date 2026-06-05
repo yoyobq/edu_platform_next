@@ -4,7 +4,7 @@
 
 本文件定义当前 public auth 一次性入口的稳定前端约定。
 
-`staff invite` 的页面细节与交互语义，统一以 [public-auth-staff-invite.md](./public-auth-staff-invite.md) 为准；本文件只收口这些 intent 入口的共同边界、归属和当前状态。
+`staff invite` 的页面细节与交互语义，统一以 [public-auth-staff-invite.md](./public-auth-staff-invite.md) 为准；学生注册链接注册链路统一以 [public-auth-student-registration.md](./public-auth-student-registration.md) 为准。本文件只收口这些 intent 入口的共同边界、归属和当前状态。
 
 ## Public Auth 入口全集
 
@@ -15,6 +15,8 @@
 - `/reset-password`
 - `/reset-password/:verificationCode`
 - `/invite/:inviteType/:verificationCode`
+- `/student-register/:token`
+- `/verify/account-email/:token`
 - `/verify/email/:verificationCode`
 - `/welcome-back/reset-password`
 - `/welcome-back/reset-password/:verificationCode`
@@ -31,6 +33,8 @@
 当前 public auth intent 入口包括：
 
 - `/invite/:inviteType/:verificationCode`
+- `/student-register/:token`
+- `/verify/account-email/:token`
 - `/verify/email/:verificationCode`
 - `/reset-password`
 - `/reset-password/:verificationCode`
@@ -43,7 +47,7 @@
 - layout：`PublicEntryLayout`
 - feature owner：`src/features/public-auth`
 - page owner：
-  - `/invite/*`、`/verify/email/*`、`/magic-link/*` 继续由 `src/pages/verification-intent` 承接
+  - `/invite/*`、`/student-register/*`、`/verify/*`、`/magic-link/*` 继续由 `src/pages/verification-intent` 承接
   - `/reset-password*`、`/welcome-back/reset-password*` 继续走 `verification-intent` 内的真实 reset password panel
 
 ## 固定边界
@@ -57,20 +61,22 @@
 
 ## 当前路线状态
 
-| 路由                                                | 当前状态 | 说明                                                          |
-| --------------------------------------------------- | -------- | ------------------------------------------------------------- |
-| `/login`                                            | 已落地   | session 登录入口；loader 会 restore，`skipRestore=1` 可跳过   |
-| `/forgot-password`                                  | 已落地   | 真实提交已接通                                                |
-| `/reset-password`                                   | 已落地   | 支持 query token / scene 兼容入口                             |
-| `/reset-password/:verificationCode`                 | 已落地   | 真实校验、重置、错误模型与 E2E 已接通                         |
-| `/reset-password?token=...`                         | 兼容保留 | 当前继续支持 query token 透传                                 |
-| `/welcome-back/reset-password`                      | 已落地   | welcome-back 文案场景；支持 query token                       |
-| `/welcome-back/reset-password/:verificationCode`    | 已落地   | welcome-back 文案场景；path-first verification code           |
-| `/invite/staff/:verificationCode`                   | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md`          |
-| `/invite/student/:verificationCode`                 | 公开信息 | 查询 `publicInviteInfo`；后端未提供学生注册接口前不消费 token |
-| `/invite/:inviteType/:verificationCode`（其它类型） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活                      |
-| `/verify/email/:verificationCode`                   | 已落地   | 已接入真实消费、成功 / 失败闭环与会话同步                     |
-| `/magic-link/:verificationCode`                     | 壳页     | 当前仍未接入真实登录续接闭环                                  |
+| 路由                                                | 当前状态 | 说明                                                               |
+| --------------------------------------------------- | -------- | ------------------------------------------------------------------ |
+| `/login`                                            | 已落地   | session 登录入口；loader 会 restore，`skipRestore=1` 可跳过        |
+| `/forgot-password`                                  | 已落地   | 真实提交已接通                                                     |
+| `/reset-password`                                   | 已落地   | 支持 query token / scene 兼容入口                                  |
+| `/reset-password/:verificationCode`                 | 已落地   | 真实校验、重置、错误模型与 E2E 已接通                              |
+| `/reset-password?token=...`                         | 兼容保留 | 当前继续支持 query token 透传                                      |
+| `/welcome-back/reset-password`                      | 已落地   | welcome-back 文案场景；支持 query token                            |
+| `/welcome-back/reset-password/:verificationCode`    | 已落地   | welcome-back 文案场景；path-first verification code                |
+| `/invite/staff/:verificationCode`                   | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md`               |
+| `/invite/student/:verificationCode`                 | 已下线   | 旧学生 invite 占位入口不再查询旧接口，路由按 404 处理              |
+| `/student-register/:token`                          | 已落地   | 学生注册链接注册入口，细节见 `public-auth-student-registration.md` |
+| `/verify/account-email/:token`                      | 已落地   | 初始登录邮箱验证入口，打开后直接消费 token                         |
+| `/invite/:inviteType/:verificationCode`（其它类型） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活                           |
+| `/verify/email/:verificationCode`                   | 已落地   | 登录邮箱变更确认；不是新账号初始邮箱验证入口                       |
+| `/magic-link/:verificationCode`                     | 壳页     | 当前仍未接入真实登录续接闭环                                       |
 
 ## 对 `magic-link` 的当前约束
 
@@ -90,4 +96,5 @@
 
 - staff invite 当前继续通过 `/labs/invite-issuer` 生成联调链接
 - 该页只作为联调工具，不承担正式管理后台职责
+- 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/student-register/<token>`，不再走旧 `inviteStudent` / `registerByInvite`
 - 它不进入正式导航，只保留直链使用

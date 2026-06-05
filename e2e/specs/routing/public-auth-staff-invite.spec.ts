@@ -678,42 +678,15 @@ for (const inviteCase of [
   });
 }
 
-test('有效 student invite 应查询公开信息并提示注册暂未开放', async ({ page }) => {
-  let publicInviteToken: string | null = null;
-  let consumeRequestCount = 0;
+test('旧 student invite 入口应下线为 404 且不再查询公开 invite 信息', async ({ page }) => {
+  let publicInviteRequestCount = 0;
 
   await page.route('**/graphql', async (route) => {
     const payload = getGraphQLPayload(route);
     const query = typeof payload?.query === 'string' ? payload.query : '';
 
     if (query.includes('query PublicInviteInfo')) {
-      publicInviteToken = payload?.variables?.token ?? null;
-      await fulfillGraphQL(route, {
-        data: {
-          publicInviteInfo: {
-            info: {
-              canProceed: true,
-              description: '请核对邮箱，学生邀请链接签发后 48 小时内有效。',
-              expiresAt: '2026-05-10T03:00:00.000Z',
-              inviteUrl: 'https://your-app.com/invite/student/student-invite-001',
-              invitedEmail: 'student@example.com',
-              issuer: '系统管理员',
-              staffId: null,
-              statusReason: 'AVAILABLE',
-              title: '学生邀请',
-              type: 'INVITE_STUDENT',
-            },
-            message: null,
-            reason: null,
-            success: true,
-          },
-        },
-      });
-      return;
-    }
-
-    if (query.includes('mutation ConsumeStaffInvite')) {
-      consumeRequestCount += 1;
+      publicInviteRequestCount += 1;
     }
 
     await route.fallback();
@@ -721,13 +694,8 @@ test('有效 student invite 应查询公开信息并提示注册暂未开放', a
 
   await page.goto(routes.invite('student', 'student-invite-001'));
 
-  await expect(page.getByRole('heading', { name: '学生邀请' })).toBeVisible();
-  await expect(page.getByText('student@example.com')).toBeVisible();
-  await expect(page.getByText('学生邀请暂时还不能在线注册')).toBeVisible();
-  await expect(page.getByText('在线注册接口尚未开放')).toBeVisible();
-  await expect(page.getByRole('button', { name: '返回登录' })).toBeVisible();
-  expect(publicInviteToken).toBe('student-invite-001');
-  expect(consumeRequestCount).toBe(0);
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+  expect(publicInviteRequestCount).toBe(0);
 });
 
 test('上游账号校验失败时应提示明确错误且停留在身份核对阶段', async ({ page }) => {

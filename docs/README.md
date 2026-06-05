@@ -37,6 +37,7 @@ This directory contains project documentation.
 - 想确认 `/profile` 个人资料页、身份信息页签与 `slotGroup` 展示边界时，先看 [project-convention/my-profile.md](./project-convention/my-profile.md)
 - 想确认 `My 教学日志` 的查询、保存、草稿、筛选与 upstream 会话边界时，先看 [project-convention/academic-teaching-log.md](./project-convention/academic-teaching-log.md)
 - 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
+- 想确认学生注册链接注册、初始登录邮箱验证和重发验证邮件约定时，先看 [project-convention/public-auth-student-registration.md](./project-convention/public-auth-student-registration.md)
 - 想确认 public auth 一次性入口当前由谁承接、哪些已是真实流程、哪些仍是 shell 时，先看 [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - 想确认当前身份、授权摘要、会话恢复以及 protected route 前置续期边界时，先看 [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - 想确认 upstream token 为什么由前端持有、当前 `/labs/upstream-session-demo` 的行为边界，以及后续 upstream 功能应复用什么模式时，先看 [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
@@ -92,6 +93,7 @@ This directory contains project documentation.
 - [project-convention/identity-access-session.md](./project-convention/identity-access-session.md)
 - [project-convention/my-profile.md](./project-convention/my-profile.md)
 - [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
+- [project-convention/public-auth-student-registration.md](./project-convention/public-auth-student-registration.md)
 - [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/staff-directory-cache.md](./project-convention/staff-directory-cache.md)
@@ -214,6 +216,7 @@ docs/
     identity-access-session.md
     my-profile.md
     public-auth-staff-invite.md
+    public-auth-student-registration.md
     public-auth-verification-intents.md
     route-url-semantics.md
     staff-directory-cache.md

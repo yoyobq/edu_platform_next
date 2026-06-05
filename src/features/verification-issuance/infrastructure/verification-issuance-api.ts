@@ -6,7 +6,7 @@ type IssueInviteResponse = {
   recordId?: number | null;
   success: boolean;
   token?: string | null;
-  type?: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
+  type?: 'INVITE_STAFF' | null;
 };
 
 type AdminRequestPasswordResetEmailResponse = {
@@ -24,7 +24,7 @@ export type IssueInviteResult = {
   message: string | null;
   recordId: number | null;
   token: string | null;
-  type: 'INVITE_STAFF' | 'INVITE_STUDENT' | null;
+  type: 'INVITE_STAFF' | null;
 };
 
 export type AdminRequestPasswordResetEmailResult = {

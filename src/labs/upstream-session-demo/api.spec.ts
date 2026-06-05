@@ -215,6 +215,9 @@ describe('upstream-session-demo api', () => {
       {
         sessionToken: 'rolling-token-005',
       },
+      {
+        authMode: 'none',
+      },
     );
   });
 

@@ -114,3 +114,80 @@ export type StaffInviteConsumptionResult =
   | { accountId: number | null; status: 'success' }
   | { message: string; status: 'failure' }
   | { message: string; status: 'error' };
+
+export type StudentRegistrationLinkReason =
+  | 'AVAILABLE'
+  | 'CLASS_NOT_FOUND'
+  | 'LINK_EXPIRED'
+  | 'LINK_NOT_ACTIVE'
+  | 'LINK_NOT_FOUND'
+  | 'LINK_REVOKED';
+
+export type StudentRegistrationLinkScope = 'CLASS' | 'STUDENT';
+export type StudentRegistrationLinkStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+
+export type StudentRegistrationLinkInfo = {
+  canProceed: boolean;
+  classCode: string;
+  className: string | null;
+  expiresAt: string;
+  scope: StudentRegistrationLinkScope;
+  status: StudentRegistrationLinkStatus;
+  studentId: string | null;
+};
+
+export type StudentRegistrationLinkInfoResult =
+  | { info: StudentRegistrationLinkInfo; status: 'ready' }
+  | {
+      info: StudentRegistrationLinkInfo | null;
+      message: string;
+      reason: StudentRegistrationLinkReason;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
+
+export type StudentRegistrationInput = {
+  idCardLastSix: string;
+  loginEmail: string;
+  loginName?: string;
+  loginPassword: string;
+  name: string;
+  nickname?: string;
+  studentId: string;
+  token: string;
+};
+
+export type StudentRegistrationConsumptionResult =
+  | {
+      accountId: number | null;
+      accountStatus: string | null;
+      emailVerificationRequired: boolean;
+      emailVerificationSent: boolean;
+      loginEmail: string;
+      message: string | null;
+      status: 'success';
+    }
+  | { message: string; status: 'identity-mismatch' }
+  | { message: string; status: 'failure' }
+  | { message: string; status: 'error' };
+
+export type LoginEmailVerificationReason = 'EXPIRED' | 'INVALID' | 'USED';
+
+export type LoginEmailVerificationResult =
+  | {
+      accountId: number | null;
+      loginEmail: string | null;
+      message: string | null;
+      status: 'success';
+    }
+  | {
+      loginEmail: string | null;
+      message: string;
+      reason: LoginEmailVerificationReason;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
+
+export type ResendLoginEmailVerificationResult =
+  | { message: string | null; status: 'success' }
+  | { message: string; status: 'error' };

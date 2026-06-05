@@ -41,6 +41,8 @@ import {
   InviteIntentPage,
   MagicLinkIntentPage,
   ResetPasswordIntentPage,
+  StudentRegistrationPage,
+  VerifyAccountEmailIntentPage,
   VerifyEmailIntentPage,
   WelcomeBackResetPasswordIntentPage,
 } from '@/pages/verification-intent';
@@ -96,6 +98,7 @@ const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/magic-link/',
   '/reset-password',
+  '/student-register/',
   '/welcome-back/reset-password',
   '/verify/',
 ];
@@ -410,6 +413,14 @@ async function welcomeLoader({ request }: LoaderFunctionArgs) {
 
   if (!snapshot.needsProfileCompletion) {
     throw redirect(resolveWelcomeRedirectTarget(url.searchParams.get('redirect'), url.origin));
+  }
+
+  return null;
+}
+
+async function inviteIntentLoader({ params }: LoaderFunctionArgs) {
+  if (params.inviteType?.trim().toLowerCase() === 'student') {
+    throw new Response('Not Found', { status: 404 });
   }
 
   return null;
@@ -896,7 +907,16 @@ const router = createBrowserRouter([
       },
       {
         path: '/invite/:inviteType/:verificationCode',
+        loader: inviteIntentLoader,
         Component: InviteIntentPage,
+      },
+      {
+        path: '/student-register/:token',
+        Component: StudentRegistrationPage,
+      },
+      {
+        path: '/verify/account-email/:token',
+        Component: VerifyAccountEmailIntentPage,
       },
       {
         path: '/verify/email/:verificationCode',

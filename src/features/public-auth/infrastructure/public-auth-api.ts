@@ -8,20 +8,32 @@ import {
 
 import { normalizeDepartmentName } from '@/shared/department';
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
-import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
+import {
+  executeGraphQL,
+  type GraphQLAuthMode,
+  hasGraphQLErrorCode,
+  isGraphQLIngressError,
+} from '@/shared/graphql';
 
 import type { PublicAuthApiPort } from '../application/ports';
 import type {
   ChangeLoginEmailConfirmResult,
   ChangeLoginEmailIntentResult,
+  LoginEmailVerificationReason,
+  LoginEmailVerificationResult,
   PasswordResetPreview,
   PublicInviteInfo,
   PublicInviteIntentResult,
   PublicInviteType,
+  ResendLoginEmailVerificationResult,
   ResetPasswordResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
   StaffInviteStatusReason,
+  StudentRegistrationConsumptionResult,
+  StudentRegistrationLinkInfo,
+  StudentRegistrationLinkInfoResult,
+  StudentRegistrationLinkReason,
   VerificationFailureReason,
   VerificationIntentResult,
 } from '../application/types';
@@ -89,6 +101,52 @@ type PublicInviteInfoResponse = {
     } | null;
     message?: string | null;
     reason?: VerificationRecordFailureReason | null;
+    success: boolean;
+  };
+};
+
+type PublicStudentRegistrationLinkInfoResponse = {
+  publicStudentRegistrationLinkInfo: {
+    info?: {
+      canProceed: boolean;
+      classCode: string;
+      className?: string | null;
+      expiresAt: string;
+      scope: 'CLASS' | 'STUDENT';
+      status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+      studentId?: string | null;
+    } | null;
+    message?: string | null;
+    reason?: StudentRegistrationLinkReason | null;
+    success: boolean;
+  };
+};
+
+type ConsumeStudentRegistrationLinkResponse = {
+  consumeStudentRegistrationLink: {
+    accountId?: number | null;
+    accountStatus?: string | null;
+    emailVerificationRequired?: boolean | null;
+    emailVerificationSent?: boolean | null;
+    loginEmail?: string | null;
+    message?: string | null;
+    success: boolean;
+  };
+};
+
+type VerifyLoginEmailResponse = {
+  verifyLoginEmail: {
+    accountId?: number | null;
+    loginEmail?: string | null;
+    message?: string | null;
+    reason?: LoginEmailVerificationReason | null;
+    success: boolean;
+  };
+};
+
+type ResendLoginEmailVerificationResponse = {
+  resendLoginEmailVerification: {
+    message?: string | null;
     success: boolean;
   };
 };
@@ -194,6 +252,60 @@ const PUBLIC_INVITE_INFO_QUERY = `
         title
         type
       }
+    }
+  }
+`;
+
+const PUBLIC_STUDENT_REGISTRATION_LINK_INFO_QUERY = `
+  query PublicStudentRegistrationLinkInfo($token: String!) {
+    publicStudentRegistrationLinkInfo(token: $token) {
+      success
+      reason
+      message
+      info {
+        canProceed
+        status
+        scope
+        classCode
+        className
+        studentId
+        expiresAt
+      }
+    }
+  }
+`;
+
+const CONSUME_STUDENT_REGISTRATION_LINK_MUTATION = `
+  mutation ConsumeStudentRegistrationLink($input: ConsumeStudentRegistrationLinkInput!) {
+    consumeStudentRegistrationLink(input: $input) {
+      success
+      message
+      accountId
+      loginEmail
+      accountStatus
+      emailVerificationRequired
+      emailVerificationSent
+    }
+  }
+`;
+
+const VERIFY_LOGIN_EMAIL_MUTATION = `
+  mutation VerifyLoginEmail($input: VerifyLoginEmailInput!) {
+    verifyLoginEmail(input: $input) {
+      success
+      message
+      reason
+      accountId
+      loginEmail
+    }
+  }
+`;
+
+const RESEND_LOGIN_EMAIL_VERIFICATION_MUTATION = `
+  mutation ResendLoginEmailVerification($input: ResendLoginEmailVerificationInput!) {
+    resendLoginEmailVerification(input: $input) {
+      success
+      message
     }
   }
 `;
@@ -498,6 +610,60 @@ function resolveChangeLoginEmailFailureMessage(
   return '这个邮箱验证链接无效，请确认链接是否完整。';
 }
 
+function resolveStudentRegistrationLinkFailureMessage(
+  reason: StudentRegistrationLinkReason,
+  fallback?: string | null,
+): string {
+  if (fallback) {
+    return fallback;
+  }
+
+  if (reason === 'LINK_EXPIRED') {
+    return '这个学生注册链接已经过期，请联系班主任或管理员重新获取链接。';
+  }
+
+  if (reason === 'LINK_REVOKED') {
+    return '这个学生注册链接已经撤销，请联系班主任或管理员确认最新链接。';
+  }
+
+  if (reason === 'LINK_NOT_ACTIVE') {
+    return '这个学生注册链接暂时不可用，请联系班主任或管理员确认链接状态。';
+  }
+
+  if (reason === 'CLASS_NOT_FOUND') {
+    return '这个学生注册链接对应的班级不存在，请联系班主任或管理员处理。';
+  }
+
+  if (reason === 'LINK_NOT_FOUND') {
+    return '这个学生注册链接无效，请确认链接是否完整。';
+  }
+
+  return '这个学生注册链接暂时不可用，请稍后再试。';
+}
+
+function resolveLoginEmailVerificationFailureMessage(
+  reason: LoginEmailVerificationReason,
+  fallback?: string | null,
+): string {
+  if (fallback) {
+    return fallback;
+  }
+
+  if (reason === 'EXPIRED') {
+    return '这个登录邮箱验证链接已经过期，请重新发送验证邮件。';
+  }
+
+  if (reason === 'USED') {
+    return '这个登录邮箱验证链接已经使用过，当前无需重复验证。';
+  }
+
+  return '这个登录邮箱验证链接无效，请检查邮件中的链接是否完整。';
+}
+
+function isStudentRegistrationIdentityMismatchError(error: unknown): boolean {
+  return hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH');
+}
+
 async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
   const result = await findPublicInviteIntent({
     inviteType: 'staff',
@@ -634,6 +800,69 @@ function mapPublicInviteInfo(
     title: info.title || null,
     type: info.type === 'INVITE_STUDENT' ? 'INVITE_STUDENT' : 'INVITE_STAFF',
   };
+}
+
+function mapStudentRegistrationLinkInfo(
+  info: NonNullable<
+    PublicStudentRegistrationLinkInfoResponse['publicStudentRegistrationLinkInfo']['info']
+  >,
+): StudentRegistrationLinkInfo {
+  return {
+    canProceed: info.canProceed,
+    classCode: info.classCode,
+    className: info.className || null,
+    expiresAt: info.expiresAt,
+    scope: info.scope,
+    status: info.status,
+    studentId: info.studentId || null,
+  };
+}
+
+async function findStudentRegistrationLinkInfo(
+  token: string,
+): Promise<StudentRegistrationLinkInfoResult> {
+  if (!token.trim()) {
+    return {
+      info: null,
+      status: 'failure',
+      reason: 'LINK_NOT_FOUND',
+      message: resolveStudentRegistrationLinkFailureMessage('LINK_NOT_FOUND'),
+    };
+  }
+
+  try {
+    const response = await requestGraphQL<
+      PublicStudentRegistrationLinkInfoResponse,
+      {
+        token: string;
+      }
+    >(PUBLIC_STUDENT_REGISTRATION_LINK_INFO_QUERY, {
+      token: token.trim(),
+    });
+    const result = response.publicStudentRegistrationLinkInfo;
+    const info = result.info ? mapStudentRegistrationLinkInfo(result.info) : null;
+
+    if (result.success && info?.canProceed) {
+      return {
+        status: 'ready',
+        info,
+      };
+    }
+
+    const reason = result.reason || 'LINK_NOT_FOUND';
+
+    return {
+      info,
+      status: 'failure',
+      reason,
+      message: resolveStudentRegistrationLinkFailureMessage(reason, result.message),
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      message: resolvePublicAuthErrorMessage(error, '暂时无法读取学生注册链接。'),
+    };
+  }
 }
 
 async function loginUpstreamSession(input: { password: string; userId: string }): Promise<{
@@ -784,6 +1013,154 @@ export const publicAuthApi: PublicAuthApiPort = {
     }
 
     return findPublicInviteIntent(input);
+  },
+  async getStudentRegistrationLinkInfo(input) {
+    return findStudentRegistrationLinkInfo(input.token);
+  },
+  async consumeStudentRegistrationLink(input): Promise<StudentRegistrationConsumptionResult> {
+    try {
+      const response = await requestGraphQL<
+        ConsumeStudentRegistrationLinkResponse,
+        {
+          input: {
+            idCardLastSix: string;
+            loginEmail: string;
+            loginName?: string;
+            loginPassword: string;
+            name: string;
+            nickname?: string;
+            studentId: string;
+            token: string;
+          };
+        }
+      >(CONSUME_STUDENT_REGISTRATION_LINK_MUTATION, {
+        input: {
+          idCardLastSix: input.idCardLastSix.trim(),
+          loginEmail: input.loginEmail.trim(),
+          loginName: normalizeOptionalText(input.loginName),
+          loginPassword: input.loginPassword,
+          name: input.name.trim(),
+          nickname: normalizeOptionalText(input.nickname),
+          studentId: input.studentId.trim(),
+          token: input.token.trim(),
+        },
+      });
+      const result = response.consumeStudentRegistrationLink;
+
+      if (!result.success) {
+        return {
+          status: 'failure',
+          message: result.message || '暂时无法完成学生注册。',
+        };
+      }
+
+      return {
+        accountId: result.accountId ?? null,
+        accountStatus: result.accountStatus ?? null,
+        emailVerificationRequired: result.emailVerificationRequired ?? true,
+        emailVerificationSent: result.emailVerificationSent ?? false,
+        loginEmail: result.loginEmail || input.loginEmail.trim(),
+        message: result.message ?? null,
+        status: 'success',
+      };
+    } catch (error) {
+      if (isStudentRegistrationIdentityMismatchError(error)) {
+        return {
+          status: 'identity-mismatch',
+          message: '身份信息不匹配，请核对后重试。',
+        };
+      }
+
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法完成学生注册。'),
+      };
+    }
+  },
+  async verifyLoginEmail(input): Promise<LoginEmailVerificationResult> {
+    try {
+      const normalizedToken = input.token.trim();
+
+      if (!normalizedToken) {
+        return {
+          loginEmail: null,
+          status: 'failure',
+          reason: 'INVALID',
+          message: resolveLoginEmailVerificationFailureMessage('INVALID'),
+        };
+      }
+
+      const response = await requestGraphQL<
+        VerifyLoginEmailResponse,
+        {
+          input: {
+            token: string;
+          };
+        }
+      >(VERIFY_LOGIN_EMAIL_MUTATION, {
+        input: {
+          token: normalizedToken,
+        },
+      });
+      const result = response.verifyLoginEmail;
+
+      if (result.success) {
+        return {
+          accountId: result.accountId ?? null,
+          loginEmail: result.loginEmail ?? null,
+          message: result.message ?? null,
+          status: 'success',
+        };
+      }
+
+      const reason = result.reason || 'INVALID';
+
+      return {
+        loginEmail: result.loginEmail ?? null,
+        status: 'failure',
+        reason,
+        message: resolveLoginEmailVerificationFailureMessage(reason, result.message),
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法完成登录邮箱验证。'),
+      };
+    }
+  },
+  async resendLoginEmailVerification(input): Promise<ResendLoginEmailVerificationResult> {
+    try {
+      const response = await requestGraphQL<
+        ResendLoginEmailVerificationResponse,
+        {
+          input: {
+            loginEmail: string;
+          };
+        }
+      >(RESEND_LOGIN_EMAIL_VERIFICATION_MUTATION, {
+        input: {
+          loginEmail: input.loginEmail.trim(),
+        },
+      });
+      const result = response.resendLoginEmailVerification;
+
+      if (result.success) {
+        return {
+          status: 'success',
+          message: result.message ?? null,
+        };
+      }
+
+      return {
+        status: 'error',
+        message: result.message || '暂时无法发送验证邮件，请稍后再试。',
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法发送验证邮件，请稍后再试。'),
+      };
+    }
   },
   async loginUpstreamSession(input) {
     return loginUpstreamSession(input);
