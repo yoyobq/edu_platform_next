@@ -8,6 +8,8 @@ import type {
   StaffInviteConsumptionResult,
   StaffInviteIdentity,
   StaffInviteIntentResult,
+  StudentRegistrationAccountVerificationInput,
+  StudentRegistrationAccountVerificationResult,
   StudentRegistrationConsumptionResult,
   StudentRegistrationIdentityVerificationInput,
   StudentRegistrationIdentityVerificationResult,
@@ -39,6 +41,9 @@ export type PublicAuthApiPort = {
   verifyStudentRegistrationIdentity: (
     input: StudentRegistrationIdentityVerificationInput,
   ) => Promise<StudentRegistrationIdentityVerificationResult>;
+  verifyStudentRegistrationAccount: (
+    input: StudentRegistrationAccountVerificationInput,
+  ) => Promise<StudentRegistrationAccountVerificationResult>;
   consumeStudentRegistrationLink: (
     input: StudentRegistrationInput,
   ) => Promise<StudentRegistrationConsumptionResult>;

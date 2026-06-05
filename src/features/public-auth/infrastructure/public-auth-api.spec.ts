@@ -220,6 +220,69 @@ describe('public auth api student registration', () => {
     });
   });
 
+  it('verifies student registration account fields before final consume', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      verifyStudentRegistrationAccount: {
+        success: true,
+        canProceed: true,
+        reason: 'AVAILABLE',
+        message: null,
+      },
+    });
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationAccount({
+        token: ' token-001 ',
+        loginName: ' stu001 ',
+        loginPassword: 'abc12345!',
+        nickname: ' 小张 ',
+      }),
+    ).resolves.toEqual({
+      canProceed: true,
+      message: null,
+      status: 'success',
+    });
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+
+    expect(query).toContain('VerifyStudentRegistrationAccount');
+    expect(query).toContain('verifyStudentRegistrationAccount');
+    expect(variables).toEqual({
+      input: {
+        token: 'token-001',
+        loginName: 'stu001',
+        loginPassword: 'abc12345!',
+        nickname: '小张',
+      },
+    });
+  });
+
+  it('maps student registration account login name conflicts with stable copy', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      verifyStudentRegistrationAccount: {
+        success: false,
+        canProceed: false,
+        reason: 'LOGIN_NAME_TAKEN',
+        message: 'login name already exists',
+      },
+    });
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationAccount({
+        token: 'token-001',
+        loginName: 'stu001',
+        loginPassword: 'abc12345!',
+        nickname: '小张',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'LOGIN_NAME_TAKEN',
+      message: '这个登录名已被使用，请换一个。',
+      status: 'failure',
+    });
+  });
+
   it('maps student registration identity mismatch as a form failure result', async () => {
     const error = new Error('身份信息不匹配');
 

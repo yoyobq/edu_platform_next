@@ -31,6 +31,10 @@
 - 从身份核对进入账号信息前，调用 `verifyStudentRegistrationIdentity`
 - `verifyStudentRegistrationIdentity` 只做只读校验，不创建账号、不绑定学生档案、不签发邮箱验证
 - 身份预校验失败统一展示“身份信息不匹配，请核对后重试。”
+- 从账号信息进入登录邮箱前，调用 `verifyStudentRegistrationAccount`
+- `verifyStudentRegistrationAccount` 只做只读校验，不创建账号、不绑定学生档案、不签发邮箱验证
+- `LOGIN_NAME_TAKEN` 统一展示“这个登录名已被使用，请换一个。”
+- 账号预校验不校验 `loginEmail`；登录邮箱仍由最终注册提交校验
 - `loginEmail` 是 `account.loginEmail`，不是学生资料邮箱
 
 提交 `consumeStudentRegistrationLink` 成功后：

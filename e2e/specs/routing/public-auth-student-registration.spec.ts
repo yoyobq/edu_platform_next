@@ -27,6 +27,7 @@ async function fulfillGraphQL(route: Route, body: unknown) {
 }
 
 test('学生注册链接注册成功后应进入待验证登录邮箱状态并支持泛化重发', async ({ page }) => {
+  let accountInput: Record<string, unknown> | null = null;
   let consumeInput: Record<string, unknown> | null = null;
   let identityInput: Record<string, unknown> | null = null;
   let resendInput: Record<string, unknown> | null = null;
@@ -63,6 +64,21 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
       await fulfillGraphQL(route, {
         data: {
           verifyStudentRegistrationIdentity: {
+            success: true,
+            canProceed: true,
+            reason: 'AVAILABLE',
+            message: null,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationAccount')) {
+      accountInput = payload?.variables?.input ?? null;
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationAccount: {
             success: true,
             canProceed: true,
             reason: 'AVAILABLE',
@@ -138,6 +154,12 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
     studentId: 'S001',
     name: '张三',
     idCardLastSix: 'A12345',
+  });
+  expect(accountInput).toEqual({
+    token: 'student-register-success-001',
+    loginName: 'stu001',
+    loginPassword: 'Abc12345!',
+    nickname: '张三',
   });
   expect(consumeInput).toEqual({
     token: 'student-register-success-001',

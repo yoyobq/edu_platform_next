@@ -143,7 +143,9 @@ function StudentRegistrationForm({
   info,
   onCurrentStepChange,
   onSubmit,
+  onVerifyAccount,
   onVerifyIdentity,
+  verifyingAccount,
   verifyingIdentity,
   submitError,
   submitting,
@@ -152,9 +154,13 @@ function StudentRegistrationForm({
   info: StudentRegistrationLinkInfo;
   onCurrentStepChange: (step: number) => void;
   onSubmit: (values: StudentRegistrationFormValues) => Promise<void>;
+  onVerifyAccount: (
+    values: Pick<StudentRegistrationFormValues, 'loginName' | 'loginPassword' | 'nickname'>,
+  ) => Promise<boolean>;
   onVerifyIdentity: (
     values: Pick<StudentRegistrationFormValues, 'idCardLastSix' | 'name' | 'studentId'>,
   ) => Promise<boolean>;
+  verifyingAccount: boolean;
   verifyingIdentity: boolean;
   submitError: string | null;
   submitting: boolean;
@@ -182,6 +188,19 @@ function StudentRegistrationForm({
           idCardLastSix: values.idCardLastSix,
           name: values.name,
           studentId: values.studentId,
+        });
+
+        if (!canProceed) {
+          return;
+        }
+      }
+
+      if (currentStep === 1) {
+        const values = form.getFieldsValue();
+        const canProceed = await onVerifyAccount({
+          loginName: values.loginName,
+          loginPassword: values.loginPassword,
+          nickname: values.nickname,
         });
 
         if (!canProceed) {
@@ -383,7 +402,9 @@ function StudentRegistrationForm({
           ) : (
             <Button
               type="primary"
-              loading={currentStep === 0 && verifyingIdentity}
+              loading={
+                (currentStep === 0 && verifyingIdentity) || (currentStep === 1 && verifyingAccount)
+              }
               onClick={goToNextStep}
             >
               下一步
@@ -549,6 +570,7 @@ export function StudentRegistrationLinkPanel({
   } | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [verifyingAccount, setVerifyingAccount] = useState(false);
   const [verifyingIdentity, setVerifyingIdentity] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<Extract<
@@ -575,6 +597,7 @@ export function StudentRegistrationLinkPanel({
       setLinkFailure(null);
       setPageError(null);
       setSubmitError(null);
+      setVerifyingAccount(false);
       setVerifyingIdentity(false);
       setSuccessResult(null);
 
@@ -663,9 +686,32 @@ export function StudentRegistrationLinkPanel({
         currentStep={currentStep}
         info={linkInfo}
         onCurrentStepChange={setCurrentStep}
+        verifyingAccount={verifyingAccount}
         verifyingIdentity={verifyingIdentity}
         submitError={submitError}
         submitting={submitting}
+        onVerifyAccount={async (values) => {
+          setVerifyingAccount(true);
+          setSubmitError(null);
+
+          try {
+            const result = await publicAuthApi.verifyStudentRegistrationAccount({
+              loginName: values.loginName,
+              loginPassword: values.loginPassword,
+              nickname: values.nickname,
+              token,
+            });
+
+            if (result.status === 'success') {
+              return true;
+            }
+
+            setSubmitError(result.message);
+            return false;
+          } finally {
+            setVerifyingAccount(false);
+          }
+        }}
         onVerifyIdentity={async (values) => {
           setVerifyingIdentity(true);
           setSubmitError(null);

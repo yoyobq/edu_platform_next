@@ -183,6 +183,35 @@ export type StudentRegistrationIdentityVerificationResult =
     }
   | { message: string; status: 'error' };
 
+export type StudentRegistrationAccountVerificationInput = {
+  loginName?: string;
+  loginPassword: string;
+  nickname?: string;
+  token: string;
+};
+
+export type StudentRegistrationAccountVerificationReason =
+  | 'AVAILABLE'
+  | 'CLASS_NOT_FOUND'
+  | 'LINK_EXPIRED'
+  | 'LINK_NOT_ACTIVE'
+  | 'LINK_NOT_FOUND'
+  | 'LINK_REVOKED'
+  | 'LOGIN_NAME_INVALID'
+  | 'LOGIN_NAME_TAKEN'
+  | 'NICKNAME_INVALID'
+  | 'PASSWORD_INVALID';
+
+export type StudentRegistrationAccountVerificationResult =
+  | { canProceed: true; message: string | null; status: 'success' }
+  | {
+      canProceed: false;
+      message: string;
+      reason: StudentRegistrationAccountVerificationReason;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
+
 export type StudentRegistrationConsumptionResult =
   | {
       accountId: number | null;

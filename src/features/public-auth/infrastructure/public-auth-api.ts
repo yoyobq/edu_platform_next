@@ -30,6 +30,8 @@ import type {
   StaffInviteIdentity,
   StaffInviteIntentResult,
   StaffInviteStatusReason,
+  StudentRegistrationAccountVerificationReason,
+  StudentRegistrationAccountVerificationResult,
   StudentRegistrationConsumptionResult,
   StudentRegistrationIdentityVerificationReason,
   StudentRegistrationIdentityVerificationResult,
@@ -141,6 +143,15 @@ type VerifyStudentRegistrationIdentityResponse = {
     canProceed?: boolean | null;
     message?: string | null;
     reason?: StudentRegistrationIdentityVerificationReason | null;
+    success: boolean;
+  };
+};
+
+type VerifyStudentRegistrationAccountResponse = {
+  verifyStudentRegistrationAccount: {
+    canProceed?: boolean | null;
+    message?: string | null;
+    reason?: StudentRegistrationAccountVerificationReason | null;
     success: boolean;
   };
 };
@@ -303,6 +314,17 @@ const CONSUME_STUDENT_REGISTRATION_LINK_MUTATION = `
 const VERIFY_STUDENT_REGISTRATION_IDENTITY_MUTATION = `
   mutation VerifyStudentRegistrationIdentity($input: VerifyStudentRegistrationIdentityInput!) {
     verifyStudentRegistrationIdentity(input: $input) {
+      success
+      canProceed
+      reason
+      message
+    }
+  }
+`;
+
+const VERIFY_STUDENT_REGISTRATION_ACCOUNT_MUTATION = `
+  mutation VerifyStudentRegistrationAccount($input: VerifyStudentRegistrationAccountInput!) {
+    verifyStudentRegistrationAccount(input: $input) {
       success
       canProceed
       reason
@@ -676,6 +698,37 @@ function resolveStudentRegistrationIdentityVerificationFailureMessage(
   }
 
   return resolveStudentRegistrationLinkFailureMessage(reason, fallback);
+}
+
+function resolveStudentRegistrationAccountVerificationFailureMessage(
+  reason: StudentRegistrationAccountVerificationReason,
+  fallback?: string | null,
+): string {
+  if (reason === 'LOGIN_NAME_TAKEN') {
+    return '这个登录名已被使用，请换一个。';
+  }
+
+  if (fallback) {
+    return fallback;
+  }
+
+  if (reason === 'LOGIN_NAME_INVALID') {
+    return '登录名格式不正确，请修改后重试。';
+  }
+
+  if (reason === 'PASSWORD_INVALID') {
+    return '登录密码不符合要求，请修改后重试。';
+  }
+
+  if (reason === 'NICKNAME_INVALID') {
+    return '昵称不符合要求，请修改后重试。';
+  }
+
+  if (reason === 'AVAILABLE') {
+    return '暂时无法校验账号信息，请稍后再试。';
+  }
+
+  return resolveStudentRegistrationLinkFailureMessage(reason);
 }
 
 function resolveLoginEmailVerificationFailureMessage(
@@ -1109,6 +1162,61 @@ export const publicAuthApi: PublicAuthApiPort = {
       return {
         status: 'error',
         message: resolvePublicAuthErrorMessage(error, '暂时无法核对身份信息。'),
+      };
+    }
+  },
+  async verifyStudentRegistrationAccount(
+    input,
+  ): Promise<StudentRegistrationAccountVerificationResult> {
+    try {
+      const response = await requestGraphQL<
+        VerifyStudentRegistrationAccountResponse,
+        {
+          input: {
+            loginName?: string;
+            loginPassword: string;
+            nickname?: string;
+            token: string;
+          };
+        }
+      >(VERIFY_STUDENT_REGISTRATION_ACCOUNT_MUTATION, {
+        input: {
+          loginName: normalizeOptionalText(input.loginName),
+          loginPassword: input.loginPassword,
+          nickname: normalizeOptionalText(input.nickname),
+          token: input.token.trim(),
+        },
+      });
+      const result = response.verifyStudentRegistrationAccount;
+
+      if (result.success && result.canProceed === true) {
+        return {
+          canProceed: true,
+          message: result.message ?? null,
+          status: 'success',
+        };
+      }
+
+      if (!result.reason) {
+        return {
+          status: 'error',
+          message: result.message || '暂时无法校验账号信息。',
+        };
+      }
+
+      return {
+        canProceed: false,
+        message: resolveStudentRegistrationAccountVerificationFailureMessage(
+          result.reason,
+          result.message,
+        ),
+        reason: result.reason,
+        status: 'failure',
+      };
+    } catch (error) {
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法校验账号信息。'),
       };
     }
   },
