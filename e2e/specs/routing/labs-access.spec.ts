@@ -588,9 +588,9 @@ test('labs invite issuer 可签发学生注册链接并展示后端返回链接'
           data: {
             issueStudentRegistrationLink: {
               success: true,
-              link: 'https://frontend.example/student-register/student-register-token-001',
+              link: 'https://frontend.example/invite/student-registration/student-register-token-001',
               token: 'student-register-token-001',
-              campaignId: 7001,
+              recordId: 7001,
               expiresAt: '2026-06-30T03:00:00.000Z',
               classCode: '7020002',
               studentId: 'SRL000002',
@@ -616,7 +616,9 @@ test('labs invite issuer 可签发学生注册链接并展示后端返回链接'
   await expect(page.getByText('学生注册链接已签发')).toBeVisible();
   await expect(page.getByText('student-register-token-001', { exact: true })).toBeVisible();
   await expect(
-    page.getByText('https://frontend.example/student-register/student-register-token-001'),
+    page.getByText(
+      'https://frontend.example/invite/student-registration/student-register-token-001',
+    ),
   ).toBeVisible();
   expect(requestInput).toEqual({
     classCode: '7020002',

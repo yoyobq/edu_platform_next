@@ -9,6 +9,8 @@ import type {
   StaffInviteIdentity,
   StaffInviteIntentResult,
   StudentRegistrationConsumptionResult,
+  StudentRegistrationIdentityVerificationInput,
+  StudentRegistrationIdentityVerificationResult,
   StudentRegistrationInput,
   StudentRegistrationLinkInfoResult,
   VerificationIntentResult,
@@ -28,12 +30,15 @@ export type PublicAuthApiPort = {
   }) => Promise<VerificationIntentResult>;
   getStaffInviteInfo: (input: { verificationCode: string }) => Promise<StaffInviteIntentResult>;
   getPublicInviteInfo: (input: {
-    inviteType: 'staff' | 'student';
+    inviteType: 'staff';
     verificationCode: string;
   }) => Promise<PublicInviteIntentResult>;
   getStudentRegistrationLinkInfo: (input: {
     token: string;
   }) => Promise<StudentRegistrationLinkInfoResult>;
+  verifyStudentRegistrationIdentity: (
+    input: StudentRegistrationIdentityVerificationInput,
+  ) => Promise<StudentRegistrationIdentityVerificationResult>;
   consumeStudentRegistrationLink: (
     input: StudentRegistrationInput,
   ) => Promise<StudentRegistrationConsumptionResult>;

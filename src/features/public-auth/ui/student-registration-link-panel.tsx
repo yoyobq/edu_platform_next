@@ -1,14 +1,8 @@
 // src/features/public-auth/ui/student-registration-link-panel.tsx
 
 import { useEffect, useState } from 'react';
-import {
-  CheckCircleOutlined,
-  MailOutlined,
-  ReloadOutlined,
-  RightOutlined,
-  TeamOutlined,
-} from '@ant-design/icons';
-import { Alert, Button, Flex, Form, Input, Skeleton, Typography } from 'antd';
+import { MailOutlined, ReloadOutlined, RightOutlined, TeamOutlined } from '@ant-design/icons';
+import { Alert, Button, Flex, Form, Input, Skeleton, Steps, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
 import {
@@ -25,8 +19,15 @@ import type {
 import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
+const FALLBACK_STUDENT_REGISTRATION_ID_EXAMPLE = '3130102XX';
 
 type StudentRegistrationPhase = 'loading' | 'ready' | 'failure' | 'error' | 'pending-email';
+
+export type StudentRegistrationPanelContext = {
+  currentStep: number;
+  info: StudentRegistrationLinkInfo | null;
+  phase: StudentRegistrationPhase;
+};
 
 type StudentRegistrationFormValues = {
   confirmPassword: string;
@@ -39,22 +40,29 @@ type StudentRegistrationFormValues = {
   studentId: string;
 };
 
-function formatDateTime(value: string) {
-  const date = new Date(value);
+type StudentRegistrationStep = {
+  description: string;
+  fields: (keyof StudentRegistrationFormValues)[];
+  title: string;
+};
 
-  if (Number.isNaN(date.getTime())) {
-    return value;
-  }
-
-  return date.toLocaleString('zh-CN', {
-    hour12: false,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
+const studentRegistrationSteps: StudentRegistrationStep[] = [
+  {
+    title: '身份核对',
+    description: '确认受邀学生',
+    fields: ['studentId', 'name', 'idCardLastSix'],
+  },
+  {
+    title: '账号信息',
+    description: '设置登录凭证',
+    fields: ['nickname', 'loginName', 'loginPassword', 'confirmPassword'],
+  },
+  {
+    title: '登录邮箱',
+    description: '进入邮箱验证',
+    fields: ['loginEmail'],
+  },
+];
 
 function resolveLinkFailureTitle(reason: StudentRegistrationLinkReason) {
   if (reason === 'LINK_EXPIRED') {
@@ -73,62 +81,89 @@ function resolveLinkFailureTitle(reason: StudentRegistrationLinkReason) {
 }
 
 function StudentRegistrationSummaryCard({ info }: { info: StudentRegistrationLinkInfo }) {
+  const classLabel = info.className || info.classCode;
+
   return (
     <div className="rounded-card p-4" style={{ background: 'var(--ant-color-fill-quaternary)' }}>
-      <Flex vertical gap={12}>
-        <Flex gap={8} align="center">
-          <TeamOutlined
-            style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
-          />
-          <Typography.Text strong>{info.className || info.classCode}</Typography.Text>
-        </Flex>
-        <Flex gap={24} wrap style={{ paddingLeft: 24 }}>
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
-              班级代码
-            </Typography.Text>
-            <div style={{ marginTop: 2 }}>
-              <Typography.Text>{info.classCode}</Typography.Text>
-            </div>
-          </div>
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
-              链接类型
-            </Typography.Text>
-            <div style={{ marginTop: 2 }}>
-              <Typography.Text>
-                {info.scope === 'STUDENT' ? '指定学生' : '班级共享'}
-              </Typography.Text>
-            </div>
-          </div>
-          <div>
-            <Typography.Text type="secondary" style={{ fontSize: 'var(--ant-font-size-sm)' }}>
-              过期时间
-            </Typography.Text>
-            <div style={{ marginTop: 2 }}>
-              <Typography.Text>{formatDateTime(info.expiresAt)}</Typography.Text>
-            </div>
-          </div>
-        </Flex>
+      <Flex gap={8} align="center">
+        <TeamOutlined
+          style={{ color: 'var(--ant-color-primary)', fontSize: 'var(--ant-font-size-lg)' }}
+        />
+        <Typography.Text strong>{classLabel}</Typography.Text>
       </Flex>
     </div>
   );
 }
 
+function StudentRegistrationProgress({
+  compact,
+  currentStep,
+}: {
+  compact: boolean;
+  currentStep: number;
+}) {
+  return (
+    <Steps
+      current={currentStep}
+      orientation={compact ? 'vertical' : 'horizontal'}
+      responsive={false}
+      size="small"
+      titlePlacement={compact ? 'horizontal' : 'vertical'}
+      items={studentRegistrationSteps.map((step) => ({
+        content: step.description,
+        title: step.title,
+      }))}
+    />
+  );
+}
+
+function resolveStudentIdExample(info: StudentRegistrationLinkInfo) {
+  const expandedClassMatch = info.className?.match(/(\d{2})大(\d{1,2})/) ?? null;
+
+  if (expandedClassMatch) {
+    const [, enrollmentYear, classNumber] = expandedClassMatch;
+
+    return `3${enrollmentYear}02${classNumber.padStart(2, '0')}XX`;
+  }
+
+  const classDigits = info.className?.match(/\d{4}/)?.[0] ?? null;
+
+  if (!classDigits) {
+    return FALLBACK_STUDENT_REGISTRATION_ID_EXAMPLE;
+  }
+
+  const enrollmentYear = classDigits.slice(0, 2);
+  const classNumber = classDigits.slice(2, 4);
+
+  return `3${enrollmentYear}01${classNumber}XX`;
+}
+
 function StudentRegistrationForm({
+  currentStep,
   info,
+  onCurrentStepChange,
   onSubmit,
+  onVerifyIdentity,
+  verifyingIdentity,
   submitError,
   submitting,
 }: {
+  currentStep: number;
   info: StudentRegistrationLinkInfo;
+  onCurrentStepChange: (step: number) => void;
   onSubmit: (values: StudentRegistrationFormValues) => Promise<void>;
+  onVerifyIdentity: (
+    values: Pick<StudentRegistrationFormValues, 'idCardLastSix' | 'name' | 'studentId'>,
+  ) => Promise<boolean>;
+  verifyingIdentity: boolean;
   submitError: string | null;
   submitting: boolean;
 }) {
   const [form] = Form.useForm<StudentRegistrationFormValues>();
   const [nicknameTouched, setNicknameTouched] = useState(false);
-  const isStudentIdLocked = info.scope === 'STUDENT';
+  const isStudentIdLocked = info.scope === 'STUDENT' && Boolean(info.studentId);
+  const isLastStep = currentStep === studentRegistrationSteps.length - 1;
+  const studentIdExample = resolveStudentIdExample(info);
 
   useEffect(() => {
     form.setFieldsValue({
@@ -137,12 +172,56 @@ function StudentRegistrationForm({
     setNicknameTouched(false);
   }, [form, info.studentId, isStudentIdLocked]);
 
+  async function goToNextStep() {
+    try {
+      await form.validateFields(studentRegistrationSteps[currentStep].fields);
+
+      if (currentStep === 0) {
+        const values = form.getFieldsValue();
+        const canProceed = await onVerifyIdentity({
+          idCardLastSix: values.idCardLastSix,
+          name: values.name,
+          studentId: values.studentId,
+        });
+
+        if (!canProceed) {
+          return;
+        }
+      }
+
+      onCurrentStepChange(Math.min(currentStep + 1, studentRegistrationSteps.length - 1));
+    } catch {
+      // antd Form has already rendered field-level validation feedback.
+    }
+  }
+
+  function goToPreviousStep() {
+    onCurrentStepChange(Math.max(currentStep - 1, 0));
+  }
+
+  function moveToFirstErrorStep(errorFields: { name: (string | number)[] }[]) {
+    const firstErrorField = errorFields[0]?.name[0];
+
+    if (typeof firstErrorField !== 'string') {
+      return;
+    }
+
+    const targetStep = studentRegistrationSteps.findIndex((step) =>
+      step.fields.includes(firstErrorField as keyof StudentRegistrationFormValues),
+    );
+
+    if (targetStep >= 0) {
+      onCurrentStepChange(targetStep);
+    }
+  }
+
   return (
     <Form<StudentRegistrationFormValues>
       form={form}
       layout="vertical"
       requiredMark={false}
       onFinish={onSubmit}
+      onFinishFailed={({ errorFields }) => moveToFirstErrorStep(errorFields)}
       onValuesChange={(changedValues) => {
         if ('nickname' in changedValues) {
           setNicknameTouched(true);
@@ -161,134 +240,156 @@ function StudentRegistrationForm({
         </Form.Item>
       ) : null}
 
-      <Form.Item
-        label="学生编号"
-        name="studentId"
-        rules={[{ required: true, message: '请输入学生编号。', whitespace: true }]}
-        extra={isStudentIdLocked ? '这个链接已指定学生编号，不能修改。' : undefined}
-      >
-        <Input disabled={isStudentIdLocked} placeholder="请输入学生编号" autoComplete="off" />
-      </Form.Item>
+      <div hidden={currentStep !== 0}>
+        <Form.Item
+          label="学号"
+          name="studentId"
+          rules={[{ required: true, message: '请输入学号。', whitespace: true }]}
+          extra={isStudentIdLocked ? '这个链接已指定学号，不能修改。' : `例如：${studentIdExample}`}
+        >
+          <Input disabled={isStudentIdLocked} placeholder="请输入完整学号" autoComplete="off" />
+        </Form.Item>
 
-      <Form.Item
-        label="学生姓名"
-        name="name"
-        rules={[{ required: true, message: '请输入学生姓名。', whitespace: true }]}
-      >
-        <Input placeholder="请输入学生姓名" autoComplete="name" />
-      </Form.Item>
+        <Form.Item
+          label="学生姓名"
+          name="name"
+          rules={[{ required: true, message: '请输入学生姓名。', whitespace: true }]}
+        >
+          <Input placeholder="请输入你的真实姓名" autoComplete="name" />
+        </Form.Item>
 
-      <Form.Item
-        label="证件号后 6 位"
-        name="idCardLastSix"
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请输入证件号后 6 位。' },
-          {
-            validator(_, value: string | undefined) {
-              if (!value || isValidStudentRegistrationIdCardLastSix(value)) {
-                return Promise.resolve();
-              }
+        <Form.Item
+          label="身份证后 6 位"
+          name="idCardLastSix"
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            { required: true, message: '请输入身份证后 6 位。' },
+            {
+              validator(_, value: string | undefined) {
+                if (!value || isValidStudentRegistrationIdCardLastSix(value)) {
+                  return Promise.resolve();
+                }
 
-              return Promise.reject(new Error('证件号后 6 位只能包含数字或字母，且长度必须为 6。'));
+                return Promise.reject(
+                  new Error('身份证后 6 位只能包含数字或字母，且长度必须为 6。'),
+                );
+              },
             },
-          },
-        ]}
-      >
-        <Input placeholder="请输入证件号后 6 位" autoComplete="off" maxLength={6} />
-      </Form.Item>
+          ]}
+        >
+          <Input placeholder="请输入身份证后 6 位" autoComplete="off" maxLength={6} />
+        </Form.Item>
+      </div>
 
-      <Form.Item
-        label="登录邮箱"
-        name="loginEmail"
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请输入登录邮箱。' },
-          { type: 'email', message: '请输入有效邮箱地址。' },
-        ]}
-      >
-        <Input placeholder="请输入登录邮箱" autoComplete="email" />
-      </Form.Item>
+      <div hidden={currentStep !== 1}>
+        <Form.Item label="昵称（可选）" name="nickname" extra="默认使用学生姓名，也可以自定义。">
+          <Input placeholder="可选填写昵称" autoComplete="nickname" />
+        </Form.Item>
 
-      <Form.Item label="昵称（可选）" name="nickname" extra="默认使用学生姓名，也可以自定义。">
-        <Input placeholder="可选填写昵称" autoComplete="nickname" />
-      </Form.Item>
+        <Form.Item
+          label="登录名（可选）"
+          name="loginName"
+          validateTrigger={['onChange', 'onBlur']}
+          extra="留空时可直接使用登录邮箱登录。"
+          rules={[
+            {
+              validator(_, value: string | undefined) {
+                if (isValidStudentRegistrationLoginName(value)) {
+                  return Promise.resolve();
+                }
 
-      <Form.Item
-        label="登录名（可选）"
-        name="loginName"
-        validateTrigger={['onChange', 'onBlur']}
-        extra="留空时可直接使用登录邮箱登录。"
-        rules={[
-          {
-            validator(_, value: string | undefined) {
-              if (isValidStudentRegistrationLoginName(value)) {
-                return Promise.resolve();
-              }
-
-              return Promise.reject(
-                new Error('登录名需为 4-30 位，只能包含字母、数字、下划线或短横线。'),
-              );
+                return Promise.reject(
+                  new Error('登录名需为 4-30 位，只能包含字母、数字、下划线或短横线。'),
+                );
+              },
             },
-          },
-        ]}
-      >
-        <Input placeholder="可选填写登录名" autoComplete="username" />
-      </Form.Item>
+          ]}
+        >
+          <Input placeholder="可选填写登录名" autoComplete="username" />
+        </Form.Item>
 
-      <Form.Item
-        label="登录密码"
-        name="loginPassword"
-        validateFirst
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请输入登录密码。' },
-          {
-            validator(_, value: string | undefined) {
-              if (!value) {
-                return Promise.resolve();
-              }
+        <Form.Item
+          label="登录密码"
+          name="loginPassword"
+          validateFirst
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            { required: true, message: '请输入登录密码。' },
+            {
+              validator(_, value: string | undefined) {
+                if (!value) {
+                  return Promise.resolve();
+                }
 
-              const { hasMinLength, hasRequiredCharacterMix } =
-                getStudentRegistrationPasswordRuleState(value);
+                const { hasMinLength, hasRequiredCharacterMix } =
+                  getStudentRegistrationPasswordRuleState(value);
 
-              if (hasMinLength && hasRequiredCharacterMix) {
-                return Promise.resolve();
-              }
+                if (hasMinLength && hasRequiredCharacterMix) {
+                  return Promise.resolve();
+                }
 
-              return Promise.reject(new Error(studentRegistrationPasswordValidationMessage));
+                return Promise.reject(new Error(studentRegistrationPasswordValidationMessage));
+              },
             },
-          },
-        ]}
-      >
-        <Input.Password placeholder="请输入登录密码" autoComplete="new-password" />
-      </Form.Item>
+          ]}
+        >
+          <Input.Password placeholder="请输入登录密码" autoComplete="new-password" />
+        </Form.Item>
 
-      <Form.Item
-        label="确认登录密码"
-        name="confirmPassword"
-        dependencies={['loginPassword']}
-        validateTrigger={['onChange', 'onBlur']}
-        rules={[
-          { required: true, message: '请再次输入登录密码。' },
-          ({ getFieldValue }) => ({
-            validator(_, value) {
-              if (!value || getFieldValue('loginPassword') === value) {
-                return Promise.resolve();
-              }
+        <Form.Item
+          label="确认登录密码"
+          name="confirmPassword"
+          dependencies={['loginPassword']}
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            { required: true, message: '请再次输入登录密码。' },
+            ({ getFieldValue }) => ({
+              validator(_, value) {
+                if (!value || getFieldValue('loginPassword') === value) {
+                  return Promise.resolve();
+                }
 
-              return Promise.reject(new Error('两次输入的密码不一致。'));
-            },
-          }),
-        ]}
-      >
-        <Input.Password placeholder="请再次输入登录密码" autoComplete="new-password" />
-      </Form.Item>
+                return Promise.reject(new Error('两次输入的密码不一致。'));
+              },
+            }),
+          ]}
+        >
+          <Input.Password placeholder="请再次输入登录密码" autoComplete="new-password" />
+        </Form.Item>
+      </div>
+
+      <div hidden={currentStep !== 2}>
+        <Form.Item
+          label="登录邮箱"
+          name="loginEmail"
+          validateTrigger={['onChange', 'onBlur']}
+          extra="提交后会向该邮箱发送验证邮件。"
+          rules={[
+            { required: true, message: '请输入登录邮箱。' },
+            { type: 'email', message: '请输入有效邮箱地址。' },
+          ]}
+        >
+          <Input placeholder="请输入登录邮箱" autoComplete="email" />
+        </Form.Item>
+      </div>
 
       <Form.Item style={{ marginBottom: 0 }}>
-        <Button type="primary" htmlType="submit" block loading={submitting}>
-          提交注册
-        </Button>
+        <Flex gap={8} justify={currentStep > 0 ? 'space-between' : 'flex-end'} wrap>
+          {currentStep > 0 ? <Button onClick={goToPreviousStep}>上一步</Button> : null}
+          {isLastStep ? (
+            <Button type="primary" htmlType="submit" loading={submitting}>
+              提交注册
+            </Button>
+          ) : (
+            <Button
+              type="primary"
+              loading={currentStep === 0 && verifyingIdentity}
+              onClick={goToNextStep}
+            >
+              下一步
+            </Button>
+          )}
+        </Flex>
       </Form.Item>
     </Form>
   );
@@ -429,8 +530,17 @@ function PendingEmailState({
   );
 }
 
-export function StudentRegistrationLinkPanel({ token }: { token: string }) {
+export function StudentRegistrationLinkPanel({
+  compact = false,
+  onContextChange,
+  token,
+}: {
+  compact?: boolean;
+  onContextChange?: (context: StudentRegistrationPanelContext) => void;
+  token: string;
+}) {
   const [phase, setPhase] = useState<StudentRegistrationPhase>('loading');
+  const [currentStep, setCurrentStep] = useState(0);
   const [linkInfo, setLinkInfo] = useState<StudentRegistrationLinkInfo | null>(null);
   const [linkFailure, setLinkFailure] = useState<{
     info: StudentRegistrationLinkInfo | null;
@@ -439,6 +549,7 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
   } | null>(null);
   const [pageError, setPageError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [verifyingIdentity, setVerifyingIdentity] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<Extract<
     StudentRegistrationConsumptionResult,
@@ -447,14 +558,24 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
+    onContextChange?.({
+      currentStep,
+      info: linkInfo,
+      phase,
+    });
+  }, [currentStep, linkInfo, onContextChange, phase]);
+
+  useEffect(() => {
     let isActive = true;
 
     async function runWorkflow() {
       setPhase('loading');
+      setCurrentStep(0);
       setLinkInfo(null);
       setLinkFailure(null);
       setPageError(null);
       setSubmitError(null);
+      setVerifyingIdentity(false);
       setSuccessResult(null);
 
       const result = await publicAuthApi.getStudentRegistrationLinkInfo({
@@ -536,18 +657,37 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
   }
 
   return (
-    <Flex vertical gap={16}>
-      <StudentRegistrationSummaryCard info={linkInfo} />
-      <Alert
-        type="info"
-        showIcon
-        title="注册后需要验证登录邮箱"
-        description="提交成功后，系统会向登录邮箱发送验证邮件。邮箱验证完成前，账号不能登录。"
-      />
+    <Flex vertical gap={compact ? 20 : 28}>
+      <StudentRegistrationProgress compact={compact} currentStep={currentStep} />
       <StudentRegistrationForm
+        currentStep={currentStep}
         info={linkInfo}
+        onCurrentStepChange={setCurrentStep}
+        verifyingIdentity={verifyingIdentity}
         submitError={submitError}
         submitting={submitting}
+        onVerifyIdentity={async (values) => {
+          setVerifyingIdentity(true);
+          setSubmitError(null);
+
+          try {
+            const result = await publicAuthApi.verifyStudentRegistrationIdentity({
+              idCardLastSix: values.idCardLastSix,
+              name: values.name,
+              studentId: values.studentId,
+              token,
+            });
+
+            if (result.status === 'success') {
+              return true;
+            }
+
+            setSubmitError(result.message);
+            return false;
+          } finally {
+            setVerifyingIdentity(false);
+          }
+        }}
         onSubmit={async (values) => {
           setSubmitting(true);
           setSubmitError(null);
@@ -576,9 +716,6 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
           }
         }}
       />
-      <Typography.Text type="secondary">
-        <CheckCircleOutlined aria-hidden="true" /> 注册成功后不会自动登录。
-      </Typography.Text>
     </Flex>
   );
 }

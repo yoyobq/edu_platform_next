@@ -98,7 +98,6 @@ const PUBLIC_PATH_PREFIXES = [
   '/login',
   '/magic-link/',
   '/reset-password',
-  '/student-register/',
   '/welcome-back/reset-password',
   '/verify/',
 ];
@@ -906,13 +905,13 @@ const router = createBrowserRouter([
         Component: ResetPasswordIntentPage,
       },
       {
+        path: '/invite/student-registration/:token',
+        Component: StudentRegistrationPage,
+      },
+      {
         path: '/invite/:inviteType/:verificationCode',
         loader: inviteIntentLoader,
         Component: InviteIntentPage,
-      },
-      {
-        path: '/student-register/:token',
-        Component: StudentRegistrationPage,
       },
       {
         path: '/verify/account-email/:token',

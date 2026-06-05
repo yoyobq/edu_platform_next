@@ -28,6 +28,7 @@ async function fulfillGraphQL(route: Route, body: unknown) {
 
 test('学生注册链接注册成功后应进入待验证登录邮箱状态并支持泛化重发', async ({ page }) => {
   let consumeInput: Record<string, unknown> | null = null;
+  let identityInput: Record<string, unknown> | null = null;
   let resendInput: Record<string, unknown> | null = null;
 
   await mockApiHealth(page);
@@ -51,6 +52,21 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
               studentId: null,
               expiresAt: '2026-06-30T12:00:00.000Z',
             },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationIdentity')) {
+      identityInput = payload?.variables?.input ?? null;
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationIdentity: {
+            success: true,
+            canProceed: true,
+            reason: 'AVAILABLE',
+            message: null,
           },
         },
       });
@@ -93,15 +109,23 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
 
   await page.goto(routes.studentRegister('student-register-success-001'));
 
-  await expect(page.getByRole('heading', { name: '学生注册' })).toBeVisible();
-  await expect(page.getByText('信息1301班')).toBeVisible();
-  await page.getByLabel('学生编号').fill('S001');
+  await expect(page.getByRole('heading', { name: '信息1301班 学生注册' })).toBeVisible();
+  await expect(page.getByText('班级代码')).toHaveCount(0);
+  await expect(page.getByText('适用范围')).toHaveCount(0);
+  await expect(page.getByText('过期时间')).toHaveCount(0);
+  await expect(page.getByText('1031301')).toHaveCount(0);
+  await expect(page.getByPlaceholder('请输入完整学号')).toBeVisible();
+  await expect(page.getByText('例如：3130101XX')).toBeVisible();
+  await page.getByLabel('学号').fill('S001');
   await page.getByLabel('学生姓名').fill('张三');
-  await page.getByLabel('证件号后 6 位').fill('A12345');
-  await page.getByLabel('登录邮箱').fill('student@example.com');
+  await page.getByLabel('身份证后 6 位').fill('A12345');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByLabel('昵称（可选）')).toHaveValue('张三');
   await page.getByLabel('登录名（可选）').fill('stu001');
   await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Abc12345!');
   await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Abc12345!');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByLabel('登录邮箱').fill('student@example.com');
   await page.getByRole('button', { name: '提交注册' }).click();
 
   await expect(page.getByRole('alert').filter({ hasText: '账号已创建' })).toBeVisible();
@@ -109,6 +133,12 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
   await page.getByRole('button', { name: '重新发送验证邮件' }).click();
   await expect(page.getByRole('alert').filter({ hasText: '如果账户需要验证' })).toBeVisible();
 
+  expect(identityInput).toEqual({
+    token: 'student-register-success-001',
+    studentId: 'S001',
+    name: '张三',
+    idCardLastSix: 'A12345',
+  });
   expect(consumeInput).toEqual({
     token: 'student-register-success-001',
     studentId: 'S001',
@@ -124,7 +154,7 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
   });
 });
 
-test('指定学生注册链接应锁定学生编号', async ({ page }) => {
+test('指定学生注册链接应锁定学号输入', async ({ page }) => {
   await mockApiHealth(page);
   await page.route('**/graphql', async (route) => {
     const payload = getGraphQLPayload(route);
@@ -157,8 +187,9 @@ test('指定学生注册链接应锁定学生编号', async ({ page }) => {
 
   await page.goto(routes.studentRegister('student-register-locked-001'));
 
-  await expect(page.getByLabel('学生编号')).toHaveValue('S001');
-  await expect(page.getByLabel('学生编号')).toBeDisabled();
+  await expect(page.getByLabel('学号')).toHaveValue('S001');
+  await expect(page.getByLabel('学号')).toBeDisabled();
+  await expect(page.getByLabel('学生姓名')).toBeVisible();
 });
 
 test('学生注册链接不可用时不展示注册表单', async ({ page }) => {
@@ -187,7 +218,7 @@ test('学生注册链接不可用时不展示注册表单', async ({ page }) => 
   await page.goto(routes.studentRegister('missing-register-link'));
 
   await expect(page.getByRole('alert')).toContainText('注册链接不可用');
-  await expect(page.getByLabel('学生编号')).toHaveCount(0);
+  await expect(page.getByLabel('学号')).toHaveCount(0);
 });
 
 test('登录邮箱验证成功后应跳转登录页并预填登录邮箱', async ({ page }) => {

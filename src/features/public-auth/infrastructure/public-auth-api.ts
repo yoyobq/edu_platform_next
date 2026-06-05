@@ -31,6 +31,8 @@ import type {
   StaffInviteIntentResult,
   StaffInviteStatusReason,
   StudentRegistrationConsumptionResult,
+  StudentRegistrationIdentityVerificationReason,
+  StudentRegistrationIdentityVerificationResult,
   StudentRegistrationLinkInfo,
   StudentRegistrationLinkInfoResult,
   StudentRegistrationLinkReason,
@@ -97,7 +99,7 @@ type PublicInviteInfoResponse = {
       staffId?: string | null;
       statusReason: 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
       title?: string | null;
-      type: 'INVITE_STAFF' | 'INVITE_STUDENT' | 'PASSWORD_RESET' | 'MAGIC_LINK';
+      type: 'INVITE_STAFF' | 'PASSWORD_RESET' | 'MAGIC_LINK';
     } | null;
     message?: string | null;
     reason?: VerificationRecordFailureReason | null;
@@ -130,6 +132,15 @@ type ConsumeStudentRegistrationLinkResponse = {
     emailVerificationSent?: boolean | null;
     loginEmail?: string | null;
     message?: string | null;
+    success: boolean;
+  };
+};
+
+type VerifyStudentRegistrationIdentityResponse = {
+  verifyStudentRegistrationIdentity: {
+    canProceed?: boolean | null;
+    message?: string | null;
+    reason?: StudentRegistrationIdentityVerificationReason | null;
     success: boolean;
   };
 };
@@ -285,6 +296,17 @@ const CONSUME_STUDENT_REGISTRATION_LINK_MUTATION = `
       accountStatus
       emailVerificationRequired
       emailVerificationSent
+    }
+  }
+`;
+
+const VERIFY_STUDENT_REGISTRATION_IDENTITY_MUTATION = `
+  mutation VerifyStudentRegistrationIdentity($input: VerifyStudentRegistrationIdentityInput!) {
+    verifyStudentRegistrationIdentity(input: $input) {
+      success
+      canProceed
+      reason
+      message
     }
   }
 `;
@@ -641,6 +663,21 @@ function resolveStudentRegistrationLinkFailureMessage(
   return '这个学生注册链接暂时不可用，请稍后再试。';
 }
 
+function resolveStudentRegistrationIdentityVerificationFailureMessage(
+  reason: StudentRegistrationIdentityVerificationReason,
+  fallback?: string | null,
+): string {
+  if (reason === 'IDENTITY_MISMATCH') {
+    return '身份信息不匹配，请核对后重试。';
+  }
+
+  if (reason === 'AVAILABLE') {
+    return fallback || '暂时无法确认身份信息，请稍后再试。';
+  }
+
+  return resolveStudentRegistrationLinkFailureMessage(reason, fallback);
+}
+
 function resolveLoginEmailVerificationFailureMessage(
   reason: LoginEmailVerificationReason,
   fallback?: string | null,
@@ -661,7 +698,10 @@ function resolveLoginEmailVerificationFailureMessage(
 }
 
 function isStudentRegistrationIdentityMismatchError(error: unknown): boolean {
-  return hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH');
+  return (
+    hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH') ||
+    hasGraphQLErrorCode(error, 'IDENTITY_MISMATCH')
+  );
 }
 
 async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
@@ -698,10 +738,6 @@ async function findStaffInviteIntent(verificationCode: string): Promise<StaffInv
   return result;
 }
 
-function expectedInviteRecordType(inviteType: PublicInviteType) {
-  return inviteType === 'student' ? 'INVITE_STUDENT' : 'INVITE_STAFF';
-}
-
 async function findPublicInviteIntent(input: {
   inviteType: PublicInviteType;
   verificationCode: string;
@@ -717,7 +753,7 @@ async function findPublicInviteIntent(input: {
     });
     const result = response.publicInviteInfo;
     const info = result.info;
-    const expectedType = expectedInviteRecordType(input.inviteType);
+    const expectedType = 'INVITE_STAFF';
 
     if (info?.type && info.type !== expectedType) {
       return {
@@ -798,7 +834,7 @@ function mapPublicInviteInfo(
     staffId: info.staffId || null,
     statusReason: info.statusReason,
     title: info.title || null,
-    type: info.type === 'INVITE_STUDENT' ? 'INVITE_STUDENT' : 'INVITE_STAFF',
+    type: 'INVITE_STAFF',
   };
 }
 
@@ -1017,8 +1053,77 @@ export const publicAuthApi: PublicAuthApiPort = {
   async getStudentRegistrationLinkInfo(input) {
     return findStudentRegistrationLinkInfo(input.token);
   },
+  async verifyStudentRegistrationIdentity(
+    input,
+  ): Promise<StudentRegistrationIdentityVerificationResult> {
+    try {
+      const response = await requestGraphQL<
+        VerifyStudentRegistrationIdentityResponse,
+        {
+          input: {
+            idCardLastSix: string;
+            name: string;
+            studentId: string;
+            token: string;
+          };
+        }
+      >(VERIFY_STUDENT_REGISTRATION_IDENTITY_MUTATION, {
+        input: {
+          idCardLastSix: input.idCardLastSix.trim(),
+          name: input.name.trim(),
+          studentId: input.studentId.trim(),
+          token: input.token.trim(),
+        },
+      });
+      const result = response.verifyStudentRegistrationIdentity;
+
+      if (result.success && result.canProceed === true) {
+        return {
+          canProceed: true,
+          message: result.message ?? null,
+          status: 'success',
+        };
+      }
+
+      const reason = result.reason ?? 'IDENTITY_MISMATCH';
+
+      return {
+        canProceed: false,
+        message: resolveStudentRegistrationIdentityVerificationFailureMessage(
+          reason,
+          result.message,
+        ),
+        reason,
+        status: 'failure',
+      };
+    } catch (error) {
+      if (isStudentRegistrationIdentityMismatchError(error)) {
+        return {
+          canProceed: false,
+          message: '身份信息不匹配，请核对后重试。',
+          reason: 'IDENTITY_MISMATCH',
+          status: 'failure',
+        };
+      }
+
+      return {
+        status: 'error',
+        message: resolvePublicAuthErrorMessage(error, '暂时无法核对身份信息。'),
+      };
+    }
+  },
   async consumeStudentRegistrationLink(input): Promise<StudentRegistrationConsumptionResult> {
     try {
+      const mutationInput = {
+        idCardLastSix: input.idCardLastSix.trim(),
+        loginEmail: input.loginEmail.trim(),
+        loginName: normalizeOptionalText(input.loginName),
+        loginPassword: input.loginPassword,
+        name: input.name.trim(),
+        nickname: normalizeOptionalText(input.nickname),
+        studentId: input.studentId.trim(),
+        token: input.token.trim(),
+      };
       const response = await requestGraphQL<
         ConsumeStudentRegistrationLinkResponse,
         {
@@ -1034,16 +1139,7 @@ export const publicAuthApi: PublicAuthApiPort = {
           };
         }
       >(CONSUME_STUDENT_REGISTRATION_LINK_MUTATION, {
-        input: {
-          idCardLastSix: input.idCardLastSix.trim(),
-          loginEmail: input.loginEmail.trim(),
-          loginName: normalizeOptionalText(input.loginName),
-          loginPassword: input.loginPassword,
-          name: input.name.trim(),
-          nickname: normalizeOptionalText(input.nickname),
-          studentId: input.studentId.trim(),
-          token: input.token.trim(),
-        },
+        input: mutationInput,
       });
       const result = response.consumeStudentRegistrationLink;
 

@@ -22,6 +22,9 @@ export type {
   StaffInviteInfo,
   StaffInviteIntentResult,
   StudentRegistrationConsumptionResult,
+  StudentRegistrationIdentityVerificationInput,
+  StudentRegistrationIdentityVerificationReason,
+  StudentRegistrationIdentityVerificationResult,
   StudentRegistrationInput,
   StudentRegistrationLinkInfo,
   StudentRegistrationLinkInfoResult,
@@ -35,6 +38,7 @@ export { ResetPasswordForm } from './ui/reset-password-form';
 export type { ResetPasswordIntentPanelCopy } from './ui/reset-password-intent-panel';
 export { ResetPasswordIntentPanel } from './ui/reset-password-intent-panel';
 export { StaffInviteIntentPanel } from './ui/staff-invite-intent-panel';
+export type { StudentRegistrationPanelContext } from './ui/student-registration-link-panel';
 export { StudentRegistrationLinkPanel } from './ui/student-registration-link-panel';
 export { VerifyEmailIntentPanel } from './ui/verify-email-intent-panel';
 

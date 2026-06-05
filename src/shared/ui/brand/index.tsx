@@ -56,9 +56,12 @@ export function BrandLockup({
                     whiteSpace: 'nowrap',
                   }
                 : {
-                    color: 'var(--ant-color-text-secondary)',
-                    fontSize: 'var(--ant-font-size-sm)',
-                    letterSpacing: '0.04em',
+                    color: 'var(--ant-color-text)',
+                    fontSize: 'var(--ant-font-size-heading-4)',
+                    fontWeight: 600,
+                    lineHeight: 1.2,
+                    marginBottom: 0,
+                    whiteSpace: 'nowrap',
                   }
             }
           >

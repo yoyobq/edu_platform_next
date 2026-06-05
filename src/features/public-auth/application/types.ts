@@ -9,8 +9,8 @@ export type PasswordResetPreview = {
 };
 
 export type InviteStatusReason = 'AVAILABLE' | 'CONSUMED' | 'EXPIRED' | 'INVALID';
-export type PublicInviteRecordType = 'INVITE_STAFF' | 'INVITE_STUDENT';
-export type PublicInviteType = 'staff' | 'student';
+export type PublicInviteRecordType = 'INVITE_STAFF';
+export type PublicInviteType = 'staff';
 export type StaffInviteStatusReason = InviteStatusReason;
 
 export type VerificationIntentResult =
@@ -156,6 +156,32 @@ export type StudentRegistrationInput = {
   studentId: string;
   token: string;
 };
+
+export type StudentRegistrationIdentityVerificationInput = {
+  idCardLastSix: string;
+  name: string;
+  studentId: string;
+  token: string;
+};
+
+export type StudentRegistrationIdentityVerificationReason =
+  | 'AVAILABLE'
+  | 'CLASS_NOT_FOUND'
+  | 'IDENTITY_MISMATCH'
+  | 'LINK_EXPIRED'
+  | 'LINK_NOT_ACTIVE'
+  | 'LINK_NOT_FOUND'
+  | 'LINK_REVOKED';
+
+export type StudentRegistrationIdentityVerificationResult =
+  | { canProceed: true; message: string | null; status: 'success' }
+  | {
+      canProceed: false;
+      message: string;
+      reason: StudentRegistrationIdentityVerificationReason;
+      status: 'failure';
+    }
+  | { message: string; status: 'error' };
 
 export type StudentRegistrationConsumptionResult =
   | {

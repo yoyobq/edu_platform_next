@@ -24,7 +24,7 @@
 - `/welcome`
 - `/invite/teacher/:verificationCode`
 - `/invite/leader/:verificationCode`
-- `/student-register/:token`
+- `/invite/student-registration/:token`
 - `/verify/account-email/:token`
 - `/verify/email/:verificationCode`
 - `/reset-password/:verificationCode`

@@ -25,7 +25,6 @@ type InviteIssuerFormValues = {
 
 type InviteIssueResult = {
   accountId: number | null;
-  campaignId: number | null;
   classCode: string | null;
   expiresAt: string | null;
   inviteLink: string | null;
@@ -159,7 +158,6 @@ export function InviteIssuerLabPage() {
 
                   setResult({
                     accountId,
-                    campaignId: null,
                     classCode: null,
                     expiresAt: null,
                     inviteLink: buildAbsoluteLink(origin, resetPath),
@@ -189,12 +187,11 @@ export function InviteIssuerLabPage() {
 
                   setResult({
                     accountId: null,
-                    campaignId: issued.campaignId,
                     classCode: issued.classCode,
                     expiresAt: issued.expiresAt,
                     inviteLink: issued.link,
                     message: '已签发学生注册链接，学生打开后会进入公开注册主线。',
-                    recordId: null,
+                    recordId: issued.recordId,
                     secondaryLink: null,
                     studentId: issued.studentId,
                     token: issued.token,
@@ -212,7 +209,6 @@ export function InviteIssuerLabPage() {
 
                 setResult({
                   accountId: null,
-                  campaignId: null,
                   classCode: null,
                   ...issued,
                   inviteLink: invitePath && origin ? `${origin}${invitePath}` : invitePath,
@@ -354,9 +350,6 @@ export function InviteIssuerLabPage() {
                 <ResultItem label="类型" value={result.type || '未返回'} />
                 {result.accountId ? (
                   <ResultItem label="目标账号 ID" value={String(result.accountId)} />
-                ) : null}
-                {result.campaignId ? (
-                  <ResultItem label="Campaign ID" value={String(result.campaignId)} />
                 ) : null}
                 {result.classCode ? <ResultItem label="班级代码" value={result.classCode} /> : null}
                 {result.studentId ? <ResultItem label="学生编号" value={result.studentId} /> : null}

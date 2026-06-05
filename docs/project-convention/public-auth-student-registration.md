@@ -6,7 +6,7 @@
 
 ## 入口
 
-- 学生注册入口：`/student-register/:token`
+- 学生注册入口：`/invite/student-registration/:token`
 - 初始登录邮箱验证入口：`/verify/account-email/:token`
 - 旧 `/invite/student/:verificationCode` 已下线，路由按 404 处理
 - `/verify/email/:verificationCode` 继续表示“登录邮箱变更确认”，不复用为新账号初始邮箱验证
@@ -17,14 +17,20 @@
 - 只传 `classCode` 时签发班级共享注册链接
 - 传 `classCode + studentId` 时签发指定学生注册链接
 - 签发结果优先展示并复制后端返回的 `link`，前端不自行拼接注册 URL
+- 签发结果 ID 使用后端返回的 `recordId`，不再使用旧 `campaignId`
 
 ## 注册流程
 
 - 页面先查询 `publicStudentRegistrationLinkInfo(token)`
 - 只有 `success=true && info.canProceed=true` 展示注册表单
 - `LINK_NOT_FOUND` 时 `info=null`，页面展示失效态
+- 身份核对步骤填写 `studentId + name + idCardLastSix`
 - `scope=STUDENT` 时锁定 `studentId`，提交后端返回值
-- `scope=CLASS` 时由学生填写 `studentId`
+- `scope=CLASS` 时由学生填写 `studentId`，学号示例从班级名推导并脱敏尾号：
+  `1301 -> 3130101XX`，`13大2 -> 3130202XX`
+- 从身份核对进入账号信息前，调用 `verifyStudentRegistrationIdentity`
+- `verifyStudentRegistrationIdentity` 只做只读校验，不创建账号、不绑定学生档案、不签发邮箱验证
+- 身份预校验失败统一展示“身份信息不匹配，请核对后重试。”
 - `loginEmail` 是 `account.loginEmail`，不是学生资料邮箱
 
 提交 `consumeStudentRegistrationLink` 成功后：

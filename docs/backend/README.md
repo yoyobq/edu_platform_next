@@ -15,6 +15,9 @@
 使用原则：
 
 - 优先查看同机后端工作区；仓库内 `docs/backend/*` 只作为本地 fallback
+- 当前 `docs/backend/schema.graphql` 可能包含旧学生 invite 快照定义；学生注册链路以
+  `issueStudentRegistrationLink` / `publicStudentRegistrationLinkInfo` /
+  `consumeStudentRegistrationLink` 为准
 - 不让前端代码、脚本或 CI 依赖 `/var/www/backend_next` 绝对路径
 - 只有在当前任务确实依赖后端字段、类型、query、mutation、input 或具体业务错误码时，才按需查看相关片段
 - 不建议全文阅读完整 schema

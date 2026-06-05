@@ -15,7 +15,7 @@
 - `/reset-password`
 - `/reset-password/:verificationCode`
 - `/invite/:inviteType/:verificationCode`
-- `/student-register/:token`
+- `/invite/student-registration/:token`
 - `/verify/account-email/:token`
 - `/verify/email/:verificationCode`
 - `/welcome-back/reset-password`
@@ -33,7 +33,7 @@
 当前 public auth intent 入口包括：
 
 - `/invite/:inviteType/:verificationCode`
-- `/student-register/:token`
+- `/invite/student-registration/:token`
 - `/verify/account-email/:token`
 - `/verify/email/:verificationCode`
 - `/reset-password`
@@ -47,7 +47,7 @@
 - layout：`PublicEntryLayout`
 - feature owner：`src/features/public-auth`
 - page owner：
-  - `/invite/*`、`/student-register/*`、`/verify/*`、`/magic-link/*` 继续由 `src/pages/verification-intent` 承接
+  - `/invite/*`、`/verify/*`、`/magic-link/*` 继续由 `src/pages/verification-intent` 承接
   - `/reset-password*`、`/welcome-back/reset-password*` 继续走 `verification-intent` 内的真实 reset password panel
 
 ## 固定边界
@@ -72,7 +72,7 @@
 | `/welcome-back/reset-password/:verificationCode`    | 已落地   | welcome-back 文案场景；path-first verification code                |
 | `/invite/staff/:verificationCode`                   | 已落地   | 真实流程已接通，细节见 `public-auth-staff-invite.md`               |
 | `/invite/student/:verificationCode`                 | 已下线   | 旧学生 invite 占位入口不再查询旧接口，路由按 404 处理              |
-| `/student-register/:token`                          | 已落地   | 学生注册链接注册入口，细节见 `public-auth-student-registration.md` |
+| `/invite/student-registration/:token`               | 已落地   | 学生注册链接注册入口，细节见 `public-auth-student-registration.md` |
 | `/verify/account-email/:token`                      | 已落地   | 初始登录邮箱验证入口，打开后直接消费 token                         |
 | `/invite/:inviteType/:verificationCode`（其它类型） | 受限壳页 | 当前只保留入口与参数展示，不伪造真实激活                           |
 | `/verify/email/:verificationCode`                   | 已落地   | 登录邮箱变更确认；不是新账号初始邮箱验证入口                       |
@@ -96,5 +96,5 @@
 
 - staff invite 与学生注册链接当前继续通过 `/labs/invite-issuer` 生成联调链接
 - 该页只作为联调工具，不承担正式管理后台职责
-- 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/student-register/<token>`，不再走旧 `inviteStudent` / `registerByInvite`
+- 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/invite/student-registration/<token>`，不再走旧 `inviteStudent` / 学生 `registerByInvite`
 - 它不进入正式导航，只保留直链使用

@@ -44,7 +44,7 @@ export function ForgotPasswordPage() {
                   <h1
                     style={{
                       fontSize: 'var(--ant-font-size-heading-3)',
-                      fontWeight: 'var(--ant-font-weight-heading)',
+                      fontWeight: 600,
                       lineHeight: 'var(--ant-line-height-heading-3)',
                       marginBottom: 12,
                       marginTop: 8,

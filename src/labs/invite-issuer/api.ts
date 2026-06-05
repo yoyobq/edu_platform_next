@@ -17,10 +17,10 @@ type AdminRequestPasswordResetEmailResponse = {
 };
 
 type IssueStudentRegistrationLinkResponse = {
-  campaignId?: number | null;
   classCode?: string | null;
   expiresAt?: string | null;
   link?: string | null;
+  recordId?: number | null;
   studentId?: string | null;
   success: boolean;
   token?: string | null;
@@ -35,10 +35,10 @@ type IssueInviteResult = {
 };
 
 type IssueStudentRegistrationLinkResult = {
-  campaignId: number | null;
   classCode: string | null;
   expiresAt: string | null;
   link: string | null;
+  recordId: number | null;
   studentId: string | null;
   token: string | null;
 };
@@ -76,7 +76,7 @@ const ISSUE_STUDENT_REGISTRATION_LINK_MUTATION = `
       success
       link
       token
-      campaignId
+      recordId
       expiresAt
       classCode
       studentId
@@ -114,10 +114,10 @@ function normalizeIssueStudentRegistrationLinkResult(
   result: IssueStudentRegistrationLinkResponse,
 ): IssueStudentRegistrationLinkResult {
   return {
-    campaignId: result.campaignId ?? null,
     classCode: result.classCode || null,
     expiresAt: result.expiresAt || null,
     link: result.link || null,
+    recordId: result.recordId ?? null,
     studentId: result.studentId || null,
     token: result.token || null,
   };

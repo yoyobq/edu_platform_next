@@ -157,6 +157,69 @@ describe('public auth api student registration', () => {
     });
   });
 
+  it('verifies student registration identity without consuming the link', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      verifyStudentRegistrationIdentity: {
+        success: true,
+        canProceed: true,
+        reason: 'AVAILABLE',
+        message: null,
+      },
+    });
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationIdentity({
+        token: ' token-001 ',
+        studentId: ' S001 ',
+        name: ' 张三 ',
+        idCardLastSix: ' A12345 ',
+      }),
+    ).resolves.toEqual({
+      canProceed: true,
+      message: null,
+      status: 'success',
+    });
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+
+    expect(query).toContain('VerifyStudentRegistrationIdentity');
+    expect(query).toContain('verifyStudentRegistrationIdentity');
+    expect(variables).toEqual({
+      input: {
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+      },
+    });
+  });
+
+  it('maps student registration identity verification mismatch as a generic failure', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      verifyStudentRegistrationIdentity: {
+        success: false,
+        canProceed: false,
+        reason: 'IDENTITY_MISMATCH',
+        message: '身份信息不匹配',
+      },
+    });
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationIdentity({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'IDENTITY_MISMATCH',
+      message: '身份信息不匹配，请核对后重试。',
+      status: 'failure',
+    });
+  });
+
   it('maps student registration identity mismatch as a form failure result', async () => {
     const error = new Error('身份信息不匹配');
 
