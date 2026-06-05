@@ -18,8 +18,8 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   claimClassAdviserForRosterSync,
-  commitStudentRosterMembershipReconciliation,
-  dryRunReconcileStudentRosterMembership,
+  commitUpstreamStudentRosterReconciliation,
+  dryRunReconcileUpstreamStudentRoster,
   fetchPreviousClassAdviserClasses,
 } from './api';
 
@@ -103,11 +103,11 @@ describe('student roster membership reconciliation api', () => {
     };
 
     executeGraphQLMock.mockResolvedValueOnce({
-      dryRunReconcileStudentRosterMembership: payload,
+      dryRunReconcileUpstreamStudentRoster: payload,
     });
 
     await expect(
-      dryRunReconcileStudentRosterMembership({
+      dryRunReconcileUpstreamStudentRoster({
         classCode: ' 1031301 ',
         upstreamSessionToken: ' {"token":"current"} ',
       }),
@@ -116,8 +116,10 @@ describe('student roster membership reconciliation api', () => {
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
     const variables = executeGraphQLMock.mock.calls[0]?.[1];
 
-    expect(query).toContain('DryRunReconcileStudentRosterMembershipInput');
-    expect(query).toContain('StudentRosterMembershipResultFields');
+    expect(query).toContain('DryRunReconcileUpstreamStudentRosterInput');
+    expect(query).toContain('UpstreamStudentRosterReconciliationResultFields');
+    expect(query).toContain('dryRunReconcileUpstreamStudentRoster');
+    expect(query).not.toContain('dryRunReconcileStudentRosterMembership');
     expect(query).not.toContain('classListCodes');
     expect(query).not.toContain('departmentIds');
     expect(variables).toEqual({
@@ -192,11 +194,11 @@ describe('student roster membership reconciliation api', () => {
     };
 
     executeGraphQLMock.mockResolvedValueOnce({
-      commitStudentRosterMembershipReconciliation: payload,
+      commitUpstreamStudentRosterReconciliation: payload,
     });
 
     await expect(
-      commitStudentRosterMembershipReconciliation({
+      commitUpstreamStudentRosterReconciliation({
         classCode: ' 1031301 ',
         confirmations: [
           {
@@ -219,6 +221,9 @@ describe('student roster membership reconciliation api', () => {
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
     const variables = executeGraphQLMock.mock.calls[0]?.[1];
 
+    expect(query).toContain('CommitUpstreamStudentRosterReconciliationInput');
+    expect(query).toContain('commitUpstreamStudentRosterReconciliation');
+    expect(query).not.toContain('commitStudentRosterMembershipReconciliation');
     expect(query).not.toContain('classListCodes');
     expect(query).not.toContain('departmentIds');
     expect(variables).toEqual({

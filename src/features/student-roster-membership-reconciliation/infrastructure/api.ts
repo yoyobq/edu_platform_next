@@ -16,9 +16,9 @@ import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 import type {
   ClaimClassAdviserForRosterSyncInput,
   ClaimClassAdviserForRosterSyncResult,
-  CommitStudentRosterMembershipReconciliationInput,
+  CommitUpstreamStudentRosterReconciliationInput,
   CurrentRosterMembershipAccount,
-  DryRunReconcileStudentRosterMembershipInput,
+  DryRunReconcileUpstreamStudentRosterInput,
   PreviousClassAdviserClassesResult,
   StudentRosterMembershipReconciliationResult,
 } from '../application/types';
@@ -38,16 +38,16 @@ type PreviousClassAdviserClassesResponse = {
   fetchPreviousClassAdviserClasses: PreviousClassAdviserClassesResult;
 };
 
-type DryRunReconcileStudentRosterMembershipResponse = {
-  dryRunReconcileStudentRosterMembership: StudentRosterMembershipReconciliationResult;
+type DryRunReconcileUpstreamStudentRosterResponse = {
+  dryRunReconcileUpstreamStudentRoster: StudentRosterMembershipReconciliationResult;
 };
 
 type ClaimClassAdviserForRosterSyncResponse = {
   claimClassAdviserForRosterSync: ClaimClassAdviserForRosterSyncResult;
 };
 
-type CommitStudentRosterMembershipReconciliationResponse = {
-  commitStudentRosterMembershipReconciliation: StudentRosterMembershipReconciliationResult;
+type CommitUpstreamStudentRosterReconciliationResponse = {
+  commitUpstreamStudentRosterReconciliation: StudentRosterMembershipReconciliationResult;
 };
 
 const CURRENT_ACCOUNT_QUERY = `
@@ -78,8 +78,9 @@ const FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY = `
   }
 `;
 
-const STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS = `
-  fragment StudentRosterMembershipResultFields on StudentRosterMembershipReconciliationResultDTO {
+const UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS = `
+  fragment UpstreamStudentRosterReconciliationResultFields
+    on UpstreamStudentRosterReconciliationResultDTO {
     dryRun
     committed
     requiresReconfirm
@@ -129,14 +130,14 @@ const STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS = `
   }
 `;
 
-const DRY_RUN_RECONCILE_STUDENT_ROSTER_MEMBERSHIP_MUTATION = `
-  ${STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS}
+const DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION = `
+  ${UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS}
 
-  mutation DryRunReconcileStudentRosterMembership(
-    $input: DryRunReconcileStudentRosterMembershipInput!
+  mutation DryRunReconcileUpstreamStudentRoster(
+    $input: DryRunReconcileUpstreamStudentRosterInput!
   ) {
-    dryRunReconcileStudentRosterMembership(input: $input) {
-      ...StudentRosterMembershipResultFields
+    dryRunReconcileUpstreamStudentRoster(input: $input) {
+      ...UpstreamStudentRosterReconciliationResultFields
     }
   }
 `;
@@ -156,14 +157,14 @@ const CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION = `
   }
 `;
 
-const COMMIT_STUDENT_ROSTER_MEMBERSHIP_RECONCILIATION_MUTATION = `
-  ${STUDENT_ROSTER_MEMBERSHIP_RESULT_FIELDS}
+const COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION = `
+  ${UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS}
 
-  mutation CommitStudentRosterMembershipReconciliation(
-    $input: CommitStudentRosterMembershipReconciliationInput!
+  mutation CommitUpstreamStudentRosterReconciliation(
+    $input: CommitUpstreamStudentRosterReconciliationInput!
   ) {
-    commitStudentRosterMembershipReconciliation(input: $input) {
-      ...StudentRosterMembershipResultFields
+    commitUpstreamStudentRosterReconciliation(input: $input) {
+      ...UpstreamStudentRosterReconciliationResultFields
     }
   }
 `;
@@ -178,7 +179,7 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
-function normalizeDryRunInput(input: DryRunReconcileStudentRosterMembershipInput) {
+function normalizeDryRunInput(input: DryRunReconcileUpstreamStudentRosterInput) {
   return {
     classCode: normalizeRequiredTextValue(input.classCode, { label: '班级' }),
     upstreamSessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
@@ -191,7 +192,7 @@ function normalizeClaimClassAdviserInput(input: ClaimClassAdviserForRosterSyncIn
   return normalizeDryRunInput(input);
 }
 
-function normalizeCommitInput(input: CommitStudentRosterMembershipReconciliationInput) {
+function normalizeCommitInput(input: CommitUpstreamStudentRosterReconciliationInput) {
   const normalizedInput = normalizeDryRunInput(input);
 
   return {
@@ -246,19 +247,19 @@ export async function fetchPreviousClassAdviserClasses(input: { sessionToken: st
   return response.fetchPreviousClassAdviserClasses;
 }
 
-export async function dryRunReconcileStudentRosterMembership(
-  input: DryRunReconcileStudentRosterMembershipInput,
+export async function dryRunReconcileUpstreamStudentRoster(
+  input: DryRunReconcileUpstreamStudentRosterInput,
 ) {
   const response = await requestGraphQL<
-    DryRunReconcileStudentRosterMembershipResponse,
+    DryRunReconcileUpstreamStudentRosterResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_RECONCILE_STUDENT_ROSTER_MEMBERSHIP_MUTATION, {
+  >(DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION, {
     input: normalizeDryRunInput(input),
   });
 
-  return response.dryRunReconcileStudentRosterMembership;
+  return response.dryRunReconcileUpstreamStudentRoster;
 }
 
 export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserForRosterSyncInput) {
@@ -274,19 +275,19 @@ export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserFor
   return response.claimClassAdviserForRosterSync;
 }
 
-export async function commitStudentRosterMembershipReconciliation(
-  input: CommitStudentRosterMembershipReconciliationInput,
+export async function commitUpstreamStudentRosterReconciliation(
+  input: CommitUpstreamStudentRosterReconciliationInput,
 ) {
   const response = await requestGraphQL<
-    CommitStudentRosterMembershipReconciliationResponse,
+    CommitUpstreamStudentRosterReconciliationResponse,
     {
       input: ReturnType<typeof normalizeCommitInput>;
     }
-  >(COMMIT_STUDENT_ROSTER_MEMBERSHIP_RECONCILIATION_MUTATION, {
+  >(COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION, {
     input: normalizeCommitInput(input),
   });
 
-  return response.commitStudentRosterMembershipReconciliation;
+  return response.commitUpstreamStudentRosterReconciliation;
 }
 
 export function resolveStudentRosterMembershipErrorMessage(error: unknown) {

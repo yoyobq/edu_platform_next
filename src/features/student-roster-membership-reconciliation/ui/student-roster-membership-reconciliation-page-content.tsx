@@ -79,8 +79,8 @@ import type {
 } from '../application/types';
 import {
   claimClassAdviserForRosterSync,
-  commitStudentRosterMembershipReconciliation,
-  dryRunReconcileStudentRosterMembership,
+  commitUpstreamStudentRosterReconciliation,
+  dryRunReconcileUpstreamStudentRoster,
   fetchCurrentRosterMembershipAccount,
   fetchPreviousClassAdviserClasses,
   isExpiredUpstreamSessionError,
@@ -620,7 +620,7 @@ export function StudentRosterMembershipReconciliationPageContent({
               sessionForDryRun: StoredUpstreamSession,
               claimNotice: ClassAdviserClaimNotice | null = null,
             ) => {
-              const result = await dryRunReconcileStudentRosterMembership({
+              const result = await dryRunReconcileUpstreamStudentRoster({
                 classCode: action.classCode,
                 upstreamSessionToken: sessionForDryRun.upstreamSessionToken,
               });
@@ -690,7 +690,7 @@ export function StudentRosterMembershipReconciliationPageContent({
           case 'commit': {
             setIsCommitting(true);
             setReconciliationError(null);
-            const result = await commitStudentRosterMembershipReconciliation({
+            const result = await commitUpstreamStudentRosterReconciliation({
               classCode: action.classCode,
               confirmations: action.confirmations,
               endDecisions: action.endDecisions,

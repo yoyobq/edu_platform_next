@@ -113,12 +113,12 @@ export type StudentRosterMembershipReconciliationResult = {
   upstreamSessionToken: string;
 };
 
-export type DryRunReconcileStudentRosterMembershipInput = {
+export type DryRunReconcileUpstreamStudentRosterInput = {
   classCode: string;
   upstreamSessionToken: string;
 };
 
-export type ClaimClassAdviserForRosterSyncInput = DryRunReconcileStudentRosterMembershipInput;
+export type ClaimClassAdviserForRosterSyncInput = DryRunReconcileUpstreamStudentRosterInput;
 
 export type StudentRosterMembershipConfirmationInput = {
   decisionOutcome: StudentRosterMembershipDecisionOutcome;
@@ -132,8 +132,8 @@ export type StudentRosterMembershipEndDecisionInput = {
   endReason?: string;
 };
 
-export type CommitStudentRosterMembershipReconciliationInput =
-  DryRunReconcileStudentRosterMembershipInput & {
+export type CommitUpstreamStudentRosterReconciliationInput =
+  DryRunReconcileUpstreamStudentRosterInput & {
     confirmations?: StudentRosterMembershipConfirmationInput[];
     endDecisions?: StudentRosterMembershipEndDecisionInput[];
   };
