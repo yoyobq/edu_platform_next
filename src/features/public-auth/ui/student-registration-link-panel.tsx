@@ -1,6 +1,6 @@
 // src/features/public-auth/ui/student-registration-link-panel.tsx
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { MailOutlined, ReloadOutlined, RightOutlined, TeamOutlined } from '@ant-design/icons';
 import { Alert, Button, Flex, Form, Input, Skeleton, Steps, Typography } from 'antd';
 import { useNavigate } from 'react-router';
@@ -45,6 +45,8 @@ type StudentRegistrationStep = {
   fields: (keyof StudentRegistrationFormValues)[];
   title: string;
 };
+
+type StudentRegistrationStepSnapshot = Partial<Record<keyof StudentRegistrationFormValues, string>>;
 
 const studentRegistrationSteps: StudentRegistrationStep[] = [
   {
@@ -167,9 +169,14 @@ function StudentRegistrationForm({
 }) {
   const [form] = Form.useForm<StudentRegistrationFormValues>();
   const [nicknameTouched, setNicknameTouched] = useState(false);
+  const currentStepRef = useRef(currentStep);
+  const verificationRequestIdRef = useRef(0);
   const isStudentIdLocked = info.scope === 'STUDENT' && Boolean(info.studentId);
   const isLastStep = currentStep === studentRegistrationSteps.length - 1;
   const studentIdExample = resolveStudentIdExample(info);
+  const isIdentityStepVerifying = currentStep === 0 && verifyingIdentity;
+  const isAccountStepVerifying = currentStep === 1 && verifyingAccount;
+  const isCurrentStepBusy = isIdentityStepVerifying || isAccountStepVerifying || submitting;
 
   useEffect(() => {
     form.setFieldsValue({
@@ -178,11 +185,45 @@ function StudentRegistrationForm({
     setNicknameTouched(false);
   }, [form, info.studentId, isStudentIdLocked]);
 
-  async function goToNextStep() {
-    try {
-      await form.validateFields(studentRegistrationSteps[currentStep].fields);
+  useEffect(() => {
+    currentStepRef.current = currentStep;
+  }, [currentStep]);
 
-      if (currentStep === 0) {
+  function readStepSnapshot(
+    fields: (keyof StudentRegistrationFormValues)[],
+  ): StudentRegistrationStepSnapshot {
+    const values = form.getFieldsValue(fields);
+
+    return fields.reduce<StudentRegistrationStepSnapshot>((snapshot, field) => {
+      snapshot[field] = values[field] ?? '';
+      return snapshot;
+    }, {});
+  }
+
+  function isSameStepSnapshot(
+    fields: (keyof StudentRegistrationFormValues)[],
+    left: StudentRegistrationStepSnapshot,
+    right: StudentRegistrationStepSnapshot,
+  ) {
+    return fields.every((field) => (left[field] ?? '') === (right[field] ?? ''));
+  }
+
+  async function goToNextStep() {
+    if (isCurrentStepBusy) {
+      return;
+    }
+
+    try {
+      const stepAtRequest = currentStep;
+      const stepFields = studentRegistrationSteps[stepAtRequest].fields;
+
+      await form.validateFields(stepFields);
+
+      const requestId = verificationRequestIdRef.current + 1;
+      verificationRequestIdRef.current = requestId;
+      const requestSnapshot = readStepSnapshot(stepFields);
+
+      if (stepAtRequest === 0) {
         const values = form.getFieldsValue();
         const canProceed = await onVerifyIdentity({
           idCardLastSix: values.idCardLastSix,
@@ -195,7 +236,7 @@ function StudentRegistrationForm({
         }
       }
 
-      if (currentStep === 1) {
+      if (stepAtRequest === 1) {
         const values = form.getFieldsValue();
         const canProceed = await onVerifyAccount({
           loginName: values.loginName,
@@ -208,13 +249,30 @@ function StudentRegistrationForm({
         }
       }
 
-      onCurrentStepChange(Math.min(currentStep + 1, studentRegistrationSteps.length - 1));
+      const isLatestRequest = verificationRequestIdRef.current === requestId;
+      const isStillSameStep = currentStepRef.current === stepAtRequest;
+      const isStillSameInput = isSameStepSnapshot(
+        stepFields,
+        requestSnapshot,
+        readStepSnapshot(stepFields),
+      );
+
+      if (!isLatestRequest || !isStillSameStep || !isStillSameInput) {
+        return;
+      }
+
+      onCurrentStepChange(Math.min(stepAtRequest + 1, studentRegistrationSteps.length - 1));
     } catch {
       // antd Form has already rendered field-level validation feedback.
     }
   }
 
   function goToPreviousStep() {
+    if (isCurrentStepBusy) {
+      return;
+    }
+
+    verificationRequestIdRef.current += 1;
     onCurrentStepChange(Math.max(currentStep - 1, 0));
   }
 
@@ -266,7 +324,11 @@ function StudentRegistrationForm({
           rules={[{ required: true, message: '请输入学号。', whitespace: true }]}
           extra={isStudentIdLocked ? '这个链接已指定学号，不能修改。' : `例如：${studentIdExample}`}
         >
-          <Input disabled={isStudentIdLocked} placeholder="请输入完整学号" autoComplete="off" />
+          <Input
+            disabled={isStudentIdLocked || isIdentityStepVerifying}
+            placeholder="请输入完整学号"
+            autoComplete="off"
+          />
         </Form.Item>
 
         <Form.Item
@@ -274,7 +336,11 @@ function StudentRegistrationForm({
           name="name"
           rules={[{ required: true, message: '请输入学生姓名。', whitespace: true }]}
         >
-          <Input placeholder="请输入你的真实姓名" autoComplete="name" />
+          <Input
+            disabled={isIdentityStepVerifying}
+            placeholder="请输入你的真实姓名"
+            autoComplete="name"
+          />
         </Form.Item>
 
         <Form.Item
@@ -296,13 +362,22 @@ function StudentRegistrationForm({
             },
           ]}
         >
-          <Input placeholder="请输入身份证后 6 位" autoComplete="off" maxLength={6} />
+          <Input
+            disabled={isIdentityStepVerifying}
+            placeholder="请输入身份证后 6 位"
+            autoComplete="off"
+            maxLength={6}
+          />
         </Form.Item>
       </div>
 
       <div hidden={currentStep !== 1}>
         <Form.Item label="昵称（可选）" name="nickname" extra="默认使用学生姓名，也可以自定义。">
-          <Input placeholder="可选填写昵称" autoComplete="nickname" />
+          <Input
+            disabled={isAccountStepVerifying}
+            placeholder="可选填写昵称"
+            autoComplete="nickname"
+          />
         </Form.Item>
 
         <Form.Item
@@ -324,7 +399,11 @@ function StudentRegistrationForm({
             },
           ]}
         >
-          <Input placeholder="可选填写登录名" autoComplete="username" />
+          <Input
+            disabled={isAccountStepVerifying}
+            placeholder="可选填写登录名"
+            autoComplete="username"
+          />
         </Form.Item>
 
         <Form.Item
@@ -352,7 +431,11 @@ function StudentRegistrationForm({
             },
           ]}
         >
-          <Input.Password placeholder="请输入登录密码" autoComplete="new-password" />
+          <Input.Password
+            disabled={isAccountStepVerifying}
+            placeholder="请输入登录密码"
+            autoComplete="new-password"
+          />
         </Form.Item>
 
         <Form.Item
@@ -373,7 +456,11 @@ function StudentRegistrationForm({
             }),
           ]}
         >
-          <Input.Password placeholder="请再次输入登录密码" autoComplete="new-password" />
+          <Input.Password
+            disabled={isAccountStepVerifying}
+            placeholder="请再次输入登录密码"
+            autoComplete="new-password"
+          />
         </Form.Item>
       </div>
 
@@ -388,13 +475,17 @@ function StudentRegistrationForm({
             { type: 'email', message: '请输入有效邮箱地址。' },
           ]}
         >
-          <Input placeholder="请输入登录邮箱" autoComplete="email" />
+          <Input disabled={submitting} placeholder="请输入登录邮箱" autoComplete="email" />
         </Form.Item>
       </div>
 
       <Form.Item style={{ marginBottom: 0 }}>
         <Flex gap={8} justify={currentStep > 0 ? 'space-between' : 'flex-end'} wrap>
-          {currentStep > 0 ? <Button onClick={goToPreviousStep}>上一步</Button> : null}
+          {currentStep > 0 ? (
+            <Button disabled={isCurrentStepBusy} onClick={goToPreviousStep}>
+              上一步
+            </Button>
+          ) : null}
           {isLastStep ? (
             <Button type="primary" htmlType="submit" loading={submitting}>
               提交注册
@@ -402,6 +493,7 @@ function StudentRegistrationForm({
           ) : (
             <Button
               type="primary"
+              disabled={isCurrentStepBusy}
               loading={
                 (currentStep === 0 && verifyingIdentity) || (currentStep === 1 && verifyingAccount)
               }
