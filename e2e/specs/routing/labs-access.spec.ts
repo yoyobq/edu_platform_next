@@ -410,7 +410,7 @@ test('labs upstream session demo 可登录 upstream、读取教师字典并滚�
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.getByPlaceholder('学号或工号').fill('teacher.alice');
   await page.getByPlaceholder('校园网登录密码').fill('secret-password');
-  await page.getByRole('button', { name: '登录并继续' }).click();
+  await page.getByRole('button', { name: '授权并继续' }).click();
 
   await expect(page.getByText('"value": "teacher-001"')).toBeVisible();
   await expect(page.getByText('预览条数：1')).toBeVisible();
@@ -553,6 +553,75 @@ test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({
   await expect(page.getByText('教职工邀请已签发')).toBeVisible();
   await expect(page.locator('text=staff-token-001').first()).toBeVisible();
   await expect(page.getByText('/invite/staff/staff-token-001')).toBeVisible();
+});
+
+test('labs invite issuer 可签发学生注册链接并展示后端返回链接', async ({ page }) => {
+  let requestInput: { classCode?: string; studentId?: string } | null = null;
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'admin-user',
+      primaryAccessGroup: 'ADMIN',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: {
+            input?: { classCode?: string; studentId?: string };
+          };
+        }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('mutation IssueStudentRegistrationLink')) {
+      requestInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            issueStudentRegistrationLink: {
+              success: true,
+              link: 'https://frontend.example/student-register/student-register-token-001',
+              token: 'student-register-token-001',
+              campaignId: 7001,
+              expiresAt: '2026-06-30T03:00:00.000Z',
+              classCode: '7020002',
+              studentId: 'SRL000002',
+            },
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsInviteIssuer);
+
+  await page.getByText('学生注册链接', { exact: true }).click();
+  await page.getByLabel('班级代码').fill('7020002');
+  await page.getByLabel('学生编号（可选）').fill('SRL000002');
+  await page.getByRole('button', { name: '签发学生注册链接' }).click();
+
+  await expect(page.getByText('学生注册链接已签发')).toBeVisible();
+  await expect(page.getByText('student-register-token-001', { exact: true })).toBeVisible();
+  await expect(
+    page.getByText('https://frontend.example/student-register/student-register-token-001'),
+  ).toBeVisible();
+  expect(requestInput).toEqual({
+    classCode: '7020002',
+    studentId: 'SRL000002',
+  });
 });
 
 test('admin 认证码签发可从教师字典选择教师并发送邀请', async ({ page }) => {

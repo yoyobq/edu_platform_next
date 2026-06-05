@@ -4,7 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Flex, Skeleton, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
-import type { LoginEmailVerificationReason } from '../application/types';
+import type {
+  LoginEmailVerificationReason,
+  LoginEmailVerificationResult,
+} from '../application/types';
 import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
@@ -47,26 +50,35 @@ function resolveFailureActionText(reason: LoginEmailVerificationReason) {
 export function LoginEmailVerificationIntentPanel({ token }: { token: string }) {
   const navigate = useNavigate();
   const [state, setState] = useState<LoginEmailVerificationState>({ status: 'loading' });
-  const consumedTokenRef = useRef<string | null>(null);
+  const verificationRequestRef = useRef<{
+    promise: Promise<LoginEmailVerificationResult>;
+    token: string;
+  } | null>(null);
 
   useEffect(() => {
     let isActive = true;
 
     async function runWorkflow() {
       const normalizedToken = token.trim();
+      const existingRequest = verificationRequestRef.current;
+      const request =
+        existingRequest?.token === normalizedToken
+          ? existingRequest
+          : {
+              promise: publicAuthApi.verifyLoginEmail({
+                token: normalizedToken,
+              }),
+              token: normalizedToken,
+            };
 
-      if (consumedTokenRef.current === normalizedToken) {
-        return;
+      if (request !== existingRequest) {
+        verificationRequestRef.current = request;
+        setState({ status: 'loading' });
       }
 
-      consumedTokenRef.current = normalizedToken;
-      setState({ status: 'loading' });
+      const result = await request.promise;
 
-      const result = await publicAuthApi.verifyLoginEmail({
-        token: normalizedToken,
-      });
-
-      if (!isActive) {
+      if (!isActive || verificationRequestRef.current?.token !== normalizedToken) {
         return;
       }
 

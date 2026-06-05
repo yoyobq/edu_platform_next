@@ -11,6 +11,13 @@
 - 旧 `/invite/student/:verificationCode` 已下线，路由按 404 处理
 - `/verify/email/:verificationCode` 继续表示“登录邮箱变更确认”，不复用为新账号初始邮箱验证
 
+## 签发
+
+- `/labs/invite-issuer` 可临时调用 `issueStudentRegistrationLink`
+- 只传 `classCode` 时签发班级共享注册链接
+- 传 `classCode + studentId` 时签发指定学生注册链接
+- 签发结果优先展示并复制后端返回的 `link`，前端不自行拼接注册 URL
+
 ## 注册流程
 
 - 页面先查询 `publicStudentRegistrationLinkInfo(token)`

@@ -100,8 +100,8 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
   await page.getByLabel('证件号后 6 位').fill('A12345');
   await page.getByLabel('登录邮箱').fill('student@example.com');
   await page.getByLabel('登录名（可选）').fill('stu001');
-  await page.getByLabel('登录密码').fill('Abc12345!');
-  await page.getByLabel('确认登录密码').fill('Abc12345!');
+  await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Abc12345!');
+  await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Abc12345!');
   await page.getByRole('button', { name: '提交注册' }).click();
 
   await expect(page.getByRole('alert').filter({ hasText: '账号已创建' })).toBeVisible();

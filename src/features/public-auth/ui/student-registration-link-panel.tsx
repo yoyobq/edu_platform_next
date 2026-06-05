@@ -8,7 +8,6 @@ import {
   RightOutlined,
   TeamOutlined,
 } from '@ant-design/icons';
-import type { FormInstance } from 'antd';
 import { Alert, Button, Flex, Form, Input, Skeleton, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
@@ -117,18 +116,17 @@ function StudentRegistrationSummaryCard({ info }: { info: StudentRegistrationLin
 }
 
 function StudentRegistrationForm({
-  form,
   info,
   onSubmit,
   submitError,
   submitting,
 }: {
-  form: FormInstance<StudentRegistrationFormValues>;
   info: StudentRegistrationLinkInfo;
   onSubmit: (values: StudentRegistrationFormValues) => Promise<void>;
   submitError: string | null;
   submitting: boolean;
 }) {
+  const [form] = Form.useForm<StudentRegistrationFormValues>();
   const [nicknameTouched, setNicknameTouched] = useState(false);
   const isStudentIdLocked = info.scope === 'STUDENT';
 
@@ -432,7 +430,6 @@ function PendingEmailState({
 }
 
 export function StudentRegistrationLinkPanel({ token }: { token: string }) {
-  const [form] = Form.useForm<StudentRegistrationFormValues>();
   const [phase, setPhase] = useState<StudentRegistrationPhase>('loading');
   const [linkInfo, setLinkInfo] = useState<StudentRegistrationLinkInfo | null>(null);
   const [linkFailure, setLinkFailure] = useState<{
@@ -459,7 +456,6 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
       setPageError(null);
       setSubmitError(null);
       setSuccessResult(null);
-      form.resetFields();
 
       const result = await publicAuthApi.getStudentRegistrationLinkInfo({
         token,
@@ -494,7 +490,7 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
     return () => {
       isActive = false;
     };
-  }, [form, reloadKey, token]);
+  }, [reloadKey, token]);
 
   if (phase === 'loading') {
     return (
@@ -549,7 +545,6 @@ export function StudentRegistrationLinkPanel({ token }: { token: string }) {
         description="提交成功后，系统会向登录邮箱发送验证邮件。邮箱验证完成前，账号不能登录。"
       />
       <StudentRegistrationForm
-        form={form}
         info={linkInfo}
         submitError={submitError}
         submitting={submitting}

@@ -16,12 +16,31 @@ type AdminRequestPasswordResetEmailResponse = {
   success: boolean;
 };
 
+type IssueStudentRegistrationLinkResponse = {
+  campaignId?: number | null;
+  classCode?: string | null;
+  expiresAt?: string | null;
+  link?: string | null;
+  studentId?: string | null;
+  success: boolean;
+  token?: string | null;
+};
+
 type IssueInviteResult = {
   expiresAt: string | null;
   message: string | null;
   recordId: number | null;
   token: string | null;
   type: 'INVITE_STAFF' | null;
+};
+
+type IssueStudentRegistrationLinkResult = {
+  campaignId: number | null;
+  classCode: string | null;
+  expiresAt: string | null;
+  link: string | null;
+  studentId: string | null;
+  token: string | null;
 };
 
 type AdminRequestPasswordResetEmailResult = {
@@ -47,6 +66,20 @@ const ADMIN_REQUEST_PASSWORD_RESET_EMAIL_MUTATION = `
     adminRequestPasswordResetEmail(input: $input) {
       message
       success
+    }
+  }
+`;
+
+const ISSUE_STUDENT_REGISTRATION_LINK_MUTATION = `
+  mutation IssueStudentRegistrationLink($input: IssueStudentRegistrationLinkInput!) {
+    issueStudentRegistrationLink(input: $input) {
+      success
+      link
+      token
+      campaignId
+      expiresAt
+      classCode
+      studentId
     }
   }
 `;
@@ -77,6 +110,19 @@ function normalizeAdminRequestPasswordResetEmailResult(
   };
 }
 
+function normalizeIssueStudentRegistrationLinkResult(
+  result: IssueStudentRegistrationLinkResponse,
+): IssueStudentRegistrationLinkResult {
+  return {
+    campaignId: result.campaignId ?? null,
+    classCode: result.classCode || null,
+    expiresAt: result.expiresAt || null,
+    link: result.link || null,
+    studentId: result.studentId || null,
+    token: result.token || null,
+  };
+}
+
 function resolveErrorMessage(error: unknown, fallback: string) {
   if (isGraphQLIngressError(error)) {
     const firstError = error.graphqlErrors?.[0];
@@ -88,6 +134,15 @@ function resolveErrorMessage(error: unknown, fallback: string) {
 
     if (extensions.errorCode === 'INVITE_ISSUE_FAILED') {
       return '邀请邮件发送失败，系统已撤销该邀请，请稍后重试或联系管理员。';
+    }
+
+    if (
+      typeof firstError?.message === 'string' &&
+      firstError.message.trim() &&
+      firstError.message !== extensions.code &&
+      firstError.message !== extensions.errorCode
+    ) {
+      return firstError.message;
     }
 
     return error.userMessage;
@@ -119,6 +174,38 @@ export async function issueStaffInvite(input: { invitedEmail: string; staffId?: 
     return normalizeIssueInviteResult(response.inviteStaff);
   } catch (error) {
     throw new Error(resolveErrorMessage(error, '暂时无法签发教职工邀请。'));
+  }
+}
+
+export async function issueStudentRegistrationLink(input: {
+  classCode: string;
+  studentId?: string;
+}) {
+  try {
+    const response = await requestGraphQL<
+      {
+        issueStudentRegistrationLink: IssueStudentRegistrationLinkResponse;
+      },
+      {
+        input: {
+          classCode: string;
+          studentId?: string;
+        };
+      }
+    >(ISSUE_STUDENT_REGISTRATION_LINK_MUTATION, {
+      input: {
+        classCode: input.classCode,
+        studentId: input.studentId,
+      },
+    });
+
+    if (!response.issueStudentRegistrationLink.success) {
+      throw new Error('暂时无法签发学生注册链接。');
+    }
+
+    return normalizeIssueStudentRegistrationLinkResult(response.issueStudentRegistrationLink);
+  } catch (error) {
+    throw new Error(resolveErrorMessage(error, '暂时无法签发学生注册链接。'));
   }
 }
 

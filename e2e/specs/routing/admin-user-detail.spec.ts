@@ -1,4 +1,4 @@
-import type { Route } from '@playwright/test';
+import type { Page, Route } from '@playwright/test';
 
 import { mockApiHealth, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
@@ -23,6 +23,16 @@ async function fulfillGraphQLError(route: Route, message: string) {
   await fulfillGraphQL(route, {
     errors: [{ message }],
   });
+}
+
+async function openIdentityTabAndWaitForEndButton(page: Page, postId: number) {
+  const identityTab = page.getByRole('tab', { name: '身份信息' });
+  const endButton = page.getByRole('button', { name: `结束 ${postId}` });
+
+  await expect(async () => {
+    await identityTab.click();
+    await expect(endButton).toBeVisible({ timeout: 1000 });
+  }).toPass({ timeout: 6000 });
 }
 
 function buildMePayload() {
@@ -409,7 +419,7 @@ test('staff slot 结束失败时应保留当前视图并显示错误', async ({ 
 
   await page.goto(`/admin/users/${accountId}`);
 
-  await page.getByRole('tab', { name: '身份信息' }).click();
+  await openIdentityTabAndWaitForEndButton(page, 7001);
   await page.getByRole('button', { name: '结束 7001' }).click();
   await page.getByTestId('staff-slot-end-confirm-7001').click();
 

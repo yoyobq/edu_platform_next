@@ -94,7 +94,7 @@
 
 ## 当前联调补充
 
-- staff invite 当前继续通过 `/labs/invite-issuer` 生成联调链接
+- staff invite 与学生注册链接当前继续通过 `/labs/invite-issuer` 生成联调链接
 - 该页只作为联调工具，不承担正式管理后台职责
 - 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/student-register/<token>`，不再走旧 `inviteStudent` / `registerByInvite`
 - 它不进入正式导航，只保留直链使用

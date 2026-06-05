@@ -193,7 +193,7 @@ test('已认证 runtime 下的 public-auth 请求不应携带 Authorization', as
   });
 
   await page.goto(routes.home);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 
   await page.goto(routes.forgotPassword);
   await page.getByLabel('邮箱').fill('tester@example.com');
@@ -590,7 +590,7 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
   });
 
   await page.goto(routes.home);
-  await expectAuthenticatedUserMenu(page, 'account-1');
+  await expectAuthenticatedUserMenu(page, 'root-admin');
 
   // auth 主流程 restore -> me 失败 -> 走 auth 自己的 refresh -> 再 me 成功
   // shared retry 不应介入（refreshRequestCount 应为 1，来自 auth 自身的 restore 逻辑）
@@ -718,7 +718,7 @@ test('restore 触发 refresh 后，后续 me 请求应显式使用 refresh 返�
 
   await page.goto(routes.home);
 
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'refreshed-admin');
   expect(meAuthHeaders).toEqual(['Bearer stale-access-token', 'Bearer fresh-access-token']);
   expect(refreshAuthHeader).toBeNull();
 });

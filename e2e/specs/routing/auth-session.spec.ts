@@ -338,7 +338,7 @@ test('登录成功后，应按 redirect 进入目标页并呈现已认证状态'
 
   await expect(page).toHaveURL(/\/labs\/demo$/);
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
 test('登录成功后不应等待 me 完成才离开登录页', async ({ page }) => {
@@ -368,7 +368,7 @@ test('登录成功但 me 失败时，应保留已建立会话并停留在工作�
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
 test('登录成功后刷新页面，应通过 me 从本地会话恢复认证状态', async ({ page }) => {
@@ -382,11 +382,11 @@ test('登录成功后刷新页面，应通过 me 从本地会话恢复认证状�
   await submitLogin(page);
 
   await expect(page).toHaveURL(/\/$/);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 
   await page.reload();
 
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 
   await page.goto(routes.labsDemo);
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
@@ -404,7 +404,7 @@ test('本地 access token 失效时，应走 refresh 后恢复会话', async ({ 
   await page.goto(routes.home);
 
   await expect(page).toHaveURL(/\/$/);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'refreshed-admin');
 });
 
 test('切换到失效账号时，应弹出轻量登录框而不是跳回登录页', async ({ page }) => {
@@ -414,10 +414,10 @@ test('切换到失效账号时，应弹出轻量登录框而不是跳回登录�
   await page.goto(routes.home);
 
   await expect(page).toHaveURL(/\/$/);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 
   await page.getByRole('button', { name: '用户菜单' }).click();
-  await page.getByRole('button', { name: /account-9527/ }).click();
+  await page.getByRole('button', { name: /admin-user/ }).click();
   await page.getByRole('button', { name: /staff-user/ }).click();
 
   const reauthDialog = page.getByRole('dialog', { name: '重新登录账号' });
@@ -447,7 +447,7 @@ test('refresh 成功后 me 再失败时，应保留当前工作台会话', async
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'refreshed-admin');
 });
 
 test('本地会话失效且 refresh 失败时，应保留现有工作台快照', async ({ page }) => {
@@ -463,7 +463,7 @@ test('本地会话失效且 refresh 失败时，应保留现有工作台快照',
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'expired-admin');
 });
 
 test('access token 临近过期但 me 仍可用时，首页导航不应因前置续期被阻断', async ({ page }) => {
@@ -477,7 +477,7 @@ test('access token 临近过期但 me 仍可用时，首页导航不应因前置
   await page.goto(routes.home);
 
   await expect(page).toHaveURL(/\/$/);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'stale-admin');
   await expect(
     page.evaluate((storageKey) => window.localStorage.getItem(storageKey), AUTH_STORAGE_KEY),
   ).resolves.not.toBeNull();
@@ -525,7 +525,7 @@ test('redirect 指向站外地址时，登录后应回退到首页', async ({ pa
 
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
 test('redirect 重新指向登录页时，登录后应回退到首页而不是形成回环', async ({ page }) => {
@@ -540,7 +540,7 @@ test('redirect 重新指向登录页时，登录后应回退到首页而不是�
   await submitLogin(page);
 
   await expect(page).toHaveURL(/\/$/);
-  await expectAuthenticatedUserMenu(page, 'account-9527');
+  await expectAuthenticatedUserMenu(page, 'admin-user');
 });
 
 test('已认证会话访问 login 且 redirect 先指向 /welcome 时，应直接解到最终站内目标', async ({

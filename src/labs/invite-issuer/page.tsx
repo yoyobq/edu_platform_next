@@ -5,31 +5,41 @@ import { Alert, Button, Card, Form, Input, Radio, Space, Tag, Typography } from 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import { inviteIssuerLabAccess } from './access';
-import { adminRequestPasswordResetEmail, issueStaffInvite } from './api';
+import {
+  adminRequestPasswordResetEmail,
+  issueStaffInvite,
+  issueStudentRegistrationLink,
+} from './api';
 import { inviteIssuerLabMeta } from './meta';
 
-type InviteIssuerType = 'staff' | 'welcomeBack';
+type InviteIssuerType = 'staff' | 'studentRegistration' | 'welcomeBack';
 
 type InviteIssuerFormValues = {
   accountId?: string;
+  classCode?: string;
   inviteType: InviteIssuerType;
-  invitedEmail: string;
+  invitedEmail?: string;
   staffId?: string;
+  studentId?: string;
 };
 
 type InviteIssueResult = {
   accountId: number | null;
+  campaignId: number | null;
+  classCode: string | null;
   expiresAt: string | null;
   inviteLink: string | null;
   message: string | null;
   recordId: number | null;
   secondaryLink: string | null;
+  studentId: string | null;
   token: string | null;
-  type: 'INVITE_STAFF' | 'PASSWORD_RESET' | null;
+  type: 'INVITE_STAFF' | 'PASSWORD_RESET' | 'STUDENT_REGISTRATION_LINK' | null;
 };
 
 const inviteTypeOptions = [
   { label: '教职工邀请', value: 'staff' },
+  { label: '学生注册链接', value: 'studentRegistration' },
   { label: '老用户回归', value: 'welcomeBack' },
 ] satisfies readonly { label: string; value: InviteIssuerType }[];
 
@@ -83,6 +93,10 @@ export function InviteIssuerLabPage() {
       return '老用户回归邮件已触发';
     }
 
+    if (result?.type === 'STUDENT_REGISTRATION_LINK') {
+      return '学生注册链接已签发';
+    }
+
     return '教职工邀请已签发';
   }, [result?.type]);
 
@@ -108,7 +122,8 @@ export function InviteIssuerLabPage() {
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             这是临时联调工具，不承担正式管理后台职责。当前直接调用后端 `inviteStaff` /
-            `adminRequestPasswordResetEmail` mutation，并把返回 token 或预期入口组装成可核对的链接。
+            `issueStudentRegistrationLink` / `adminRequestPasswordResetEmail` mutation，并把返回
+            token 或入口链接展示出来便于核对。
           </Typography.Paragraph>
         </div>
       </Card>
@@ -144,6 +159,8 @@ export function InviteIssuerLabPage() {
 
                   setResult({
                     accountId,
+                    campaignId: null,
+                    classCode: null,
                     expiresAt: null,
                     inviteLink: buildAbsoluteLink(origin, resetPath),
                     message:
@@ -151,23 +168,56 @@ export function InviteIssuerLabPage() {
                       '已向该账号注册邮箱发送密码设置邮件。前端会根据 verification payload 中的 preview.kind、nickname、loginEmailMasked 自动展示老用户回归文案。',
                     recordId: null,
                     secondaryLink: buildAbsoluteLink(origin, legacyResetPath),
+                    studentId: null,
                     token: null,
                     type: 'PASSWORD_RESET',
                   });
                   return;
                 }
 
+                if (values.inviteType === 'studentRegistration') {
+                  const classCode = values.classCode?.trim() || '';
+
+                  if (!classCode) {
+                    throw new Error('请输入班级代码。');
+                  }
+
+                  const issued = await issueStudentRegistrationLink({
+                    classCode,
+                    studentId: values.studentId?.trim() || undefined,
+                  });
+
+                  setResult({
+                    accountId: null,
+                    campaignId: issued.campaignId,
+                    classCode: issued.classCode,
+                    expiresAt: issued.expiresAt,
+                    inviteLink: issued.link,
+                    message: '已签发学生注册链接，学生打开后会进入公开注册主线。',
+                    recordId: null,
+                    secondaryLink: null,
+                    studentId: issued.studentId,
+                    token: issued.token,
+                    type: 'STUDENT_REGISTRATION_LINK',
+                  });
+                  return;
+                }
+
+                const invitedEmail = values.invitedEmail?.trim() || '';
                 const issued = await issueStaffInvite({
-                  invitedEmail: values.invitedEmail.trim(),
+                  invitedEmail,
                   staffId: values.staffId?.trim() || undefined,
                 });
                 const invitePath = issued.token ? `/invite/staff/${issued.token}` : null;
 
                 setResult({
                   accountId: null,
+                  campaignId: null,
+                  classCode: null,
                   ...issued,
                   inviteLink: invitePath && origin ? `${origin}${invitePath}` : invitePath,
                   secondaryLink: null,
+                  studentId: null,
                 });
               } catch (error) {
                 setResult(null);
@@ -192,8 +242,20 @@ export function InviteIssuerLabPage() {
             </Form.Item>
 
             <Form.Item
-              label={inviteType === 'welcomeBack' ? '账号 ID' : '被邀请邮箱'}
-              name={inviteType === 'welcomeBack' ? 'accountId' : 'invitedEmail'}
+              label={
+                inviteType === 'welcomeBack'
+                  ? '账号 ID'
+                  : inviteType === 'studentRegistration'
+                    ? '班级代码'
+                    : '被邀请邮箱'
+              }
+              name={
+                inviteType === 'welcomeBack'
+                  ? 'accountId'
+                  : inviteType === 'studentRegistration'
+                    ? 'classCode'
+                    : 'invitedEmail'
+              }
               validateTrigger={['onChange', 'onBlur']}
               rules={
                 inviteType === 'welcomeBack'
@@ -204,17 +266,27 @@ export function InviteIssuerLabPage() {
                         message: '账号 ID 必须是正整数。',
                       },
                     ]
-                  : [
-                      { required: true, message: '请输入被邀请邮箱。' },
-                      { type: 'email', message: '请输入有效邮箱地址。' },
-                    ]
+                  : inviteType === 'studentRegistration'
+                    ? [{ required: true, message: '请输入班级代码。', whitespace: true }]
+                    : [
+                        { required: true, message: '请输入被邀请邮箱。' },
+                        { type: 'email', message: '请输入有效邮箱地址。' },
+                      ]
               }
             >
               <Input
                 placeholder={
-                  inviteType === 'welcomeBack' ? '请输入目标账号 ID' : '请输入被邀请邮箱'
+                  inviteType === 'welcomeBack'
+                    ? '请输入目标账号 ID'
+                    : inviteType === 'studentRegistration'
+                      ? '请输入班级代码'
+                      : '请输入被邀请邮箱'
                 }
-                autoComplete={inviteType === 'welcomeBack' ? 'off' : 'email'}
+                autoComplete={
+                  inviteType === 'studentRegistration' || inviteType === 'welcomeBack'
+                    ? 'off'
+                    : 'email'
+                }
               />
             </Form.Item>
 
@@ -232,11 +304,19 @@ export function InviteIssuerLabPage() {
               <Form.Item label="教职工 ID" name="staffId">
                 <Input placeholder="可选，按后端当前 contract 传 staffId" />
               </Form.Item>
+            ) : inviteType === 'studentRegistration' ? (
+              <Form.Item label="学生编号（可选）" name="studentId">
+                <Input placeholder="留空签发班级共享链接；填写后签发指定学生链接" />
+              </Form.Item>
             ) : null}
 
             <Form.Item style={{ marginBottom: 0 }}>
               <Button type="primary" htmlType="submit" block loading={submitting}>
-                {inviteType === 'welcomeBack' ? '发送回归改密邮件' : '签发邀请'}
+                {inviteType === 'welcomeBack'
+                  ? '发送回归改密邮件'
+                  : inviteType === 'studentRegistration'
+                    ? '签发学生注册链接'
+                    : '签发邀请'}
               </Button>
             </Form.Item>
           </Form>
@@ -275,7 +355,14 @@ export function InviteIssuerLabPage() {
                 {result.accountId ? (
                   <ResultItem label="目标账号 ID" value={String(result.accountId)} />
                 ) : null}
-                <ResultItem label="记录 ID" value={String(result.recordId ?? '未返回')} />
+                {result.campaignId ? (
+                  <ResultItem label="Campaign ID" value={String(result.campaignId)} />
+                ) : null}
+                {result.classCode ? <ResultItem label="班级代码" value={result.classCode} /> : null}
+                {result.studentId ? <ResultItem label="学生编号" value={result.studentId} /> : null}
+                {result.recordId ? (
+                  <ResultItem label="记录 ID" value={String(result.recordId)} />
+                ) : null}
                 <ResultItem label="Token" value={result.token || '邮件发送，前端不返回 token'} />
                 <ResultItem label="过期时间" value={formatDateTime(result.expiresAt)} />
                 <ResultItem
