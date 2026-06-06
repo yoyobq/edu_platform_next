@@ -41,6 +41,13 @@ type AcademicCalendarEventSeed = {
   version: number;
 };
 
+type AcademicCalendarGraphQLRequestCounters = {
+  academicCalendarEvents: number;
+  academicSemesters: number;
+  studentAcademicCalendarEvents: number;
+  studentAcademicSemesters: number;
+};
+
 function buildAcademicCalendarState() {
   const semesters: AcademicSemesterSeed[] = [
     {
@@ -140,8 +147,42 @@ function buildAcademicCalendarState() {
   return { events, semesters };
 }
 
+function toStudentAcademicSemesters(semesters: readonly AcademicSemesterSeed[]) {
+  return semesters.map((semester) => ({
+    endDate: semester.endDate,
+    examStartDate: semester.examStartDate,
+    firstTeachingDate: semester.firstTeachingDate,
+    id: semester.id,
+    isCurrent: semester.isCurrent,
+    name: semester.name,
+    schoolYear: semester.schoolYear,
+    startDate: semester.startDate,
+    termNumber: semester.termNumber,
+  }));
+}
+
+function toStudentAcademicCalendarEvents(events: readonly AcademicCalendarEventSeed[]) {
+  return events.map((event) => ({
+    dayPeriod: event.dayPeriod,
+    eventDate: event.eventDate,
+    eventType: event.eventType,
+    id: event.id,
+    originalDate: event.originalDate,
+    ruleNote: event.ruleNote,
+    semesterId: event.semesterId,
+    teachingCalcEffect: event.teachingCalcEffect,
+    topic: event.topic,
+  }));
+}
+
 async function mockAcademicCalendarGraphQL(page: Page) {
   const state = buildAcademicCalendarState();
+  const requestCounters: AcademicCalendarGraphQLRequestCounters = {
+    academicCalendarEvents: 0,
+    academicSemesters: 0,
+    studentAcademicCalendarEvents: 0,
+    studentAcademicSemesters: 0,
+  };
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
@@ -153,7 +194,48 @@ async function mockAcademicCalendarGraphQL(page: Page) {
     const query = typeof payload?.query === 'string' ? payload.query : '';
     const variables = payload?.variables ?? {};
 
+    if (query.includes('query StudentAcademicSemesters')) {
+      requestCounters.studentAcademicSemesters += 1;
+      const semesters = variables.isCurrent
+        ? state.semesters.filter((semester) => semester.isCurrent)
+        : state.semesters;
+      const limit = typeof variables.limit === 'number' ? variables.limit : semesters.length;
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            studentAcademicSemesters: toStudentAcademicSemesters(semesters.slice(0, limit)),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('query StudentAcademicCalendarEvents')) {
+      requestCounters.studentAcademicCalendarEvents += 1;
+      const semesterId = Number(variables.semesterId ?? 0);
+      const limit = typeof variables.limit === 'number' ? variables.limit : state.events.length;
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            studentAcademicCalendarEvents: toStudentAcademicCalendarEvents(
+              state.events
+                .filter((item) => item.semesterId === semesterId && item.recordStatus === 'ACTIVE')
+                .slice(0, limit),
+            ),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
     if (query.includes('query AcademicSemesters')) {
+      requestCounters.academicSemesters += 1;
       await route.fulfill({
         body: JSON.stringify({
           data: {
@@ -167,6 +249,7 @@ async function mockAcademicCalendarGraphQL(page: Page) {
     }
 
     if (query.includes('query AcademicCalendarEvents')) {
+      requestCounters.academicCalendarEvents += 1;
       const semesterId = Number(variables.semesterId ?? 0);
 
       await route.fulfill({
@@ -183,6 +266,8 @@ async function mockAcademicCalendarGraphQL(page: Page) {
 
     await route.fallback();
   });
+
+  return requestCounters;
 }
 
 async function seedProtectedSession(page: Page, currentSession: SeedAuthSessionOptions) {
@@ -226,7 +311,7 @@ async function overrideStoredAccessToken(page: Page, accessToken: string) {
 
 async function seedSemesterCalendarPage(page: Page, currentSession: SeedAuthSessionOptions) {
   await seedProtectedSession(page, currentSession);
-  await mockAcademicCalendarGraphQL(page);
+  return mockAcademicCalendarGraphQL(page);
 }
 
 test('admin 访问正式学期校历页时应成功并支持查看事件详情', async ({ page }) => {
@@ -282,6 +367,58 @@ test('academic officer 访问正式学期校历页时应成功', async ({ page }
   await expect(page).toHaveURL(routes.semesterCalendar);
   await expect(page.getByRole('heading', { name: '学期校历' })).toBeVisible();
   await expect(page.getByText('春季运动会')).toBeVisible();
+});
+
+test('student 访问正式学期校历页时应成功，并使用独立学生导航', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 960 });
+  const requestCounters = await seedSemesterCalendarPage(page, {
+    accountId: 2001,
+    accessGroup: ['STUDENT'],
+    displayName: 'student-user',
+    identity: {
+      currentClassCode: '1031301',
+      currentClassId: 'class-1031301',
+      id: 'S001',
+      kind: 'STUDENT',
+      upstreamId: '313010201',
+    },
+    identityName: '测试学生',
+    primaryAccessGroup: 'STUDENT',
+  });
+
+  await page.goto(routes.semesterCalendar);
+
+  await expect(page).toHaveURL(routes.semesterCalendar);
+  await expect(page.getByRole('heading', { name: '学期校历' })).toBeVisible();
+  await expect(page.getByText('春季运动会')).toBeVisible();
+  await expect(page.getByText('劳动节调休预告')).toHaveCount(0);
+
+  await page.getByText('春季运动会').click();
+  await expect(page.getByText('规则说明')).toBeVisible();
+  await expect(page.getByText('版本号')).toHaveCount(0);
+  await expect(page.getByText('更新时间')).toHaveCount(0);
+  await expect(page.getByText('生效', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('暂定', { exact: true })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(page.getByText('规则说明')).toHaveCount(0);
+
+  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await expect(page.getByRole('menuitem', { name: '学期校历' })).toBeVisible();
+  await expect(page.getByRole('menuitem', { name: '校历课表' })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: '教务助手' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await expect(page.getByText('student-user@example.com')).toBeVisible();
+  await expect(page.getByText('个人资料')).toBeVisible();
+  await expect(page.getByText('退出登录')).toBeVisible();
+  await expect(page.getByText('增加另一个账号')).toHaveCount(0);
+  expect(requestCounters).toEqual({
+    academicCalendarEvents: 0,
+    academicSemesters: 0,
+    studentAcademicCalendarEvents: 1,
+    studentAcademicSemesters: 1,
+  });
 });
 
 test('正式学期校历页应支持切换学期并刷新周视图内容', async ({ page }) => {

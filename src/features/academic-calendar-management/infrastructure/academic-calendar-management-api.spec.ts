@@ -21,6 +21,8 @@ import {
   requestAcademicCalendarEvents,
   requestAcademicSemesterDelete,
   requestAcademicSemesters,
+  requestStudentAcademicCalendarEvents,
+  requestStudentAcademicSemesters,
 } from './academic-calendar-management-api';
 
 describe('academic-calendar-management api', () => {
@@ -102,5 +104,74 @@ describe('academic-calendar-management api', () => {
     await expect(requestAcademicSemesterDelete({ id: 7 })).rejects.toThrow(
       '该学期下仍存在校历事件，无法删除。',
     );
+  });
+
+  it('uses student academic calendar queries without management-only DTO fields', async () => {
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        studentAcademicSemesters: [
+          {
+            endDate: '2026-07-10',
+            examStartDate: '2026-06-22',
+            firstTeachingDate: '2026-02-20',
+            id: 3,
+            isCurrent: true,
+            name: '2025-2026 第二学期',
+            schoolYear: 2025,
+            startDate: '2026-02-17',
+            termNumber: 2,
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        studentAcademicCalendarEvents: [
+          {
+            dayPeriod: 'ALL_DAY',
+            eventDate: '2026-05-01',
+            eventType: 'HOLIDAY',
+            id: 9,
+            originalDate: null,
+            ruleNote: '劳动节',
+            semesterId: 3,
+            teachingCalcEffect: 'CANCEL',
+            topic: '五一劳动节',
+          },
+        ],
+      });
+
+    await expect(requestStudentAcademicSemesters({ isCurrent: true, limit: 1 })).resolves.toEqual([
+      expect.objectContaining({
+        createdAt: '',
+        id: 3,
+        isCurrent: true,
+        name: '2025-2026 第二学期',
+        updatedAt: '',
+      }),
+    ]);
+
+    await expect(
+      requestStudentAcademicCalendarEvents({ limit: 500, semesterId: 3 }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: 9,
+        recordStatus: 'ACTIVE',
+        topic: '五一劳动节',
+        updatedByAccountId: null,
+        version: 0,
+      }),
+    ]);
+
+    const studentSemesterQuery = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const studentCalendarEventQuery = executeGraphQLMock.mock.calls[1]?.[0] as string;
+
+    expect(studentSemesterQuery).toContain('studentAcademicSemesters');
+    expect(studentSemesterQuery).not.toContain('createdAt');
+    expect(studentSemesterQuery).not.toContain('updatedAt');
+    expect(studentCalendarEventQuery).toContain('studentAcademicCalendarEvents');
+    expect(studentCalendarEventQuery).not.toContain('recordStatus');
+    expect(studentCalendarEventQuery).not.toContain('version');
+    expect(studentCalendarEventQuery).not.toContain('createdAt');
+    expect(studentCalendarEventQuery).not.toContain('updatedAt');
+    expect(studentCalendarEventQuery).not.toContain('updatedByAccountId');
   });
 });

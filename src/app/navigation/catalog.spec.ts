@@ -327,6 +327,18 @@ describe('navigation catalog', () => {
 
     expect(canAccessNavigationPath('/', guestFilter)).toBe(true);
     expect(canAccessNavigationPath('/', studentFilter)).toBe(true);
+    expect(canAccessNavigationPath('/calendar-schedule/semester-calendar', studentFilter)).toBe(
+      true,
+    );
+    expect(canAccessNavigationPath('/calendar-schedule/weekly-timetable', studentFilter)).toBe(
+      false,
+    );
+    expect(canAccessNavigationPath('/calendar-schedule/semester-timetable', studentFilter)).toBe(
+      false,
+    );
+    expect(canAccessNavigationPath('/academic-affairs/academic-calendar', studentFilter)).toBe(
+      false,
+    );
     expect(canAccessNavigationPath('/errors/preview', guestFilter)).toBe(true);
     expect(canAccessNavigationPath('/admin/users', guestFilter)).toBe(false);
     expect(canAccessNavigationPath('/admin/verification-issuance', guestFilter)).toBe(false);
@@ -460,6 +472,26 @@ describe('navigation catalog', () => {
         }),
       ),
     ).toBe(false);
+  });
+
+  it('exposes semester calendar as a standalone student navigation entry', () => {
+    const studentItems = getNavigationItems(
+      buildFilter({
+        accountId: 2001,
+        primaryAccessGroup: 'STUDENT',
+        accessGroup: ['STUDENT'],
+      }),
+    );
+
+    expect(studentItems.map((item) => item.key)).toEqual([
+      '/',
+      '/calendar-schedule/semester-calendar',
+    ]);
+    expect(findGroup(studentItems, 'calendar-schedule')).toBeUndefined();
+    expect(findGroup(studentItems, 'academic-assistant')).toBeUndefined();
+    expect(findGroup(studentItems, 'academic-affairs')).toBeUndefined();
+    expect(findGroup(studentItems, 'system-management')).toBeUndefined();
+    expect(findGroup(studentItems, 'labs')).toBeUndefined();
   });
 
   it('continues exposing navigation leaf items for the local entry catalog', () => {

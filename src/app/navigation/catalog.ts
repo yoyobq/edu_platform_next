@@ -4,6 +4,7 @@ import { getErrorNavigationItems } from './providers/errors';
 import { getHomeNavigationItems } from './providers/home';
 import { getLabsNavigationItems } from './providers/labs';
 import { getSandboxNavigationItems } from './providers/sandbox';
+import { getStudentNavigationItems } from './providers/student';
 import { getUpstreamDataSyncNavigationItems } from './providers/upstream-data-sync';
 import type { NavigationFilter } from './types';
 import {
@@ -15,6 +16,7 @@ import {
 
 const NAVIGATION_PROVIDERS = [
   getHomeNavigationItems,
+  getStudentNavigationItems,
   getAcademicAffairsNavigationItems,
   getUpstreamDataSyncNavigationItems,
   getLabsNavigationItems,

@@ -48,7 +48,7 @@ import {
 } from '@/app/providers';
 import { createAppThemeConfig } from '@/app/theme';
 
-import { logout, useAuthSessionState } from '@/features/auth';
+import { type AuthSessionSnapshot, logout, useAuthSessionState } from '@/features/auth';
 
 import {
   THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
@@ -58,9 +58,10 @@ import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
 
-import { AccountMenu } from './account-menu';
+import { StaffAccountMenu } from './account-menu';
 import { EntryAccentGlyph } from './entry-accent-glyph';
 import { NavSidebar } from './nav-sidebar';
+import { StudentAccountMenu } from './student-account-menu';
 import { useMediaQuery } from './use-media-query';
 
 type AppLayoutProps = {
@@ -86,6 +87,16 @@ const ThirdWorkspaceDemoHost = lazy(() =>
 
 function getBaseURL(pathname: string, search: string): string {
   return withWorkbenchSearch(pathname, search);
+}
+
+function isStudentWorkspaceSession(snapshot: AuthSessionSnapshot) {
+  const accessGroup = snapshot.userInfo.accessGroup;
+
+  return (
+    accessGroup.includes('STUDENT') &&
+    !accessGroup.includes('ADMIN') &&
+    !accessGroup.includes('STAFF')
+  );
 }
 
 function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
@@ -357,10 +368,14 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     '--layout-main-width': `${Math.round(mainWidth)}px`,
     ...frameShiftStyle,
   };
+  const AccountMenuComponent =
+    activeSnapshot && isStudentWorkspaceSession(activeSnapshot)
+      ? StudentAccountMenu
+      : StaffAccountMenu;
   const sidebarFooter = hasSidebar ? (
     <div className="flex flex-col gap-2">
       {activeSnapshot ? (
-        <AccountMenu
+        <AccountMenuComponent
           activeSnapshot={activeSnapshot}
           controlSize={NAV_RAIL_CONTROL_SIZE}
           fontScale={fontScale}
@@ -563,7 +578,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   </Tooltip>
 
                   {authSession.status === 'authenticated' && activeSnapshot ? (
-                    <AccountMenu
+                    <AccountMenuComponent
                       activeSnapshot={activeSnapshot}
                       controlSize={NAV_RAIL_CONTROL_SIZE}
                       fontScale={fontScale}

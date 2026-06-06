@@ -129,7 +129,7 @@ function getSwitchFailureMessage(error: unknown) {
   return error instanceof Error ? error.message : '切换账号失败，请稍后再试。';
 }
 
-export function AccountMenu({
+export function StaffAccountMenu({
   activeSnapshot,
   controlSize,
   fontScale,

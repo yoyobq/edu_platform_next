@@ -258,6 +258,52 @@ describe('public auth api student registration', () => {
     });
   });
 
+  it('maps student registration identity top-level link errors as link failures', async () => {
+    const error = new Error('学生注册链接已过期');
+
+    hasGraphQLErrorCodeMock.mockImplementation(
+      (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_EXPIRED',
+    );
+    executeGraphQLMock.mockRejectedValueOnce(error);
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationIdentity({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'LINK_EXPIRED',
+      message: '这个学生注册链接已经过期，请联系班主任或管理员重新获取链接。',
+      status: 'failure',
+    });
+  });
+
+  it('maps student registration identity top-level inactive link errors as link failures', async () => {
+    const error = new Error('学生注册链接不可用');
+
+    hasGraphQLErrorCodeMock.mockImplementation(
+      (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
+    );
+    executeGraphQLMock.mockRejectedValueOnce(error);
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationIdentity({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'LINK_NOT_ACTIVE',
+      message: '这个学生注册链接暂时不可用，请联系班主任或管理员确认链接状态。',
+      status: 'failure',
+    });
+  });
+
   it('verifies student registration account fields before final consume', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       verifyStudentRegistrationAccount: {
@@ -317,6 +363,29 @@ describe('public auth api student registration', () => {
       canProceed: false,
       reason: 'LOGIN_NAME_TAKEN',
       message: '这个登录名已被使用，请换一个。',
+      status: 'failure',
+    });
+  });
+
+  it('maps student registration account top-level link errors as link failures', async () => {
+    const error = new Error('学生注册链接不可用');
+
+    hasGraphQLErrorCodeMock.mockImplementation(
+      (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
+    );
+    executeGraphQLMock.mockRejectedValueOnce(error);
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationAccount({
+        token: 'token-001',
+        loginName: 'stu001',
+        loginPassword: 'abc12345!',
+        nickname: '小张',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'LINK_NOT_ACTIVE',
+      message: '这个学生注册链接暂时不可用，请联系班主任或管理员确认链接状态。',
       status: 'failure',
     });
   });

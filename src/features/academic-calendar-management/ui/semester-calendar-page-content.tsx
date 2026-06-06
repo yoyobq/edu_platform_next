@@ -80,6 +80,7 @@ const DAY_PERIOD_LABELS_FULL: Record<AcademicCalendarEventDayPeriod, string> = {
 };
 
 const TOOLTIP_EVENT_LIMIT = 5;
+const DEFAULT_SEMESTER_QUERY_INPUT = { limit: 500 } as const;
 
 const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   ACTIVITY: '活动',
@@ -113,10 +114,13 @@ type SelectedCalendarDayEvents = {
 };
 
 type SemesterCalendarPageContentProps = {
+  emptySemestersDescription?: string;
   listAcademicCalendarEvents: (
     input: ListAcademicCalendarEventsInput,
   ) => Promise<AcademicCalendarEventRecord[]>;
   listAcademicSemesters: (input: ListAcademicSemestersInput) => Promise<AcademicSemesterRecord[]>;
+  semesterQueryInput?: ListAcademicSemestersInput;
+  showEventManagementMetadata?: boolean;
 };
 
 function buildDayCellTooltipLines(events: AcademicCalendarEventRecord[]) {
@@ -227,8 +231,11 @@ function findMainScrollContainer(element: HTMLElement) {
 }
 
 export function SemesterCalendarPageContent({
+  emptySemestersDescription = '当前还没有可浏览的学期',
   listAcademicCalendarEvents,
   listAcademicSemesters,
+  semesterQueryInput = DEFAULT_SEMESTER_QUERY_INPUT,
+  showEventManagementMetadata = true,
 }: SemesterCalendarPageContentProps) {
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
@@ -257,7 +264,7 @@ export function SemesterCalendarPageContent({
     setSemesterError(null);
 
     try {
-      const result = sortSemesters(await listAcademicSemesters({ limit: 500 }));
+      const result = sortSemesters(await listAcademicSemesters(semesterQueryInput));
 
       setSemesters(result);
       setSelectedSemesterId((currentSelection) => pickNextSemesterId(result, currentSelection));
@@ -266,7 +273,7 @@ export function SemesterCalendarPageContent({
     } finally {
       setSemestersLoading(false);
     }
-  }, [listAcademicSemesters]);
+  }, [listAcademicSemesters, semesterQueryInput]);
 
   const loadEvents = useCallback(
     async (semesterId: number) => {
@@ -495,7 +502,7 @@ export function SemesterCalendarPageContent({
         ) : semestersLoading ? (
           <Skeleton active paragraph={{ rows: 2 }} />
         ) : semesters.length === 0 ? (
-          <Empty description="当前还没有可浏览的学期" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          <Empty description={emptySemestersDescription} image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : !selectedSemester ? (
           <Empty description="当前未选中学期" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         ) : eventsLoading ? (
@@ -794,12 +801,13 @@ export function SemesterCalendarPageContent({
                     </Typography.Text>
                     <Tag>{DAY_PERIOD_LABELS_FULL[event.dayPeriod]}</Tag>
                     <Tag color="blue">{EVENT_TYPE_LABELS[event.eventType]}</Tag>
-                    <Tag>{RECORD_STATUS_LABELS[event.recordStatus]}</Tag>
+                    {showEventManagementMetadata ? (
+                      <Tag>{RECORD_STATUS_LABELS[event.recordStatus]}</Tag>
+                    ) : null}
                   </div>
 
-                  <Descriptions
-                    column={1}
-                    items={[
+                  {(() => {
+                    const detailItems = [
                       {
                         key: 'semester',
                         label: '所属学期',
@@ -822,18 +830,24 @@ export function SemesterCalendarPageContent({
                         label: '原始日期',
                         children: event.originalDate ? formatDisplayDate(event.originalDate) : '—',
                       },
-                      {
-                        key: 'updatedAt',
-                        label: '更新时间',
-                        children: formatDateTime(event.updatedAt),
-                      },
-                      {
-                        key: 'version',
-                        label: '版本号',
-                        children: event.version,
-                      },
-                    ]}
-                  />
+                      ...(showEventManagementMetadata
+                        ? [
+                            {
+                              key: 'updatedAt',
+                              label: '更新时间',
+                              children: formatDateTime(event.updatedAt),
+                            },
+                            {
+                              key: 'version',
+                              label: '版本号',
+                              children: event.version,
+                            },
+                          ]
+                        : []),
+                    ];
+
+                    return <Descriptions column={1} items={detailItems} />;
+                  })()}
 
                   <div>
                     <Typography.Text strong>规则说明</Typography.Text>

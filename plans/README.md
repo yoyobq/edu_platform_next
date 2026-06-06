@@ -83,4 +83,5 @@ plan 不负责定义稳定规则。
 ## 当前计划
 
 - [staff-slot-management-plan.md](./staff-slot-management-plan.md)
+- [student-login-navigation-plan.md](./student-login-navigation-plan.md)
 - [ui-ux-evolution-direction.md](./ui-ux-evolution-direction.md)

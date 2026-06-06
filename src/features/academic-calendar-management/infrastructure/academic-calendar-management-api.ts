@@ -121,6 +121,60 @@ const DELETE_ACADEMIC_CALENDAR_EVENT_MUTATION = `
 
 type AcademicSemesterDTO = AcademicSemesterEntityRecord;
 type AcademicCalendarEventDTO = AcademicCalendarEventRecord;
+type StudentAcademicSemesterDTO = {
+  endDate: string;
+  examStartDate: string;
+  firstTeachingDate: string;
+  id: number;
+  isCurrent: boolean;
+  name: string;
+  schoolYear: number;
+  startDate: string;
+  termNumber: number;
+};
+type StudentAcademicCalendarEventDTO = {
+  dayPeriod: AcademicCalendarEventRecord['dayPeriod'];
+  eventDate: string;
+  eventType: AcademicCalendarEventRecord['eventType'];
+  id: number;
+  originalDate: string | null;
+  ruleNote: string | null;
+  semesterId: number;
+  teachingCalcEffect: AcademicCalendarEventRecord['teachingCalcEffect'];
+  topic: string;
+};
+
+const LIST_STUDENT_ACADEMIC_SEMESTERS_QUERY = `
+  query StudentAcademicSemesters($isCurrent: Boolean, $limit: Int) {
+    studentAcademicSemesters(isCurrent: $isCurrent, limit: $limit) {
+      id
+      schoolYear
+      termNumber
+      name
+      startDate
+      firstTeachingDate
+      examStartDate
+      endDate
+      isCurrent
+    }
+  }
+`;
+
+const LIST_STUDENT_ACADEMIC_CALENDAR_EVENTS_QUERY = `
+  query StudentAcademicCalendarEvents($semesterId: Int!, $limit: Int) {
+    studentAcademicCalendarEvents(semesterId: $semesterId, limit: $limit) {
+      id
+      semesterId
+      topic
+      eventDate
+      dayPeriod
+      eventType
+      teachingCalcEffect
+      ruleNote
+      originalDate
+    }
+  }
+`;
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
@@ -163,6 +217,45 @@ function mapAcademicCalendarEventRecord(
     updatedAt: record.updatedAt,
     updatedByAccountId: record.updatedByAccountId,
     version: record.version,
+  };
+}
+
+function mapStudentAcademicSemesterRecord(
+  record: StudentAcademicSemesterDTO,
+): AcademicSemesterRecord {
+  return {
+    createdAt: '',
+    endDate: record.endDate,
+    examStartDate: record.examStartDate,
+    firstTeachingDate: record.firstTeachingDate,
+    id: record.id,
+    isCurrent: record.isCurrent,
+    name: record.name,
+    schoolYear: record.schoolYear,
+    startDate: record.startDate,
+    termNumber: record.termNumber,
+    updatedAt: '',
+  };
+}
+
+function mapStudentAcademicCalendarEventRecord(
+  record: StudentAcademicCalendarEventDTO,
+): AcademicCalendarEventRecord {
+  return {
+    createdAt: '',
+    dayPeriod: record.dayPeriod,
+    eventDate: record.eventDate,
+    eventType: record.eventType,
+    id: record.id,
+    originalDate: record.originalDate,
+    recordStatus: 'ACTIVE',
+    ruleNote: record.ruleNote,
+    semesterId: record.semesterId,
+    teachingCalcEffect: record.teachingCalcEffect,
+    topic: record.topic,
+    updatedAt: '',
+    updatedByAccountId: null,
+    version: 0,
   };
 }
 
@@ -244,6 +337,43 @@ export async function requestAcademicCalendarEvents(input: ListAcademicCalendarE
     return response.academicCalendarEvents.map(mapAcademicCalendarEventRecord);
   } catch (error) {
     throw new Error(resolveAcademicCalendarErrorMessage(error, '暂时无法加载校历事件列表。'));
+  }
+}
+
+export async function requestStudentAcademicSemesters(
+  input: Pick<ListAcademicSemestersInput, 'isCurrent' | 'limit'> = {},
+) {
+  try {
+    const response = await requestGraphQL<
+      { studentAcademicSemesters: StudentAcademicSemesterDTO[] },
+      Pick<ListAcademicSemestersInput, 'isCurrent' | 'limit'>
+    >(LIST_STUDENT_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.studentAcademicSemesters.map(mapStudentAcademicSemesterRecord);
+  } catch (error) {
+    throw new Error(resolveAcademicCalendarErrorMessage(error, '暂时无法加载学生学期校历。'));
+  }
+}
+
+export async function requestStudentAcademicCalendarEvents(
+  input: Pick<ListAcademicCalendarEventsInput, 'limit' | 'semesterId'>,
+) {
+  try {
+    if (typeof input.semesterId !== 'number') {
+      throw new Error('缺少学期 ID。');
+    }
+
+    const response = await requestGraphQL<
+      { studentAcademicCalendarEvents: StudentAcademicCalendarEventDTO[] },
+      { limit?: number; semesterId: number }
+    >(LIST_STUDENT_ACADEMIC_CALENDAR_EVENTS_QUERY, {
+      limit: input.limit,
+      semesterId: input.semesterId,
+    });
+
+    return response.studentAcademicCalendarEvents.map(mapStudentAcademicCalendarEventRecord);
+  } catch (error) {
+    throw new Error(resolveAcademicCalendarErrorMessage(error, '暂时无法加载学生校历事件。'));
   }
 }
 

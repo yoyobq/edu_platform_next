@@ -1195,6 +1195,17 @@ export const publicAuthApi: PublicAuthApiPort = {
         status: 'failure',
       };
     } catch (error) {
+      const linkFailureReason = resolveStudentRegistrationLinkFailureReasonFromError(error);
+
+      if (linkFailureReason) {
+        return {
+          canProceed: false,
+          message: resolveStudentRegistrationIdentityVerificationFailureMessage(linkFailureReason),
+          reason: linkFailureReason,
+          status: 'failure',
+        };
+      }
+
       if (isStudentRegistrationIdentityMismatchError(error)) {
         return {
           canProceed: false,
@@ -1259,6 +1270,17 @@ export const publicAuthApi: PublicAuthApiPort = {
         status: 'failure',
       };
     } catch (error) {
+      const linkFailureReason = resolveStudentRegistrationLinkFailureReasonFromError(error);
+
+      if (linkFailureReason) {
+        return {
+          canProceed: false,
+          message: resolveStudentRegistrationAccountVerificationFailureMessage(linkFailureReason),
+          reason: linkFailureReason,
+          status: 'failure',
+        };
+      }
+
       return {
         status: 'error',
         message: resolvePublicAuthErrorMessage(error, '暂时无法校验账号信息。'),
