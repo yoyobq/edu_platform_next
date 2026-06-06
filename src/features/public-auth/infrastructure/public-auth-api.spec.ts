@@ -104,6 +104,44 @@ describe('public auth api student registration', () => {
     });
   });
 
+  it('maps consumed student registration links as inactive failures with info', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      publicStudentRegistrationLinkInfo: {
+        success: false,
+        reason: 'LINK_NOT_ACTIVE',
+        message: '学生注册链接不可用',
+        info: {
+          canProceed: false,
+          status: 'CONSUMED',
+          scope: 'STUDENT',
+          classCode: '1031301',
+          className: '信息1301班',
+          studentId: 'S001',
+          expiresAt: '2026-06-30T12:00:00.000Z',
+        },
+      },
+    });
+
+    await expect(
+      publicAuthApi.getStudentRegistrationLinkInfo({
+        token: 'consumed-token',
+      }),
+    ).resolves.toEqual({
+      status: 'failure',
+      reason: 'LINK_NOT_ACTIVE',
+      message: '学生注册链接不可用',
+      info: {
+        canProceed: false,
+        status: 'CONSUMED',
+        scope: 'STUDENT',
+        classCode: '1031301',
+        className: '信息1301班',
+        studentId: 'S001',
+        expiresAt: '2026-06-30T12:00:00.000Z',
+      },
+    });
+  });
+
   it('consumes student registration link with normalized input and pending email fields', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       consumeStudentRegistrationLink: {
@@ -301,6 +339,30 @@ describe('public auth api student registration', () => {
     ).resolves.toEqual({
       status: 'identity-mismatch',
       message: '身份信息不匹配，请核对后重试。',
+    });
+  });
+
+  it('maps final student registration link errors as link failures', async () => {
+    const error = new Error('学生注册链接不可用');
+
+    hasGraphQLErrorCodeMock.mockImplementation(
+      (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
+    );
+    executeGraphQLMock.mockRejectedValueOnce(error);
+
+    await expect(
+      publicAuthApi.consumeStudentRegistrationLink({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+        loginEmail: 'student@example.com',
+        loginPassword: 'abc12345',
+      }),
+    ).resolves.toEqual({
+      status: 'link-failure',
+      reason: 'LINK_NOT_ACTIVE',
+      message: '这个学生注册链接暂时不可用，请联系班主任或管理员确认链接状态。',
     });
   });
 

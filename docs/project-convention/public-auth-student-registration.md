@@ -33,13 +33,18 @@
 - 身份预校验失败统一展示“身份信息不匹配，请核对后重试。”
 - 从账号信息进入登录邮箱前，调用 `verifyStudentRegistrationAccount`
 - `verifyStudentRegistrationAccount` 只做只读校验，不创建账号、不绑定学生档案、不签发邮箱验证
+- 预校验或最终提交返回链接级 reason（`LINK_NOT_FOUND` / `LINK_EXPIRED` / `LINK_REVOKED` /
+  `LINK_NOT_ACTIVE` / `CLASS_NOT_FOUND`）时，重新读取 `publicStudentRegistrationLinkInfo`
+  并进入整页失效态
 - `LOGIN_NAME_TAKEN` 统一展示“这个登录名已被使用，请换一个。”
 - 账号预校验不校验 `loginEmail`；登录邮箱仍由最终注册提交校验
 - `loginEmail` 是 `account.loginEmail`，不是学生资料邮箱
 
 提交 `consumeStudentRegistrationLink` 成功后：
 
-- 表示账号、`base_user_info`、既有 `member_student.account_id` 绑定、claim 与登录邮箱验证记录已落库
+- 表示账号、`base_user_info`、既有 `member_student.account_id` 绑定与登录邮箱验证记录已落库；
+  `scope=STUDENT` 的注册链接已在同一事务内标记为 `CONSUMED`，`scope=CLASS`
+  的注册链接继续可复用
 - 账号状态为 `PENDING`，前端不创建登录态、不自动登录
 - `emailVerificationRequired=true && emailVerificationSent=true` 时提示查收验证邮件
 - `emailVerificationRequired=true && emailVerificationSent=false` 时提示注册已完成但初始邮件未发送，并提供重发入口

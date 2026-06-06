@@ -117,7 +117,7 @@ type PublicStudentRegistrationLinkInfoResponse = {
       className?: string | null;
       expiresAt: string;
       scope: 'CLASS' | 'STUDENT';
-      status: 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+      status: 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
       studentId?: string | null;
     } | null;
     message?: string | null;
@@ -731,6 +731,51 @@ function resolveStudentRegistrationAccountVerificationFailureMessage(
   return resolveStudentRegistrationLinkFailureMessage(reason);
 }
 
+const STUDENT_REGISTRATION_LINK_ERROR_CODE_REASON_MAP: {
+  codes: readonly string[];
+  reason: StudentRegistrationLinkReason;
+}[] = [
+  {
+    reason: 'LINK_NOT_FOUND',
+    codes: ['STUDENT_REGISTRATION_LINK_NOT_FOUND', 'LINK_NOT_FOUND'],
+  },
+  {
+    reason: 'LINK_EXPIRED',
+    codes: ['STUDENT_REGISTRATION_LINK_EXPIRED', 'LINK_EXPIRED'],
+  },
+  {
+    reason: 'LINK_REVOKED',
+    codes: ['STUDENT_REGISTRATION_LINK_REVOKED', 'LINK_REVOKED'],
+  },
+  {
+    reason: 'LINK_NOT_ACTIVE',
+    codes: [
+      'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
+      'STUDENT_REGISTRATION_LINK_ALREADY_CONSUMED',
+      'STUDENT_REGISTRATION_LINK_CONSUMED',
+      'LINK_NOT_ACTIVE',
+    ],
+  },
+  {
+    reason: 'CLASS_NOT_FOUND',
+    codes: [
+      'STUDENT_REGISTRATION_CLASS_NOT_FOUND',
+      'STUDENT_REGISTRATION_LINK_CLASS_NOT_FOUND',
+      'CLASS_NOT_FOUND',
+    ],
+  },
+];
+
+function resolveStudentRegistrationLinkFailureReasonFromError(
+  error: unknown,
+): StudentRegistrationLinkReason | null {
+  const matched = STUDENT_REGISTRATION_LINK_ERROR_CODE_REASON_MAP.find(({ codes }) =>
+    codes.some((code) => hasGraphQLErrorCode(error, code)),
+  );
+
+  return matched?.reason ?? null;
+}
+
 function resolveLoginEmailVerificationFailureMessage(
   reason: LoginEmailVerificationReason,
   fallback?: string | null,
@@ -1272,6 +1317,16 @@ export const publicAuthApi: PublicAuthApiPort = {
         return {
           status: 'identity-mismatch',
           message: '身份信息不匹配，请核对后重试。',
+        };
+      }
+
+      const linkFailureReason = resolveStudentRegistrationLinkFailureReasonFromError(error);
+
+      if (linkFailureReason) {
+        return {
+          status: 'link-failure',
+          reason: linkFailureReason,
+          message: resolveStudentRegistrationLinkFailureMessage(linkFailureReason),
         };
       }
 

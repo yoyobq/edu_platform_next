@@ -176,6 +176,224 @@ test('学生注册链接注册成功后应进入待验证登录邮箱状态并�
   });
 });
 
+test('账号预校验遇到链接失效时应刷新链接状态并进入整页失效态', async ({ page }) => {
+  let linkInfoRequests = 0;
+
+  await mockApiHealth(page);
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query PublicStudentRegistrationLinkInfo')) {
+      linkInfoRequests += 1;
+
+      if (linkInfoRequests === 1) {
+        await fulfillGraphQL(route, {
+          data: {
+            publicStudentRegistrationLinkInfo: {
+              success: true,
+              reason: 'AVAILABLE',
+              message: null,
+              info: {
+                canProceed: true,
+                status: 'ACTIVE',
+                scope: 'STUDENT',
+                classCode: '1031301',
+                className: '信息1301班',
+                studentId: 'S001',
+                expiresAt: '2026-06-30T12:00:00.000Z',
+              },
+            },
+          },
+        });
+        return;
+      }
+
+      await fulfillGraphQL(route, {
+        data: {
+          publicStudentRegistrationLinkInfo: {
+            success: false,
+            reason: 'LINK_NOT_ACTIVE',
+            message: '学生注册链接不可用',
+            info: {
+              canProceed: false,
+              status: 'CONSUMED',
+              scope: 'STUDENT',
+              classCode: '1031301',
+              className: '信息1301班',
+              studentId: 'S001',
+              expiresAt: '2026-06-30T12:00:00.000Z',
+            },
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationIdentity')) {
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationIdentity: {
+            success: true,
+            canProceed: true,
+            reason: 'AVAILABLE',
+            message: null,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationAccount')) {
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationAccount: {
+            success: false,
+            canProceed: false,
+            reason: 'LINK_NOT_ACTIVE',
+            message: '学生注册链接不可用',
+          },
+        },
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.studentRegister('student-register-consumed-during-account-001'));
+
+  await expect(page.getByLabel('学号')).toHaveValue('S001');
+  await expect(page.getByLabel('学号')).toBeDisabled();
+  await page.getByLabel('学生姓名').fill('张三');
+  await page.getByLabel('身份证后 6 位').fill('A12345');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByLabel('昵称（可选）')).toHaveValue('张三');
+  await page.getByLabel('登录名（可选）').fill('stu001');
+  await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Abc12345!');
+  await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Abc12345!');
+  await page.getByRole('button', { name: '下一步' }).click();
+
+  await expect(page.getByRole('alert').filter({ hasText: '注册链接已使用' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: '学生注册链接不可用' })).toBeVisible();
+  await expect(page.getByLabel('登录邮箱')).toHaveCount(0);
+  expect(linkInfoRequests).toBe(2);
+});
+
+test('最终提交遇到链接失效时应刷新链接状态并进入整页失效态', async ({ page }) => {
+  let linkInfoRequests = 0;
+
+  await mockApiHealth(page);
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (query.includes('query PublicStudentRegistrationLinkInfo')) {
+      linkInfoRequests += 1;
+
+      await fulfillGraphQL(route, {
+        data: {
+          publicStudentRegistrationLinkInfo:
+            linkInfoRequests === 1
+              ? {
+                  success: true,
+                  reason: 'AVAILABLE',
+                  message: null,
+                  info: {
+                    canProceed: true,
+                    status: 'ACTIVE',
+                    scope: 'STUDENT',
+                    classCode: '1031301',
+                    className: '信息1301班',
+                    studentId: 'S001',
+                    expiresAt: '2026-06-30T12:00:00.000Z',
+                  },
+                }
+              : {
+                  success: false,
+                  reason: 'LINK_NOT_ACTIVE',
+                  message: '学生注册链接不可用',
+                  info: {
+                    canProceed: false,
+                    status: 'CONSUMED',
+                    scope: 'STUDENT',
+                    classCode: '1031301',
+                    className: '信息1301班',
+                    studentId: 'S001',
+                    expiresAt: '2026-06-30T12:00:00.000Z',
+                  },
+                },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationIdentity')) {
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationIdentity: {
+            success: true,
+            canProceed: true,
+            reason: 'AVAILABLE',
+            message: null,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation VerifyStudentRegistrationAccount')) {
+      await fulfillGraphQL(route, {
+        data: {
+          verifyStudentRegistrationAccount: {
+            success: true,
+            canProceed: true,
+            reason: 'AVAILABLE',
+            message: null,
+          },
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation ConsumeStudentRegistrationLink')) {
+      await fulfillGraphQL(route, {
+        errors: [
+          {
+            message: '学生注册链接不可用',
+            extensions: {
+              code: 'BAD_USER_INPUT',
+              errorCode: 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
+              errorMessage: '学生注册链接不可用',
+            },
+          },
+        ],
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.studentRegister('student-register-consumed-during-submit-001'));
+
+  await expect(page.getByLabel('学号')).toHaveValue('S001');
+  await page.getByLabel('学生姓名').fill('张三');
+  await page.getByLabel('身份证后 6 位').fill('A12345');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByLabel('登录名（可选）').fill('stu001');
+  await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Abc12345!');
+  await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Abc12345!');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await page.getByLabel('登录邮箱').fill('student@example.com');
+  await page.getByRole('button', { name: '提交注册' }).click();
+
+  await expect(page.getByRole('alert').filter({ hasText: '注册链接已使用' })).toBeVisible();
+  await expect(page.getByRole('alert').filter({ hasText: '学生注册链接不可用' })).toBeVisible();
+  await expect(page.getByLabel('登录邮箱')).toHaveCount(0);
+  expect(linkInfoRequests).toBe(2);
+});
+
 test('指定学生注册链接应锁定学号输入', async ({ page }) => {
   await mockApiHealth(page);
   await page.route('**/graphql', async (route) => {

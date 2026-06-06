@@ -20,6 +20,13 @@ import { publicAuthApi } from '../infrastructure/public-auth-api';
 
 const PUBLIC_AUTH_RETURN_LOGIN_URL = '/login?skipRestore=1';
 const FALLBACK_STUDENT_REGISTRATION_ID_EXAMPLE = '3130102XX';
+const STUDENT_REGISTRATION_LINK_LEVEL_REASONS = new Set<string>([
+  'CLASS_NOT_FOUND',
+  'LINK_EXPIRED',
+  'LINK_NOT_ACTIVE',
+  'LINK_NOT_FOUND',
+  'LINK_REVOKED',
+]);
 
 type StudentRegistrationPhase = 'loading' | 'ready' | 'failure' | 'error' | 'pending-email';
 
@@ -66,7 +73,20 @@ const studentRegistrationSteps: StudentRegistrationStep[] = [
   },
 ];
 
-function resolveLinkFailureTitle(reason: StudentRegistrationLinkReason) {
+function isStudentRegistrationLinkLevelReason(
+  reason: string,
+): reason is StudentRegistrationLinkReason {
+  return STUDENT_REGISTRATION_LINK_LEVEL_REASONS.has(reason);
+}
+
+function resolveLinkFailureTitle(
+  reason: StudentRegistrationLinkReason,
+  info: StudentRegistrationLinkInfo | null,
+) {
+  if (info?.status === 'CONSUMED') {
+    return '注册链接已使用';
+  }
+
   if (reason === 'LINK_EXPIRED') {
     return '注册链接已过期';
   }
@@ -169,14 +189,17 @@ function StudentRegistrationForm({
 }) {
   const [form] = Form.useForm<StudentRegistrationFormValues>();
   const [nicknameTouched, setNicknameTouched] = useState(false);
+  const [stepTransitioning, setStepTransitioning] = useState(false);
   const currentStepRef = useRef(currentStep);
+  const nextStepInFlightRef = useRef(false);
   const verificationRequestIdRef = useRef(0);
   const isStudentIdLocked = info.scope === 'STUDENT' && Boolean(info.studentId);
   const isLastStep = currentStep === studentRegistrationSteps.length - 1;
   const studentIdExample = resolveStudentIdExample(info);
-  const isIdentityStepVerifying = currentStep === 0 && verifyingIdentity;
-  const isAccountStepVerifying = currentStep === 1 && verifyingAccount;
-  const isCurrentStepBusy = isIdentityStepVerifying || isAccountStepVerifying || submitting;
+  const isIdentityStepVerifying = currentStep === 0 && (verifyingIdentity || stepTransitioning);
+  const isAccountStepVerifying = currentStep === 1 && (verifyingAccount || stepTransitioning);
+  const isCurrentStepBusy =
+    isIdentityStepVerifying || isAccountStepVerifying || stepTransitioning || submitting;
 
   useEffect(() => {
     form.setFieldsValue({
@@ -209,9 +232,12 @@ function StudentRegistrationForm({
   }
 
   async function goToNextStep() {
-    if (isCurrentStepBusy) {
+    if (isCurrentStepBusy || nextStepInFlightRef.current) {
       return;
     }
+
+    nextStepInFlightRef.current = true;
+    setStepTransitioning(true);
 
     try {
       const stepAtRequest = currentStep;
@@ -264,11 +290,14 @@ function StudentRegistrationForm({
       onCurrentStepChange(Math.min(stepAtRequest + 1, studentRegistrationSteps.length - 1));
     } catch {
       // antd Form has already rendered field-level validation feedback.
+    } finally {
+      nextStepInFlightRef.current = false;
+      setStepTransitioning(false);
     }
   }
 
   function goToPreviousStep() {
-    if (isCurrentStepBusy) {
+    if (isCurrentStepBusy || nextStepInFlightRef.current) {
       return;
     }
 
@@ -524,7 +553,12 @@ function StudentRegistrationFailureState({
   return (
     <Flex vertical gap={16}>
       {info ? <StudentRegistrationSummaryCard info={info} /> : null}
-      <Alert type="error" showIcon title={resolveLinkFailureTitle(reason)} description={message} />
+      <Alert
+        type="error"
+        showIcon
+        title={resolveLinkFailureTitle(reason, info)}
+        description={message}
+      />
       <Flex gap={8} justify="flex-end" wrap>
         <Button onClick={onReload} icon={<ReloadOutlined />}>
           重新读取
@@ -708,6 +742,7 @@ export function StudentRegistrationLinkPanel({
       }
 
       if (result.status === 'failure') {
+        setLinkInfo(result.info);
         setLinkFailure({
           info: result.info,
           message: result.message,
@@ -727,6 +762,39 @@ export function StudentRegistrationLinkPanel({
       isActive = false;
     };
   }, [reloadKey, token]);
+
+  async function refreshStudentRegistrationLinkState() {
+    const result = await publicAuthApi.getStudentRegistrationLinkInfo({
+      token,
+    });
+
+    setSubmitError(null);
+
+    if (result.status === 'ready') {
+      setLinkInfo(result.info);
+      setLinkFailure(null);
+      setPageError(null);
+      setPhase('ready');
+      return 'ready';
+    }
+
+    if (result.status === 'failure') {
+      setLinkInfo(result.info);
+      setLinkFailure({
+        info: result.info,
+        message: result.message,
+        reason: result.reason,
+      });
+      setPageError(null);
+      setPhase('failure');
+      return 'blocked';
+    }
+
+    setLinkFailure(null);
+    setPageError(result.message);
+    setPhase('error');
+    return 'blocked';
+  }
 
   if (phase === 'loading') {
     return (
@@ -798,6 +866,19 @@ export function StudentRegistrationLinkPanel({
               return true;
             }
 
+            if (
+              result.status === 'failure' &&
+              isStudentRegistrationLinkLevelReason(result.reason)
+            ) {
+              const latestState = await refreshStudentRegistrationLinkState();
+
+              if (latestState === 'ready') {
+                setSubmitError(result.message);
+              }
+
+              return false;
+            }
+
             setSubmitError(result.message);
             return false;
           } finally {
@@ -818,6 +899,19 @@ export function StudentRegistrationLinkPanel({
 
             if (result.status === 'success') {
               return true;
+            }
+
+            if (
+              result.status === 'failure' &&
+              isStudentRegistrationLinkLevelReason(result.reason)
+            ) {
+              const latestState = await refreshStudentRegistrationLinkState();
+
+              if (latestState === 'ready') {
+                setSubmitError(result.message);
+              }
+
+              return false;
             }
 
             setSubmitError(result.message);
@@ -845,6 +939,16 @@ export function StudentRegistrationLinkPanel({
             if (result.status === 'success') {
               setSuccessResult(result);
               setPhase('pending-email');
+              return;
+            }
+
+            if (result.status === 'link-failure') {
+              const latestState = await refreshStudentRegistrationLinkState();
+
+              if (latestState === 'ready') {
+                setSubmitError(result.message);
+              }
+
               return;
             }
 

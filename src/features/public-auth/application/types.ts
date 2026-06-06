@@ -124,7 +124,7 @@ export type StudentRegistrationLinkReason =
   | 'LINK_REVOKED';
 
 export type StudentRegistrationLinkScope = 'CLASS' | 'STUDENT';
-export type StudentRegistrationLinkStatus = 'ACTIVE' | 'EXPIRED' | 'REVOKED';
+export type StudentRegistrationLinkStatus = 'ACTIVE' | 'CONSUMED' | 'EXPIRED' | 'REVOKED';
 
 export type StudentRegistrationLinkInfo = {
   canProceed: boolean;
@@ -223,6 +223,7 @@ export type StudentRegistrationConsumptionResult =
       status: 'success';
     }
   | { message: string; status: 'identity-mismatch' }
+  | { message: string; reason: StudentRegistrationLinkReason; status: 'link-failure' }
   | { message: string; status: 'failure' }
   | { message: string; status: 'error' };
 
