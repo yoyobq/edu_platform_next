@@ -246,7 +246,9 @@
 在菜单语义上，当前进一步收口为：
 
 - `primaryAccessGroup` 决定正式一级菜单的主身份语义
-- 当前 admin 导航 capability 以授权为准：只要 `accessGroup` 包含 `ADMIN`，即可启用 admin 导航入口
+- 当前 `ADMIN / STAFF / STUDENT` 均已有正式侧栏入口，具体菜单由 `src/app/navigation/` provider 与 access helper 聚合过滤
+- `ADMIN / STAFF` 当前使用完整分组式管理与教务入口
+- 纯 `STUDENT` 当前使用独立轻量导航入口与账户菜单，不复用 staff/admin 完整分组骨架
 - `REGISTRANT` 不进入正式菜单体系，只保留补全过程所需壳层与入口
 - `slotGroup` 只承接跨页面持续存在的全局职责插槽
 - 进入 `slotGroup` 的职责必须具备独立 landing page

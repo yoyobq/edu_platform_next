@@ -88,8 +88,9 @@
 当前正式规则进一步明确：
 
 - 菜单 capability 不是全站默认前提
-- 第一批启用范围只收 `admin` 域
-- 当前首页 `/` 已纳入首批 admin 导航入口；public entry 与其他尚未拆出的轻壳页面可以继续保持 `none`
+- 完整分组式正式菜单当前以 `ADMIN / STAFF` 的管理与教务入口为主
+- 纯 `STUDENT` 已有独立轻量导航入口与账户菜单，当前导航树包含首页 `/` 与学期校历 `/calendar-schedule/semester-calendar`
+- public entry 与其他尚未拆出的轻壳页面可以继续保持 `none`
 - 菜单回归后，首页仍是摘要与入口，不退化为普通菜单落地页
 - Sidecar 与协作入口仍保留独立角色，不被侧边菜单吞并
 

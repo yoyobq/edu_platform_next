@@ -18,7 +18,12 @@
 
 `drawer / flyout` 仍是保留中的临时展开态设计；当前代码只保留状态接口，尚未接到壳层 UI。
 
-当前启用范围：第一批只收 `admin` 授权入口；只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用 admin 导航 capability。当前首页 `/` 也已作为首批 admin 菜单项接入。public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
+当前启用范围：
+
+- `ADMIN` 账号：只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用正式侧栏；菜单可包含首页、校历课表、教务助手、教务管理、上游数据同步、labs / sandbox 与系统管理等入口，其中 sandbox 仅在 dev / test 暴露。
+- `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表与教务助手，部分 `slotGroup` 会增加每周课表、教务管理等入口。
+- 纯 `STUDENT` 入口：当前已有独立轻量导航与账户菜单，最终导航树至少包含首页 `/` 与 `/calendar-schedule/semester-calendar` 学期校历；它不是 staff/admin 那套完整分组骨架。
+- public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
 
 ## 导航真相归属
 
@@ -33,7 +38,8 @@
 
 当前已落地的 provider 归属为：
 
-- `home`：首页 `/`
+- `home`：首页 `/`，当前对 `ADMIN / STAFF / STUDENT` 等登录身份开放
+- `student`：纯 `STUDENT` 账号的独立业务入口，当前贡献 `/calendar-schedule/semester-calendar`；首页仍由 `home` provider 贡献
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
@@ -75,15 +81,18 @@
 当前实现补充：
 
 - admin 导航 capability 以授权为准，只要 `accessGroup` 包含 `ADMIN` 即可启用
+- staff 导航 capability 已启用，当前由 `academic-affairs` provider 贡献 staff 可见入口，并按 `slotGroup` 增量开放部分管理入口
+- 纯 student 导航 capability 已启用独立轻量入口，当前最终菜单树包含首页与学生学期校历；其中学期校历由 `student` provider 贡献
+- 账户菜单已按身份族拆分，纯 student 使用 `StudentAccountMenu`，staff/admin 继续使用 staff 账户菜单
 - `primaryAccessGroup` 仍保留为主身份语义，不因 admin 入口能力而被改写
 
-| 主身份       | 规划档位      | 当前状态                    |
-| ------------ | ------------- | --------------------------- |
-| `ADMIN`      | `rail / full` | 第一批已启用 admin 导航入口 |
-| `STAFF`      | `rail / full` | 仅保留规划，暂未启用        |
-| `STUDENT`    | `none / rail` | 仅保留规划，暂未启用        |
-| `GUEST`      | `none`        | 第一版保持 `none`           |
-| `REGISTRANT` | `none`        | 不进入正式菜单              |
+| 主身份       | 规划档位      | 当前状态                                            |
+| ------------ | ------------- | --------------------------------------------------- |
+| `ADMIN`      | `rail / full` | 已启用正式侧栏入口                                  |
+| `STAFF`      | `rail / full` | 已启用正式侧栏入口，部分入口按 `slotGroup` 增量开放 |
+| `STUDENT`    | `none / rail` | 已启用独立轻量入口：首页、学期校历                  |
+| `GUEST`      | `none`        | 第一版保持 `none`                                   |
+| `REGISTRANT` | `none`        | 不进入正式菜单                                      |
 
 跨主身份共享入口通过 navigation manifest 投影实现，不在多个身份骨架下重复声明同一页面。
 
