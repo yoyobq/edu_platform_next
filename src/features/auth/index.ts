@@ -53,8 +53,13 @@ import {
   readAuthRefreshFeedbackFlash,
 } from './infrastructure/auth-refresh-feedback';
 import { authStorage } from './infrastructure/auth-storage';
+import {
+  consumeExplicitLogoutRedirectHome,
+  markExplicitLogoutRedirectHome,
+} from './infrastructure/explicit-logout-redirect';
 export { LoginForm } from './ui/login-form';
 export {
+  consumeExplicitLogoutRedirectHome,
   queueAuthRefreshFailureMessage,
   queueAuthRefreshRecoveredMessage,
   readAuthRefreshFeedbackFlash,
@@ -86,6 +91,7 @@ export function refreshSession() {
 }
 
 export function logout() {
+  markExplicitLogoutRedirectHome();
   return runLogout(authPorts);
 }
 

@@ -118,6 +118,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const [viewportWidth, setViewportWidth] = useState(() =>
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
+  const [viewportHeight, setViewportHeight] = useState(() =>
+    typeof window !== 'undefined' ? window.innerHeight : 0,
+  );
   const [hasLoadedEntrySidecar, setHasLoadedEntrySidecar] = useState(isOpen);
   const [sidebarOverride, setSidebarOverride] = useState<AppLayoutSidebarOverride | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
@@ -144,6 +147,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const {
     autoFoldToRail,
     clearManualFullOverride,
+    hasPinnedFullPreference,
     manualFullOverride,
     mode: navMode,
     prefersPinnedFull,
@@ -170,16 +174,34 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   useEffect(() => {
     if (authSession.status === 'authenticated' && navigationFilter) {
       const baseMode = resolveNavMode(navigationFilter);
-      const targetMode = baseMode === 'rail' && prefersPinnedFull ? 'full' : baseMode;
+      const isExtremelyNarrowPortrait =
+        viewportWidth > 0 &&
+        viewportHeight > viewportWidth &&
+        viewportWidth < NAV_FULL_WIDTH + NAV_MAIN_MIN_WIDTH_WITH_FULL;
+      const shouldDefaultToFull =
+        baseMode === 'rail' && !hasPinnedFullPreference && !isExtremelyNarrowPortrait;
+      const targetMode =
+        baseMode === 'rail' && (prefersPinnedFull || shouldDefaultToFull) ? 'full' : baseMode;
       if (navMode === 'none' && targetMode !== 'none') {
-        setNavMode(targetMode);
+        setNavMode(targetMode, {
+          preservePinnedPreference: !hasPinnedFullPreference,
+        });
       }
     }
 
     if (authSession.status === 'unauthenticated' && navMode !== 'none') {
       setNavMode('none');
     }
-  }, [authSession.status, mainWidth, navMode, navigationFilter, prefersPinnedFull, setNavMode]);
+  }, [
+    authSession.status,
+    hasPinnedFullPreference,
+    navMode,
+    navigationFilter,
+    prefersPinnedFull,
+    setNavMode,
+    viewportHeight,
+    viewportWidth,
+  ]);
 
   const navItems = useMemo(
     () => (navigationFilter ? getNavigationItems(navigationFilter) : []),
@@ -218,6 +240,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
     const handleResize = () => {
       setViewportWidth(window.innerWidth);
+      setViewportHeight(window.innerHeight);
     };
 
     window.addEventListener('resize', handleResize);

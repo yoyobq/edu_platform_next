@@ -6,7 +6,7 @@ import { createContext, useContext } from 'react';
  * Nav sidebar capability modes.
  * - none: no left sidebar, keeps current light navigation
  * - rail: 80px icon column; click/focus triggers drawer flyout
- * - full: full-width sidebar, entered after user explicitly pins
+ * - full: full-width sidebar, used by default on roomy screens or after user explicitly pins
  *
  * drawer/flyout is a transient UI state within rail, not an independent mode.
  */
@@ -35,6 +35,7 @@ export const NAV_MAIN_MIN_WIDTH_TO_RESTORE_FULL = 680;
 export type NavCapabilityState = {
   mode: NavMode;
   prefersPinnedFull: boolean;
+  hasPinnedFullPreference: boolean;
   manualFullOverride: boolean;
   /** Drawer flyout is temporarily expanded within rail mode. */
   isDrawerOpen: boolean;

@@ -9,6 +9,7 @@ import { Button, Card, Flex, Typography } from 'antd';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 
 import {
+  consumeExplicitLogoutRedirectHome,
   login,
   LoginForm,
   readAuthRefreshFeedbackFlash,
@@ -55,12 +56,13 @@ export function LoginPage() {
     return flash?.type === 'error' ? flash.content : null;
   });
   const [submitting, setSubmitting] = useState(false);
-  const redirectTarget = resolveAuthenticatedRedirectTarget(
-    new URLSearchParams(location.search).get('redirect'),
-    {
-      needsProfileCompletion: authSession.snapshot?.needsProfileCompletion ?? false,
-    },
-  );
+  const [shouldRedirectHomeAfterExplicitLogout] = useState(consumeExplicitLogoutRedirectHome);
+  const loginRedirectCandidate = shouldRedirectHomeAfterExplicitLogout
+    ? null
+    : new URLSearchParams(location.search).get('redirect');
+  const redirectTarget = resolveAuthenticatedRedirectTarget(loginRedirectCandidate, {
+    needsProfileCompletion: authSession.snapshot?.needsProfileCompletion ?? false,
+  });
   const initialLoginName = readLoginNameFromLocationState(location.state);
 
   useEffect(() => {
@@ -78,12 +80,7 @@ export function LoginPage() {
   }
 
   if (authSession.status === 'hydrating' && !submitting) {
-    return (
-      <Navigate
-        to={resolveLoginRedirectTarget(new URLSearchParams(location.search).get('redirect'))}
-        replace
-      />
-    );
+    return <Navigate to={resolveLoginRedirectTarget(loginRedirectCandidate)} replace />;
   }
 
   return (
@@ -191,12 +188,9 @@ export function LoginPage() {
                           type: 'PASSWORD',
                         });
 
-                        navigate(
-                          resolveLoginRedirectTarget(
-                            new URLSearchParams(location.search).get('redirect'),
-                          ),
-                          { replace: true },
-                        );
+                        navigate(resolveLoginRedirectTarget(loginRedirectCandidate), {
+                          replace: true,
+                        });
                       } catch (error) {
                         setSubmitError(resolveLoginSubmitErrorMessage(error));
                       } finally {
