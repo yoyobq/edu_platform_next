@@ -114,6 +114,9 @@ export const demoLabMeta = {
   - 用于演示“前端持有 upstream token、后端代访问 upstream”的当前标准链路
   - 当前使用教师字典、班级列表、历史班主任、教职工身份、教学计划等 upstream 代理接口作为示例数据源
   - 若后续出现正式 upstream 业务页，应优先迁入正式区拥有者切片，而不是让 labs 长期承担正式入口
+- `/labs/zquiz-practice-activities`
+  - 用于验证学生侧可选练习列表、状态展示与开始练习接口联调体验
+  - 若后续作为正式学生练习入口，应迁入正式区拥有者切片
 - `/labs/student-roster-membership-reconciliation`
   - 用于验证单班学生名册归属核对 dry-run、确认与 commit 流程
   - 若后续作为正式业务入口，应迁入正式区拥有者切片

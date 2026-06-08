@@ -10,8 +10,12 @@ function hasStaffNavigationAccess(input: { accessGroup?: readonly AuthAccessGrou
   return input.accessGroup?.includes('STAFF') ?? false;
 }
 
+function hasStudentNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  return input.accessGroup?.includes('STUDENT') ?? false;
+}
+
 function hasLabNavigationAccess(
-  allowedAccessLevels: readonly ('admin' | 'staff' | 'guest')[],
+  allowedAccessLevels: readonly ('admin' | 'staff' | 'student' | 'guest')[],
   filter: Parameters<NavigationItemsProvider>[0],
 ) {
   return allowedAccessLevels.some((accessLevel) => {
@@ -23,6 +27,12 @@ function hasLabNavigationAccess(
 
     if (accessLevel === 'staff') {
       return hasStaffNavigationAccess({
+        accessGroup: filter.accessGroup,
+      });
+    }
+
+    if (accessLevel === 'student') {
+      return hasStudentNavigationAccess({
         accessGroup: filter.accessGroup,
       });
     }
@@ -60,6 +70,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
+    ...(hasLabNavigationAccess(['student'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['STUDENT'] as const,
+            iconKey: 'PlaySquareOutlined',
+            key: '/labs/zquiz-practice-activities',
+            label: '可选练习',
+            navMode: 'rail' as const,
+            path: '/labs/zquiz-practice-activities',
+            primaryAccessGroup: 'STUDENT' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
   ];
 
   if (children.length === 0) {
@@ -69,7 +93,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
   return [
     {
       children,
-      allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+      allowedAccessGroups: ['ADMIN', 'STAFF', 'STUDENT'] as const,
       iconKey: 'ExperimentOutlined',
       key: 'labs',
       label: 'Labs',

@@ -22,7 +22,7 @@
 
 - `ADMIN` 账号：只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用正式侧栏；菜单可包含首页、校历课表、教务助手、教务管理、上游数据同步、labs / sandbox 与系统管理等入口，其中 sandbox 仅在 dev / test 暴露。
 - `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表与教务助手，部分 `slotGroup` 会增加每周课表、教务管理等入口。
-- 纯 `STUDENT` 入口：当前已有独立轻量导航与账户菜单，最终导航树至少包含首页 `/` 与 `/calendar-schedule/semester-calendar` 学期校历；它不是 staff/admin 那套完整分组骨架。
+- 纯 `STUDENT` 入口：当前已有独立轻量导航与账户菜单，最终导航树至少包含首页 `/`、`/calendar-schedule/semester-calendar` 学期校历与学生可见 labs；它不是 staff/admin 那套完整分组骨架。
 - public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
 
 ## 导航真相归属
@@ -47,7 +47,7 @@
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
-- `labs`：`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/student-roster-membership-reconciliation`
+- `labs`：`/labs/invite-issuer`、`/labs/upstream-session-demo`、`/labs/zquiz-practice-activities`、`/labs/student-roster-membership-reconciliation`
 - `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：
@@ -82,7 +82,7 @@
 
 - admin 导航 capability 以授权为准，只要 `accessGroup` 包含 `ADMIN` 即可启用
 - staff 导航 capability 已启用，当前由 `academic-affairs` provider 贡献 staff 可见入口，并按 `slotGroup` 增量开放部分管理入口
-- 纯 student 导航 capability 已启用独立轻量入口，当前最终菜单树包含首页与学生学期校历；其中学期校历由 `student` provider 贡献
+- 纯 student 导航 capability 已启用独立轻量入口，当前最终菜单树包含首页、学生学期校历与学生可见 labs；其中学期校历由 `student` provider 贡献
 - 账户菜单已按身份族拆分，纯 student 使用 `StudentAccountMenu`，staff/admin 继续使用 staff 账户菜单
 - `primaryAccessGroup` 仍保留为主身份语义，不因 admin 入口能力而被改写
 
@@ -90,7 +90,7 @@
 | ------------ | ------------- | --------------------------------------------------- |
 | `ADMIN`      | `rail / full` | 已启用正式侧栏入口                                  |
 | `STAFF`      | `rail / full` | 已启用正式侧栏入口，部分入口按 `slotGroup` 增量开放 |
-| `STUDENT`    | `none / rail` | 已启用独立轻量入口：首页、学期校历                  |
+| `STUDENT`    | `none / rail` | 已启用独立轻量入口：首页、学期校历、学生 labs       |
 | `GUEST`      | `none`        | 第一版保持 `none`                                   |
 | `REGISTRANT` | `none`        | 不进入正式菜单                                      |
 

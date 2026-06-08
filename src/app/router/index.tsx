@@ -90,6 +90,10 @@ import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
+import {
+  loadZquizPracticeActivitiesLabRouteModule,
+  zquizPracticeActivitiesLabAccess,
+} from '@/labs/zquiz-practice-activities';
 import { loadSandboxPlaygroundRouteModule } from '@/sandbox/playground';
 
 const PUBLIC_PATH_PREFIXES = [
@@ -107,7 +111,7 @@ function isPublicPath(pathname: string): boolean {
 }
 
 type AppEnv = 'dev' | 'test' | 'prod';
-type AppAccessLevel = 'guest' | 'admin' | 'staff';
+type AppAccessLevel = 'guest' | 'admin' | 'staff' | 'student';
 type LabAccess = {
   allowedAccessLevels: readonly AppAccessLevel[];
   env: readonly ('dev' | 'prod')[];
@@ -140,6 +144,10 @@ function getCurrentSessionAccessLevels(): AppAccessLevel[] {
 
   if (snapshot.userInfo.accessGroup.includes('STAFF')) {
     accessLevels.push('staff');
+  }
+
+  if (snapshot.userInfo.accessGroup.includes('STUDENT')) {
+    accessLevels.push('student');
   }
 
   if (accessLevels.length === 0) {
@@ -550,6 +558,42 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(zquizPracticeActivitiesLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(zquizPracticeActivitiesLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(zquizPracticeActivitiesLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -1097,6 +1141,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'zquiz-practice-activities',
+            loader: zquizPracticeActivitiesLabLoader,
+            lazy: loadZquizPracticeActivitiesLabRouteModule,
           },
           {
             path: 'student-roster-membership-reconciliation',
