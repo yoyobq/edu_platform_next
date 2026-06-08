@@ -69,6 +69,11 @@ type AppLayoutProps = {
   children?: ReactNode;
 };
 
+type AppLayoutSidebarOverride = {
+  content: ReactNode;
+  width?: number;
+};
+
 type MainFrameStyle = CSSProperties & {
   '--layout-main-width': string;
 };
@@ -114,6 +119,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
     typeof window !== 'undefined' ? window.innerWidth : 0,
   );
   const [hasLoadedEntrySidecar, setHasLoadedEntrySidecar] = useState(isOpen);
+  const [sidebarOverride, setSidebarOverride] = useState<AppLayoutSidebarOverride | null>(null);
   const isDesktop = useMediaQuery('(min-width: 1024px)');
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
@@ -336,7 +342,21 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
   const search = location.search;
   const hasSidebar =
-    authSession.status === 'authenticated' && navMode !== 'none' && navItems.length > 0;
+    authSession.status === 'authenticated' &&
+    navMode !== 'none' &&
+    (navItems.length > 0 || Boolean(sidebarOverride));
+  const sidebarWidth = sidebarOverride
+    ? (sidebarOverride.width ?? NAV_FULL_WIDTH)
+    : navMode === 'full'
+      ? NAV_FULL_WIDTH
+      : NAV_RAIL_WIDTH;
+  const layoutOutletContext = useMemo(
+    () => ({
+      activeSnapshot,
+      setSidebarOverride,
+    }),
+    [activeSnapshot],
+  );
 
   // Top bar menu items — only built when sidebar is not active.
   const menuItems: ItemType[] = hasSidebar
@@ -469,7 +489,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
           <Layout style={{ height: '100%', background: 'transparent' }}>
             <Layout style={{ background: 'transparent', minHeight: 0, overflow: 'hidden' }}>
               <Layout.Sider
-                width={navMode === 'full' ? NAV_FULL_WIDTH : NAV_RAIL_WIDTH}
+                width={sidebarWidth}
                 style={{
                   background: 'var(--color-bg-container)',
                   borderRight: '1px solid var(--ant-color-border-secondary)',
@@ -477,7 +497,13 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                   position: 'relative',
                 }}
               >
-                <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
+                {sidebarOverride ? (
+                  <div className="h-full" style={{ width: sidebarWidth }}>
+                    {sidebarOverride.content}
+                  </div>
+                ) : (
+                  <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
+                )}
               </Layout.Sider>
               <Layout style={{ background: 'transparent', minWidth: 0 }}>
                 {mainToolbar}
@@ -514,7 +540,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                           </Flex>
                         </Card>
                       ) : (
-                        (children ?? <Outlet />)
+                        (children ?? <Outlet context={layoutOutletContext} />)
                       )}
                     </Flex>
                   </div>
@@ -654,7 +680,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                         </Flex>
                       </Card>
                     ) : (
-                      (children ?? <Outlet />)
+                      (children ?? <Outlet context={layoutOutletContext} />)
                     )}
                   </Flex>
                 </div>
