@@ -21,6 +21,7 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import { buildDepartmentSelectOptions, DepartmentSelect } from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -66,11 +67,16 @@ import {
   type RosterReviewItem,
   type RosterReviewKind,
 } from '../application/result-view-model';
-import { resolveRosterSyncPermissionStrategy } from '../application/roster-sync-permission';
+import {
+  hasRosterMembershipLocalClassOptionsAccess,
+  resolveRosterSyncPermissionStrategy,
+} from '../application/roster-sync-permission';
 import type {
   ClaimClassAdviserForRosterSyncResult,
   CurrentRosterMembershipAccount,
+  LocalRosterClassOption,
   PreviousClassAdviserClassesResult,
+  RosterMembershipDepartmentOption,
   StudentRosterMembershipConfirmationInput,
   StudentRosterMembershipEndDecisionInput,
   StudentRosterMembershipReconciliationItem,
@@ -83,7 +89,9 @@ import {
   dryRunReconcileUpstreamStudentRoster,
   fetchCurrentRosterMembershipAccount,
   fetchPreviousClassAdviserClasses,
+  fetchRosterMembershipDepartmentOptions,
   isExpiredUpstreamSessionError,
+  listLocalClassOptions,
   resolveStudentRosterMembershipErrorMessage,
 } from '../infrastructure/api';
 import { isRosterMembershipPermissionError } from '../infrastructure/api-errors';
@@ -383,12 +391,16 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [currentAccount, setCurrentAccount] = useState<CurrentRosterMembershipAccount | null>(null);
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isLoadingClassList, setIsLoadingClassList] = useState(false);
+  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
+  const [isLoadingLocalClassOptions, setIsLoadingLocalClassOptions] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
   const [classListError, setClassListError] = useState<string | null>(null);
+  const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
+  const [localClassOptionsError, setLocalClassOptionsError] = useState<string | null>(null);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [classAdviserClaimNotice, setClassAdviserClaimNotice] =
     useState<ClassAdviserClaimNotice | null>(null);
@@ -403,6 +415,13 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [classListResult, setClassListResult] = useState<PreviousClassAdviserClassesResult | null>(
     null,
   );
+  const [departmentOptionRecords, setDepartmentOptionRecords] = useState<
+    RosterMembershipDepartmentOption[]
+  >([]);
+  const [localClassOptions, setLocalClassOptions] = useState<LocalRosterClassOption[]>([]);
+  const [localClassKeyword, setLocalClassKeyword] = useState('');
+  const [localClassOptionsRefreshKey, setLocalClassOptionsRefreshKey] = useState(0);
+  const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | undefined>();
   const [selectedClassCode, setSelectedClassCode] = useState<string | undefined>();
   const [reconciliationResult, setReconciliationResult] =
     useState<StudentRosterMembershipReconciliationResult | null>(null);
@@ -429,6 +448,14 @@ export function StudentRosterMembershipReconciliationPageContent({
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     rememberedCredentials,
   });
+  const canUseLocalClassOptions = hasRosterMembershipLocalClassOptionsAccess({
+    accessGroup,
+    slotGroup,
+  });
+  const departmentOptions = useMemo(
+    () => buildDepartmentSelectOptions(departmentOptionRecords),
+    [departmentOptionRecords],
+  );
   const classOptions = useMemo(
     () =>
       classListResult?.classes.map((item) => ({
@@ -437,8 +464,23 @@ export function StudentRosterMembershipReconciliationPageContent({
       })) ?? [],
     [classListResult],
   );
+  const localClassSelectOptions = useMemo(
+    () =>
+      localClassOptions.map((item) => ({
+        label: `${item.className} (${item.classCode})`,
+        value: item.classCode,
+      })),
+    [localClassOptions],
+  );
   const selectedClass =
     classListResult?.classes.find((item) => item.code === selectedClassCode) ?? null;
+  const selectedLocalClass =
+    localClassOptions.find((item) => item.classCode === selectedClassCode) ?? null;
+  const selectedClassLabel =
+    selectedClass?.name ??
+    (selectedLocalClass
+      ? `${selectedLocalClass.className} (${selectedLocalClass.classCode})`
+      : selectedClassCode);
   const reviewItems = useMemo(
     () => buildRosterReviewItems(reconciliationResult?.items ?? [], getResultRowKey),
     [reconciliationResult],
@@ -500,7 +542,9 @@ export function StudentRosterMembershipReconciliationPageContent({
     commitConfirmationsPayload.length > 0 ||
     commitEndDecisions.length > 0 ||
     hasAutomaticRosterCommitWork(reconciliationResult?.items ?? []);
-  const isRunningAction = isLoadingClassList || isPreviewing || isCommitting;
+  const isLoadingClassSelection =
+    isLoadingClassList || isLoadingDepartments || isLoadingLocalClassOptions;
+  const isRunningAction = isLoadingClassSelection || isPreviewing || isCommitting;
   const canCommit =
     Boolean(reconciliationResult) &&
     hasCommitWork &&
@@ -542,6 +586,8 @@ export function StudentRosterMembershipReconciliationPageContent({
       setResultFilter('focus');
       setResultTablePage(1);
       setClassListError(null);
+      setDepartmentOptionsError(null);
+      setLocalClassOptionsError(null);
       setReconciliationError(message ?? null);
       setPendingAction(null);
     },
@@ -889,7 +935,100 @@ export function StudentRosterMembershipReconciliationPageContent({
   }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
 
   useEffect(() => {
-    if (!currentAccount || !storedSession || hasAutoLoadedClassList || classListResult) {
+    if (!canUseLocalClassOptions || !currentAccount) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadDepartmentOptions() {
+      setIsLoadingDepartments(true);
+      setDepartmentOptionsError(null);
+
+      try {
+        const departments = await fetchRosterMembershipDepartmentOptions();
+
+        if (!isCancelled) {
+          setDepartmentOptionRecords(departments);
+          setDepartmentOptionsError(null);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setDepartmentOptionsError(resolveStudentRosterMembershipErrorMessage(error));
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingDepartments(false);
+        }
+      }
+    }
+
+    void loadDepartmentOptions();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [canUseLocalClassOptions, currentAccount]);
+
+  useEffect(() => {
+    if (!canUseLocalClassOptions || !currentAccount) {
+      return;
+    }
+
+    let isCancelled = false;
+    const timeoutId = window.setTimeout(
+      () => {
+        async function loadLocalClasses() {
+          setIsLoadingLocalClassOptions(true);
+          setLocalClassOptionsError(null);
+
+          try {
+            const classes = await listLocalClassOptions({
+              departmentId: selectedDepartmentId,
+              keyword: localClassKeyword,
+            });
+
+            if (!isCancelled) {
+              setLocalClassOptions(classes);
+              setLocalClassOptionsError(null);
+            }
+          } catch (error) {
+            if (!isCancelled) {
+              setLocalClassOptions([]);
+              setLocalClassOptionsError(resolveStudentRosterMembershipErrorMessage(error));
+            }
+          } finally {
+            if (!isCancelled) {
+              setIsLoadingLocalClassOptions(false);
+            }
+          }
+        }
+
+        void loadLocalClasses();
+      },
+      localClassKeyword.trim() ? 300 : 0,
+    );
+
+    return () => {
+      isCancelled = true;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    canUseLocalClassOptions,
+    currentAccount,
+    localClassKeyword,
+    localClassOptionsRefreshKey,
+    selectedDepartmentId,
+  ]);
+
+  useEffect(() => {
+    if (
+      canUseLocalClassOptions ||
+      !currentAccount ||
+      !storedSession ||
+      hasAutoLoadedClassList ||
+      classListResult
+    ) {
       return;
     }
 
@@ -897,7 +1036,14 @@ export function StudentRosterMembershipReconciliationPageContent({
     void performAction(storedSession, {
       type: 'load-class-list',
     });
-  }, [classListResult, currentAccount, hasAutoLoadedClassList, performAction, storedSession]);
+  }, [
+    canUseLocalClassOptions,
+    classListResult,
+    currentAccount,
+    hasAutoLoadedClassList,
+    performAction,
+    storedSession,
+  ]);
 
   useEffect(() => {
     const maxPage = Math.max(1, Math.ceil(visibleReviewItems.length / resultTablePageSize));
@@ -912,9 +1058,7 @@ export function StudentRosterMembershipReconciliationPageContent({
   }
 
   function handleSwitchUpstreamAccount() {
-    setPendingAction({
-      type: 'load-class-list',
-    });
+    setPendingAction(canUseLocalClassOptions ? null : { type: 'load-class-list' });
     setIsLoginModalOpen(true);
     setLoginError(null);
     loginForm.setFieldsValue(
@@ -926,7 +1070,9 @@ export function StudentRosterMembershipReconciliationPageContent({
 
   async function handleDryRun() {
     if (!selectedClassCode) {
-      setReconciliationError('请先从班级列表选择一个班级。');
+      setReconciliationError(
+        canUseLocalClassOptions ? '请先选择一个本地班级。' : '请先从班级列表选择一个班级。',
+      );
       return;
     }
 
@@ -1389,7 +1535,140 @@ export function StudentRosterMembershipReconciliationPageContent({
     },
   ];
 
-  function renderClassListCard() {
+  function clearReconciliationViewState() {
+    setReconciliationResult(null);
+    setClassAdviserClaimNotice(null);
+    setPostCommitRefreshNotice(null);
+    setConfirmationDrafts({});
+    setEndDecisionDrafts({});
+    setPreRegisteredReviewDrafts({});
+    setResultFilter('focus');
+    setResultTablePage(1);
+    setReconciliationError(null);
+  }
+
+  function renderResultActionBar() {
+    if (!reconciliationResult) {
+      return null;
+    }
+
+    return (
+      <div className="border-t border-border pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Popconfirm
+              cancelText="取消"
+              okButtonProps={{ loading: isCommitting }}
+              okText="提交"
+              title="确认提交核对结果？"
+              onConfirm={() => void handleCommit()}
+            >
+              <Button danger={hasCommitWork} loading={isCommitting} disabled={!canCommit}>
+                {hasCommitWork ? '提交核对结果' : '无需提交'}
+              </Button>
+            </Popconfirm>
+            <Button
+              icon={<ReloadOutlined />}
+              disabled={!selectedClassCode || isRunningAction}
+              onClick={() => void handleDryRun()}
+            >
+              重新预读并核对
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  function renderLocalClassListCard() {
+    return (
+      <Card title="班级选择与核对">
+        <div className="flex flex-col gap-4">
+          {departmentOptionsError ? (
+            <Alert type="warning" showIcon title={departmentOptionsError} />
+          ) : null}
+          {localClassOptionsError ? (
+            <Alert type="warning" showIcon title={localClassOptionsError} />
+          ) : null}
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex min-w-60 flex-col gap-1">
+              <span className="text-xs text-text-secondary">系部</span>
+              <DepartmentSelect
+                allowClear
+                emptyText="当前没有可选系部"
+                loading={isLoadingDepartments}
+                options={departmentOptions}
+                placeholder="全部系部"
+                value={selectedDepartmentId}
+                style={{ width: '100%' }}
+                onChange={(value) => {
+                  setSelectedDepartmentId(value);
+                  setSelectedClassCode(undefined);
+                  clearReconciliationViewState();
+                }}
+              />
+            </div>
+            <div className="flex min-w-80 flex-1 flex-col gap-1">
+              <span className="text-xs text-text-secondary">核对班级</span>
+              <Select
+                allowClear
+                showSearch
+                filterOption={false}
+                loading={isLoadingLocalClassOptions}
+                notFoundContent={isLoadingLocalClassOptions ? '正在加载班级' : '没有匹配班级'}
+                optionFilterProp="label"
+                placeholder="输入班级名称或代码搜索"
+                value={selectedClassCode}
+                options={localClassSelectOptions}
+                style={{ width: '100%' }}
+                onChange={(value) => {
+                  setSelectedClassCode(value);
+                  clearReconciliationViewState();
+                }}
+                onSearch={(keyword) => {
+                  setLocalClassKeyword(keyword);
+                }}
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!reconciliationResult ? (
+                <Button
+                  type="primary"
+                  loading={isPreviewing}
+                  disabled={!selectedClassCode || isRunningAction}
+                  onClick={() => void handleDryRun()}
+                >
+                  预读校园网学生花名册并核对
+                </Button>
+              ) : null}
+              <Button
+                icon={<ReloadOutlined />}
+                loading={isLoadingLocalClassOptions}
+                disabled={isRunningAction && !isLoadingLocalClassOptions}
+                onClick={() => {
+                  setLocalClassOptionsRefreshKey((current) => current + 1);
+                }}
+              >
+                刷新本地班级
+              </Button>
+              <Button
+                type="link"
+                icon={<SwapOutlined />}
+                disabled={isRunningAction}
+                onClick={handleSwitchUpstreamAccount}
+              >
+                切换校园网账号
+              </Button>
+            </div>
+          </div>
+          {renderResultActionBar()}
+        </div>
+      </Card>
+    );
+  }
+
+  function renderPreviousClassAdviserClassListCard() {
     return (
       <Card title="班级选择与核对">
         <div className="flex flex-col gap-4">
@@ -1408,15 +1687,7 @@ export function StudentRosterMembershipReconciliationPageContent({
                     style={{ width: '100%' }}
                     onChange={(value) => {
                       setSelectedClassCode(value);
-                      setReconciliationResult(null);
-                      setClassAdviserClaimNotice(null);
-                      setPostCommitRefreshNotice(null);
-                      setConfirmationDrafts({});
-                      setEndDecisionDrafts({});
-                      setPreRegisteredReviewDrafts({});
-                      setResultFilter('focus');
-                      setResultTablePage(1);
-                      setReconciliationError(null);
+                      clearReconciliationViewState();
                     }}
                   />
                 </div>
@@ -1449,33 +1720,7 @@ export function StudentRosterMembershipReconciliationPageContent({
                   </Button>
                 </div>
               </div>
-              {reconciliationResult ? (
-                <div className="border-t border-border pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
-                    <div className="flex flex-wrap justify-end gap-2">
-                      <Popconfirm
-                        cancelText="取消"
-                        okButtonProps={{ loading: isCommitting }}
-                        okText="提交"
-                        title="确认提交核对结果？"
-                        onConfirm={() => void handleCommit()}
-                      >
-                        <Button danger={hasCommitWork} loading={isCommitting} disabled={!canCommit}>
-                          {hasCommitWork ? '提交核对结果' : '无需提交'}
-                        </Button>
-                      </Popconfirm>
-                      <Button
-                        icon={<ReloadOutlined />}
-                        disabled={!selectedClassCode || isRunningAction}
-                        onClick={() => void handleDryRun()}
-                      >
-                        重新预读并核对
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : null}
+              {renderResultActionBar()}
             </>
           ) : (
             <div className="flex flex-wrap gap-2">
@@ -1500,6 +1745,12 @@ export function StudentRosterMembershipReconciliationPageContent({
         </div>
       </Card>
     );
+  }
+
+  function renderClassListCard() {
+    return canUseLocalClassOptions
+      ? renderLocalClassListCard()
+      : renderPreviousClassAdviserClassListCard();
   }
 
   function renderObservationTable() {
@@ -1648,9 +1899,11 @@ export function StudentRosterMembershipReconciliationPageContent({
               showIcon
               title="还没有核对结果"
               description={
-                selectedClass
-                  ? `已选择 ${selectedClass.name}，点击 Dry-run 核对后展示差异。`
-                  : '请先读取班级列表并选择班级。'
+                selectedClassCode
+                  ? `已选择 ${selectedClassLabel}，点击 Dry-run 核对后展示差异。`
+                  : canUseLocalClassOptions
+                    ? '请先选择一个本地班级。'
+                    : '请先读取班级列表并选择班级。'
               }
             />
           </div>
@@ -1720,7 +1973,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             });
             if (nextPendingAction) {
               await performAction(nextSession, nextPendingAction);
-            } else {
+            } else if (!canUseLocalClassOptions) {
               setHasAutoLoadedClassList(true);
               await performAction(nextSession, {
                 type: 'load-class-list',

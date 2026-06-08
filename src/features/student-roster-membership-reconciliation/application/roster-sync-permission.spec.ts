@@ -2,7 +2,10 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { resolveRosterSyncPermissionStrategy } from './roster-sync-permission';
+import {
+  hasRosterMembershipLocalClassOptionsAccess,
+  resolveRosterSyncPermissionStrategy,
+} from './roster-sync-permission';
 
 describe('roster sync permission strategy', () => {
   it('lets admins dry-run directly', () => {
@@ -12,9 +15,42 @@ describe('roster sync permission strategy', () => {
         slotGroup: [],
       }),
     ).toBe('dry-run-only');
+    expect(
+      hasRosterMembershipLocalClassOptionsAccess({
+        accessGroup: ['ADMIN'],
+        slotGroup: [],
+      }),
+    ).toBe(true);
   });
 
-  it('lets broad roster-sync slots dry-run directly', () => {
+  it('lets local class option slots dry-run directly', () => {
+    expect(
+      resolveRosterSyncPermissionStrategy({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe('dry-run-only');
+    expect(
+      hasRosterMembershipLocalClassOptionsAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      resolveRosterSyncPermissionStrategy({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe('dry-run-only');
+    expect(
+      hasRosterMembershipLocalClassOptionsAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+  });
+
+  it('lets counselor dry-run directly without local class options', () => {
     expect(
       resolveRosterSyncPermissionStrategy({
         accessGroup: ['STAFF'],
@@ -22,11 +58,11 @@ describe('roster sync permission strategy', () => {
       }),
     ).toBe('dry-run-only');
     expect(
-      resolveRosterSyncPermissionStrategy({
+      hasRosterMembershipLocalClassOptionsAccess({
         accessGroup: ['STAFF'],
-        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        slotGroup: ['COUNSELOR'],
       }),
-    ).toBe('dry-run-only');
+    ).toBe(false);
   });
 
   it('tries dry-run before claim for class advisers', () => {
@@ -45,5 +81,11 @@ describe('roster sync permission strategy', () => {
         slotGroup: [],
       }),
     ).toBe('claim-before-dry-run');
+    expect(
+      hasRosterMembershipLocalClassOptionsAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: [],
+      }),
+    ).toBe(false);
   });
 });

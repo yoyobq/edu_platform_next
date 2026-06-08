@@ -19,7 +19,10 @@ import type {
   CommitUpstreamStudentRosterReconciliationInput,
   CurrentRosterMembershipAccount,
   DryRunReconcileUpstreamStudentRosterInput,
+  ListLocalClassOptionsInput,
+  LocalRosterClassOption,
   PreviousClassAdviserClassesResult,
+  RosterMembershipDepartmentOption,
   StudentRosterMembershipReconciliationResult,
 } from '../application/types';
 
@@ -36,6 +39,14 @@ type CurrentAccountResponse = {
 
 type PreviousClassAdviserClassesResponse = {
   fetchPreviousClassAdviserClasses: PreviousClassAdviserClassesResult;
+};
+
+type RosterMembershipDepartmentsResponse = {
+  departments: RosterMembershipDepartmentOption[];
+};
+
+type ListLocalClassOptionsResponse = {
+  listLocalClassOptions: LocalRosterClassOption[];
 };
 
 type DryRunReconcileUpstreamStudentRosterResponse = {
@@ -74,6 +85,29 @@ const FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY = `
         value
         image
       }
+    }
+  }
+`;
+
+const ROSTER_MEMBERSHIP_DEPARTMENTS_QUERY = `
+  query StudentRosterMembershipDepartments($isEnabled: Boolean, $limit: Int) {
+    departments(isEnabled: $isEnabled, limit: $limit) {
+      id
+      departmentName
+      isEnabled
+      shortName
+    }
+  }
+`;
+
+const LIST_LOCAL_CLASS_OPTIONS_QUERY = `
+  query StudentRosterMembershipLocalClassOptions($input: ListLocalClassOptionsInput) {
+    listLocalClassOptions(input: $input) {
+      id
+      departmentId
+      classCode
+      className
+      gradeYear
     }
   }
 `;
@@ -192,6 +226,13 @@ function normalizeClaimClassAdviserInput(input: ClaimClassAdviserForRosterSyncIn
   return normalizeDryRunInput(input);
 }
 
+function normalizeListLocalClassOptionsInput(input: ListLocalClassOptionsInput = {}) {
+  return {
+    departmentId: normalizeOptionalTextValue(input.departmentId, 'to_undefined'),
+    keyword: normalizeOptionalTextValue(input.keyword, 'to_undefined'),
+  };
+}
+
 function normalizeCommitInput(input: CommitUpstreamStudentRosterReconciliationInput) {
   const normalizedInput = normalizeDryRunInput(input);
 
@@ -245,6 +286,42 @@ export async function fetchPreviousClassAdviserClasses(input: { sessionToken: st
   );
 
   return response.fetchPreviousClassAdviserClasses;
+}
+
+export async function fetchRosterMembershipDepartmentOptions() {
+  try {
+    const response = await requestGraphQL<
+      RosterMembershipDepartmentsResponse,
+      {
+        isEnabled: boolean;
+        limit: number;
+      }
+    >(ROSTER_MEMBERSHIP_DEPARTMENTS_QUERY, {
+      isEnabled: true,
+      limit: 500,
+    });
+
+    return response.departments;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载可选系部。'));
+  }
+}
+
+export async function listLocalClassOptions(input: ListLocalClassOptionsInput = {}) {
+  try {
+    const response = await requestGraphQL<
+      ListLocalClassOptionsResponse,
+      {
+        input: ReturnType<typeof normalizeListLocalClassOptionsInput>;
+      }
+    >(LIST_LOCAL_CLASS_OPTIONS_QUERY, {
+      input: normalizeListLocalClassOptionsInput(input),
+    });
+
+    return response.listLocalClassOptions;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本地班级选项。'));
+  }
 }
 
 export async function dryRunReconcileUpstreamStudentRoster(

@@ -956,12 +956,15 @@ export async function seedAuthSession(page: Page, options: SeedAuthSessionOption
 export async function openHomeAs(
   page: Page,
   sessionOptions: SeedAuthSessionOptions = { primaryAccessGroup: 'ADMIN' },
+  options: { expectedHeading?: string } = {},
 ): Promise<void> {
+  const expectedHeading = options.expectedHeading ?? '我的工作台';
+
   await mockApiHealth(page);
   await mockAuthGraphQL(page, { currentSession: sessionOptions });
   await seedAuthSession(page, sessionOptions);
   await page.goto(routes.home);
-  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: expectedHeading })).toBeVisible();
 }
 
 export async function openHome(page: Page): Promise<void> {

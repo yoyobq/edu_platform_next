@@ -17,7 +17,7 @@ import {
   API_HEALTH_STATUS_HOME_RETRY_ACTION_ID,
   useApiHealthStatusHomeModule,
 } from '@/features/api-health-status';
-import { useAuthSessionState } from '@/features/auth';
+import { type AuthSessionState, useAuthSessionState } from '@/features/auth';
 import { buildHomePageViewModel, OPEN_ENTRY_SIDECAR_ACTION_ID } from '@/features/workbench-home';
 
 import {
@@ -77,6 +77,28 @@ function toTagColor(tone: HomeModuleSummaryTone | undefined) {
 }
 
 type WorkbenchNameMode = 'nickname' | 'staffName';
+
+function isStudentOnlySession(authSession: AuthSessionState) {
+  const accessGroup = authSession.snapshot?.userInfo.accessGroup ?? [];
+
+  return (
+    authSession.status === 'authenticated' &&
+    accessGroup.includes('STUDENT') &&
+    !accessGroup.includes('ADMIN') &&
+    !accessGroup.includes('STAFF')
+  );
+}
+
+function resolveStudentDisplayName(authSession: AuthSessionState) {
+  const identityName =
+    authSession.snapshot?.identity?.kind === 'STUDENT'
+      ? authSession.snapshot.identity.name?.trim()
+      : null;
+  const nickname = authSession.snapshot?.userInfo.nickname?.trim();
+  const displayName = authSession.snapshot?.displayName?.trim();
+
+  return identityName || nickname || displayName || '同学';
+}
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
   return [...records].sort((left, right) => {
@@ -434,9 +456,58 @@ function WorkbenchWeeklyTimetable({
   );
 }
 
-export function HomePage() {
+function StudentHomePageContent({ authSession }: { authSession: AuthSessionState }) {
+  const studentName = resolveStudentDisplayName(authSession);
+  const profileTags = authSession.snapshot?.userInfo.tags ?? [];
+  const profileTagsTooltip =
+    profileTags.length > 0 ? (
+      <div className="home-workbench-profile-tag-tooltip">
+        {profileTags.map((tag) => (
+          <Tag key={tag}>{tag}</Tag>
+        ))}
+      </div>
+    ) : undefined;
+
+  return (
+    <Flex vertical gap={24}>
+      <DecoratedPageHeader
+        description={
+          <>
+            欢迎回来，<span className="home-workbench-welcome-name">{studentName}</span>。
+            愿你今天的学习安排清晰顺利。
+          </>
+        }
+        eyebrow="学生首页"
+        eyebrowAsHeading
+        icon={<HomeOutlined />}
+        iconPlacement="eyebrow"
+        title="我的学习首页"
+        titleHeadingLevel={3}
+        titleLevel={3}
+        aside={
+          <div className="home-workbench-profile">
+            <Tooltip placement="bottom" title={profileTagsTooltip}>
+              <span className="home-workbench-profile-avatar">
+                <HexAvatar
+                  accountId={authSession.snapshot?.accountId}
+                  avatarUrl={authSession.snapshot?.userInfo.avatarUrl}
+                  size={88}
+                  style={{
+                    border: '3px solid var(--ant-color-bg-container)',
+                    boxShadow: '0 0 0 1px var(--ant-color-border-secondary), var(--shadow-card)',
+                  }}
+                />
+              </span>
+            </Tooltip>
+          </div>
+        }
+      />
+    </Flex>
+  );
+}
+
+function WorkbenchHomePageContent({ authSession }: { authSession: AuthSessionState }) {
   const navigate = useNavigate();
-  const authSession = useAuthSessionState();
   const { isPending, module: statusOverviewModule, retry } = useApiHealthStatusHomeModule();
   const [nameMode, setNameMode] = useState<WorkbenchNameMode>('staffName');
   const identity = authSession.snapshot?.identity;
@@ -614,4 +685,14 @@ export function HomePage() {
       )}
     </Flex>
   );
+}
+
+export function HomePage() {
+  const authSession = useAuthSessionState();
+
+  if (isStudentOnlySession(authSession)) {
+    return <StudentHomePageContent authSession={authSession} />;
+  }
+
+  return <WorkbenchHomePageContent authSession={authSession} />;
 }

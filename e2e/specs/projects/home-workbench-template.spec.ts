@@ -130,12 +130,16 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
   });
 }
 
-test('学生身份进入首页时，应进入我的工作台周课表内容', async ({ page }) => {
-  await openHomeAs(page, { primaryAccessGroup: 'STUDENT' });
+test('学生身份进入首页时，应进入学生专用首页', async ({ page }) => {
+  await openHomeAs(page, { primaryAccessGroup: 'STUDENT' }, { expectedHeading: '学生首页' });
 
-  await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expect(page.getByText('当前账号暂无可展示周课表')).toBeVisible();
-  await expect(page.getByText('注意：待办事项暂时保存在本地，无法跨设备展示')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '学生首页' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的学习首页' })).toBeVisible();
+  await expect(page.getByText('愿你今天的学习安排清晰顺利。')).toBeVisible();
+  await expect(page.getByText('当前账号暂无可展示周课表')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '其他待办' })).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: '快捷入口' })).toHaveCount(0);
+  await expect(page.getByText('注意：待办事项暂时保存在本地，无法跨设备展示')).toHaveCount(0);
   await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveCount(0);
   await expect(page.getByText('成员默认模板')).toHaveCount(0);
   await expect(page.getByRole('button', { name: '打开开始入口' })).toHaveCount(0);

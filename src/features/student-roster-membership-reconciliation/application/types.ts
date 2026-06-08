@@ -18,6 +18,26 @@ export type PreviousClassAdviserClassesResult = {
   upstreamSessionToken: string;
 };
 
+export type RosterMembershipDepartmentOption = {
+  departmentName: string;
+  id: string;
+  isEnabled: boolean;
+  shortName: string | null;
+};
+
+export type LocalRosterClassOption = {
+  classCode: string;
+  className: string;
+  departmentId: string;
+  gradeYear: number | null;
+  id: string;
+};
+
+export type ListLocalClassOptionsInput = {
+  departmentId?: string;
+  keyword?: string;
+};
+
 export type ClaimClassAdviserForRosterSyncReason =
   | 'ALREADY_CLAIMED'
   | 'CLAIMED'
