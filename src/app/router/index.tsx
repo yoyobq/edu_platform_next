@@ -1,6 +1,6 @@
 // src/app/router/index.tsx
 
-import { type ReactNode, useEffect, useRef } from 'react';
+import { type ComponentType, type ReactNode, useEffect, useRef } from 'react';
 import { Spin } from 'antd';
 import {
   createBrowserRouter,
@@ -15,40 +15,8 @@ import {
 import { AppLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
-import { AcademicCalendarPage } from '@/pages/academic-calendar';
-import { AcademicWorkloadPage } from '@/pages/academic-workload';
-import { AcademicWorkloadDeductionSummaryPage } from '@/pages/academic-workload-deduction-summary';
-import { AcademicWorkloadReportPage } from '@/pages/academic-workload-report';
-import { AdminUserDetailPage } from '@/pages/admin-user-detail';
-import { AdminUsersPage } from '@/pages/admin-users';
-import { ClassSyncPage } from '@/pages/class-sync';
-import { ErrorPreviewPage } from '@/pages/error-preview';
-import { ExternalTeacherCompensationPage } from '@/pages/external-teacher-compensation';
-import { ForgotPasswordPage } from '@/pages/forgot-password';
 import { HomePage } from '@/pages/home';
-import { IntegratedPlanCorrectionsPage } from '@/pages/integrated-plan-corrections';
-import { LoginPage } from '@/pages/login';
-import { MajorSyncPage } from '@/pages/major-sync';
-import { MyTeachingLogsPage } from '@/pages/my-teaching-logs';
 import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
-import { ProfilePage } from '@/pages/profile';
-import { SemesterCalendarPage } from '@/pages/semester-calendar';
-import { SemesterCourseScheduleSyncPage } from '@/pages/semester-course-schedule-sync';
-import { SemesterTimetablePage } from '@/pages/semester-timetable';
-import { StaffSemesterProfilesPage } from '@/pages/staff-semester-profiles';
-import { StudentRosterMembershipReconciliationPage } from '@/pages/student-roster-membership-reconciliation';
-import {
-  InviteIntentPage,
-  MagicLinkIntentPage,
-  ResetPasswordIntentPage,
-  StudentRegistrationPage,
-  VerifyAccountEmailIntentPage,
-  VerifyEmailIntentPage,
-  WelcomeBackResetPasswordIntentPage,
-} from '@/pages/verification-intent';
-import { VerificationIssuancePage } from '@/pages/verification-issuance';
-import { WeeklyTimetablePage } from '@/pages/weekly-timetable';
-import { WelcomePage } from '@/pages/welcome';
 import {
   buildWelcomeRedirectTarget,
   getAuthSessionSnapshot,
@@ -117,6 +85,21 @@ type LabAccess = {
   env: readonly ('dev' | 'prod')[];
 };
 
+type PageRouteModule<ComponentName extends string> = Record<ComponentName, ComponentType>;
+
+function loadPageRouteModule<ComponentName extends string>(
+  importPage: () => Promise<PageRouteModule<ComponentName>>,
+  componentName: ComponentName,
+) {
+  return async () => {
+    const pageRouteModule = await importPage();
+
+    return {
+      Component: pageRouteModule[componentName],
+    };
+  };
+}
+
 function getCurrentAppEnv(): AppEnv {
   const configuredAppEnv = import.meta.env.VITE_APP_ENV;
 
@@ -128,6 +111,118 @@ function getCurrentAppEnv(): AppEnv {
 }
 
 const currentAppEnv = getCurrentAppEnv();
+
+const loadLoginRouteModule = loadPageRouteModule(() => import('@/pages/login'), 'LoginPage');
+const loadForgotPasswordRouteModule = loadPageRouteModule(
+  () => import('@/pages/forgot-password'),
+  'ForgotPasswordPage',
+);
+const loadResetPasswordIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'ResetPasswordIntentPage',
+);
+const loadStudentRegistrationRouteModule = loadPageRouteModule(
+  () => import('@/pages/student-registration'),
+  'StudentRegistrationPage',
+);
+const loadInviteIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'InviteIntentPage',
+);
+const loadVerifyAccountEmailIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'VerifyAccountEmailIntentPage',
+);
+const loadVerifyEmailIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'VerifyEmailIntentPage',
+);
+const loadWelcomeBackResetPasswordIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'WelcomeBackResetPasswordIntentPage',
+);
+const loadMagicLinkIntentRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-intent'),
+  'MagicLinkIntentPage',
+);
+const loadWelcomeRouteModule = loadPageRouteModule(() => import('@/pages/welcome'), 'WelcomePage');
+const loadProfileRouteModule = loadPageRouteModule(() => import('@/pages/profile'), 'ProfilePage');
+const loadAdminUsersRouteModule = loadPageRouteModule(
+  () => import('@/pages/admin-users'),
+  'AdminUsersPage',
+);
+const loadAdminUserDetailRouteModule = loadPageRouteModule(
+  () => import('@/pages/admin-user-detail'),
+  'AdminUserDetailPage',
+);
+const loadVerificationIssuanceRouteModule = loadPageRouteModule(
+  () => import('@/pages/verification-issuance'),
+  'VerificationIssuancePage',
+);
+const loadErrorPreviewRouteModule = loadPageRouteModule(
+  () => import('@/pages/error-preview'),
+  'ErrorPreviewPage',
+);
+const loadAcademicCalendarRouteModule = loadPageRouteModule(
+  () => import('@/pages/academic-calendar'),
+  'AcademicCalendarPage',
+);
+const loadSemesterCalendarRouteModule = loadPageRouteModule(
+  () => import('@/pages/semester-calendar'),
+  'SemesterCalendarPage',
+);
+const loadWeeklyTimetableRouteModule = loadPageRouteModule(
+  () => import('@/pages/weekly-timetable'),
+  'WeeklyTimetablePage',
+);
+const loadSemesterTimetableRouteModule = loadPageRouteModule(
+  () => import('@/pages/semester-timetable'),
+  'SemesterTimetablePage',
+);
+const loadMajorSyncRouteModule = loadPageRouteModule(
+  () => import('@/pages/major-sync'),
+  'MajorSyncPage',
+);
+const loadClassSyncRouteModule = loadPageRouteModule(
+  () => import('@/pages/class-sync'),
+  'ClassSyncPage',
+);
+const loadSemesterCourseScheduleSyncRouteModule = loadPageRouteModule(
+  () => import('@/pages/semester-course-schedule-sync'),
+  'SemesterCourseScheduleSyncPage',
+);
+const loadStaffSemesterProfilesRouteModule = loadPageRouteModule(
+  () => import('@/pages/staff-semester-profiles'),
+  'StaffSemesterProfilesPage',
+);
+const loadAcademicWorkloadReportRouteModule = loadPageRouteModule(
+  () => import('@/pages/academic-workload-report'),
+  'AcademicWorkloadReportPage',
+);
+const loadAcademicWorkloadDeductionSummaryRouteModule = loadPageRouteModule(
+  () => import('@/pages/academic-workload-deduction-summary'),
+  'AcademicWorkloadDeductionSummaryPage',
+);
+const loadExternalTeacherCompensationRouteModule = loadPageRouteModule(
+  () => import('@/pages/external-teacher-compensation'),
+  'ExternalTeacherCompensationPage',
+);
+const loadMyTeachingLogsRouteModule = loadPageRouteModule(
+  () => import('@/pages/my-teaching-logs'),
+  'MyTeachingLogsPage',
+);
+const loadIntegratedPlanCorrectionsRouteModule = loadPageRouteModule(
+  () => import('@/pages/integrated-plan-corrections'),
+  'IntegratedPlanCorrectionsPage',
+);
+const loadStudentRosterMembershipReconciliationRouteModule = loadPageRouteModule(
+  () => import('@/pages/student-roster-membership-reconciliation'),
+  'StudentRosterMembershipReconciliationPage',
+);
+const loadAcademicWorkloadRouteModule = loadPageRouteModule(
+  () => import('@/pages/academic-workload'),
+  'AcademicWorkloadPage',
+);
 
 function getCurrentSessionAccessLevels(): AppAccessLevel[] {
   const snapshot = getAuthSessionSnapshot();
@@ -938,48 +1033,48 @@ const router = createBrowserRouter([
       {
         path: '/login',
         loader: loginRouteLoader,
-        Component: LoginPage,
+        lazy: loadLoginRouteModule,
       },
       {
         path: '/forgot-password',
-        Component: ForgotPasswordPage,
+        lazy: loadForgotPasswordRouteModule,
       },
       {
         path: '/reset-password',
-        Component: ResetPasswordIntentPage,
+        lazy: loadResetPasswordIntentRouteModule,
       },
       {
         path: '/invite/student-registration/:token',
-        Component: StudentRegistrationPage,
+        lazy: loadStudentRegistrationRouteModule,
       },
       {
         path: '/invite/:inviteType/:verificationCode',
         loader: inviteIntentLoader,
-        Component: InviteIntentPage,
+        lazy: loadInviteIntentRouteModule,
       },
       {
         path: '/verify/account-email/:token',
-        Component: VerifyAccountEmailIntentPage,
+        lazy: loadVerifyAccountEmailIntentRouteModule,
       },
       {
         path: '/verify/email/:verificationCode',
-        Component: VerifyEmailIntentPage,
+        lazy: loadVerifyEmailIntentRouteModule,
       },
       {
         path: '/reset-password/:verificationCode',
-        Component: ResetPasswordIntentPage,
+        lazy: loadResetPasswordIntentRouteModule,
       },
       {
         path: '/welcome-back/reset-password',
-        Component: WelcomeBackResetPasswordIntentPage,
+        lazy: loadWelcomeBackResetPasswordIntentRouteModule,
       },
       {
         path: '/welcome-back/reset-password/:verificationCode',
-        Component: WelcomeBackResetPasswordIntentPage,
+        lazy: loadWelcomeBackResetPasswordIntentRouteModule,
       },
       {
         path: '/magic-link/:verificationCode',
-        Component: MagicLinkIntentPage,
+        lazy: loadMagicLinkIntentRouteModule,
       },
     ],
   },
@@ -1001,37 +1096,37 @@ const router = createBrowserRouter([
       {
         path: '/welcome',
         loader: welcomeLoader,
-        Component: WelcomePage,
+        lazy: loadWelcomeRouteModule,
       },
       {
         path: '/profile',
         loader: protectedWorkbenchLoader,
-        Component: ProfilePage,
+        lazy: loadProfileRouteModule,
       },
       {
         path: '/admin/users',
         loader: adminUsersLoader,
-        Component: AdminUsersPage,
+        lazy: loadAdminUsersRouteModule,
       },
       {
         path: '/admin/users/:id',
         loader: adminUsersLoader,
-        Component: AdminUserDetailPage,
+        lazy: loadAdminUserDetailRouteModule,
       },
       {
         path: '/admin/verification-issuance',
         loader: adminUsersLoader,
-        Component: VerificationIssuancePage,
+        lazy: loadVerificationIssuanceRouteModule,
       },
       {
         path: '/errors/preview',
         loader: errorPreviewLoader,
-        Component: ErrorPreviewPage,
+        lazy: loadErrorPreviewRouteModule,
       },
       {
         path: '/academic-affairs/academic-calendar',
         loader: academicCalendarPageLoader,
-        Component: AcademicCalendarPage,
+        lazy: loadAcademicCalendarRouteModule,
       },
       {
         path: '/academic-affairs/semester-calendar',
@@ -1040,72 +1135,72 @@ const router = createBrowserRouter([
       {
         path: '/calendar-schedule/semester-calendar',
         loader: semesterCalendarPageLoader,
-        Component: SemesterCalendarPage,
+        lazy: loadSemesterCalendarRouteModule,
       },
       {
         path: '/calendar-schedule/weekly-timetable',
         loader: weeklyTimetablePageLoader,
-        Component: WeeklyTimetablePage,
+        lazy: loadWeeklyTimetableRouteModule,
       },
       {
         path: '/calendar-schedule/semester-timetable',
         loader: semesterTimetablePageLoader,
-        Component: SemesterTimetablePage,
+        lazy: loadSemesterTimetableRouteModule,
       },
       {
         path: '/upstream-data-sync/major-sync',
         loader: majorSyncPageLoader,
-        Component: MajorSyncPage,
+        lazy: loadMajorSyncRouteModule,
       },
       {
         path: '/upstream-data-sync/class-sync',
         loader: classSyncPageLoader,
-        Component: ClassSyncPage,
+        lazy: loadClassSyncRouteModule,
       },
       {
         path: '/upstream-data-sync/semester-course-schedule-sync',
         loader: semesterCourseScheduleSyncPageLoader,
-        Component: SemesterCourseScheduleSyncPage,
+        lazy: loadSemesterCourseScheduleSyncRouteModule,
       },
       {
         path: '/academic-affairs/staff-semester-profiles',
         loader: staffSemesterProfilesPageLoader,
-        Component: StaffSemesterProfilesPage,
+        lazy: loadStaffSemesterProfilesRouteModule,
       },
       {
         path: '/academic-affairs/academic-workload-report',
         loader: academicWorkloadReportPageLoader,
-        Component: AcademicWorkloadReportPage,
+        lazy: loadAcademicWorkloadReportRouteModule,
       },
       {
         path: '/academic-affairs/academic-workload-deduction-summary',
         loader: academicWorkloadDeductionSummaryPageLoader,
-        Component: AcademicWorkloadDeductionSummaryPage,
+        lazy: loadAcademicWorkloadDeductionSummaryRouteModule,
       },
       {
         path: '/academic-affairs/external-teacher-compensation',
         loader: externalTeacherCompensationPageLoader,
-        Component: ExternalTeacherCompensationPage,
+        lazy: loadExternalTeacherCompensationRouteModule,
       },
       {
         path: '/academic-affairs/my-teaching-logs',
         loader: myTeachingLogsPageLoader,
-        Component: MyTeachingLogsPage,
+        lazy: loadMyTeachingLogsRouteModule,
       },
       {
         path: '/academic-affairs/integrated-plan-corrections',
         loader: integratedPlanCorrectionsPageLoader,
-        Component: IntegratedPlanCorrectionsPage,
+        lazy: loadIntegratedPlanCorrectionsRouteModule,
       },
       {
         path: '/academic-affairs/student-roster-membership-reconciliation',
         loader: studentRosterMembershipReconciliationPageLoader,
-        Component: StudentRosterMembershipReconciliationPage,
+        lazy: loadStudentRosterMembershipReconciliationRouteModule,
       },
       {
         path: '/academic-assistant/academic-workload',
         loader: academicWorkloadPageLoader,
-        Component: AcademicWorkloadPage,
+        lazy: loadAcademicWorkloadRouteModule,
       },
       {
         path: '/admin/error-preview',
