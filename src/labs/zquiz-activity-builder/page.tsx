@@ -18,6 +18,7 @@ import {
   Button,
   Card,
   DatePicker,
+  Descriptions,
   Empty,
   Flex,
   Form,
@@ -25,6 +26,7 @@ import {
   InputNumber,
   message,
   Modal,
+  Segmented,
   Select,
   Skeleton,
   Space,
@@ -41,10 +43,13 @@ import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layou
 import { zquizActivityBuilderLabAccess } from './access';
 import {
   buildZquizActivityDraftInput,
+  collectZquizExamAttempts,
   getZquizActivityTeacherDetail,
+  getZquizExamTeacherProgress,
   listLocalClassOptions,
   listZquizAssemblyQuestions,
   listZquizBanks,
+  listZquizKnowledgeNodes,
   listZquizTeacherActivities,
   type LocalClassOption,
   publishZquizActivity,
@@ -56,6 +61,9 @@ import {
   type ZquizActivityStatus,
   type ZquizActivityTarget,
   type ZquizAssemblyQuestion,
+  type ZquizExamTeacherProgress,
+  type ZquizGenerationRuleStrategy,
+  type ZquizKnowledgeNode,
   type ZquizQuestionType,
   type ZquizTeacherActivityDetail,
   type ZquizTeacherActivitySummary,
@@ -74,6 +82,15 @@ type QuestionFilters = {
   keyword: string;
   knowledgeNodeId: number | null;
   questionType?: ZquizQuestionType;
+};
+
+type RandomRuleDraft = {
+  count: number;
+  id: string;
+  includeChildren: boolean;
+  knowledgeNodeIds: number[];
+  questionType: ZquizQuestionType;
+  scoreMax: number;
 };
 
 type EditorFormValues = {
@@ -102,6 +119,13 @@ type AsyncListState<T> = {
   loading: boolean;
 };
 
+type ExamProgressState = {
+  collecting: boolean;
+  error: string | null;
+  loading: boolean;
+  progress: ZquizExamTeacherProgress | null;
+};
+
 const EMPTY_QUESTION_FILTERS: QuestionFilters = {
   keyword: '',
   knowledgeNodeId: null,
@@ -114,6 +138,13 @@ const EMPTY_EDITOR_STATE: EditorState = {
   loading: false,
   mode: 'PRACTICE',
   status: 'DRAFT',
+};
+
+const EMPTY_EXAM_PROGRESS_STATE: ExamProgressState = {
+  collecting: false,
+  error: null,
+  loading: false,
+  progress: null,
 };
 
 const MODE_LABELS: Record<ZquizActivityMode, string> = {
@@ -159,6 +190,11 @@ const STATUS_OPTIONS = [
   { label: '已发布', value: 'PUBLISHED' },
   { label: '已关闭', value: 'CLOSED' },
 ] satisfies readonly { label: string; value: ZquizActivityStatus }[];
+
+const GENERATION_STRATEGY_OPTIONS = [
+  { label: '固定题单', value: 'FIXED' },
+  { label: '知识点随机', value: 'RANDOM_BY_KNOWLEDGE' },
+] satisfies readonly { label: string; value: ZquizGenerationRuleStrategy }[];
 
 function formatDateTime(value: string | null) {
   if (!value) {
@@ -219,12 +255,44 @@ function getQuestionLabel(question: ZquizAssemblyQuestion | null, questionId: nu
   return question?.stem || `题目 #${questionId}`;
 }
 
+function getKnowledgeNodeLabel(node: ZquizKnowledgeNode) {
+  const codeText = node.code ? `（${node.code}）` : '';
+  const typeText = node.nodeType === 'CATEGORY' ? '分类' : '知识点';
+
+  return `${node.name}${codeText} · ${typeText} · ${node.totalQuestionCount} 题`;
+}
+
 function toSelectedItem(question: ZquizAssemblyQuestion): ZquizActivityItem {
   return {
     question,
     questionId: question.id,
     scoreMax: 1,
     sortOrder: 0,
+  };
+}
+
+function createRandomRuleDraft(index: number): RandomRuleDraft {
+  return {
+    count: 1,
+    id: `random-rule-${Date.now()}-${index}`,
+    includeChildren: true,
+    knowledgeNodeIds: [],
+    questionType: 'SINGLE_CHOICE',
+    scoreMax: 1,
+  };
+}
+
+function toRandomRuleDraft(
+  rule: NonNullable<ZquizTeacherActivityDetail['generationRule']>['randomRules'][number],
+  index: number,
+): RandomRuleDraft {
+  return {
+    count: rule.count,
+    id: `random-rule-${rule.sortOrder}-${index}`,
+    includeChildren: rule.includeChildren,
+    knowledgeNodeIds: [...rule.knowledgeNodeIds],
+    questionType: rule.questionType,
+    scoreMax: rule.scoreMax,
   };
 }
 
@@ -275,15 +343,27 @@ export function ZquizActivityBuilderLabPage() {
     items: [],
     loading: false,
   });
+  const [knowledgeNodesState, setKnowledgeNodesState] = useState<
+    AsyncListState<ZquizKnowledgeNode>
+  >({
+    error: null,
+    items: [],
+    loading: false,
+  });
   const [activityFilters, setActivityFilters] = useState<ActivityFilters>({
     keyword: '',
   });
   const [questionFilters, setQuestionFilters] = useState<QuestionFilters>(EMPTY_QUESTION_FILTERS);
   const [editor, setEditor] = useState<EditorState>(EMPTY_EDITOR_STATE);
+  const [generationStrategy, setGenerationStrategy] =
+    useState<ZquizGenerationRuleStrategy>('FIXED');
+  const [randomRules, setRandomRules] = useState<RandomRuleDraft[]>([]);
   const [selectedItems, setSelectedItems] = useState<ZquizActivityItem[]>([]);
   const [targetSnapshots, setTargetSnapshots] = useState<ZquizActivityTarget[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [examProgressState, setExamProgressState] =
+    useState<ExamProgressState>(EMPTY_EXAM_PROGRESS_STATE);
   const selectedBankId = Form.useWatch('bankId', form);
 
   const readOnly = editor.active && editor.status !== 'DRAFT';
@@ -323,6 +403,13 @@ export function ZquizActivityBuilderLabPage() {
     return Array.from(options.values());
   }, [classesState.items, targetSnapshots]);
 
+  const knowledgeNodeSelectOptions = useMemo(() => {
+    return knowledgeNodesState.items.map((node) => ({
+      label: getKnowledgeNodeLabel(node),
+      value: node.id,
+    }));
+  }, [knowledgeNodesState.items]);
+
   const selectedQuestionIds = useMemo(() => {
     return new Set(selectedItems.map((item) => item.questionId));
   }, [selectedItems]);
@@ -330,6 +417,14 @@ export function ZquizActivityBuilderLabPage() {
   const totalScore = useMemo(() => {
     return selectedItems.reduce((sum, item) => sum + item.scoreMax, 0);
   }, [selectedItems]);
+
+  const randomQuestionCount = useMemo(() => {
+    return randomRules.reduce((sum, rule) => sum + rule.count, 0);
+  }, [randomRules]);
+
+  const randomTotalScore = useMemo(() => {
+    return randomRules.reduce((sum, rule) => sum + rule.count * rule.scoreMax, 0);
+  }, [randomRules]);
 
   const loadBanks = useCallback(async () => {
     setBanksState((current) => ({ ...current, error: null, loading: true }));
@@ -404,6 +499,41 @@ export function ZquizActivityBuilderLabPage() {
     [questionFilters],
   );
 
+  const loadKnowledgeNodes = useCallback(async (bankId: number) => {
+    setKnowledgeNodesState((current) => ({ ...current, error: null, loading: true }));
+
+    try {
+      const knowledgeNodes = await listZquizKnowledgeNodes({ bankId });
+      setKnowledgeNodesState({ error: null, items: knowledgeNodes, loading: false });
+    } catch (error) {
+      setKnowledgeNodesState({
+        error: resolveZquizActivityBuilderErrorMessage(error, '暂时无法加载知识点。'),
+        items: [],
+        loading: false,
+      });
+    }
+  }, []);
+
+  const loadExamProgress = useCallback(async (activityId: number) => {
+    setExamProgressState((current) => ({ ...current, error: null, loading: true }));
+
+    try {
+      const progress = await getZquizExamTeacherProgress({ activityId });
+      setExamProgressState({
+        collecting: false,
+        error: null,
+        loading: false,
+        progress,
+      });
+    } catch (error) {
+      setExamProgressState((current) => ({
+        ...current,
+        error: resolveZquizActivityBuilderErrorMessage(error, '暂时无法加载考试进度。'),
+        loading: false,
+      }));
+    }
+  }, []);
+
   useEffect(() => {
     void loadBanks();
     void loadClasses();
@@ -415,6 +545,8 @@ export function ZquizActivityBuilderLabPage() {
 
   const applyDetail = useCallback(
     (detail: ZquizTeacherActivityDetail) => {
+      const generationRule = detail.mode === 'EXAM' ? detail.generationRule : null;
+
       setEditor({
         activityId: detail.id,
         active: true,
@@ -422,9 +554,12 @@ export function ZquizActivityBuilderLabPage() {
         mode: detail.mode,
         status: detail.status,
       });
-      setSelectedItems(detail.items);
+      setGenerationStrategy(generationRule?.strategy ?? 'FIXED');
+      setRandomRules(generationRule?.randomRules.map(toRandomRuleDraft) ?? []);
+      setSelectedItems(generationRule?.strategy === 'RANDOM_BY_KNOWLEDGE' ? [] : detail.items);
       setTargetSnapshots(detail.targets);
       setSubmitError(null);
+      setExamProgressState(EMPTY_EXAM_PROGRESS_STATE);
       form.setFieldsValue(toFormValues(detail));
     },
     [form],
@@ -440,10 +575,14 @@ export function ZquizActivityBuilderLabPage() {
         status: 'DRAFT',
       });
       setQuestionsState({ error: null, items: [], loading: false });
+      setKnowledgeNodesState({ error: null, items: [], loading: false });
       setQuestionFilters(EMPTY_QUESTION_FILTERS);
+      setGenerationStrategy('FIXED');
+      setRandomRules([]);
       setSelectedItems([]);
       setTargetSnapshots([]);
       setSubmitError(null);
+      setExamProgressState(EMPTY_EXAM_PROGRESS_STATE);
       form.resetFields();
       form.setFieldsValue({
         attemptLimit: mode === 'EXAM' ? 1 : null,
@@ -469,6 +608,8 @@ export function ZquizActivityBuilderLabPage() {
         status: activity.status,
       });
       setSubmitError(null);
+      setExamProgressState(EMPTY_EXAM_PROGRESS_STATE);
+      setKnowledgeNodesState({ error: null, items: [], loading: false });
       setQuestionFilters(EMPTY_QUESTION_FILTERS);
 
       try {
@@ -483,16 +624,29 @@ export function ZquizActivityBuilderLabPage() {
 
         applyDetail(detail);
         await loadQuestions(detail.bankId, EMPTY_QUESTION_FILTERS);
+        if (detail.mode === 'EXAM') {
+          await loadKnowledgeNodes(detail.bankId);
+        }
+        if (detail.mode === 'EXAM' && detail.status === 'PUBLISHED') {
+          await loadExamProgress(detail.id);
+        }
       } catch (error) {
         setEditor((current) => ({ ...current, loading: false }));
         setSubmitError(resolveZquizActivityBuilderErrorMessage(error, '暂时无法读取活动详情。'));
       }
     },
-    [applyDetail, loadQuestions],
+    [applyDetail, loadExamProgress, loadKnowledgeNodes, loadQuestions],
   );
 
   const buildDraftSource = useCallback(() => {
     const values = form.getFieldsValue(true);
+    const fixedItems = selectedItems.map((item) => ({
+      questionId: item.questionId,
+      scoreMax: item.scoreMax,
+    }));
+    const shuffleOptions = values.shuffleOptions ?? true;
+    const shuffleQuestions = values.shuffleQuestions ?? true;
+    const isRandomExam = editor.mode === 'EXAM' && generationStrategy === 'RANDOM_BY_KNOWLEDGE';
 
     return {
       activityId: editor.activityId,
@@ -500,17 +654,36 @@ export function ZquizActivityBuilderLabPage() {
       bankId: values.bankId,
       durationMinutes: values.durationMinutes,
       endsAt: toBusinessDateTime(values.endsAt),
-      items: selectedItems.map((item) => ({
-        questionId: item.questionId,
-        scoreMax: item.scoreMax,
-      })),
-      shuffleOptions: values.shuffleOptions,
-      shuffleQuestions: values.shuffleQuestions,
+      generationRule:
+        editor.mode === 'EXAM'
+          ? isRandomExam
+            ? {
+                randomRules: randomRules.map((rule) => ({
+                  count: rule.count,
+                  includeChildren: rule.includeChildren,
+                  knowledgeNodeIds: rule.knowledgeNodeIds,
+                  questionType: rule.questionType,
+                  scoreMax: rule.scoreMax,
+                })),
+                shuffleOptions,
+                shuffleQuestions,
+                strategy: 'RANDOM_BY_KNOWLEDGE' as const,
+              }
+            : {
+                fixedItems,
+                shuffleOptions,
+                shuffleQuestions,
+                strategy: 'FIXED' as const,
+              }
+          : undefined,
+      items: isRandomExam ? [] : fixedItems,
+      shuffleOptions,
+      shuffleQuestions,
       startsAt: toBusinessDateTime(values.startsAt),
       targetClassIds: values.targetClassIds ?? [],
       title: values.title,
     };
-  }, [editor.activityId, form, selectedItems]);
+  }, [editor.activityId, editor.mode, form, generationStrategy, randomRules, selectedItems]);
 
   const handleSaveDraft = useCallback(async () => {
     if (!editor.active || readOnly) {
@@ -577,6 +750,9 @@ export function ZquizActivityBuilderLabPage() {
               mode: editor.mode,
             });
             applyDetail(publishedDetail);
+            if (publishedDetail.mode === 'EXAM') {
+              await loadExamProgress(publishedDetail.id);
+            }
             await loadActivities(activityFilters);
             messageApi.success('活动已发布。');
           } catch (error) {
@@ -597,22 +773,71 @@ export function ZquizActivityBuilderLabPage() {
     editor.active,
     editor.mode,
     form,
+    loadExamProgress,
     loadActivities,
     messageApi,
     readOnly,
   ]);
 
+  const handleCollectExamAttempts = useCallback(() => {
+    if (!editor.activityId || editor.mode !== 'EXAM' || editor.status !== 'PUBLISHED') {
+      return;
+    }
+
+    const activityId = editor.activityId;
+
+    Modal.confirm({
+      content: '将使用学生最后一次自动保存的草稿作为最终答案。已提交或已评分的作答不会被覆盖。',
+      okText: '收卷',
+      onOk: async () => {
+        setExamProgressState((current) => ({
+          ...current,
+          collecting: true,
+          error: null,
+        }));
+
+        try {
+          const result = await collectZquizExamAttempts({
+            activityId,
+          });
+
+          setExamProgressState({
+            collecting: false,
+            error: null,
+            loading: false,
+            progress: result.progress,
+          });
+          messageApi.success(
+            `收卷完成：收取 ${result.collectedCount} 份，跳过 ${result.skippedCount} 份。`,
+          );
+        } catch (error) {
+          setExamProgressState((current) => ({
+            ...current,
+            collecting: false,
+            error: resolveZquizActivityBuilderErrorMessage(error, '暂时无法主动收卷。'),
+          }));
+        }
+      },
+      title: '确认主动收卷',
+    });
+  }, [editor.activityId, editor.mode, editor.status, messageApi]);
+
   const handleBankChange = useCallback(
     (bankId: number | undefined) => {
       setSelectedItems([]);
+      setRandomRules([]);
       setQuestionsState({ error: null, items: [], loading: false });
+      setKnowledgeNodesState({ error: null, items: [], loading: false });
       setQuestionFilters(EMPTY_QUESTION_FILTERS);
 
       if (bankId) {
         void loadQuestions(bankId, EMPTY_QUESTION_FILTERS);
+        if (editor.mode === 'EXAM') {
+          void loadKnowledgeNodes(bankId);
+        }
       }
     },
-    [loadQuestions],
+    [editor.mode, loadKnowledgeNodes, loadQuestions],
   );
 
   const handleSearchQuestions = useCallback(() => {
@@ -662,6 +887,38 @@ export function ZquizActivityBuilderLabPage() {
 
   const handleRemoveSelectedItem = useCallback((questionId: number) => {
     setSelectedItems((current) => current.filter((item) => item.questionId !== questionId));
+  }, []);
+
+  const handleAddRandomRule = useCallback(() => {
+    setRandomRules((current) => [...current, createRandomRuleDraft(current.length)]);
+  }, []);
+
+  const handleUpdateRandomRule = useCallback(
+    (ruleId: string, patch: Partial<Omit<RandomRuleDraft, 'id'>>) => {
+      setRandomRules((current) =>
+        current.map((rule) => (rule.id === ruleId ? { ...rule, ...patch } : rule)),
+      );
+    },
+    [],
+  );
+
+  const handleMoveRandomRule = useCallback((ruleId: string, direction: -1 | 1) => {
+    setRandomRules((current) => {
+      const currentIndex = current.findIndex((rule) => rule.id === ruleId);
+      const nextIndex = currentIndex + direction;
+
+      if (currentIndex < 0 || nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const next = [...current];
+      [next[currentIndex], next[nextIndex]] = [next[nextIndex], next[currentIndex]];
+      return next;
+    });
+  }, []);
+
+  const handleRemoveRandomRule = useCallback((ruleId: string) => {
+    setRandomRules((current) => current.filter((rule) => rule.id !== ruleId));
   }, []);
 
   const activityColumns = useMemo<ColumnsType<ZquizTeacherActivitySummary>>(
@@ -815,6 +1072,147 @@ export function ZquizActivityBuilderLabPage() {
     ],
   );
 
+  const randomRuleColumns = useMemo<ColumnsType<RandomRuleDraft>>(
+    () => [
+      {
+        key: 'sortOrder',
+        render: (_, __, index) => index + 1,
+        title: '序号',
+        width: 70,
+      },
+      {
+        key: 'knowledgeNodeIds',
+        render: (_, rule) => (
+          <Select<number[]>
+            disabled={readOnly}
+            loading={knowledgeNodesState.loading}
+            maxTagCount="responsive"
+            mode="multiple"
+            optionFilterProp="label"
+            options={knowledgeNodeSelectOptions}
+            placeholder="选择知识点"
+            showSearch
+            style={{ width: '100%' }}
+            value={rule.knowledgeNodeIds}
+            onChange={(knowledgeNodeIds) => handleUpdateRandomRule(rule.id, { knowledgeNodeIds })}
+          />
+        ),
+        title: '知识点',
+        width: 320,
+      },
+      {
+        dataIndex: 'includeChildren',
+        key: 'includeChildren',
+        render: (includeChildren: boolean, rule) => (
+          <Switch
+            checked={includeChildren}
+            disabled={readOnly}
+            onChange={(checked) => handleUpdateRandomRule(rule.id, { includeChildren: checked })}
+          />
+        ),
+        title: '含子节点',
+        width: 100,
+      },
+      {
+        dataIndex: 'questionType',
+        key: 'questionType',
+        render: (questionType: ZquizQuestionType, rule) => (
+          <Select<ZquizQuestionType>
+            disabled={readOnly}
+            options={QUESTION_TYPE_OPTIONS}
+            style={{ width: '100%' }}
+            value={questionType}
+            onChange={(nextQuestionType) =>
+              handleUpdateRandomRule(rule.id, { questionType: nextQuestionType })
+            }
+          />
+        ),
+        title: '题型',
+        width: 150,
+      },
+      {
+        dataIndex: 'count',
+        key: 'count',
+        render: (count: number, rule) => (
+          <InputNumber
+            disabled={readOnly}
+            min={1}
+            precision={0}
+            style={{ width: '100%' }}
+            value={count}
+            onChange={(nextCount) => {
+              if (nextCount) {
+                handleUpdateRandomRule(rule.id, { count: nextCount });
+              }
+            }}
+          />
+        ),
+        title: '数量',
+        width: 100,
+      },
+      {
+        dataIndex: 'scoreMax',
+        key: 'scoreMax',
+        render: (scoreMax: number, rule) => (
+          <InputNumber
+            disabled={readOnly}
+            min={0.01}
+            precision={2}
+            style={{ width: '100%' }}
+            value={scoreMax}
+            onChange={(nextScoreMax) => {
+              if (nextScoreMax) {
+                handleUpdateRandomRule(rule.id, { scoreMax: nextScoreMax });
+              }
+            }}
+          />
+        ),
+        title: '单题分值',
+        width: 120,
+      },
+      {
+        key: 'actions',
+        render: (_, rule, index) => (
+          <Space>
+            <Button
+              aria-label="上移随机规则"
+              disabled={readOnly || index === 0}
+              icon={<ArrowUpOutlined />}
+              onClick={() => handleMoveRandomRule(rule.id, -1)}
+              size="small"
+            />
+            <Button
+              aria-label="下移随机规则"
+              disabled={readOnly || index === randomRules.length - 1}
+              icon={<ArrowDownOutlined />}
+              onClick={() => handleMoveRandomRule(rule.id, 1)}
+              size="small"
+            />
+            <Button
+              danger
+              aria-label="删除随机规则"
+              disabled={readOnly}
+              icon={<DeleteOutlined />}
+              onClick={() => handleRemoveRandomRule(rule.id)}
+              size="small"
+            />
+          </Space>
+        ),
+        title: '操作',
+        width: 160,
+      },
+    ],
+    [
+      handleMoveRandomRule,
+      handleRemoveRandomRule,
+      handleUpdateRandomRule,
+      knowledgeNodeSelectOptions,
+      knowledgeNodesState.loading,
+      randomRules.length,
+      readOnly,
+    ],
+  );
+
   const questionColumns = useMemo<ColumnsType<ZquizAssemblyQuestion>>(
     () => [
       {
@@ -869,6 +1267,213 @@ export function ZquizActivityBuilderLabPage() {
     ],
     [handleAddQuestion, readOnly, selectedQuestionIds],
   );
+
+  function renderExamGenerationStrategyCard() {
+    if (editor.mode !== 'EXAM') {
+      return null;
+    }
+
+    return (
+      <Card size="small" title="考试组卷策略">
+        <Flex vertical gap={12}>
+          <Segmented
+            disabled={readOnly || submitting}
+            options={GENERATION_STRATEGY_OPTIONS}
+            value={generationStrategy}
+            onChange={(value) => setGenerationStrategy(value as ZquizGenerationRuleStrategy)}
+          />
+          <Space wrap>
+            <Tag color={generationStrategy === 'FIXED' ? 'blue' : 'purple'}>
+              {generationStrategy === 'FIXED' ? '固定题单' : '知识点随机'}
+            </Tag>
+            {generationStrategy === 'FIXED' ? (
+              <>
+                <Tag>{selectedItems.length} 题</Tag>
+                <Tag>{formatScore(totalScore)} 分</Tag>
+              </>
+            ) : (
+              <>
+                <Tag>{randomRules.length} 组规则</Tag>
+                <Tag>{randomQuestionCount} 题</Tag>
+                <Tag>{formatScore(randomTotalScore)} 分</Tag>
+              </>
+            )}
+          </Space>
+        </Flex>
+      </Card>
+    );
+  }
+
+  function renderRandomRuleCard() {
+    const bankId = typeof selectedBankId === 'number' ? selectedBankId : null;
+
+    return (
+      <Card
+        size="small"
+        title={`随机抽题规则：${randomRules.length} 组 / ${randomQuestionCount} 题 / ${formatScore(
+          randomTotalScore,
+        )} 分`}
+        extra={
+          <Space>
+            <Button
+              disabled={!bankId}
+              icon={<ReloadOutlined />}
+              loading={knowledgeNodesState.loading}
+              onClick={() => {
+                if (bankId) {
+                  void loadKnowledgeNodes(bankId);
+                }
+              }}
+            >
+              刷新知识点
+            </Button>
+            <Button
+              disabled={readOnly}
+              icon={<PlusOutlined />}
+              onClick={handleAddRandomRule}
+              type="primary"
+            >
+              添加规则
+            </Button>
+          </Space>
+        }
+      >
+        <Flex vertical gap={12}>
+          {!bankId ? <Alert showIcon message="请选择题库后配置随机抽题规则。" type="info" /> : null}
+          {knowledgeNodesState.error ? (
+            <Alert showIcon message={knowledgeNodesState.error} type="error" />
+          ) : null}
+          {randomQuestionCount > 200 ? (
+            <Alert showIcon message="随机组卷总题量不能超过 200 题。" type="warning" />
+          ) : null}
+
+          <Table<RandomRuleDraft>
+            columns={randomRuleColumns}
+            dataSource={randomRules}
+            loading={knowledgeNodesState.loading}
+            locale={{ emptyText: <Empty description="还未配置随机抽题规则" /> }}
+            pagination={false}
+            rowKey={(rule) => rule.id}
+            scroll={{ x: 1020 }}
+          />
+        </Flex>
+      </Card>
+    );
+  }
+
+  function renderExamProgressCard() {
+    if (editor.mode !== 'EXAM' || editor.status !== 'PUBLISHED' || !editor.activityId) {
+      return null;
+    }
+
+    const activityId = editor.activityId;
+    const progress = examProgressState.progress;
+
+    return (
+      <Card
+        size="small"
+        title="考试进度"
+        extra={
+          <Space>
+            <Button
+              icon={<ReloadOutlined />}
+              loading={examProgressState.loading}
+              onClick={() => void loadExamProgress(activityId)}
+            >
+              刷新进度
+            </Button>
+            <Button
+              danger
+              loading={examProgressState.collecting}
+              onClick={handleCollectExamAttempts}
+            >
+              主动收卷
+            </Button>
+          </Space>
+        }
+      >
+        <Flex vertical gap={12}>
+          {examProgressState.error ? (
+            <Alert showIcon message={examProgressState.error} type="error" />
+          ) : null}
+
+          {examProgressState.loading && !progress ? (
+            <Skeleton active paragraph={{ rows: 3 }} />
+          ) : progress ? (
+            <Descriptions
+              bordered
+              column={3}
+              size="small"
+              items={[
+                {
+                  key: 'targetStudentCount',
+                  label: '目标学生',
+                  children: progress.targetStudentCount,
+                },
+                {
+                  key: 'startedStudentCount',
+                  label: '已开始',
+                  children: progress.startedStudentCount,
+                },
+                {
+                  key: 'notStartedStudentCount',
+                  label: '未开始',
+                  children: progress.notStartedStudentCount,
+                },
+                {
+                  key: 'totalAttemptCount',
+                  label: '作答总数',
+                  children: progress.totalAttemptCount,
+                },
+                {
+                  key: 'inProgressAttemptCount',
+                  label: '作答中',
+                  children: progress.inProgressAttemptCount,
+                },
+                {
+                  key: 'submittedAttemptCount',
+                  label: '已提交',
+                  children: progress.submittedAttemptCount,
+                },
+                {
+                  key: 'gradedAttemptCount',
+                  label: '已评分',
+                  children: progress.gradedAttemptCount,
+                },
+                {
+                  key: 'abandonedAttemptCount',
+                  label: '已放弃',
+                  children: progress.abandonedAttemptCount,
+                },
+                {
+                  key: 'notGradedAttemptCount',
+                  label: '未评分',
+                  children: progress.notGradedAttemptCount,
+                },
+                {
+                  key: 'autoGradedAttemptCount',
+                  label: '自动评分',
+                  children: progress.autoGradedAttemptCount,
+                },
+                {
+                  key: 'manualPendingAttemptCount',
+                  label: '待人工批改',
+                  children: progress.manualPendingAttemptCount,
+                },
+                {
+                  key: 'manualGradedAttemptCount',
+                  label: '人工已评',
+                  children: progress.manualGradedAttemptCount,
+                },
+              ]}
+            />
+          ) : (
+            <Empty description="暂无考试进度" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+          )}
+        </Flex>
+      </Card>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -980,7 +1585,17 @@ export function ZquizActivityBuilderLabPage() {
           }
           extra={
             <Space>
-              <Button onClick={() => setEditor(EMPTY_EDITOR_STATE)}>关闭</Button>
+              <Button
+                onClick={() => {
+                  setEditor(EMPTY_EDITOR_STATE);
+                  setExamProgressState(EMPTY_EXAM_PROGRESS_STATE);
+                  setGenerationStrategy('FIXED');
+                  setKnowledgeNodesState({ error: null, items: [], loading: false });
+                  setRandomRules([]);
+                }}
+              >
+                关闭
+              </Button>
               <Button
                 disabled={readOnly}
                 icon={<SaveOutlined />}
@@ -1012,6 +1627,8 @@ export function ZquizActivityBuilderLabPage() {
               {readOnly ? (
                 <Alert showIcon type="info" message="该活动已离开草稿状态，只能查看配置。" />
               ) : null}
+
+              {renderExamProgressCard()}
 
               <Form<EditorFormValues>
                 disabled={readOnly || submitting}
@@ -1087,79 +1704,90 @@ export function ZquizActivityBuilderLabPage() {
 
               {classesState.error ? <Alert type="error" message={classesState.error} /> : null}
 
-              <Card
-                size="small"
-                title={`已选题目：${selectedItems.length} 题 / ${formatScore(totalScore)} 分`}
-              >
-                <Table<ZquizActivityItem>
-                  columns={selectedItemColumns}
-                  dataSource={selectedItems}
-                  locale={{ emptyText: <Empty description="还未选择题目" /> }}
-                  pagination={false}
-                  rowKey={(item) => item.questionId}
-                  scroll={{ x: 760 }}
-                />
-              </Card>
+              {renderExamGenerationStrategyCard()}
 
-              <Card size="small" title="题库题目">
-                <Flex vertical gap={12}>
-                  <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2, large: 4 }}>
-                    <Input.Search
-                      allowClear
-                      placeholder="搜索题干"
-                      value={questionFilters.keyword}
-                      onChange={(event) =>
-                        setQuestionFilters((current) => ({
-                          ...current,
-                          keyword: event.target.value,
-                        }))
-                      }
-                      onSearch={handleSearchQuestions}
+              {editor.mode === 'EXAM' && generationStrategy === 'RANDOM_BY_KNOWLEDGE' ? (
+                renderRandomRuleCard()
+              ) : (
+                <>
+                  <Card
+                    size="small"
+                    title={`已选题目：${selectedItems.length} 题 / ${formatScore(totalScore)} 分`}
+                  >
+                    <Table<ZquizActivityItem>
+                      columns={selectedItemColumns}
+                      dataSource={selectedItems}
+                      locale={{ emptyText: <Empty description="还未选择题目" /> }}
+                      pagination={false}
+                      rowKey={(item) => item.questionId}
+                      scroll={{ x: 760 }}
                     />
-                    <Select<ZquizQuestionType | undefined>
-                      allowClear
-                      placeholder="题型"
-                      options={QUESTION_TYPE_OPTIONS}
-                      value={questionFilters.questionType}
-                      onChange={(questionType) =>
-                        setQuestionFilters((current) => ({ ...current, questionType }))
-                      }
-                    />
-                    <InputNumber
-                      min={1}
-                      precision={0}
-                      placeholder="知识点 ID"
-                      style={{ width: '100%' }}
-                      value={questionFilters.knowledgeNodeId}
-                      onChange={(knowledgeNodeId) =>
-                        setQuestionFilters((current) => ({ ...current, knowledgeNodeId }))
-                      }
-                    />
-                    <Button
-                      icon={<SearchOutlined />}
-                      loading={questionsState.loading}
-                      onClick={handleSearchQuestions}
-                    >
-                      查询题目
-                    </Button>
-                  </ResponsiveGrid>
+                  </Card>
 
-                  {banksState.error ? <Alert type="error" message={banksState.error} /> : null}
-                  {questionsState.error ? (
-                    <Alert type="error" message={questionsState.error} />
-                  ) : null}
+                  <Card size="small" title="题库题目">
+                    <Flex vertical gap={12}>
+                      <ResponsiveGrid
+                        className="gap-4"
+                        columns={{ compact: 1, regular: 2, large: 4 }}
+                      >
+                        <Input.Search
+                          allowClear
+                          placeholder="搜索题干"
+                          value={questionFilters.keyword}
+                          onChange={(event) =>
+                            setQuestionFilters((current) => ({
+                              ...current,
+                              keyword: event.target.value,
+                            }))
+                          }
+                          onSearch={handleSearchQuestions}
+                        />
+                        <Select<ZquizQuestionType | undefined>
+                          allowClear
+                          placeholder="题型"
+                          options={QUESTION_TYPE_OPTIONS}
+                          value={questionFilters.questionType}
+                          onChange={(questionType) =>
+                            setQuestionFilters((current) => ({ ...current, questionType }))
+                          }
+                        />
+                        <InputNumber
+                          min={1}
+                          precision={0}
+                          placeholder="知识点 ID"
+                          style={{ width: '100%' }}
+                          value={questionFilters.knowledgeNodeId}
+                          onChange={(knowledgeNodeId) =>
+                            setQuestionFilters((current) => ({ ...current, knowledgeNodeId }))
+                          }
+                        />
+                        <Button
+                          icon={<SearchOutlined />}
+                          loading={questionsState.loading}
+                          onClick={handleSearchQuestions}
+                        >
+                          查询题目
+                        </Button>
+                      </ResponsiveGrid>
 
-                  <Table<ZquizAssemblyQuestion>
-                    columns={questionColumns}
-                    dataSource={questionsState.items}
-                    loading={questionsState.loading}
-                    locale={{ emptyText: <Empty description="请选择题库后查询题目" /> }}
-                    pagination={false}
-                    rowKey={(question) => question.id}
-                    scroll={{ x: 780 }}
-                  />
-                </Flex>
-              </Card>
+                      {banksState.error ? <Alert type="error" message={banksState.error} /> : null}
+                      {questionsState.error ? (
+                        <Alert type="error" message={questionsState.error} />
+                      ) : null}
+
+                      <Table<ZquizAssemblyQuestion>
+                        columns={questionColumns}
+                        dataSource={questionsState.items}
+                        loading={questionsState.loading}
+                        locale={{ emptyText: <Empty description="请选择题库后查询题目" /> }}
+                        pagination={false}
+                        rowKey={(question) => question.id}
+                        scroll={{ x: 780 }}
+                      />
+                    </Flex>
+                  </Card>
+                </>
+              )}
             </Flex>
           )}
         </Card>

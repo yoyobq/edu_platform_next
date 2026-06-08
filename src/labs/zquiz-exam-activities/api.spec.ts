@@ -16,9 +16,11 @@ import {
   autosaveZquizExam,
   buildZquizExamAnswers,
   buildZquizExamDraftAnswersFromServer,
+  getMyZquizExamAttempt,
   resolveZquizExamErrorMessage,
   startZquizExam,
   submitZquizExam,
+  type ZquizExamAttempt,
   type ZquizExamPaper,
   type ZquizExamPaperItem,
 } from './api';
@@ -102,6 +104,33 @@ function createPaper(): ZquizExamPaper {
     ],
     items: paperItems,
     startedAt: '2026-06-09T01:00:00.000Z',
+  };
+}
+
+function createAttempt(): ZquizExamAttempt {
+  return {
+    activity: createPaper().activity,
+    attemptNo: 1,
+    gradingStatus: 'AUTO_GRADED',
+    id: '9001',
+    items: [
+      {
+        ...paperItems[0],
+        answer: {
+          answerText: null,
+          blankAnswers: [],
+          selectedLabels: ['B'],
+        },
+        gradingStatus: 'AUTO_GRADED',
+        isCorrect: true,
+        scoreAwarded: 2,
+      },
+    ],
+    scoreAwarded: 2,
+    scoreMax: 2,
+    startedAt: '2026-06-09T01:00:00.000Z',
+    status: 'GRADED',
+    submittedAt: '2026-06-09T01:10:00.000Z',
   };
 }
 
@@ -282,6 +311,40 @@ describe('zquiz exam api', () => {
               selectedLabels: ['B'],
             },
           ],
+          attemptId: '9001',
+        },
+      },
+    );
+  });
+
+  it('loads a submitted exam attempt result with optional attempt id', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      getMyZquizExamAttempt: createAttempt(),
+    });
+
+    await expect(
+      getMyZquizExamAttempt({
+        activityId: 30,
+        attemptId: '9001',
+      }),
+    ).resolves.toMatchObject({
+      id: '9001',
+      items: [
+        {
+          answer: {
+            selectedLabels: ['B'],
+          },
+          paperItemNo: 1,
+          scoreAwarded: 2,
+        },
+      ],
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query getMyZquizExamAttempt'),
+      {
+        input: {
+          activityId: 30,
           attemptId: '9001',
         },
       },

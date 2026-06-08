@@ -12,6 +12,8 @@ import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 export type ZquizActivityMode = 'EXAM' | 'PRACTICE';
 export type ZquizActivityStatus = 'CLOSED' | 'DRAFT' | 'PUBLISHED';
 export type ZquizBankStatus = 'ACTIVE' | 'ARCHIVED';
+export type ZquizGenerationRuleStrategy = 'FIXED' | 'RANDOM_BY_KNOWLEDGE';
+export type ZquizKnowledgeNodeType = 'CATEGORY' | 'POINT';
 export type ZquizQuestionStatus = 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
 export type ZquizQuestionType =
   | 'ESSAY'
@@ -78,6 +80,29 @@ export type ZquizActivityItem = {
   sortOrder: number;
 };
 
+export type ZquizGenerationRuleFixedItem = {
+  questionId: number;
+  scoreMax: number;
+  sortOrder: number;
+};
+
+export type ZquizGenerationRandomRule = {
+  count: number;
+  includeChildren: boolean;
+  knowledgeNodeIds: number[];
+  questionType: ZquizQuestionType;
+  scoreMax: number;
+  sortOrder: number;
+};
+
+export type ZquizGenerationRule = {
+  fixedItems: ZquizGenerationRuleFixedItem[];
+  randomRules: ZquizGenerationRandomRule[];
+  shuffleOptions: boolean;
+  shuffleQuestions: boolean;
+  strategy: ZquizGenerationRuleStrategy;
+};
+
 export type ZquizTeacherActivityDetail = {
   attemptLimit: number | null;
   bankId: number;
@@ -85,6 +110,7 @@ export type ZquizTeacherActivityDetail = {
   createdByAccountId: number | null;
   durationMinutes: number | null;
   endsAt: string | null;
+  generationRule?: ZquizGenerationRule | null;
   id: number;
   items: ZquizActivityItem[];
   mode: ZquizActivityMode;
@@ -95,6 +121,29 @@ export type ZquizTeacherActivityDetail = {
   targets: ZquizActivityTarget[];
   title: string;
   updatedAt: string;
+};
+
+export type ZquizExamTeacherProgress = {
+  abandonedAttemptCount: number;
+  activityId: number;
+  autoGradedAttemptCount: number;
+  gradedAttemptCount: number;
+  inProgressAttemptCount: number;
+  manualGradedAttemptCount: number;
+  manualPendingAttemptCount: number;
+  notGradedAttemptCount: number;
+  notStartedStudentCount: number;
+  startedStudentCount: number;
+  submittedAttemptCount: number;
+  targetStudentCount: number;
+  totalAttemptCount: number;
+};
+
+export type ZquizExamCollectResult = {
+  activityId: number;
+  collectedCount: number;
+  progress: ZquizExamTeacherProgress;
+  skippedCount: number;
 };
 
 export type LocalClassOption = {
@@ -127,6 +176,24 @@ export type ListZquizAssemblyQuestionsInput = {
   questionType?: ZquizQuestionType | null;
 };
 
+export type ZquizKnowledgeNode = {
+  bankId: number;
+  code: string | null;
+  directQuestionCount: number;
+  id: number;
+  name: string;
+  nodeType: ZquizKnowledgeNodeType;
+  parentId: number | null;
+  sortOrder: number;
+  totalQuestionCount: number;
+};
+
+export type ListZquizKnowledgeNodesInput = {
+  bankId: number;
+  keyword?: string | null;
+  nodeType?: ZquizKnowledgeNodeType | null;
+};
+
 export type ListLocalClassOptionsInput = {
   departmentId?: string | null;
   keyword?: string | null;
@@ -137,12 +204,29 @@ export type ZquizActivityDraftItemSource = {
   scoreMax: number;
 };
 
+export type ZquizGenerationRandomRuleSource = {
+  count?: number | null;
+  includeChildren?: boolean | null;
+  knowledgeNodeIds?: readonly number[] | null;
+  questionType?: ZquizQuestionType | null;
+  scoreMax?: number | null;
+};
+
+export type ZquizGenerationRuleSource = {
+  fixedItems?: readonly ZquizActivityDraftItemSource[] | null;
+  randomRules?: readonly ZquizGenerationRandomRuleSource[] | null;
+  shuffleOptions?: boolean | null;
+  shuffleQuestions?: boolean | null;
+  strategy: ZquizGenerationRuleStrategy;
+};
+
 export type ZquizActivityDraftSource = {
   activityId?: number | null;
   attemptLimit?: number | null;
   bankId?: number | null;
   durationMinutes?: number | null;
   endsAt?: string | null;
+  generationRule?: ZquizGenerationRuleSource | null;
   items?: readonly ZquizActivityDraftItemSource[] | null;
   shuffleOptions?: boolean | null;
   shuffleQuestions?: boolean | null;
@@ -157,6 +241,13 @@ export type SaveZquizActivityDraftInput = {
   bankId: number;
   durationMinutes: number | null;
   endsAt: string | null;
+  generationRule?: {
+    fixedItems?: ZquizGenerationRuleFixedItem[];
+    randomRules?: ZquizGenerationRandomRule[];
+    shuffleOptions?: boolean;
+    shuffleQuestions?: boolean;
+    strategy: ZquizGenerationRuleStrategy;
+  };
   items: {
     questionId: number;
     scoreMax: number;
@@ -171,7 +262,7 @@ export type SaveZquizActivityDraftInput = {
 
 export type ZquizPublishValidationSource = Pick<
   SaveZquizActivityDraftInput,
-  'durationMinutes' | 'endsAt' | 'items' | 'startsAt' | 'targetClassIds'
+  'durationMinutes' | 'endsAt' | 'generationRule' | 'items' | 'startsAt' | 'targetClassIds'
 > & {
   mode: ZquizActivityMode;
 };
@@ -186,6 +277,10 @@ type ListZquizTeacherActivitiesResponse = {
 
 type ListZquizAssemblyQuestionsResponse = {
   listZquizAssemblyQuestions: ZquizAssemblyQuestion[];
+};
+
+type ListZquizKnowledgeNodesResponse = {
+  listZquizKnowledgeNodes: ZquizKnowledgeNode[];
 };
 
 type ListLocalClassOptionsResponse = {
@@ -214,6 +309,14 @@ type PublishZquizPracticeResponse = {
 
 type PublishZquizExamResponse = {
   publishZquizExam: Omit<ZquizTeacherActivityDetail, 'mode'>;
+};
+
+type GetZquizExamTeacherProgressResponse = {
+  getZquizExamTeacherProgress: ZquizExamTeacherProgress;
+};
+
+type CollectZquizExamAttemptsResponse = {
+  collectZquizExamAttempts: ZquizExamCollectResult;
 };
 
 const BUSINESS_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
@@ -266,6 +369,48 @@ const ZQUIZ_ACTIVITY_DETAIL_FIELDS = `
   }
 `;
 
+const ZQUIZ_GENERATION_RULE_FIELDS = `
+  strategy
+  shuffleQuestions
+  shuffleOptions
+  fixedItems {
+    questionId
+    scoreMax
+    sortOrder
+  }
+  randomRules {
+    sortOrder
+    knowledgeNodeIds
+    includeChildren
+    questionType
+    count
+    scoreMax
+  }
+`;
+
+const ZQUIZ_EXAM_ACTIVITY_DETAIL_FIELDS = `
+  ${ZQUIZ_ACTIVITY_DETAIL_FIELDS}
+  generationRule {
+    ${ZQUIZ_GENERATION_RULE_FIELDS}
+  }
+`;
+
+const ZQUIZ_EXAM_TEACHER_PROGRESS_FIELDS = `
+  activityId
+  targetStudentCount
+  startedStudentCount
+  notStartedStudentCount
+  totalAttemptCount
+  inProgressAttemptCount
+  submittedAttemptCount
+  gradedAttemptCount
+  abandonedAttemptCount
+  notGradedAttemptCount
+  autoGradedAttemptCount
+  manualPendingAttemptCount
+  manualGradedAttemptCount
+`;
+
 const LIST_ZQUIZ_BANKS_QUERY = `
   query listZquizBanks($input: ListZquizBanksInput) {
     listZquizBanks(input: $input) {
@@ -306,6 +451,22 @@ const LIST_ZQUIZ_ASSEMBLY_QUESTIONS_QUERY = `
   }
 `;
 
+const LIST_ZQUIZ_KNOWLEDGE_NODES_QUERY = `
+  query listZquizKnowledgeNodes($input: ListZquizKnowledgeNodesInput!) {
+    listZquizKnowledgeNodes(input: $input) {
+      id
+      bankId
+      parentId
+      code
+      name
+      nodeType
+      sortOrder
+      directQuestionCount
+      totalQuestionCount
+    }
+  }
+`;
+
 const LIST_LOCAL_CLASS_OPTIONS_QUERY = `
   query ZquizActivityBuilderLocalClassOptions($input: ListLocalClassOptionsInput) {
     listLocalClassOptions(input: $input) {
@@ -329,7 +490,7 @@ const SAVE_ZQUIZ_PRACTICE_DRAFT_MUTATION = `
 const SAVE_ZQUIZ_EXAM_DRAFT_MUTATION = `
   mutation saveZquizExamDraft($input: SaveZquizExamDraftInput!) {
     saveZquizExamDraft(input: $input) {
-      ${ZQUIZ_ACTIVITY_DETAIL_FIELDS}
+      ${ZQUIZ_EXAM_ACTIVITY_DETAIL_FIELDS}
     }
   }
 `;
@@ -345,7 +506,7 @@ const GET_ZQUIZ_PRACTICE_TEACHER_DETAIL_QUERY = `
 const GET_ZQUIZ_EXAM_TEACHER_DETAIL_QUERY = `
   query getZquizExamTeacherDetail($input: ZquizExamInput!) {
     getZquizExamTeacherDetail(input: $input) {
-      ${ZQUIZ_ACTIVITY_DETAIL_FIELDS}
+      ${ZQUIZ_EXAM_ACTIVITY_DETAIL_FIELDS}
     }
   }
 `;
@@ -361,7 +522,28 @@ const PUBLISH_ZQUIZ_PRACTICE_MUTATION = `
 const PUBLISH_ZQUIZ_EXAM_MUTATION = `
   mutation publishZquizExam($input: ZquizExamInput!) {
     publishZquizExam(input: $input) {
-      ${ZQUIZ_ACTIVITY_DETAIL_FIELDS}
+      ${ZQUIZ_EXAM_ACTIVITY_DETAIL_FIELDS}
+    }
+  }
+`;
+
+const GET_ZQUIZ_EXAM_TEACHER_PROGRESS_QUERY = `
+  query getZquizExamTeacherProgress($input: ZquizExamInput!) {
+    getZquizExamTeacherProgress(input: $input) {
+      ${ZQUIZ_EXAM_TEACHER_PROGRESS_FIELDS}
+    }
+  }
+`;
+
+const COLLECT_ZQUIZ_EXAM_ATTEMPTS_MUTATION = `
+  mutation collectZquizExamAttempts($input: ZquizExamInput!) {
+    collectZquizExamAttempts(input: $input) {
+      activityId
+      collectedCount
+      skippedCount
+      progress {
+        ${ZQUIZ_EXAM_TEACHER_PROGRESS_FIELDS}
+      }
     }
   }
 `;
@@ -417,6 +599,10 @@ function normalizeScoreMax(value: number | null | undefined) {
   return value;
 }
 
+function normalizeQuestionCount(value: number | null | undefined) {
+  return normalizeRequiredPositiveInteger(value, '抽题数量');
+}
+
 function normalizeOptionalDateTimeText(value: string | null | undefined) {
   const normalized = normalizeOptionalTextValue(value, 'to_null');
 
@@ -436,21 +622,126 @@ function normalizeQuestion(question: ZquizAssemblyQuestion): ZquizAssemblyQuesti
   };
 }
 
+function normalizeGenerationRuleFixedItems(
+  items: readonly ZquizActivityDraftItemSource[] | null | undefined,
+): ZquizGenerationRuleFixedItem[] {
+  return (items ?? []).map((item, index) => ({
+    questionId: normalizeRequiredPositiveInteger(item.questionId, '题目 ID'),
+    scoreMax: normalizeScoreMax(item.scoreMax),
+    sortOrder: index + 1,
+  }));
+}
+
+function normalizeGenerationRuleRandomRules(
+  rules: readonly ZquizGenerationRandomRuleSource[] | null | undefined,
+): ZquizGenerationRandomRule[] {
+  return (rules ?? []).map((rule, index) => ({
+    count: normalizeQuestionCount(rule.count),
+    includeChildren: rule.includeChildren ?? true,
+    knowledgeNodeIds: normalizeTextListValue(
+      (rule.knowledgeNodeIds ?? []).map((nodeId) => String(nodeId)),
+      {
+        dedupe: true,
+        emptyItemPolicy: 'filter',
+      },
+    ).map((nodeId) => normalizeRequiredPositiveInteger(Number(nodeId), '知识点 ID')),
+    questionType: rule.questionType || 'SINGLE_CHOICE',
+    scoreMax: normalizeScoreMax(rule.scoreMax),
+    sortOrder: index + 1,
+  }));
+}
+
+function normalizeGenerationRuleSource(
+  input: ZquizGenerationRuleSource | null | undefined,
+): SaveZquizActivityDraftInput['generationRule'] {
+  if (!input) {
+    return undefined;
+  }
+
+  const shuffleQuestions = input.shuffleQuestions ?? true;
+  const shuffleOptions = input.shuffleOptions ?? true;
+
+  if (input.strategy === 'RANDOM_BY_KNOWLEDGE') {
+    return {
+      randomRules: normalizeGenerationRuleRandomRules(input.randomRules),
+      shuffleOptions,
+      shuffleQuestions,
+      strategy: 'RANDOM_BY_KNOWLEDGE',
+    };
+  }
+
+  return {
+    fixedItems: normalizeGenerationRuleFixedItems(input.fixedItems),
+    shuffleOptions,
+    shuffleQuestions,
+    strategy: 'FIXED',
+  };
+}
+
+function normalizeGenerationRule(
+  generationRule: ZquizGenerationRule | null | undefined,
+  fallback: {
+    fixedItems: ZquizActivityItem[];
+    shuffleOptions: boolean;
+    shuffleQuestions: boolean;
+  },
+): ZquizGenerationRule {
+  if (!generationRule) {
+    return {
+      fixedItems: fallback.fixedItems.map((item) => ({
+        questionId: item.questionId,
+        scoreMax: item.scoreMax,
+        sortOrder: item.sortOrder,
+      })),
+      randomRules: [],
+      shuffleOptions: fallback.shuffleOptions,
+      shuffleQuestions: fallback.shuffleQuestions,
+      strategy: 'FIXED',
+    };
+  }
+
+  return {
+    fixedItems: [...generationRule.fixedItems].sort(
+      (left, right) => left.sortOrder - right.sortOrder,
+    ),
+    randomRules: [...generationRule.randomRules]
+      .sort((left, right) => left.sortOrder - right.sortOrder)
+      .map((rule) => ({
+        ...rule,
+        includeChildren: rule.includeChildren ?? true,
+        knowledgeNodeIds: [...rule.knowledgeNodeIds],
+      })),
+    shuffleOptions: generationRule.shuffleOptions,
+    shuffleQuestions: generationRule.shuffleQuestions,
+    strategy: generationRule.strategy,
+  };
+}
+
 function normalizeDetail(
   mode: ZquizActivityMode,
   detail: Omit<ZquizTeacherActivityDetail, 'mode'>,
 ): ZquizTeacherActivityDetail {
+  const items = [...detail.items]
+    .sort((left, right) => left.sortOrder - right.sortOrder)
+    .map((item) => ({
+      ...item,
+      question: item.question ? normalizeQuestion(item.question) : null,
+    }));
+
   return {
     ...detail,
     attemptLimit: detail.attemptLimit ?? null,
     durationMinutes: detail.durationMinutes ?? null,
     endsAt: detail.endsAt || null,
-    items: [...detail.items]
-      .sort((left, right) => left.sortOrder - right.sortOrder)
-      .map((item) => ({
-        ...item,
-        question: item.question ? normalizeQuestion(item.question) : null,
-      })),
+    generationRule:
+      mode === 'EXAM'
+        ? normalizeGenerationRule(detail.generationRule, {
+            fixedItems: items,
+            shuffleOptions: detail.shuffleOptions,
+            shuffleQuestions: detail.shuffleQuestions,
+          })
+        : undefined,
+    items,
     mode,
     startsAt: detail.startsAt || null,
     targets: detail.targets.map((target) => ({
@@ -502,6 +793,14 @@ export function normalizeListZquizAssemblyQuestionsInput(input: ListZquizAssembl
   });
 }
 
+export function normalizeListZquizKnowledgeNodesInput(input: ListZquizKnowledgeNodesInput) {
+  return compactFilterInput({
+    bankId: normalizeRequiredPositiveInteger(input.bankId, '题库 ID'),
+    keyword: normalizeOptionalTextValue(input.keyword, 'to_undefined'),
+    nodeType: input.nodeType || undefined,
+  });
+}
+
 export function normalizeListLocalClassOptionsInput(input: ListLocalClassOptionsInput = {}) {
   return compactFilterInput({
     departmentId: normalizeOptionalTextValue(input.departmentId, 'to_undefined'),
@@ -518,6 +817,7 @@ export function buildZquizActivityDraftInput(
     bankId: normalizeRequiredPositiveInteger(input.bankId, '题库'),
     durationMinutes: normalizeOptionalPositiveInteger(input.durationMinutes, '时长'),
     endsAt: normalizeOptionalDateTimeText(input.endsAt),
+    generationRule: normalizeGenerationRuleSource(input.generationRule),
     items: (input.items ?? []).map((item, index) => ({
       questionId: normalizeRequiredPositiveInteger(item.questionId, '题目 ID'),
       scoreMax: normalizeScoreMax(item.scoreMax),
@@ -536,8 +836,10 @@ export function buildZquizActivityDraftInput(
 
 export function validateZquizActivityPublishDraft(input: ZquizPublishValidationSource) {
   const errors: string[] = [];
+  const isRandomExam =
+    input.mode === 'EXAM' && input.generationRule?.strategy === 'RANDOM_BY_KNOWLEDGE';
 
-  if (input.items.length === 0) {
+  if (!isRandomExam && input.items.length === 0) {
     errors.push('发布前至少选择 1 道题。');
   }
 
@@ -546,6 +848,39 @@ export function validateZquizActivityPublishDraft(input: ZquizPublishValidationS
   }
 
   if (input.mode === 'EXAM') {
+    if (isRandomExam) {
+      const randomRules = input.generationRule?.randomRules ?? [];
+      const totalCount = randomRules.reduce((sum, rule) => sum + rule.count, 0);
+
+      if (randomRules.length === 0) {
+        errors.push('随机组卷发布前至少配置 1 条抽题规则。');
+      }
+
+      if (totalCount > 200) {
+        errors.push('随机组卷总题量不能超过 200 题。');
+      }
+
+      randomRules.forEach((rule, index) => {
+        const ruleNo = index + 1;
+
+        if (rule.knowledgeNodeIds.length === 0) {
+          errors.push(`随机规则 ${ruleNo} 至少选择 1 个知识点。`);
+        }
+
+        if (!rule.questionType) {
+          errors.push(`随机规则 ${ruleNo} 必须选择题型。`);
+        }
+
+        if (rule.count <= 0) {
+          errors.push(`随机规则 ${ruleNo} 抽题数量必须大于 0。`);
+        }
+
+        if (rule.scoreMax <= 0) {
+          errors.push(`随机规则 ${ruleNo} 单题分值必须大于 0。`);
+        }
+      });
+    }
+
     if (!input.startsAt) {
       errors.push('考试发布前必须填写开始时间。');
     }
@@ -644,6 +979,21 @@ export async function listZquizAssemblyQuestions(input: ListZquizAssemblyQuestio
   });
 
   return response.listZquizAssemblyQuestions.map(normalizeQuestion);
+}
+
+export async function listZquizKnowledgeNodes(input: ListZquizKnowledgeNodesInput) {
+  const response = await requestGraphQL<
+    ListZquizKnowledgeNodesResponse,
+    {
+      input: ReturnType<typeof normalizeListZquizKnowledgeNodesInput>;
+    }
+  >(LIST_ZQUIZ_KNOWLEDGE_NODES_QUERY, {
+    input: normalizeListZquizKnowledgeNodesInput(input),
+  });
+
+  return [...response.listZquizKnowledgeNodes].sort(
+    (left, right) => left.sortOrder - right.sortOrder || left.id - right.id,
+  );
 }
 
 export async function listLocalClassOptions(input: ListLocalClassOptionsInput = {}) {
@@ -745,4 +1095,32 @@ export async function publishZquizActivity(input: { activityId: number; mode: Zq
   );
 
   return normalizeDetail('EXAM', response.publishZquizExam);
+}
+
+export async function getZquizExamTeacherProgress(input: { activityId: number }) {
+  const variables = {
+    input: {
+      activityId: normalizeRequiredPositiveInteger(input.activityId, '活动 ID'),
+    },
+  };
+  const response = await requestGraphQL<GetZquizExamTeacherProgressResponse, typeof variables>(
+    GET_ZQUIZ_EXAM_TEACHER_PROGRESS_QUERY,
+    variables,
+  );
+
+  return response.getZquizExamTeacherProgress;
+}
+
+export async function collectZquizExamAttempts(input: { activityId: number }) {
+  const variables = {
+    input: {
+      activityId: normalizeRequiredPositiveInteger(input.activityId, '活动 ID'),
+    },
+  };
+  const response = await requestGraphQL<CollectZquizExamAttemptsResponse, typeof variables>(
+    COLLECT_ZQUIZ_EXAM_ATTEMPTS_MUTATION,
+    variables,
+  );
+
+  return response.collectZquizExamAttempts;
 }

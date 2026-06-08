@@ -5,6 +5,7 @@ import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  CloseCircleOutlined,
   FileDoneOutlined,
   HourglassOutlined,
   PlayCircleOutlined,
@@ -34,12 +35,16 @@ import {
   buildZquizExamAnswers,
   buildZquizExamDraftAnswersFromServer,
   getMyZquizExamActivity,
+  getMyZquizExamAttempt,
   listMyZquizExamActivities,
   resolveZquizExamErrorMessage,
   startZquizExam,
   submitZquizExam,
   type ZquizExamActivity,
+  type ZquizExamAttempt,
   type ZquizExamAttemptGradingStatus,
+  type ZquizExamAttemptItem,
+  type ZquizExamAttemptItemGradingStatus,
   type ZquizExamAttemptStatus,
   type ZquizExamAvailability,
   type ZquizExamDraftAnswers,
@@ -49,7 +54,7 @@ import {
   type ZquizExamSubmitResult,
 } from './api';
 
-type ExamView = 'list' | 'paper' | 'submitted';
+type ExamView = 'list' | 'paper' | 'result';
 type DraftAnswer = unknown;
 type DraftAnswers = ZquizExamDraftAnswers;
 
@@ -66,6 +71,7 @@ type PaperViewState = {
 };
 
 type SubmitViewState = {
+  attempt: ZquizExamAttempt | null;
   error: string | null;
   loading: boolean;
   result: ZquizExamSubmitResult | null;
@@ -114,6 +120,20 @@ const ATTEMPT_GRADING_STATUS_LABELS: Record<ZquizExamAttemptGradingStatus, strin
   MANUAL_GRADED: '人工已评',
   MANUAL_PENDING: '待人工批改',
   NOT_GRADED: '未评分',
+};
+
+const ITEM_GRADING_STATUS_LABELS: Record<ZquizExamAttemptItemGradingStatus, string> = {
+  AUTO_GRADED: '自动评分',
+  MANUAL_GRADED: '人工已评',
+  MANUAL_PENDING: '待人工批改',
+  UNANSWERED: '未作答',
+};
+
+const ITEM_GRADING_STATUS_TAG_COLORS: Record<ZquizExamAttemptItemGradingStatus, string> = {
+  AUTO_GRADED: 'green',
+  MANUAL_GRADED: 'blue',
+  MANUAL_PENDING: 'gold',
+  UNANSWERED: 'default',
 };
 
 function formatDateTime(value: string | null) {
@@ -439,6 +459,140 @@ function ExamQuestionCard({
   );
 }
 
+function CorrectnessTag({ item }: { item: ZquizExamAttemptItem }) {
+  if (item.gradingStatus === 'UNANSWERED') {
+    return <Tag>未作答</Tag>;
+  }
+
+  if (item.gradingStatus === 'MANUAL_PENDING') {
+    return (
+      <Tag color="gold" icon={<HourglassOutlined />}>
+        待批改
+      </Tag>
+    );
+  }
+
+  if (item.isCorrect === true) {
+    return (
+      <Tag color="green" icon={<CheckCircleOutlined />}>
+        正确
+      </Tag>
+    );
+  }
+
+  if (item.isCorrect === false) {
+    return (
+      <Tag color="red" icon={<CloseCircleOutlined />}>
+        错误
+      </Tag>
+    );
+  }
+
+  return <Tag>{ITEM_GRADING_STATUS_LABELS[item.gradingStatus]}</Tag>;
+}
+
+const AttemptAnswerView = memo(function AttemptAnswerView({
+  item,
+}: {
+  item: ZquizExamAttemptItem;
+}) {
+  if (
+    item.type === 'SINGLE_CHOICE' ||
+    item.type === 'MULTIPLE_CHOICE' ||
+    item.type === 'TRUE_FALSE'
+  ) {
+    return (
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-text-secondary">提交答案</span>
+        {item.answer.selectedLabels.length > 0 ? (
+          <Space wrap>
+            {item.answer.selectedLabels.map((label) => (
+              <Tag key={label}>{label}</Tag>
+            ))}
+          </Space>
+        ) : (
+          <Typography.Text type="secondary">未作答</Typography.Text>
+        )}
+      </div>
+    );
+  }
+
+  if (item.type === 'FILL_BLANK') {
+    return (
+      <div className="flex flex-col gap-2">
+        <span className="text-xs text-text-secondary">提交答案</span>
+        {item.answer.blankAnswers.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            {item.answer.blankAnswers.map((blankAnswer) => (
+              <div key={blankAnswer.blankNo} className="flex flex-wrap gap-2">
+                <Tag>空 {blankAnswer.blankNo}</Tag>
+                <span>{blankAnswer.answerText}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <Typography.Text type="secondary">未作答</Typography.Text>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs text-text-secondary">提交答案</span>
+      {item.answer.answerText ? (
+        <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+          {item.answer.answerText}
+        </Typography.Paragraph>
+      ) : (
+        <Typography.Text type="secondary">未作答</Typography.Text>
+      )}
+    </div>
+  );
+});
+
+const AttemptQuestionCard = memo(function AttemptQuestionCard({
+  item,
+}: {
+  item: ZquizExamAttemptItem;
+}) {
+  return (
+    <Card
+      title={
+        <Space wrap>
+          <span>第 {item.paperItemNo} 题</span>
+          <Tag>{QUESTION_TYPE_LABELS[item.type]}</Tag>
+          <Tag color="blue">{formatScorePair(item.scoreAwarded, item.scoreMax)} 分</Tag>
+          <Tag color={ITEM_GRADING_STATUS_TAG_COLORS[item.gradingStatus]}>
+            {ITEM_GRADING_STATUS_LABELS[item.gradingStatus]}
+          </Tag>
+          <CorrectnessTag item={item} />
+        </Space>
+      }
+    >
+      <div className="flex flex-col gap-4">
+        <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+          {item.stem}
+        </Typography.Paragraph>
+        <AssetList assets={item.assets} />
+        {item.options.length > 0 ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-xs text-text-secondary">卷面选项</span>
+            <div className="flex flex-col gap-2">
+              {item.options.map((option) => (
+                <span key={option.label}>
+                  {option.label}. {option.content}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        <AttemptAnswerView item={item} />
+      </div>
+    </Card>
+  );
+});
+
 export function ZquizExamActivitiesLabPage() {
   const [view, setView] = useState<ExamView>('list');
   const [listState, setListState] = useState<ActivityViewState>({
@@ -452,6 +606,7 @@ export function ZquizExamActivitiesLabPage() {
     paper: null,
   });
   const [submitState, setSubmitState] = useState<SubmitViewState>({
+    attempt: null,
     error: null,
     loading: false,
     result: null,
@@ -463,6 +618,7 @@ export function ZquizExamActivitiesLabPage() {
     status: 'idle',
   });
   const [startingActivityId, setStartingActivityId] = useState<number | null>(null);
+  const [loadingResultActivityId, setLoadingResultActivityId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const autosaveTimerRef = useRef<number | null>(null);
@@ -613,6 +769,7 @@ export function ZquizExamActivitiesLabPage() {
       paper: null,
     });
     setSubmitState({
+      attempt: null,
       error: null,
       loading: false,
       result: null,
@@ -662,6 +819,52 @@ export function ZquizExamActivitiesLabPage() {
     }
   }, []);
 
+  const handleLoadExamResult = useCallback(
+    async (input: {
+      activityId: number;
+      attemptId?: string | null;
+      summary?: ZquizExamSubmitResult | null;
+    }) => {
+      setLoadingResultActivityId(input.activityId);
+      setPaperState({
+        error: null,
+        loading: false,
+        paper: null,
+      });
+      setSubmitState({
+        attempt: null,
+        error: null,
+        loading: true,
+        result: input.summary ?? null,
+      });
+      setView('result');
+
+      try {
+        const attempt = await getMyZquizExamAttempt({
+          activityId: input.activityId,
+          attemptId: input.attemptId,
+        });
+
+        setSubmitState({
+          attempt,
+          error: attempt ? null : '暂无已提交的考试结果。',
+          loading: false,
+          result: input.summary ?? null,
+        });
+      } catch (error) {
+        setSubmitState({
+          attempt: null,
+          error: resolveZquizExamErrorMessage(error, '暂时无法读取考试结果。'),
+          loading: false,
+          result: input.summary ?? null,
+        });
+      } finally {
+        setLoadingResultActivityId(null);
+      }
+    },
+    [],
+  );
+
   const handleAnswerChange = useCallback(
     (paperItemNo: number, value: DraftAnswer) => {
       const nextAnswers = {
@@ -695,6 +898,7 @@ export function ZquizExamActivitiesLabPage() {
       paper: null,
     });
     setSubmitState({
+      attempt: null,
       error: null,
       loading: false,
       result: null,
@@ -719,6 +923,7 @@ export function ZquizExamActivitiesLabPage() {
 
     setSubmitting(true);
     setSubmitState({
+      attempt: null,
       error: null,
       loading: true,
       result: null,
@@ -731,11 +936,6 @@ export function ZquizExamActivitiesLabPage() {
       });
 
       dirtyRef.current = false;
-      setSubmitState({
-        error: null,
-        loading: false,
-        result,
-      });
       setPaperState({
         error: null,
         loading: false,
@@ -749,10 +949,15 @@ export function ZquizExamActivitiesLabPage() {
       latestAnswersRef.current = {};
       paperRef.current = null;
       setAnswers({});
-      setView('submitted');
       void loadActivities();
+      await handleLoadExamResult({
+        activityId: paper.activity.id,
+        attemptId: result.attemptId,
+        summary: result,
+      });
     } catch (error) {
       setSubmitState({
+        attempt: null,
         error: resolveZquizExamErrorMessage(error, '暂时无法提交考试。'),
         loading: false,
         result: null,
@@ -826,6 +1031,14 @@ export function ZquizExamActivitiesLabPage() {
                 return (
                   <List.Item
                     actions={[
+                      <Button
+                        icon={<FileDoneOutlined />}
+                        key="result"
+                        loading={loadingResultActivityId === activity.id}
+                        onClick={() => void handleLoadExamResult({ activityId: activity.id })}
+                      >
+                        查看结果
+                      </Button>,
                       <Button
                         disabled={!canStart}
                         icon={<PlayCircleOutlined />}
@@ -1000,66 +1213,160 @@ export function ZquizExamActivitiesLabPage() {
     );
   }
 
-  function renderSubmitted() {
+  function renderResult() {
+    const attempt = submitState.attempt;
     const result = submitState.result;
 
-    return (
-      <Card
-        title={
-          <Space>
-            <FileDoneOutlined />
-            <span>考试已提交</span>
-          </Space>
-        }
-        extra={
-          <Button icon={<ArrowLeftOutlined />} onClick={resetToList}>
-            返回列表
-          </Button>
-        }
-      >
-        {submitState.loading ? (
+    if (submitState.loading) {
+      return (
+        <Card title="考试结果">
           <Skeleton active paragraph={{ rows: 5 }} />
-        ) : result ? (
-          <Descriptions
-            bordered
-            column={2}
-            items={[
-              {
-                key: 'attemptId',
-                label: 'Attempt ID',
-                children: result.attemptId,
-              },
-              {
-                key: 'attemptNo',
-                label: '提交次数',
-                children: `第 ${result.attemptNo} 次`,
-              },
-              {
-                key: 'status',
-                label: '状态',
-                children: ATTEMPT_STATUS_LABELS[result.status],
-              },
-              {
-                key: 'gradingStatus',
-                label: '评分状态',
-                children: ATTEMPT_GRADING_STATUS_LABELS[result.gradingStatus],
-              },
-              {
-                key: 'score',
-                label: '分数',
-                children: formatScorePair(result.scoreAwarded, result.scoreMax),
-              },
-              {
-                key: 'submittedAt',
-                label: '提交时间',
-                children: formatDateTime(result.submittedAt),
-              },
-            ]}
-          />
-        ) : (
-          <Alert showIcon message={submitState.error || '暂无提交结果'} type="error" />
-        )}
-      </Card>
+        </Card>
+      );
+    }
+
+    const extra = (
+      <Button icon={<ArrowLeftOutlined />} onClick={resetToList}>
+        返回列表
+      </Button>
+    );
+
+    if (!attempt) {
+      return (
+        <Card
+          title={
+            <Space>
+              <FileDoneOutlined />
+              <span>考试结果</span>
+            </Space>
+          }
+          extra={extra}
+        >
+          <div className="flex flex-col gap-4">
+            {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
+            {result ? (
+              <Descriptions
+                bordered
+                column={2}
+                items={[
+                  {
+                    key: 'attemptId',
+                    label: 'Attempt ID',
+                    children: result.attemptId,
+                  },
+                  {
+                    key: 'attemptNo',
+                    label: '提交次数',
+                    children: `第 ${result.attemptNo} 次`,
+                  },
+                  {
+                    key: 'status',
+                    label: '状态',
+                    children: ATTEMPT_STATUS_LABELS[result.status],
+                  },
+                  {
+                    key: 'gradingStatus',
+                    label: '评分状态',
+                    children: ATTEMPT_GRADING_STATUS_LABELS[result.gradingStatus],
+                  },
+                  {
+                    key: 'score',
+                    label: '分数',
+                    children: formatScorePair(result.scoreAwarded, result.scoreMax),
+                  },
+                  {
+                    key: 'submittedAt',
+                    label: '提交时间',
+                    children: formatDateTime(result.submittedAt),
+                  },
+                ]}
+              />
+            ) : (
+              <Empty description="暂无考试结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+            )}
+          </div>
+        </Card>
+      );
+    }
+
+    return (
+      <div className="flex flex-col gap-5">
+        <Card
+          title={
+            <Space>
+              <FileDoneOutlined />
+              <span>{attempt.activity.title}</span>
+            </Space>
+          }
+          extra={extra}
+        >
+          <div className="flex flex-col gap-4">
+            {attempt.gradingStatus === 'MANUAL_PENDING' ? (
+              <Alert
+                showIcon
+                message="本次考试包含待人工批改题，当前总分只包含已自动评分的部分。"
+                type="warning"
+              />
+            ) : null}
+
+            {submitState.error ? (
+              <Alert showIcon message={submitState.error} type="warning" />
+            ) : null}
+
+            <Descriptions
+              bordered
+              column={2}
+              items={[
+                {
+                  key: 'score',
+                  label: '总分',
+                  children: formatScorePair(attempt.scoreAwarded, attempt.scoreMax),
+                },
+                {
+                  key: 'attemptNo',
+                  label: '提交次数',
+                  children: `第 ${attempt.attemptNo} 次`,
+                },
+                {
+                  key: 'status',
+                  label: '状态',
+                  children: ATTEMPT_STATUS_LABELS[attempt.status],
+                },
+                {
+                  key: 'gradingStatus',
+                  label: '评分状态',
+                  children: ATTEMPT_GRADING_STATUS_LABELS[attempt.gradingStatus],
+                },
+                {
+                  key: 'startedAt',
+                  label: '开始时间',
+                  children: formatDateTime(attempt.startedAt),
+                },
+                {
+                  key: 'submittedAt',
+                  label: '提交时间',
+                  children: formatDateTime(attempt.submittedAt),
+                },
+                {
+                  key: 'attemptId',
+                  label: 'Attempt ID',
+                  children: (
+                    <Typography.Text copyable ellipsis>
+                      {attempt.id}
+                    </Typography.Text>
+                  ),
+                },
+              ]}
+            />
+          </div>
+        </Card>
+
+        <div className="flex flex-col gap-4">
+          {attempt.items.map((item) => (
+            <AttemptQuestionCard key={`${item.paperItemNo}-${item.questionId}`} item={item} />
+          ))}
+        </div>
+      </div>
     );
   }
 
@@ -1068,7 +1375,7 @@ export function ZquizExamActivitiesLabPage() {
       {renderHeader()}
       {view === 'list' ? renderList() : null}
       {view === 'paper' ? renderPaper() : null}
-      {view === 'submitted' ? renderSubmitted() : null}
+      {view === 'result' ? renderResult() : null}
     </div>
   );
 }

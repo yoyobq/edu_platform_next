@@ -13,10 +13,14 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   buildZquizActivityDraftInput,
+  collectZquizExamAttempts,
+  getZquizExamTeacherProgress,
   listZquizBanks,
+  listZquizKnowledgeNodes,
   listZquizTeacherActivities,
   saveZquizExamDraft,
   validateZquizActivityPublishDraft,
+  type ZquizExamTeacherProgress,
   type ZquizTeacherActivityDetail,
 } from './api';
 
@@ -79,6 +83,24 @@ function createDetail(): Omit<ZquizTeacherActivityDetail, 'mode'> {
   };
 }
 
+function createProgress(): ZquizExamTeacherProgress {
+  return {
+    abandonedAttemptCount: 0,
+    activityId: 20,
+    autoGradedAttemptCount: 2,
+    gradedAttemptCount: 2,
+    inProgressAttemptCount: 3,
+    manualGradedAttemptCount: 0,
+    manualPendingAttemptCount: 1,
+    notGradedAttemptCount: 3,
+    notStartedStudentCount: 5,
+    startedStudentCount: 6,
+    submittedAttemptCount: 3,
+    targetStudentCount: 11,
+    totalAttemptCount: 6,
+  };
+}
+
 describe('zquiz activity builder api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
@@ -132,6 +154,77 @@ describe('zquiz activity builder api', () => {
         title: '期中考试',
       }),
     ).toThrow('时间必须是不带时区的业务时间');
+  });
+
+  it('builds fixed and random generation rule inputs for exam drafts', () => {
+    expect(
+      buildZquizActivityDraftInput({
+        bankId: 1,
+        generationRule: {
+          fixedItems: [
+            { questionId: 1001, scoreMax: 2 },
+            { questionId: 1002, scoreMax: 3 },
+          ],
+          shuffleOptions: false,
+          shuffleQuestions: true,
+          strategy: 'FIXED',
+        },
+        items: [
+          { questionId: 1001, scoreMax: 2 },
+          { questionId: 1002, scoreMax: 3 },
+        ],
+        targetClassIds: ['C001'],
+        title: '固定考试',
+      }),
+    ).toMatchObject({
+      generationRule: {
+        fixedItems: [
+          { questionId: 1001, scoreMax: 2, sortOrder: 1 },
+          { questionId: 1002, scoreMax: 3, sortOrder: 2 },
+        ],
+        shuffleOptions: false,
+        shuffleQuestions: true,
+        strategy: 'FIXED',
+      },
+    });
+
+    expect(
+      buildZquizActivityDraftInput({
+        bankId: 1,
+        generationRule: {
+          randomRules: [
+            {
+              count: 5,
+              includeChildren: null,
+              knowledgeNodeIds: [10, 10, 11],
+              questionType: 'SINGLE_CHOICE',
+              scoreMax: 2,
+            },
+          ],
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+        targetClassIds: ['C001'],
+        title: '随机考试',
+      }),
+    ).toMatchObject({
+      generationRule: {
+        randomRules: [
+          {
+            count: 5,
+            includeChildren: true,
+            knowledgeNodeIds: [10, 11],
+            questionType: 'SINGLE_CHOICE',
+            scoreMax: 2,
+            sortOrder: 1,
+          },
+        ],
+        shuffleOptions: true,
+        shuffleQuestions: true,
+        strategy: 'RANDOM_BY_KNOWLEDGE',
+      },
+      items: [],
+    });
   });
 
   it('calls bank and activity list queries with normalized filters', async () => {
@@ -197,6 +290,54 @@ describe('zquiz activity builder api', () => {
     );
   });
 
+  it('loads zquiz knowledge nodes with normalized filters', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      listZquizKnowledgeNodes: [
+        {
+          bankId: 1,
+          code: 'P002',
+          directQuestionCount: 2,
+          id: 11,
+          name: '知识点二',
+          nodeType: 'POINT',
+          parentId: 1,
+          sortOrder: 2,
+          totalQuestionCount: 2,
+        },
+        {
+          bankId: 1,
+          code: 'P001',
+          directQuestionCount: 3,
+          id: 10,
+          name: '知识点一',
+          nodeType: 'POINT',
+          parentId: 1,
+          sortOrder: 1,
+          totalQuestionCount: 3,
+        },
+      ],
+    });
+
+    await expect(
+      listZquizKnowledgeNodes({
+        bankId: 1,
+        keyword: ' 知识点 ',
+        nodeType: 'POINT',
+      }),
+    ).resolves.toMatchObject([{ id: 10 }, { id: 11 }]);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query listZquizKnowledgeNodes'),
+      {
+        input: {
+          bankId: 1,
+          keyword: '知识点',
+          nodeType: 'POINT',
+        },
+      },
+    );
+  });
+
   it('saves exam draft through the exam mutation and normalizes detail order', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       saveZquizExamDraft: createDetail(),
@@ -234,6 +375,143 @@ describe('zquiz activity builder api', () => {
     );
   });
 
+  it('saves a random exam draft through generation rule input', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      saveZquizExamDraft: {
+        ...createDetail(),
+        generationRule: {
+          fixedItems: [],
+          randomRules: [
+            {
+              count: 5,
+              includeChildren: true,
+              knowledgeNodeIds: [10, 11],
+              questionType: 'SINGLE_CHOICE',
+              scoreMax: 2,
+              sortOrder: 1,
+            },
+          ],
+          shuffleOptions: true,
+          shuffleQuestions: true,
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+      },
+    });
+
+    await expect(
+      saveZquizExamDraft({
+        bankId: 1,
+        generationRule: {
+          randomRules: [
+            {
+              count: 5,
+              includeChildren: true,
+              knowledgeNodeIds: [10, 11],
+              questionType: 'SINGLE_CHOICE',
+              scoreMax: 2,
+            },
+          ],
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+        targetClassIds: ['C001'],
+        title: '随机考试',
+      }),
+    ).resolves.toMatchObject({
+      generationRule: {
+        randomRules: [
+          {
+            count: 5,
+            knowledgeNodeIds: [10, 11],
+          },
+        ],
+        strategy: 'RANDOM_BY_KNOWLEDGE',
+      },
+      items: [],
+      mode: 'EXAM',
+    });
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('generationRule');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation saveZquizExamDraft'),
+      expect.objectContaining({
+        input: expect.objectContaining({
+          generationRule: {
+            randomRules: [
+              {
+                count: 5,
+                includeChildren: true,
+                knowledgeNodeIds: [10, 11],
+                questionType: 'SINGLE_CHOICE',
+                scoreMax: 2,
+                sortOrder: 1,
+              },
+            ],
+            shuffleOptions: true,
+            shuffleQuestions: true,
+            strategy: 'RANDOM_BY_KNOWLEDGE',
+          },
+          items: [],
+        }),
+      }),
+    );
+  });
+
+  it('loads exam teacher progress and collects in-progress attempts', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      getZquizExamTeacherProgress: createProgress(),
+    });
+
+    await expect(getZquizExamTeacherProgress({ activityId: 20 })).resolves.toMatchObject({
+      activityId: 20,
+      inProgressAttemptCount: 3,
+      targetStudentCount: 11,
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query getZquizExamTeacherProgress'),
+      {
+        input: {
+          activityId: 20,
+        },
+      },
+    );
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      collectZquizExamAttempts: {
+        activityId: 20,
+        collectedCount: 3,
+        progress: {
+          ...createProgress(),
+          inProgressAttemptCount: 0,
+          submittedAttemptCount: 6,
+        },
+        skippedCount: 3,
+      },
+    });
+
+    await expect(collectZquizExamAttempts({ activityId: 20 })).resolves.toMatchObject({
+      activityId: 20,
+      collectedCount: 3,
+      progress: {
+        inProgressAttemptCount: 0,
+      },
+      skippedCount: 3,
+    });
+
+    expect(executeGraphQLMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('mutation collectZquizExamAttempts'),
+      {
+        input: {
+          activityId: 20,
+        },
+      },
+    );
+  });
+
   it('validates publish rules for practice and exam', () => {
     expect(
       validateZquizActivityPublishDraft({
@@ -256,5 +534,48 @@ describe('zquiz activity builder api', () => {
         targetClassIds: ['C001'],
       }),
     ).toEqual(['考试开始时间不能晚于结束时间。']);
+
+    expect(
+      validateZquizActivityPublishDraft({
+        durationMinutes: 90,
+        endsAt: '2026-06-08 11:00:00.000',
+        generationRule: {
+          randomRules: [
+            {
+              count: 5,
+              includeChildren: true,
+              knowledgeNodeIds: [10],
+              questionType: 'SINGLE_CHOICE',
+              scoreMax: 2,
+              sortOrder: 1,
+            },
+          ],
+          shuffleOptions: true,
+          shuffleQuestions: true,
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+        mode: 'EXAM',
+        startsAt: '2026-06-08 09:00:00.000',
+        targetClassIds: ['C001'],
+      }),
+    ).toEqual([]);
+
+    expect(
+      validateZquizActivityPublishDraft({
+        durationMinutes: 90,
+        endsAt: '2026-06-08 11:00:00.000',
+        generationRule: {
+          randomRules: [],
+          shuffleOptions: true,
+          shuffleQuestions: true,
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+        mode: 'EXAM',
+        startsAt: '2026-06-08 09:00:00.000',
+        targetClassIds: ['C001'],
+      }),
+    ).toContain('随机组卷发布前至少配置 1 条抽题规则。');
   });
 });

@@ -11,6 +11,11 @@ export type ZquizExamAttemptGradingStatus =
   | 'MANUAL_GRADED'
   | 'MANUAL_PENDING'
   | 'NOT_GRADED';
+export type ZquizExamAttemptItemGradingStatus =
+  | 'AUTO_GRADED'
+  | 'MANUAL_GRADED'
+  | 'MANUAL_PENDING'
+  | 'UNANSWERED';
 export type ZquizExamQuestionType =
   | 'ESSAY'
   | 'FILL_BLANK'
@@ -108,6 +113,32 @@ export type ZquizExamSubmitResult = {
   submittedAt: string | null;
 };
 
+export type ZquizExamAttemptAnswer = {
+  answerText: string | null;
+  blankAnswers: ZquizExamDraftBlankAnswer[];
+  selectedLabels: string[];
+};
+
+export type ZquizExamAttemptItem = ZquizExamPaperItem & {
+  answer: ZquizExamAttemptAnswer;
+  gradingStatus: ZquizExamAttemptItemGradingStatus;
+  isCorrect: boolean | null;
+  scoreAwarded: number;
+};
+
+export type ZquizExamAttempt = {
+  activity: ZquizExamActivity;
+  attemptNo: number;
+  gradingStatus: ZquizExamAttemptGradingStatus;
+  id: string;
+  items: ZquizExamAttemptItem[];
+  scoreAwarded: number;
+  scoreMax: number;
+  startedAt: string | null;
+  status: ZquizExamAttemptStatus;
+  submittedAt: string | null;
+};
+
 export type ZquizExamDraftAnswers = Record<string, unknown>;
 
 export type SubmitZquizExamAnswerInput = {
@@ -135,6 +166,10 @@ type AutosaveZquizExamResponse = {
 
 type SubmitZquizExamResponse = {
   submitZquizExam: ZquizExamSubmitResult;
+};
+
+type GetMyZquizExamAttemptResponse = {
+  getMyZquizExamAttempt: ZquizExamAttempt | null;
 };
 
 const EXAM_CONFIGURATION_ERROR_MESSAGE = '考试配置异常，请联系教师';
@@ -245,6 +280,63 @@ const START_ZQUIZ_EXAM_MUTATION = `
   }
 `;
 
+const ZQUIZ_EXAM_ATTEMPT_FIELDS = `
+  id
+  attemptNo
+  status
+  gradingStatus
+  scoreAwarded
+  scoreMax
+  startedAt
+  submittedAt
+  activity {
+    id
+    title
+    bankId
+    startsAt
+    endsAt
+    durationMinutes
+    attemptLimit
+    availability
+    canStart
+  }
+  items {
+    paperItemNo
+    questionId
+    type
+    stem
+    scoreMax
+    scoreAwarded
+    isCorrect
+    gradingStatus
+    options {
+      label
+      content
+      sortOrder
+    }
+    blanks {
+      blankNo
+      score
+    }
+    assets {
+      kind
+      storageKey
+      originalName
+      mimeType
+      sizeBytes
+      sortOrder
+    }
+    answer {
+      selectedLabels
+      blankAnswers {
+        blankNo
+        answerText
+      }
+      answerText
+    }
+  }
+`;
+
 const AUTOSAVE_ZQUIZ_EXAM_MUTATION = `
   mutation autosaveZquizExam($input: AutosaveZquizExamInput!) {
     autosaveZquizExam(input: $input) {
@@ -274,6 +366,14 @@ const SUBMIT_ZQUIZ_EXAM_MUTATION = `
       scoreMax
       startedAt
       submittedAt
+    }
+  }
+`;
+
+const GET_MY_ZQUIZ_EXAM_ATTEMPT_QUERY = `
+  query getMyZquizExamAttempt($input: ZquizExamAttemptInput!) {
+    getMyZquizExamAttempt(input: $input) {
+      ${ZQUIZ_EXAM_ATTEMPT_FIELDS}
     }
   }
 `;
@@ -330,6 +430,23 @@ function normalizeDraftAnswer(answer: ZquizExamDraftAnswer): ZquizExamDraftAnswe
   };
 }
 
+function normalizePaperItem(item: ZquizExamPaperItem): ZquizExamPaperItem {
+  return {
+    ...item,
+    assets: item.assets.map((asset) => ({
+      ...asset,
+      mimeType: normalizeOptionalString(asset.mimeType),
+      originalName: normalizeOptionalString(asset.originalName),
+      sizeBytes: normalizeOptionalNumber(asset.sizeBytes),
+    })),
+    blanks: item.blanks.map((blank) => ({
+      blankNo: blank.blankNo,
+      score: normalizeOptionalNumber(blank.score),
+    })),
+    options: [...item.options].sort((left, right) => left.sortOrder - right.sortOrder),
+  };
+}
+
 function normalizePaper(paper: ZquizExamPaper): ZquizExamPaper {
   return {
     activity: normalizeActivity(paper.activity),
@@ -337,20 +454,7 @@ function normalizePaper(paper: ZquizExamPaper): ZquizExamPaper {
     attemptNo: paper.attemptNo,
     deadlineAt: paper.deadlineAt,
     draftAnswers: paper.draftAnswers.map(normalizeDraftAnswer),
-    items: paper.items.map((item) => ({
-      ...item,
-      assets: item.assets.map((asset) => ({
-        ...asset,
-        mimeType: normalizeOptionalString(asset.mimeType),
-        originalName: normalizeOptionalString(asset.originalName),
-        sizeBytes: normalizeOptionalNumber(asset.sizeBytes),
-      })),
-      blanks: item.blanks.map((blank) => ({
-        blankNo: blank.blankNo,
-        score: normalizeOptionalNumber(blank.score),
-      })),
-      options: [...item.options].sort((left, right) => left.sortOrder - right.sortOrder),
-    })),
+    items: paper.items.map(normalizePaperItem),
     startedAt: paper.startedAt,
   };
 }
@@ -373,6 +477,42 @@ function normalizeSubmitResult(result: ZquizExamSubmitResult): ZquizExamSubmitRe
     startedAt: normalizeOptionalString(result.startedAt),
     status: result.status,
     submittedAt: normalizeOptionalString(result.submittedAt),
+  };
+}
+
+function normalizeAttemptAnswer(answer: ZquizExamAttemptAnswer): ZquizExamAttemptAnswer {
+  return {
+    answerText: normalizeOptionalString(answer.answerText),
+    blankAnswers: answer.blankAnswers.map((blankAnswer) => ({
+      answerText: blankAnswer.answerText,
+      blankNo: blankAnswer.blankNo,
+    })),
+    selectedLabels: [...answer.selectedLabels],
+  };
+}
+
+function normalizeAttemptItem(item: ZquizExamAttemptItem): ZquizExamAttemptItem {
+  return {
+    ...normalizePaperItem(item),
+    answer: normalizeAttemptAnswer(item.answer),
+    gradingStatus: item.gradingStatus,
+    isCorrect: item.isCorrect,
+    scoreAwarded: item.scoreAwarded,
+  };
+}
+
+function normalizeAttempt(attempt: ZquizExamAttempt): ZquizExamAttempt {
+  return {
+    activity: normalizeActivity(attempt.activity),
+    attemptNo: attempt.attemptNo,
+    gradingStatus: attempt.gradingStatus,
+    id: attempt.id,
+    items: attempt.items.map(normalizeAttemptItem),
+    scoreAwarded: attempt.scoreAwarded,
+    scoreMax: attempt.scoreMax,
+    startedAt: normalizeOptionalString(attempt.startedAt),
+    status: attempt.status,
+    submittedAt: normalizeOptionalString(attempt.submittedAt),
   };
 }
 
@@ -684,5 +824,31 @@ export async function submitZquizExam(input: {
         mapNotOpenToDeadline: true,
       }),
     );
+  }
+}
+
+export async function getMyZquizExamAttempt(input: {
+  activityId: number;
+  attemptId?: string | null;
+}) {
+  try {
+    const response = await requestGraphQL<
+      GetMyZquizExamAttemptResponse,
+      {
+        input: {
+          activityId: number;
+          attemptId?: string | null;
+        };
+      }
+    >(GET_MY_ZQUIZ_EXAM_ATTEMPT_QUERY, {
+      input: {
+        activityId: input.activityId,
+        attemptId: input.attemptId || null,
+      },
+    });
+
+    return response.getMyZquizExamAttempt ? normalizeAttempt(response.getMyZquizExamAttempt) : null;
+  } catch (error) {
+    throw new Error(resolveGraphQLErrorMessage(error, '暂时无法读取考试结果。'));
   }
 }
