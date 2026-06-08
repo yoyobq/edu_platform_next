@@ -1,4 +1,4 @@
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import { type AuthAccessGroup, hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -12,6 +12,13 @@ function hasStaffNavigationAccess(input: { accessGroup?: readonly AuthAccessGrou
 
 function hasStudentNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   return input.accessGroup?.includes('STUDENT') ?? false;
+}
+
+function hasZquizActivityBuilderNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
+  return hasAdminOrAcademicOfficerAccess({
+    accessGroup: filter.accessGroup,
+    slotGroup: filter.slotGroup,
+  });
 }
 
 function hasLabNavigationAccess(
@@ -65,6 +72,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: 'Upstream 会话示例',
             navMode: 'rail' as const,
             path: '/labs/upstream-session-demo',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasZquizActivityBuilderNavigationAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FormOutlined',
+            key: '/labs/zquiz-activity-builder',
+            label: 'Zquiz 组卷',
+            navMode: 'rail' as const,
+            path: '/labs/zquiz-activity-builder',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },

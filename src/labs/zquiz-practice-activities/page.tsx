@@ -58,7 +58,7 @@ type ActivityViewState = {
 type PaperViewState = {
   error: string | null;
   loading: boolean;
-  paper: ZquizPracticePaper | null;
+  paper: PracticePaperView | null;
 };
 
 type AttemptViewState = {
@@ -70,6 +70,7 @@ type AttemptViewState = {
 type PracticeView = 'list' | 'paper' | 'result';
 type DraftAnswer = unknown;
 type DraftAnswers = ZquizPracticeDraftAnswers;
+type PracticePaperView = Omit<ZquizPracticePaper, 'signedPaperToken'>;
 
 const DRAFT_STORAGE_PREFIX = 'zquiz-practice-draft:';
 const LAST_ATTEMPT_STORAGE_PREFIX = 'zquiz-practice-last-attempt:';
@@ -205,37 +206,17 @@ function canStartActivity(activity: ZquizPracticeActivity) {
   return activity.availability === 'OPEN' && activity.canStart;
 }
 
-async function resolveDraftStorageKey(token: string) {
-  if (!window.crypto?.subtle) {
-    return null;
-  }
+function createDraftStorageKey(activityId: number) {
+  const randomId =
+    typeof window.crypto?.randomUUID === 'function'
+      ? window.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
-  const digest = await window.crypto.subtle.digest('SHA-256', new TextEncoder().encode(token));
-  const tokenHash = Array.from(new Uint8Array(digest))
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('');
-
-  return `${DRAFT_STORAGE_PREFIX}${tokenHash}`;
+  return `${DRAFT_STORAGE_PREFIX}${activityId}:${randomId}`;
 }
 
 function getLastAttemptStorageKey(activityId: number) {
   return `${LAST_ATTEMPT_STORAGE_PREFIX}${activityId}`;
-}
-
-function readDraftAnswers(storageKey: string): DraftAnswers {
-  try {
-    const storedValue = window.localStorage.getItem(storageKey);
-
-    if (!storedValue) {
-      return {};
-    }
-
-    const parsed = JSON.parse(storedValue);
-
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function writeDraftAnswers(storageKey: string, answers: DraftAnswers) {
@@ -687,7 +668,7 @@ export function ZquizPracticeActivitiesLabPage() {
       }
 
       if (draftStorageKeyRef.current) {
-        writeDraftAnswers(draftStorageKeyRef.current, latestAnswersRef.current);
+        clearDraftAnswers(draftStorageKeyRef.current);
       }
     };
   }, []);
@@ -732,16 +713,17 @@ export function ZquizPracticeActivitiesLabPage() {
       const paper = await startZquizPractice({
         activityId,
       });
+      const draftStorageKey = createDraftStorageKey(paper.activity.id);
+      const draftAnswers: DraftAnswers = {};
+      const { signedPaperToken, ...paperView } = paper;
 
       setPaperState({
         error: null,
         loading: false,
-        paper,
+        paper: paperView,
       });
-      const draftStorageKey = await resolveDraftStorageKey(paper.signedPaperToken);
-      const draftAnswers = draftStorageKey ? readDraftAnswers(draftStorageKey) : {};
 
-      paperTokenRef.current = paper.signedPaperToken;
+      paperTokenRef.current = signedPaperToken;
       draftStorageKeyRef.current = draftStorageKey;
       latestAnswersRef.current = draftAnswers;
       setAnswers(draftAnswers);
@@ -830,6 +812,9 @@ export function ZquizPracticeActivitiesLabPage() {
 
   function handleBackToList() {
     flushDraftWrite();
+    if (draftStorageKeyRef.current) {
+      clearDraftAnswers(draftStorageKeyRef.current);
+    }
     setView('list');
     setPaperState({
       error: null,
@@ -847,7 +832,7 @@ export function ZquizPracticeActivitiesLabPage() {
     setAnswers({});
   }
 
-  async function doSubmitPractice(paper: ZquizPracticePaper) {
+  async function doSubmitPractice(paper: PracticePaperView) {
     flushDraftWrite();
     setSubmitting(true);
     setPaperState((current) => ({
@@ -856,10 +841,16 @@ export function ZquizPracticeActivitiesLabPage() {
     }));
 
     try {
+      const signedPaperToken = paperTokenRef.current;
+
+      if (!signedPaperToken) {
+        throw new Error('练习提交凭证已失效，请重新开始练习。');
+      }
+
       const attempt = await submitZquizPractice({
         activityId: paper.activity.id,
         answers: buildZquizPracticeSubmitAnswers(paper.items, latestAnswersRef.current),
-        signedPaperToken: paper.signedPaperToken,
+        signedPaperToken,
       });
 
       if (draftStorageKeyRef.current) {

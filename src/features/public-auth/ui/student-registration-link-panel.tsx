@@ -32,6 +32,7 @@ type StudentRegistrationPhase = 'loading' | 'ready' | 'failure' | 'error' | 'pen
 
 export type StudentRegistrationPanelContext = {
   currentStep: number;
+  emailVerificationRequired: boolean | null;
   info: StudentRegistrationLinkInfo | null;
   phase: StudentRegistrationPhase;
 };
@@ -708,10 +709,12 @@ export function StudentRegistrationLinkPanel({
   useEffect(() => {
     onContextChange?.({
       currentStep,
+      emailVerificationRequired:
+        phase === 'pending-email' ? (successResult?.emailVerificationRequired ?? true) : null,
       info: linkInfo,
       phase,
     });
-  }, [currentStep, linkInfo, onContextChange, phase]);
+  }, [currentStep, linkInfo, onContextChange, phase, successResult?.emailVerificationRequired]);
 
   useEffect(() => {
     let isActive = true;

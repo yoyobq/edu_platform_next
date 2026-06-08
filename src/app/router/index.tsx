@@ -59,6 +59,10 @@ import {
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
 import {
+  loadZquizActivityBuilderLabRouteModule,
+  zquizActivityBuilderLabAccess,
+} from '@/labs/zquiz-activity-builder';
+import {
   loadZquizPracticeActivitiesLabRouteModule,
   zquizPracticeActivitiesLabAccess,
 } from '@/labs/zquiz-practice-activities';
@@ -695,6 +699,44 @@ async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs)
   return null;
 }
 
+async function zquizActivityBuilderLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(zquizActivityBuilderLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasLabAccess(zquizActivityBuilderLabAccess) ||
+    !hasAdminOrAcademicOfficerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
   const snapshot = getAuthSessionSnapshot();
@@ -1236,6 +1278,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'zquiz-activity-builder',
+            loader: zquizActivityBuilderLabLoader,
+            lazy: loadZquizActivityBuilderLabRouteModule,
           },
           {
             path: 'zquiz-practice-activities',

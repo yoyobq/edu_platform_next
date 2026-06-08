@@ -71,6 +71,7 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/zquiz-activity-builder',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -123,6 +124,7 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/zquiz-activity-builder',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -257,6 +259,7 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'academic-affairs',
+      'labs',
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
@@ -276,7 +279,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-activity-builder',
+    ]);
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
         accountId: 1002,
@@ -331,6 +336,17 @@ describe('navigation catalog', () => {
       true,
     );
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
+    expect(canAccessNavigationPath('/labs/zquiz-activity-builder', studentFilter)).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/labs/zquiz-activity-builder',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['ACADEMIC_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
     expect(canAccessNavigationPath('/calendar-schedule/weekly-timetable', studentFilter)).toBe(
       false,
     );
@@ -520,6 +536,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/zquiz-activity-builder',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',

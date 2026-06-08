@@ -12,27 +12,13 @@ import {
 import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
 
+import { resolveStudentRegistrationLead } from './copy';
+
 type StudentRegistrationWidthBand = 'compact' | 'regular';
 
 const STUDENT_REGISTRATION_WIDTH_RULES: { max: number; value: StudentRegistrationWidthBand }[] = [
   { max: 760, value: 'compact' },
 ];
-
-function resolveStudentRegistrationLead(context: StudentRegistrationPanelContext) {
-  if (context.phase === 'loading') {
-    return '正在读取注册链接，请稍候。';
-  }
-
-  if (context.phase === 'failure' || context.phase === 'error') {
-    return '当前注册链接暂不可用，请根据页面提示处理。';
-  }
-
-  if (context.phase === 'pending-email') {
-    return '注册信息已提交，接下来请验证登录邮箱。';
-  }
-
-  return '请按步骤核对身份并设置平台账号。';
-}
 
 export function StudentRegistrationPage() {
   const { token = '' } = useParams();
@@ -45,6 +31,7 @@ export function StudentRegistrationPage() {
   const isCompact = band === 'compact';
   const [registrationContext, setRegistrationContext] = useState<StudentRegistrationPanelContext>({
     currentStep: 0,
+    emailVerificationRequired: null,
     info: null,
     phase: 'loading',
   });
