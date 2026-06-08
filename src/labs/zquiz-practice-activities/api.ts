@@ -9,7 +9,6 @@ export type ZquizPracticeAvailability = 'NOT_STARTED' | 'OPEN' | 'ENDED' | 'CLOS
 export type ZquizPracticeActivity = {
   attemptLimit: number | null;
   availability: ZquizPracticeAvailability;
-  bankId: number;
   canStart: boolean;
   durationMinutes: number | null;
   endsAt: string | null;
@@ -18,14 +17,59 @@ export type ZquizPracticeActivity = {
   title: string;
 };
 
-export type ZquizPracticeStartResult = Record<string, unknown>;
+export type ZquizPracticeQuestionType =
+  | 'ESSAY'
+  | 'FILL_BLANK'
+  | 'MULTIPLE_CHOICE'
+  | 'SINGLE_CHOICE'
+  | 'TRUE_FALSE';
+
+export type ZquizPracticePaperOption = {
+  content: string;
+  label: string;
+  sortOrder: number;
+};
+
+export type ZquizPracticePaperBlank = {
+  blankNo: number;
+  score: number;
+};
+
+export type ZquizPracticePaperAsset = {
+  kind: string;
+  mimeType: string | null;
+  originalName: string | null;
+  sizeBytes: number | null;
+  sortOrder: number;
+  storageKey: string;
+};
+
+export type ZquizPracticePaperItem = {
+  assets: ZquizPracticePaperAsset[];
+  blanks: ZquizPracticePaperBlank[];
+  options: ZquizPracticePaperOption[];
+  paperItemNo: number;
+  questionId: number;
+  scoreMax: number;
+  stem: string;
+  type: ZquizPracticeQuestionType;
+};
+
+export type ZquizPracticePaper = {
+  activity: Pick<
+    ZquizPracticeActivity,
+    'attemptLimit' | 'availability' | 'canStart' | 'durationMinutes' | 'id' | 'title'
+  >;
+  items: ZquizPracticePaperItem[];
+  signedPaperToken: string;
+};
 
 type ListMyZquizPracticeActivitiesResponse = {
   listMyZquizPracticeActivities: ZquizPracticeActivity[];
 };
 
 type StartZquizPracticeResponse = {
-  startZquizPractice: ZquizPracticeStartResult;
+  startZquizPractice: ZquizPracticePaper;
 };
 
 const LIST_MY_ZQUIZ_PRACTICE_ACTIVITIES_QUERY = `
@@ -33,7 +77,6 @@ const LIST_MY_ZQUIZ_PRACTICE_ACTIVITIES_QUERY = `
     listMyZquizPracticeActivities {
       id
       title
-      bankId
       startsAt
       endsAt
       durationMinutes
@@ -45,14 +88,42 @@ const LIST_MY_ZQUIZ_PRACTICE_ACTIVITIES_QUERY = `
 `;
 
 const START_ZQUIZ_PRACTICE_MUTATION = `
-  mutation StartZquizPractice($activityId: Int!) {
-    startZquizPractice(activityId: $activityId)
-  }
-`;
-
-const START_ZQUIZ_PRACTICE_WITH_INPUT_MUTATION = `
-  mutation StartZquizPracticeWithInput($input: StartZquizPracticeInput!) {
-    startZquizPractice(input: $input)
+  mutation startZquizPractice($input: ZquizPracticeInput!) {
+    startZquizPractice(input: $input) {
+      activity {
+        id
+        title
+        durationMinutes
+        attemptLimit
+        availability
+        canStart
+      }
+      signedPaperToken
+      items {
+        paperItemNo
+        questionId
+        type
+        stem
+        scoreMax
+        options {
+          label
+          content
+          sortOrder
+        }
+        blanks {
+          blankNo
+          score
+        }
+        assets {
+          kind
+          storageKey
+          originalName
+          mimeType
+          sizeBytes
+          sortOrder
+        }
+      }
+    }
   }
 `;
 
@@ -87,23 +158,6 @@ function resolveGraphQLErrorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback;
 }
 
-function shouldRetryStartWithInput(error: unknown) {
-  if (!isGraphQLIngressError(error)) {
-    return false;
-  }
-
-  return (
-    error.graphqlErrors?.some((graphqlError) => {
-      const message = graphqlError.message.toLowerCase();
-
-      return (
-        message.includes('unknown argument') ||
-        (message.includes('argument') && message.includes('input') && message.includes('required'))
-      );
-    }) ?? false
-  );
-}
-
 function normalizeOptionalString(value: string | null | undefined) {
   return value || null;
 }
@@ -116,7 +170,6 @@ function normalizeActivity(activity: ZquizPracticeActivity): ZquizPracticeActivi
   return {
     attemptLimit: normalizeOptionalNumber(activity.attemptLimit),
     availability: activity.availability,
-    bankId: activity.bankId,
     canStart: Boolean(activity.canStart),
     durationMinutes: normalizeOptionalNumber(activity.durationMinutes),
     endsAt: normalizeOptionalString(activity.endsAt),
@@ -148,35 +201,18 @@ export async function startZquizPractice(input: { activityId: number }) {
     const response = await requestGraphQL<
       StartZquizPracticeResponse,
       {
-        activityId: number;
+        input: {
+          activityId: number;
+        };
       }
     >(START_ZQUIZ_PRACTICE_MUTATION, {
-      activityId: input.activityId,
+      input: {
+        activityId: input.activityId,
+      },
     });
 
     return response.startZquizPractice;
-  } catch (directError) {
-    if (!shouldRetryStartWithInput(directError)) {
-      throw new Error(resolveGraphQLErrorMessage(directError, '暂时无法开始练习。'));
-    }
-
-    try {
-      const response = await requestGraphQL<
-        StartZquizPracticeResponse,
-        {
-          input: {
-            activityId: number;
-          };
-        }
-      >(START_ZQUIZ_PRACTICE_WITH_INPUT_MUTATION, {
-        input: {
-          activityId: input.activityId,
-        },
-      });
-
-      return response.startZquizPractice;
-    } catch {
-      throw new Error(resolveGraphQLErrorMessage(directError, '暂时无法开始练习。'));
-    }
+  } catch (error) {
+    throw new Error(resolveGraphQLErrorMessage(error, '暂时无法开始练习。'));
   }
 }
