@@ -196,6 +196,8 @@ const GENERATION_STRATEGY_OPTIONS = [
   { label: '知识点随机', value: 'RANDOM_BY_KNOWLEDGE' },
 ] satisfies readonly { label: string; value: ZquizGenerationRuleStrategy }[];
 
+let randomRuleDraftIdSeq = 0;
+
 function formatDateTime(value: string | null) {
   if (!value) {
     return '不限';
@@ -272,9 +274,11 @@ function toSelectedItem(question: ZquizAssemblyQuestion): ZquizActivityItem {
 }
 
 function createRandomRuleDraft(index: number): RandomRuleDraft {
+  randomRuleDraftIdSeq += 1;
+
   return {
     count: 1,
-    id: `random-rule-${Date.now()}-${index}`,
+    id: `random-rule-${randomRuleDraftIdSeq}-${index}`,
     includeChildren: true,
     knowledgeNodeIds: [],
     questionType: 'SINGLE_CHOICE',
@@ -623,13 +627,13 @@ export function ZquizActivityBuilderLabPage() {
         }
 
         applyDetail(detail);
-        await loadQuestions(detail.bankId, EMPTY_QUESTION_FILTERS);
-        if (detail.mode === 'EXAM') {
-          await loadKnowledgeNodes(detail.bankId);
-        }
-        if (detail.mode === 'EXAM' && detail.status === 'PUBLISHED') {
-          await loadExamProgress(detail.id);
-        }
+        await Promise.all([
+          loadQuestions(detail.bankId, EMPTY_QUESTION_FILTERS),
+          detail.mode === 'EXAM' ? loadKnowledgeNodes(detail.bankId) : Promise.resolve(),
+          detail.mode === 'EXAM' && detail.status === 'PUBLISHED'
+            ? loadExamProgress(detail.id)
+            : Promise.resolve(),
+        ]);
       } catch (error) {
         setEditor((current) => ({ ...current, loading: false }));
         setSubmitError(resolveZquizActivityBuilderErrorMessage(error, '暂时无法读取活动详情。'));
@@ -677,8 +681,12 @@ export function ZquizActivityBuilderLabPage() {
               }
           : undefined,
       items: isRandomExam ? [] : fixedItems,
-      shuffleOptions,
-      shuffleQuestions,
+      ...(editor.mode === 'PRACTICE'
+        ? {
+            shuffleOptions,
+            shuffleQuestions,
+          }
+        : {}),
       startsAt: toBusinessDateTime(values.startsAt),
       targetClassIds: values.targetClassIds ?? [],
       title: values.title,
@@ -789,34 +797,36 @@ export function ZquizActivityBuilderLabPage() {
     Modal.confirm({
       content: '将使用学生最后一次自动保存的草稿作为最终答案。已提交或已评分的作答不会被覆盖。',
       okText: '收卷',
-      onOk: async () => {
-        setExamProgressState((current) => ({
-          ...current,
-          collecting: true,
-          error: null,
-        }));
-
-        try {
-          const result = await collectZquizExamAttempts({
-            activityId,
-          });
-
-          setExamProgressState({
-            collecting: false,
-            error: null,
-            loading: false,
-            progress: result.progress,
-          });
-          messageApi.success(
-            `收卷完成：收取 ${result.collectedCount} 份，跳过 ${result.skippedCount} 份。`,
-          );
-        } catch (error) {
+      onOk: () => {
+        void (async () => {
           setExamProgressState((current) => ({
             ...current,
-            collecting: false,
-            error: resolveZquizActivityBuilderErrorMessage(error, '暂时无法主动收卷。'),
+            collecting: true,
+            error: null,
           }));
-        }
+
+          try {
+            const result = await collectZquizExamAttempts({
+              activityId,
+            });
+
+            setExamProgressState({
+              collecting: false,
+              error: null,
+              loading: false,
+              progress: result.progress,
+            });
+            messageApi.success(
+              `收卷完成：收取 ${result.collectedCount} 份，跳过 ${result.skippedCount} 份。`,
+            );
+          } catch (error) {
+            setExamProgressState((current) => ({
+              ...current,
+              collecting: false,
+              error: resolveZquizActivityBuilderErrorMessage(error, '暂时无法主动收卷。'),
+            }));
+          }
+        })();
       },
       title: '确认主动收卷',
     });
@@ -1328,7 +1338,7 @@ export function ZquizActivityBuilderLabPage() {
               刷新知识点
             </Button>
             <Button
-              disabled={readOnly}
+              disabled={readOnly || !bankId}
               icon={<PlusOutlined />}
               onClick={handleAddRandomRule}
               type="primary"

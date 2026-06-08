@@ -843,7 +843,7 @@ export async function getMyZquizExamAttempt(input: {
     >(GET_MY_ZQUIZ_EXAM_ATTEMPT_QUERY, {
       input: {
         activityId: input.activityId,
-        attemptId: input.attemptId || null,
+        attemptId: input.attemptId ?? null,
       },
     });
 

@@ -349,6 +349,38 @@ describe('zquiz exam api', () => {
         },
       },
     );
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      getMyZquizExamAttempt: null,
+    });
+
+    await expect(getMyZquizExamAttempt({ activityId: 30 })).resolves.toBeNull();
+
+    expect(executeGraphQLMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('query getMyZquizExamAttempt'),
+      {
+        input: {
+          activityId: 30,
+          attemptId: null,
+        },
+      },
+    );
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      getMyZquizExamAttempt: null,
+    });
+
+    await expect(getMyZquizExamAttempt({ activityId: 30, attemptId: null })).resolves.toBeNull();
+
+    expect(executeGraphQLMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('query getMyZquizExamAttempt'),
+      {
+        input: {
+          activityId: 30,
+          attemptId: null,
+        },
+      },
+    );
   });
 
   it('maps invalid exam schedule config to the teacher-contact message', () => {

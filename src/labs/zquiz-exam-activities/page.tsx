@@ -626,6 +626,7 @@ export function ZquizExamActivitiesLabPage() {
   const dirtyRef = useRef(false);
   const latestAnswersRef = useRef<DraftAnswers>({});
   const paperRef = useRef<ZquizExamPaper | null>(null);
+  const resultRequestSeqRef = useRef(0);
   const submittingRef = useRef(false);
 
   const activityCountText = useMemo(() => {
@@ -825,6 +826,8 @@ export function ZquizExamActivitiesLabPage() {
       attemptId?: string | null;
       summary?: ZquizExamSubmitResult | null;
     }) => {
+      const requestSeq = resultRequestSeqRef.current + 1;
+      resultRequestSeqRef.current = requestSeq;
       setLoadingResultActivityId(input.activityId);
       setPaperState({
         error: null,
@@ -845,6 +848,10 @@ export function ZquizExamActivitiesLabPage() {
           attemptId: input.attemptId,
         });
 
+        if (resultRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setSubmitState({
           attempt,
           error: attempt ? null : '暂无已提交的考试结果。',
@@ -852,6 +859,10 @@ export function ZquizExamActivitiesLabPage() {
           result: input.summary ?? null,
         });
       } catch (error) {
+        if (resultRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setSubmitState({
           attempt: null,
           error: resolveZquizExamErrorMessage(error, '暂时无法读取考试结果。'),
@@ -859,7 +870,9 @@ export function ZquizExamActivitiesLabPage() {
           result: input.summary ?? null,
         });
       } finally {
-        setLoadingResultActivityId(null);
+        if (resultRequestSeqRef.current === requestSeq) {
+          setLoadingResultActivityId(null);
+        }
       }
     },
     [],
@@ -892,6 +905,8 @@ export function ZquizExamActivitiesLabPage() {
     }
 
     setView('list');
+    resultRequestSeqRef.current += 1;
+    setLoadingResultActivityId(null);
     setPaperState({
       error: null,
       loading: false,

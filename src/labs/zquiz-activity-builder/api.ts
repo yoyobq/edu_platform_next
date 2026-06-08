@@ -253,8 +253,8 @@ export type SaveZquizActivityDraftInput = {
     scoreMax: number;
     sortOrder: number;
   }[];
-  shuffleOptions: boolean;
-  shuffleQuestions: boolean;
+  shuffleOptions?: boolean;
+  shuffleQuestions?: boolean;
   startsAt: string | null;
   targetClassIds: string[];
   title: string;
@@ -638,13 +638,13 @@ function normalizeGenerationRuleRandomRules(
   return (rules ?? []).map((rule, index) => ({
     count: normalizeQuestionCount(rule.count),
     includeChildren: rule.includeChildren ?? true,
-    knowledgeNodeIds: normalizeTextListValue(
-      (rule.knowledgeNodeIds ?? []).map((nodeId) => String(nodeId)),
-      {
-        dedupe: true,
-        emptyItemPolicy: 'filter',
-      },
-    ).map((nodeId) => normalizeRequiredPositiveInteger(Number(nodeId), '知识点 ID')),
+    knowledgeNodeIds: Array.from(
+      new Set(
+        (rule.knowledgeNodeIds ?? []).map((nodeId) =>
+          normalizeRequiredPositiveInteger(nodeId, '知识点 ID'),
+        ),
+      ),
+    ),
     questionType: rule.questionType || 'SINGLE_CHOICE',
     scoreMax: normalizeScoreMax(rule.scoreMax),
     sortOrder: index + 1,
@@ -727,22 +727,25 @@ function normalizeDetail(
       ...item,
       question: item.question ? normalizeQuestion(item.question) : null,
     }));
+  const generationRule =
+    mode === 'EXAM'
+      ? normalizeGenerationRule(detail.generationRule, {
+          fixedItems: items,
+          shuffleOptions: detail.shuffleOptions,
+          shuffleQuestions: detail.shuffleQuestions,
+        })
+      : undefined;
 
   return {
     ...detail,
     attemptLimit: detail.attemptLimit ?? null,
     durationMinutes: detail.durationMinutes ?? null,
     endsAt: detail.endsAt || null,
-    generationRule:
-      mode === 'EXAM'
-        ? normalizeGenerationRule(detail.generationRule, {
-            fixedItems: items,
-            shuffleOptions: detail.shuffleOptions,
-            shuffleQuestions: detail.shuffleQuestions,
-          })
-        : undefined,
+    generationRule,
     items,
     mode,
+    shuffleOptions: generationRule?.shuffleOptions ?? detail.shuffleOptions,
+    shuffleQuestions: generationRule?.shuffleQuestions ?? detail.shuffleQuestions,
     startsAt: detail.startsAt || null,
     targets: detail.targets.map((target) => ({
       ...target,
@@ -811,20 +814,27 @@ export function normalizeListLocalClassOptionsInput(input: ListLocalClassOptions
 export function buildZquizActivityDraftInput(
   input: ZquizActivityDraftSource,
 ): SaveZquizActivityDraftInput {
+  const generationRule = normalizeGenerationRuleSource(input.generationRule);
+  const shuffleOptions = input.shuffleOptions ?? true;
+  const shuffleQuestions = input.shuffleQuestions ?? true;
+
   return {
     activityId: normalizeOptionalPositiveInteger(input.activityId, '活动 ID'),
     attemptLimit: normalizeOptionalPositiveInteger(input.attemptLimit, '作答次数'),
     bankId: normalizeRequiredPositiveInteger(input.bankId, '题库'),
     durationMinutes: normalizeOptionalPositiveInteger(input.durationMinutes, '时长'),
     endsAt: normalizeOptionalDateTimeText(input.endsAt),
-    generationRule: normalizeGenerationRuleSource(input.generationRule),
+    ...(generationRule
+      ? { generationRule }
+      : {
+          shuffleOptions,
+          shuffleQuestions,
+        }),
     items: (input.items ?? []).map((item, index) => ({
       questionId: normalizeRequiredPositiveInteger(item.questionId, '题目 ID'),
       scoreMax: normalizeScoreMax(item.scoreMax),
       sortOrder: index + 1,
     })),
-    shuffleOptions: input.shuffleOptions ?? true,
-    shuffleQuestions: input.shuffleQuestions ?? true,
     startsAt: normalizeOptionalDateTimeText(input.startsAt),
     targetClassIds: normalizeTextListValue([...(input.targetClassIds ?? [])], {
       dedupe: true,
@@ -865,10 +875,6 @@ export function validateZquizActivityPublishDraft(input: ZquizPublishValidationS
 
         if (rule.knowledgeNodeIds.length === 0) {
           errors.push(`随机规则 ${ruleNo} 至少选择 1 个知识点。`);
-        }
-
-        if (!rule.questionType) {
-          errors.push(`随机规则 ${ruleNo} 必须选择题型。`);
         }
 
         if (rule.count <= 0) {

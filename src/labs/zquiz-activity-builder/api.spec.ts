@@ -14,6 +14,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   buildZquizActivityDraftInput,
   collectZquizExamAttempts,
+  getZquizActivityTeacherDetail,
   getZquizExamTeacherProgress,
   listZquizBanks,
   listZquizKnowledgeNodes,
@@ -200,6 +201,13 @@ describe('zquiz activity builder api', () => {
               questionType: 'SINGLE_CHOICE',
               scoreMax: 2,
             },
+            {
+              count: 3,
+              includeChildren: false,
+              knowledgeNodeIds: [20],
+              questionType: 'MULTIPLE_CHOICE',
+              scoreMax: 4,
+            },
           ],
           strategy: 'RANDOM_BY_KNOWLEDGE',
         },
@@ -217,6 +225,14 @@ describe('zquiz activity builder api', () => {
             questionType: 'SINGLE_CHOICE',
             scoreMax: 2,
             sortOrder: 1,
+          },
+          {
+            count: 3,
+            includeChildren: false,
+            knowledgeNodeIds: [20],
+            questionType: 'MULTIPLE_CHOICE',
+            scoreMax: 4,
+            sortOrder: 2,
           },
         ],
         shuffleOptions: true,
@@ -458,6 +474,48 @@ describe('zquiz activity builder api', () => {
         }),
       }),
     );
+  });
+
+  it('normalizes exam detail shuffle flags from generation rule when present', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      getZquizExamTeacherDetail: {
+        ...createDetail(),
+        generationRule: {
+          fixedItems: [],
+          randomRules: [
+            {
+              count: 5,
+              includeChildren: false,
+              knowledgeNodeIds: [10],
+              questionType: 'SINGLE_CHOICE',
+              scoreMax: 2,
+              sortOrder: 1,
+            },
+          ],
+          shuffleOptions: false,
+          shuffleQuestions: false,
+          strategy: 'RANDOM_BY_KNOWLEDGE',
+        },
+        items: [],
+        shuffleOptions: true,
+        shuffleQuestions: true,
+      },
+    });
+
+    await expect(
+      getZquizActivityTeacherDetail({
+        activityId: 20,
+        mode: 'EXAM',
+      }),
+    ).resolves.toMatchObject({
+      generationRule: {
+        shuffleOptions: false,
+        shuffleQuestions: false,
+        strategy: 'RANDOM_BY_KNOWLEDGE',
+      },
+      shuffleOptions: false,
+      shuffleQuestions: false,
+    });
   });
 
   it('loads exam teacher progress and collects in-progress attempts', async () => {
