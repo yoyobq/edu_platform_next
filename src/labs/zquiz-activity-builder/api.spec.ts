@@ -120,6 +120,20 @@ describe('zquiz activity builder api', () => {
     });
   });
 
+  it('rejects timezone datetime text before saving draft input', () => {
+    expect(() =>
+      buildZquizActivityDraftInput({
+        bankId: 1,
+        durationMinutes: 90,
+        endsAt: '2026-06-08T11:00:00.000Z',
+        items: [{ questionId: 1001, scoreMax: 2 }],
+        startsAt: '2026-06-08 09:00:00.000',
+        targetClassIds: ['C001'],
+        title: '期中考试',
+      }),
+    ).toThrow('时间必须是不带时区的业务时间');
+  });
+
   it('calls bank and activity list queries with normalized filters', async () => {
     executeGraphQLMock.mockResolvedValueOnce({
       listZquizBanks: [

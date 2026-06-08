@@ -335,6 +335,7 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/calendar-schedule/semester-calendar', studentFilter)).toBe(
       true,
     );
+    expect(canAccessNavigationPath('/labs/zquiz-exam-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-activity-builder', studentFilter)).toBe(false);
     expect(
@@ -506,6 +507,7 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(studentItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-exam-activities',
       '/labs/zquiz-practice-activities',
     ]);
     expect(findGroup(studentItems, 'calendar-schedule')).toBeUndefined();

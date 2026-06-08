@@ -216,6 +216,8 @@ type PublishZquizExamResponse = {
   publishZquizExam: Omit<ZquizTeacherActivityDetail, 'mode'>;
 };
 
+const BUSINESS_DATETIME_PATTERN = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(?:\.\d{1,3})?$/;
+
 const ZQUIZ_ASSEMBLY_QUESTION_FIELDS = `
   id
   bankId
@@ -416,7 +418,13 @@ function normalizeScoreMax(value: number | null | undefined) {
 }
 
 function normalizeOptionalDateTimeText(value: string | null | undefined) {
-  return normalizeOptionalTextValue(value, 'to_null');
+  const normalized = normalizeOptionalTextValue(value, 'to_null');
+
+  if (normalized && !BUSINESS_DATETIME_PATTERN.test(normalized)) {
+    throw new Error('时间必须是不带时区的业务时间，格式为 YYYY-MM-DD HH:mm:ss.SSS。');
+  }
+
+  return normalized;
 }
 
 function normalizeQuestion(question: ZquizAssemblyQuestion): ZquizAssemblyQuestion {

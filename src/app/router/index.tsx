@@ -63,6 +63,10 @@ import {
   zquizActivityBuilderLabAccess,
 } from '@/labs/zquiz-activity-builder';
 import {
+  loadZquizExamActivitiesLabRouteModule,
+  zquizExamActivitiesLabAccess,
+} from '@/labs/zquiz-exam-activities';
+import {
   loadZquizPracticeActivitiesLabRouteModule,
   zquizPracticeActivitiesLabAccess,
 } from '@/labs/zquiz-practice-activities';
@@ -699,6 +703,42 @@ async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs)
   return null;
 }
 
+async function zquizExamActivitiesLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(zquizExamActivitiesLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(zquizExamActivitiesLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(zquizExamActivitiesLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function zquizActivityBuilderLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(zquizActivityBuilderLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -1283,6 +1323,11 @@ const router = createBrowserRouter([
             path: 'zquiz-activity-builder',
             loader: zquizActivityBuilderLabLoader,
             lazy: loadZquizActivityBuilderLabRouteModule,
+          },
+          {
+            path: 'zquiz-exam-activities',
+            loader: zquizExamActivitiesLabLoader,
+            lazy: loadZquizExamActivitiesLabRouteModule,
           },
           {
             path: 'zquiz-practice-activities',

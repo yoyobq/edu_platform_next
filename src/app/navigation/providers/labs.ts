@@ -95,6 +95,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['STUDENT'] as const,
+            iconKey: 'FileTextOutlined',
+            key: '/labs/zquiz-exam-activities',
+            label: '可选考试',
+            navMode: 'rail' as const,
+            path: '/labs/zquiz-exam-activities',
+            primaryAccessGroup: 'STUDENT' as const,
+            slotGroup: null,
+          },
+          {
+            allowedAccessGroups: ['STUDENT'] as const,
             iconKey: 'PlaySquareOutlined',
             key: '/labs/zquiz-practice-activities',
             label: '可选练习',
