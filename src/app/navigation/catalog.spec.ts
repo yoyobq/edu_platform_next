@@ -72,6 +72,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/zquiz-activity-builder',
+      '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -125,6 +126,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/zquiz-activity-builder',
+      '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -144,6 +146,7 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
+      'labs',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -155,7 +158,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-exam-teacher-gradebook',
+    ]);
   });
 
   it('keeps upstream sync pages hidden from student affairs officers', () => {
@@ -172,8 +177,11 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
+      'labs',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-exam-teacher-gradebook',
+    ]);
     expect(
       canAccessNavigationPath(
         '/upstream-data-sync/major-sync',
@@ -236,7 +244,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
-    expect(findGroup(staffItems, 'labs')).toBeUndefined();
+    expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-exam-teacher-gradebook',
+    ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
       '/calendar-schedule/weekly-timetable',
@@ -281,6 +291,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
+      '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
@@ -338,6 +349,10 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/zquiz-exam-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-activity-builder', studentFilter)).toBe(false);
+    expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', studentFilter)).toBe(
+      false,
+    );
+    expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath(
         '/labs/zquiz-activity-builder',
@@ -345,6 +360,15 @@ describe('navigation catalog', () => {
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
           slotGroup: ['ACADEMIC_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/zquiz-exam-teacher-gradebook',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
         }),
       ),
     ).toBe(true);
@@ -539,6 +563,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/zquiz-activity-builder',
+      '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',

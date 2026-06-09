@@ -91,6 +91,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
+    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/labs/zquiz-exam-teacher-gradebook',
+            label: '考试成绩分析',
+            navMode: 'rail' as const,
+            path: '/labs/zquiz-exam-teacher-gradebook',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(hasLabNavigationAccess(['student'], filter)
       ? [
           {

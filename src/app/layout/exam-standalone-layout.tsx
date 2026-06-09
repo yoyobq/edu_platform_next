@@ -15,14 +15,16 @@ type ExamStandaloneLayoutProps = {
 
 export function ExamStandaloneLayout({ children }: ExamStandaloneLayoutProps) {
   const authSession = useAuthSessionState();
-  const { fontScale, isDark } = useTheme();
+  const { fontScale, isDark, setIsDark } = useTheme();
   const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
   const outletContext = useMemo(
     () => ({
       activeSnapshot,
+      isDark,
       presentation: 'exam-standalone' as const,
+      setIsDark,
     }),
-    [activeSnapshot],
+    [activeSnapshot, isDark, setIsDark],
   );
 
   return (

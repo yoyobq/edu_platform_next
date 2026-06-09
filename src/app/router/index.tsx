@@ -68,6 +68,10 @@ import {
   zquizExamActivitiesLabAccess,
 } from '@/labs/zquiz-exam-activities';
 import {
+  loadZquizExamTeacherGradebookLabRouteModule,
+  zquizExamTeacherGradebookLabAccess,
+} from '@/labs/zquiz-exam-teacher-gradebook';
+import {
   loadZquizPracticeActivitiesLabRouteModule,
   zquizPracticeActivitiesLabAccess,
 } from '@/labs/zquiz-practice-activities';
@@ -740,6 +744,42 @@ async function zquizExamActivitiesLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
+async function zquizExamTeacherGradebookLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(zquizExamTeacherGradebookLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(zquizExamTeacherGradebookLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(zquizExamTeacherGradebookLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
 async function zquizActivityBuilderLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(zquizActivityBuilderLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -1349,6 +1389,11 @@ const router = createBrowserRouter([
             path: 'zquiz-exam-activities',
             loader: zquizExamActivitiesLabLoader,
             lazy: loadZquizExamActivitiesLabRouteModule,
+          },
+          {
+            path: 'zquiz-exam-teacher-gradebook',
+            loader: zquizExamTeacherGradebookLabLoader,
+            lazy: loadZquizExamTeacherGradebookLabRouteModule,
           },
           {
             path: 'zquiz-practice-activities',

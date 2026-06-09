@@ -17,9 +17,12 @@ import {
   CloseCircleOutlined,
   FileDoneOutlined,
   HourglassOutlined,
+  MoonOutlined,
   PlayCircleOutlined,
+  QuestionCircleOutlined,
   ReloadOutlined,
   SendOutlined,
+  SunOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -88,7 +91,9 @@ type ExamSidebarOverride = {
 
 type ExamOutletContext = {
   activeSnapshot: ExamLayoutSnapshot | null;
+  isDark?: boolean;
   presentation?: 'app' | 'exam-standalone';
+  setIsDark?: (value: boolean | ((prev: boolean) => boolean)) => void;
   setSidebarOverride?: (override: ExamSidebarOverride | null) => void;
 };
 
@@ -120,6 +125,7 @@ type AutosaveState = {
 type QuestionStatusGroup = {
   items: {
     answered: boolean;
+    doubted: boolean;
     item: ZquizExamPaperItem;
   }[];
   label: string;
@@ -136,6 +142,7 @@ const AUTOSAVE_FALLBACK_INTERVAL_MS = 30_000;
 const AUTOSAVE_MIN_QUESTION_THRESHOLD = 2;
 const AUTOSAVE_QUESTION_THRESHOLD = 3;
 const COUNTDOWN_PRECISE_THRESHOLD_SECONDS = 300;
+const DOUBT_QUESTION_NOS_SESSION_STORAGE_PREFIX = 'zquiz-exam-activities:doubt-question-nos:v1';
 const CURRENT_TIME_TOOLBAR_PILL_WIDTH = '5.75rem';
 const COUNTDOWN_TOOLBAR_PILL_WIDTH = '8.75rem';
 const EXAM_STANDALONE_SIDEBAR_WIDTH = 320;
@@ -343,6 +350,88 @@ function resolveStudentIdentityDisplay(snapshot: ExamLayoutSnapshot | null) {
   return { identityId, realName };
 }
 
+function resolveDoubtQuestionNosSessionKey(paper: ZquizExamPaper) {
+  return `${DOUBT_QUESTION_NOS_SESSION_STORAGE_PREFIX}:${paper.activity.id}:${paper.attemptId}`;
+}
+
+function buildValidPaperItemNoSet(paper: ZquizExamPaper) {
+  return new Set(paper.items.map((item) => item.paperItemNo));
+}
+
+function readDoubtQuestionNosFromSession(key: string, validPaperItemNos: ReadonlySet<number>) {
+  if (typeof window === 'undefined') {
+    return new Set<number>();
+  }
+
+  try {
+    const value = window.sessionStorage.getItem(key);
+
+    if (!value) {
+      return new Set<number>();
+    }
+
+    const parsed: unknown = JSON.parse(value);
+
+    if (!Array.isArray(parsed)) {
+      return new Set<number>();
+    }
+
+    const questionNos = new Set<number>();
+
+    for (const rawQuestionNo of parsed) {
+      const questionNo = typeof rawQuestionNo === 'number' ? rawQuestionNo : Number(rawQuestionNo);
+
+      if (Number.isInteger(questionNo) && validPaperItemNos.has(questionNo)) {
+        questionNos.add(questionNo);
+      }
+    }
+
+    return questionNos;
+  } catch {
+    return new Set<number>();
+  }
+}
+
+function writeDoubtQuestionNosToSession(key: string, questionNos: ReadonlySet<number>) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    if (questionNos.size === 0) {
+      window.sessionStorage.removeItem(key);
+      return;
+    }
+
+    window.sessionStorage.setItem(
+      key,
+      JSON.stringify([...questionNos].sort((left, right) => left - right)),
+    );
+  } catch {
+    // Session storage is best-effort UI state.
+  }
+}
+
+function removeDoubtQuestionNosSession(key: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // noop
+  }
+}
+
+function clearDoubtQuestionNosSession(paper: ZquizExamPaper | null) {
+  if (!paper) {
+    return;
+  }
+
+  removeDoubtQuestionNosSession(resolveDoubtQuestionNosSessionKey(paper));
+}
+
 function resolveAutosaveQuestionThreshold(paper: ZquizExamPaper | null) {
   const questionCount = paper?.items.length ?? AUTOSAVE_QUESTION_THRESHOLD;
 
@@ -355,6 +444,7 @@ function resolveAutosaveQuestionThreshold(paper: ZquizExamPaper | null) {
 function buildQuestionStatusGroups(
   paper: ZquizExamPaper,
   answers: DraftAnswers,
+  doubtQuestionNos: ReadonlySet<number>,
 ): QuestionStatusGroup[] {
   const groups: QuestionStatusGroup[] = [];
   const groupByType = new Map<ZquizExamPaperItem['type'], QuestionStatusGroup>();
@@ -377,6 +467,7 @@ function buildQuestionStatusGroups(
 
     group.items.push({
       answered: buildZquizExamAnswers([item], answers).length > 0,
+      doubted: doubtQuestionNos.has(item.paperItemNo),
       item,
     });
   }
@@ -684,6 +775,19 @@ function resolveSidebarQuestionButtonStyle(answered: boolean) {
   } satisfies CSSProperties;
 }
 
+function resolveSidebarDoubtMarkerStyle() {
+  return {
+    background: 'var(--ant-color-warning)',
+    border: '1px solid var(--ant-color-bg-container)',
+    borderRadius: 'var(--ant-border-radius-sm)',
+    height: 8,
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    width: 8,
+  } satisfies CSSProperties;
+}
+
 function resolveSidebarIdentityAvatarFrameStyle() {
   return {
     alignItems: 'center',
@@ -694,6 +798,23 @@ function resolveSidebarIdentityAvatarFrameStyle() {
     height: EXAM_SIDEBAR_IDENTITY_AVATAR_FRAME_SIZE,
     justifyContent: 'center',
     width: EXAM_SIDEBAR_IDENTITY_AVATAR_FRAME_SIZE,
+  } satisfies CSSProperties;
+}
+
+function resolveDoubtQuestionToggleStyle(isDoubted: boolean) {
+  if (isDoubted) {
+    return {
+      background:
+        'color-mix(in srgb, var(--ant-color-warning-bg) 64%, var(--ant-color-bg-container))',
+      border:
+        '1px solid color-mix(in srgb, var(--ant-color-warning-border) 72%, var(--ant-color-border-secondary))',
+      color: 'var(--ant-color-warning)',
+    } satisfies CSSProperties;
+  }
+
+  return {
+    border: '1px solid transparent',
+    color: 'var(--ant-color-text-tertiary)',
   } satisfies CSSProperties;
 }
 
@@ -842,6 +963,10 @@ function ExamAnswerStatusSidebar({
 }) {
   const questionCount = paper.items.length;
   const progressPercent = questionCount > 0 ? Math.round((answerCount / questionCount) * 100) : 0;
+  const doubtCount = groups.reduce(
+    (count, group) => count + group.items.filter(({ doubted }) => doubted).length,
+    0,
+  );
   const studentIdentity = resolveStudentIdentityDisplay(snapshot);
 
   return (
@@ -860,7 +985,9 @@ function ExamAnswerStatusSidebar({
           <span>
             已答 {answerCount} / {questionCount}
           </span>
-          <span>{progressPercent}%</span>
+          <span style={doubtCount > 0 ? { color: 'var(--ant-color-warning)' } : undefined}>
+            {doubtCount > 0 ? `疑问 ${doubtCount}` : `${progressPercent}%`}
+          </span>
         </div>
         <div
           className="h-1.5 overflow-hidden rounded-full"
@@ -880,16 +1007,21 @@ function ExamAnswerStatusSidebar({
             <section key={group.type} className="flex flex-col gap-2">
               <div className="px-1 text-xs font-medium text-text-secondary">{group.label}</div>
               <div className="grid grid-cols-5 gap-2">
-                {group.items.map(({ answered, item }) => (
+                {group.items.map(({ answered, doubted, item }) => (
                   <button
-                    aria-label={`第 ${item.paperItemNo} 题，${answered ? '已作答' : '未作答'}`}
-                    className="flex h-9 items-center justify-center text-sm font-medium transition-colors hover:bg-fill-hover hover:text-text"
+                    aria-label={`第 ${item.paperItemNo} 题，${answered ? '已作答' : '未作答'}${
+                      doubted ? '，有疑问' : ''
+                    }`}
+                    className="relative flex h-9 items-center justify-center text-sm font-medium transition-colors hover:bg-fill-hover hover:text-text"
                     key={`${item.paperItemNo}-${item.questionId}`}
                     style={resolveSidebarQuestionButtonStyle(answered)}
                     type="button"
                     onClick={() => scrollToExamQuestion(item.paperItemNo)}
                   >
                     {item.paperItemNo}
+                    {doubted ? (
+                      <span aria-hidden="true" style={resolveSidebarDoubtMarkerStyle()} />
+                    ) : null}
                   </button>
                 ))}
               </div>
@@ -926,6 +1058,50 @@ function ExamAnswerStatusSidebar({
         </div>
       </div>
     </aside>
+  );
+}
+
+function DoubtQuestionToggle({
+  disabled,
+  isDoubted,
+  onToggle,
+}: {
+  disabled: boolean;
+  isDoubted: boolean;
+  onToggle: () => void;
+}) {
+  const title = isDoubted ? '取消疑问题标记' : '标记为疑问题';
+
+  return (
+    <Tooltip title={title}>
+      <Button
+        aria-label={title}
+        aria-pressed={isDoubted}
+        disabled={disabled}
+        icon={<QuestionCircleOutlined />}
+        shape="circle"
+        size="small"
+        style={resolveDoubtQuestionToggleStyle(isDoubted)}
+        type="text"
+        onClick={onToggle}
+      />
+    </Tooltip>
+  );
+}
+
+function ThemeModeToggle({ isDark, onToggle }: { isDark: boolean; onToggle: () => void }) {
+  const title = isDark ? '切换浅色模式' : '切换深色模式';
+
+  return (
+    <Tooltip title={title}>
+      <Button
+        aria-label={title}
+        icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+        shape="circle"
+        type="text"
+        onClick={onToggle}
+      />
+    </Tooltip>
   );
 }
 
@@ -1148,14 +1324,18 @@ function EssayAnswer({
 
 function ExamQuestionCard({
   disabled,
+  isDoubted,
   item,
   onAnswerChange,
+  onDoubtToggle,
   showScore,
   value,
 }: {
   disabled: boolean;
+  isDoubted: boolean;
   item: ZquizExamPaperItem;
   onAnswerChange: (paperItemNo: number, value: DraftAnswer) => void;
+  onDoubtToggle: (paperItemNo: number) => void;
   showScore: boolean;
   value: DraftAnswer;
 }) {
@@ -1238,6 +1418,13 @@ function ExamQuestionCard({
             ) : null}
           </div>
         )
+      }
+      extra={
+        <DoubtQuestionToggle
+          disabled={disabled}
+          isDoubted={isDoubted}
+          onToggle={() => onDoubtToggle(item.paperItemNo)}
+        />
       }
     >
       {isChoiceQuestion ? (
@@ -1429,7 +1616,9 @@ function ZquizExamActivitiesLabPageContent({
   const outletContext = useOutletContext<ExamOutletContext | undefined>();
   const navigate = useNavigate();
   const activeLayoutSnapshot = outletContext?.activeSnapshot ?? null;
+  const isDark = outletContext?.isDark ?? false;
   const isStandaloneExamShell = outletContext?.presentation === 'exam-standalone';
+  const setIsDark = outletContext?.setIsDark;
   const setSidebarOverride = outletContext?.setSidebarOverride;
   const [view, setView] = useState<ExamView>(mode === 'paper-route' ? 'paper' : 'list');
   const [listState, setListState] = useState<ActivityViewState>({
@@ -1449,6 +1638,10 @@ function ZquizExamActivitiesLabPageContent({
     result: null,
   });
   const [answers, setAnswers] = useState<DraftAnswers>({});
+  const [doubtQuestionNos, setDoubtQuestionNos] = useState<ReadonlySet<number>>(() => new Set());
+  const [hydratedDoubtQuestionNosSessionKey, setHydratedDoubtQuestionNosSessionKey] = useState<
+    string | null
+  >(null);
   const [autosaveState, setAutosaveState] = useState<AutosaveState>({
     error: null,
     lastSavedAt: null,
@@ -1481,12 +1674,15 @@ function ZquizExamActivitiesLabPageContent({
   }, [listState.activities.length, listState.loading]);
 
   const currentPaper = paperState.paper;
+  const currentDoubtQuestionNosSessionKey = useMemo(() => {
+    return currentPaper ? resolveDoubtQuestionNosSessionKey(currentPaper) : null;
+  }, [currentPaper]);
   const answerCount = useMemo(() => {
     return currentPaper ? buildZquizExamAnswers(currentPaper.items, answers).length : 0;
   }, [answers, currentPaper]);
   const questionStatusGroups = useMemo(() => {
-    return currentPaper ? buildQuestionStatusGroups(currentPaper, answers) : [];
-  }, [answers, currentPaper]);
+    return currentPaper ? buildQuestionStatusGroups(currentPaper, answers, doubtQuestionNos) : [];
+  }, [answers, currentPaper, doubtQuestionNos]);
   const renderedQuestionNos = useMemo(() => {
     return currentPaper ? buildRenderedQuestionNos(currentPaper) : [];
   }, [currentPaper]);
@@ -1614,6 +1810,31 @@ function ZquizExamActivitiesLabPageContent({
       void loadActivities();
     }
   }, [loadActivities, mode]);
+
+  useEffect(() => {
+    if (!currentPaper || !currentDoubtQuestionNosSessionKey) {
+      setHydratedDoubtQuestionNosSessionKey(null);
+      return;
+    }
+
+    const validPaperItemNos = buildValidPaperItemNoSet(currentPaper);
+
+    setDoubtQuestionNos(
+      readDoubtQuestionNosFromSession(currentDoubtQuestionNosSessionKey, validPaperItemNos),
+    );
+    setHydratedDoubtQuestionNosSessionKey(currentDoubtQuestionNosSessionKey);
+  }, [currentDoubtQuestionNosSessionKey, currentPaper]);
+
+  useEffect(() => {
+    if (
+      !currentDoubtQuestionNosSessionKey ||
+      hydratedDoubtQuestionNosSessionKey !== currentDoubtQuestionNosSessionKey
+    ) {
+      return;
+    }
+
+    writeDoubtQuestionNosToSession(currentDoubtQuestionNosSessionKey, doubtQuestionNos);
+  }, [currentDoubtQuestionNosSessionKey, doubtQuestionNos, hydratedDoubtQuestionNosSessionKey]);
 
   useEffect(() => {
     runAutosaveRef.current = runAutosave;
@@ -1847,6 +2068,7 @@ function ZquizExamActivitiesLabPageContent({
       lastSavedAt: null,
       status: 'idle',
     });
+    setDoubtQuestionNos(new Set());
 
     try {
       const detail = await getMyZquizExamActivity({
@@ -1871,6 +2093,7 @@ function ZquizExamActivitiesLabPageContent({
       dirtyRef.current = false;
       pendingAutosaveQuestionNosRef.current.clear();
       setAnswers(draftAnswers);
+      setDoubtQuestionNos(new Set());
       setPaperState({
         error: null,
         loading: false,
@@ -1917,12 +2140,15 @@ function ZquizExamActivitiesLabPageContent({
     }) => {
       const requestSeq = resultRequestSeqRef.current + 1;
       resultRequestSeqRef.current = requestSeq;
+      clearDoubtQuestionNosSession(paperRef.current);
       setLoadingResultActivityId(input.activityId);
       setPaperState({
         error: null,
         loading: false,
         paper: null,
       });
+      setDoubtQuestionNos(new Set());
+      setHydratedDoubtQuestionNosSessionKey(null);
       setSubmitState({
         attempt: null,
         error: null,
@@ -1998,12 +2224,27 @@ function ZquizExamActivitiesLabPageContent({
     [queueAutosave],
   );
 
+  const handleToggleDoubtQuestion = useCallback((paperItemNo: number) => {
+    setDoubtQuestionNos((current) => {
+      const nextQuestionNos = new Set(current);
+
+      if (nextQuestionNos.has(paperItemNo)) {
+        nextQuestionNos.delete(paperItemNo);
+      } else {
+        nextQuestionNos.add(paperItemNo);
+      }
+
+      return nextQuestionNos;
+    });
+  }, []);
+
   function resetToList() {
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
     }
 
+    clearDoubtQuestionNosSession(paperRef.current);
     resultRequestSeqRef.current += 1;
     setLoadingResultActivityId(null);
     setPaperState({
@@ -2027,6 +2268,8 @@ function ZquizExamActivitiesLabPageContent({
     pendingAutosaveQuestionNosRef.current.clear();
     paperRef.current = null;
     setAnswers({});
+    setDoubtQuestionNos(new Set());
+    setHydratedDoubtQuestionNosSessionKey(null);
     releaseExamFullscreen();
 
     if (mode === 'paper-route') {
@@ -2069,6 +2312,7 @@ function ZquizExamActivitiesLabPageContent({
         attemptId: paper.attemptId,
       });
 
+      clearDoubtQuestionNosSession(paper);
       dirtyRef.current = false;
       setPaperState({
         error: null,
@@ -2084,6 +2328,8 @@ function ZquizExamActivitiesLabPageContent({
       pendingAutosaveQuestionNosRef.current.clear();
       paperRef.current = null;
       setAnswers({});
+      setDoubtQuestionNos(new Set());
+      setHydratedDoubtQuestionNosSessionKey(null);
       releaseExamFullscreen();
       if (mode === 'list') {
         void loadActivities();
@@ -2258,6 +2504,9 @@ function ZquizExamActivitiesLabPageContent({
                 paper={paper}
                 submitting={submitting}
               />
+              {setIsDark ? (
+                <ThemeModeToggle isDark={isDark} onToggle={() => setIsDark((value) => !value)} />
+              ) : null}
               <Button
                 disabled={isAfterDeadline}
                 icon={<SendOutlined />}
@@ -2310,10 +2559,12 @@ function ZquizExamActivitiesLabPageContent({
                       >
                         <ExamQuestionCard
                           disabled={submitting || isAfterDeadline}
+                          isDoubted={doubtQuestionNos.has(item.paperItemNo)}
                           item={item}
                           showScore={shouldShowItemScore}
                           value={answers[String(item.paperItemNo)]}
                           onAnswerChange={handleAnswerChange}
+                          onDoubtToggle={handleToggleDoubtQuestion}
                         />
                       </div>
                     ))}

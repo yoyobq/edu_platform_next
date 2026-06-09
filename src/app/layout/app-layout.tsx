@@ -376,9 +376,11 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const layoutOutletContext = useMemo(
     () => ({
       activeSnapshot,
+      isDark,
+      setIsDark,
       setSidebarOverride,
     }),
-    [activeSnapshot],
+    [activeSnapshot, isDark, setIsDark],
   );
 
   // Top bar menu items — only built when sidebar is not active.
