@@ -64,6 +64,7 @@ import {
 } from '@/labs/zquiz-activity-builder';
 import {
   loadZquizExamActivitiesLabRouteModule,
+  loadZquizExamPaperLabRouteModule,
   zquizExamActivitiesLabAccess,
 } from '@/labs/zquiz-exam-activities';
 import {
@@ -1328,6 +1329,11 @@ const router = createBrowserRouter([
             path: 'zquiz-exam-activities',
             loader: zquizExamActivitiesLabLoader,
             lazy: loadZquizExamActivitiesLabRouteModule,
+          },
+          {
+            path: 'zquiz-exam-activities/:activityId',
+            loader: zquizExamActivitiesLabLoader,
+            lazy: loadZquizExamPaperLabRouteModule,
           },
           {
             path: 'zquiz-practice-activities',

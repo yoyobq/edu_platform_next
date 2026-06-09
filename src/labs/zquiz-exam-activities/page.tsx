@@ -10,7 +10,6 @@ import {
   HourglassOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
-  SaveOutlined,
   SendOutlined,
 } from '@ant-design/icons';
 import {
@@ -30,7 +29,7 @@ import {
   Tooltip,
   Typography,
 } from 'antd';
-import { useOutletContext } from 'react-router';
+import { useNavigate, useOutletContext, useParams } from 'react-router';
 
 import { HexAvatar } from '@/shared/hex-avatar';
 
@@ -116,6 +115,8 @@ type QuestionStatusGroup = {
   label: string;
   type: ZquizExamPaperItem['type'];
 };
+
+type ExamPageMode = 'list' | 'paper-route';
 
 const AUTOSAVE_DEBOUNCE_MS = 1200;
 const AUTOSAVE_FALLBACK_INTERVAL_MS = 30_000;
@@ -881,11 +882,18 @@ const AttemptQuestionCard = memo(function AttemptQuestionCard({
   );
 });
 
-export function ZquizExamActivitiesLabPage() {
+function ZquizExamActivitiesLabPageContent({
+  activityId,
+  mode,
+}: {
+  activityId?: number;
+  mode: ExamPageMode;
+}) {
   const outletContext = useOutletContext<ExamOutletContext | undefined>();
+  const navigate = useNavigate();
   const activeLayoutSnapshot = outletContext?.activeSnapshot ?? null;
   const setSidebarOverride = outletContext?.setSidebarOverride;
-  const [view, setView] = useState<ExamView>('list');
+  const [view, setView] = useState<ExamView>(mode === 'paper-route' ? 'paper' : 'list');
   const [listState, setListState] = useState<ActivityViewState>({
     activities: [],
     error: null,
@@ -908,7 +916,6 @@ export function ZquizExamActivitiesLabPage() {
     lastSavedAt: null,
     status: 'idle',
   });
-  const [startingActivityId, setStartingActivityId] = useState<number | null>(null);
   const [loadingResultActivityId, setLoadingResultActivityId] = useState<number | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [now, setNow] = useState(() => Date.now());
@@ -920,6 +927,7 @@ export function ZquizExamActivitiesLabPage() {
   const pendingAutosaveQuestionNosRef = useRef<Set<number>>(new Set());
   const resultRequestSeqRef = useRef(0);
   const runAutosaveRef = useRef<(() => Promise<void>) | null>(null);
+  const startedRouteActivityIdRef = useRef<number | null>(null);
   const submittingRef = useRef(false);
 
   const activityCountText = useMemo(() => {
@@ -1031,8 +1039,10 @@ export function ZquizExamActivitiesLabPage() {
   }, [queueAutosave]);
 
   useEffect(() => {
-    void loadActivities();
-  }, [loadActivities]);
+    if (mode === 'list') {
+      void loadActivities();
+    }
+  }, [loadActivities, mode]);
 
   useEffect(() => {
     runAutosaveRef.current = runAutosave;
@@ -1113,7 +1123,6 @@ export function ZquizExamActivitiesLabPage() {
   }, []);
 
   const handleStartExam = useCallback(async (activityId: number) => {
-    setStartingActivityId(activityId);
     setPaperState({
       error: null,
       loading: true,
@@ -1166,10 +1175,31 @@ export function ZquizExamActivitiesLabPage() {
         loading: false,
         paper: null,
       });
-    } finally {
-      setStartingActivityId(null);
     }
   }, []);
+
+  useEffect(() => {
+    if (mode !== 'paper-route') {
+      return;
+    }
+
+    if (!activityId || !Number.isInteger(activityId) || activityId <= 0) {
+      setPaperState({
+        error: '考试地址无效。',
+        loading: false,
+        paper: null,
+      });
+      setView('paper');
+      return;
+    }
+
+    if (startedRouteActivityIdRef.current === activityId) {
+      return;
+    }
+
+    startedRouteActivityIdRef.current = activityId;
+    void handleStartExam(activityId);
+  }, [activityId, handleStartExam, mode]);
 
   const handleLoadExamResult = useCallback(
     async (input: {
@@ -1262,7 +1292,6 @@ export function ZquizExamActivitiesLabPage() {
       autosaveTimerRef.current = null;
     }
 
-    setView('list');
     resultRequestSeqRef.current += 1;
     setLoadingResultActivityId(null);
     setPaperState({
@@ -1286,6 +1315,13 @@ export function ZquizExamActivitiesLabPage() {
     pendingAutosaveQuestionNosRef.current.clear();
     paperRef.current = null;
     setAnswers({});
+
+    if (mode === 'paper-route') {
+      navigate('/labs/zquiz-exam-activities');
+      return;
+    }
+
+    setView('list');
     void loadActivities();
   }
 
@@ -1325,7 +1361,9 @@ export function ZquizExamActivitiesLabPage() {
       pendingAutosaveQuestionNosRef.current.clear();
       paperRef.current = null;
       setAnswers({});
-      void loadActivities();
+      if (mode === 'list') {
+        void loadActivities();
+      }
       await handleLoadExamResult({
         activityId: paper.activity.id,
         attemptId: result.attemptId,
@@ -1424,8 +1462,7 @@ export function ZquizExamActivitiesLabPage() {
                         disabled={!canStart}
                         icon={<PlayCircleOutlined />}
                         key="start"
-                        loading={startingActivityId === activity.id}
-                        onClick={() => void handleStartExam(activity.id)}
+                        onClick={() => navigate(`/labs/zquiz-exam-activities/${activity.id}`)}
                         type={canStart ? 'primary' : 'default'}
                       >
                         {canStart ? '开始考试' : disabledReason || '不可进入'}
@@ -1449,38 +1486,6 @@ export function ZquizExamActivitiesLabPage() {
         </Card>
       </>
     );
-  }
-
-  function renderAutosaveStatus() {
-    if (autosaveState.status === 'saving') {
-      return (
-        <Tag icon={<SaveOutlined />} color="processing">
-          保存中
-        </Tag>
-      );
-    }
-
-    if (autosaveState.status === 'saved') {
-      return (
-        <Tag icon={<CheckCircleOutlined />} color="green">
-          已保存：{formatDateTime(autosaveState.lastSavedAt)}
-        </Tag>
-      );
-    }
-
-    if (autosaveState.status === 'dirty') {
-      return (
-        <Tag icon={<HourglassOutlined />} color="gold">
-          有未保存答案
-        </Tag>
-      );
-    }
-
-    if (autosaveState.status === 'error') {
-      return <Tag color="red">保存失败</Tag>;
-    }
-
-    return <Tag>等待作答</Tag>;
   }
 
   function renderPaper() {
@@ -1529,10 +1534,13 @@ export function ZquizExamActivitiesLabPage() {
           <div className="flex flex-col gap-4">
             <div className="flex flex-wrap gap-2">
               <Tag color="blue">Attempt #{paper.attemptNo}</Tag>
-              <Tag icon={<ClockCircleOutlined />} color={isAfterDeadline ? 'red' : 'green'}>
-                剩余：{formatCountdown(paper.deadlineAt, now)}
+              <Tag color={isAfterDeadline ? 'red' : 'green'}>
+                <span className="inline-flex items-center gap-2">
+                  <AutosaveStatusDot state={autosaveState} />
+                  <ClockCircleOutlined />
+                  <span>剩余：{formatCountdown(paper.deadlineAt, now)}</span>
+                </span>
               </Tag>
-              {renderAutosaveStatus()}
               <Tag color="purple">已作答 {answerCount} 题</Tag>
             </div>
 
@@ -1772,10 +1780,25 @@ export function ZquizExamActivitiesLabPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      {renderHeader()}
-      {view === 'list' ? renderList() : null}
+      {view === 'list' ? (
+        <>
+          {renderHeader()}
+          {renderList()}
+        </>
+      ) : null}
       {view === 'paper' ? renderPaper() : null}
       {view === 'result' ? renderResult() : null}
     </div>
   );
+}
+
+export function ZquizExamActivitiesLabPage() {
+  return <ZquizExamActivitiesLabPageContent mode="list" />;
+}
+
+export function ZquizExamPaperLabPage() {
+  const params = useParams();
+  const activityId = Number(params.activityId);
+
+  return <ZquizExamActivitiesLabPageContent activityId={activityId} mode="paper-route" />;
 }

@@ -9,3 +9,11 @@ export async function loadZquizExamActivitiesLabRouteModule() {
     Component: ZquizExamActivitiesLabPage,
   };
 }
+
+export async function loadZquizExamPaperLabRouteModule() {
+  const { ZquizExamPaperLabPage } = await import('./page');
+
+  return {
+    Component: ZquizExamPaperLabPage,
+  };
+}
