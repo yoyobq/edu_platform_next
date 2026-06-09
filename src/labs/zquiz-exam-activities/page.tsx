@@ -73,7 +73,7 @@ type DraftAnswers = ZquizExamDraftAnswers;
 type ExamLayoutSnapshot = {
   accountId: number;
   identity: {
-    currentClassCode?: string | null;
+    id: string;
     name: string | null;
   } | null;
   userInfo: {
@@ -138,7 +138,9 @@ const AUTOSAVE_QUESTION_THRESHOLD = 3;
 const COUNTDOWN_PRECISE_THRESHOLD_SECONDS = 300;
 const CURRENT_TIME_TOOLBAR_PILL_WIDTH = '5.75rem';
 const COUNTDOWN_TOOLBAR_PILL_WIDTH = '8.75rem';
-const EXAM_STANDALONE_SIDEBAR_WIDTH = 292;
+const EXAM_STANDALONE_SIDEBAR_WIDTH = 320;
+const EXAM_SIDEBAR_IDENTITY_AVATAR_FRAME_SIZE = 44;
+const EXAM_SIDEBAR_IDENTITY_AVATAR_SIZE = 38;
 const CHOICE_HEADER_STEM_SINGLE_LINE_OFFSET_PX = 8;
 const QUESTION_WHEEL_NAVIGATION_ANCHOR_OFFSET_PX = 96;
 const QUESTION_WHEEL_NAVIGATION_DELTA_THRESHOLD = 32;
@@ -332,6 +334,13 @@ function formatCountdown(deadlineAt: string, now: number) {
   }
 
   return `${totalMinutes}分`;
+}
+
+function resolveStudentIdentityDisplay(snapshot: ExamLayoutSnapshot | null) {
+  const realName = snapshot?.identity?.name?.trim() || '未同步真实姓名';
+  const identityId = snapshot?.identity?.id.trim() || '未同步学号';
+
+  return { identityId, realName };
 }
 
 function resolveAutosaveQuestionThreshold(paper: ZquizExamPaper | null) {
@@ -654,6 +663,40 @@ function resolveQuestionNumberStyle() {
   } satisfies CSSProperties;
 }
 
+function resolveSidebarQuestionButtonStyle(answered: boolean) {
+  if (answered) {
+    return {
+      background:
+        'color-mix(in srgb, var(--ant-color-primary-bg) 58%, var(--ant-color-bg-container))',
+      border:
+        '1px solid color-mix(in srgb, var(--ant-color-primary-border) 72%, var(--ant-color-border-secondary))',
+      borderRadius: 'var(--ant-border-radius)',
+      color: 'color-mix(in srgb, var(--ant-color-primary) 86%, var(--ant-color-text-secondary))',
+    } satisfies CSSProperties;
+  }
+
+  return {
+    background:
+      'color-mix(in srgb, var(--ant-color-fill-quaternary) 72%, var(--ant-color-bg-container))',
+    border: '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 84%, transparent)',
+    borderRadius: 'var(--ant-border-radius)',
+    color: 'var(--ant-color-text-secondary)',
+  } satisfies CSSProperties;
+}
+
+function resolveSidebarIdentityAvatarFrameStyle() {
+  return {
+    alignItems: 'center',
+    background: 'var(--ant-color-bg-container)',
+    border: '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 82%, transparent)',
+    borderRadius: '50%',
+    display: 'flex',
+    height: EXAM_SIDEBAR_IDENTITY_AVATAR_FRAME_SIZE,
+    justifyContent: 'center',
+    width: EXAM_SIDEBAR_IDENTITY_AVATAR_FRAME_SIZE,
+  } satisfies CSSProperties;
+}
+
 function resolveAutosaveIndicator(state: AutosaveState, isAfterDeadline = false) {
   if (isAfterDeadline) {
     return {
@@ -702,27 +745,6 @@ function resolveAutosaveIndicator(state: AutosaveState, isAfterDeadline = false)
     label: '暂无保存内容',
     title: '尚未作答，暂无需要保存的答案。',
   };
-}
-
-function AutosaveStatusDot({
-  isAfterDeadline = false,
-  state,
-}: {
-  isAfterDeadline?: boolean;
-  state: AutosaveState;
-}) {
-  const indicator = resolveAutosaveIndicator(state, isAfterDeadline);
-
-  return (
-    <Tooltip title={indicator.title}>
-      <span
-        aria-label={indicator.label}
-        className="inline-flex h-2.5 w-2.5 shrink-0 rounded-full"
-        role="status"
-        style={{ background: indicator.color }}
-      />
-    </Tooltip>
-  );
 }
 
 function ExamToolbarStatusTags({
@@ -809,34 +831,31 @@ function ExamToolbarStatusTags({
 
 function ExamAnswerStatusSidebar({
   answerCount,
-  autosaveState,
   groups,
-  isAfterDeadline,
-  now,
   paper,
   snapshot,
 }: {
   answerCount: number;
-  autosaveState: AutosaveState;
   groups: QuestionStatusGroup[];
-  isAfterDeadline: boolean;
-  now: number;
   paper: ZquizExamPaper;
   snapshot: ExamLayoutSnapshot | null;
 }) {
   const questionCount = paper.items.length;
   const progressPercent = questionCount > 0 ? Math.round((answerCount / questionCount) * 100) : 0;
-  const realName = snapshot?.identity?.name?.trim() || '未同步真实姓名';
-  const classCode = snapshot?.identity?.currentClassCode?.trim();
+  const studentIdentity = resolveStudentIdentityDisplay(snapshot);
 
   return (
     <aside className="flex h-full flex-col">
       <div
-        className="flex shrink-0 flex-col gap-2 px-4 py-4"
-        style={{ borderBottom: '1px solid var(--ant-color-border-secondary)' }}
+        className="flex shrink-0 flex-col gap-3 px-4 py-4"
+        style={{
+          background:
+            'color-mix(in srgb, var(--ant-color-primary-bg) 34%, var(--ant-color-bg-container))',
+          borderBottom:
+            '1px solid color-mix(in srgb, var(--ant-color-primary-border) 42%, var(--ant-color-border-secondary))',
+        }}
       >
-        <span className="text-xs font-medium text-text-secondary">考试答题情况</span>
-        <span className="line-clamp-2 text-base font-semibold">{paper.activity.title}</span>
+        <span className="text-sm font-semibold text-text">答题卡</span>
         <div className="flex items-center justify-between gap-3 text-xs text-text-secondary">
           <span>
             已答 {answerCount} / {questionCount}
@@ -853,38 +872,20 @@ function ExamAnswerStatusSidebar({
             style={{ background: 'var(--ant-color-primary)', width: `${progressPercent}%` }}
           />
         </div>
-        <div className="flex items-center gap-2 text-xs text-text-secondary">
-          <AutosaveStatusDot isAfterDeadline={isAfterDeadline} state={autosaveState} />
-          <span style={isAfterDeadline ? { color: 'var(--ant-color-error)' } : undefined}>
-            剩余：{formatCountdown(paper.deadlineAt, now)}
-          </span>
-        </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         <div className="flex flex-col gap-4">
           {groups.map((group) => (
             <section key={group.type} className="flex flex-col gap-2">
               <div className="px-1 text-xs font-medium text-text-secondary">{group.label}</div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-5 gap-2">
                 {group.items.map(({ answered, item }) => (
                   <button
                     aria-label={`第 ${item.paperItemNo} 题，${answered ? '已作答' : '未作答'}`}
-                    className={
-                      answered
-                        ? 'flex h-10 items-center justify-center rounded-md border text-sm font-medium transition-colors hover:bg-fill-hover'
-                        : 'flex h-10 items-center justify-center rounded-md border border-border-secondary bg-bg-container text-sm font-medium text-text-secondary transition-colors hover:bg-fill-hover hover:text-text'
-                    }
+                    className="flex h-9 items-center justify-center text-sm font-medium transition-colors hover:bg-fill-hover hover:text-text"
                     key={`${item.paperItemNo}-${item.questionId}`}
-                    style={
-                      answered
-                        ? {
-                            background: 'var(--ant-color-primary-bg)',
-                            borderColor: 'var(--ant-color-primary-border)',
-                            color: 'var(--ant-color-primary)',
-                          }
-                        : undefined
-                    }
+                    style={resolveSidebarQuestionButtonStyle(answered)}
                     type="button"
                     onClick={() => scrollToExamQuestion(item.paperItemNo)}
                   >
@@ -898,20 +899,29 @@ function ExamAnswerStatusSidebar({
       </div>
 
       <div
-        className="shrink-0 px-3 pb-3 pt-3"
+        className="shrink-0 px-4 py-2"
         style={{ borderTop: '1px solid var(--ant-color-border-secondary)' }}
       >
-        <div className="flex min-w-0 items-center gap-3 rounded-lg px-2 py-2">
-          <HexAvatar
-            accountId={snapshot?.accountId ?? paper.attemptId}
-            avatarUrl={snapshot?.userInfo.avatarUrl ?? null}
-            size={32}
-          />
+        <div className="flex min-w-0 items-center gap-4">
+          <span className="shrink-0" style={resolveSidebarIdentityAvatarFrameStyle()}>
+            <HexAvatar
+              accountId={snapshot?.accountId ?? paper.attemptId}
+              avatarUrl={snapshot?.userInfo.avatarUrl ?? null}
+              size={EXAM_SIDEBAR_IDENTITY_AVATAR_SIZE}
+            />
+          </span>
           <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-medium">{realName}</div>
-            <div className="truncate text-xs text-text-secondary">
-              {classCode ? `班级 ${classCode}` : '学生账号'}
+            <div className="truncate text-base font-semibold leading-5">
+              {studentIdentity.realName}
             </div>
+            <Tooltip title={studentIdentity.identityId}>
+              <div
+                className="mt-0.5 truncate text-xs leading-4 text-text-secondary"
+                style={{ fontVariantNumeric: 'tabular-nums' }}
+              >
+                {studentIdentity.identityId}
+              </div>
+            </Tooltip>
           </div>
         </div>
       </div>
@@ -1652,10 +1662,7 @@ function ZquizExamActivitiesLabPageContent({
       content: (
         <ExamAnswerStatusSidebar
           answerCount={answerCount}
-          autosaveState={autosaveState}
           groups={questionStatusGroups}
-          isAfterDeadline={isAfterDeadline}
-          now={now}
           paper={currentPaper}
           snapshot={activeLayoutSnapshot}
         />
@@ -1664,11 +1671,8 @@ function ZquizExamActivitiesLabPageContent({
   }, [
     activeLayoutSnapshot,
     answerCount,
-    autosaveState,
     currentPaper,
     isStandaloneExamShell,
-    isAfterDeadline,
-    now,
     questionStatusGroups,
     setSidebarOverride,
     view,
@@ -2336,10 +2340,7 @@ function ZquizExamActivitiesLabPageContent({
           >
             <ExamAnswerStatusSidebar
               answerCount={answerCount}
-              autosaveState={autosaveState}
               groups={questionStatusGroups}
-              isAfterDeadline={isAfterDeadline}
-              now={now}
               paper={currentPaper}
               snapshot={activeLayoutSnapshot}
             />
