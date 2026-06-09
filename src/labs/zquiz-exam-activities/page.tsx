@@ -1,10 +1,18 @@
 // src/labs/zquiz-exam-activities/page.tsx
 
-import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type CSSProperties,
+  memo,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
-  ClockCircleOutlined,
   CloseCircleOutlined,
   FileDoneOutlined,
   HourglassOutlined,
@@ -118,10 +126,26 @@ type QuestionStatusGroup = {
 
 type ExamPageMode = 'list' | 'paper-route';
 
+let examFullscreenSessionActive = false;
+let examFullscreenReleaseTimer: number | null = null;
+
 const AUTOSAVE_DEBOUNCE_MS = 1200;
 const AUTOSAVE_FALLBACK_INTERVAL_MS = 30_000;
 const AUTOSAVE_MIN_QUESTION_THRESHOLD = 2;
 const AUTOSAVE_QUESTION_THRESHOLD = 3;
+const QUESTION_WHEEL_NAVIGATION_ANCHOR_OFFSET_PX = 96;
+const QUESTION_WHEEL_NAVIGATION_DELTA_THRESHOLD = 32;
+const QUESTION_WHEEL_NAVIGATION_RESET_MS = 180;
+const CHOICE_OPTION_TEXT_STYLE = {
+  fontSize: 'var(--ant-font-size-lg)',
+  lineHeight: 'var(--ant-line-height-lg)',
+} satisfies CSSProperties;
+const CHOICE_STEM_TEXT_STYLE = {
+  fontSize: 'var(--ant-font-size-lg)',
+  lineHeight: 'var(--ant-line-height-lg)',
+  marginBottom: 0,
+  whiteSpace: 'pre-wrap',
+} satisfies CSSProperties;
 const QUESTION_GROUP_ORDINALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 const AVAILABILITY_LABELS: Record<ZquizExamAvailability, string> = {
@@ -278,6 +302,30 @@ function buildQuestionStatusGroups(
   return groups;
 }
 
+function buildRenderedQuestionNos(paper: ZquizExamPaper) {
+  const groups: { paperItemNos: number[]; type: ZquizExamPaperItem['type'] }[] = [];
+  const groupByType = new Map<ZquizExamPaperItem['type'], number[]>();
+
+  for (const item of [...paper.items].sort((left, right) => left.paperItemNo - right.paperItemNo)) {
+    const existingGroup = groupByType.get(item.type);
+
+    if (existingGroup) {
+      existingGroup.push(item.paperItemNo);
+      continue;
+    }
+
+    const paperItemNos = [item.paperItemNo];
+
+    groupByType.set(item.type, paperItemNos);
+    groups.push({
+      paperItemNos,
+      type: item.type,
+    });
+  }
+
+  return groups.flatMap((group) => group.paperItemNos);
+}
+
 function formatQuestionGroupOrdinal(index: number) {
   return QUESTION_GROUP_ORDINALS[index] ?? String(index + 1);
 }
@@ -314,7 +362,141 @@ function scrollToExamQuestion(paperItemNo: number) {
     ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-function resolveAutosaveIndicator(state: AutosaveState) {
+function resolveCurrentExamQuestionIndex(questionNos: readonly number[]) {
+  const anchorY = window.scrollY + QUESTION_WHEEL_NAVIGATION_ANCHOR_OFFSET_PX;
+  let currentIndex = -1;
+
+  for (const [index, questionNo] of questionNos.entries()) {
+    const questionElement = document.getElementById(`exam-question-${questionNo}`);
+
+    if (!questionElement) {
+      continue;
+    }
+
+    const questionTop = window.scrollY + questionElement.getBoundingClientRect().top;
+
+    if (questionTop > anchorY) {
+      break;
+    }
+
+    currentIndex = index;
+  }
+
+  return currentIndex;
+}
+
+function resolveWheelTargetQuestionIndex(
+  questionNos: readonly number[],
+  deltaY: number,
+  currentIndex: number | null,
+) {
+  const direction = deltaY > 0 ? 1 : -1;
+  const sourceIndex = currentIndex ?? resolveCurrentExamQuestionIndex(questionNos);
+  const targetIndex =
+    direction > 0 ? Math.min(sourceIndex + 1, questionNos.length - 1) : sourceIndex - 1;
+
+  if (targetIndex < 0 || targetIndex === sourceIndex) {
+    return null;
+  }
+
+  return targetIndex;
+}
+
+function shouldIgnoreQuestionWheelNavigation(target: EventTarget | null) {
+  if (!(target instanceof Element)) {
+    return false;
+  }
+
+  return Boolean(
+    target.closest(
+      [
+        'textarea',
+        'input:not([type="radio"]):not([type="checkbox"])',
+        'select',
+        '[contenteditable="true"]',
+        '.ant-input',
+        '.ant-input-affix-wrapper',
+        '.ant-input-number',
+        '.ant-modal-root',
+        '.ant-picker',
+        '.ant-select',
+      ].join(','),
+    ),
+  );
+}
+
+function requestExamFullscreen() {
+  cancelScheduledExamFullscreenRelease();
+
+  if (
+    typeof document === 'undefined' ||
+    !document.fullscreenEnabled ||
+    document.fullscreenElement
+  ) {
+    return;
+  }
+
+  void document.documentElement
+    .requestFullscreen({ navigationUI: 'hide' })
+    .then(() => {
+      examFullscreenSessionActive = true;
+    })
+    .catch(() => undefined);
+}
+
+function releaseExamFullscreen() {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  if (!document.fullscreenElement) {
+    examFullscreenSessionActive = false;
+    return;
+  }
+
+  if (!examFullscreenSessionActive) {
+    return;
+  }
+
+  void document
+    .exitFullscreen()
+    .catch(() => undefined)
+    .finally(() => {
+      examFullscreenSessionActive = false;
+    });
+}
+
+function cancelScheduledExamFullscreenRelease() {
+  if (typeof window === 'undefined' || examFullscreenReleaseTimer === null) {
+    return;
+  }
+
+  window.clearTimeout(examFullscreenReleaseTimer);
+  examFullscreenReleaseTimer = null;
+}
+
+function scheduleReleaseExamFullscreen() {
+  if (typeof window === 'undefined') {
+    releaseExamFullscreen();
+    return;
+  }
+
+  cancelScheduledExamFullscreenRelease();
+  examFullscreenReleaseTimer = window.setTimeout(() => {
+    examFullscreenReleaseTimer = null;
+    releaseExamFullscreen();
+  }, 0);
+}
+
+function resolveAutosaveIndicator(state: AutosaveState, isAfterDeadline = false) {
+  if (isAfterDeadline) {
+    return {
+      color: 'var(--ant-color-text-quaternary)',
+      label: '自动保存已停止',
+      title: '考试已截止，自动保存已停止。',
+    };
+  }
+
   if (state.status === 'saving') {
     return {
       color: 'var(--ant-color-warning)',
@@ -356,8 +538,14 @@ function resolveAutosaveIndicator(state: AutosaveState) {
   };
 }
 
-function AutosaveStatusDot({ state }: { state: AutosaveState }) {
-  const indicator = resolveAutosaveIndicator(state);
+function AutosaveStatusDot({
+  isAfterDeadline = false,
+  state,
+}: {
+  isAfterDeadline?: boolean;
+  state: AutosaveState;
+}) {
+  const indicator = resolveAutosaveIndicator(state, isAfterDeadline);
 
   return (
     <Tooltip title={indicator.title}>
@@ -368,6 +556,53 @@ function AutosaveStatusDot({ state }: { state: AutosaveState }) {
         style={{ background: indicator.color }}
       />
     </Tooltip>
+  );
+}
+
+function ExamToolbarStatusTags({
+  autosaveState,
+  isAfterDeadline,
+  now,
+  paper,
+  submitting,
+}: {
+  autosaveState: AutosaveState;
+  isAfterDeadline: boolean;
+  now: number;
+  paper: ZquizExamPaper;
+  submitting: boolean;
+}) {
+  const autosaveIndicator = resolveAutosaveIndicator(autosaveState, isAfterDeadline);
+
+  return (
+    <Space wrap size={[8, 8]}>
+      <Tooltip title={`截止时间：${formatDateTime(paper.deadlineAt)}`}>
+        <Tag color={isAfterDeadline ? 'red' : 'green'}>
+          {isAfterDeadline ? '已截止' : `剩余 ${formatCountdown(paper.deadlineAt, now)}`}
+        </Tag>
+      </Tooltip>
+      {submitting ? (
+        <Tooltip title="正在提交考试。">
+          <Tag aria-label="正在提交考试" role="status">
+            <span
+              aria-hidden="true"
+              className="inline-flex h-2.5 w-2.5 shrink-0 rounded-badge"
+              style={{ background: 'var(--ant-color-info)' }}
+            />
+          </Tag>
+        </Tooltip>
+      ) : (
+        <Tooltip title={autosaveIndicator.title}>
+          <Tag aria-label={autosaveIndicator.label} role="status">
+            <span
+              aria-hidden="true"
+              className="inline-flex h-2.5 w-2.5 shrink-0 rounded-badge"
+              style={{ background: autosaveIndicator.color }}
+            />
+          </Tag>
+        </Tooltip>
+      )}
+    </Space>
   );
 }
 
@@ -418,7 +653,7 @@ function ExamAnswerStatusSidebar({
           />
         </div>
         <div className="flex items-center gap-2 text-xs text-text-secondary">
-          <AutosaveStatusDot state={autosaveState} />
+          <AutosaveStatusDot isAfterDeadline={isAfterDeadline} state={autosaveState} />
           <span style={isAfterDeadline ? { color: 'var(--ant-color-error)' } : undefined}>
             剩余：{formatCountdown(paper.deadlineAt, now)}
           </span>
@@ -507,6 +742,18 @@ function canStartActivity(activity: ZquizExamActivity) {
   return activity.availability === 'OPEN' && activity.canStart;
 }
 
+function isChoiceQuestionType(type: ZquizExamPaperItem['type']) {
+  return type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE' || type === 'TRUE_FALSE';
+}
+
+function isQuestionAnswered(item: ZquizExamPaperItem, value: DraftAnswer) {
+  return (
+    buildZquizExamAnswers([item], {
+      [String(item.paperItemNo)]: value,
+    }).length > 0
+  );
+}
+
 function ActivityMeta({ activity }: { activity: ZquizExamActivity }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -536,19 +783,23 @@ const AssetList = memo(function AssetList({ assets }: { assets: ZquizExamPaperAs
   }
 
   return (
-    <div className="flex flex-col gap-2">
-      {assets.map((asset) => (
-        <div
-          className="rounded-card border border-border-secondary p-3 text-sm text-text-secondary"
-          key={`${asset.storageKey}-${asset.sortOrder}`}
-        >
-          <div>{asset.originalName || asset.storageKey}</div>
-          <div>
-            {asset.kind} · {asset.mimeType || '未知类型'}
+    <section className="flex flex-col gap-2">
+      <Typography.Text strong>附件</Typography.Text>
+      <div className="flex flex-col gap-2">
+        {assets.map((asset) => (
+          <div
+            className="rounded-card p-3 text-sm text-text-secondary"
+            key={`${asset.storageKey}-${asset.sortOrder}`}
+            style={{ border: '1px solid var(--ant-color-border-secondary)' }}
+          >
+            <div>{asset.originalName || asset.storageKey}</div>
+            <div>
+              {asset.kind} · {asset.mimeType || '未知类型'}
+            </div>
           </div>
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+    </section>
   );
 });
 
@@ -569,10 +820,12 @@ function SingleChoiceAnswer({
       value={typeof value === 'string' ? value : undefined}
       onChange={(event) => onChange(event.target.value)}
     >
-      <Space direction="vertical">
+      <Space direction="vertical" size={12}>
         {item.options.map((option) => (
           <Radio key={option.label} value={option.label}>
-            {option.label}. {option.content}
+            <span style={CHOICE_OPTION_TEXT_STYLE}>
+              {option.label}. {option.content}
+            </span>
           </Radio>
         ))}
       </Space>
@@ -597,10 +850,12 @@ function MultipleChoiceAnswer({
       value={Array.isArray(value) ? value : []}
       onChange={(selectedValues) => onChange(selectedValues.map(String))}
     >
-      <Space direction="vertical">
+      <Space direction="vertical" size={12}>
         {item.options.map((option) => (
           <Checkbox key={option.label} value={option.label}>
-            {option.label}. {option.content}
+            <span style={CHOICE_OPTION_TEXT_STYLE}>
+              {option.label}. {option.content}
+            </span>
           </Checkbox>
         ))}
       </Space>
@@ -724,26 +979,56 @@ function ExamQuestionCard({
     );
   }
 
+  const answered = isQuestionAnswered(item, value);
+  const isChoiceQuestion = isChoiceQuestionType(item.type);
+
   return (
     <Card
-      title={
-        <div className="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-1">
-          <span className="shrink-0">第 {item.paperItemNo} 题</span>
-          <span className="min-w-0 flex-1 whitespace-pre-wrap text-sm font-normal text-text">
-            {item.stem}
-          </span>
-          {showScore ? (
-            <Tag color="blue" style={{ flexShrink: 0 }}>
-              {formatScore(item.scoreMax)} 分
-            </Tag>
-          ) : null}
-        </div>
+      title={`第 ${item.paperItemNo} 题`}
+      extra={
+        <Space wrap size={[8, 8]}>
+          <Tag>{QUESTION_TYPE_LABELS[item.type]}</Tag>
+          <Tag
+            color={answered ? 'green' : 'default'}
+            icon={answered ? <CheckCircleOutlined /> : null}
+          >
+            {answered ? '已作答' : '未作答'}
+          </Tag>
+          {showScore ? <Tag color="blue">{formatScore(item.scoreMax)} 分</Tag> : null}
+        </Space>
       }
     >
-      <div className="flex flex-col gap-4">
-        <AssetList assets={item.assets} />
-        {renderAnswer()}
-      </div>
+      {isChoiceQuestion ? (
+        <div className="flex flex-col gap-4">
+          <Typography.Paragraph style={CHOICE_STEM_TEXT_STYLE}>{item.stem}</Typography.Paragraph>
+          <AssetList assets={item.assets} />
+          {renderAnswer()}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <section className="flex flex-col gap-2">
+            <Typography.Text strong>题干</Typography.Text>
+            <div
+              className="rounded-card p-4"
+              style={{
+                background: 'var(--ant-color-fill-quaternary)',
+                border: '1px solid var(--ant-color-border-secondary)',
+              }}
+            >
+              <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
+                {item.stem}
+              </Typography.Paragraph>
+            </div>
+          </section>
+
+          <AssetList assets={item.assets} />
+
+          <section className="flex flex-col gap-2">
+            <Typography.Text strong>作答</Typography.Text>
+            <div className="rounded-card border border-border p-4">{renderAnswer()}</div>
+          </section>
+        </div>
+      )}
     </Card>
   );
 }
@@ -922,9 +1207,13 @@ function ZquizExamActivitiesLabPageContent({
   const autosaveTimerRef = useRef<number | null>(null);
   const autosavingRef = useRef(false);
   const dirtyRef = useRef(false);
+  const isAfterDeadlineRef = useRef(false);
   const latestAnswersRef = useRef<DraftAnswers>({});
   const paperRef = useRef<ZquizExamPaper | null>(null);
   const pendingAutosaveQuestionNosRef = useRef<Set<number>>(new Set());
+  const paperWheelScopeRef = useRef<HTMLDivElement | null>(null);
+  const questionWheelNavigationIndexRef = useRef<number | null>(null);
+  const questionWheelNavigationResetTimerRef = useRef<number | null>(null);
   const resultRequestSeqRef = useRef(0);
   const runAutosaveRef = useRef<(() => Promise<void>) | null>(null);
   const startedRouteActivityIdRef = useRef<number | null>(null);
@@ -945,6 +1234,9 @@ function ZquizExamActivitiesLabPageContent({
   const questionStatusGroups = useMemo(() => {
     return currentPaper ? buildQuestionStatusGroups(currentPaper, answers) : [];
   }, [answers, currentPaper]);
+  const renderedQuestionNos = useMemo(() => {
+    return currentPaper ? buildRenderedQuestionNos(currentPaper) : [];
+  }, [currentPaper]);
 
   const isAfterDeadline = useMemo(() => {
     if (!currentPaper) {
@@ -953,7 +1245,7 @@ function ZquizExamActivitiesLabPageContent({
 
     const deadline = new Date(currentPaper.deadlineAt).getTime();
 
-    return Number.isNaN(deadline) ? false : now > deadline;
+    return Number.isNaN(deadline) ? false : now >= deadline;
   }, [currentPaper, now]);
 
   const loadActivities = useCallback(async () => {
@@ -981,6 +1273,15 @@ function ZquizExamActivitiesLabPageContent({
   }, []);
 
   const queueAutosave = useCallback(() => {
+    if (isAfterDeadlineRef.current) {
+      if (autosaveTimerRef.current !== null) {
+        window.clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+
+      return;
+    }
+
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
     }
@@ -995,6 +1296,12 @@ function ZquizExamActivitiesLabPageContent({
     const paper = paperRef.current;
 
     if (!paper || autosavingRef.current || submittingRef.current) {
+      return;
+    }
+
+    if (isAfterDeadlineRef.current) {
+      dirtyRef.current = false;
+      pendingAutosaveQuestionNosRef.current.clear();
       return;
     }
 
@@ -1027,6 +1334,17 @@ function ZquizExamActivitiesLabPageContent({
         queueAutosave();
       }
     } catch (error) {
+      if (isAfterDeadlineRef.current) {
+        dirtyRef.current = false;
+        pendingAutosaveQuestionNosRef.current.clear();
+        setAutosaveState((current) => ({
+          ...current,
+          error: null,
+          status: current.lastSavedAt ? 'saved' : 'idle',
+        }));
+        return;
+      }
+
       dirtyRef.current = true;
       setAutosaveState((current) => ({
         ...current,
@@ -1047,6 +1365,27 @@ function ZquizExamActivitiesLabPageContent({
   useEffect(() => {
     runAutosaveRef.current = runAutosave;
   }, [runAutosave]);
+
+  useEffect(() => {
+    isAfterDeadlineRef.current = isAfterDeadline;
+
+    if (!isAfterDeadline) {
+      return;
+    }
+
+    if (autosaveTimerRef.current !== null) {
+      window.clearTimeout(autosaveTimerRef.current);
+      autosaveTimerRef.current = null;
+    }
+
+    dirtyRef.current = false;
+    pendingAutosaveQuestionNosRef.current.clear();
+    setAutosaveState((current) => ({
+      ...current,
+      error: null,
+      status: current.lastSavedAt ? 'saved' : 'idle',
+    }));
+  }, [currentPaper?.attemptId, isAfterDeadline]);
 
   useEffect(() => {
     paperRef.current = currentPaper;
@@ -1105,7 +1444,7 @@ function ZquizExamActivitiesLabPageContent({
 
   useEffect(() => {
     const timer = window.setInterval(() => {
-      if (dirtyRef.current) {
+      if (dirtyRef.current && !isAfterDeadlineRef.current) {
         void runAutosave();
       }
     }, AUTOSAVE_FALLBACK_INTERVAL_MS);
@@ -1121,6 +1460,123 @@ function ZquizExamActivitiesLabPageContent({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (view !== 'paper') {
+      return;
+    }
+
+    function blockFullscreenShortcut(event: KeyboardEvent) {
+      if (event.key !== 'F11' && event.code !== 'F11') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+    }
+
+    window.addEventListener('keydown', blockFullscreenShortcut, true);
+
+    return () => {
+      window.removeEventListener('keydown', blockFullscreenShortcut, true);
+    };
+  }, [view]);
+
+  useEffect(() => {
+    if (mode !== 'paper-route') {
+      return;
+    }
+
+    cancelScheduledExamFullscreenRelease();
+
+    return () => {
+      scheduleReleaseExamFullscreen();
+    };
+  }, [mode]);
+
+  useEffect(() => {
+    if (view === 'paper' && currentPaper) {
+      requestExamFullscreen();
+    }
+  }, [currentPaper, view]);
+
+  useEffect(() => {
+    if (view !== 'paper' || renderedQuestionNos.length === 0) {
+      return;
+    }
+
+    function resetQuestionWheelNavigationIndex() {
+      questionWheelNavigationIndexRef.current = null;
+
+      if (questionWheelNavigationResetTimerRef.current !== null) {
+        window.clearTimeout(questionWheelNavigationResetTimerRef.current);
+        questionWheelNavigationResetTimerRef.current = null;
+      }
+    }
+
+    function scheduleQuestionWheelNavigationIndexReset() {
+      if (questionWheelNavigationResetTimerRef.current !== null) {
+        window.clearTimeout(questionWheelNavigationResetTimerRef.current);
+      }
+
+      questionWheelNavigationResetTimerRef.current = window.setTimeout(() => {
+        questionWheelNavigationIndexRef.current = null;
+        questionWheelNavigationResetTimerRef.current = null;
+      }, QUESTION_WHEEL_NAVIGATION_RESET_MS);
+    }
+
+    function handleQuestionWheelNavigation(event: WheelEvent) {
+      const paperWheelScope = paperWheelScopeRef.current;
+
+      if (
+        event.defaultPrevented ||
+        event.altKey ||
+        event.ctrlKey ||
+        event.metaKey ||
+        event.shiftKey ||
+        Math.abs(event.deltaY) < QUESTION_WHEEL_NAVIGATION_DELTA_THRESHOLD ||
+        shouldIgnoreQuestionWheelNavigation(event.target) ||
+        !paperWheelScope ||
+        !(event.target instanceof Node) ||
+        !paperWheelScope.contains(event.target)
+      ) {
+        return;
+      }
+
+      const targetQuestionIndex = resolveWheelTargetQuestionIndex(
+        renderedQuestionNos,
+        event.deltaY,
+        questionWheelNavigationIndexRef.current,
+      );
+
+      if (targetQuestionIndex === null) {
+        return;
+      }
+
+      const targetQuestionNo = renderedQuestionNos[targetQuestionIndex];
+
+      if (!targetQuestionNo) {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      questionWheelNavigationIndexRef.current = targetQuestionIndex;
+      scrollToExamQuestion(targetQuestionNo);
+      scheduleQuestionWheelNavigationIndexReset();
+    }
+
+    window.addEventListener('wheel', handleQuestionWheelNavigation, {
+      capture: true,
+      passive: false,
+    });
+
+    return () => {
+      window.removeEventListener('wheel', handleQuestionWheelNavigation, true);
+      resetQuestionWheelNavigationIndex();
+    };
+  }, [renderedQuestionNos, view]);
 
   const handleStartExam = useCallback(async (activityId: number) => {
     setPaperState({
@@ -1261,6 +1717,10 @@ function ZquizExamActivitiesLabPageContent({
 
   const handleAnswerChange = useCallback(
     (paperItemNo: number, value: DraftAnswer) => {
+      if (isAfterDeadlineRef.current) {
+        return;
+      }
+
       const nextAnswers = {
         ...latestAnswersRef.current,
         [String(paperItemNo)]: value,
@@ -1315,6 +1775,7 @@ function ZquizExamActivitiesLabPageContent({
     pendingAutosaveQuestionNosRef.current.clear();
     paperRef.current = null;
     setAnswers({});
+    releaseExamFullscreen();
 
     if (mode === 'paper-route') {
       navigate('/labs/zquiz-exam-activities');
@@ -1326,6 +1787,16 @@ function ZquizExamActivitiesLabPageContent({
   }
 
   async function doSubmitExam(paper: ZquizExamPaper) {
+    if (isAfterDeadlineRef.current) {
+      setSubmitState({
+        attempt: null,
+        error: '考试已截止，不能再交卷。系统将以最后一次成功保存的答案作为收卷依据。',
+        loading: false,
+        result: null,
+      });
+      return;
+    }
+
     if (autosaveTimerRef.current !== null) {
       window.clearTimeout(autosaveTimerRef.current);
       autosaveTimerRef.current = null;
@@ -1361,6 +1832,7 @@ function ZquizExamActivitiesLabPageContent({
       pendingAutosaveQuestionNosRef.current.clear();
       paperRef.current = null;
       setAnswers({});
+      releaseExamFullscreen();
       if (mode === 'list') {
         void loadActivities();
       }
@@ -1380,7 +1852,7 @@ function ZquizExamActivitiesLabPageContent({
       submittingRef.current = false;
       setSubmitting(false);
 
-      if (paperRef.current && dirtyRef.current) {
+      if (paperRef.current && dirtyRef.current && !isAfterDeadlineRef.current) {
         queueAutosave();
       }
     }
@@ -1389,7 +1861,7 @@ function ZquizExamActivitiesLabPageContent({
   function handleSubmitExam() {
     const paper = paperRef.current;
 
-    if (!paper || submitting) {
+    if (!paper || submitting || isAfterDeadline) {
       return;
     }
 
@@ -1462,7 +1934,10 @@ function ZquizExamActivitiesLabPageContent({
                         disabled={!canStart}
                         icon={<PlayCircleOutlined />}
                         key="start"
-                        onClick={() => navigate(`/labs/zquiz-exam-activities/${activity.id}`)}
+                        onClick={() => {
+                          requestExamFullscreen();
+                          navigate(`/labs/zquiz-exam-activities/${activity.id}`);
+                        }}
                         type={canStart ? 'primary' : 'default'}
                       >
                         {canStart ? '开始考试' : disabledReason || '不可进入'}
@@ -1512,15 +1987,32 @@ function ZquizExamActivitiesLabPageContent({
     }
 
     return (
-      <div className="flex flex-col gap-5">
-        <Card
-          title={paper.activity.title}
-          extra={
-            <Space wrap>
-              <Button icon={<ArrowLeftOutlined />} onClick={resetToList}>
-                返回列表
-              </Button>
+      <div ref={paperWheelScopeRef} className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+        <div
+          className="sticky top-0 z-floating-action-bar px-4 py-3"
+          style={{
+            WebkitBackdropFilter: 'blur(16px) saturate(140%)',
+            backdropFilter: 'blur(16px) saturate(140%)',
+            background: 'color-mix(in srgb, var(--ant-color-bg-container) 82%, transparent)',
+            borderBottom: '1px solid var(--ant-color-border-secondary)',
+          }}
+        >
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <Typography.Title level={4} ellipsis style={{ marginBottom: 0 }}>
+                {paper.activity.title}
+              </Typography.Title>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <ExamToolbarStatusTags
+                autosaveState={autosaveState}
+                isAfterDeadline={isAfterDeadline}
+                now={now}
+                paper={paper}
+                submitting={submitting}
+              />
               <Button
+                disabled={isAfterDeadline}
                 icon={<SendOutlined />}
                 loading={submitting}
                 onClick={handleSubmitExam}
@@ -1528,64 +2020,23 @@ function ZquizExamActivitiesLabPageContent({
               >
                 交卷
               </Button>
-            </Space>
-          }
-        >
-          <div className="flex flex-col gap-4">
-            <div className="flex flex-wrap gap-2">
-              <Tag color="blue">Attempt #{paper.attemptNo}</Tag>
-              <Tag color={isAfterDeadline ? 'red' : 'green'}>
-                <span className="inline-flex items-center gap-2">
-                  <AutosaveStatusDot state={autosaveState} />
-                  <ClockCircleOutlined />
-                  <span>剩余：{formatCountdown(paper.deadlineAt, now)}</span>
-                </span>
-              </Tag>
-              <Tag color="purple">已作答 {answerCount} 题</Tag>
             </div>
-
-            {autosaveState.error ? (
-              <Alert showIcon message={autosaveState.error} type="warning" />
-            ) : null}
-
-            {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
-
-            {isAfterDeadline ? (
-              <Alert
-                showIcon
-                message="考试已超过提交时间，保存或交卷可能会被拒绝。"
-                type="warning"
-              />
-            ) : null}
-
-            <Descriptions
-              bordered
-              column={2}
-              items={[
-                {
-                  key: 'startedAt',
-                  label: '开始时间',
-                  children: formatDateTime(paper.startedAt),
-                },
-                {
-                  key: 'deadlineAt',
-                  label: '截止时间',
-                  children: formatDateTime(paper.deadlineAt),
-                },
-                {
-                  key: 'duration',
-                  label: '考试时长',
-                  children: formatDuration(paper.activity.durationMinutes),
-                },
-                {
-                  key: 'attemptId',
-                  label: 'Attempt ID',
-                  children: paper.attemptId,
-                },
-              ]}
-            />
           </div>
-        </Card>
+        </div>
+
+        {autosaveState.error ? (
+          <Alert showIcon message={autosaveState.error} type="warning" />
+        ) : null}
+
+        {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
+
+        {isAfterDeadline ? (
+          <Alert
+            showIcon
+            message="考试已截止，答题、自动保存和交卷已停止，系统将以最后一次成功保存的答案作为收卷依据。"
+            type="warning"
+          />
+        ) : null}
 
         <div className="flex flex-col gap-6">
           {questionStatusGroups.map((group, groupIndex) => {
@@ -1604,7 +2055,7 @@ function ZquizExamActivitiesLabPageContent({
                       style={{ scrollMarginTop: 24 }}
                     >
                       <ExamQuestionCard
-                        disabled={submitting}
+                        disabled={submitting || isAfterDeadline}
                         item={item}
                         showScore={shouldShowItemScore}
                         value={answers[String(item.paperItemNo)]}
