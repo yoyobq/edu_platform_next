@@ -13,6 +13,7 @@ import {
 import {
   ArrowLeftOutlined,
   CheckCircleOutlined,
+  ClockCircleOutlined,
   CloseCircleOutlined,
   FileDoneOutlined,
   HourglassOutlined,
@@ -87,7 +88,8 @@ type ExamSidebarOverride = {
 
 type ExamOutletContext = {
   activeSnapshot: ExamLayoutSnapshot | null;
-  setSidebarOverride: (override: ExamSidebarOverride | null) => void;
+  presentation?: 'app' | 'exam-standalone';
+  setSidebarOverride?: (override: ExamSidebarOverride | null) => void;
 };
 
 type ActivityViewState = {
@@ -133,6 +135,11 @@ const AUTOSAVE_DEBOUNCE_MS = 1200;
 const AUTOSAVE_FALLBACK_INTERVAL_MS = 30_000;
 const AUTOSAVE_MIN_QUESTION_THRESHOLD = 2;
 const AUTOSAVE_QUESTION_THRESHOLD = 3;
+const COUNTDOWN_PRECISE_THRESHOLD_SECONDS = 300;
+const CURRENT_TIME_TOOLBAR_PILL_WIDTH = '5.75rem';
+const COUNTDOWN_TOOLBAR_PILL_WIDTH = '8.75rem';
+const EXAM_STANDALONE_SIDEBAR_WIDTH = 292;
+const CHOICE_HEADER_STEM_SINGLE_LINE_OFFSET_PX = 8;
 const QUESTION_WHEEL_NAVIGATION_ANCHOR_OFFSET_PX = 96;
 const QUESTION_WHEEL_NAVIGATION_DELTA_THRESHOLD = 32;
 const QUESTION_WHEEL_NAVIGATION_RESET_MS = 180;
@@ -140,12 +147,46 @@ const CHOICE_OPTION_TEXT_STYLE = {
   fontSize: 'var(--ant-font-size-lg)',
   lineHeight: 'var(--ant-line-height-lg)',
 } satisfies CSSProperties;
-const CHOICE_STEM_TEXT_STYLE = {
+const CHOICE_OPTION_CONTENT_STYLE = {
+  minWidth: 0,
+  paddingTop: 1,
+} satisfies CSSProperties;
+const CHOICE_HEADER_STEM_TEXT_STYLE = {
+  color: 'var(--ant-color-text)',
+  display: 'block',
   fontSize: 'var(--ant-font-size-lg)',
+  fontWeight: 500,
   lineHeight: 'var(--ant-line-height-lg)',
-  marginBottom: 0,
+  paddingTop: CHOICE_HEADER_STEM_SINGLE_LINE_OFFSET_PX,
   whiteSpace: 'pre-wrap',
 } satisfies CSSProperties;
+const TOOLBAR_TIME_TEXT_STYLE = {
+  fontVariantNumeric: 'tabular-nums',
+  lineHeight: 1,
+} satisfies CSSProperties;
+const EXAM_TOOLBAR_STYLE = {
+  background: 'var(--ant-color-bg-container)',
+  borderBottom: '1px solid color-mix(in srgb, var(--ant-color-border) 82%, transparent)',
+  boxShadow: 'var(--shadow-surface)',
+} satisfies CSSProperties;
+const QUESTION_CARD_STYLE = {
+  borderColor: 'color-mix(in srgb, var(--ant-color-border-secondary) 72%, transparent)',
+  boxShadow: 'none',
+} satisfies CSSProperties;
+const QUESTION_CARD_STYLES = {
+  body: {
+    padding: 24,
+  },
+  header: {
+    borderBottom:
+      '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 72%, transparent)',
+    minHeight: 64,
+    padding: '16px 24px',
+  },
+} satisfies {
+  body: CSSProperties;
+  header: CSSProperties;
+};
 const QUESTION_GROUP_ORDINALS = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十'];
 
 const AVAILABILITY_LABELS: Record<ZquizExamAvailability, string> = {
@@ -220,6 +261,26 @@ function formatDateTime(value: string | null) {
   });
 }
 
+function formatTimestampDateTime(value: number) {
+  return new Date(value).toLocaleString('zh-CN', {
+    hour12: false,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+}
+
+function formatClockMinute(value: number) {
+  return new Date(value).toLocaleTimeString('zh-CN', {
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 function formatDuration(value: number | null) {
   return value === null ? '未配置' : `${value} 分钟`;
 }
@@ -236,6 +297,10 @@ function formatScorePair(scoreAwarded: number, scoreMax: number) {
   return `${formatScore(scoreAwarded)} / ${formatScore(scoreMax)}`;
 }
 
+function formatCountdownUnit(value: number) {
+  return String(value).padStart(2, '0');
+}
+
 function formatCountdown(deadlineAt: string, now: number) {
   const deadline = new Date(deadlineAt).getTime();
 
@@ -250,15 +315,23 @@ function formatCountdown(deadlineAt: string, now: number) {
   }
 
   const totalSeconds = Math.ceil(remaining / 1000);
-  const hours = Math.floor(totalSeconds / 3600);
-  const minutes = Math.floor((totalSeconds % 3600) / 60);
-  const seconds = totalSeconds % 60;
 
-  if (hours > 0) {
-    return `${hours}小时 ${minutes}分 ${seconds}秒`;
+  if (totalSeconds <= COUNTDOWN_PRECISE_THRESHOLD_SECONDS) {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+
+    return `${formatCountdownUnit(minutes)}:${formatCountdownUnit(seconds)}`;
   }
 
-  return `${minutes}分 ${seconds}秒`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+
+  if (hours > 0) {
+    return `${hours}小时 ${formatCountdownUnit(minutes)}分`;
+  }
+
+  return `${totalMinutes}分`;
 }
 
 function resolveAutosaveQuestionThreshold(paper: ZquizExamPaper | null) {
@@ -488,6 +561,99 @@ function scheduleReleaseExamFullscreen() {
   }, 0);
 }
 
+function resolveToolbarTimePillStyle(isAfterDeadline: boolean) {
+  if (isAfterDeadline) {
+    return {
+      justifyContent: 'center',
+      background:
+        'color-mix(in srgb, var(--ant-color-error-bg) 78%, var(--ant-color-bg-container))',
+      border: '1px solid var(--ant-color-error-border)',
+      borderRadius: 'var(--ant-border-radius)',
+      color: 'var(--ant-color-error)',
+      whiteSpace: 'nowrap',
+      width: COUNTDOWN_TOOLBAR_PILL_WIDTH,
+    } satisfies CSSProperties;
+  }
+
+  return {
+    justifyContent: 'center',
+    background:
+      'color-mix(in srgb, var(--ant-color-success-bg) 72%, var(--ant-color-bg-container))',
+    border: '1px solid var(--ant-color-success-border)',
+    borderRadius: 'var(--ant-border-radius)',
+    color: 'var(--ant-color-success)',
+    whiteSpace: 'nowrap',
+    width: COUNTDOWN_TOOLBAR_PILL_WIDTH,
+  } satisfies CSSProperties;
+}
+
+function resolveToolbarCurrentTimePillStyle() {
+  return {
+    background: 'var(--ant-color-fill-quaternary)',
+    border: '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 78%, transparent)',
+    borderRadius: 'var(--ant-border-radius)',
+    color: 'var(--ant-color-text-secondary)',
+    justifyContent: 'center',
+    whiteSpace: 'nowrap',
+    width: CURRENT_TIME_TOOLBAR_PILL_WIDTH,
+  } satisfies CSSProperties;
+}
+
+function resolveToolbarStatusPillStyle() {
+  return {
+    background: 'color-mix(in srgb, var(--ant-color-bg-container) 76%, transparent)',
+    border: '1px solid var(--ant-color-border-secondary)',
+    borderRadius: 'var(--ant-border-radius)',
+  } satisfies CSSProperties;
+}
+
+function resolveChoiceOptionStyle(selected: boolean, disabled: boolean) {
+  if (selected) {
+    return {
+      alignItems: 'flex-start',
+      background:
+        'color-mix(in srgb, var(--ant-color-primary-bg) 54%, var(--ant-color-bg-container))',
+      border: '1px solid var(--ant-color-primary-border)',
+      borderRadius: 'var(--ant-border-radius)',
+      display: 'flex',
+      marginInlineEnd: 0,
+      minHeight: 58,
+      padding: '12px 14px',
+      transition: 'background-color 160ms ease, border-color 160ms ease',
+      width: '100%',
+    } satisfies CSSProperties;
+  }
+
+  return {
+    alignItems: 'flex-start',
+    background: disabled ? 'var(--ant-color-fill-quaternary)' : 'var(--ant-color-bg-container)',
+    border: '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 78%, transparent)',
+    borderRadius: 'var(--ant-border-radius)',
+    display: 'flex',
+    marginInlineEnd: 0,
+    minHeight: 58,
+    padding: '12px 14px',
+    transition: 'background-color 160ms ease, border-color 160ms ease',
+    width: '100%',
+  } satisfies CSSProperties;
+}
+
+function resolveQuestionNumberStyle() {
+  return {
+    alignItems: 'center',
+    background: 'var(--ant-color-fill-quaternary)',
+    border: '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 86%, transparent)',
+    borderRadius: 'var(--ant-border-radius)',
+    color: 'var(--ant-color-text-secondary)',
+    display: 'inline-flex',
+    flexShrink: 0,
+    fontVariantNumeric: 'tabular-nums',
+    height: 'var(--ant-control-height-lg)',
+    justifyContent: 'center',
+    width: 'var(--ant-control-height-lg)',
+  } satisfies CSSProperties;
+}
+
 function resolveAutosaveIndicator(state: AutosaveState, isAfterDeadline = false) {
   if (isAfterDeadline) {
     return {
@@ -532,7 +698,7 @@ function resolveAutosaveIndicator(state: AutosaveState, isAfterDeadline = false)
   }
 
   return {
-    color: 'var(--ant-color-fill)',
+    color: 'var(--ant-color-text-quaternary)',
     label: '暂无保存内容',
     title: '尚未作答，暂无需要保存的答案。',
   };
@@ -575,34 +741,69 @@ function ExamToolbarStatusTags({
   const autosaveIndicator = resolveAutosaveIndicator(autosaveState, isAfterDeadline);
 
   return (
-    <Space wrap size={[8, 8]}>
+    <div className="flex flex-wrap items-center gap-2">
+      <Tooltip title={`当前时间：${formatTimestampDateTime(now)}`}>
+        <span
+          aria-label={`当前时间 ${formatClockMinute(now)}`}
+          className="inline-flex h-8 items-center gap-1.5 px-3 text-sm font-medium"
+          style={resolveToolbarCurrentTimePillStyle()}
+        >
+          <ClockCircleOutlined aria-hidden="true" style={{ fontSize: 'var(--ant-font-size)' }} />
+          <span style={TOOLBAR_TIME_TEXT_STYLE}>{formatClockMinute(now)}</span>
+        </span>
+      </Tooltip>
       <Tooltip title={`截止时间：${formatDateTime(paper.deadlineAt)}`}>
-        <Tag color={isAfterDeadline ? 'red' : 'green'}>
-          {isAfterDeadline ? '已截止' : `剩余 ${formatCountdown(paper.deadlineAt, now)}`}
-        </Tag>
+        <span
+          aria-label={
+            isAfterDeadline ? '考试已截止' : `剩余时间 ${formatCountdown(paper.deadlineAt, now)}`
+          }
+          className="inline-flex h-8 items-center gap-1.5 px-3 text-sm font-medium"
+          style={resolveToolbarTimePillStyle(isAfterDeadline)}
+        >
+          <HourglassOutlined aria-hidden="true" style={{ fontSize: 'var(--ant-font-size)' }} />
+          <span style={TOOLBAR_TIME_TEXT_STYLE}>
+            {isAfterDeadline ? '已截止' : formatCountdown(paper.deadlineAt, now)}
+          </span>
+        </span>
       </Tooltip>
       {submitting ? (
         <Tooltip title="正在提交考试。">
-          <Tag aria-label="正在提交考试" role="status">
+          <span
+            aria-label="正在提交考试"
+            className="inline-flex h-8 w-8 items-center justify-center"
+            role="status"
+            style={resolveToolbarStatusPillStyle()}
+          >
             <span
               aria-hidden="true"
-              className="inline-flex h-2.5 w-2.5 shrink-0 rounded-badge"
-              style={{ background: 'var(--ant-color-info)' }}
+              className="inline-flex h-2.5 w-2.5 shrink-0"
+              style={{
+                background: 'var(--ant-color-info)',
+                borderRadius: 'var(--ant-border-radius-sm)',
+              }}
             />
-          </Tag>
+          </span>
         </Tooltip>
       ) : (
         <Tooltip title={autosaveIndicator.title}>
-          <Tag aria-label={autosaveIndicator.label} role="status">
+          <span
+            aria-label={autosaveIndicator.label}
+            className="inline-flex h-8 w-8 items-center justify-center"
+            role="status"
+            style={resolveToolbarStatusPillStyle()}
+          >
             <span
               aria-hidden="true"
-              className="inline-flex h-2.5 w-2.5 shrink-0 rounded-badge"
-              style={{ background: autosaveIndicator.color }}
+              className="inline-flex h-2.5 w-2.5 shrink-0"
+              style={{
+                background: autosaveIndicator.color,
+                borderRadius: 'var(--ant-border-radius-sm)',
+              }}
             />
-          </Tag>
+          </span>
         </Tooltip>
       )}
-    </Space>
+    </div>
   );
 }
 
@@ -746,14 +947,6 @@ function isChoiceQuestionType(type: ZquizExamPaperItem['type']) {
   return type === 'SINGLE_CHOICE' || type === 'MULTIPLE_CHOICE' || type === 'TRUE_FALSE';
 }
 
-function isQuestionAnswered(item: ZquizExamPaperItem, value: DraftAnswer) {
-  return (
-    buildZquizExamAnswers([item], {
-      [String(item.paperItemNo)]: value,
-    }).length > 0
-  );
-}
-
 function ActivityMeta({ activity }: { activity: ZquizExamActivity }) {
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2">
@@ -788,9 +981,13 @@ const AssetList = memo(function AssetList({ assets }: { assets: ZquizExamPaperAs
       <div className="flex flex-col gap-2">
         {assets.map((asset) => (
           <div
-            className="rounded-card p-3 text-sm text-text-secondary"
+            className="p-3 text-sm text-text-secondary"
             key={`${asset.storageKey}-${asset.sortOrder}`}
-            style={{ border: '1px solid var(--ant-color-border-secondary)' }}
+            style={{
+              border:
+                '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 78%, transparent)',
+              borderRadius: 'var(--ant-border-radius)',
+            }}
           >
             <div>{asset.originalName || asset.storageKey}</div>
             <div>
@@ -817,18 +1014,25 @@ function SingleChoiceAnswer({
   return (
     <Radio.Group
       disabled={disabled}
+      style={{ width: '100%' }}
       value={typeof value === 'string' ? value : undefined}
       onChange={(event) => onChange(event.target.value)}
     >
-      <Space direction="vertical" size={12}>
+      <div className="flex w-full flex-col gap-3">
         {item.options.map((option) => (
-          <Radio key={option.label} value={option.label}>
-            <span style={CHOICE_OPTION_TEXT_STYLE}>
-              {option.label}. {option.content}
+          <Radio
+            key={option.label}
+            style={resolveChoiceOptionStyle(option.label === value, disabled)}
+            value={option.label}
+          >
+            <span style={CHOICE_OPTION_CONTENT_STYLE}>
+              <span className="block" style={CHOICE_OPTION_TEXT_STYLE}>
+                {option.label}. {option.content}
+              </span>
             </span>
           </Radio>
         ))}
-      </Space>
+      </div>
     </Radio.Group>
   );
 }
@@ -844,21 +1048,30 @@ function MultipleChoiceAnswer({
   onChange: (value: DraftAnswer) => void;
   value: DraftAnswer;
 }) {
+  const selectedValues = Array.isArray(value) ? value.map(String) : [];
+
   return (
     <Checkbox.Group
       disabled={disabled}
-      value={Array.isArray(value) ? value : []}
-      onChange={(selectedValues) => onChange(selectedValues.map(String))}
+      style={{ width: '100%' }}
+      value={selectedValues}
+      onChange={(nextSelectedValues) => onChange(nextSelectedValues.map(String))}
     >
-      <Space direction="vertical" size={12}>
+      <div className="flex w-full flex-col gap-3">
         {item.options.map((option) => (
-          <Checkbox key={option.label} value={option.label}>
-            <span style={CHOICE_OPTION_TEXT_STYLE}>
-              {option.label}. {option.content}
+          <Checkbox
+            key={option.label}
+            style={resolveChoiceOptionStyle(selectedValues.includes(option.label), disabled)}
+            value={option.label}
+          >
+            <span style={CHOICE_OPTION_CONTENT_STYLE}>
+              <span className="block" style={CHOICE_OPTION_TEXT_STYLE}>
+                {option.label}. {option.content}
+              </span>
             </span>
           </Checkbox>
         ))}
-      </Space>
+      </div>
     </Checkbox.Group>
   );
 }
@@ -979,28 +1192,46 @@ function ExamQuestionCard({
     );
   }
 
-  const answered = isQuestionAnswered(item, value);
   const isChoiceQuestion = isChoiceQuestionType(item.type);
 
   return (
     <Card
-      title={`第 ${item.paperItemNo} 题`}
-      extra={
-        <Space wrap size={[8, 8]}>
-          <Tag>{QUESTION_TYPE_LABELS[item.type]}</Tag>
-          <Tag
-            color={answered ? 'green' : 'default'}
-            icon={answered ? <CheckCircleOutlined /> : null}
+      style={QUESTION_CARD_STYLE}
+      styles={QUESTION_CARD_STYLES}
+      title={
+        isChoiceQuestion ? (
+          <div
+            className="flex min-w-0 items-start gap-3"
+            style={{ overflow: 'visible', whiteSpace: 'normal' }}
           >
-            {answered ? '已作答' : '未作答'}
-          </Tag>
-          {showScore ? <Tag color="blue">{formatScore(item.scoreMax)} 分</Tag> : null}
-        </Space>
+            <span className="text-sm font-semibold" style={resolveQuestionNumberStyle()}>
+              {item.paperItemNo}
+            </span>
+            <div className="min-w-0 flex-1">
+              <span style={CHOICE_HEADER_STEM_TEXT_STYLE}>{item.stem}</span>
+              {showScore ? (
+                <span className="mt-1 block text-xs font-medium text-text-secondary">
+                  {formatScore(item.scoreMax)} 分
+                </span>
+              ) : null}
+            </div>
+          </div>
+        ) : (
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="text-sm font-semibold" style={resolveQuestionNumberStyle()}>
+              {item.paperItemNo}
+            </span>
+            {showScore ? (
+              <span className="min-w-0 truncate text-xs font-medium text-text-secondary">
+                {formatScore(item.scoreMax)} 分
+              </span>
+            ) : null}
+          </div>
+        )
       }
     >
       {isChoiceQuestion ? (
-        <div className="flex flex-col gap-4">
-          <Typography.Paragraph style={CHOICE_STEM_TEXT_STYLE}>{item.stem}</Typography.Paragraph>
+        <div className="flex flex-col gap-5">
           <AssetList assets={item.assets} />
           {renderAnswer()}
         </div>
@@ -1009,10 +1240,12 @@ function ExamQuestionCard({
           <section className="flex flex-col gap-2">
             <Typography.Text strong>题干</Typography.Text>
             <div
-              className="rounded-card p-4"
+              className="p-4"
               style={{
                 background: 'var(--ant-color-fill-quaternary)',
-                border: '1px solid var(--ant-color-border-secondary)',
+                border:
+                  '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 78%, transparent)',
+                borderRadius: 'var(--ant-border-radius)',
               }}
             >
               <Typography.Paragraph style={{ marginBottom: 0, whiteSpace: 'pre-wrap' }}>
@@ -1025,7 +1258,16 @@ function ExamQuestionCard({
 
           <section className="flex flex-col gap-2">
             <Typography.Text strong>作答</Typography.Text>
-            <div className="rounded-card border border-border p-4">{renderAnswer()}</div>
+            <div
+              className="p-4"
+              style={{
+                border:
+                  '1px solid color-mix(in srgb, var(--ant-color-border-secondary) 78%, transparent)',
+                borderRadius: 'var(--ant-border-radius)',
+              }}
+            >
+              {renderAnswer()}
+            </div>
           </section>
         </div>
       )}
@@ -1177,6 +1419,7 @@ function ZquizExamActivitiesLabPageContent({
   const outletContext = useOutletContext<ExamOutletContext | undefined>();
   const navigate = useNavigate();
   const activeLayoutSnapshot = outletContext?.activeSnapshot ?? null;
+  const isStandaloneExamShell = outletContext?.presentation === 'exam-standalone';
   const setSidebarOverride = outletContext?.setSidebarOverride;
   const [view, setView] = useState<ExamView>(mode === 'paper-route' ? 'paper' : 'list');
   const [listState, setListState] = useState<ActivityViewState>({
@@ -1392,6 +1635,10 @@ function ZquizExamActivitiesLabPageContent({
   }, [currentPaper]);
 
   useEffect(() => {
+    if (isStandaloneExamShell) {
+      return;
+    }
+
     if (!setSidebarOverride) {
       return;
     }
@@ -1419,6 +1666,7 @@ function ZquizExamActivitiesLabPageContent({
     answerCount,
     autosaveState,
     currentPaper,
+    isStandaloneExamShell,
     isAfterDeadline,
     now,
     questionStatusGroups,
@@ -1987,21 +2235,16 @@ function ZquizExamActivitiesLabPageContent({
     }
 
     return (
-      <div ref={paperWheelScopeRef} className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+      <div ref={paperWheelScopeRef} className="flex w-full flex-col gap-5">
         <div
-          className="sticky top-0 z-floating-action-bar px-4 py-3"
-          style={{
-            WebkitBackdropFilter: 'blur(16px) saturate(140%)',
-            backdropFilter: 'blur(16px) saturate(140%)',
-            background: 'color-mix(in srgb, var(--ant-color-bg-container) 82%, transparent)',
-            borderBottom: '1px solid var(--ant-color-border-secondary)',
-          }}
+          className="sticky top-0 z-floating-action-bar -mx-4 px-4 py-3"
+          style={EXAM_TOOLBAR_STYLE}
         >
-          <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="mx-auto flex w-full max-w-4xl flex-wrap items-center justify-between gap-4">
             <div className="min-w-0 flex-1">
-              <Typography.Title level={4} ellipsis style={{ marginBottom: 0 }}>
+              <span className="block truncate text-base font-semibold text-text">
                 {paper.activity.title}
-              </Typography.Title>
+              </span>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               <ExamToolbarStatusTags
@@ -2024,51 +2267,101 @@ function ZquizExamActivitiesLabPageContent({
           </div>
         </div>
 
-        {autosaveState.error ? (
-          <Alert showIcon message={autosaveState.error} type="warning" />
-        ) : null}
+        <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+          {autosaveState.error ? (
+            <Alert showIcon message={autosaveState.error} type="warning" />
+          ) : null}
 
-        {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
+          {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
 
-        {isAfterDeadline ? (
-          <Alert
-            showIcon
-            message="考试已截止，答题、自动保存和交卷已停止，系统将以最后一次成功保存的答案作为收卷依据。"
-            type="warning"
-          />
-        ) : null}
+          {isAfterDeadline ? (
+            <Alert
+              showIcon
+              message="考试已截止，答题、自动保存和交卷已停止，系统将以最后一次成功保存的答案作为收卷依据。"
+              type="warning"
+            />
+          ) : null}
 
-        <div className="flex flex-col gap-6">
-          {questionStatusGroups.map((group, groupIndex) => {
-            const shouldShowItemScore = !hasUniformQuestionGroupScore(group);
+          <div className="flex flex-col gap-6">
+            {questionStatusGroups.map((group, groupIndex) => {
+              const shouldShowItemScore = !hasUniformQuestionGroupScore(group);
 
-            return (
-              <section className="flex flex-col gap-4" key={group.type}>
-                <h2 className="text-base font-semibold text-text">
-                  {formatQuestionGroupTitle(group, groupIndex)}
-                </h2>
-                <div className="flex flex-col gap-4">
-                  {group.items.map(({ item }) => (
-                    <div
-                      id={`exam-question-${item.paperItemNo}`}
-                      key={`${item.paperItemNo}-${item.questionId}`}
-                      style={{ scrollMarginTop: 24 }}
-                    >
-                      <ExamQuestionCard
-                        disabled={submitting || isAfterDeadline}
-                        item={item}
-                        showScore={shouldShowItemScore}
-                        value={answers[String(item.paperItemNo)]}
-                        onAnswerChange={handleAnswerChange}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </section>
-            );
-          })}
+              return (
+                <section className="flex flex-col gap-4" key={group.type}>
+                  <h2
+                    className="text-sm font-semibold text-text-secondary"
+                    style={{
+                      borderBottom: '1px solid var(--ant-color-border-secondary)',
+                      paddingBottom: 8,
+                    }}
+                  >
+                    {formatQuestionGroupTitle(group, groupIndex)}
+                  </h2>
+                  <div className="flex flex-col gap-4">
+                    {group.items.map(({ item }) => (
+                      <div
+                        id={`exam-question-${item.paperItemNo}`}
+                        key={`${item.paperItemNo}-${item.questionId}`}
+                        style={{ scrollMarginTop: QUESTION_WHEEL_NAVIGATION_ANCHOR_OFFSET_PX }}
+                      >
+                        <ExamQuestionCard
+                          disabled={submitting || isAfterDeadline}
+                          item={item}
+                          showScore={shouldShowItemScore}
+                          value={answers[String(item.paperItemNo)]}
+                          onAnswerChange={handleAnswerChange}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
         </div>
       </div>
+    );
+  }
+
+  function renderStandaloneExamRoute() {
+    if (view === 'paper' && currentPaper) {
+      return (
+        <div className="flex h-full min-h-0 bg-bg-layout text-text">
+          <aside
+            className="min-h-0 shrink-0 bg-bg-container"
+            style={{
+              borderRight: '1px solid var(--ant-color-border-secondary)',
+              width: EXAM_STANDALONE_SIDEBAR_WIDTH,
+            }}
+          >
+            <ExamAnswerStatusSidebar
+              answerCount={answerCount}
+              autosaveState={autosaveState}
+              groups={questionStatusGroups}
+              isAfterDeadline={isAfterDeadline}
+              now={now}
+              paper={currentPaper}
+              snapshot={activeLayoutSnapshot}
+            />
+          </aside>
+          <main className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">{renderPaper()}</main>
+        </div>
+      );
+    }
+
+    return (
+      <main className="h-full overflow-y-auto px-6 py-6">
+        <div className="mx-auto max-w-5xl">
+          {view === 'list' ? (
+            <>
+              {renderHeader()}
+              {renderList()}
+            </>
+          ) : null}
+          {view === 'paper' ? renderPaper() : null}
+          {view === 'result' ? renderResult() : null}
+        </div>
+      </main>
     );
   }
 
@@ -2227,6 +2520,10 @@ function ZquizExamActivitiesLabPageContent({
         </div>
       </div>
     );
+  }
+
+  if (isStandaloneExamShell) {
+    return renderStandaloneExamRoute();
   }
 
   return (

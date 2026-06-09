@@ -12,7 +12,7 @@ import {
   useRouteError,
 } from 'react-router';
 
-import { AppLayout, PublicEntryLayout } from '@/app/layout';
+import { AppLayout, ExamStandaloneLayout, PublicEntryLayout } from '@/app/layout';
 import { canAccessNavigationPath } from '@/app/navigation';
 
 import { HomePage } from '@/pages/home';
@@ -1065,6 +1065,14 @@ function AppRouteErrorPage() {
   );
 }
 
+function ExamStandaloneRouteErrorPage() {
+  return (
+    <ExamStandaloneLayout>
+      <RouteErrorPage />
+    </ExamStandaloneLayout>
+  );
+}
+
 function RouteHydrateFallback() {
   return null;
 }
@@ -1158,6 +1166,18 @@ const router = createBrowserRouter([
       {
         path: '/magic-link/:verificationCode',
         lazy: loadMagicLinkIntentRouteModule,
+      },
+    ],
+  },
+  {
+    Component: ExamStandaloneLayout,
+    ErrorBoundary: ExamStandaloneRouteErrorPage,
+    HydrateFallback: RouteHydrateFallback,
+    children: [
+      {
+        path: '/labs/zquiz-exam-activities/:activityId',
+        loader: zquizExamActivitiesLabLoader,
+        lazy: loadZquizExamPaperLabRouteModule,
       },
     ],
   },
@@ -1329,11 +1349,6 @@ const router = createBrowserRouter([
             path: 'zquiz-exam-activities',
             loader: zquizExamActivitiesLabLoader,
             lazy: loadZquizExamActivitiesLabRouteModule,
-          },
-          {
-            path: 'zquiz-exam-activities/:activityId',
-            loader: zquizExamActivitiesLabLoader,
-            lazy: loadZquizExamPaperLabRouteModule,
           },
           {
             path: 'zquiz-practice-activities',
