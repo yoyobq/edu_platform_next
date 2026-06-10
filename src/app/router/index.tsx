@@ -323,13 +323,23 @@ function hasHydratingSession() {
     return true;
   }
 
+  if (authState.status !== 'restoring') {
+    return false;
+  }
+
   return isAuthPendingSession(readStoredAuthSession());
+}
+
+function hasSessionRestoreFailure() {
+  const authState = getAuthSessionState();
+
+  return authState.status === 'unauthenticated' && Boolean(authState.lastError);
 }
 
 async function loginRouteLoader({ request }: LoaderFunctionArgs) {
   const { url } = getRequestTarget(request);
 
-  if (url.searchParams.get('skipRestore') !== '1') {
+  if (url.searchParams.get('skipRestore') !== '1' && !hasSessionRestoreFailure()) {
     if (hasHydratingSession()) {
       void restoreSession({ background: true });
     } else {

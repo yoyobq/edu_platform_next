@@ -3,17 +3,24 @@
 
 import {
   getAuthSessionState,
+  getCurrentAuthSession,
   setAuthenticatedSession,
   setAuthSessionRestoring,
   setHydratingSession,
   setUnauthenticatedSession,
 } from './session-store';
-import { isAuthPendingSession, type AuthSessionSnapshot } from './types';
+import { isAuthPendingSession, type AuthSessionSnapshot, type AuthStoredSession } from './types';
 import type { AuthPorts } from './ports';
+import { refreshSessionWithLock } from './refresh-session';
+import { isGraphQLIngressError } from '@/shared/graphql';
 
 const AUTH_REFRESH_FEEDBACK_FLASH_KEY = 'platform_next.auth_refresh_feedback_flash';
 
 function queueAuthFailureFlash(content: string) {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
   window.sessionStorage.setItem(
     AUTH_REFRESH_FEEDBACK_FLASH_KEY,
     JSON.stringify({
@@ -26,12 +33,79 @@ function queueAuthFailureFlash(content: string) {
   );
 }
 
-let restorePromise: Promise<AuthSessionSnapshot | null> | null = null;
+const restorePromises = new Map<string, Promise<AuthSessionSnapshot | null>>();
 
 type RestoreSessionOptions = {
   background?: boolean;
   waitForPending?: boolean;
 };
+
+function isSameSessionTokenPair(
+  left: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'> | null | undefined,
+  right: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'>,
+) {
+  return left?.accessToken === right.accessToken && left.refreshToken === right.refreshToken;
+}
+
+function getSessionTokenKey(session: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'>) {
+  return JSON.stringify([session.accessToken, session.refreshToken]);
+}
+
+function isRestoreSessionStillCurrent(
+  ports: AuthPorts,
+  session: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'>,
+) {
+  return isSameSessionTokenPair(getCurrentAuthSession() ?? ports.storage.readSession(), session);
+}
+
+function getSessionErrorMessage(error: unknown, fallback: string) {
+  if (isGraphQLIngressError(error)) {
+    return error.userMessage;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
+
+function isAuthSessionFailure(error: unknown) {
+  return isGraphQLIngressError(error) && error.type === 'auth';
+}
+
+function failRestoreSession(input: {
+  error: unknown;
+  isBackground: boolean;
+  ports: AuthPorts;
+  snapshot: AuthStoredSession;
+}) {
+  const errorMessage = getSessionErrorMessage(input.error, '当前会话已失效，请重新登录。');
+
+  if (input.isBackground || isAuthPendingSession(input.snapshot)) {
+    queueAuthFailureFlash(errorMessage);
+  }
+
+  input.ports.storage.clearSession();
+  setUnauthenticatedSession(errorMessage);
+  return null;
+}
+
+function retainRestoreSession(input: {
+  error: unknown;
+  isBackground: boolean;
+  snapshot: AuthStoredSession;
+}) {
+  const errorMessage = getSessionErrorMessage(input.error, '当前会话暂时无法恢复，请稍后重试。');
+
+  if (input.isBackground || isAuthPendingSession(input.snapshot)) {
+    queueAuthFailureFlash(errorMessage);
+  }
+
+  if (isAuthPendingSession(input.snapshot)) {
+    setUnauthenticatedSession(errorMessage);
+    return null;
+  }
+
+  setAuthenticatedSession(input.snapshot);
+  return input.snapshot;
+}
 
 export async function restoreSession(
   ports: AuthPorts,
@@ -39,10 +113,6 @@ export async function restoreSession(
 ): Promise<AuthSessionSnapshot | null> {
   if (getAuthSessionState().status === 'authenticated') {
     return getAuthSessionState().snapshot;
-  }
-
-  if (restorePromise) {
-    return options?.background ? null : restorePromise;
   }
 
   const snapshot = ports.storage.readSession();
@@ -53,36 +123,76 @@ export async function restoreSession(
     return null;
   }
 
+  const restoreKey = getSessionTokenKey(snapshot);
+  const runningRestorePromise = restorePromises.get(restoreKey);
+
+  if (runningRestorePromise) {
+    return options?.background ? null : runningRestorePromise;
+  }
+
   if (isAuthPendingSession(snapshot)) {
     setHydratingSession(snapshot);
   } else {
     setAuthSessionRestoring();
   }
 
-  restorePromise = (async () => {
+  const nextRestorePromise = (async () => {
     try {
       const restoredSnapshot = await ports.api.restore(snapshot);
+
+      if (!isRestoreSessionStillCurrent(ports, snapshot)) {
+        return null;
+      }
 
       ports.storage.writeSession(restoredSnapshot);
       setAuthenticatedSession(restoredSnapshot);
 
       return restoredSnapshot;
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : '当前会话已失效，请重新登录。';
-
-      if (options?.background || isAuthPendingSession(snapshot)) {
-        queueAuthFailureFlash(errorMessage);
+      if (!isRestoreSessionStillCurrent(ports, snapshot)) {
+        return null;
       }
 
-      ports.storage.clearSession();
-      setUnauthenticatedSession(errorMessage);
-      return null;
+      if (isAuthSessionFailure(error)) {
+        try {
+          return await refreshSessionWithLock(ports, snapshot.refreshToken);
+        } catch (refreshError) {
+          if (!isRestoreSessionStillCurrent(ports, snapshot)) {
+            return null;
+          }
+
+          if (isAuthSessionFailure(refreshError)) {
+            return failRestoreSession({
+              error: refreshError,
+              isBackground: options?.background === true,
+              ports,
+              snapshot,
+            });
+          }
+
+          return retainRestoreSession({
+            error: refreshError,
+            isBackground: options?.background === true,
+            snapshot,
+          });
+        }
+      }
+
+      return retainRestoreSession({
+        error,
+        isBackground: options?.background === true,
+        snapshot,
+      });
     }
   })().finally(() => {
-    restorePromise = null;
+    if (restorePromises.get(restoreKey) === nextRestorePromise) {
+      restorePromises.delete(restoreKey);
+    }
   });
+
+  restorePromises.set(restoreKey, nextRestorePromise);
 
   return options?.background || (isAuthPendingSession(snapshot) && !options?.waitForPending)
     ? null
-    : restorePromise;
+    : nextRestorePromise;
 }

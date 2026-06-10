@@ -142,9 +142,17 @@ export async function executeGraphQL<TData, TVariables extends OperationVariable
 
     try {
       await refreshSession();
-    } catch {
-      onAuthFailure?.();
-      throw ingressError;
+    } catch (refreshError) {
+      const refreshIngressError = toGraphQLIngressError(refreshError, {
+        operationName: ingressError.operationName,
+      });
+
+      if (refreshIngressError.type === 'auth') {
+        onAuthFailure?.();
+        throw ingressError;
+      }
+
+      throw refreshIngressError;
     }
 
     const retryOptions = { ...options, accessToken: undefined };

@@ -38,7 +38,8 @@ export function getAuthPendingSession() {
 }
 
 export function getCurrentAuthSession() {
-  return currentAuthSessionState.snapshot ?? currentAuthSessionState.pendingSession;
+  // During login hydration, pending tokens are the active auth context.
+  return currentAuthSessionState.pendingSession ?? currentAuthSessionState.snapshot;
 }
 
 export function subscribeAuthSession(listener: () => void) {
@@ -66,7 +67,8 @@ export function setHydratingSession(session: AuthPendingSession) {
   setAuthSessionState({
     status: 'hydrating',
     pendingSession: session,
-    snapshot: currentAuthSessionState.snapshot,
+    // Do not expose the previous identity to route guards while a new login is hydrating.
+    snapshot: null,
     lastError: null,
   });
 }

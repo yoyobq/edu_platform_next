@@ -1,14 +1,21 @@
 import { Kind, type OperationDefinitionNode, OperationTypeNode } from 'graphql';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { clientMutateMock, clientQueryMock, getGraphQLClientMock, getOperationASTMock, gqlMock } =
-  vi.hoisted(() => ({
-    clientMutateMock: vi.fn(),
-    clientQueryMock: vi.fn(),
-    getGraphQLClientMock: vi.fn(),
-    getOperationASTMock: vi.fn(),
-    gqlMock: vi.fn(),
-  }));
+const {
+  clientMutateMock,
+  clientQueryMock,
+  getGraphQLClientMock,
+  getGraphQLRuntimeConfigMock,
+  getOperationASTMock,
+  gqlMock,
+} = vi.hoisted(() => ({
+  clientMutateMock: vi.fn(),
+  clientQueryMock: vi.fn(),
+  getGraphQLClientMock: vi.fn(),
+  getGraphQLRuntimeConfigMock: vi.fn(),
+  getOperationASTMock: vi.fn(),
+  gqlMock: vi.fn(),
+}));
 
 vi.mock('@apollo/client', () => ({
   gql: gqlMock,
@@ -25,9 +32,10 @@ vi.mock('graphql', async (importOriginal) => {
 
 vi.mock('./client', () => ({
   getGraphQLClient: getGraphQLClientMock,
-  getGraphQLRuntimeConfig: () => ({}),
+  getGraphQLRuntimeConfig: getGraphQLRuntimeConfigMock,
 }));
 
+import { GraphQLIngressError } from './errors';
 import { executeGraphQL } from './request';
 
 function createOperation(
@@ -55,6 +63,7 @@ describe('executeGraphQL', () => {
     clientMutateMock.mockReset();
     clientQueryMock.mockReset();
     getGraphQLClientMock.mockReset();
+    getGraphQLRuntimeConfigMock.mockReset();
     getOperationASTMock.mockReset();
     gqlMock.mockReset();
 
@@ -63,6 +72,7 @@ describe('executeGraphQL', () => {
       mutate: clientMutateMock,
       query: clientQueryMock,
     });
+    getGraphQLRuntimeConfigMock.mockReturnValue({});
     getOperationASTMock.mockReturnValue(
       createOperation(OperationTypeNode.QUERY, 'CachedGraphQLQuery'),
     );
@@ -102,5 +112,63 @@ describe('executeGraphQL', () => {
         variables: { id: 'NODE-002' },
       }),
     );
+  });
+
+  it('does not call auth failure when reactive refresh fails for a non-auth reason', async () => {
+    const refreshSession = vi.fn(async () => {
+      throw new GraphQLIngressError({
+        message: 'Network unavailable',
+        type: 'network',
+      });
+    });
+    const onAuthFailure = vi.fn();
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      onAuthFailure,
+      refreshSession,
+    });
+    clientQueryMock.mockRejectedValueOnce(
+      new GraphQLIngressError({
+        message: 'Access token expired',
+        type: 'auth',
+      }),
+    );
+
+    await expect(executeGraphQL('query NeedsAuth { me { accountId } }', {})).rejects.toMatchObject({
+      type: 'network',
+    });
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onAuthFailure).not.toHaveBeenCalled();
+    expect(clientQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls auth failure when reactive refresh fails with auth', async () => {
+    const refreshSession = vi.fn(async () => {
+      throw new GraphQLIngressError({
+        message: 'Refresh token expired',
+        type: 'auth',
+      });
+    });
+    const onAuthFailure = vi.fn();
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      onAuthFailure,
+      refreshSession,
+    });
+    clientQueryMock.mockRejectedValueOnce(
+      new GraphQLIngressError({
+        message: 'Access token expired',
+        type: 'auth',
+      }),
+    );
+
+    await expect(executeGraphQL('query NeedsAuth { me { accountId } }', {})).rejects.toMatchObject({
+      type: 'auth',
+    });
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onAuthFailure).toHaveBeenCalledTimes(1);
+    expect(clientQueryMock).toHaveBeenCalledTimes(1);
   });
 });

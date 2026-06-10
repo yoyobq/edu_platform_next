@@ -8,7 +8,6 @@ import {
 import { configureGraphQLRuntime } from '@/shared/graphql';
 
 let hasBootstrappedGraphQLRuntime = false;
-let refreshSessionPromise: Promise<void> | null = null;
 
 export function bootstrapGraphQLRuntime() {
   if (hasBootstrappedGraphQLRuntime) {
@@ -22,19 +21,7 @@ export function bootstrapGraphQLRuntime() {
       forceLogout(null);
     },
     refreshSession: () => {
-      if (refreshSessionPromise) {
-        return refreshSessionPromise;
-      }
-
-      refreshSessionPromise = (async () => {
-        try {
-          await ensureFreshSession({ force: true });
-        } finally {
-          refreshSessionPromise = null;
-        }
-      })();
-
-      return refreshSessionPromise;
+      return ensureFreshSession({ force: true }).then(() => undefined);
     },
   });
 

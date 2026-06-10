@@ -2,7 +2,7 @@
 
 import type { OperationVariables } from '@apollo/client';
 
-import { executeGraphQL, type GraphQLAuthMode, isGraphQLIngressError } from '@/shared/graphql';
+import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 
 import type { AuthApiPort } from '../application/ports';
 import type { AuthLoginInput, AuthSessionSnapshot } from '../application/types';
@@ -176,19 +176,9 @@ export const authApi: AuthApiPort = {
       { authMode: 'none' },
     );
 
-    return hydrateSession(response.refresh);
+    return mapTokensToPendingSession(response.refresh);
   },
   async restore(session) {
-    try {
-      return await hydrateSession(session);
-    } catch (error) {
-      if (isGraphQLIngressError(error) && error.type === 'auth') {
-        return this.refresh({
-          refreshToken: session.refreshToken,
-        });
-      }
-
-      throw error;
-    }
+    return hydrateSession(session);
   },
 };

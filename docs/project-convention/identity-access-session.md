@@ -92,14 +92,16 @@
 1. 先使用当前 `accessToken` 调 `me`
 2. 若失败，再用 `refreshToken` 调 `refresh`
 3. `refresh` 成功后，再次调用 `me`
-4. 任一步失败，前端强制登出并清空本地会话
+4. 若失败是 `GraphQLIngressError.type === 'auth'`，前端按会话不可用处理并清空本地会话
+5. 若失败是 `network / http / graphql / malformed` 等非 auth 错误，前端不清空本地会话
 
 如果本地存储中只有 pending session，则当前恢复链路退化为：
 
 1. 直接使用当前 `accessToken` 调 `me`
 2. 若命中 auth 失败，再用 `refreshToken` 调 `refresh`
 3. `refresh` 成功后，再次调用 `me`
-4. 任一步失败，前端清理 pending session，回到登录页
+4. auth 失败时清理 pending session，回到登录页
+5. 非 auth 失败时保留 pending session，但退出 `hydrating` 并展示错误，避免登录页被持续重定向
 
 进入 protected route 前的当前默认链路为：
 
@@ -304,7 +306,8 @@
 
 - token 过期或无效：强制登出
 - `me` 失败：先尝试 `refresh -> me`
-- `refresh` 成功后 `me` 再失败：强制登出
+- 启动恢复或 refresh 后的 `me` 非 auth 失败：保留本地会话；已有完整 snapshot 时继续使用本地 snapshot
+- `refresh` 成功后 `me` 再 auth 失败：强制登出
 - JWT payload 缺失前端展示字段：不由前端补造；以 `me` 成功与否为准
 - 后端未明确给出 `GUEST` 时，前端不得进入 `GUEST` 流程
 

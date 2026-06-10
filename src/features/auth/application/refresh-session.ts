@@ -1,29 +1,139 @@
-import type { AuthPorts } from './ports';
-import { getCurrentAuthSession, setAuthenticatedSession } from './session-store';
-import type { AuthSessionSnapshot } from './types';
+import { isGraphQLIngressError } from '@/shared/graphql';
 
-let refreshPromise: Promise<AuthSessionSnapshot> | null = null;
+import type { AuthPorts } from './ports';
+import {
+  getCurrentAuthSession,
+  setAuthenticatedSession,
+  setHydratingSession,
+  setUnauthenticatedSession,
+} from './session-store';
+import { type AuthPendingSession, type AuthSessionSnapshot, isAuthPendingSession } from './types';
+
+const refreshPromises = new Map<string, Promise<AuthSessionSnapshot>>();
+
+function isRefreshTokenStillCurrent(ports: AuthPorts, refreshToken: string) {
+  const currentSession = getCurrentAuthSession() ?? ports.storage.readSession();
+
+  return currentSession?.refreshToken === refreshToken;
+}
+
+function isPendingSessionStillCurrent(ports: AuthPorts, session: AuthPendingSession) {
+  const currentSession = getCurrentAuthSession() ?? ports.storage.readSession();
+
+  return (
+    currentSession?.accessToken === session.accessToken &&
+    currentSession.refreshToken === session.refreshToken
+  );
+}
+
+function getCurrentRefreshSnapshot(ports: AuthPorts, refreshToken: string) {
+  const currentSession = getCurrentAuthSession();
+
+  if (
+    currentSession &&
+    !isAuthPendingSession(currentSession) &&
+    currentSession.refreshToken === refreshToken
+  ) {
+    return currentSession;
+  }
+
+  const storedSession = ports.storage.readSession();
+
+  if (
+    storedSession &&
+    !isAuthPendingSession(storedSession) &&
+    storedSession.refreshToken === refreshToken
+  ) {
+    return storedSession;
+  }
+
+  return null;
+}
+
+function getSessionErrorMessage(error: unknown) {
+  if (isGraphQLIngressError(error)) {
+    return error.userMessage;
+  }
+
+  return error instanceof Error ? error.message : '当前会话暂时无法恢复，请稍后重试。';
+}
+
+function isAuthSessionFailure(error: unknown) {
+  return isGraphQLIngressError(error) && error.type === 'auth';
+}
+
+function buildRetainedSnapshot(
+  snapshot: AuthSessionSnapshot,
+  pendingSession: AuthPendingSession,
+): AuthSessionSnapshot {
+  return {
+    ...snapshot,
+    accessToken: pendingSession.accessToken,
+    refreshToken: pendingSession.refreshToken,
+  };
+}
 
 export function refreshSessionWithLock(
   ports: AuthPorts,
   refreshToken: string,
 ): Promise<AuthSessionSnapshot> {
-  if (refreshPromise) {
-    return refreshPromise;
+  const existingPromise = refreshPromises.get(refreshToken);
+
+  if (existingPromise) {
+    return existingPromise;
   }
 
-  refreshPromise = (async () => {
-    const refreshedSnapshot = await ports.api.refresh({
+  const fallbackSnapshot = getCurrentRefreshSnapshot(ports, refreshToken);
+
+  const refreshPromise = (async () => {
+    const pendingSession = await ports.api.refresh({
       refreshToken,
     });
 
-    ports.storage.writeSession(refreshedSnapshot);
-    setAuthenticatedSession(refreshedSnapshot);
+    if (isRefreshTokenStillCurrent(ports, refreshToken)) {
+      ports.storage.writeSession(pendingSession);
+      setHydratingSession(pendingSession);
+    }
+
+    let refreshedSnapshot: AuthSessionSnapshot;
+
+    try {
+      refreshedSnapshot = await ports.api.restore(pendingSession);
+    } catch (error) {
+      if (!isPendingSessionStillCurrent(ports, pendingSession)) {
+        throw error;
+      }
+
+      if (isAuthSessionFailure(error)) {
+        ports.storage.clearSession();
+        setUnauthenticatedSession(getSessionErrorMessage(error));
+        throw error;
+      }
+
+      if (fallbackSnapshot) {
+        const retainedSnapshot = buildRetainedSnapshot(fallbackSnapshot, pendingSession);
+
+        ports.storage.writeSession(retainedSnapshot);
+        setAuthenticatedSession(retainedSnapshot);
+
+        return retainedSnapshot;
+      }
+
+      setUnauthenticatedSession(getSessionErrorMessage(error));
+      throw error;
+    }
+
+    if (isPendingSessionStillCurrent(ports, pendingSession)) {
+      ports.storage.writeSession(refreshedSnapshot);
+      setAuthenticatedSession(refreshedSnapshot);
+    }
 
     return refreshedSnapshot;
   })().finally(() => {
-    refreshPromise = null;
+    refreshPromises.delete(refreshToken);
   });
+
+  refreshPromises.set(refreshToken, refreshPromise);
 
   return refreshPromise;
 }
