@@ -36,6 +36,20 @@ async function expectAuthenticatedUserMenu(
   await page.keyboard.press('Escape');
 }
 
+async function expectAuthenticatedStudentMenu(page: Page, displayName: string) {
+  const userMenuButton = page.getByRole('button', { name: '用户菜单' });
+
+  await expect(userMenuButton).toBeVisible();
+  await userMenuButton.click();
+
+  const dropdown = page.locator('.ant-dropdown').last();
+
+  await expect(dropdown.getByText(displayName, { exact: true })).toBeVisible();
+  await expect(dropdown.getByText(`${displayName}@example.com`, { exact: true })).toBeVisible();
+
+  await page.keyboard.press('Escape');
+}
+
 async function submitLogin(page: Page) {
   await page.getByLabel('登录名或邮箱').fill('tester@example.com');
   await page.getByLabel('密码').fill('password');
@@ -65,19 +79,34 @@ function buildAccountSwitchTestSession(input: {
   accessToken: string;
   accountId: number;
   displayName: string;
-  primaryAccessGroup: 'ADMIN' | 'STAFF';
+  primaryAccessGroup: 'ADMIN' | 'STAFF' | 'STUDENT';
   refreshToken: string;
 }) {
-  const identity =
-    input.primaryAccessGroup === 'STAFF'
-      ? {
-          departmentId: 'staff-department',
-          id: `staff-${input.accountId}`,
-          kind: 'STAFF' as const,
-          name: input.displayName,
-          slotGroup: [] as readonly string[],
-        }
-      : null;
+  const identity = (() => {
+    if (input.primaryAccessGroup === 'STAFF') {
+      return {
+        departmentId: 'staff-department',
+        id: `staff-${input.accountId}`,
+        kind: 'STAFF' as const,
+        name: input.displayName,
+        slotGroup: [] as readonly string[],
+      };
+    }
+
+    if (input.primaryAccessGroup === 'STUDENT') {
+      return {
+        currentClassCode: 'class-01',
+        currentClassId: 'class-01',
+        id: `student-${input.accountId}`,
+        kind: 'STUDENT' as const,
+        name: input.displayName,
+        slotGroup: [] as readonly string[],
+        upstreamId: `upstream-${input.accountId}`,
+      };
+    }
+
+    return null;
+  })();
 
   return {
     accessToken: input.accessToken,
@@ -109,6 +138,27 @@ function buildAccountSwitchTestSession(input: {
 }
 
 function buildMePayload(session: AccountSwitchTestSession) {
+  const identity =
+    session.identity?.kind === 'STAFF'
+      ? {
+          __typename: 'StaffType',
+          departmentId: session.identity.departmentId,
+          id: session.identity.id,
+          name: session.identity.name,
+          slotGroup: session.identity.slotGroup,
+        }
+      : session.identity?.kind === 'STUDENT'
+        ? {
+            __typename: 'StudentType',
+            currentClassCode: session.identity.currentClassCode,
+            currentClassId: session.identity.currentClassId,
+            id: session.identity.id,
+            name: session.identity.name,
+            slotGroup: session.identity.slotGroup,
+            upstreamId: session.identity.upstreamId,
+          }
+        : null;
+
   return {
     account: {
       id: session.account.id,
@@ -118,15 +168,7 @@ function buildMePayload(session: AccountSwitchTestSession) {
       status: session.account.status,
     },
     accountId: session.accountId,
-    identity: session.identity
-      ? {
-          __typename: 'StaffType',
-          departmentId: session.identity.departmentId,
-          id: session.identity.id,
-          name: session.identity.name,
-          slotGroup: session.identity.slotGroup,
-        }
-      : null,
+    identity,
     needsProfileCompletion: session.needsProfileCompletion,
     userInfo: {
       accessGroup: session.userInfo.accessGroup,
@@ -140,14 +182,28 @@ function buildMePayload(session: AccountSwitchTestSession) {
 }
 
 function buildMyProfileIdentityPayload(session: AccountSwitchTestSession) {
-  return session.identity
-    ? {
-        __typename: 'MyProfileStaffIdentityDTO',
-        accountId: session.accountId,
-        id: session.identity.id,
-        name: session.displayName,
-      }
-    : null;
+  if (session.identity?.kind === 'STAFF') {
+    return {
+      __typename: 'MyProfileStaffIdentityDTO',
+      accountId: session.accountId,
+      id: session.identity.id,
+      name: session.displayName,
+    };
+  }
+
+  if (session.identity?.kind === 'STUDENT') {
+    return {
+      __typename: 'MyProfileStudentIdentityDTO',
+      accountId: session.accountId,
+      currentClassCode: session.identity.currentClassCode,
+      currentClassId: session.identity.currentClassId,
+      id: session.identity.id,
+      name: session.displayName,
+      upstreamId: session.identity.upstreamId,
+    };
+  }
+
+  return null;
 }
 
 async function fulfillGraphQLAuthError(route: Route) {
@@ -158,6 +214,114 @@ async function fulfillGraphQLAuthError(route: Route) {
     contentType: 'application/json',
     status: 200,
   });
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, reject, resolve };
+}
+
+async function fulfillGraphQLData(route: Route, data: Record<string, unknown>) {
+  await route.fulfill({
+    body: JSON.stringify({ data }),
+    contentType: 'application/json',
+    status: 200,
+  });
+}
+
+async function mockLoginDuringOldRestoreGraphQL(page: Page) {
+  const oldStaffSession = buildAccountSwitchTestSession({
+    accessToken: 'old-staff-access-token',
+    accountId: 1001,
+    displayName: 'old-staff-user',
+    primaryAccessGroup: 'STAFF',
+    refreshToken: 'old-staff-refresh-token',
+  });
+  const newStudentSession = buildAccountSwitchTestSession({
+    accessToken: 'new-student-access-token',
+    accountId: 1002,
+    displayName: 'new-student-user',
+    primaryAccessGroup: 'STUDENT',
+    refreshToken: 'new-student-refresh-token',
+  });
+  const oldMeStarted = createDeferred();
+  const releaseOldMe = createDeferred();
+
+  await page.addInitScript(
+    ({ authKey, session }) => {
+      window.localStorage.setItem(authKey, JSON.stringify(session));
+    },
+    {
+      authKey: AUTH_STORAGE_KEY,
+      session: oldStaffSession,
+    },
+  );
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: { refreshToken?: unknown } } }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+    const authorization = route.request().headers().authorization ?? '';
+
+    if (query.includes('mutation Login')) {
+      await fulfillGraphQLData(route, {
+        login: {
+          accessToken: newStudentSession.accessToken,
+          refreshToken: newStudentSession.refreshToken,
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      await fulfillGraphQLAuthError(route);
+      return;
+    }
+
+    if (query.includes('query Me')) {
+      if (authorization.includes(oldStaffSession.accessToken)) {
+        oldMeStarted.resolve();
+        await releaseOldMe.promise;
+        await fulfillGraphQLData(route, {
+          me: buildMePayload(oldStaffSession),
+        });
+        return;
+      }
+
+      if (authorization.includes(newStudentSession.accessToken)) {
+        await fulfillGraphQLData(route, {
+          me: buildMePayload(newStudentSession),
+        });
+        return;
+      }
+    }
+
+    if (query.includes('myProfileIdentity')) {
+      await fulfillGraphQLData(route, {
+        myProfileIdentity: buildMyProfileIdentityPayload(
+          authorization.includes(newStudentSession.accessToken)
+            ? newStudentSession
+            : oldStaffSession,
+        ),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  return {
+    newStudentSession,
+    oldMeStarted: oldMeStarted.promise,
+    releaseOldMe: releaseOldMe.resolve,
+  };
 }
 
 async function mockAccountSwitchReauthGraphQL(page: Page) {
@@ -354,6 +518,36 @@ test('登录成功后不应等待 me 完成才离开登录页', async ({ page })
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '正在同步账户信息' })).toBeVisible();
   await expect(layoutBanner(page).getByRole('button', { name: '取消登录' })).toBeVisible();
+});
+
+test('旧会话恢复中发起新登录时，应最终认证新登录会话', async ({ page }) => {
+  await mockApiHealth(page);
+  const { newStudentSession, oldMeStarted, releaseOldMe } =
+    await mockLoginDuringOldRestoreGraphQL(page);
+
+  await page.goto(routes.home);
+  await oldMeStarted;
+
+  await page.goto(`${routes.login}?skipRestore=1`);
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
+
+  await submitLogin(page);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedStudentMenu(page, newStudentSession.displayName);
+
+  releaseOldMe();
+
+  await expect
+    .poll(async () =>
+      page.evaluate((storageKey) => {
+        const rawSession = window.localStorage.getItem(storageKey);
+
+        return rawSession ? (JSON.parse(rawSession) as { displayName?: string }).displayName : null;
+      }, AUTH_STORAGE_KEY),
+    )
+    .toBe(newStudentSession.displayName);
+  await expectAuthenticatedStudentMenu(page, newStudentSession.displayName);
 });
 
 test('登录成功但 me 失败时，应保留已建立会话并停留在工作台', async ({ page }) => {
