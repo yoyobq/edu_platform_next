@@ -9,6 +9,7 @@ import {
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
+  saveCurriculumPlanHomepage,
 } from './api';
 
 vi.mock('@/shared/graphql', () => ({
@@ -169,6 +170,45 @@ describe('curriculum plan homepage lab api', () => {
     expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
       planId: 'plan-001',
       sessionToken: 'upstream-token-001',
+    });
+  });
+
+  it('saves the full upstream-style homepage object without remapping keys', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      saveCurriculumPlanHomepage: {
+        code: '0',
+        data: { saved: true },
+        expiresAt: '2026-06-01T09:00:00.000Z',
+        msg: 'ok',
+        success: true,
+        upstreamSessionToken: 'upstream-token-003',
+      },
+    });
+
+    const homepage = {
+      lecture_plan_id: 'plan-001',
+      course_name: '网页设计与制作',
+      textbook_name: 'HTML5+CSS3网页设计与制作',
+      untouched_upstream_field: 'keep-me',
+    };
+
+    await expect(
+      saveCurriculumPlanHomepage({
+        homepage,
+        sessionToken: 'upstream-token-002',
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      upstreamSessionToken: 'upstream-token-003',
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'mutation SaveCurriculumPlanHomepage',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+      input: {
+        homepage,
+        sessionToken: 'upstream-token-002',
+      },
     });
   });
 });

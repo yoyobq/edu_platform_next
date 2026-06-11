@@ -1,7 +1,13 @@
 // src/labs/curriculum-plan-homepage/page.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ClearOutlined, LoginOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
+import {
+  ClearOutlined,
+  LoginOutlined,
+  ReloadOutlined,
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -11,6 +17,8 @@ import {
   Empty,
   Flex,
   Form,
+  Input,
+  InputNumber,
   Select,
   Space,
   Spin,
@@ -48,6 +56,7 @@ import {
   fetchCurriculumPlanHomepageList,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
+  saveCurriculumPlanHomepage,
 } from './api';
 
 type SearchFormValues = {
@@ -64,11 +73,16 @@ type PendingAction =
   | {
       type: 'list';
       values: SearchFormValues;
+    }
+  | {
+      homepage: Record<string, unknown>;
+      planId: string;
+      type: 'save';
     };
 
 type ActionError = {
   message: string;
-  target: 'detail' | 'list' | 'session';
+  target: 'detail' | 'list' | 'save' | 'session';
 };
 
 const SEMESTER_OPTIONS = [
@@ -82,23 +96,6 @@ const SEMESTER_OPTIONS = [
   },
 ];
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
-
-const HOMEPAGE_FIELD_DEFINITIONS = [
-  { key: 'course_name', label: '课程名称' },
-  { key: 'classNames', label: '授课班级' },
-  { key: 'teacher_in_charge_name', label: '课程负责人' },
-  { key: 'textbook_name', label: '教材' },
-  { key: 'teaching_objectives', label: '教学目标' },
-  { key: 'teaching_weeks', label: '授课周数' },
-  { key: 'weekly_lessons', label: '周课时' },
-  { key: 'total_lessons', label: '总课时' },
-  { key: 'lecture_lessons', label: '理论课时' },
-  { key: 'training_lessons', label: '实践课时' },
-  { key: 'review_exam_lessons', label: '复习考试课时' },
-  { key: 'flexible_lessons', label: '机动课时' },
-  { key: 'teaching_end_chapter_content', label: '期末章节内容' },
-  { key: 'updateflag', label: '更新标记' },
-] as const;
 
 function getDefaultAcademicTerm(): SearchFormValues {
   const now = new Date();
@@ -201,14 +198,6 @@ function renderJsonBlock(value: unknown, token: ReturnType<typeof theme.useToken
   );
 }
 
-function renderHomepageValue(value: unknown, token: ReturnType<typeof theme.useToken>['token']) {
-  if (value && typeof value === 'object') {
-    return renderJsonBlock(value, token);
-  }
-
-  return formatCompactValue(value);
-}
-
 function buildDetailMetadataItems(item: CurriculumPlanHomepageListItem | null) {
   return [
     {
@@ -258,15 +247,327 @@ function buildDetailMetadataItems(item: CurriculumPlanHomepageListItem | null) {
   ];
 }
 
-function buildHomepageDescriptionItems(
+function readHomepageValue(
   homepage: Record<string, unknown> | null,
-  token: ReturnType<typeof theme.useToken>['token'],
+  candidates: readonly string[],
 ) {
-  return HOMEPAGE_FIELD_DEFINITIONS.map((field) => ({
-    children: renderHomepageValue(homepage?.[field.key], token),
-    key: field.key,
-    label: field.label,
-  }));
+  if (!homepage) {
+    return null;
+  }
+
+  for (const key of candidates) {
+    const value = homepage[key];
+
+    if (value !== null && value !== undefined && value !== '') {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function readHomepageText(homepage: Record<string, unknown> | null, candidates: readonly string[]) {
+  const value = readHomepageValue(homepage, candidates);
+
+  if (value === null) {
+    return '';
+  }
+
+  return String(value);
+}
+
+function readHomepageNumber(
+  homepage: Record<string, unknown> | null,
+  candidates: readonly string[],
+) {
+  const value = readHomepageValue(homepage, candidates);
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function buildHomepageDraftFromDetail(result: CurriculumPlanHomepageDetailResult) {
+  const homepage =
+    result.homepage && typeof result.homepage === 'object' && !Array.isArray(result.homepage)
+      ? { ...result.homepage }
+      : {};
+
+  if (!homepage.lecture_plan_id) {
+    homepage.lecture_plan_id = result.planId;
+  }
+
+  return homepage;
+}
+
+function renderDraftInput(value: string, onChange: (nextValue: string) => void) {
+  return <Input value={value} onChange={(event) => onChange(event.target.value)} />;
+}
+
+function renderDraftTextarea(value: string, onChange: (nextValue: string) => void, rows = 3) {
+  return (
+    <Input.TextArea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} />
+  );
+}
+
+function renderDraftNumber(value: number | null, onChange: (nextValue: number | null) => void) {
+  return (
+    <InputNumber
+      controls
+      style={{ width: '100%' }}
+      value={value}
+      onChange={(nextValue) => {
+        onChange(typeof nextValue === 'number' && Number.isFinite(nextValue) ? nextValue : null);
+      }}
+    />
+  );
+}
+
+function CurriculumPlanHomepageFormPreview({
+  homepage,
+  isSaving,
+  onSave,
+  onUpdateField,
+  token,
+}: {
+  homepage: Record<string, unknown>;
+  isSaving: boolean;
+  onSave: () => void;
+  onUpdateField: (field: string, value: number | string | null) => void;
+  token: ReturnType<typeof theme.useToken>['token'];
+}) {
+  const tableStyle = {
+    borderCollapse: 'collapse',
+    tableLayout: 'fixed',
+    width: '100%',
+  } as const;
+  const cellStyle = {
+    border: `1px solid ${token.colorBorder}`,
+    padding: token.paddingXS,
+    verticalAlign: 'middle',
+  } as const;
+  const labelCellStyle = {
+    ...cellStyle,
+    background: token.colorFillQuaternary,
+    color: token.colorText,
+    textAlign: 'center',
+    width: 230,
+  } as const;
+  const headerCellStyle = {
+    ...labelCellStyle,
+    width: undefined,
+  } as const;
+  const fieldsetStyle = {
+    border: `1px solid ${token.colorBorder}`,
+    margin: 0,
+    padding: `${token.paddingSM}px ${token.padding}px ${token.padding}px`,
+  } as const;
+  const legendStyle = {
+    color: token.colorText,
+    fontWeight: token.fontWeightStrong,
+    padding: `0 ${token.paddingXXS}px`,
+  } as const;
+
+  return (
+    <Space orientation="vertical" size={token.margin} style={{ width: '100%' }}>
+      <Flex align="center" justify="space-between" gap={token.margin}>
+        <span style={{ width: 88 }} />
+        <Typography.Title level={3} style={{ margin: 0, textAlign: 'center' }}>
+          授课计划首页信息
+        </Typography.Title>
+        <Button icon={<SaveOutlined />} loading={isSaving} type="primary" onClick={onSave}>
+          保存
+        </Button>
+      </Flex>
+
+      <fieldset style={fieldsetStyle}>
+        <legend style={legendStyle}>基本信息</legend>
+        <table style={tableStyle}>
+          <tbody>
+            <tr>
+              <td style={labelCellStyle}>教材名称及版本</td>
+              <td style={cellStyle}>
+                {renderDraftInput(
+                  readHomepageText(homepage, ['textbook_name', 'textbookName']),
+                  (value) => onUpdateField('textbook_name', value),
+                )}
+              </td>
+            </tr>
+            <tr>
+              <td style={labelCellStyle}>教学目的要求</td>
+              <td style={cellStyle}>
+                {renderDraftTextarea(
+                  readHomepageText(homepage, ['teaching_objectives', 'teachingObjectives']),
+                  (value) => onUpdateField('teaching_objectives', value),
+                )}
+              </td>
+            </tr>
+            <tr>
+              <td style={labelCellStyle}>改进教学的具体措施</td>
+              <td style={cellStyle}>
+                {renderDraftTextarea(
+                  readHomepageText(homepage, [
+                    'teaching_improvement_measures',
+                    'improve_teaching_measures',
+                    'teaching_measures',
+                    'improvement_measures',
+                    'teachingMethods',
+                  ]),
+                  (value) => onUpdateField('teaching_improvement_measures', value),
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </fieldset>
+
+      <fieldset style={fieldsetStyle}>
+        <legend style={legendStyle}>课时分配</legend>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th rowSpan={2} style={headerCellStyle}>
+                授课周数
+              </th>
+              <th rowSpan={2} style={headerCellStyle}>
+                周课时
+              </th>
+              <th rowSpan={2} style={headerCellStyle}>
+                授课总课时
+              </th>
+              <th colSpan={4} style={headerCellStyle}>
+                分配
+              </th>
+            </tr>
+            <tr>
+              <th style={headerCellStyle}>讲课</th>
+              <th style={headerCellStyle}>实训</th>
+              <th style={headerCellStyle}>复习考试</th>
+              <th style={headerCellStyle}>机动</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['teaching_weeks']), (value) =>
+                  onUpdateField('teaching_weeks', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['weekly_lessons']), (value) =>
+                  onUpdateField('weekly_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['total_lessons']), (value) =>
+                  onUpdateField('total_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['lecture_lessons']), (value) =>
+                  onUpdateField('lecture_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['training_lessons']), (value) =>
+                  onUpdateField('training_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['review_exam_lessons']), (value) =>
+                  onUpdateField('review_exam_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(readHomepageNumber(homepage, ['flexible_lessons']), (value) =>
+                  onUpdateField('flexible_lessons', value),
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </fieldset>
+
+      <fieldset style={fieldsetStyle}>
+        <legend style={legendStyle}>期末完成情况</legend>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th rowSpan={2} style={headerCellStyle}>
+                计划课时
+              </th>
+              <th rowSpan={2} style={headerCellStyle}>
+                完成课时
+              </th>
+              <th colSpan={3} style={headerCellStyle}>
+                超出或减少课时
+              </th>
+            </tr>
+            <tr>
+              <th style={headerCellStyle}>超出</th>
+              <th style={headerCellStyle}>减少</th>
+              <th style={headerCellStyle}>弥补</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style={cellStyle}>
+                {renderDraftNumber(
+                  readHomepageNumber(homepage, ['planned_lessons', 'plan_lessons']),
+                  (value) => onUpdateField('planned_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(
+                  readHomepageNumber(homepage, ['completed_lessons', 'finished_lessons']),
+                  (value) => onUpdateField('completed_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(
+                  readHomepageNumber(homepage, ['exceeded_lessons', 'exceed_lessons']),
+                  (value) => onUpdateField('exceeded_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(
+                  readHomepageNumber(homepage, ['reduced_lessons', 'reduce_lessons']),
+                  (value) => onUpdateField('reduced_lessons', value),
+                )}
+              </td>
+              <td style={cellStyle}>
+                {renderDraftNumber(
+                  readHomepageNumber(homepage, ['makeup_lessons', 'make_up_lessons']),
+                  (value) => onUpdateField('makeup_lessons', value),
+                )}
+              </td>
+            </tr>
+            <tr>
+              <td style={labelCellStyle}>教学截止章节内容</td>
+              <td colSpan={4} style={cellStyle}>
+                {renderDraftTextarea(
+                  readHomepageText(homepage, [
+                    'teaching_end_chapter_content',
+                    'teachingEndChapterContent',
+                  ]),
+                  (value) => onUpdateField('teaching_end_chapter_content', value),
+                  3,
+                )}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </fieldset>
+    </Space>
+  );
 }
 
 export function CurriculumPlanHomepageLabPage() {
@@ -286,6 +587,7 @@ export function CurriculumPlanHomepageLabPage() {
   const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [isSavingHomepage, setIsSavingHomepage] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
@@ -293,10 +595,12 @@ export function CurriculumPlanHomepageLabPage() {
   const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ActionError | null>(null);
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [listResult, setListResult] = useState<CurriculumPlanHomepageListResult | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detailResult, setDetailResult] = useState<CurriculumPlanHomepageDetailResult | null>(null);
+  const [homepageDrafts, setHomepageDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const lockedUpstreamLoginUserId =
     !isAdminAccount && currentAccount?.staffId ? currentAccount.staffId : null;
@@ -321,6 +625,8 @@ export function CurriculumPlanHomepageLabPage() {
     setListResult(null);
     setSelectedPlanId(null);
     setDetailResult(null);
+    setHomepageDrafts({});
+    setSaveSuccessMessage(null);
   }, []);
 
   const clearCurrentSession = useCallback(
@@ -371,6 +677,8 @@ export function CurriculumPlanHomepageLabPage() {
           setIsLoadingList(true);
           setDetailResult(null);
           setSelectedPlanId(null);
+          setHomepageDrafts({});
+          setSaveSuccessMessage(null);
 
           const result = await fetchCurriculumPlanHomepageList({
             ...action.values,
@@ -382,7 +690,27 @@ export function CurriculumPlanHomepageLabPage() {
           return;
         }
 
+        if (action.type === 'save') {
+          setIsSavingHomepage(true);
+          setSaveSuccessMessage(null);
+
+          const result = await saveCurriculumPlanHomepage({
+            homepage: action.homepage,
+            sessionToken: currentSession.upstreamSessionToken,
+          });
+
+          persistSessionFromResult(currentSession, result);
+
+          if (!result.success) {
+            throw new Error(result.msg?.trim() || result.code || '授课计划首页保存失败。');
+          }
+
+          setSaveSuccessMessage(result.msg?.trim() || '授课计划首页已保存。');
+          return;
+        }
+
         setIsLoadingDetail(true);
+        setSaveSuccessMessage(null);
         setSelectedPlanId(action.item.planId);
 
         const result = await fetchCurriculumPlanHomepageDetail({
@@ -392,6 +720,10 @@ export function CurriculumPlanHomepageLabPage() {
 
         persistSessionFromResult(currentSession, result);
         setDetailResult(result);
+        setHomepageDrafts((current) => ({
+          ...current,
+          [result.planId]: buildHomepageDraftFromDetail(result),
+        }));
       };
 
       const handleActionError = (error: unknown) => {
@@ -400,6 +732,14 @@ export function CurriculumPlanHomepageLabPage() {
           setActionError({
             message: resolveUpstreamErrorMessage(error, '暂时无法读取授课计划首页列表。'),
             target: 'list',
+          });
+          return;
+        }
+
+        if (action.type === 'save') {
+          setActionError({
+            message: resolveUpstreamErrorMessage(error, '暂时无法保存授课计划首页。'),
+            target: 'save',
           });
           return;
         }
@@ -453,6 +793,7 @@ export function CurriculumPlanHomepageLabPage() {
       } finally {
         setIsLoadingList(false);
         setIsLoadingDetail(false);
+        setIsSavingHomepage(false);
       }
     },
     [clearResults, persistSessionFromResult, promptUpstreamLogin, refreshSession],
@@ -493,11 +834,47 @@ export function CurriculumPlanHomepageLabPage() {
     [ensureSessionAndRun],
   );
 
+  const updateHomepageDraftField = useCallback(
+    (planId: string, field: string, value: number | string | null) => {
+      setHomepageDrafts((current) => ({
+        ...current,
+        [planId]: {
+          ...(current[planId] ?? {}),
+          [field]: value,
+        },
+      }));
+      setSaveSuccessMessage(null);
+    },
+    [],
+  );
+
+  const handleSaveHomepage = useCallback(
+    async (planId: string) => {
+      const draft = homepageDrafts[planId];
+
+      if (!draft) {
+        setActionError({
+          message: '当前首页详情尚未加载完成，暂时无法保存。',
+          target: 'save',
+        });
+        return;
+      }
+
+      await ensureSessionAndRun({
+        homepage: draft,
+        planId,
+        type: 'save',
+      });
+    },
+    [ensureSessionAndRun, homepageDrafts],
+  );
+
   const planTabItems = useMemo(
     () =>
       (listResult?.items ?? []).map((item) => {
         const isActiveItem = selectedPlanId === item.planId;
         const matchedDetail = detailResult?.planId === item.planId ? detailResult : null;
+        const draft = homepageDrafts[item.planId];
 
         return {
           children: (
@@ -508,35 +885,18 @@ export function CurriculumPlanHomepageLabPage() {
                 </Flex>
               ) : (
                 <Space orientation="vertical" size={token.margin} style={{ width: '100%' }}>
-                  <Flex align="flex-start" justify="space-between" wrap="wrap" gap={token.marginSM}>
-                    <Space orientation="vertical" size={2}>
-                      <Typography.Title level={4} style={{ margin: 0 }}>
-                        {item.courseName || '未命名课程'}
-                      </Typography.Title>
-                      <Typography.Text type="secondary">
-                        {item.className || '未返回班级'}
-                      </Typography.Text>
-                    </Space>
-                    <Typography.Text copyable type="secondary">
-                      {item.planId}
-                    </Typography.Text>
-                  </Flex>
-
-                  <Descriptions
-                    bordered
-                    column={1}
-                    items={buildDetailMetadataItems(item)}
-                    size="small"
-                    title="列表摘要"
-                  />
-
-                  {matchedDetail?.homepage ? (
-                    <Descriptions
-                      bordered
-                      column={1}
-                      items={buildHomepageDescriptionItems(matchedDetail.homepage, token)}
-                      size="small"
-                      title="首页表单"
+                  {matchedDetail && draft ? (
+                    <CurriculumPlanHomepageFormPreview
+                      key={matchedDetail.planId}
+                      homepage={draft}
+                      isSaving={isSavingHomepage && isActiveItem}
+                      onSave={() => {
+                        void handleSaveHomepage(item.planId);
+                      }}
+                      onUpdateField={(field, value) => {
+                        updateHomepageDraftField(item.planId, field, value);
+                      }}
+                      token={token}
                     />
                   ) : (
                     <Empty description="暂未读取详情" image={Empty.PRESENTED_IMAGE_SIMPLE} />
@@ -545,9 +905,21 @@ export function CurriculumPlanHomepageLabPage() {
                   <Collapse
                     items={[
                       {
-                        children: renderJsonBlock(matchedDetail?.homepage ?? {}, token),
+                        children: (
+                          <Descriptions
+                            bordered
+                            column={1}
+                            items={buildDetailMetadataItems(item)}
+                            size="small"
+                          />
+                        ),
+                        key: 'summary',
+                        label: '列表摘要',
+                      },
+                      {
+                        children: renderJsonBlock(draft ?? matchedDetail?.homepage ?? {}, token),
                         key: 'homepage',
-                        label: '原始 homepage',
+                        label: '当前 homepage 草稿',
                       },
                       {
                         children: renderJsonBlock(item.rawPlan ?? {}, token),
@@ -590,7 +962,17 @@ export function CurriculumPlanHomepageLabPage() {
           ),
         };
       }),
-    [detailResult, isLoadingDetail, listResult?.items, selectedPlanId, token],
+    [
+      detailResult,
+      handleSaveHomepage,
+      homepageDrafts,
+      isLoadingDetail,
+      isSavingHomepage,
+      listResult?.items,
+      selectedPlanId,
+      token,
+      updateHomepageDraftField,
+    ],
   );
 
   useEffect(() => {
@@ -827,6 +1209,7 @@ export function CurriculumPlanHomepageLabPage() {
 
       {pageError ? <Alert showIcon message={pageError} type="error" /> : null}
       {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
+      {saveSuccessMessage ? <Alert showIcon message={saveSuccessMessage} type="success" /> : null}
 
       <Card>
         <Flex align="center" justify="space-between" wrap="wrap" gap={token.margin}>

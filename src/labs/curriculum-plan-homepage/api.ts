@@ -51,6 +51,10 @@ type CurriculumPlanHomepageDetailResponse = {
   fetchCurriculumPlanHomepageDetail: CurriculumPlanHomepageDetailResult;
 };
 
+type SaveCurriculumPlanHomepageResponse = {
+  saveCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
+};
+
 type DepartmentDTO = {
   departmentName: string;
   id: string;
@@ -95,6 +99,15 @@ export type CurriculumPlanHomepageDetailResult = {
   expiresAt: string | null;
   homepage: Record<string, unknown> | null;
   planId: string;
+  upstreamSessionToken: string;
+};
+
+export type SaveCurriculumPlanHomepageResult = {
+  code: string | null;
+  data: unknown;
+  expiresAt: string | null;
+  msg: string | null;
+  success: boolean;
   upstreamSessionToken: string;
 };
 
@@ -190,6 +203,19 @@ const DEPARTMENTS_QUERY = `
       id
       isEnabled
       shortName
+    }
+  }
+`;
+
+const SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
+  mutation SaveCurriculumPlanHomepage($input: SaveCurriculumPlanHomepageInput!) {
+    saveCurriculumPlanHomepage(input: $input) {
+      upstreamSessionToken
+      expiresAt
+      code
+      success
+      msg
+      data
     }
   }
 `;
@@ -321,4 +347,26 @@ export async function fetchCurriculumPlanHomepageDetail(input: {
   });
 
   return response.fetchCurriculumPlanHomepageDetail;
+}
+
+export async function saveCurriculumPlanHomepage(input: {
+  homepage: Record<string, unknown>;
+  sessionToken: string;
+}) {
+  const response = await requestGraphQL<
+    SaveCurriculumPlanHomepageResponse,
+    {
+      input: {
+        homepage: Record<string, unknown>;
+        sessionToken: string;
+      };
+    }
+  >(SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION, {
+    input: {
+      homepage: input.homepage,
+      sessionToken: input.sessionToken,
+    },
+  });
+
+  return response.saveCurriculumPlanHomepage;
 }
