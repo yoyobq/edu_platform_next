@@ -23,11 +23,12 @@ async function waitForBestEffortLogout(logoutPromise: Promise<void>) {
 }
 
 export function clearLocalAuthSession(ports: AuthPorts) {
+  // Local-only cleanup for aborted hydration and passive auth failure paths.
   ports.storage.clearSession();
   setUnauthenticatedSession();
 }
 
-async function revokeAuthSession(
+export async function revokeAuthSession(
   ports: AuthPorts,
   session: Pick<AuthStoredSession, 'accessToken'> | null | undefined,
 ) {

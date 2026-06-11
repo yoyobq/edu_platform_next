@@ -2,7 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clearLocalAuthSession, logout } from './logout';
+import { clearLocalAuthSession, logout, revokeAuthSession } from './logout';
 import type { AuthPorts } from './ports';
 import {
   getAuthSessionState,
@@ -86,6 +86,21 @@ describe('auth logout', () => {
     expect(ports.storage.clearSession).toHaveBeenCalledTimes(1);
     expect(getCurrentAuthSession()).toBeNull();
     expect(getAuthSessionState().status).toBe('unauthenticated');
+  });
+
+  it('revokes remote session without clearing local session', async () => {
+    const session = buildSessionSnapshot();
+    const apiLogout = vi.fn(async () => undefined);
+    const ports = createPorts({ logout: apiLogout });
+
+    setAuthenticatedSession(session);
+
+    await expect(revokeAuthSession(ports, session)).resolves.toBeUndefined();
+
+    expect(apiLogout).toHaveBeenCalledWith({ accessToken: session.accessToken });
+    expect(ports.storage.clearSession).not.toHaveBeenCalled();
+    expect(getCurrentAuthSession()).toEqual(session);
+    expect(getAuthSessionState().status).toBe('authenticated');
   });
 
   it('still clears local session when backend logout fails', async () => {

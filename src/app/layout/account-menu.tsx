@@ -23,7 +23,7 @@ import { useNavigate } from 'react-router';
 
 import { FONT_SCALE_OPTIONS, type FontScale } from '@/app/providers';
 
-import { type AuthSessionSnapshot, logout } from '@/features/auth';
+import { type AuthSessionSnapshot, logout, revokeAuthSession } from '@/features/auth';
 
 import {
   type AccountSwitchLabSession,
@@ -51,6 +51,7 @@ type AccountCredentialsFormValues = {
 type AccountReauthRequest = {
   mode: 'logout-fallback' | 'switch';
   nextRecords: AccountSwitchLabRecord[] | null;
+  sessionToRevoke: AccountSwitchLabSession | null;
   session: AccountSwitchLabSession;
 };
 
@@ -253,11 +254,13 @@ export function StaffAccountMenu({
     session: AccountSwitchLabSession,
     mode: AccountReauthRequest['mode'] = 'switch',
     nextRecords: AccountSwitchLabRecord[] | null = null,
+    sessionToRevoke: AccountSwitchLabSession | null = null,
   ) {
     setAddAccountModalOpen(false);
     setReauthRequest({
       mode,
       nextRecords,
+      sessionToRevoke,
       session,
     });
     setAddAccountError(`${getAccountDisplayName(session)} 登录已失效，请重新登录后继续。`);
@@ -358,6 +361,10 @@ export function StaffAccountMenu({
       }
 
       if (request.mode === 'logout-fallback') {
+        if (request.sessionToRevoke) {
+          await revokeAuthSession({ accessToken: request.sessionToRevoke.accessToken });
+        }
+
         commitAccountRecords(
           upsertAccountSwitchLabRecord(
             (request.nextRecords ?? []).filter(
@@ -401,6 +408,7 @@ export function StaffAccountMenu({
       try {
         const restoredFallbackSession = await restoreAccountSwitchLabSession(fallbackSession);
 
+        await revokeAuthSession({ accessToken: session.accessToken });
         commitAccountRecords(
           upsertAccountSwitchLabRecord(
             nextRecords.filter(
@@ -415,7 +423,7 @@ export function StaffAccountMenu({
           (isGraphQLIngressError(error) && error.type === 'auth') ||
           isAccountSwitchLabAccountMismatchError(error)
         ) {
-          openReauthModal(fallbackSession, 'logout-fallback', nextRecords);
+          openReauthModal(fallbackSession, 'logout-fallback', nextRecords, session);
           return;
         }
 

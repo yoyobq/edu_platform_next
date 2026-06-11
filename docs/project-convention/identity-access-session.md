@@ -10,6 +10,7 @@
 - `refresh`：续期会话；后端返回新的 `accessToken / refreshToken`，前端随后执行 `me` 并产出 hydrated snapshot
 - `me`：返回前端当前会话权威快照
 - `logout`：显式退出会先调用后端，使当前账号已签发的 refresh token 失效，随后清理本地会话
+- `clearLocalAuthSession`：只清理本地会话，用于取消水合或被动失效，不代表后端登出
 
 当前前端统一按两步处理登录态：
 
@@ -95,11 +96,20 @@
 4. 后端通过递增账号级 `tokenVersion` 让该账号已签发的 refresh token 全部失效
 5. 已签发 access token 不做前端侧追踪，继续按服务端 JWT 过期策略自然失效
 
+账号切换中的“移除当前账号并切到另一个账号”也按显式退出旧账号处理：
+
+1. 先确认 fallback 账号可恢复或已重新登录
+2. 使用旧当前账号的 `accessToken` 调后端 `logout`
+3. 再把本地当前会话替换为 fallback 账号
+
+账号切换中的“移除非当前账号”只表示不再保留该本地账号记录，不调用后端 `logout`。
+
 被动退出链路保持本地语义：
 
 - `forceLogout()`
 - refresh 失败
 - 会话恢复或普通请求判定会话失效
+- hydrating 阶段点击“取消登录”
 
 这些路径不调用后端 `logout`，只清理本地 session 并交给 app watcher / 调用方完成跳转。
 

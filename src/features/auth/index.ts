@@ -9,6 +9,7 @@ import { login as runLogin } from './application/login';
 import {
   clearLocalAuthSession as runClearLocalAuthSession,
   logout as runLogout,
+  revokeAuthSession as runRevokeAuthSession,
 } from './application/logout';
 import type { AuthPorts } from './application/ports';
 import {
@@ -100,6 +101,10 @@ export function logout() {
 
 export function clearLocalAuthSession() {
   return runClearLocalAuthSession(authPorts);
+}
+
+export function revokeAuthSession(input: { accessToken: string }) {
+  return runRevokeAuthSession(authPorts, input);
 }
 
 export function forceLogout(reason?: string | null) {

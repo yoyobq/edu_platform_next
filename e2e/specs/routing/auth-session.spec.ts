@@ -346,6 +346,7 @@ async function mockAccountSwitchReauthGraphQL(page: Page) {
     primaryAccessGroup: 'STAFF',
     refreshToken: 'staff-refresh-token-fresh',
   });
+  const logoutRequests: string[] = [];
 
   await page.addInitScript(
     ({ authKey, currentSession, switchKey, targetSession }) => {
@@ -379,6 +380,16 @@ async function mockAccountSwitchReauthGraphQL(page: Page) {
       | undefined;
     const query = typeof payload?.query === 'string' ? payload.query : '';
     const authorization = route.request().headers().authorization ?? '';
+
+    if (query.includes('mutation Logout')) {
+      logoutRequests.push(authorization);
+      await fulfillGraphQLData(route, {
+        logout: {
+          success: true,
+        },
+      });
+      return;
+    }
 
     if (query.includes('query Me')) {
       if (authorization.includes(staleStaffSession.accessToken)) {
@@ -458,6 +469,128 @@ async function mockAccountSwitchReauthGraphQL(page: Page) {
 
     await route.fallback();
   });
+
+  return {
+    adminSession,
+    freshStaffSession,
+    logoutRequests,
+    staleStaffSession,
+  };
+}
+
+async function mockActiveAccountLogoutFallbackGraphQL(
+  page: Page,
+  options: { logoutError?: boolean } = {},
+) {
+  const adminSession = buildAccountSwitchTestSession({
+    accessToken: 'admin-access-token',
+    accountId: 9527,
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+    refreshToken: 'admin-refresh-token',
+  });
+  const fallbackStaffSession = buildAccountSwitchTestSession({
+    accessToken: 'staff-access-token',
+    accountId: 1001,
+    displayName: 'staff-user',
+    primaryAccessGroup: 'STAFF',
+    refreshToken: 'staff-refresh-token',
+  });
+  const logoutRequests: string[] = [];
+
+  await page.addInitScript(
+    ({ authKey, currentSession, fallbackSession, switchKey }) => {
+      if (!window.localStorage.getItem(authKey)) {
+        window.localStorage.setItem(authKey, JSON.stringify(currentSession));
+      }
+
+      if (!window.localStorage.getItem(switchKey)) {
+        window.localStorage.setItem(
+          switchKey,
+          JSON.stringify([
+            {
+              addedAt: '2026-04-03T00:00:00.000Z',
+              session: fallbackSession,
+            },
+          ]),
+        );
+      }
+    },
+    {
+      authKey: AUTH_STORAGE_KEY,
+      currentSession: adminSession,
+      fallbackSession: fallbackStaffSession,
+      switchKey: ACCOUNT_SWITCH_STORAGE_KEY,
+    },
+  );
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: { refreshToken?: unknown } } }
+      | undefined;
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+    const authorization = route.request().headers().authorization ?? '';
+
+    if (query.includes('mutation Logout')) {
+      logoutRequests.push(authorization);
+
+      if (options.logoutError) {
+        await fulfillGraphQLAuthError(route);
+        return;
+      }
+
+      await fulfillGraphQLData(route, {
+        logout: {
+          success: true,
+        },
+      });
+      return;
+    }
+
+    if (query.includes('mutation Refresh')) {
+      const refreshToken = payload?.variables?.input?.refreshToken;
+      const session =
+        refreshToken === fallbackStaffSession.refreshToken ? fallbackStaffSession : adminSession;
+
+      await fulfillGraphQLData(route, {
+        refresh: {
+          accessToken: session.accessToken,
+          refreshToken: session.refreshToken,
+        },
+      });
+      return;
+    }
+
+    if (query.includes('query Me')) {
+      await fulfillGraphQLData(route, {
+        me: buildMePayload(
+          authorization.includes(fallbackStaffSession.accessToken)
+            ? fallbackStaffSession
+            : adminSession,
+        ),
+      });
+      return;
+    }
+
+    if (query.includes('myProfileIdentity')) {
+      await fulfillGraphQLData(route, {
+        myProfileIdentity: buildMyProfileIdentityPayload(
+          authorization.includes(fallbackStaffSession.accessToken)
+            ? fallbackStaffSession
+            : adminSession,
+        ),
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  return {
+    adminSession,
+    fallbackStaffSession,
+    logoutRequests,
+  };
 }
 
 async function replaceStoredAccessToken(page: Page, accessToken: string) {
@@ -626,6 +759,130 @@ test('切换到失效账号时，应弹出轻量登录框而不是跳回登录�
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
   await expectAuthenticatedUserMenu(page, 'staff-user', 'Staff');
+});
+
+test('移除当前账号并切到 fallback 时，应撤销旧当前账号 refresh token', async ({ page }) => {
+  await mockApiHealth(page);
+  const { fallbackStaffSession, logoutRequests } =
+    await mockActiveAccountLogoutFallbackGraphQL(page);
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await page.getByRole('button', { name: '退出账户' }).click();
+  await page
+    .locator('.ant-popover')
+    .last()
+    .getByRole('button', { name: /admin-user/ })
+    .click();
+  await expect(page.getByText('换到另一个账号？')).toBeVisible();
+  await page.getByRole('button', { name: '切换过去' }).click();
+
+  await expect.poll(() => logoutRequests.length).toBe(1);
+  expect(logoutRequests[0]).toBe('Bearer admin-access-token');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
+  await expectAuthenticatedUserMenu(page, 'staff-user', 'Staff');
+
+  const storedSession = await page.evaluate((storageKey) => {
+    return JSON.parse(window.localStorage.getItem(storageKey) ?? 'null') as {
+      accessToken?: string;
+      accountId?: number;
+    } | null;
+  }, AUTH_STORAGE_KEY);
+  const switchRecords = await page.evaluate((storageKey) => {
+    return JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as {
+      session: { accountId: number };
+    }[];
+  }, ACCOUNT_SWITCH_STORAGE_KEY);
+
+  expect(storedSession?.accountId).toBe(fallbackStaffSession.accountId);
+  expect(storedSession?.accessToken).toBe(fallbackStaffSession.accessToken);
+  expect(switchRecords).toHaveLength(1);
+  expect(switchRecords[0]?.session.accountId).toBe(fallbackStaffSession.accountId);
+});
+
+test('移除当前账号时即使 logout mutation 失败，也应切到 fallback', async ({ page }) => {
+  await mockApiHealth(page);
+  const { fallbackStaffSession, logoutRequests } = await mockActiveAccountLogoutFallbackGraphQL(
+    page,
+    {
+      logoutError: true,
+    },
+  );
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await page.getByRole('button', { name: '退出账户' }).click();
+  await page
+    .locator('.ant-popover')
+    .last()
+    .getByRole('button', { name: /admin-user/ })
+    .click();
+  await expect(page.getByText('换到另一个账号？')).toBeVisible();
+  await page.getByRole('button', { name: '切换过去' }).click();
+
+  await expect.poll(() => logoutRequests.length).toBe(1);
+  expect(logoutRequests[0]).toBe('Bearer admin-access-token');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
+
+  const storedSession = await page.evaluate((storageKey) => {
+    return JSON.parse(window.localStorage.getItem(storageKey) ?? 'null') as {
+      accountId?: number;
+    } | null;
+  }, AUTH_STORAGE_KEY);
+
+  expect(storedSession?.accountId).toBe(fallbackStaffSession.accountId);
+});
+
+test('移除当前账号且 fallback 需重新登录时，应在重登后撤销旧当前账号', async ({ page }) => {
+  await mockApiHealth(page);
+  const { freshStaffSession, logoutRequests } = await mockAccountSwitchReauthGraphQL(page);
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await page.getByRole('button', { name: '退出账户' }).click();
+  await page
+    .locator('.ant-popover')
+    .last()
+    .getByRole('button', { name: /admin-user/ })
+    .click();
+  await expect(page.getByText('换到另一个账号？')).toBeVisible();
+  await page.getByRole('button', { name: '切换过去' }).click();
+
+  const reauthDialog = page.getByRole('dialog', { name: '重新登录账号' });
+
+  await expect(reauthDialog).toBeVisible();
+  await reauthDialog.getByLabel('密码').fill('password');
+  await reauthDialog.getByRole('button', { name: '登录并切换' }).click();
+
+  await expect.poll(() => logoutRequests.length).toBe(1);
+  expect(logoutRequests[0]).toBe('Bearer admin-access-token');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
+  await expectAuthenticatedUserMenu(page, 'staff-user', 'Staff');
+
+  const storedSession = await page.evaluate((storageKey) => {
+    return JSON.parse(window.localStorage.getItem(storageKey) ?? 'null') as {
+      accessToken?: string;
+      accountId?: number;
+    } | null;
+  }, AUTH_STORAGE_KEY);
+
+  expect(storedSession?.accountId).toBe(freshStaffSession.accountId);
+  expect(storedSession?.accessToken).toBe(freshStaffSession.accessToken);
 });
 
 test('refresh 成功后 me 再失败时，应保留当前工作台会话', async ({ page }) => {
