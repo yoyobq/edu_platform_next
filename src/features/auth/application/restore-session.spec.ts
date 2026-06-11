@@ -133,6 +133,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn((session) => {
           if (session.accessToken === expiredSession.accessToken) {
@@ -163,6 +164,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(),
         restore: vi.fn(async () => {
           throw new GraphQLIngressError({
@@ -195,6 +197,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn((session) => {
           if (session.accessToken === expiredSession.accessToken) {
@@ -246,6 +249,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn((session) => {
           if (session.accessToken === expiredSession.accessToken) {
@@ -295,6 +299,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(),
         restore: vi.fn((session) => {
           if (session.accessToken === oldSession.accessToken) {
@@ -348,6 +353,7 @@ describe('restoreSession pending hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(),
         restore: vi.fn(() => deferredRestore.promise),
       },

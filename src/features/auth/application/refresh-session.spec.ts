@@ -87,6 +87,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(() => deferredRefresh.promise),
         restore: vi.fn(async () => refreshedSession),
       },
@@ -133,6 +134,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn(() => deferredHydrate.promise),
       },
@@ -181,6 +183,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn(async () => {
           throw new GraphQLIngressError({
@@ -224,6 +227,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn(async () => {
           throw new GraphQLIngressError({
@@ -288,6 +292,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(async () => pendingSession),
         restore: vi.fn(async () => refreshedSession),
       },
@@ -365,6 +370,7 @@ describe('auth refresh locking', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(),
+        logout: vi.fn(),
         refresh: vi.fn(({ refreshToken }) => {
           if (refreshToken === staffSession.refreshToken) {
             return staffRefresh.promise;

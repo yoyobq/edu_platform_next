@@ -9,6 +9,7 @@ import type {
 
 export type AuthApiPort = {
   login: (input: AuthLoginInput) => Promise<AuthPendingSession>;
+  logout: (input: { accessToken: string }) => Promise<void>;
   refresh: (input: { refreshToken: string }) => Promise<AuthPendingSession>;
   restore: (
     session: Pick<AuthStoredSession, 'accessToken' | 'refreshToken'>,

@@ -678,10 +678,17 @@ test('access token 临近过期但 me 仍可用时，首页导航不应因前置
 });
 
 test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ page }) => {
+  let logoutRequestCount = 0;
+  let logoutAuthorization: string | null = null;
+
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: createAdminSession(),
     loginSession: createAdminSession(),
+    onLogoutRequest: ({ authorization }) => {
+      logoutRequestCount += 1;
+      logoutAuthorization = authorization;
+    },
   });
 
   await page.goto(routes.login);
@@ -700,12 +707,58 @@ test('退出登录后，应清空会话并重新拦截 labs 访问', async ({ pa
   await expect(
     page.evaluate((storageKey) => window.localStorage.getItem(storageKey), AUTH_STORAGE_KEY),
   ).resolves.toBeNull();
+  expect(logoutRequestCount).toBe(1);
+  expect(logoutAuthorization).toBe('Bearer admin-access-token');
 
   await page.goto(routes.labsDemo);
   await expect(page).toHaveURL(
     new RegExp(`/login\\?redirect=${encodeURIComponent(routes.labsDemo)}$`),
   );
   await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
+});
+
+test('退出登录 mutation 失败时，仍应清空会话并进入登录页', async ({ page }) => {
+  let logoutRequestCount = 0;
+
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: createAdminSession(),
+    loginSession: createAdminSession(),
+    logoutErrorMessage: 'LOGOUT_FAILED',
+    onLogoutRequest: () => {
+      logoutRequestCount += 1;
+    },
+  });
+
+  await page.goto(routes.login);
+  await submitLogin(page);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  const userMenuButton = page.getByRole('button', { name: '用户菜单' });
+  await userMenuButton.click();
+
+  await page.getByRole('button', { name: '退出账户' }).click();
+  await expect(page.getByText('结束会话')).toBeVisible();
+  await page.getByRole('button', { name: '江湖再见' }).click();
+
+  await expect.poll(() => logoutRequestCount).toBe(1);
+  await expect
+    .poll(async () => {
+      try {
+        return await page.evaluate(
+          (storageKey) => window.localStorage.getItem(storageKey),
+          AUTH_STORAGE_KEY,
+        );
+      } catch {
+        return 'NAVIGATING';
+      }
+    })
+    .toBeNull();
+  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
+  expect(logoutRequestCount).toBe(1);
 });
 
 test('redirect 指向站外地址时，登录后应回退到首页', async ({ page }) => {

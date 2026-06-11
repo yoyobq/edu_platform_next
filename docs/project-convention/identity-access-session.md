@@ -9,7 +9,7 @@
 - `login`：建立 pending session；后端返回 `accessToken / refreshToken`，前端映射为 `AuthPendingSession`
 - `refresh`：续期会话；后端返回新的 `accessToken / refreshToken`，前端随后执行 `me` 并产出 hydrated snapshot
 - `me`：返回前端当前会话权威快照
-- `logout`：前端当前按纯本地退出处理，直接清本地会话
+- `logout`：显式退出会先调用后端，使当前账号已签发的 refresh token 失效，随后清理本地会话
 
 当前前端统一按两步处理登录态：
 
@@ -86,6 +86,22 @@
 - `force: true` 只用于“服务端已经实际拒绝了当前 token”的场景，跳过客户端 `isTokenFresh` 判断
 - 成功后重放原请求一次；失败后调用 `onAuthFailure`
 - auth 主流程通过 `allowAuthRetry: false` 排除在此路径之外
+
+当前显式退出链路为：
+
+1. 使用当前 `accessToken` 调后端 `logout`
+2. `logout` 请求设置 `allowAuthRetry: false`，不触发 refresh / retry
+3. 无论后端 `logout` 成功或失败，前端都继续清本地 session、Apollo cache，并跳转登录页
+4. 后端通过递增账号级 `tokenVersion` 让该账号已签发的 refresh token 全部失效
+5. 已签发 access token 不做前端侧追踪，继续按服务端 JWT 过期策略自然失效
+
+被动退出链路保持本地语义：
+
+- `forceLogout()`
+- refresh 失败
+- 会话恢复或普通请求判定会话失效
+
+这些路径不调用后端 `logout`，只清理本地 session 并交给 app watcher / 调用方完成跳转。
 
 页面刷新后的恢复链路为：
 

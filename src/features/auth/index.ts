@@ -6,7 +6,10 @@ export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/shared/auth-access';
 import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
-import { logout as runLogout } from './application/logout';
+import {
+  clearLocalAuthSession as runClearLocalAuthSession,
+  logout as runLogout,
+} from './application/logout';
 import type { AuthPorts } from './application/ports';
 import {
   buildWelcomeRedirectTarget,
@@ -93,6 +96,10 @@ export function refreshSession() {
 export function logout() {
   markExplicitLogoutRedirectHome();
   return runLogout(authPorts);
+}
+
+export function clearLocalAuthSession() {
+  return runClearLocalAuthSession(authPorts);
 }
 
 export function forceLogout(reason?: string | null) {

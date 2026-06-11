@@ -55,8 +55,10 @@ type MockAuthGraphQLOptions = {
   currentSession?: SeedAuthSessionOptions;
   loginErrorMessage?: string;
   loginSession?: SeedAuthSessionOptions;
+  logoutErrorMessage?: string;
   meDelayMs?: number;
   meErrorSequence?: readonly string[];
+  onLogoutRequest?: (request: { authorization: string | null }) => void;
   refreshErrorMessage?: string;
   refreshSession?: SeedAuthSessionOptions;
 };
@@ -788,6 +790,30 @@ export async function mockAuthGraphQL(
         body: JSON.stringify({
           data: {
             refresh: buildTokens(currentProfile),
+          },
+        }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+
+    if (query.includes('mutation Logout')) {
+      options.onLogoutRequest?.({
+        authorization: route.request().headers().authorization ?? null,
+      });
+
+      if (options.logoutErrorMessage) {
+        await fulfillGraphQLError(route, options.logoutErrorMessage);
+        return;
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            logout: {
+              success: true,
+            },
           },
         }),
         contentType: 'application/json',

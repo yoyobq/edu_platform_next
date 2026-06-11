@@ -59,10 +59,10 @@ export function StudentAccountMenu({
   const identityLabel = isSessionResolving ? '同步中' : '学生账号';
 
   async function handleLogout() {
+    await logout();
     await getGraphQLClient()
       .clearStore()
       .catch(() => undefined);
-    logout();
     navigate('/login', { replace: true });
   }
 

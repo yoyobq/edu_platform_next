@@ -48,7 +48,11 @@ import {
 } from '@/app/providers';
 import { createAppThemeConfig } from '@/app/theme';
 
-import { type AuthSessionSnapshot, logout, useAuthSessionState } from '@/features/auth';
+import {
+  type AuthSessionSnapshot,
+  clearLocalAuthSession,
+  useAuthSessionState,
+} from '@/features/auth';
 
 import {
   THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
@@ -651,7 +655,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                         type="text"
                         size="small"
                         onClick={() => {
-                          logout();
+                          clearLocalAuthSession();
                           navigate('/login', { replace: true });
                         }}
                       >

@@ -1082,8 +1082,7 @@ function RouteErrorPage() {
   const navigate = useNavigate();
 
   const handleRelogin = () => {
-    logout();
-    navigate('/login', { replace: true });
+    void logout().finally(() => navigate('/login', { replace: true }));
   };
 
   if (isRouteErrorResponse(error)) {

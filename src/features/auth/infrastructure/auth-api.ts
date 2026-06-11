@@ -56,6 +56,12 @@ type LoginMutationResponse = {
   login: SessionTokensDTO;
 };
 
+type LogoutMutationResponse = {
+  logout: {
+    success: boolean;
+  };
+};
+
 type MeQueryResponse = {
   me: SessionQueryDTO;
 };
@@ -69,6 +75,14 @@ const LOGIN_MUTATION = `
     login(input: $input) {
       accessToken
       refreshToken
+    }
+  }
+`;
+
+const LOGOUT_MUTATION = `
+  mutation Logout {
+    logout {
+      success
     }
   }
 `;
@@ -163,6 +177,17 @@ export const authApi: AuthApiPort = {
     );
 
     return mapTokensToPendingSession(response.login);
+  },
+  async logout(input: { accessToken: string }) {
+    const response = await requestGraphQL<LogoutMutationResponse, Record<string, never>>(
+      LOGOUT_MUTATION,
+      {},
+      { accessToken: input.accessToken },
+    );
+
+    if (!response.logout.success) {
+      throw new Error('退出登录未成功。');
+    }
   },
   async refresh(input: { refreshToken: string }) {
     const response = await requestGraphQL<

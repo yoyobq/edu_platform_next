@@ -21,8 +21,7 @@ export function ErrorPreviewPage() {
   const navigate = useNavigate();
   const [active, setActive] = useState<PreviewKey>('404');
   const handleRelogin = () => {
-    logout();
-    navigate('/login', { replace: true });
+    void logout().finally(() => navigate('/login', { replace: true }));
   };
   const previewMap: Record<PreviewKey, () => React.JSX.Element> = {
     '403': () => <Error403 onRelogin={handleRelogin} />,

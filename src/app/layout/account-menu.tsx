@@ -430,10 +430,10 @@ export function StaffAccountMenu({
     commitAccountRecords(nextRecords);
 
     if (isActiveAccount) {
+      await logout();
       await getGraphQLClient()
         .clearStore()
         .catch(() => undefined);
-      logout();
       navigate('/login', { replace: true });
     }
   }
