@@ -52,6 +52,10 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
+import {
+  curriculumPlanHomepageLabAccess,
+  loadCurriculumPlanHomepageLabRouteModule,
+} from '@/labs/curriculum-plan-homepage';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -676,6 +680,42 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function curriculumPlanHomepageLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(curriculumPlanHomepageLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(curriculumPlanHomepageLabAccess)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(curriculumPlanHomepageLabAccess)) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -1388,6 +1428,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'curriculum-plan-homepage',
+            loader: curriculumPlanHomepageLabLoader,
+            lazy: loadCurriculumPlanHomepageLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',

@@ -9,6 +9,7 @@ export const routes = {
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>
     `/invite/${inviteType}/${verificationCode}`,
   labsAcademicAdjustedWorkloadReport: '/labs/academic-adjusted-workload-report',
+  labsCurriculumPlanHomepage: '/labs/curriculum-plan-homepage',
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
   labsPayloadCrypto: '/labs/payload-crypto',

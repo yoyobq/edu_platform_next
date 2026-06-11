@@ -265,6 +265,33 @@ test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 la
   await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
 });
 
+test('具备 staff 权限的已登录会话，应允许进入授课计划首页 lab', async ({ page }) => {
+  await mockApiHealth(page);
+  await mockAuthGraphQL(page, {
+    currentSession: {
+      displayName: 'staff-user',
+      identity: {
+        id: 'staff-1001',
+        kind: 'STAFF',
+      },
+      primaryAccessGroup: 'STAFF',
+    },
+  });
+  await seedAuthSession(page, {
+    displayName: 'staff-user',
+    identity: {
+      id: 'staff-1001',
+      kind: 'STAFF',
+    },
+    primaryAccessGroup: 'STAFF',
+  });
+
+  await page.goto(routes.labsCurriculumPlanHomepage);
+
+  await expect(page.getByRole('heading', { name: '授课计划首页' })).toBeVisible();
+  await expect(page.getByRole('button', { name: '读取计划列表' })).toBeVisible();
+});
+
 test('labs upstream session demo 可登录 upstream、读取教师字典并滚动更新本地 token', async ({
   page,
 }) => {
