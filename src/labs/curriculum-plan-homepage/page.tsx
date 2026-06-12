@@ -1,7 +1,13 @@
 // src/labs/curriculum-plan-homepage/page.tsx
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import { SaveOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import {
+  BookOutlined,
+  CalendarOutlined,
+  FlagOutlined,
+  SaveOutlined,
+  SearchOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -26,6 +32,10 @@ import {
 } from 'antd';
 
 import {
+  type AcademicSemesterRecord,
+  requestAcademicSemesters,
+} from '@/entities/academic-semester';
+import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
   type DepartmentSelectOption,
@@ -41,6 +51,8 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+
 import {
   type CurrentCurriculumPlanHomepageAccount,
   type CurriculumPlanHomepageDetailResult,
@@ -49,6 +61,7 @@ import {
   type CurriculumPlanHomepagePrefillFieldWriteRule,
   type CurriculumPlanHomepagePrefillMode,
   type CurriculumPlanHomepagePrefillPhase,
+  type CurriculumPlanHomepagePrefillResult,
   type CurriculumPlanHomepageReferenceCandidateItem,
   type CurriculumPlanHomepageReferenceCandidatesResult,
   type CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
@@ -56,10 +69,12 @@ import {
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
+  isCurriculumPlanHomepagePrefillTimeWindowClosedError,
   isExpiredUpstreamSessionError,
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
+  resolveCurriculumPlanHomepagePrefillErrorMessage,
   resolveUpstreamErrorMessage,
   saveCurriculumPlanHomepage,
 } from './api';
@@ -135,6 +150,11 @@ type SuggestedFieldState = {
 
 type SuggestedFieldsByPlan = Record<string, Record<string, SuggestedFieldState>>;
 
+type PrefillActionState = {
+  disabled: boolean;
+  tooltip?: string;
+};
+
 const SEMESTER_OPTIONS = [
   {
     label: '第一学期',
@@ -148,6 +168,7 @@ const SEMESTER_OPTIONS = [
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const MANAGED_HOMEPAGE_SLOT_GROUPS = ['ACADEMIC_OFFICER', 'TEACHING_GROUP_LEADER'] as const;
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
+const DAY_MS = 24 * 60 * 60 * 1000;
 const CALCULATED_SUGGESTION_FIELDS = new Set([
   'compensated_lessons',
   'completed_lessons',
@@ -214,6 +235,149 @@ function resolvePrefillMode(account: CurrentCurriculumPlanHomepageAccount | null
 
 function buildPhaseKey(planId: string, phase: CurriculumPlanHomepagePrefillPhase) {
   return `${planId}:${phase}`;
+}
+
+function confirmPrefillTimeWindowOverride() {
+  return new Promise<boolean>((resolve) => {
+    Modal.confirm({
+      cancelText: '取消',
+      content: '当前不在建议预填时间范围内，是否继续预填？',
+      okText: '继续预填',
+      onCancel: () => {
+        resolve(false);
+      },
+      onOk: () => {
+        resolve(true);
+      },
+      title: '确认继续预填',
+    });
+  });
+}
+
+function parseDateToDayIndex(value: string | null | undefined) {
+  const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})/u);
+
+  if (!match) {
+    return null;
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) {
+    return null;
+  }
+
+  return Math.floor(Date.UTC(year, month - 1, day) / DAY_MS);
+}
+
+function formatDayIndex(dayIndex: number) {
+  return new Date(dayIndex * DAY_MS).toISOString().slice(0, 10);
+}
+
+function getTodayDayIndex() {
+  const now = new Date();
+
+  return Math.floor(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / DAY_MS);
+}
+
+function findAcademicSemester(
+  item: CurriculumPlanHomepageListItem,
+  semesters: readonly AcademicSemesterRecord[],
+) {
+  const schoolYear = Number.parseInt(String(item.schoolYear ?? ''), 10);
+  const termNumber = Number.parseInt(String(item.semester ?? ''), 10);
+
+  if (!Number.isFinite(schoolYear) || !Number.isFinite(termNumber)) {
+    return null;
+  }
+
+  return (
+    semesters.find(
+      (semester) => semester.schoolYear === schoolYear && semester.termNumber === termNumber,
+    ) ?? null
+  );
+}
+
+function resolvePrefillActionState(input: {
+  ignoreTimeWindow: boolean;
+  isLoadingAcademicSemesters: boolean;
+  item: CurriculumPlanHomepageListItem;
+  phase: CurriculumPlanHomepagePrefillPhase;
+  semesters: readonly AcademicSemesterRecord[];
+}): PrefillActionState {
+  if (input.ignoreTimeWindow) {
+    return {
+      disabled: false,
+    };
+  }
+
+  if (input.isLoadingAcademicSemesters) {
+    return {
+      disabled: true,
+      tooltip: '正在确认预填时间范围。',
+    };
+  }
+
+  const semester = findAcademicSemester(input.item, input.semesters);
+
+  if (!semester) {
+    return {
+      disabled: false,
+    };
+  }
+
+  const baseDayIndex = parseDateToDayIndex(
+    input.phase === 'INITIAL' ? semester.firstTeachingDate : semester.examStartDate,
+  );
+
+  if (baseDayIndex === null) {
+    return {
+      disabled: false,
+    };
+  }
+
+  const allowedFrom = baseDayIndex - 7;
+  const allowedTo = baseDayIndex + (input.phase === 'INITIAL' ? 20 : 13);
+  const today = getTodayDayIndex();
+
+  if (today >= allowedFrom && today <= allowedTo) {
+    return {
+      disabled: false,
+    };
+  }
+
+  return {
+    disabled: true,
+    tooltip: `当前不在建议预填时间范围内，允许 ${formatDayIndex(allowedFrom)} 至 ${formatDayIndex(
+      allowedTo,
+    )}。`,
+  };
+}
+
+function buildPrefillActionStates(input: {
+  ignoreTimeWindow: boolean;
+  isLoadingAcademicSemesters: boolean;
+  item: CurriculumPlanHomepageListItem;
+  semesters: readonly AcademicSemesterRecord[];
+}): Record<CurriculumPlanHomepagePrefillPhase, PrefillActionState> {
+  return {
+    FINAL: resolvePrefillActionState({
+      ignoreTimeWindow: input.ignoreTimeWindow,
+      isLoadingAcademicSemesters: input.isLoadingAcademicSemesters,
+      item: input.item,
+      phase: 'FINAL',
+      semesters: input.semesters,
+    }),
+    INITIAL: resolvePrefillActionState({
+      ignoreTimeWindow: input.ignoreTimeWindow,
+      isLoadingAcademicSemesters: input.isLoadingAcademicSemesters,
+      item: input.item,
+      phase: 'INITIAL',
+      semesters: input.semesters,
+    }),
+  };
 }
 
 function requireListItemValue(value: string | null | undefined, label: string) {
@@ -1031,6 +1195,7 @@ function CurriculumPlanHomepageFormPreview({
   onRevertSuggestion,
   onSave,
   onUpdateField,
+  prefillActionStates,
   statusMessage,
   suggestions,
   token,
@@ -1046,6 +1211,7 @@ function CurriculumPlanHomepageFormPreview({
   onRevertSuggestion: (field: string) => void;
   onSave: () => void;
   onUpdateField: (field: string, value: number | string | null) => void;
+  prefillActionStates: Record<CurriculumPlanHomepagePrefillPhase, PrefillActionState>;
   statusMessage: string | null;
   suggestions: Record<string, SuggestedFieldState>;
   token: ReturnType<typeof theme.useToken>['token'];
@@ -1097,6 +1263,40 @@ function CurriculumPlanHomepageFormPreview({
       suggestion: suggestions[field],
       token,
     });
+  const renderPrefillButton = (
+    phase: CurriculumPlanHomepagePrefillPhase,
+    label: string,
+    icon: ReactNode,
+  ) => {
+    const actionState = prefillActionStates[phase];
+    const button = (
+      <Button
+        disabled={actionState.disabled}
+        icon={icon}
+        loading={!actionState.disabled && isLoadingPrefill}
+        size="small"
+        onClick={() => {
+          if (actionState.disabled) {
+            return;
+          }
+
+          onPreviewPrefill(phase);
+        }}
+      >
+        {label}
+      </Button>
+    );
+
+    if (!actionState.tooltip) {
+      return button;
+    }
+
+    return (
+      <Tooltip title={actionState.tooltip}>
+        <span style={{ display: 'inline-block' }}>{button}</span>
+      </Tooltip>
+    );
+  };
 
   return (
     <Space orientation="vertical" size={token.marginSM} style={formShellStyle}>
@@ -1106,26 +1306,8 @@ function CurriculumPlanHomepageFormPreview({
           授课计划首页信息
         </Typography.Title>
         <Space size={token.marginXS} wrap>
-          <Button
-            icon={<ThunderboltOutlined />}
-            loading={isLoadingPrefill}
-            size="small"
-            onClick={() => {
-              onPreviewPrefill('INITIAL');
-            }}
-          >
-            学期初预填
-          </Button>
-          <Button
-            icon={<ThunderboltOutlined />}
-            loading={isLoadingPrefill}
-            size="small"
-            onClick={() => {
-              onPreviewPrefill('FINAL');
-            }}
-          >
-            学期末预填
-          </Button>
+          {renderPrefillButton('INITIAL', '学期初预填', <CalendarOutlined />)}
+          {renderPrefillButton('FINAL', '学期末预填', <FlagOutlined />)}
           <Button
             icon={<SaveOutlined />}
             loading={isSaving}
@@ -1424,6 +1606,9 @@ export function CurriculumPlanHomepageLabPage() {
   const [loadingReferenceKey, setLoadingReferenceKey] = useState<string | null>(null);
   const [loadingEndChapterKey, setLoadingEndChapterKey] = useState<string | null>(null);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
+  const [isLoadingAcademicSemesters, setIsLoadingAcademicSemesters] = useState(false);
+  const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
+  const [academicSemestersError, setAcademicSemestersError] = useState<string | null>(null);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
@@ -1957,8 +2142,17 @@ export function CurriculumPlanHomepageLabPage() {
           message: '当前首页详情尚未加载完成，暂时无法预填。',
           target: 'prefill',
         });
-        return;
+        return false;
       }
+
+      const loadPreviewResult = (overrideTimeWindow?: boolean) =>
+        previewCurriculumPlanHomepagePrefill({
+          context: buildPrefillContext(item, prefillMode),
+          mode: prefillMode,
+          overrideTimeWindow,
+          phase,
+          planId: item.planId,
+        });
 
       setIsPreviewingPrefill(true);
       setActionError(null);
@@ -1969,18 +2163,35 @@ export function CurriculumPlanHomepageLabPage() {
       });
 
       try {
-        const result = await previewCurriculumPlanHomepagePrefill({
-          context: buildPrefillContext(item, prefillMode),
-          mode: prefillMode,
-          phase,
-          planId: item.planId,
-        });
+        let result: CurriculumPlanHomepagePrefillResult;
+
+        try {
+          result = await loadPreviewResult();
+        } catch (error) {
+          if (!isCurriculumPlanHomepagePrefillTimeWindowClosedError(error)) {
+            throw error;
+          }
+
+          if (isAdminAccount) {
+            result = await loadPreviewResult(true);
+          } else {
+            setIsPreviewingPrefill(false);
+
+            const shouldOverrideTimeWindow = await confirmPrefillTimeWindowOverride();
+
+            if (!shouldOverrideTimeWindow) {
+              return false;
+            }
+
+            setIsPreviewingPrefill(true);
+            result = await loadPreviewResult(true);
+          }
+        }
+
         const update = buildPrefillDraftUpdate({
           currentDraft: draft,
           fieldWriteRules: result.fieldWriteRules,
           homepagePatch: result.homepagePatch,
-          removeGeneratedStopNoteLines: phase === 'INITIAL',
-          removeTeachingEndChapterPrefix: phase === 'INITIAL' ? '最终完成至：' : undefined,
         });
 
         setPrefillPreviewUpdates((current) => ({
@@ -1992,16 +2203,23 @@ export function CurriculumPlanHomepageLabPage() {
             warnings: result.warnings,
           },
         }));
+
+        return true;
       } catch (error) {
         setActionError({
-          message: resolveUpstreamErrorMessage(error, '暂时无法生成授课计划首页预填。'),
+          message: resolveCurriculumPlanHomepagePrefillErrorMessage(
+            error,
+            '暂时无法生成授课计划首页预填。',
+          ),
           target: 'prefill',
         });
+
+        return false;
       } finally {
         setIsPreviewingPrefill(false);
       }
     },
-    [homepageDrafts, prefillMode],
+    [homepageDrafts, isAdminAccount, prefillMode],
   );
 
   const handleOpenPrefillModal = useCallback(
@@ -2021,7 +2239,13 @@ export function CurriculumPlanHomepageLabPage() {
         phase,
       });
 
-      await handlePreviewPrefill(item, phase);
+      const isPreviewReady = await handlePreviewPrefill(item, phase);
+
+      if (!isPreviewReady) {
+        setPrefillModal(null);
+        return;
+      }
+
       await ensureSessionAndRun({
         item,
         phase,
@@ -2124,9 +2348,6 @@ export function CurriculumPlanHomepageLabPage() {
         currentDraft: nextDraft,
         fieldWriteRules: update.fieldWriteRules,
         homepagePatch: update.homepagePatch,
-        removeGeneratedStopNoteLines: prefillModal.phase === 'INITIAL',
-        removeTeachingEndChapterPrefix:
-          prefillModal.phase === 'INITIAL' ? '最终完成至：' : undefined,
       });
 
       nextDraft = prefillUpdate.nextDraft;
@@ -2232,6 +2453,12 @@ export function CurriculumPlanHomepageLabPage() {
         const matchedDetail = detailResult?.planId === item.planId ? detailResult : null;
         const draft = homepageDrafts[item.planId];
         const suggestions = suggestedFieldsByPlan[item.planId] ?? {};
+        const prefillActionStates = buildPrefillActionStates({
+          ignoreTimeWindow: isAdminAccount,
+          isLoadingAcademicSemesters,
+          item,
+          semesters: academicSemesters,
+        });
 
         return {
           children: (
@@ -2258,6 +2485,7 @@ export function CurriculumPlanHomepageLabPage() {
                       isCompactViewport={isCompactViewport}
                       isLoadingPrefill={isPreviewingPrefill && isActiveItem}
                       isSaving={isSavingHomepage && isActiveItem}
+                      prefillActionStates={prefillActionStates}
                       statusMessage={isActiveItem ? saveSuccessMessage : null}
                       suggestions={suggestions}
                       onConfirmAllSuggestions={() => {
@@ -2351,9 +2579,12 @@ export function CurriculumPlanHomepageLabPage() {
       detailResult,
       confirmAllSuggestedFields,
       confirmSuggestedField,
+      academicSemesters,
       handleOpenPrefillModal,
       handleSaveHomepage,
       homepageDrafts,
+      isLoadingAcademicSemesters,
+      isAdminAccount,
       isCompactViewport,
       isLoadingDetail,
       isPreviewingPrefill,
@@ -2451,6 +2682,44 @@ export function CurriculumPlanHomepageLabPage() {
       isCancelled = true;
     };
   }, [clearResults]);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadAcademicSemesters() {
+      setIsLoadingAcademicSemesters(true);
+      setAcademicSemestersError(null);
+
+      try {
+        const nextSemesters = await requestAcademicSemesters({ limit: 500 });
+
+        if (isCancelled) {
+          return;
+        }
+
+        setAcademicSemesters(nextSemesters);
+      } catch (error) {
+        if (isCancelled) {
+          return;
+        }
+
+        setAcademicSemesters([]);
+        setAcademicSemestersError(
+          resolveUpstreamErrorMessage(error, '暂时无法加载学期日期，预填时间窗口状态不可用。'),
+        );
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingAcademicSemesters(false);
+        }
+      }
+    }
+
+    void loadAcademicSemesters();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
@@ -2597,22 +2866,18 @@ export function CurriculumPlanHomepageLabPage() {
 
   return (
     <div style={{ display: 'grid', gap: token.marginSM }}>
-      <Flex align="flex-start" justify="space-between" wrap="wrap" gap={token.marginSM}>
-        <div>
-          <Typography.Title level={3} style={{ marginBottom: token.marginXXS }}>
-            My 计划首页
-          </Typography.Title>
-          <Typography.Text type="secondary">
-            {currentAccount
-              ? `${currentAccount.displayName} · ${currentAccount.accessGroup.join(', ')}`
-              : '正在确认当前账号'}
-          </Typography.Text>
-        </div>
-        <Tag color="blue">Lab</Tag>
-      </Flex>
+      <DecoratedPageHeader
+        colorScheme="purple"
+        description="对照历史计划，补齐首页信息"
+        icon={<BookOutlined />}
+        title="My 计划首页"
+      />
 
       {pageError ? <Alert showIcon message={pageError} type="error" /> : null}
       {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
+      {academicSemestersError ? (
+        <Alert showIcon message={academicSemestersError} type="warning" />
+      ) : null}
 
       <Card size="small">
         <Form<SearchFormValues>

@@ -120,38 +120,10 @@ function appendUniqueLine(currentValue: unknown, line: string) {
   return trimmedCurrentText ? `${trimmedCurrentText}\n${nextLine}` : nextLine;
 }
 
-function removePrefixLine(currentValue: unknown, prefix: string) {
-  const currentText = normalizeText(currentValue);
-
-  if (!currentText) {
-    return currentText;
-  }
-
-  return currentText
-    .split(/\r?\n/)
-    .filter((line) => !line.trimStart().startsWith(prefix))
-    .join('\n');
-}
-
 function isGeneratedStopNoteLine(line: string) {
   const normalizedLine = line.trim();
 
   return /(放假|停课|运动会)/u.test(normalizedLine) && /\d+(?:\.\d+)?\s*课时/u.test(normalizedLine);
-}
-
-function removeGeneratedStopNoteLines(currentValue: unknown) {
-  const currentText = normalizeText(currentValue);
-
-  if (!currentText) {
-    return currentText;
-  }
-
-  return currentText
-    .split(/\r?\n/)
-    .filter((line) => {
-      return !isGeneratedStopNoteLine(line);
-    })
-    .join('\n');
 }
 
 function placeTeachingEndChapterFirstLine(currentValue: unknown, prefix: string, value: string) {
@@ -199,8 +171,6 @@ export function buildPrefillDraftUpdate(input: {
   currentDraft: Record<string, unknown>;
   fieldWriteRules: readonly CurriculumPlanHomepagePrefillFieldWriteRule[];
   homepagePatch: Record<string, unknown>;
-  removeGeneratedStopNoteLines?: boolean;
-  removeTeachingEndChapterPrefix?: string;
 }) {
   const nextDraft = { ...input.currentDraft };
   const changes: CurriculumPlanHomepageDraftChange[] = [];
@@ -212,29 +182,6 @@ export function buildPrefillDraftUpdate(input: {
       field,
       kind: 'set',
       nextValue,
-    });
-  }
-
-  if (input.removeTeachingEndChapterPrefix) {
-    setDraftValue({
-      changes,
-      draft: nextDraft,
-      field: 'teaching_end_chapter_content',
-      kind: 'replace',
-      nextValue: removePrefixLine(
-        nextDraft.teaching_end_chapter_content,
-        input.removeTeachingEndChapterPrefix,
-      ),
-    });
-  }
-
-  if (input.removeGeneratedStopNoteLines) {
-    setDraftValue({
-      changes,
-      draft: nextDraft,
-      field: 'teaching_end_chapter_content',
-      kind: 'replace',
-      nextValue: removeGeneratedStopNoteLines(nextDraft.teaching_end_chapter_content),
     });
   }
 

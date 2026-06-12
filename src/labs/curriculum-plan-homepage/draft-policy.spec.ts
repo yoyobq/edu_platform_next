@@ -46,7 +46,7 @@ describe('curriculum plan homepage draft policy', () => {
     ]);
   });
 
-  it('removes final chapter prefix before applying initial prefill notes', () => {
+  it('keeps existing teaching end content when appending prefill notes', () => {
     const result = buildPrefillDraftUpdate({
       currentDraft: {
         teaching_end_chapter_content: '清明放假 2 课时\n最终完成至：旧章节',
@@ -59,34 +59,10 @@ describe('curriculum plan homepage draft policy', () => {
         },
       ],
       homepagePatch: {},
-      removeTeachingEndChapterPrefix: '最终完成至：',
     });
 
     expect(result.nextDraft).toMatchObject({
-      teaching_end_chapter_content: '清明放假 2 课时\n运动会放假 4 课时',
-    });
-  });
-
-  it('replaces generated stop notes when applying initial prefill again', () => {
-    const result = buildPrefillDraftUpdate({
-      currentDraft: {
-        teaching_end_chapter_content:
-          '清明放假 2 课时，运动会放假 4 课时\n教师手工备注保留\n最终完成至：旧章节',
-      },
-      fieldWriteRules: [
-        {
-          field: 'teaching_end_chapter_content',
-          mode: 'APPEND_UNIQUE_LINE',
-          value: '清明放假 2 课时，劳动节放假 2 课时',
-        },
-      ],
-      homepagePatch: {},
-      removeGeneratedStopNoteLines: true,
-      removeTeachingEndChapterPrefix: '最终完成至：',
-    });
-
-    expect(result.nextDraft).toMatchObject({
-      teaching_end_chapter_content: '教师手工备注保留\n清明放假 2 课时，劳动节放假 2 课时',
+      teaching_end_chapter_content: '清明放假 2 课时\n最终完成至：旧章节\n运动会放假 4 课时',
     });
   });
 

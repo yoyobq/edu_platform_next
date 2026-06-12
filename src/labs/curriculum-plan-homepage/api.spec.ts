@@ -2,28 +2,40 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, hasGraphQLErrorCode } from '@/shared/graphql';
 
 import {
   fetchCurrentCurriculumPlanHomepageAccount,
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
+  isCurriculumPlanHomepagePrefillTimeWindowClosedError,
+  isCurriculumPlanHomepageSemesterInvalidDateError,
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
+  resolveCurriculumPlanHomepagePrefillErrorMessage,
   saveCurriculumPlanHomepage,
 } from './api';
 
+const { executeGraphQLMock, hasGraphQLErrorCodeMock } = vi.hoisted(() => ({
+  executeGraphQLMock: vi.fn(),
+  hasGraphQLErrorCodeMock: vi.fn(() => false),
+}));
+
 vi.mock('@/shared/graphql', () => ({
-  executeGraphQL: vi.fn(),
+  executeGraphQL: executeGraphQLMock,
+  hasGraphQLErrorCode: hasGraphQLErrorCodeMock,
 }));
 
 const mockedExecuteGraphQL = vi.mocked(executeGraphQL);
+const mockedHasGraphQLErrorCode = vi.mocked(hasGraphQLErrorCode);
 
 describe('curriculum plan homepage lab api', () => {
   beforeEach(() => {
     mockedExecuteGraphQL.mockReset();
+    mockedHasGraphQLErrorCode.mockReset();
+    mockedHasGraphQLErrorCode.mockReturnValue(false);
   });
 
   it('maps the current staff account for upstream session ownership', async () => {
@@ -254,6 +266,7 @@ describe('curriculum plan homepage lab api', () => {
           weeklyHours: 4,
         },
         mode: 'managed',
+        overrideTimeWindow: true,
         phase: 'INITIAL',
         planId: ' plan-001 ',
       }),
@@ -264,6 +277,9 @@ describe('curriculum plan homepage lab api', () => {
     });
     expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
       'query PreviewAcademicCurriculumPlanHomepagePrefill',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'overrideTimeWindow: $overrideTimeWindow',
     );
     expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
       context: {
@@ -276,6 +292,7 @@ describe('curriculum plan homepage lab api', () => {
         weekCount: 15,
         weeklyHours: 4,
       },
+      overrideTimeWindow: true,
       phase: 'INITIAL',
       planId: 'plan-001',
     });
@@ -309,6 +326,9 @@ describe('curriculum plan homepage lab api', () => {
     expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
       'query PreviewMyAcademicCurriculumPlanHomepagePrefill',
     );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'overrideTimeWindow: $overrideTimeWindow',
+    );
     expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
       context: {
         courseName: null,
@@ -322,6 +342,27 @@ describe('curriculum plan homepage lab api', () => {
       phase: 'FINAL',
       planId: 'plan-001',
     });
+  });
+
+  it('detects prefill time window and invalid semester date errors', () => {
+    const error = new Error('graphql');
+
+    mockedHasGraphQLErrorCode.mockImplementation((_error, errorCode) => {
+      return (
+        errorCode === 'ACADEMIC_COURSE_SCHEDULE_CURRICULUM_PLAN_HOMEPAGE_PREFILL_TIME_WINDOW_CLOSED'
+      );
+    });
+
+    expect(isCurriculumPlanHomepagePrefillTimeWindowClosedError(error)).toBe(true);
+    expect(isCurriculumPlanHomepageSemesterInvalidDateError(error)).toBe(false);
+
+    mockedHasGraphQLErrorCode.mockImplementation((_error, errorCode) => {
+      return errorCode === 'ACADEMIC_SEMESTER_INVALID_DATE';
+    });
+
+    expect(resolveCurriculumPlanHomepagePrefillErrorMessage(error, 'fallback')).toBe(
+      '学期日期数据异常，暂时无法生成预填建议。请联系管理员核对学期日期配置。',
+    );
   });
 
   it('loads managed historical reference candidates and keeps upstream session result', async () => {
