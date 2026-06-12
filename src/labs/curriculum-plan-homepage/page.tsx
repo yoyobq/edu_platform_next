@@ -1,14 +1,7 @@
 // src/labs/curriculum-plan-homepage/page.tsx
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ClearOutlined,
-  LoginOutlined,
-  ReloadOutlined,
-  SaveOutlined,
-  SearchOutlined,
-  ThunderboltOutlined,
-} from '@ant-design/icons';
+import { SaveOutlined, SearchOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -28,6 +21,7 @@ import {
   Tabs,
   Tag,
   theme,
+  Tooltip,
   Typography,
 } from 'antd';
 
@@ -41,7 +35,6 @@ import {
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
-  formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -152,6 +145,33 @@ const SEMESTER_OPTIONS = [
 ];
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const MANAGED_HOMEPAGE_SLOT_GROUPS = ['ACADEMIC_OFFICER', 'TEACHING_GROUP_LEADER'] as const;
+const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
+
+function useCompactViewport() {
+  const [isCompactViewport, setIsCompactViewport] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(COMPACT_VIEWPORT_QUERY).matches,
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    const mediaQuery = window.matchMedia(COMPACT_VIEWPORT_QUERY);
+    const handleChange = () => {
+      setIsCompactViewport(mediaQuery.matches);
+    };
+
+    handleChange();
+    mediaQuery.addEventListener('change', handleChange);
+
+    return () => {
+      mediaQuery.removeEventListener('change', handleChange);
+    };
+  }, []);
+
+  return isCompactViewport;
+}
 
 function getDefaultAcademicTerm(): SearchFormValues {
   const now = new Date();
@@ -323,11 +343,11 @@ function renderJsonBlock(value: unknown, token: ReturnType<typeof theme.useToken
         borderRadius: token.borderRadiusSM,
         color: token.colorText,
         fontSize: token.fontSizeSM,
-        lineHeight: 1.6,
+        lineHeight: 1.45,
         margin: 0,
-        maxHeight: 360,
+        maxHeight: 240,
         overflow: 'auto',
-        padding: token.paddingSM,
+        padding: token.paddingXS,
         whiteSpace: 'pre-wrap',
         wordBreak: 'break-word',
       }}
@@ -463,12 +483,17 @@ function buildHomepageDraftFromDetail(result: CurriculumPlanHomepageDetailResult
 }
 
 function renderDraftInput(value: string, onChange: (nextValue: string) => void) {
-  return <Input value={value} onChange={(event) => onChange(event.target.value)} />;
+  return <Input size="small" value={value} onChange={(event) => onChange(event.target.value)} />;
 }
 
-function renderDraftTextarea(value: string, onChange: (nextValue: string) => void, rows = 3) {
+function renderDraftTextarea(value: string, onChange: (nextValue: string) => void, rows = 2) {
   return (
-    <Input.TextArea rows={rows} value={value} onChange={(event) => onChange(event.target.value)} />
+    <Input.TextArea
+      rows={rows}
+      size="small"
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+    />
   );
 }
 
@@ -476,6 +501,7 @@ function renderDraftNumber(value: number | null, onChange: (nextValue: number | 
   return (
     <InputNumber
       controls
+      size="small"
       style={{ width: '100%' }}
       value={value}
       onChange={(nextValue) => {
@@ -483,6 +509,24 @@ function renderDraftNumber(value: number | null, onChange: (nextValue: number | 
       }}
     />
   );
+}
+
+function formatSuggestionOriginalValue(value: unknown) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  if (typeof value === 'string') {
+    const trimmedValue = value.trim();
+
+    return trimmedValue ? trimmedValue : null;
+  }
+
+  if (typeof value === 'object') {
+    return formatJson(value);
+  }
+
+  return String(value);
 }
 
 function renderSuggestedControl(input: {
@@ -498,8 +542,8 @@ function renderSuggestedControl(input: {
   }
 
   const isCalculated = input.suggestion.tone === 'calculated';
-
-  return (
+  const originalValue = formatSuggestionOriginalValue(input.suggestion.before);
+  const control = (
     <div
       style={{
         background: isCalculated ? input.token.colorWarningBg : input.token.colorInfoBg,
@@ -507,7 +551,7 @@ function renderSuggestedControl(input: {
           isCalculated ? input.token.colorWarningBorder : input.token.colorInfoBorder
         }`,
         borderRadius: input.token.borderRadiusSM,
-        padding: input.token.paddingXS,
+        padding: input.token.paddingXXS,
       }}
     >
       <Space orientation="vertical" size={input.token.marginXXS} style={{ width: '100%' }}>
@@ -538,6 +582,29 @@ function renderSuggestedControl(input: {
         </Flex>
       </Space>
     </div>
+  );
+
+  if (!originalValue) {
+    return control;
+  }
+
+  return (
+    <Tooltip
+      title={
+        <span
+          style={{
+            display: 'block',
+            maxWidth: 320,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+          }}
+        >
+          原始值：{originalValue}
+        </span>
+      }
+    >
+      {control}
+    </Tooltip>
   );
 }
 
@@ -668,13 +735,13 @@ function CurriculumPlanHomepagePrefillModal({
       okText="填入表单"
       open={Boolean(modal)}
       title={modal ? `${title} · ${modal.item.courseName || '未命名课程'}` : title}
-      width={640}
+      width={560}
       onCancel={onClose}
       onOk={() => {
         void onApply();
       }}
     >
-      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+      <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {prefillUpdate?.warnings.length ? (
           <Alert showIcon message={prefillUpdate.warnings.join('、')} type="warning" />
         ) : null}
@@ -688,7 +755,7 @@ function CurriculumPlanHomepagePrefillModal({
         <Space orientation="vertical" size="small" style={{ width: '100%' }}>
           <Typography.Text strong>参考其他教学计划</Typography.Text>
           {isLoadingReferenceCandidates ? (
-            <Flex align="center" justify="center" style={{ minHeight: 96 }}>
+            <Flex align="center" justify="center" style={{ minHeight: 72 }}>
               <Spin />
             </Flex>
           ) : (
@@ -720,7 +787,7 @@ function CurriculumPlanHomepagePrefillModal({
           <Space orientation="vertical" size="small" style={{ width: '100%' }}>
             <Typography.Text strong>最终章节</Typography.Text>
             {isLoadingEndChapterCandidates ? (
-              <Flex align="center" justify="center" style={{ minHeight: 96 }}>
+              <Flex align="center" justify="center" style={{ minHeight: 72 }}>
                 <Spin />
               </Flex>
             ) : (
@@ -753,7 +820,7 @@ function CurriculumPlanHomepagePrefillModal({
         ) : null}
 
         {isLoadingPrefill ? (
-          <Flex align="center" justify="center" style={{ minHeight: 64 }}>
+          <Flex align="center" justify="center" style={{ minHeight: 48 }}>
             <Spin />
           </Flex>
         ) : (
@@ -768,6 +835,7 @@ function CurriculumPlanHomepagePrefillModal({
 
 function CurriculumPlanHomepageFormPreview({
   homepage,
+  isCompactViewport,
   isLoadingPrefill,
   isSaving,
   onConfirmAllSuggestions,
@@ -781,6 +849,7 @@ function CurriculumPlanHomepageFormPreview({
   token,
 }: {
   homepage: Record<string, unknown>;
+  isCompactViewport: boolean;
   isLoadingPrefill: boolean;
   isSaving: boolean;
   onConfirmAllSuggestions: () => void;
@@ -809,7 +878,7 @@ function CurriculumPlanHomepageFormPreview({
     background: token.colorFillQuaternary,
     color: token.colorText,
     textAlign: 'center',
-    width: 230,
+    width: isCompactViewport ? 128 : 160,
   } as const;
   const headerCellStyle = {
     ...labelCellStyle,
@@ -825,6 +894,12 @@ function CurriculumPlanHomepageFormPreview({
     fontWeight: token.fontWeightStrong,
     padding: `0 ${token.paddingXXS}px`,
   } as const;
+  const formShellStyle = {
+    marginInline: 'auto',
+    maxWidth: isCompactViewport ? '100%' : 1020,
+    width: '100%',
+  } as const;
+  const textareaRows = isCompactViewport ? 2 : 3;
   const renderField = (field: string, children: ReactNode) =>
     renderSuggestedControl({
       children,
@@ -836,16 +911,17 @@ function CurriculumPlanHomepageFormPreview({
     });
 
   return (
-    <Space orientation="vertical" size={token.margin} style={{ width: '100%' }}>
-      <Flex align="center" justify="space-between" gap={token.margin}>
-        <span style={{ width: 88 }} />
-        <Typography.Title level={3} style={{ margin: 0, textAlign: 'center' }}>
+    <Space orientation="vertical" size={token.marginSM} style={formShellStyle}>
+      <Flex align="center" justify="space-between" gap={token.marginSM} wrap="wrap">
+        <span style={{ width: isCompactViewport ? 0 : 64 }} />
+        <Typography.Title level={4} style={{ margin: 0, textAlign: 'center' }}>
           授课计划首页信息
         </Typography.Title>
-        <Space wrap>
+        <Space size={token.marginXS} wrap>
           <Button
             icon={<ThunderboltOutlined />}
             loading={isLoadingPrefill}
+            size="small"
             onClick={() => {
               onPreviewPrefill('INITIAL');
             }}
@@ -855,13 +931,20 @@ function CurriculumPlanHomepageFormPreview({
           <Button
             icon={<ThunderboltOutlined />}
             loading={isLoadingPrefill}
+            size="small"
             onClick={() => {
               onPreviewPrefill('FINAL');
             }}
           >
             学期末预填
           </Button>
-          <Button icon={<SaveOutlined />} loading={isSaving} type="primary" onClick={onSave}>
+          <Button
+            icon={<SaveOutlined />}
+            loading={isSaving}
+            size="small"
+            type="primary"
+            onClick={onSave}
+          >
             保存
           </Button>
         </Space>
@@ -911,6 +994,7 @@ function CurriculumPlanHomepageFormPreview({
                   renderDraftTextarea(
                     readHomepageText(homepage, ['teaching_objectives', 'teachingObjectives']),
                     (value) => onUpdateField('teaching_objectives', value),
+                    textareaRows,
                   ),
                 )}
               </td>
@@ -929,6 +1013,7 @@ function CurriculumPlanHomepageFormPreview({
                       'teachingMethods',
                     ]),
                     (value) => onUpdateField('improvement_measures', value),
+                    textareaRows,
                   ),
                 )}
               </td>
@@ -989,23 +1074,36 @@ function CurriculumPlanHomepageFormPreview({
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['lecture_lessons']), (value) =>
-                  onUpdateField('lecture_lessons', value),
+                {renderField(
+                  'lecture_lessons',
+                  renderDraftNumber(readHomepageNumber(homepage, ['lecture_lessons']), (value) =>
+                    onUpdateField('lecture_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['training_lessons']), (value) =>
-                  onUpdateField('training_lessons', value),
+                {renderField(
+                  'training_lessons',
+                  renderDraftNumber(readHomepageNumber(homepage, ['training_lessons']), (value) =>
+                    onUpdateField('training_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['review_exam_lessons']), (value) =>
-                  onUpdateField('review_exam_lessons', value),
+                {renderField(
+                  'review_exam_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, ['review_exam_lessons']),
+                    (value) => onUpdateField('review_exam_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['flexible_lessons']), (value) =>
-                  onUpdateField('flexible_lessons', value),
+                {renderField(
+                  'flexible_lessons',
+                  renderDraftNumber(readHomepageNumber(homepage, ['flexible_lessons']), (value) =>
+                    onUpdateField('flexible_lessons', value),
+                  ),
                 )}
               </td>
             </tr>
@@ -1101,7 +1199,7 @@ function CurriculumPlanHomepageFormPreview({
                       'teachingEndChapterContent',
                     ]),
                     (value) => onUpdateField('teaching_end_chapter_content', value),
-                    3,
+                    textareaRows,
                   ),
                 )}
               </td>
@@ -1115,6 +1213,7 @@ function CurriculumPlanHomepageFormPreview({
 
 export function CurriculumPlanHomepageLabPage() {
   const { token } = theme.useToken();
+  const isCompactViewport = useCompactViewport();
   const defaultSearchValues = useMemo(() => getDefaultAcademicTerm(), []);
   const schoolYearOptions = useMemo(
     () => buildSchoolYearOptions(defaultSearchValues.schoolYear),
@@ -1127,7 +1226,6 @@ export function CurriculumPlanHomepageLabPage() {
   );
   const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
-  const [isRefreshingSession, setIsRefreshingSession] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSavingHomepage, setIsSavingHomepage] = useState(false);
@@ -1945,17 +2043,27 @@ export function CurriculumPlanHomepageLabPage() {
 
         return {
           children: (
-            <div style={{ minHeight: 480, paddingLeft: token.paddingLG }}>
+            <div
+              style={{
+                minHeight: isCompactViewport ? 320 : 400,
+                paddingLeft: isCompactViewport ? 0 : token.paddingSM,
+              }}
+            >
               {isLoadingDetail && isActiveItem ? (
-                <Flex align="center" justify="center" style={{ minHeight: 320 }}>
+                <Flex
+                  align="center"
+                  justify="center"
+                  style={{ minHeight: isCompactViewport ? 200 : 240 }}
+                >
                   <Spin />
                 </Flex>
               ) : (
-                <Space orientation="vertical" size={token.margin} style={{ width: '100%' }}>
+                <Space orientation="vertical" size={token.marginSM} style={{ width: '100%' }}>
                   {matchedDetail && draft ? (
                     <CurriculumPlanHomepageFormPreview
                       key={matchedDetail.planId}
                       homepage={draft}
+                      isCompactViewport={isCompactViewport}
                       isLoadingPrefill={isPreviewingPrefill && isActiveItem}
                       isSaving={isSavingHomepage && isActiveItem}
                       suggestions={suggestions}
@@ -2019,7 +2127,7 @@ export function CurriculumPlanHomepageLabPage() {
           ),
           key: item.planId,
           label: (
-            <div style={{ maxWidth: 240 }}>
+            <div style={{ maxWidth: isCompactViewport ? 180 : 200 }}>
               <div
                 style={{
                   fontWeight: isActiveItem ? token.fontWeightStrong : token.fontWeight,
@@ -2053,6 +2161,7 @@ export function CurriculumPlanHomepageLabPage() {
       handleOpenPrefillModal,
       handleSaveHomepage,
       homepageDrafts,
+      isCompactViewport,
       isLoadingDetail,
       isPreviewingPrefill,
       isSavingHomepage,
@@ -2290,49 +2399,12 @@ export function CurriculumPlanHomepageLabPage() {
     }
   }
 
-  async function handleRefreshSession() {
-    if (!storedSession) {
-      openLoginModal();
-      return;
-    }
-
-    setIsRefreshingSession(true);
-    setActionError(null);
-
-    try {
-      await refreshSession(storedSession);
-    } catch (error) {
-      setActionError({
-        message: resolveUpstreamRefreshFailureMessage(error),
-        target: 'session',
-      });
-      openLoginModal({
-        fallbackUserId: storedSession.upstreamLoginId,
-        message: resolveUpstreamRefreshFailureMessage(error),
-      });
-    } finally {
-      setIsRefreshingSession(false);
-    }
-  }
-
-  function handleClearSession() {
-    clearCurrentSession();
-    setLoginError(null);
-    setPendingAction(null);
-  }
-
-  const sessionSummary = storedSession
-    ? `${storedSession.upstreamLoginId || '未记录账号'} · ${formatUpstreamSessionDateTime(
-        storedSession.expiresAt,
-      )}`
-    : '未登录 upstream';
-
   return (
-    <div style={{ display: 'grid', gap: token.marginLG }}>
-      <Flex align="flex-start" justify="space-between" wrap="wrap" gap={token.margin}>
+    <div style={{ display: 'grid', gap: token.marginSM }}>
+      <Flex align="flex-start" justify="space-between" wrap="wrap" gap={token.marginSM}>
         <div>
-          <Typography.Title level={2} style={{ marginBottom: token.marginXS }}>
-            授课计划首页
+          <Typography.Title level={3} style={{ marginBottom: token.marginXXS }}>
+            My 计划首页
           </Typography.Title>
           <Typography.Text type="secondary">
             {currentAccount
@@ -2347,50 +2419,14 @@ export function CurriculumPlanHomepageLabPage() {
       {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
       {saveSuccessMessage ? <Alert showIcon message={saveSuccessMessage} type="success" /> : null}
 
-      <Card>
-        <Flex align="center" justify="space-between" wrap="wrap" gap={token.margin}>
-          <Space orientation="vertical" size={2}>
-            <Typography.Text strong>Upstream 会话</Typography.Text>
-            <Typography.Text type="secondary">{sessionSummary}</Typography.Text>
-          </Space>
-          <Space wrap>
-            <Button
-              icon={<LoginOutlined />}
-              loading={isLoadingCurrentAccount}
-              onClick={() => {
-                openLoginModal();
-              }}
-            >
-              登录 upstream
-            </Button>
-            <Button
-              disabled={!storedSession}
-              icon={<ReloadOutlined />}
-              loading={isRefreshingSession}
-              onClick={() => {
-                void handleRefreshSession();
-              }}
-            >
-              刷新会话
-            </Button>
-            <Button
-              disabled={!storedSession && !listResult}
-              icon={<ClearOutlined />}
-              onClick={handleClearSession}
-            >
-              清除
-            </Button>
-          </Space>
-        </Flex>
-      </Card>
-
-      <Card>
+      <Card size="small">
         <Form<SearchFormValues>
           form={searchForm}
           initialValues={defaultSearchValues}
           layout="inline"
           requiredMark={false}
-          style={{ rowGap: token.marginSM }}
+          size="small"
+          style={{ rowGap: token.marginXS }}
           onFinish={(values) => {
             void handleFetchList(values);
           }}
@@ -2400,14 +2436,14 @@ export function CurriculumPlanHomepageLabPage() {
             name="schoolYear"
             rules={[{ required: true, message: '请选择学年' }]}
           >
-            <Select options={schoolYearOptions} style={{ width: 140 }} />
+            <Select options={schoolYearOptions} style={{ width: 124 }} />
           </Form.Item>
           <Form.Item
             label="学期"
             name="semester"
             rules={[{ required: true, message: '请选择学期' }]}
           >
-            <Select options={SEMESTER_OPTIONS} style={{ width: 120 }} />
+            <Select options={SEMESTER_OPTIONS} style={{ width: 108 }} />
           </Form.Item>
           <DepartmentFormItem
             label="系部"
@@ -2415,7 +2451,8 @@ export function CurriculumPlanHomepageLabPage() {
             options={departmentOptions}
             required
             selectProps={{
-              style: { width: 220 },
+              size: 'small',
+              style: { width: 200 },
             }}
             validateStatus={departmentOptionsError ? 'warning' : undefined}
           />
@@ -2425,6 +2462,7 @@ export function CurriculumPlanHomepageLabPage() {
               htmlType="submit"
               icon={<SearchOutlined />}
               loading={isLoadingList}
+              size="small"
               type="primary"
             >
               读取计划列表
@@ -2440,7 +2478,9 @@ export function CurriculumPlanHomepageLabPage() {
         <Tabs
           activeKey={selectedPlanId ?? listResult.items[0]?.planId}
           items={planTabItems}
-          tabPosition="left"
+          size="small"
+          tabBarGutter={token.marginXS}
+          tabPosition={isCompactViewport ? 'top' : 'left'}
           onChange={(nextPlanId) => {
             const nextItem = listResult.items.find((item) => item.planId === nextPlanId);
 
@@ -2459,7 +2499,7 @@ export function CurriculumPlanHomepageLabPage() {
             background: token.colorBgContainer,
             border: `1px solid ${token.colorBorderSecondary}`,
             borderRadius: token.borderRadiusLG,
-            minHeight: 320,
+            minHeight: isCompactViewport ? 200 : 240,
           }}
         >
           <Empty description={isLoadingList ? '正在读取' : '暂无授课计划'} />

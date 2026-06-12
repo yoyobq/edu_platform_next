@@ -133,7 +133,7 @@ describe('curriculum plan homepage draft policy', () => {
     });
   });
 
-  it('reuses close reference lesson distribution and calculates training lessons', () => {
+  it('reuses close reference lesson distribution and marks distribution fields calculated', () => {
     const result = buildInitialReferenceLessonDistributionDraftUpdate({
       currentDraft: {
         lecture_lessons: 30,
@@ -157,7 +157,12 @@ describe('curriculum plan homepage draft policy', () => {
       total_lessons: 56,
       training_lessons: 14,
     });
-    expect(result.calculatedFields).toEqual(['training_lessons']);
+    expect(result.calculatedFields).toEqual([
+      'lecture_lessons',
+      'review_exam_lessons',
+      'flexible_lessons',
+      'training_lessons',
+    ]);
     expect(result.changes.map((change) => change.field)).toEqual([
       'lecture_lessons',
       'review_exam_lessons',
@@ -185,7 +190,7 @@ describe('curriculum plan homepage draft policy', () => {
     expect(result.changes).toEqual([]);
   });
 
-  it('replaces only the teaching end chapter prefix line', () => {
+  it('places teaching end chapter first without prefix', () => {
     const result = buildTeachingEndChapterDraftUpdate({
       currentDraft: {
         teaching_end_chapter_content: '清明放假 2 课时\n最终完成至：旧章节',
@@ -216,7 +221,42 @@ describe('curriculum plan homepage draft policy', () => {
     });
 
     expect(result.nextDraft).toMatchObject({
-      teaching_end_chapter_content: '清明放假 2 课时\n最终完成至：网页发布',
+      teaching_end_chapter_content: '网页发布\n清明放假 2 课时',
+    });
+  });
+
+  it('replaces the first teaching end chapter line when applying final prefill again', () => {
+    const result = buildTeachingEndChapterDraftUpdate({
+      currentDraft: {
+        teaching_end_chapter_content: '旧章节\n清明放假 2 课时',
+      },
+      group: {
+        applyMode: 'APPLY_TEACHING_END_CHAPTER_PREFIX_LINE',
+        groupKey: 'teachingEndChapterContent',
+        items: [],
+        phase: 'FINAL',
+        targetFields: ['teaching_end_chapter_content'],
+        title: '教学截止章节候选',
+        writeRule: {
+          field: 'teaching_end_chapter_content',
+          mode: 'REPLACE_PREFIX_LINE',
+          prefix: '最终完成至：',
+        },
+      },
+      item: {
+        displayText: '第15周 网页发布',
+        lecturePlanDetailId: 'detail-001',
+        sectionId: null,
+        sectionName: null,
+        teachingChapterContent: '网页发布',
+        topicName: null,
+        value: '网页发布',
+        weekNumber: '15',
+      },
+    });
+
+    expect(result.nextDraft).toMatchObject({
+      teaching_end_chapter_content: '网页发布\n清明放假 2 课时',
     });
   });
 });

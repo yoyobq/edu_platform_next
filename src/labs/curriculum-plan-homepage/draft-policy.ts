@@ -120,24 +120,6 @@ function appendUniqueLine(currentValue: unknown, line: string) {
   return trimmedCurrentText ? `${trimmedCurrentText}\n${nextLine}` : nextLine;
 }
 
-function replacePrefixLine(currentValue: unknown, prefix: string, value: string) {
-  const currentText = normalizeText(currentValue);
-  const nextLine = `${prefix}${value}`;
-  const currentLines = currentText ? currentText.split(/\r?\n/) : [];
-  const matchedIndex = currentLines.findIndex((line) => line.trimStart().startsWith(prefix));
-
-  if (matchedIndex >= 0) {
-    const nextLines = [...currentLines];
-    nextLines[matchedIndex] = nextLine;
-
-    return nextLines.join('\n');
-  }
-
-  const trimmedCurrentText = currentText.replace(/\s+$/u, '');
-
-  return trimmedCurrentText ? `${trimmedCurrentText}\n${nextLine}` : nextLine;
-}
-
 function removePrefixLine(currentValue: unknown, prefix: string) {
   const currentText = normalizeText(currentValue);
 
@@ -151,6 +133,12 @@ function removePrefixLine(currentValue: unknown, prefix: string) {
     .join('\n');
 }
 
+function isGeneratedStopNoteLine(line: string) {
+  const normalizedLine = line.trim();
+
+  return /(放假|停课|运动会)/u.test(normalizedLine) && /\d+(?:\.\d+)?\s*课时/u.test(normalizedLine);
+}
+
 function removeGeneratedStopNoteLines(currentValue: unknown) {
   const currentText = normalizeText(currentValue);
 
@@ -161,13 +149,27 @@ function removeGeneratedStopNoteLines(currentValue: unknown) {
   return currentText
     .split(/\r?\n/)
     .filter((line) => {
-      const normalizedLine = line.trim();
-      const looksLikeStopNote =
-        /(放假|停课|运动会)/u.test(normalizedLine) && /\d+(?:\.\d+)?\s*课时/u.test(normalizedLine);
-
-      return !looksLikeStopNote;
+      return !isGeneratedStopNoteLine(line);
     })
     .join('\n');
+}
+
+function placeTeachingEndChapterFirstLine(currentValue: unknown, prefix: string, value: string) {
+  const nextLine = value.trim();
+  const currentText = normalizeText(currentValue);
+
+  if (!nextLine) {
+    return currentText;
+  }
+
+  const retainedLines = (currentText ? currentText.split(/\r?\n/) : [])
+    .filter((line) => !line.trimStart().startsWith(prefix))
+    .filter((line) => line.trim() && line.trim() !== nextLine);
+  const [firstLine, ...restLines] = retainedLines;
+  const shouldReplaceFirstLine = Boolean(firstLine) && !isGeneratedStopNoteLine(firstLine);
+  const tailLines = shouldReplaceFirstLine ? restLines : retainedLines;
+
+  return [nextLine, ...tailLines].join('\n');
 }
 
 function setDraftValue(input: {
@@ -366,7 +368,12 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
   });
 
   return {
-    calculatedFields: ['training_lessons'],
+    calculatedFields: [
+      'lecture_lessons',
+      'review_exam_lessons',
+      'flexible_lessons',
+      'training_lessons',
+    ],
     changes,
     nextDraft,
   };
@@ -396,7 +403,11 @@ export function buildTeachingEndChapterDraftUpdate(input: {
     draft: nextDraft,
     field,
     kind: 'replace',
-    nextValue: replacePrefixLine(nextDraft[field], input.group.writeRule.prefix, input.item.value),
+    nextValue: placeTeachingEndChapterFirstLine(
+      nextDraft[field],
+      input.group.writeRule.prefix,
+      input.item.value,
+    ),
   });
 
   return {

@@ -83,7 +83,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'BookOutlined',
             key: '/labs/curriculum-plan-homepage',
-            label: '授课计划首页',
+            label: 'My 计划首页',
             navMode: 'rail' as const,
             path: '/labs/curriculum-plan-homepage',
             primaryAccessGroup: 'STAFF' as const,
