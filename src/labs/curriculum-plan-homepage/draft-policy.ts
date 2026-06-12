@@ -368,12 +368,7 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
   });
 
   return {
-    calculatedFields: [
-      'lecture_lessons',
-      'review_exam_lessons',
-      'flexible_lessons',
-      'training_lessons',
-    ],
+    calculatedFields: ['training_lessons'],
     changes,
     nextDraft,
   };

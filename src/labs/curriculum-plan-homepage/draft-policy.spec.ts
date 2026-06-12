@@ -133,7 +133,7 @@ describe('curriculum plan homepage draft policy', () => {
     });
   });
 
-  it('reuses close reference lesson distribution and marks distribution fields calculated', () => {
+  it('reuses close reference lesson distribution and calculates training lessons', () => {
     const result = buildInitialReferenceLessonDistributionDraftUpdate({
       currentDraft: {
         lecture_lessons: 30,
@@ -157,12 +157,7 @@ describe('curriculum plan homepage draft policy', () => {
       total_lessons: 56,
       training_lessons: 14,
     });
-    expect(result.calculatedFields).toEqual([
-      'lecture_lessons',
-      'review_exam_lessons',
-      'flexible_lessons',
-      'training_lessons',
-    ]);
+    expect(result.calculatedFields).toEqual(['training_lessons']);
     expect(result.changes.map((change) => change.field)).toEqual([
       'lecture_lessons',
       'review_exam_lessons',

@@ -125,10 +125,12 @@ type PrefillModalState = {
   phase: CurriculumPlanHomepagePrefillPhase;
 };
 
+type SuggestionSource = 'calculated' | 'history' | 'schedule';
+
 type SuggestedFieldState = {
   before: unknown;
   label: string;
-  tone?: 'calculated' | 'normal';
+  source: SuggestionSource;
 };
 
 type SuggestedFieldsByPlan = Record<string, Record<string, SuggestedFieldState>>;
@@ -146,6 +148,15 @@ const SEMESTER_OPTIONS = [
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const MANAGED_HOMEPAGE_SLOT_GROUPS = ['ACADEMIC_OFFICER', 'TEACHING_GROUP_LEADER'] as const;
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
+const CALCULATED_SUGGESTION_FIELDS = new Set([
+  'compensated_lessons',
+  'completed_lessons',
+  'extra_lessons',
+  'reduced_lessons',
+  'total_lessons',
+  'training_lessons',
+]);
+const SCHEDULE_SUGGESTION_FIELDS = new Set(['planned_lessons', 'teaching_weeks', 'weekly_lessons']);
 
 function useCompactViewport() {
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
@@ -529,6 +540,45 @@ function formatSuggestionOriginalValue(value: unknown) {
   return String(value);
 }
 
+function resolveSuggestionSource(field: string): SuggestionSource {
+  if (SCHEDULE_SUGGESTION_FIELDS.has(field)) {
+    return 'schedule';
+  }
+
+  if (CALCULATED_SUGGESTION_FIELDS.has(field)) {
+    return 'calculated';
+  }
+
+  return 'history';
+}
+
+function resolveSuggestionSourceView(
+  source: SuggestionSource,
+  token: ReturnType<typeof theme.useToken>['token'],
+) {
+  if (source === 'calculated') {
+    return {
+      background: token.colorWarningBg,
+      border: token.colorWarningBorder,
+      label: '计算获得',
+    };
+  }
+
+  if (source === 'schedule') {
+    return {
+      background: token.colorInfoBg,
+      border: token.colorInfoBorder,
+      label: '来自课表',
+    };
+  }
+
+  return {
+    background: token.colorSuccessBg,
+    border: token.colorSuccessBorder,
+    label: '参考历史',
+  };
+}
+
 function renderSuggestedControl(input: {
   children: ReactNode;
   field: string;
@@ -541,15 +591,13 @@ function renderSuggestedControl(input: {
     return input.children;
   }
 
-  const isCalculated = input.suggestion.tone === 'calculated';
+  const sourceView = resolveSuggestionSourceView(input.suggestion.source, input.token);
   const originalValue = formatSuggestionOriginalValue(input.suggestion.before);
   const control = (
     <div
       style={{
-        background: isCalculated ? input.token.colorWarningBg : input.token.colorInfoBg,
-        border: `1px solid ${
-          isCalculated ? input.token.colorWarningBorder : input.token.colorInfoBorder
-        }`,
+        background: sourceView.background,
+        border: `1px solid ${sourceView.border}`,
         borderRadius: input.token.borderRadiusSM,
         padding: input.token.paddingXXS,
       }}
@@ -557,9 +605,7 @@ function renderSuggestedControl(input: {
       <Space orientation="vertical" size={input.token.marginXXS} style={{ width: '100%' }}>
         {input.children}
         <Flex align="center" justify="space-between" gap={input.token.marginXS} wrap="wrap">
-          <Typography.Text type="secondary">
-            {isCalculated ? '计算建议' : '预填建议'}
-          </Typography.Text>
+          <Typography.Text type="secondary">{sourceView.label}</Typography.Text>
           <Space size={input.token.marginXXS}>
             <Button
               size="small"
@@ -608,27 +654,76 @@ function renderSuggestedControl(input: {
   );
 }
 
+function parseAcademicTermIndex(schoolYear: string | null | undefined, semester: string | null) {
+  const parsedSchoolYear = Number.parseInt(String(schoolYear ?? ''), 10);
+  const parsedSemester = Number.parseInt(String(semester ?? ''), 10);
+
+  if (!Number.isFinite(parsedSchoolYear) || (parsedSemester !== 1 && parsedSemester !== 2)) {
+    return null;
+  }
+
+  return parsedSchoolYear * 2 + parsedSemester - 1;
+}
+
+function formatReferenceCandidateTermLabel(
+  item: CurriculumPlanHomepageReferenceCandidateItem,
+  currentItem: CurriculumPlanHomepageListItem | null,
+) {
+  const currentTermIndex = parseAcademicTermIndex(currentItem?.schoolYear, currentItem?.semester);
+  const candidateTermIndex = parseAcademicTermIndex(item.schoolYear, item.semester);
+  const currentSchoolYear = Number.parseInt(String(currentItem?.schoolYear ?? ''), 10);
+  const candidateSchoolYear = Number.parseInt(item.schoolYear, 10);
+
+  if (currentTermIndex === null || candidateTermIndex === null) {
+    return `${item.schoolYear}-${item.semester}`;
+  }
+
+  const termDiff = currentTermIndex - candidateTermIndex;
+
+  if (termDiff === 1) {
+    return '上学期';
+  }
+
+  if (Number.isFinite(currentSchoolYear) && candidateSchoolYear === currentSchoolYear - 1) {
+    return '上学年';
+  }
+
+  if (termDiff > 1) {
+    return '更早';
+  }
+
+  return '本学期';
+}
+
 function renderReferenceCandidateTitle(item: CurriculumPlanHomepageReferenceCandidateItem) {
-  return `${item.schoolYear}-${item.semester} · ${item.courseName || '未返回课程'} · ${
-    item.teachingClassName || '未返回班级'
-  }`;
+  return `${item.courseName || '未返回课程'} · ${item.teachingClassName || '未返回班级'}`;
+}
+
+function formatPrefillModalCourseTitle(item: CurriculumPlanHomepageListItem) {
+  const courseName = item.courseName || '未命名课程';
+
+  if (
+    item.weekCount === null ||
+    item.weekCount === undefined ||
+    item.weeklyHours === null ||
+    item.weeklyHours === undefined
+  ) {
+    return courseName;
+  }
+
+  return `${courseName} — ${item.weekCount * item.weeklyHours}课时`;
 }
 
 function renderReferenceCandidateDescription(
   item: CurriculumPlanHomepageReferenceCandidateItem,
   token: ReturnType<typeof theme.useToken>['token'],
 ) {
+  const weekText =
+    item.weekCount === null || item.weekCount === undefined ? null : `${item.weekCount} 周`;
   const planText =
     item.plannedLessons === null || item.plannedLessons === undefined
-      ? '计划课时未返回'
-      : `计划 ${item.plannedLessons} 课时`;
-  const weekText =
-    item.weekCount === null ||
-    item.weekCount === undefined ||
-    item.weeklyHours === null ||
-    item.weeklyHours === undefined
       ? null
-      : `${item.weekCount} 周 × ${item.weeklyHours} 课时`;
+      : `计划 ${item.plannedLessons} 课时`;
   const diffText =
     item.plannedLessonsDiff === null || item.plannedLessonsDiff === undefined
       ? null
@@ -636,8 +731,8 @@ function renderReferenceCandidateDescription(
 
   return (
     <Space size="small" wrap>
-      <Typography.Text type="secondary">{planText}</Typography.Text>
       {weekText ? <Typography.Text type="secondary">{weekText}</Typography.Text> : null}
+      {planText ? <Typography.Text type="secondary">{planText}</Typography.Text> : null}
       {diffText === null ? null : (
         <Typography.Text type="secondary">
           差{' '}
@@ -654,6 +749,42 @@ function renderReferenceCandidateDescription(
         </Typography.Text>
       )}
     </Space>
+  );
+}
+
+function canRecommendReferenceCandidate(item: CurriculumPlanHomepageReferenceCandidateItem) {
+  return item.recommended && item.plannedLessonsDiff !== null && item.plannedLessonsDiff <= 20;
+}
+
+function renderReferenceCandidateOption(input: {
+  currentItem: CurriculumPlanHomepageListItem | null;
+  isSelected: boolean;
+  item: CurriculumPlanHomepageReferenceCandidateItem;
+  optionKey: string;
+  token: ReturnType<typeof theme.useToken>['token'];
+}) {
+  return (
+    <Radio
+      key={input.optionKey}
+      style={{
+        alignItems: 'flex-start',
+        background: input.isSelected ? input.token.colorFillTertiary : undefined,
+        borderTop: `1px solid ${input.token.colorBorderSecondary}`,
+        marginInlineEnd: 0,
+        padding: `${input.token.paddingXS}px ${input.token.paddingSM}px`,
+        width: '100%',
+      }}
+      value={input.optionKey}
+    >
+      <Space orientation="vertical" size={input.token.marginXXS} style={{ minWidth: 0 }}>
+        <Flex align="center" gap={input.token.marginXS} wrap="wrap">
+          <Tag>{formatReferenceCandidateTermLabel(input.item, input.currentItem)}</Tag>
+          <Typography.Text strong>{renderReferenceCandidateTitle(input.item)}</Typography.Text>
+          {canRecommendReferenceCandidate(input.item) ? <Tag color="processing">推荐</Tag> : null}
+        </Flex>
+        {renderReferenceCandidateDescription(input.item, input.token)}
+      </Space>
+    </Radio>
   );
 }
 
@@ -683,6 +814,49 @@ function flattenEndChapterCandidates(
       })),
     ) ?? []
   );
+}
+
+function formatEndChapterWeekText(weekNumber: string | null) {
+  const normalizedWeekNumber = String(weekNumber || '').trim();
+
+  if (!normalizedWeekNumber) {
+    return null;
+  }
+
+  return normalizedWeekNumber.includes('周')
+    ? normalizedWeekNumber.replace(/\s+/gu, '')
+    : `第${normalizedWeekNumber}周`;
+}
+
+function removeEndChapterTimingText(value: string, weekText: string | null) {
+  const withoutWeek = weekText
+    ? value
+        .replace(new RegExp(`^${weekText.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}\\s*`, 'u'), '')
+        .replace(/^第\s*\d+\s*周\s*/u, '')
+    : value.replace(/^第\s*\d+\s*周\s*/u, '');
+
+  return withoutWeek
+    .replace(/(?:第\s*[一二三四五六七八九十\d]+\s*节\s*[,，、]?\s*)+/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim();
+}
+
+function formatEndChapterCandidateTitle(
+  item: CurriculumPlanHomepageTeachingEndChapterCandidatesResult['candidateGroups'][number]['items'][number],
+) {
+  const weekText = formatEndChapterWeekText(item.weekNumber);
+  const rawTitle =
+    item.value.trim() ||
+    item.teachingChapterContent?.trim() ||
+    item.topicName?.trim() ||
+    item.displayText.trim();
+  const contentText = removeEndChapterTimingText(rawTitle, weekText);
+
+  if (weekText && contentText) {
+    return `${weekText} ${contentText}`;
+  }
+
+  return contentText || weekText || item.displayText;
 }
 
 function CurriculumPlanHomepagePrefillModal({
@@ -718,9 +892,13 @@ function CurriculumPlanHomepagePrefillModal({
 }) {
   const { token } = theme.useToken();
   const phase = modal?.phase ?? 'INITIAL';
-  const title = phase === 'INITIAL' ? '学期初预填' : '学期末预填';
+  const modalTitle = modal ? formatPrefillModalCourseTitle(modal.item) : '预填';
   const referenceOptions = flattenReferenceCandidates(referenceCandidates);
   const endChapterOptions = flattenEndChapterCandidates(endChapterCandidates);
+  const referenceListStyle = {
+    borderBottom: `1px solid ${token.colorBorderSecondary}`,
+    width: '100%',
+  } as const;
   const isLoading =
     isApplying ||
     isLoadingPrefill ||
@@ -730,11 +908,12 @@ function CurriculumPlanHomepagePrefillModal({
   return (
     <Modal
       destroyOnHidden
+      cancelText="取消"
       confirmLoading={isApplying}
       okButtonProps={{ disabled: isLoading }}
       okText="填入表单"
       open={Boolean(modal)}
-      title={modal ? `${title} · ${modal.item.courseName || '未命名课程'}` : title}
+      title={modalTitle}
       width={560}
       onCancel={onClose}
       onOk={() => {
@@ -766,19 +945,31 @@ function CurriculumPlanHomepagePrefillModal({
                 setSelectedReferenceKey(String(event.target.value));
               }}
             >
-              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-                <Radio value="__none__">不使用历史参考</Radio>
-                {referenceOptions.map((option) => (
-                  <Radio key={option.key} value={option.key}>
-                    <Space orientation="vertical" size={1}>
-                      <Typography.Text>
-                        {renderReferenceCandidateTitle(option.item)}
-                      </Typography.Text>
-                      {renderReferenceCandidateDescription(option.item, token)}
-                    </Space>
-                  </Radio>
-                ))}
-              </Space>
+              <div style={referenceListStyle}>
+                <Radio
+                  style={{
+                    alignItems: 'center',
+                    background:
+                      selectedReferenceKey === '__none__' ? token.colorFillTertiary : undefined,
+                    borderTop: `1px solid ${token.colorBorderSecondary}`,
+                    marginInlineEnd: 0,
+                    padding: `${token.paddingXS}px ${token.paddingSM}px`,
+                    width: '100%',
+                  }}
+                  value="__none__"
+                >
+                  不使用历史参考
+                </Radio>
+                {referenceOptions.map((option) =>
+                  renderReferenceCandidateOption({
+                    currentItem: modal?.item ?? null,
+                    isSelected: selectedReferenceKey === option.key,
+                    item: option.item,
+                    optionKey: option.key,
+                    token,
+                  }),
+                )}
+              </div>
             </Radio.Group>
           )}
         </Space>
@@ -803,14 +994,9 @@ function CurriculumPlanHomepagePrefillModal({
                   <Radio value="__none__">不填最终章节</Radio>
                   {endChapterOptions.map((option) => (
                     <Radio key={option.key} value={option.key}>
-                      <Space orientation="vertical" size={1}>
-                        <Typography.Text>{option.item.displayText}</Typography.Text>
-                        <Typography.Text type="secondary">
-                          {[option.item.weekNumber, option.item.sectionName]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Typography.Text>
-                      </Space>
+                      <Typography.Text>
+                        {formatEndChapterCandidateTitle(option.item)}
+                      </Typography.Text>
                     </Radio>
                   ))}
                 </Space>
@@ -845,6 +1031,7 @@ function CurriculumPlanHomepageFormPreview({
   onRevertSuggestion,
   onSave,
   onUpdateField,
+  statusMessage,
   suggestions,
   token,
 }: {
@@ -859,6 +1046,7 @@ function CurriculumPlanHomepageFormPreview({
   onRevertSuggestion: (field: string) => void;
   onSave: () => void;
   onUpdateField: (field: string, value: number | string | null) => void;
+  statusMessage: string | null;
   suggestions: Record<string, SuggestedFieldState>;
   token: ReturnType<typeof theme.useToken>['token'];
 }) {
@@ -950,12 +1138,14 @@ function CurriculumPlanHomepageFormPreview({
         </Space>
       </Flex>
 
+      {statusMessage ? <Alert showIcon message={statusMessage} type="success" /> : null}
+
       {suggestionCount ? (
         <Alert
           showIcon
           message={
             <Flex align="center" justify="space-between" gap={token.marginSM} wrap="wrap">
-              <span>已填入 {suggestionCount} 项预填建议。</span>
+              <span>已填入 {suggestionCount} 项建议。</span>
               <Space>
                 <Button size="small" type="primary" onClick={onConfirmAllSuggestions}>
                   全部确认
@@ -1661,14 +1851,13 @@ export function CurriculumPlanHomepageLabPage() {
       beforeDraft: Record<string, unknown>,
       nextDraft: Record<string, unknown>,
       changes: readonly CurriculumPlanHomepageDraftChange[],
-      calculatedFields: readonly string[] = [],
+      sourceOverrides: Partial<Record<string, SuggestionSource>> = {},
     ) => {
       applyDraftUpdate(planId, nextDraft);
       setSuggestedFieldsByPlan((current) => {
         const nextPlanSuggestions = {
           ...(current[planId] ?? {}),
         };
-        const calculatedFieldSet = new Set(calculatedFields);
 
         for (const change of changes) {
           if (Object.is(beforeDraft[change.field], nextDraft[change.field])) {
@@ -1679,7 +1868,7 @@ export function CurriculumPlanHomepageLabPage() {
           nextPlanSuggestions[change.field] = {
             before: current[planId]?.[change.field]?.before ?? beforeDraft[change.field],
             label: change.label,
-            tone: calculatedFieldSet.has(change.field) ? 'calculated' : 'normal',
+            source: sourceOverrides[change.field] ?? resolveSuggestionSource(change.field),
           };
         }
 
@@ -1930,7 +2119,7 @@ export function CurriculumPlanHomepageLabPage() {
     try {
       let nextDraft = draft;
       const changes: CurriculumPlanHomepageDraftChange[] = [];
-      const calculatedFields: string[] = [];
+      const sourceOverrides: Partial<Record<string, SuggestionSource>> = {};
       const prefillUpdate = buildPrefillDraftUpdate({
         currentDraft: nextDraft,
         fieldWriteRules: update.fieldWriteRules,
@@ -1942,6 +2131,10 @@ export function CurriculumPlanHomepageLabPage() {
 
       nextDraft = prefillUpdate.nextDraft;
       changes.push(...prefillUpdate.changes);
+
+      if (prefillModal.phase === 'INITIAL') {
+        sourceOverrides.teaching_end_chapter_content = 'calculated';
+      }
 
       const selectedReference = flattenReferenceCandidates(
         referenceCandidateResults[key] ?? null,
@@ -1975,7 +2168,6 @@ export function CurriculumPlanHomepageLabPage() {
 
             nextDraft = lessonDistributionUpdate.nextDraft;
             changes.push(...lessonDistributionUpdate.changes);
-            calculatedFields.push(...(lessonDistributionUpdate.calculatedFields ?? []));
           }
         }
       }
@@ -2009,7 +2201,7 @@ export function CurriculumPlanHomepageLabPage() {
         draft,
         nextDraft,
         changes,
-        calculatedFields,
+        sourceOverrides,
       );
       setPrefillModal(null);
     } catch (error) {
@@ -2066,6 +2258,7 @@ export function CurriculumPlanHomepageLabPage() {
                       isCompactViewport={isCompactViewport}
                       isLoadingPrefill={isPreviewingPrefill && isActiveItem}
                       isSaving={isSavingHomepage && isActiveItem}
+                      statusMessage={isActiveItem ? saveSuccessMessage : null}
                       suggestions={suggestions}
                       onConfirmAllSuggestions={() => {
                         confirmAllSuggestedFields(item.planId);
@@ -2168,6 +2361,7 @@ export function CurriculumPlanHomepageLabPage() {
       listResult?.items,
       revertAllSuggestedFields,
       revertSuggestedField,
+      saveSuccessMessage,
       selectedPlanId,
       suggestedFieldsByPlan,
       token,
@@ -2199,7 +2393,9 @@ export function CurriculumPlanHomepageLabPage() {
     const referenceOptions = flattenReferenceCandidates(
       referenceCandidateResults[prefillModalKey] ?? null,
     );
-    const recommendedReference = referenceOptions.find((option) => option.item.recommended);
+    const recommendedReference = referenceOptions.find((option) =>
+      canRecommendReferenceCandidate(option.item),
+    );
 
     setSelectedReferenceCandidateKey(
       recommendedReference?.key ?? referenceOptions[0]?.key ?? '__none__',
@@ -2417,7 +2613,6 @@ export function CurriculumPlanHomepageLabPage() {
 
       {pageError ? <Alert showIcon message={pageError} type="error" /> : null}
       {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
-      {saveSuccessMessage ? <Alert showIcon message={saveSuccessMessage} type="success" /> : null}
 
       <Card size="small">
         <Form<SearchFormValues>
