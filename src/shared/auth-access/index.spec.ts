@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   canAccessPayloadCrypto,
   hasAcademicCalendarReadAccess,
+  hasAcademicCurriculumPlanHomepageAccess,
+  hasAcademicCurriculumPlanHomepageManagerAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
@@ -147,6 +149,26 @@ describe('auth access policy helpers', () => {
     expect(hasAcademicIntegratedPlanCorrectionsManagerAccess({ accessGroup: ['STAFF'] })).toBe(
       false,
     );
+  });
+
+  it('allows curriculum plan homepage to staff self-service and manager selection', () => {
+    expect(hasAcademicCurriculumPlanHomepageAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasAcademicCurriculumPlanHomepageAccess({ accessGroup: ['STAFF'] })).toBe(true);
+    expect(hasAcademicCurriculumPlanHomepageAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+    expect(hasAcademicCurriculumPlanHomepageManagerAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasAcademicCurriculumPlanHomepageManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasAcademicCurriculumPlanHomepageManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    ).toBe(true);
+    expect(hasAcademicCurriculumPlanHomepageManagerAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
   it('limits payload crypto access to the configured admin accounts', () => {

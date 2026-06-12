@@ -59,6 +59,7 @@ describe('navigation catalog', () => {
     ).toBe('TableOutlined');
     expect(findGroup(items, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
@@ -71,7 +72,6 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
@@ -119,6 +119,7 @@ describe('navigation catalog', () => {
       findGroup(prodAdminItems, 'academic-assistant')?.children.map((item) => item.key),
     ).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
@@ -126,7 +127,6 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -156,12 +156,12 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
   });
@@ -183,7 +183,6 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(
@@ -244,12 +243,12 @@ describe('navigation catalog', () => {
 
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
@@ -290,12 +289,12 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -359,16 +358,22 @@ describe('navigation catalog', () => {
       false,
     );
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', buildFilter())).toBe(true);
-    expect(canAccessNavigationPath('/labs/curriculum-plan-homepage', buildFilter())).toBe(true);
+    expect(
+      canAccessNavigationPath('/academic-affairs/my-curriculum-plan-homepage', buildFilter()),
+    ).toBe(true);
     expect(
       canAccessNavigationPath(
-        '/labs/curriculum-plan-homepage',
+        '/academic-affairs/my-curriculum-plan-homepage',
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
         }),
       ),
     ).toBe(true);
+    expect(canAccessNavigationPath('/labs/curriculum-plan-homepage', buildFilter())).toBe(false);
+    expect(
+      canAccessNavigationPath('/academic-affairs/my-curriculum-plan-homepage', studentFilter),
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/zquiz-activity-builder',
@@ -565,6 +570,7 @@ describe('navigation catalog', () => {
       '/calendar-schedule/weekly-timetable',
       '/calendar-schedule/semester-timetable',
       '/academic-affairs/my-teaching-logs',
+      '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-affairs/student-roster-membership-reconciliation',
       '/academic-assistant/academic-workload',
@@ -578,7 +584,6 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
-      '/labs/curriculum-plan-homepage',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',

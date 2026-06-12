@@ -26,7 +26,7 @@ import {
   TeamOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Menu } from 'antd';
+import { Menu, Tag } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
 import { useLocation, useNavigate } from 'react-router';
 
@@ -72,6 +72,21 @@ function shouldShowMenuIcon(depth: number) {
   return depth === 0;
 }
 
+function renderNavigationLabel(item: NavigationMetaItem) {
+  if (!item.badgeLabel) {
+    return item.label;
+  }
+
+  return (
+    <span className="app-nav-menu-label app-nav-menu-label--badged">
+      <span className="app-nav-menu-label-text">{item.label}</span>
+      <span className="app-nav-menu-badge">
+        <Tag>{item.badgeLabel}</Tag>
+      </span>
+    </span>
+  );
+}
+
 function toMenuItems(
   items: readonly NavigationMetaItem[],
   collapsed: boolean,
@@ -82,7 +97,7 @@ function toMenuItems(
       return {
         key: item.key,
         icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
-        label: item.label,
+        label: renderNavigationLabel(item),
         title: collapsed ? item.label : undefined,
         children: toMenuItems(item.children, collapsed, depth + 1),
       };
@@ -91,7 +106,7 @@ function toMenuItems(
     return {
       key: item.key,
       icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
-      label: item.label,
+      label: renderNavigationLabel(item),
       title: collapsed ? item.label : undefined,
     };
   });

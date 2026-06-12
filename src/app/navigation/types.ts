@@ -12,6 +12,7 @@ type NavigationBaseItem = {
   label: string;
   iconKey: string;
   navMode: NavMode;
+  badgeLabel?: string;
 };
 
 export type NavigationLeafItem = NavigationBaseItem & {

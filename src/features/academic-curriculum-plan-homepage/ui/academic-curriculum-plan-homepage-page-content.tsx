@@ -1,4 +1,4 @@
-// src/labs/curriculum-plan-homepage/page.tsx
+// src/features/academic-curriculum-plan-homepage/ui/academic-curriculum-plan-homepage-page-content.tsx
 
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -12,8 +12,6 @@ import {
   Alert,
   Button,
   Card,
-  Collapse,
-  Descriptions,
   Empty,
   Flex,
   Form,
@@ -51,8 +49,17 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
+import { hasAcademicCurriculumPlanHomepageManagerAccess } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import {
+  buildInitialReferenceLessonDistributionDraftUpdate,
+  buildPrefillDraftUpdate,
+  buildReferenceCandidateDraftUpdate,
+  buildTeachingEndChapterDraftUpdate,
+  type CurriculumPlanHomepageDraftChange,
+  validateCurriculumPlanHomepageBeforeSave,
+} from '../application/draft-policy';
 import {
   type CurrentCurriculumPlanHomepageAccount,
   type CurriculumPlanHomepageDetailResult,
@@ -65,7 +72,8 @@ import {
   type CurriculumPlanHomepageReferenceCandidateItem,
   type CurriculumPlanHomepageReferenceCandidatesResult,
   type CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
-  fetchCurrentCurriculumPlanHomepageAccount,
+} from '../domain/curriculum-plan-homepage-types';
+import {
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
@@ -77,14 +85,7 @@ import {
   resolveCurriculumPlanHomepagePrefillErrorMessage,
   resolveUpstreamErrorMessage,
   saveCurriculumPlanHomepage,
-} from './api';
-import {
-  buildInitialReferenceLessonDistributionDraftUpdate,
-  buildPrefillDraftUpdate,
-  buildReferenceCandidateDraftUpdate,
-  buildTeachingEndChapterDraftUpdate,
-  type CurriculumPlanHomepageDraftChange,
-} from './draft-policy';
+} from '../infrastructure/academic-curriculum-plan-homepage-api';
 
 type SearchFormValues = {
   departmentId?: string | null;
@@ -166,7 +167,6 @@ const SEMESTER_OPTIONS = [
   },
 ];
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
-const MANAGED_HOMEPAGE_SLOT_GROUPS = ['ACADEMIC_OFFICER', 'TEACHING_GROUP_LEADER'] as const;
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const CALCULATED_SUGGESTION_FIELDS = new Set([
@@ -222,11 +222,12 @@ function resolvePrefillMode(account: CurrentCurriculumPlanHomepageAccount | null
     return 'my' satisfies CurriculumPlanHomepagePrefillMode;
   }
 
-  if (account.accessGroup.includes('ADMIN')) {
-    return 'managed' satisfies CurriculumPlanHomepagePrefillMode;
-  }
-
-  if (account.slotGroup.some((slotGroup) => MANAGED_HOMEPAGE_SLOT_GROUPS.includes(slotGroup))) {
+  if (
+    hasAcademicCurriculumPlanHomepageManagerAccess({
+      accessGroup: account.accessGroup,
+      slotGroup: account.slotGroup,
+    })
+  ) {
     return 'managed' satisfies CurriculumPlanHomepagePrefillMode;
   }
 
@@ -453,22 +454,6 @@ function buildSchoolYearOptions(selectedYear: string) {
   }));
 }
 
-function formatCompactValue(value: unknown) {
-  if (value === null || value === undefined || value === '') {
-    return '未返回';
-  }
-
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return String(value);
-  }
-
-  if (typeof value === 'boolean') {
-    return value ? '是' : '否';
-  }
-
-  return String(value);
-}
-
 function formatJson(value: unknown) {
   try {
     return JSON.stringify(value, null, 2);
@@ -477,123 +462,12 @@ function formatJson(value: unknown) {
   }
 }
 
-function resolveReviewStatusTagColor(status: string | null) {
-  if (!status) {
-    return 'default';
-  }
-
-  if (status.includes('通过') || status === 'APPROVED') {
-    return 'success';
-  }
-
-  if (status.includes('不通过') || status === 'REJECTED') {
-    return 'error';
-  }
-
-  if (status.includes('审核') || status === 'UNDER_REVIEW') {
-    return 'processing';
-  }
-
-  if (status.includes('提交') || status === 'PENDING_SUBMIT') {
-    return 'warning';
-  }
-
-  return 'default';
-}
-
 function resolveUpstreamRefreshFailureMessage(error: unknown) {
   if (isExpiredUpstreamSessionError(error)) {
     return 'upstream 会话已失效，请重新登录后继续。';
   }
 
   return resolveUpstreamErrorMessage(error, 'upstream 会话刷新失败，请重新登录后继续。');
-}
-
-function renderJsonBlock(value: unknown, token: ReturnType<typeof theme.useToken>['token']) {
-  return (
-    <pre
-      style={{
-        background: token.colorFillTertiary,
-        border: `1px solid ${token.colorBorderSecondary}`,
-        borderRadius: token.borderRadiusSM,
-        color: token.colorText,
-        fontSize: token.fontSizeSM,
-        lineHeight: 1.45,
-        margin: 0,
-        maxHeight: 240,
-        overflow: 'auto',
-        padding: token.paddingXS,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-      }}
-    >
-      {formatJson(value)}
-    </pre>
-  );
-}
-
-function buildDetailMetadataItems(item: CurriculumPlanHomepageListItem | null) {
-  return [
-    {
-      children: formatCompactValue(item?.planId),
-      key: 'planId',
-      label: '教学计划 ID',
-    },
-    {
-      children: formatCompactValue(item?.teachingClassId),
-      key: 'teachingClassId',
-      label: '教学班 ID',
-    },
-    {
-      children: formatCompactValue(item?.staffId),
-      key: 'staffId',
-      label: '教师 ID',
-    },
-    {
-      children: formatCompactValue(item?.sstsCourseId),
-      key: 'sstsCourseId',
-      label: 'SSTS 课程 ID',
-    },
-    {
-      children: formatCompactValue(item?.sstsTeachingClassId),
-      key: 'sstsTeachingClassId',
-      label: 'SSTS 教学班 ID',
-    },
-    {
-      children: formatCompactValue(item?.courseName),
-      key: 'courseName',
-      label: '课程',
-    },
-    {
-      children: formatCompactValue(item?.className),
-      key: 'className',
-      label: '班级',
-    },
-    {
-      children: `${formatCompactValue(item?.schoolYear)} / ${formatCompactValue(item?.semester)}`,
-      key: 'term',
-      label: '学年学期',
-    },
-    {
-      children: formatCompactValue(item?.weekNumberText ?? item?.weekCount),
-      key: 'weeks',
-      label: '授课周',
-    },
-    {
-      children: formatCompactValue(item?.weeklyHours),
-      key: 'weeklyHours',
-      label: '周课时',
-    },
-    {
-      children: (
-        <Tag color={resolveReviewStatusTagColor(item?.reviewStatus ?? null)}>
-          {formatCompactValue(item?.reviewStatus)}
-        </Tag>
-      ),
-      key: 'reviewStatus',
-      label: '审核状态',
-    },
-  ];
 }
 
 function readHomepageValue(
@@ -818,7 +692,10 @@ function renderSuggestedControl(input: {
   );
 }
 
-function parseAcademicTermIndex(schoolYear: string | null | undefined, semester: string | null) {
+function parseAcademicTermIndex(
+  schoolYear: string | null | undefined,
+  semester: string | null | undefined,
+) {
   const parsedSchoolYear = Number.parseInt(String(schoolYear ?? ''), 10);
   const parsedSemester = Number.parseInt(String(semester ?? ''), 10);
 
@@ -1199,6 +1076,7 @@ function CurriculumPlanHomepageFormPreview({
   statusMessage,
   suggestions,
   token,
+  validationMessage,
 }: {
   homepage: Record<string, unknown>;
   isCompactViewport: boolean;
@@ -1215,6 +1093,7 @@ function CurriculumPlanHomepageFormPreview({
   statusMessage: string | null;
   suggestions: Record<string, SuggestedFieldState>;
   token: ReturnType<typeof theme.useToken>['token'];
+  validationMessage: string | null;
 }) {
   const suggestionCount = Object.keys(suggestions).length;
   const tableStyle = {
@@ -1321,6 +1200,7 @@ function CurriculumPlanHomepageFormPreview({
       </Flex>
 
       {statusMessage ? <Alert showIcon message={statusMessage} type="success" /> : null}
+      {validationMessage ? <Alert showIcon message={validationMessage} type="warning" /> : null}
 
       {suggestionCount ? (
         <Alert
@@ -1583,7 +1463,15 @@ function CurriculumPlanHomepageFormPreview({
   );
 }
 
-export function CurriculumPlanHomepageLabPage() {
+export type AcademicCurriculumPlanHomepagePageLoaderData = {
+  currentAccount: CurrentCurriculumPlanHomepageAccount;
+};
+
+type AcademicCurriculumPlanHomepagePageContentProps = AcademicCurriculumPlanHomepagePageLoaderData;
+
+export function AcademicCurriculumPlanHomepagePageContent({
+  currentAccount,
+}: AcademicCurriculumPlanHomepagePageContentProps) {
   const { token } = theme.useToken();
   const isCompactViewport = useCompactViewport();
   const defaultSearchValues = useMemo(() => getDefaultAcademicTerm(), []);
@@ -1593,10 +1481,6 @@ export function CurriculumPlanHomepageLabPage() {
   );
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [searchForm] = Form.useForm<SearchFormValues>();
-  const [currentAccount, setCurrentAccount] = useState<CurrentCurriculumPlanHomepageAccount | null>(
-    null,
-  );
-  const [isLoadingCurrentAccount, setIsLoadingCurrentAccount] = useState(true);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
@@ -1612,10 +1496,12 @@ export function CurriculumPlanHomepageLabPage() {
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
-  const [pageError, setPageError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ActionError | null>(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
+  const [saveValidationMessagesByPlan, setSaveValidationMessagesByPlan] = useState<
+    Record<string, string>
+  >({});
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [listResult, setListResult] = useState<CurriculumPlanHomepageListResult | null>(null);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
@@ -1639,6 +1525,7 @@ export function CurriculumPlanHomepageLabPage() {
   const [suggestedFieldsByPlan, setSuggestedFieldsByPlan] = useState<SuggestedFieldsByPlan>({});
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const prefillMode = resolvePrefillMode(currentAccount);
+  const canSelectDepartment = prefillMode === 'managed';
   const lockedUpstreamLoginUserId =
     !isAdminAccount && currentAccount?.staffId ? currentAccount.staffId : null;
   const {
@@ -1668,6 +1555,7 @@ export function CurriculumPlanHomepageLabPage() {
     setPrefillPreviewUpdates({});
     setPrefillModal(null);
     setSuggestedFieldsByPlan({});
+    setSaveValidationMessagesByPlan({});
     setSaveSuccessMessage(null);
   }, []);
 
@@ -1996,6 +1884,15 @@ export function CurriculumPlanHomepageLabPage() {
           [field]: value,
         },
       }));
+      setSaveValidationMessagesByPlan((current) => {
+        if (!current[planId]) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[planId];
+        return next;
+      });
       setSaveSuccessMessage(null);
     },
     [],
@@ -2012,6 +1909,27 @@ export function CurriculumPlanHomepageLabPage() {
         });
         return;
       }
+
+      const validation = validateCurriculumPlanHomepageBeforeSave(draft);
+
+      if (!validation.valid) {
+        setSaveSuccessMessage(null);
+        setSaveValidationMessagesByPlan((current) => ({
+          ...current,
+          [planId]: validation.errors.join('；'),
+        }));
+        return;
+      }
+
+      setSaveValidationMessagesByPlan((current) => {
+        if (!current[planId]) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[planId];
+        return next;
+      });
 
       await ensureSessionAndRun({
         homepage: draft,
@@ -2039,6 +1957,15 @@ export function CurriculumPlanHomepageLabPage() {
       sourceOverrides: Partial<Record<string, SuggestionSource>> = {},
     ) => {
       applyDraftUpdate(planId, nextDraft);
+      setSaveValidationMessagesByPlan((current) => {
+        if (!current[planId]) {
+          return current;
+        }
+
+        const next = { ...current };
+        delete next[planId];
+        return next;
+      });
       setSuggestedFieldsByPlan((current) => {
         const nextPlanSuggestions = {
           ...(current[planId] ?? {}),
@@ -2488,6 +2415,9 @@ export function CurriculumPlanHomepageLabPage() {
                       prefillActionStates={prefillActionStates}
                       statusMessage={isActiveItem ? saveSuccessMessage : null}
                       suggestions={suggestions}
+                      validationMessage={
+                        isActiveItem ? (saveValidationMessagesByPlan[item.planId] ?? null) : null
+                      }
                       onConfirmAllSuggestions={() => {
                         confirmAllSuggestedFields(item.planId);
                       }}
@@ -2514,34 +2444,6 @@ export function CurriculumPlanHomepageLabPage() {
                   ) : (
                     <Empty description="暂未读取详情" image={Empty.PRESENTED_IMAGE_SIMPLE} />
                   )}
-
-                  <Collapse
-                    items={[
-                      {
-                        children: (
-                          <Descriptions
-                            bordered
-                            column={1}
-                            items={buildDetailMetadataItems(item)}
-                            size="small"
-                          />
-                        ),
-                        key: 'summary',
-                        label: '列表摘要',
-                      },
-                      {
-                        children: renderJsonBlock(draft ?? matchedDetail?.homepage ?? {}, token),
-                        key: 'homepage',
-                        label: '当前 homepage 草稿',
-                      },
-                      {
-                        children: renderJsonBlock(item.rawPlan ?? {}, token),
-                        key: 'rawPlan',
-                        label: '列表 rawPlan',
-                      },
-                    ]}
-                    size="small"
-                  />
                 </Space>
               )}
             </div>
@@ -2551,7 +2453,7 @@ export function CurriculumPlanHomepageLabPage() {
             <div style={{ maxWidth: isCompactViewport ? 180 : 200 }}>
               <div
                 style={{
-                  fontWeight: isActiveItem ? token.fontWeightStrong : token.fontWeight,
+                  fontWeight: isActiveItem ? token.fontWeightStrong : undefined,
                   overflow: 'hidden',
                   textOverflow: 'ellipsis',
                   whiteSpace: 'nowrap',
@@ -2593,6 +2495,7 @@ export function CurriculumPlanHomepageLabPage() {
       revertAllSuggestedFields,
       revertSuggestedField,
       saveSuccessMessage,
+      saveValidationMessagesByPlan,
       selectedPlanId,
       suggestedFieldsByPlan,
       token,
@@ -2650,42 +2553,6 @@ export function CurriculumPlanHomepageLabPage() {
   useEffect(() => {
     let isCancelled = false;
 
-    async function bootstrapPage() {
-      setIsLoadingCurrentAccount(true);
-      setPageError(null);
-      setActionError(null);
-      clearResults();
-
-      try {
-        const nextAccount = await fetchCurrentCurriculumPlanHomepageAccount();
-
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(nextAccount);
-        setIsLoadingCurrentAccount(false);
-      } catch (error) {
-        if (isCancelled) {
-          return;
-        }
-
-        setCurrentAccount(null);
-        setPageError(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
-        setIsLoadingCurrentAccount(false);
-      }
-    }
-
-    void bootstrapPage();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [clearResults]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
     async function loadAcademicSemesters() {
       setIsLoadingAcademicSemesters(true);
       setAcademicSemestersError(null);
@@ -2725,6 +2592,16 @@ export function CurriculumPlanHomepageLabPage() {
     let isCancelled = false;
 
     async function loadDepartmentOptions() {
+      if (!canSelectDepartment) {
+        setIsLoadingDepartments(false);
+        setDepartmentOptions([]);
+        setDepartmentOptionsError(null);
+        searchForm.setFieldsValue({
+          departmentId: null,
+        });
+        return;
+      }
+
       setIsLoadingDepartments(true);
       setDepartmentOptionsError(null);
 
@@ -2781,7 +2658,7 @@ export function CurriculumPlanHomepageLabPage() {
     return () => {
       isCancelled = true;
     };
-  }, [searchForm]);
+  }, [canSelectDepartment, searchForm]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -2839,7 +2716,7 @@ export function CurriculumPlanHomepageLabPage() {
   async function handleFetchList(values: SearchFormValues) {
     await ensureSessionAndRun({
       type: 'list',
-      values,
+      values: canSelectDepartment ? values : { ...values, departmentId: null },
     });
   }
 
@@ -2867,13 +2744,35 @@ export function CurriculumPlanHomepageLabPage() {
   return (
     <div style={{ display: 'grid', gap: token.marginSM }}>
       <DecoratedPageHeader
+        aside={
+          <span
+            style={{
+              alignSelf: 'flex-start',
+              paddingTop: token.marginXS,
+            }}
+          >
+            <Tag
+              style={{
+                background: token.colorErrorBg,
+                borderColor: token.colorErrorBorder,
+                color: token.colorErrorText,
+                fontSize: token.fontSizeSM,
+                fontWeight: token.fontWeightStrong,
+                lineHeight: 1.2,
+                marginInlineEnd: 0,
+                paddingInline: token.paddingXXS,
+              }}
+            >
+              试运行
+            </Tag>
+          </span>
+        }
         colorScheme="purple"
         description="对照历史计划，补齐首页信息"
         icon={<BookOutlined />}
         title="My 计划首页"
       />
 
-      {pageError ? <Alert showIcon message={pageError} type="error" /> : null}
       {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
       {academicSemestersError ? (
         <Alert showIcon message={academicSemestersError} type="warning" />
@@ -2905,20 +2804,22 @@ export function CurriculumPlanHomepageLabPage() {
           >
             <Select options={SEMESTER_OPTIONS} style={{ width: 108 }} />
           </Form.Item>
-          <DepartmentFormItem
-            label="系部"
-            loading={isLoadingDepartments}
-            options={departmentOptions}
-            required
-            selectProps={{
-              size: 'small',
-              style: { width: 200 },
-            }}
-            validateStatus={departmentOptionsError ? 'warning' : undefined}
-          />
+          {canSelectDepartment ? (
+            <DepartmentFormItem
+              label="系部"
+              loading={isLoadingDepartments}
+              options={departmentOptions}
+              required
+              selectProps={{
+                size: 'small',
+                style: { width: 200 },
+              }}
+              validateStatus={departmentOptionsError ? 'warning' : undefined}
+            />
+          ) : null}
           <Form.Item>
             <Button
-              disabled={isLoadingCurrentAccount || isLoadingDepartments || Boolean(pageError)}
+              disabled={canSelectDepartment && isLoadingDepartments}
               htmlType="submit"
               icon={<SearchOutlined />}
               loading={isLoadingList}
@@ -2929,7 +2830,7 @@ export function CurriculumPlanHomepageLabPage() {
             </Button>
           </Form.Item>
         </Form>
-        {departmentOptionsError ? (
+        {canSelectDepartment && departmentOptionsError ? (
           <Alert showIcon message={departmentOptionsError} type="warning" />
         ) : null}
       </Card>

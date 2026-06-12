@@ -1,4 +1,4 @@
-// src/labs/curriculum-plan-homepage/api.ts
+// src/features/academic-curriculum-plan-homepage/infrastructure/academic-curriculum-plan-homepage-api.ts
 
 import type { OperationVariables } from '@apollo/client';
 
@@ -9,39 +9,20 @@ import {
 
 import { executeGraphQL, type GraphQLAuthMode, hasGraphQLErrorCode } from '@/shared/graphql';
 
-export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
+import type {
+  CurriculumPlanHomepageDepartmentOption,
+  CurriculumPlanHomepageDetailResult,
+  CurriculumPlanHomepageListResult,
+  CurriculumPlanHomepagePrefillContext,
+  CurriculumPlanHomepagePrefillMode,
+  CurriculumPlanHomepagePrefillPhase,
+  CurriculumPlanHomepagePrefillResult,
+  CurriculumPlanHomepageReferenceCandidatesResult,
+  CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
+  SaveCurriculumPlanHomepageResult,
+} from '../domain/curriculum-plan-homepage-types';
 
-type CurrentAccountResponse = {
-  me: {
-    accountId: number;
-    account: {
-      id: number;
-      identityHint: string | null;
-    };
-    identity:
-      | {
-          __typename: 'StaffType';
-          departmentId: string | null;
-          id: string;
-          name: string | null;
-          slotGroup: readonly string[] | null;
-        }
-      | {
-          __typename: 'StudentType';
-          currentClassCode: string | null;
-          currentClassId: string | null;
-          id: string;
-          name: string | null;
-          slotGroup: readonly string[] | null;
-          upstreamId: string | null;
-        }
-      | null;
-    userInfo: {
-      accessGroup: string[];
-      nickname: string | null;
-    };
-  };
-};
+export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
 type CurriculumPlanHomepageListResponse = {
   fetchCurriculumPlanHomepageList: CurriculumPlanHomepageListResult;
@@ -90,197 +71,9 @@ type DepartmentsResponse = {
   departments: DepartmentDTO[];
 };
 
-export type CurrentCurriculumPlanHomepageAccount = {
-  accessGroup: string[];
-  accountId: number;
-  displayName: string;
-  slotGroup: string[];
-  staffId: string | null;
-};
-
-export type CurriculumPlanHomepageListItem = {
-  className: string | null;
-  courseCategory: string | null;
-  courseName: string | null;
-  planId: string;
-  rawPlan: Record<string, unknown> | null;
-  reviewStatus: string | null;
-  schoolYear: string | null;
-  semester: string | null;
-  staffId: string | null;
-  sstsCourseId: string | null;
-  sstsTeachingClassId: string | null;
-  teachingClassId: string | null;
-  weekCount: number | null;
-  weekNumberText: string | null;
-  weeklyHours: number | null;
-};
-
-export type CurriculumPlanHomepageListResult = {
-  count: number;
-  expiresAt: string | null;
-  items: CurriculumPlanHomepageListItem[];
-  upstreamSessionToken: string;
-};
-
-export type CurriculumPlanHomepageDetailResult = {
-  expiresAt: string | null;
-  homepage: Record<string, unknown> | null;
-  planId: string;
-  upstreamSessionToken: string;
-};
-
-export type SaveCurriculumPlanHomepageResult = {
-  code: string | null;
-  data: unknown;
-  expiresAt: string | null;
-  msg: string | null;
-  success: boolean;
-  upstreamSessionToken: string;
-};
-
-export type CurriculumPlanHomepageDepartmentOption = {
-  departmentName: string;
-  id: string;
-  isEnabled: boolean;
-  shortName: string | null;
-};
-
-export type CurriculumPlanHomepagePrefillPhase = 'FINAL' | 'INITIAL';
-
-export type CurriculumPlanHomepagePrefillMode = 'managed' | 'my';
-
-export type CurriculumPlanHomepagePrefillFieldWriteRule = {
-  field: string;
-  mode: string;
-  value: string;
-};
-
-export type CurriculumPlanHomepagePrefillResult = {
-  fieldWriteRules: CurriculumPlanHomepagePrefillFieldWriteRule[];
-  homepagePatch: Record<string, unknown>;
-  warnings: string[];
-};
-
-export type CurriculumPlanHomepagePrefillContext = {
-  courseName: string | null;
-  schoolYear: string;
-  semester: string;
-  sstsCourseId: string;
-  sstsTeachingClassId: string;
-  staffId?: string;
-  weekCount: number | null;
-  weeklyHours: number | null;
-};
-
 const PREFILL_TIME_WINDOW_CLOSED_ERROR_CODE =
   'ACADEMIC_COURSE_SCHEDULE_CURRICULUM_PLAN_HOMEPAGE_PREFILL_TIME_WINDOW_CLOSED';
 const SEMESTER_INVALID_DATE_ERROR_CODE = 'ACADEMIC_SEMESTER_INVALID_DATE';
-
-export type CurriculumPlanHomepageReferenceCandidateValues = {
-  improvementMeasures: string | null;
-  teachingObjectives: string | null;
-  textbookName: string | null;
-};
-
-export type CurriculumPlanHomepageReferenceCandidateItem = {
-  courseName: string | null;
-  matchKind: string;
-  plannedLessons: number | null;
-  plannedLessonsDiff: number | null;
-  rank: number;
-  recommended: boolean;
-  schoolYear: string;
-  semester: string;
-  sourcePlanId: string;
-  teachingClassName: string | null;
-  values: CurriculumPlanHomepageReferenceCandidateValues;
-  weekCount: number | null;
-  weeklyHours: number | null;
-};
-
-export type CurriculumPlanHomepageReferenceCandidateGroup = {
-  applyMode: string;
-  groupKey: string;
-  items: CurriculumPlanHomepageReferenceCandidateItem[];
-  phase: CurriculumPlanHomepagePrefillPhase;
-  targetFields: string[];
-  title: string;
-};
-
-export type CurriculumPlanHomepageReferenceCandidatesResult = {
-  candidateGroups: CurriculumPlanHomepageReferenceCandidateGroup[];
-  expiresAt: string | null;
-  upstreamSessionToken: string;
-  warnings: string[];
-};
-
-export type CurriculumPlanHomepageTeachingEndChapterCandidateItem = {
-  displayText: string;
-  lecturePlanDetailId: string | null;
-  sectionId: string | null;
-  sectionName: string | null;
-  teachingChapterContent: string | null;
-  topicName: string | null;
-  value: string;
-  weekNumber: string | null;
-};
-
-export type CurriculumPlanHomepageTeachingEndChapterWriteRule = {
-  field: string;
-  mode: string;
-  prefix: string;
-};
-
-export type CurriculumPlanHomepageTeachingEndChapterCandidateGroup = {
-  applyMode: string;
-  groupKey: string;
-  items: CurriculumPlanHomepageTeachingEndChapterCandidateItem[];
-  phase: CurriculumPlanHomepagePrefillPhase;
-  targetFields: string[];
-  title: string;
-  writeRule: CurriculumPlanHomepageTeachingEndChapterWriteRule;
-};
-
-export type CurriculumPlanHomepageTeachingEndChapterCandidatesResult = {
-  candidateGroups: CurriculumPlanHomepageTeachingEndChapterCandidateGroup[];
-  expiresAt: string | null;
-  upstreamSessionToken: string;
-  warnings: string[];
-};
-
-const CURRENT_ACCOUNT_QUERY = `
-  query Me {
-    me {
-      accountId
-      account {
-        id
-        identityHint
-      }
-      userInfo {
-        accessGroup
-        nickname
-      }
-      identity {
-        __typename
-        ... on StaffType {
-          departmentId
-          id
-          name
-          slotGroup
-        }
-        ... on StudentType {
-          currentClassCode
-          currentClassId
-          id
-          name
-          slotGroup
-          upstreamId
-        }
-      }
-    }
-  }
-`;
 
 const FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY = `
   query FetchCurriculumPlanHomepageList(
@@ -600,13 +393,6 @@ function normalizeOptionalString(value: string | null | undefined) {
   return String(value || '').trim() || null;
 }
 
-function resolveDisplayName(response: CurrentAccountResponse) {
-  const identityName = response.me.identity?.name?.trim();
-  const nickname = response.me.userInfo.nickname?.trim();
-
-  return identityName || nickname || `account-${response.me.accountId}`;
-}
-
 export function isCurriculumPlanHomepagePrefillTimeWindowClosedError(error: unknown): boolean {
   return hasGraphQLErrorCode(error, PREFILL_TIME_WINDOW_CLOSED_ERROR_CODE);
 }
@@ -649,25 +435,6 @@ function buildEnabledDepartmentOptions(departments: readonly DepartmentDTO[]) {
     .filter((department): department is CurriculumPlanHomepageDepartmentOption =>
       Boolean(department && department.isEnabled),
     );
-}
-
-export async function fetchCurrentCurriculumPlanHomepageAccount(): Promise<CurrentCurriculumPlanHomepageAccount> {
-  try {
-    const response = await requestGraphQL<CurrentAccountResponse, Record<string, never>>(
-      CURRENT_ACCOUNT_QUERY,
-      {},
-    );
-
-    return {
-      accessGroup: response.me.userInfo.accessGroup,
-      accountId: response.me.accountId,
-      displayName: resolveDisplayName(response),
-      slotGroup: response.me.identity?.slotGroup ? [...response.me.identity.slotGroup] : [],
-      staffId: response.me.identity?.__typename === 'StaffType' ? response.me.identity.id : null,
-    };
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
-  }
 }
 
 export async function fetchCurriculumPlanHomepageList(input: {
@@ -784,7 +551,7 @@ export async function previewCurriculumPlanHomepagePrefill(input: {
           input.context.sstsTeachingClassId,
           'SSTS 教学班 ID',
         ),
-        staffId: normalizeRequiredString(input.context.staffId, '教师 ID'),
+        staffId: normalizeRequiredString(input.context.staffId ?? '', '教师 ID'),
         weekCount: input.context.weekCount,
         weeklyHours: input.context.weeklyHours,
       },
@@ -862,7 +629,7 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
         courseName: input.context.courseName,
         schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
         semester: normalizeRequiredString(input.context.semester, '学期'),
-        staffId: normalizeRequiredString(input.context.staffId, '教师 ID'),
+        staffId: normalizeRequiredString(input.context.staffId ?? '', '教师 ID'),
         weekCount: input.context.weekCount,
         weeklyHours: input.context.weeklyHours,
       },

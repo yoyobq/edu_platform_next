@@ -9,7 +9,6 @@ export const routes = {
   invite: (inviteType = 'workspace', verificationCode = 'invite-code-001') =>
     `/invite/${inviteType}/${verificationCode}`,
   labsAcademicAdjustedWorkloadReport: '/labs/academic-adjusted-workload-report',
-  labsCurriculumPlanHomepage: '/labs/curriculum-plan-homepage',
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
   labsPayloadCrypto: '/labs/payload-crypto',
@@ -17,6 +16,7 @@ export const routes = {
   labsUpstreamSessionDemo: '/labs/upstream-session-demo',
   login: '/login',
   magicLink: (verificationCode = 'magic-link-001') => `/magic-link/${verificationCode}`,
+  myCurriculumPlanHomepage: '/academic-affairs/my-curriculum-plan-homepage',
   profile: '/profile',
   resetPassword: (verificationCode = 'reset-password-001') => `/reset-password/${verificationCode}`,
   resetPasswordWithTokenQuery: (verificationCode = 'reset-password-001') =>

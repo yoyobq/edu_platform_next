@@ -77,20 +77,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'BookOutlined',
-            key: '/labs/curriculum-plan-homepage',
-            label: 'My 计划首页',
-            navMode: 'rail' as const,
-            path: '/labs/curriculum-plan-homepage',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasZquizActivityBuilderNavigationAccess(filter)
       ? [
           {

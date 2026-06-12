@@ -1,5 +1,6 @@
 import {
   hasAcademicCalendarReadAccess,
+  hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTimetableAccess,
@@ -153,6 +154,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: 'My 教学日志',
             navMode: 'rail' as const,
             path: '/academic-affairs/my-teaching-logs',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicCurriculumPlanHomepageAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            badgeLabel: '试运行',
+            iconKey: 'BookOutlined',
+            key: '/academic-affairs/my-curriculum-plan-homepage',
+            label: 'My 计划首页',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/my-curriculum-plan-homepage',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

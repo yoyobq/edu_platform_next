@@ -1,4 +1,4 @@
-// src/labs/curriculum-plan-homepage/draft-policy.spec.ts
+// src/features/academic-curriculum-plan-homepage/application/draft-policy.spec.ts
 
 import { describe, expect, it } from 'vitest';
 
@@ -7,6 +7,7 @@ import {
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
   buildTeachingEndChapterDraftUpdate,
+  validateCurriculumPlanHomepageBeforeSave,
 } from './draft-policy';
 
 describe('curriculum plan homepage draft policy', () => {
@@ -64,6 +65,70 @@ describe('curriculum plan homepage draft policy', () => {
     expect(result.nextDraft).toMatchObject({
       teaching_end_chapter_content: '清明放假 2 课时\n最终完成至：旧章节\n运动会放假 4 课时',
     });
+  });
+
+  it('allows saving when lesson validation groups are empty', () => {
+    expect(validateCurriculumPlanHomepageBeforeSave({})).toEqual({
+      errors: [],
+      valid: true,
+    });
+  });
+
+  it('rejects saving when lesson distribution total does not match parts', () => {
+    const result = validateCurriculumPlanHomepageBeforeSave({
+      flexible_lessons: 2,
+      lecture_lessons: 30,
+      review_exam_lessons: 4,
+      total_lessons: 40,
+      training_lessons: 8,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('课时分配校验失败');
+    expect(result.errors[0]).toContain('讲课 30 + 实训 8 + 复习考试 4 + 机动 2 = 44');
+  });
+
+  it('validates final completion with signed extra, reduced and compensated lessons', () => {
+    expect(
+      validateCurriculumPlanHomepageBeforeSave({
+        compensated_lessons: 2,
+        completed_lessons: 58,
+        extra_lessons: 0,
+        planned_lessons: 60,
+        reduced_lessons: 4,
+      }),
+    ).toEqual({
+      errors: [],
+      valid: true,
+    });
+
+    expect(
+      validateCurriculumPlanHomepageBeforeSave({
+        compensated_lessons: 0,
+        completed_lessons: 62,
+        extra_lessons: 2,
+        planned_lessons: 60,
+        reduced_lessons: 0,
+      }),
+    ).toEqual({
+      errors: [],
+      valid: true,
+    });
+  });
+
+  it('rejects saving when final completion signed difference does not match', () => {
+    const result = validateCurriculumPlanHomepageBeforeSave({
+      compensated_lessons: 0,
+      completed_lessons: 58,
+      extra_lessons: 0,
+      planned_lessons: 60,
+      reduced_lessons: 1,
+    });
+
+    expect(result.valid).toBe(false);
+    expect(result.errors[0]).toContain('期末完成情况校验失败');
+    expect(result.errors[0]).toContain('计划课时 60 - 完成课时 58 = 2');
+    expect(result.errors[0]).toContain('减少 1 - 超出 0 - 弥补 0 = 1');
   });
 
   it('applies historical reference only within target fields', () => {

@@ -35,6 +35,14 @@ export function hasAcademicTeachingLogAccess(input: { accessGroup?: readonly Aut
   return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
 }
 
+export function hasAcademicCurriculumPlanHomepageAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
 export function hasAcademicCalendarReadAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   const accessGroup = input.accessGroup ?? [];
 
@@ -94,6 +102,13 @@ export function hasAcademicIntegratedPlanCorrectionsAccess(input: {
 }
 
 export function hasAcademicIntegratedPlanCorrectionsManagerAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasAcademicTeachingLogManagerAccess(input);
+}
+
+export function hasAcademicCurriculumPlanHomepageManagerAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {

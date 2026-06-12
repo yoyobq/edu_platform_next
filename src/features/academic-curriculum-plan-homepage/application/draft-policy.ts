@@ -1,4 +1,4 @@
-// src/labs/curriculum-plan-homepage/draft-policy.ts
+// src/features/academic-curriculum-plan-homepage/application/draft-policy.ts
 
 import type {
   CurriculumPlanHomepagePrefillFieldWriteRule,
@@ -6,7 +6,7 @@ import type {
   CurriculumPlanHomepageReferenceCandidateItem,
   CurriculumPlanHomepageTeachingEndChapterCandidateGroup,
   CurriculumPlanHomepageTeachingEndChapterCandidateItem,
-} from './api';
+} from '../domain/curriculum-plan-homepage-types';
 
 export type CurriculumPlanHomepageDraftChange = {
   after: unknown;
@@ -20,6 +20,11 @@ export type CurriculumPlanHomepageDraftUpdate = {
   calculatedFields?: readonly string[];
   changes: CurriculumPlanHomepageDraftChange[];
   nextDraft: Record<string, unknown>;
+};
+
+export type CurriculumPlanHomepageSaveValidationResult = {
+  errors: string[];
+  valid: boolean;
 };
 
 const FIELD_LABELS: Record<string, string> = {
@@ -48,6 +53,29 @@ const REFERENCE_VALUE_FIELDS: Record<
   improvement_measures: 'improvementMeasures',
   teaching_objectives: 'teachingObjectives',
   textbook_name: 'textbookName',
+};
+
+const LESSON_DISTRIBUTION_FIELDS = [
+  ['total_lessons'],
+  ['lecture_lessons'],
+  ['training_lessons'],
+  ['review_exam_lessons'],
+  ['flexible_lessons'],
+] as const;
+
+const FINAL_COMPLETION_FIELDS = [
+  ['planned_lessons', 'plan_lessons'],
+  ['completed_lessons', 'finished_lessons'],
+  ['extra_lessons', 'exceeded_lessons', 'exceed_lessons'],
+  ['reduced_lessons', 'reduce_lessons'],
+  ['compensated_lessons', 'makeup_lessons', 'make_up_lessons'],
+] as const;
+
+type DraftNumberState = {
+  field: string;
+  isEmpty: boolean;
+  label: string;
+  value: number | null;
 };
 
 function normalizeText(value: unknown) {
@@ -97,8 +125,156 @@ function readNumberValue(source: Record<string, unknown>, field: string) {
   return null;
 }
 
+function readDraftNumberState(
+  source: Record<string, unknown>,
+  candidates: readonly string[],
+): DraftNumberState {
+  const field = candidates[0] ?? '';
+  const label = getFieldLabel(field);
+
+  for (const candidate of candidates) {
+    const value = source[candidate];
+
+    if (value === null || value === undefined || value === '') {
+      continue;
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      return {
+        field,
+        isEmpty: false,
+        label,
+        value,
+      };
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value.trim());
+
+      return {
+        field,
+        isEmpty: false,
+        label,
+        value: Number.isFinite(parsed) ? parsed : null,
+      };
+    }
+
+    return {
+      field,
+      isEmpty: false,
+      label,
+      value: null,
+    };
+  }
+
+  return {
+    field,
+    isEmpty: true,
+    label,
+    value: null,
+  };
+}
+
+function getValidationNumber(state: DraftNumberState) {
+  return state.value ?? 0;
+}
+
+function formatValidationNumber(value: number) {
+  return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
+}
+
+function areNumbersEqual(left: number, right: number) {
+  return Math.abs(left - right) < 0.0001;
+}
+
 function getFieldLabel(field: string) {
   return FIELD_LABELS[field] ?? field;
+}
+
+function validateLessonDistribution(draft: Record<string, unknown>) {
+  const [total, lecture, training, reviewExam, flexible] = LESSON_DISTRIBUTION_FIELDS.map(
+    (fields) => readDraftNumberState(draft, fields),
+  );
+  const values = [total, lecture, training, reviewExam, flexible];
+
+  if (values.every((value) => value.isEmpty)) {
+    return null;
+  }
+
+  const invalidValue = values.find((value) => value.value === null && !value.isEmpty);
+
+  if (invalidValue) {
+    return `${invalidValue.label}必须是有效数字。`;
+  }
+
+  const actual = getValidationNumber(total);
+  const expected =
+    getValidationNumber(lecture) +
+    getValidationNumber(training) +
+    getValidationNumber(reviewExam) +
+    getValidationNumber(flexible);
+
+  if (areNumbersEqual(actual, expected)) {
+    return null;
+  }
+
+  return `课时分配校验失败：授课总课时 ${formatValidationNumber(
+    actual,
+  )} 不等于讲课 ${formatValidationNumber(getValidationNumber(lecture))} + 实训 ${formatValidationNumber(
+    getValidationNumber(training),
+  )} + 复习考试 ${formatValidationNumber(
+    getValidationNumber(reviewExam),
+  )} + 机动 ${formatValidationNumber(getValidationNumber(flexible))} = ${formatValidationNumber(
+    expected,
+  )}。`;
+}
+
+function validateFinalCompletion(draft: Record<string, unknown>) {
+  const [planned, completed, extra, reduced, compensated] = FINAL_COMPLETION_FIELDS.map((fields) =>
+    readDraftNumberState(draft, fields),
+  );
+  const values = [planned, completed, extra, reduced, compensated];
+
+  if (values.every((value) => value.isEmpty)) {
+    return null;
+  }
+
+  const invalidValue = values.find((value) => value.value === null && !value.isEmpty);
+
+  if (invalidValue) {
+    return `${invalidValue.label}必须是有效数字。`;
+  }
+
+  const actual = getValidationNumber(planned) - getValidationNumber(completed);
+  const expected =
+    getValidationNumber(reduced) - getValidationNumber(extra) - getValidationNumber(compensated);
+
+  if (areNumbersEqual(actual, expected)) {
+    return null;
+  }
+
+  return `期末完成情况校验失败：计划课时 ${formatValidationNumber(
+    getValidationNumber(planned),
+  )} - 完成课时 ${formatValidationNumber(getValidationNumber(completed))} = ${formatValidationNumber(
+    actual,
+  )}，应等于减少 ${formatValidationNumber(
+    getValidationNumber(reduced),
+  )} - 超出 ${formatValidationNumber(getValidationNumber(extra))} - 弥补 ${formatValidationNumber(
+    getValidationNumber(compensated),
+  )} = ${formatValidationNumber(expected)}。`;
+}
+
+export function validateCurriculumPlanHomepageBeforeSave(
+  draft: Record<string, unknown>,
+): CurriculumPlanHomepageSaveValidationResult {
+  const errors = [validateLessonDistribution(draft), validateFinalCompletion(draft)].filter(
+    (error): error is string => Boolean(error),
+  );
+
+  return {
+    errors,
+    valid: errors.length === 0,
+  };
 }
 
 function appendUniqueLine(currentValue: unknown, line: string) {

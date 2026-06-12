@@ -1,11 +1,10 @@
-// src/labs/curriculum-plan-homepage/api.spec.ts
+// src/features/academic-curriculum-plan-homepage/infrastructure/academic-curriculum-plan-homepage-api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeGraphQL, hasGraphQLErrorCode } from '@/shared/graphql';
 
 import {
-  fetchCurrentCurriculumPlanHomepageAccount,
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
@@ -16,7 +15,7 @@ import {
   previewCurriculumPlanHomepagePrefill,
   resolveCurriculumPlanHomepagePrefillErrorMessage,
   saveCurriculumPlanHomepage,
-} from './api';
+} from './academic-curriculum-plan-homepage-api';
 
 const { executeGraphQLMock, hasGraphQLErrorCodeMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
@@ -31,43 +30,11 @@ vi.mock('@/shared/graphql', () => ({
 const mockedExecuteGraphQL = vi.mocked(executeGraphQL);
 const mockedHasGraphQLErrorCode = vi.mocked(hasGraphQLErrorCode);
 
-describe('curriculum plan homepage lab api', () => {
+describe('academic curriculum plan homepage api', () => {
   beforeEach(() => {
     mockedExecuteGraphQL.mockReset();
     mockedHasGraphQLErrorCode.mockReset();
     mockedHasGraphQLErrorCode.mockReturnValue(false);
-  });
-
-  it('maps the current staff account for upstream session ownership', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
-      me: {
-        account: {
-          id: 1001,
-          identityHint: 'STAFF',
-        },
-        accountId: 1001,
-        identity: {
-          __typename: 'StaffType',
-          departmentId: 'ORG0302',
-          id: 'S001',
-          name: '卜强',
-          slotGroup: [],
-        },
-        userInfo: {
-          accessGroup: ['STAFF'],
-          nickname: 'bq',
-        },
-      },
-    });
-
-    await expect(fetchCurrentCurriculumPlanHomepageAccount()).resolves.toEqual({
-      accessGroup: ['STAFF'],
-      accountId: 1001,
-      displayName: '卜强',
-      slotGroup: [],
-      staffId: 'S001',
-    });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain('query Me');
   });
 
   it('fetches homepage list with trimmed term variables and nullable department', async () => {

@@ -851,6 +851,40 @@ html.disable-motion *::after {
   transition: none !important;
 }
 
+.app-nav-menu-label {
+  align-items: center;
+  display: inline-flex;
+  min-width: 0;
+}
+
+.app-nav-menu-label--badged {
+  align-items: center;
+  gap: 2px;
+}
+
+.app-nav-menu-label-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-nav-menu-badge {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.app-nav-menu-badge :where(.ant-tag) {
+  background: var(--ant-color-error-bg);
+  border-color: var(--ant-color-error-border);
+  color: var(--ant-color-error-text);
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.1;
+  margin-inline-end: 0;
+  padding-inline: 2px;
+}
+
 .app-nav-menu-shell > .ant-menu.ant-menu-inline:not(.ant-menu-inline-collapsed) .ant-menu-item,
 .app-nav-menu-shell
   > .ant-menu.ant-menu-inline:not(.ant-menu-inline-collapsed)

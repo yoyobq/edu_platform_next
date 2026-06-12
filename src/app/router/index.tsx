@@ -38,6 +38,7 @@ import {
   type AcademicViewerRole,
   type AuthAccessGroup,
   canAccessPayloadCrypto,
+  hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
@@ -52,10 +53,6 @@ import {
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  curriculumPlanHomepageLabAccess,
-  loadCurriculumPlanHomepageLabRouteModule,
-} from '@/labs/curriculum-plan-homepage';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -227,6 +224,10 @@ const loadExternalTeacherCompensationRouteModule = loadPageRouteModule(
 const loadMyTeachingLogsRouteModule = loadPageRouteModule(
   () => import('@/pages/my-teaching-logs'),
   'MyTeachingLogsPage',
+);
+const loadMyCurriculumPlanHomepageRouteModule = loadPageRouteModule(
+  () => import('@/pages/my-curriculum-plan-homepage'),
+  'MyCurriculumPlanHomepagePage',
 );
 const loadIntegratedPlanCorrectionsRouteModule = loadPageRouteModule(
   () => import('@/pages/integrated-plan-corrections'),
@@ -686,42 +687,6 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return null;
 }
 
-async function curriculumPlanHomepageLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(curriculumPlanHomepageLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(curriculumPlanHomepageLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(curriculumPlanHomepageLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
-}
-
 async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs) {
   if (!hasLabEnvExposure(zquizPracticeActivitiesLabAccess)) {
     throw new Response('Not Found', { status: 404 });
@@ -1107,6 +1072,38 @@ async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {
   };
 }
 
+async function myCurriculumPlanHomepagePageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasAcademicCurriculumPlanHomepageAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return {
+    currentAccount: {
+      accessGroup: [...snapshot.userInfo.accessGroup],
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+      slotGroup: [...snapshot.slotGroup],
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    },
+  };
+}
+
 async function sandboxLoader({ request }: LoaderFunctionArgs) {
   if (currentAppEnv !== 'dev' && currentAppEnv !== 'test') {
     throw new Response('Not Found', { status: 404 });
@@ -1380,6 +1377,11 @@ const router = createBrowserRouter([
         lazy: loadMyTeachingLogsRouteModule,
       },
       {
+        path: '/academic-affairs/my-curriculum-plan-homepage',
+        loader: myCurriculumPlanHomepagePageLoader,
+        lazy: loadMyCurriculumPlanHomepageRouteModule,
+      },
+      {
         path: '/academic-affairs/integrated-plan-corrections',
         loader: integratedPlanCorrectionsPageLoader,
         lazy: loadIntegratedPlanCorrectionsRouteModule,
@@ -1428,11 +1430,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
-          },
-          {
-            path: 'curriculum-plan-homepage',
-            loader: curriculumPlanHomepageLabLoader,
-            lazy: loadCurriculumPlanHomepageLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',
