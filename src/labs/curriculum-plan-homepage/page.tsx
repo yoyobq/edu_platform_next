@@ -71,6 +71,7 @@ import {
   saveCurriculumPlanHomepage,
 } from './api';
 import {
+  buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
   buildTeachingEndChapterDraftUpdate,
@@ -134,6 +135,7 @@ type PrefillModalState = {
 type SuggestedFieldState = {
   before: unknown;
   label: string;
+  tone?: 'calculated' | 'normal';
 };
 
 type SuggestedFieldsByPlan = Record<string, Record<string, SuggestedFieldState>>;
@@ -495,11 +497,15 @@ function renderSuggestedControl(input: {
     return input.children;
   }
 
+  const isCalculated = input.suggestion.tone === 'calculated';
+
   return (
     <div
       style={{
-        background: input.token.colorInfoBg,
-        border: `1px solid ${input.token.colorInfoBorder}`,
+        background: isCalculated ? input.token.colorWarningBg : input.token.colorInfoBg,
+        border: `1px solid ${
+          isCalculated ? input.token.colorWarningBorder : input.token.colorInfoBorder
+        }`,
         borderRadius: input.token.borderRadiusSM,
         padding: input.token.paddingXS,
       }}
@@ -507,7 +513,9 @@ function renderSuggestedControl(input: {
       <Space orientation="vertical" size={input.token.marginXXS} style={{ width: '100%' }}>
         {input.children}
         <Flex align="center" justify="space-between" gap={input.token.marginXS} wrap="wrap">
-          <Typography.Text type="secondary">预填建议</Typography.Text>
+          <Typography.Text type="secondary">
+            {isCalculated ? '计算建议' : '预填建议'}
+          </Typography.Text>
           <Space size={input.token.marginXXS}>
             <Button
               size="small"
@@ -613,6 +621,7 @@ function flattenEndChapterCandidates(
 function CurriculumPlanHomepagePrefillModal({
   endChapterCandidates,
   isLoadingEndChapterCandidates,
+  isApplying,
   isLoadingPrefill,
   isLoadingReferenceCandidates,
   modal,
@@ -627,10 +636,11 @@ function CurriculumPlanHomepagePrefillModal({
 }: {
   endChapterCandidates: CurriculumPlanHomepageTeachingEndChapterCandidatesResult | null;
   isLoadingEndChapterCandidates: boolean;
+  isApplying: boolean;
   isLoadingPrefill: boolean;
   isLoadingReferenceCandidates: boolean;
   modal: PrefillModalState | null;
-  onApply: () => void;
+  onApply: () => Promise<void> | void;
   onClose: () => void;
   prefillUpdate: PrefillPreviewUpdate | null;
   referenceCandidates: CurriculumPlanHomepageReferenceCandidatesResult | null;
@@ -645,6 +655,7 @@ function CurriculumPlanHomepagePrefillModal({
   const referenceOptions = flattenReferenceCandidates(referenceCandidates);
   const endChapterOptions = flattenEndChapterCandidates(endChapterCandidates);
   const isLoading =
+    isApplying ||
     isLoadingPrefill ||
     isLoadingReferenceCandidates ||
     (phase === 'FINAL' && isLoadingEndChapterCandidates);
@@ -652,13 +663,16 @@ function CurriculumPlanHomepagePrefillModal({
   return (
     <Modal
       destroyOnHidden
+      confirmLoading={isApplying}
       okButtonProps={{ disabled: isLoading }}
       okText="填入表单"
       open={Boolean(modal)}
       title={modal ? `${title} · ${modal.item.courseName || '未命名课程'}` : title}
       width={640}
       onCancel={onClose}
-      onOk={onApply}
+      onOk={() => {
+        void onApply();
+      }}
     >
       <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
         {prefillUpdate?.warnings.length ? (
@@ -1117,6 +1131,7 @@ export function CurriculumPlanHomepageLabPage() {
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSavingHomepage, setIsSavingHomepage] = useState(false);
+  const [isApplyingPrefill, setIsApplyingPrefill] = useState(false);
   const [isPreviewingPrefill, setIsPreviewingPrefill] = useState(false);
   const [loadingReferenceKey, setLoadingReferenceKey] = useState<string | null>(null);
   const [loadingEndChapterKey, setLoadingEndChapterKey] = useState<string | null>(null);
@@ -1548,12 +1563,14 @@ export function CurriculumPlanHomepageLabPage() {
       beforeDraft: Record<string, unknown>,
       nextDraft: Record<string, unknown>,
       changes: readonly CurriculumPlanHomepageDraftChange[],
+      calculatedFields: readonly string[] = [],
     ) => {
       applyDraftUpdate(planId, nextDraft);
       setSuggestedFieldsByPlan((current) => {
         const nextPlanSuggestions = {
           ...(current[planId] ?? {}),
         };
+        const calculatedFieldSet = new Set(calculatedFields);
 
         for (const change of changes) {
           if (Object.is(beforeDraft[change.field], nextDraft[change.field])) {
@@ -1564,6 +1581,7 @@ export function CurriculumPlanHomepageLabPage() {
           nextPlanSuggestions[change.field] = {
             before: current[planId]?.[change.field]?.before ?? beforeDraft[change.field],
             label: change.label,
+            tone: calculatedFieldSet.has(change.field) ? 'calculated' : 'normal',
           };
         }
 
@@ -1726,8 +1744,65 @@ export function CurriculumPlanHomepageLabPage() {
     [ensureSessionAndRun, handlePreviewPrefill, homepageDrafts],
   );
 
-  const handleApplyPrefillModal = useCallback(() => {
+  const fetchReferenceHomepageDetail = useCallback(
+    async (sourcePlanId: string) => {
+      if (!storedSession) {
+        openLoginModal();
+        throw new Error('请先登录智慧校园后再读取参考教学计划。');
+      }
+
+      const runWithSession = async (currentSession: StoredUpstreamSession) => {
+        const result = await fetchCurriculumPlanHomepageDetail({
+          planId: sourcePlanId,
+          sessionToken: currentSession.upstreamSessionToken,
+        });
+
+        persistSessionFromResult(currentSession, result);
+        return result.homepage;
+      };
+
+      try {
+        return await runWithSession(storedSession);
+      } catch (error) {
+        if (!isExpiredUpstreamSessionError(error)) {
+          throw error;
+        }
+
+        let refreshedSession: StoredUpstreamSession;
+
+        try {
+          refreshedSession = await refreshSession(storedSession);
+        } catch (refreshError) {
+          openLoginModal({
+            fallbackUserId: storedSession.upstreamLoginId,
+            message: resolveUpstreamRefreshFailureMessage(refreshError),
+          });
+          throw refreshError;
+        }
+
+        try {
+          return await runWithSession(refreshedSession);
+        } catch (retryError) {
+          if (isExpiredUpstreamSessionError(retryError)) {
+            openLoginModal({
+              fallbackUserId: refreshedSession.upstreamLoginId,
+              message: 'upstream 会话已失效，请重新登录后继续。',
+            });
+          }
+
+          throw retryError;
+        }
+      }
+    },
+    [openLoginModal, persistSessionFromResult, refreshSession, storedSession],
+  );
+
+  const handleApplyPrefillModal = useCallback(async () => {
     if (!prefillModal) {
+      return;
+    }
+
+    if (isApplyingPrefill) {
       return;
     }
 
@@ -1751,64 +1826,108 @@ export function CurriculumPlanHomepageLabPage() {
       return;
     }
 
-    let nextDraft = draft;
-    const changes: CurriculumPlanHomepageDraftChange[] = [];
-    const prefillUpdate = buildPrefillDraftUpdate({
-      currentDraft: nextDraft,
-      fieldWriteRules: update.fieldWriteRules,
-      homepagePatch: update.homepagePatch,
-      removeGeneratedStopNoteLines: prefillModal.phase === 'INITIAL',
-      removeTeachingEndChapterPrefix: prefillModal.phase === 'INITIAL' ? '最终完成至：' : undefined,
-    });
+    setIsApplyingPrefill(true);
+    setActionError(null);
 
-    nextDraft = prefillUpdate.nextDraft;
-    changes.push(...prefillUpdate.changes);
-
-    const selectedReference = flattenReferenceCandidates(
-      referenceCandidateResults[key] ?? null,
-    ).find((option) => option.key === selectedReferenceCandidateKey);
-
-    if (selectedReference) {
-      const referenceUpdate = buildReferenceCandidateDraftUpdate({
+    try {
+      let nextDraft = draft;
+      const changes: CurriculumPlanHomepageDraftChange[] = [];
+      const calculatedFields: string[] = [];
+      const prefillUpdate = buildPrefillDraftUpdate({
         currentDraft: nextDraft,
-        group: selectedReference.group,
-        item: selectedReference.item,
+        fieldWriteRules: update.fieldWriteRules,
+        homepagePatch: update.homepagePatch,
+        removeGeneratedStopNoteLines: prefillModal.phase === 'INITIAL',
+        removeTeachingEndChapterPrefix:
+          prefillModal.phase === 'INITIAL' ? '最终完成至：' : undefined,
       });
 
-      nextDraft = referenceUpdate.nextDraft;
-      changes.push(...referenceUpdate.changes);
-    }
+      nextDraft = prefillUpdate.nextDraft;
+      changes.push(...prefillUpdate.changes);
 
-    if (prefillModal.phase === 'FINAL' && selectedEndChapterCandidateKey) {
-      const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
-      const selectedEndChapter = flattenEndChapterCandidates(
-        endChapterCandidateResults[endChapterKey] ?? null,
-      ).find((option) => option.key === selectedEndChapterCandidateKey);
+      const selectedReference = flattenReferenceCandidates(
+        referenceCandidateResults[key] ?? null,
+      ).find((option) => option.key === selectedReferenceCandidateKey);
 
-      if (selectedEndChapter) {
-        const endChapterUpdate = buildTeachingEndChapterDraftUpdate({
+      if (selectedReference) {
+        const referenceUpdate = buildReferenceCandidateDraftUpdate({
           currentDraft: nextDraft,
-          group: selectedEndChapter.group,
-          item: selectedEndChapter.item,
+          group: selectedReference.group,
+          item: selectedReference.item,
         });
 
-        nextDraft = endChapterUpdate.nextDraft;
-        changes.push(...endChapterUpdate.changes);
+        nextDraft = referenceUpdate.nextDraft;
+        changes.push(...referenceUpdate.changes);
+
+        if (
+          prefillModal.phase === 'INITIAL' &&
+          selectedReference.item.plannedLessonsDiff !== null &&
+          selectedReference.item.plannedLessonsDiff <= 20
+        ) {
+          const referenceHomepage = await fetchReferenceHomepageDetail(
+            selectedReference.item.sourcePlanId,
+          );
+
+          if (referenceHomepage) {
+            const lessonDistributionUpdate = buildInitialReferenceLessonDistributionDraftUpdate({
+              currentDraft: nextDraft,
+              plannedLessonsDiff: selectedReference.item.plannedLessonsDiff,
+              referenceHomepage,
+            });
+
+            nextDraft = lessonDistributionUpdate.nextDraft;
+            changes.push(...lessonDistributionUpdate.changes);
+            calculatedFields.push(...(lessonDistributionUpdate.calculatedFields ?? []));
+          }
+        }
       }
-    }
 
-    if (!changes.length) {
-      setSaveSuccessMessage('当前草稿与预填结果一致，无需应用。');
+      if (prefillModal.phase === 'FINAL' && selectedEndChapterCandidateKey) {
+        const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
+        const selectedEndChapter = flattenEndChapterCandidates(
+          endChapterCandidateResults[endChapterKey] ?? null,
+        ).find((option) => option.key === selectedEndChapterCandidateKey);
+
+        if (selectedEndChapter) {
+          const endChapterUpdate = buildTeachingEndChapterDraftUpdate({
+            currentDraft: nextDraft,
+            group: selectedEndChapter.group,
+            item: selectedEndChapter.item,
+          });
+
+          nextDraft = endChapterUpdate.nextDraft;
+          changes.push(...endChapterUpdate.changes);
+        }
+      }
+
+      if (!changes.length) {
+        setSaveSuccessMessage('当前草稿与预填结果一致，无需应用。');
+        setPrefillModal(null);
+        return;
+      }
+
+      applyDraftUpdateWithSuggestions(
+        prefillModal.item.planId,
+        draft,
+        nextDraft,
+        changes,
+        calculatedFields,
+      );
       setPrefillModal(null);
-      return;
+    } catch (error) {
+      setActionError({
+        message: resolveUpstreamErrorMessage(error, '暂时无法读取参考教学计划课时分配。'),
+        target: 'candidate',
+      });
+    } finally {
+      setIsApplyingPrefill(false);
     }
-
-    applyDraftUpdateWithSuggestions(prefillModal.item.planId, draft, nextDraft, changes);
-    setPrefillModal(null);
   }, [
     applyDraftUpdateWithSuggestions,
     endChapterCandidateResults,
+    fetchReferenceHomepageDetail,
     homepageDrafts,
+    isApplyingPrefill,
     prefillModal,
     prefillPreviewUpdates,
     referenceCandidateResults,
@@ -2369,6 +2488,7 @@ export function CurriculumPlanHomepageLabPage() {
       <CurriculumPlanHomepagePrefillModal
         modal={prefillModal}
         endChapterCandidates={currentEndChapterCandidates}
+        isApplying={isApplyingPrefill}
         isLoadingEndChapterCandidates={
           Boolean(prefillModalEndChapterKey) && loadingEndChapterKey === prefillModalEndChapterKey
         }

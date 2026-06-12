@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
   buildTeachingEndChapterDraftUpdate,
@@ -130,6 +131,58 @@ describe('curriculum plan homepage draft policy', () => {
       teaching_objectives: '历史目标',
       textbook_name: '历史教材',
     });
+  });
+
+  it('reuses close reference lesson distribution and calculates training lessons', () => {
+    const result = buildInitialReferenceLessonDistributionDraftUpdate({
+      currentDraft: {
+        lecture_lessons: 30,
+        review_exam_lessons: 2,
+        total_lessons: 56,
+        training_lessons: 20,
+      },
+      plannedLessonsDiff: 10,
+      referenceHomepage: {
+        flexible_lessons: 2,
+        lecture_lessons: 36,
+        review_exam_lessons: 4,
+        training_lessons: 18,
+      },
+    });
+
+    expect(result.nextDraft).toMatchObject({
+      flexible_lessons: 2,
+      lecture_lessons: 36,
+      review_exam_lessons: 4,
+      total_lessons: 56,
+      training_lessons: 14,
+    });
+    expect(result.calculatedFields).toEqual(['training_lessons']);
+    expect(result.changes.map((change) => change.field)).toEqual([
+      'lecture_lessons',
+      'review_exam_lessons',
+      'flexible_lessons',
+      'training_lessons',
+    ]);
+  });
+
+  it('does not reuse reference lesson distribution when lesson diff is too large', () => {
+    const result = buildInitialReferenceLessonDistributionDraftUpdate({
+      currentDraft: {
+        total_lessons: 56,
+      },
+      plannedLessonsDiff: 21,
+      referenceHomepage: {
+        flexible_lessons: 2,
+        lecture_lessons: 36,
+        review_exam_lessons: 4,
+      },
+    });
+
+    expect(result.nextDraft).toEqual({
+      total_lessons: 56,
+    });
+    expect(result.changes).toEqual([]);
   });
 
   it('replaces only the teaching end chapter prefix line', () => {
