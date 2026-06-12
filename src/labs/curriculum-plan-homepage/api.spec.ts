@@ -9,6 +9,9 @@ import {
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
+  listCurriculumPlanHomepageReferenceCandidates,
+  listCurriculumPlanHomepageTeachingEndChapterCandidates,
+  previewCurriculumPlanHomepagePrefill,
   saveCurriculumPlanHomepage,
 } from './api';
 
@@ -49,6 +52,7 @@ describe('curriculum plan homepage lab api', () => {
       accessGroup: ['STAFF'],
       accountId: 1001,
       displayName: '卜强',
+      slotGroup: [],
       staffId: 'S001',
     });
     expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain('query Me');
@@ -69,6 +73,9 @@ describe('curriculum plan homepage lab api', () => {
             reviewStatus: '待提交',
             schoolYear: '2025',
             semester: '2',
+            staffId: 'S001',
+            sstsCourseId: 'COURSE-001',
+            sstsTeachingClassId: 'CLASS-001',
             teachingClassId: 'tc-001',
             weekCount: 15,
             weekNumberText: '1-15周',
@@ -91,6 +98,9 @@ describe('curriculum plan homepage lab api', () => {
       items: [
         {
           planId: 'plan-001',
+          staffId: 'S001',
+          sstsCourseId: 'COURSE-001',
+          sstsTeachingClassId: 'CLASS-001',
         },
       ],
       upstreamSessionToken: 'upstream-token-001',
@@ -209,6 +219,242 @@ describe('curriculum plan homepage lab api', () => {
         homepage,
         sessionToken: 'upstream-token-002',
       },
+    });
+  });
+
+  it('previews managed homepage prefill with typed context', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      previewAcademicCurriculumPlanHomepagePrefill: {
+        fieldWriteRules: [
+          {
+            field: 'teaching_end_chapter_content',
+            mode: 'APPEND_UNIQUE_LINE',
+            value: '清明放假 2 课时',
+          },
+        ],
+        homepagePatch: {
+          teaching_weeks: 15,
+          total_lessons: 56,
+          weekly_lessons: 4,
+        },
+        warnings: [],
+      },
+    });
+
+    await expect(
+      previewCurriculumPlanHomepagePrefill({
+        context: {
+          courseName: '网页设计与制作',
+          schoolYear: '2025',
+          semester: '2',
+          staffId: 'S001',
+          sstsCourseId: 'COURSE-001',
+          sstsTeachingClassId: 'CLASS-001',
+          weekCount: 15,
+          weeklyHours: 4,
+        },
+        mode: 'managed',
+        phase: 'INITIAL',
+        planId: ' plan-001 ',
+      }),
+    ).resolves.toMatchObject({
+      homepagePatch: {
+        teaching_weeks: 15,
+      },
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'query PreviewAcademicCurriculumPlanHomepagePrefill',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+      context: {
+        courseName: '网页设计与制作',
+        schoolYear: '2025',
+        semester: '2',
+        staffId: 'S001',
+        sstsCourseId: 'COURSE-001',
+        sstsTeachingClassId: 'CLASS-001',
+        weekCount: 15,
+        weeklyHours: 4,
+      },
+      phase: 'INITIAL',
+      planId: 'plan-001',
+    });
+  });
+
+  it('previews my homepage prefill without staff id', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      previewMyAcademicCurriculumPlanHomepagePrefill: {
+        fieldWriteRules: [],
+        homepagePatch: {
+          compensated_lessons: 0,
+        },
+        warnings: ['WEEK_COUNT_OR_WEEKLY_HOURS_MISSING'],
+      },
+    });
+
+    await previewCurriculumPlanHomepagePrefill({
+      context: {
+        courseName: null,
+        schoolYear: '2025',
+        semester: '2',
+        sstsCourseId: 'COURSE-001',
+        sstsTeachingClassId: 'CLASS-001',
+        weekCount: null,
+        weeklyHours: null,
+      },
+      mode: 'my',
+      phase: 'FINAL',
+      planId: 'plan-001',
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'query PreviewMyAcademicCurriculumPlanHomepagePrefill',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+      context: {
+        courseName: null,
+        schoolYear: '2025',
+        semester: '2',
+        sstsCourseId: 'COURSE-001',
+        sstsTeachingClassId: 'CLASS-001',
+        weekCount: null,
+        weeklyHours: null,
+      },
+      phase: 'FINAL',
+      planId: 'plan-001',
+    });
+  });
+
+  it('loads managed historical reference candidates and keeps upstream session result', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      listAcademicCurriculumPlanHomepageReferenceCandidates: {
+        candidateGroups: [
+          {
+            applyMode: 'APPLY_HISTORY_HOMEPAGE_PHASE_FIELDS',
+            groupKey: 'historicalHomepageBasicInfo',
+            items: [
+              {
+                courseName: '网页设计与制作',
+                matchKind: 'EXACT',
+                plannedLessons: 32,
+                plannedLessonsDiff: 28,
+                rank: 1,
+                recommended: true,
+                schoolYear: '2024',
+                semester: '2',
+                sourcePlanId: 'old-plan',
+                teachingClassName: '信息2401班',
+                values: {
+                  improvementMeasures: null,
+                  teachingObjectives: '历史教学目的',
+                  textbookName: '历史教材',
+                },
+                weekCount: 16,
+                weeklyHours: 2,
+              },
+            ],
+            phase: 'INITIAL',
+            targetFields: ['textbook_name', 'teaching_objectives'],
+            title: '参考历史教学计划',
+          },
+        ],
+        expiresAt: '2026-06-01T10:00:00.000Z',
+        upstreamSessionToken: 'upstream-token-004',
+        warnings: [],
+      },
+    });
+
+    await expect(
+      listCurriculumPlanHomepageReferenceCandidates({
+        context: {
+          courseName: '网页设计与制作',
+          schoolYear: '2025',
+          semester: '2',
+          staffId: 'S001',
+          weekCount: 15,
+          weeklyHours: 4,
+        },
+        mode: 'managed',
+        phase: 'INITIAL',
+        planId: 'plan-001',
+        upstreamSessionToken: 'upstream-token-003',
+      }),
+    ).resolves.toMatchObject({
+      upstreamSessionToken: 'upstream-token-004',
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'query ListAcademicCurriculumPlanHomepageReferenceCandidates',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toMatchObject({
+      context: {
+        courseName: '网页设计与制作',
+        schoolYear: '2025',
+        semester: '2',
+        staffId: 'S001',
+        weekCount: 15,
+        weeklyHours: 4,
+      },
+      phase: 'INITIAL',
+      planId: 'plan-001',
+      upstreamSessionToken: 'upstream-token-003',
+    });
+  });
+
+  it('loads my teaching end chapter candidates with ownership context', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates: {
+        candidateGroups: [
+          {
+            applyMode: 'APPLY_TEACHING_END_CHAPTER_PREFIX_LINE',
+            groupKey: 'teachingEndChapterContent',
+            items: [
+              {
+                displayText: '第15周 网页发布',
+                lecturePlanDetailId: 'detail-001',
+                sectionId: null,
+                sectionName: null,
+                teachingChapterContent: '网页发布',
+                topicName: null,
+                value: '网页发布',
+                weekNumber: '15',
+              },
+            ],
+            phase: 'FINAL',
+            targetFields: ['teaching_end_chapter_content'],
+            title: '教学截止章节候选',
+            writeRule: {
+              field: 'teaching_end_chapter_content',
+              mode: 'REPLACE_PREFIX_LINE',
+              prefix: '最终完成至：',
+            },
+          },
+        ],
+        expiresAt: '2026-06-01T10:00:00.000Z',
+        upstreamSessionToken: 'upstream-token-005',
+        warnings: [],
+      },
+    });
+
+    await listCurriculumPlanHomepageTeachingEndChapterCandidates({
+      context: {
+        schoolYear: '2025',
+        semester: '2',
+      },
+      mode: 'my',
+      phase: 'FINAL',
+      planId: 'plan-001',
+      upstreamSessionToken: 'upstream-token-004',
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'query ListMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+      context: {
+        schoolYear: '2025',
+        semester: '2',
+      },
+      phase: 'FINAL',
+      planId: 'plan-001',
+      upstreamSessionToken: 'upstream-token-004',
     });
   });
 });

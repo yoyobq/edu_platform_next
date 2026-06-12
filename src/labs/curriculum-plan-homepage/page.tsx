@@ -1,12 +1,13 @@
 // src/labs/curriculum-plan-homepage/page.tsx
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ClearOutlined,
   LoginOutlined,
   ReloadOutlined,
   SaveOutlined,
   SearchOutlined,
+  ThunderboltOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -19,6 +20,8 @@ import {
   Form,
   Input,
   InputNumber,
+  Modal,
+  Radio,
   Select,
   Space,
   Spin,
@@ -50,14 +53,29 @@ import {
   type CurriculumPlanHomepageDetailResult,
   type CurriculumPlanHomepageListItem,
   type CurriculumPlanHomepageListResult,
+  type CurriculumPlanHomepagePrefillFieldWriteRule,
+  type CurriculumPlanHomepagePrefillMode,
+  type CurriculumPlanHomepagePrefillPhase,
+  type CurriculumPlanHomepageReferenceCandidateItem,
+  type CurriculumPlanHomepageReferenceCandidatesResult,
+  type CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
   fetchCurrentCurriculumPlanHomepageAccount,
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
   isExpiredUpstreamSessionError,
+  listCurriculumPlanHomepageReferenceCandidates,
+  listCurriculumPlanHomepageTeachingEndChapterCandidates,
+  previewCurriculumPlanHomepagePrefill,
   resolveUpstreamErrorMessage,
   saveCurriculumPlanHomepage,
 } from './api';
+import {
+  buildPrefillDraftUpdate,
+  buildReferenceCandidateDraftUpdate,
+  buildTeachingEndChapterDraftUpdate,
+  type CurriculumPlanHomepageDraftChange,
+} from './draft-policy';
 
 type SearchFormValues = {
   departmentId?: string | null;
@@ -78,12 +96,47 @@ type PendingAction =
       homepage: Record<string, unknown>;
       planId: string;
       type: 'save';
+    }
+  | {
+      item: CurriculumPlanHomepageListItem;
+      phase: CurriculumPlanHomepagePrefillPhase;
+      type: 'prefillCandidates';
+    }
+  | {
+      item: CurriculumPlanHomepageListItem;
+      phase: CurriculumPlanHomepagePrefillPhase;
+      type: 'referenceCandidates';
+    }
+  | {
+      item: CurriculumPlanHomepageListItem;
+      phase: CurriculumPlanHomepagePrefillPhase;
+      type: 'teachingEndChapterCandidates';
     };
 
 type ActionError = {
   message: string;
-  target: 'detail' | 'list' | 'save' | 'session';
+  target: 'candidate' | 'detail' | 'list' | 'prefill' | 'save' | 'session';
 };
+
+type PrefillPreviewUpdate = {
+  changes: CurriculumPlanHomepageDraftChange[];
+  fieldWriteRules: readonly CurriculumPlanHomepagePrefillFieldWriteRule[];
+  homepagePatch: Record<string, unknown>;
+  nextDraft: Record<string, unknown>;
+  warnings: string[];
+};
+
+type PrefillModalState = {
+  item: CurriculumPlanHomepageListItem;
+  phase: CurriculumPlanHomepagePrefillPhase;
+};
+
+type SuggestedFieldState = {
+  before: unknown;
+  label: string;
+};
+
+type SuggestedFieldsByPlan = Record<string, Record<string, SuggestedFieldState>>;
 
 const SEMESTER_OPTIONS = [
   {
@@ -96,6 +149,7 @@ const SEMESTER_OPTIONS = [
   },
 ];
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
+const MANAGED_HOMEPAGE_SLOT_GROUPS = ['ACADEMIC_OFFICER', 'TEACHING_GROUP_LEADER'] as const;
 
 function getDefaultAcademicTerm(): SearchFormValues {
   const now = new Date();
@@ -106,6 +160,89 @@ function getDefaultAcademicTerm(): SearchFormValues {
     departmentId: DEFAULT_DEPARTMENT_ID,
     schoolYear: String(schoolYear),
     semester: month >= 8 ? '1' : '2',
+  };
+}
+
+function resolvePrefillMode(account: CurrentCurriculumPlanHomepageAccount | null) {
+  if (!account) {
+    return 'my' satisfies CurriculumPlanHomepagePrefillMode;
+  }
+
+  if (account.accessGroup.includes('ADMIN')) {
+    return 'managed' satisfies CurriculumPlanHomepagePrefillMode;
+  }
+
+  if (account.slotGroup.some((slotGroup) => MANAGED_HOMEPAGE_SLOT_GROUPS.includes(slotGroup))) {
+    return 'managed' satisfies CurriculumPlanHomepagePrefillMode;
+  }
+
+  return 'my' satisfies CurriculumPlanHomepagePrefillMode;
+}
+
+function buildPhaseKey(planId: string, phase: CurriculumPlanHomepagePrefillPhase) {
+  return `${planId}:${phase}`;
+}
+
+function requireListItemValue(value: string | null | undefined, label: string) {
+  const normalized = String(value || '').trim();
+
+  if (!normalized) {
+    throw new Error(`当前计划缺少${label}，无法使用预填能力。`);
+  }
+
+  return normalized;
+}
+
+function buildPrefillContext(
+  item: CurriculumPlanHomepageListItem,
+  mode: CurriculumPlanHomepagePrefillMode,
+) {
+  const context = {
+    courseName: item.courseName,
+    schoolYear: requireListItemValue(item.schoolYear, '学年'),
+    semester: requireListItemValue(item.semester, '学期'),
+    sstsCourseId: requireListItemValue(item.sstsCourseId, 'SSTS 课程 ID'),
+    sstsTeachingClassId: requireListItemValue(item.sstsTeachingClassId, 'SSTS 教学班 ID'),
+    weekCount: item.weekCount,
+    weeklyHours: item.weeklyHours,
+  };
+
+  if (mode === 'managed') {
+    return {
+      ...context,
+      staffId: requireListItemValue(item.staffId, '教师 ID'),
+    };
+  }
+
+  return context;
+}
+
+function buildReferenceContext(
+  item: CurriculumPlanHomepageListItem,
+  mode: CurriculumPlanHomepagePrefillMode,
+) {
+  const context = {
+    courseName: item.courseName,
+    schoolYear: requireListItemValue(item.schoolYear, '学年'),
+    semester: requireListItemValue(item.semester, '学期'),
+    weekCount: item.weekCount,
+    weeklyHours: item.weeklyHours,
+  };
+
+  if (mode === 'managed') {
+    return {
+      ...context,
+      staffId: requireListItemValue(item.staffId, '教师 ID'),
+    };
+  }
+
+  return context;
+}
+
+function buildTeachingEndChapterContext(item: CurriculumPlanHomepageListItem) {
+  return {
+    schoolYear: requireListItemValue(item.schoolYear, '学年'),
+    semester: requireListItemValue(item.semester, '学期'),
   };
 }
 
@@ -209,6 +346,21 @@ function buildDetailMetadataItems(item: CurriculumPlanHomepageListItem | null) {
       children: formatCompactValue(item?.teachingClassId),
       key: 'teachingClassId',
       label: '教学班 ID',
+    },
+    {
+      children: formatCompactValue(item?.staffId),
+      key: 'staffId',
+      label: '教师 ID',
+    },
+    {
+      children: formatCompactValue(item?.sstsCourseId),
+      key: 'sstsCourseId',
+      label: 'SSTS 课程 ID',
+    },
+    {
+      children: formatCompactValue(item?.sstsTeachingClassId),
+      key: 'sstsTeachingClassId',
+      label: 'SSTS 教学班 ID',
     },
     {
       children: formatCompactValue(item?.courseName),
@@ -331,19 +483,303 @@ function renderDraftNumber(value: number | null, onChange: (nextValue: number | 
   );
 }
 
+function renderSuggestedControl(input: {
+  children: ReactNode;
+  field: string;
+  onConfirm: (field: string) => void;
+  onRevert: (field: string) => void;
+  suggestion?: SuggestedFieldState;
+  token: ReturnType<typeof theme.useToken>['token'];
+}) {
+  if (!input.suggestion) {
+    return input.children;
+  }
+
+  return (
+    <div
+      style={{
+        background: input.token.colorInfoBg,
+        border: `1px solid ${input.token.colorInfoBorder}`,
+        borderRadius: input.token.borderRadiusSM,
+        padding: input.token.paddingXS,
+      }}
+    >
+      <Space orientation="vertical" size={input.token.marginXXS} style={{ width: '100%' }}>
+        {input.children}
+        <Flex align="center" justify="space-between" gap={input.token.marginXS} wrap="wrap">
+          <Typography.Text type="secondary">预填建议</Typography.Text>
+          <Space size={input.token.marginXXS}>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                input.onConfirm(input.field);
+              }}
+            >
+              确认
+            </Button>
+            <Button
+              size="small"
+              onClick={() => {
+                input.onRevert(input.field);
+              }}
+            >
+              撤回
+            </Button>
+          </Space>
+        </Flex>
+      </Space>
+    </div>
+  );
+}
+
+function renderReferenceCandidateTitle(item: CurriculumPlanHomepageReferenceCandidateItem) {
+  return `${item.schoolYear}-${item.semester} · ${item.courseName || '未返回课程'} · ${
+    item.teachingClassName || '未返回班级'
+  }`;
+}
+
+function renderReferenceCandidateDescription(
+  item: CurriculumPlanHomepageReferenceCandidateItem,
+  token: ReturnType<typeof theme.useToken>['token'],
+) {
+  const planText =
+    item.plannedLessons === null || item.plannedLessons === undefined
+      ? '计划课时未返回'
+      : `计划 ${item.plannedLessons} 课时`;
+  const weekText =
+    item.weekCount === null ||
+    item.weekCount === undefined ||
+    item.weeklyHours === null ||
+    item.weeklyHours === undefined
+      ? null
+      : `${item.weekCount} 周 × ${item.weeklyHours} 课时`;
+  const diffText =
+    item.plannedLessonsDiff === null || item.plannedLessonsDiff === undefined
+      ? null
+      : item.plannedLessonsDiff;
+
+  return (
+    <Space size="small" wrap>
+      <Typography.Text type="secondary">{planText}</Typography.Text>
+      {weekText ? <Typography.Text type="secondary">{weekText}</Typography.Text> : null}
+      {diffText === null ? null : (
+        <Typography.Text type="secondary">
+          差{' '}
+          <span
+            style={{
+              color: diffText === 0 ? token.colorSuccess : token.colorWarning,
+              fontSize: '1.08em',
+              fontWeight: token.fontWeightStrong,
+            }}
+          >
+            {diffText}
+          </span>{' '}
+          课时
+        </Typography.Text>
+      )}
+    </Space>
+  );
+}
+
+function flattenReferenceCandidates(
+  result: CurriculumPlanHomepageReferenceCandidatesResult | null,
+) {
+  return (
+    result?.candidateGroups.flatMap((group) =>
+      group.items.map((item) => ({
+        group,
+        item,
+        key: `${group.groupKey}:${item.sourcePlanId}`,
+      })),
+    ) ?? []
+  );
+}
+
+function flattenEndChapterCandidates(
+  result: CurriculumPlanHomepageTeachingEndChapterCandidatesResult | null,
+) {
+  return (
+    result?.candidateGroups.flatMap((group) =>
+      group.items.map((item, index) => ({
+        group,
+        item,
+        key: `${group.groupKey}:${item.lecturePlanDetailId ?? index}:${item.value}`,
+      })),
+    ) ?? []
+  );
+}
+
+function CurriculumPlanHomepagePrefillModal({
+  endChapterCandidates,
+  isLoadingEndChapterCandidates,
+  isLoadingPrefill,
+  isLoadingReferenceCandidates,
+  modal,
+  onApply,
+  onClose,
+  prefillUpdate,
+  referenceCandidates,
+  selectedEndChapterKey,
+  selectedReferenceKey,
+  setSelectedEndChapterKey,
+  setSelectedReferenceKey,
+}: {
+  endChapterCandidates: CurriculumPlanHomepageTeachingEndChapterCandidatesResult | null;
+  isLoadingEndChapterCandidates: boolean;
+  isLoadingPrefill: boolean;
+  isLoadingReferenceCandidates: boolean;
+  modal: PrefillModalState | null;
+  onApply: () => void;
+  onClose: () => void;
+  prefillUpdate: PrefillPreviewUpdate | null;
+  referenceCandidates: CurriculumPlanHomepageReferenceCandidatesResult | null;
+  selectedEndChapterKey: string | null;
+  selectedReferenceKey: string;
+  setSelectedEndChapterKey: (key: string | null) => void;
+  setSelectedReferenceKey: (key: string) => void;
+}) {
+  const { token } = theme.useToken();
+  const phase = modal?.phase ?? 'INITIAL';
+  const title = phase === 'INITIAL' ? '学期初预填' : '学期末预填';
+  const referenceOptions = flattenReferenceCandidates(referenceCandidates);
+  const endChapterOptions = flattenEndChapterCandidates(endChapterCandidates);
+  const isLoading =
+    isLoadingPrefill ||
+    isLoadingReferenceCandidates ||
+    (phase === 'FINAL' && isLoadingEndChapterCandidates);
+
+  return (
+    <Modal
+      destroyOnHidden
+      okButtonProps={{ disabled: isLoading }}
+      okText="填入表单"
+      open={Boolean(modal)}
+      title={modal ? `${title} · ${modal.item.courseName || '未命名课程'}` : title}
+      width={640}
+      onCancel={onClose}
+      onOk={onApply}
+    >
+      <Space orientation="vertical" size="middle" style={{ width: '100%' }}>
+        {prefillUpdate?.warnings.length ? (
+          <Alert showIcon message={prefillUpdate.warnings.join('、')} type="warning" />
+        ) : null}
+        {referenceCandidates?.warnings.length ? (
+          <Alert showIcon message={referenceCandidates.warnings.join('、')} type="warning" />
+        ) : null}
+        {endChapterCandidates?.warnings.length ? (
+          <Alert showIcon message={endChapterCandidates.warnings.join('、')} type="warning" />
+        ) : null}
+
+        <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+          <Typography.Text strong>参考其他教学计划</Typography.Text>
+          {isLoadingReferenceCandidates ? (
+            <Flex align="center" justify="center" style={{ minHeight: 96 }}>
+              <Spin />
+            </Flex>
+          ) : (
+            <Radio.Group
+              style={{ width: '100%' }}
+              value={selectedReferenceKey}
+              onChange={(event) => {
+                setSelectedReferenceKey(String(event.target.value));
+              }}
+            >
+              <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+                <Radio value="__none__">不使用历史参考</Radio>
+                {referenceOptions.map((option) => (
+                  <Radio key={option.key} value={option.key}>
+                    <Space orientation="vertical" size={1}>
+                      <Typography.Text>
+                        {renderReferenceCandidateTitle(option.item)}
+                      </Typography.Text>
+                      {renderReferenceCandidateDescription(option.item, token)}
+                    </Space>
+                  </Radio>
+                ))}
+              </Space>
+            </Radio.Group>
+          )}
+        </Space>
+
+        {phase === 'FINAL' ? (
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <Typography.Text strong>最终章节</Typography.Text>
+            {isLoadingEndChapterCandidates ? (
+              <Flex align="center" justify="center" style={{ minHeight: 96 }}>
+                <Spin />
+              </Flex>
+            ) : (
+              <Radio.Group
+                style={{ width: '100%' }}
+                value={selectedEndChapterKey ?? '__none__'}
+                onChange={(event) => {
+                  const nextValue = String(event.target.value);
+                  setSelectedEndChapterKey(nextValue === '__none__' ? null : nextValue);
+                }}
+              >
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+                  <Radio value="__none__">不填最终章节</Radio>
+                  {endChapterOptions.map((option) => (
+                    <Radio key={option.key} value={option.key}>
+                      <Space orientation="vertical" size={1}>
+                        <Typography.Text>{option.item.displayText}</Typography.Text>
+                        <Typography.Text type="secondary">
+                          {[option.item.weekNumber, option.item.sectionName]
+                            .filter(Boolean)
+                            .join(' · ')}
+                        </Typography.Text>
+                      </Space>
+                    </Radio>
+                  ))}
+                </Space>
+              </Radio.Group>
+            )}
+          </Space>
+        ) : null}
+
+        {isLoadingPrefill ? (
+          <Flex align="center" justify="center" style={{ minHeight: 64 }}>
+            <Spin />
+          </Flex>
+        ) : (
+          <Typography.Text type="secondary">
+            课时预填会直接写入表单，并用浅色标记等待确认。
+          </Typography.Text>
+        )}
+      </Space>
+    </Modal>
+  );
+}
+
 function CurriculumPlanHomepageFormPreview({
   homepage,
+  isLoadingPrefill,
   isSaving,
+  onConfirmAllSuggestions,
+  onConfirmSuggestion,
+  onPreviewPrefill,
+  onRevertAllSuggestions,
+  onRevertSuggestion,
   onSave,
   onUpdateField,
+  suggestions,
   token,
 }: {
   homepage: Record<string, unknown>;
+  isLoadingPrefill: boolean;
   isSaving: boolean;
+  onConfirmAllSuggestions: () => void;
+  onConfirmSuggestion: (field: string) => void;
+  onPreviewPrefill: (phase: CurriculumPlanHomepagePrefillPhase) => void;
+  onRevertAllSuggestions: () => void;
+  onRevertSuggestion: (field: string) => void;
   onSave: () => void;
   onUpdateField: (field: string, value: number | string | null) => void;
+  suggestions: Record<string, SuggestedFieldState>;
   token: ReturnType<typeof theme.useToken>['token'];
 }) {
+  const suggestionCount = Object.keys(suggestions).length;
   const tableStyle = {
     borderCollapse: 'collapse',
     tableLayout: 'fixed',
@@ -375,6 +811,15 @@ function CurriculumPlanHomepageFormPreview({
     fontWeight: token.fontWeightStrong,
     padding: `0 ${token.paddingXXS}px`,
   } as const;
+  const renderField = (field: string, children: ReactNode) =>
+    renderSuggestedControl({
+      children,
+      field,
+      onConfirm: onConfirmSuggestion,
+      onRevert: onRevertSuggestion,
+      suggestion: suggestions[field],
+      token,
+    });
 
   return (
     <Space orientation="vertical" size={token.margin} style={{ width: '100%' }}>
@@ -383,10 +828,50 @@ function CurriculumPlanHomepageFormPreview({
         <Typography.Title level={3} style={{ margin: 0, textAlign: 'center' }}>
           授课计划首页信息
         </Typography.Title>
-        <Button icon={<SaveOutlined />} loading={isSaving} type="primary" onClick={onSave}>
-          保存
-        </Button>
+        <Space wrap>
+          <Button
+            icon={<ThunderboltOutlined />}
+            loading={isLoadingPrefill}
+            onClick={() => {
+              onPreviewPrefill('INITIAL');
+            }}
+          >
+            学期初预填
+          </Button>
+          <Button
+            icon={<ThunderboltOutlined />}
+            loading={isLoadingPrefill}
+            onClick={() => {
+              onPreviewPrefill('FINAL');
+            }}
+          >
+            学期末预填
+          </Button>
+          <Button icon={<SaveOutlined />} loading={isSaving} type="primary" onClick={onSave}>
+            保存
+          </Button>
+        </Space>
       </Flex>
+
+      {suggestionCount ? (
+        <Alert
+          showIcon
+          message={
+            <Flex align="center" justify="space-between" gap={token.marginSM} wrap="wrap">
+              <span>已填入 {suggestionCount} 项预填建议。</span>
+              <Space>
+                <Button size="small" type="primary" onClick={onConfirmAllSuggestions}>
+                  全部确认
+                </Button>
+                <Button size="small" onClick={onRevertAllSuggestions}>
+                  全部撤回
+                </Button>
+              </Space>
+            </Flex>
+          }
+          type="info"
+        />
+      ) : null}
 
       <fieldset style={fieldsetStyle}>
         <legend style={legendStyle}>基本信息</legend>
@@ -395,33 +880,42 @@ function CurriculumPlanHomepageFormPreview({
             <tr>
               <td style={labelCellStyle}>教材名称及版本</td>
               <td style={cellStyle}>
-                {renderDraftInput(
-                  readHomepageText(homepage, ['textbook_name', 'textbookName']),
-                  (value) => onUpdateField('textbook_name', value),
+                {renderField(
+                  'textbook_name',
+                  renderDraftInput(
+                    readHomepageText(homepage, ['textbook_name', 'textbookName']),
+                    (value) => onUpdateField('textbook_name', value),
+                  ),
                 )}
               </td>
             </tr>
             <tr>
               <td style={labelCellStyle}>教学目的要求</td>
               <td style={cellStyle}>
-                {renderDraftTextarea(
-                  readHomepageText(homepage, ['teaching_objectives', 'teachingObjectives']),
-                  (value) => onUpdateField('teaching_objectives', value),
+                {renderField(
+                  'teaching_objectives',
+                  renderDraftTextarea(
+                    readHomepageText(homepage, ['teaching_objectives', 'teachingObjectives']),
+                    (value) => onUpdateField('teaching_objectives', value),
+                  ),
                 )}
               </td>
             </tr>
             <tr>
               <td style={labelCellStyle}>改进教学的具体措施</td>
               <td style={cellStyle}>
-                {renderDraftTextarea(
-                  readHomepageText(homepage, [
-                    'teaching_improvement_measures',
-                    'improve_teaching_measures',
-                    'teaching_measures',
-                    'improvement_measures',
-                    'teachingMethods',
-                  ]),
-                  (value) => onUpdateField('teaching_improvement_measures', value),
+                {renderField(
+                  'improvement_measures',
+                  renderDraftTextarea(
+                    readHomepageText(homepage, [
+                      'teaching_improvement_measures',
+                      'improve_teaching_measures',
+                      'teaching_measures',
+                      'improvement_measures',
+                      'teachingMethods',
+                    ]),
+                    (value) => onUpdateField('improvement_measures', value),
+                  ),
                 )}
               </td>
             </tr>
@@ -457,18 +951,27 @@ function CurriculumPlanHomepageFormPreview({
           <tbody>
             <tr>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['teaching_weeks']), (value) =>
-                  onUpdateField('teaching_weeks', value),
+                {renderField(
+                  'teaching_weeks',
+                  renderDraftNumber(readHomepageNumber(homepage, ['teaching_weeks']), (value) =>
+                    onUpdateField('teaching_weeks', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['weekly_lessons']), (value) =>
-                  onUpdateField('weekly_lessons', value),
+                {renderField(
+                  'weekly_lessons',
+                  renderDraftNumber(readHomepageNumber(homepage, ['weekly_lessons']), (value) =>
+                    onUpdateField('weekly_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(readHomepageNumber(homepage, ['total_lessons']), (value) =>
-                  onUpdateField('total_lessons', value),
+                {renderField(
+                  'total_lessons',
+                  renderDraftNumber(readHomepageNumber(homepage, ['total_lessons']), (value) =>
+                    onUpdateField('total_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
@@ -520,46 +1023,72 @@ function CurriculumPlanHomepageFormPreview({
           <tbody>
             <tr>
               <td style={cellStyle}>
-                {renderDraftNumber(
-                  readHomepageNumber(homepage, ['planned_lessons', 'plan_lessons']),
-                  (value) => onUpdateField('planned_lessons', value),
+                {renderField(
+                  'planned_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, ['planned_lessons', 'plan_lessons']),
+                    (value) => onUpdateField('planned_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(
-                  readHomepageNumber(homepage, ['completed_lessons', 'finished_lessons']),
-                  (value) => onUpdateField('completed_lessons', value),
+                {renderField(
+                  'completed_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, ['completed_lessons', 'finished_lessons']),
+                    (value) => onUpdateField('completed_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(
-                  readHomepageNumber(homepage, ['exceeded_lessons', 'exceed_lessons']),
-                  (value) => onUpdateField('exceeded_lessons', value),
+                {renderField(
+                  'extra_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, [
+                      'extra_lessons',
+                      'exceeded_lessons',
+                      'exceed_lessons',
+                    ]),
+                    (value) => onUpdateField('extra_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(
-                  readHomepageNumber(homepage, ['reduced_lessons', 'reduce_lessons']),
-                  (value) => onUpdateField('reduced_lessons', value),
+                {renderField(
+                  'reduced_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, ['reduced_lessons', 'reduce_lessons']),
+                    (value) => onUpdateField('reduced_lessons', value),
+                  ),
                 )}
               </td>
               <td style={cellStyle}>
-                {renderDraftNumber(
-                  readHomepageNumber(homepage, ['makeup_lessons', 'make_up_lessons']),
-                  (value) => onUpdateField('makeup_lessons', value),
+                {renderField(
+                  'compensated_lessons',
+                  renderDraftNumber(
+                    readHomepageNumber(homepage, [
+                      'compensated_lessons',
+                      'makeup_lessons',
+                      'make_up_lessons',
+                    ]),
+                    (value) => onUpdateField('compensated_lessons', value),
+                  ),
                 )}
               </td>
             </tr>
             <tr>
               <td style={labelCellStyle}>教学截止章节内容</td>
               <td colSpan={4} style={cellStyle}>
-                {renderDraftTextarea(
-                  readHomepageText(homepage, [
-                    'teaching_end_chapter_content',
-                    'teachingEndChapterContent',
-                  ]),
-                  (value) => onUpdateField('teaching_end_chapter_content', value),
-                  3,
+                {renderField(
+                  'teaching_end_chapter_content',
+                  renderDraftTextarea(
+                    readHomepageText(homepage, [
+                      'teaching_end_chapter_content',
+                      'teachingEndChapterContent',
+                    ]),
+                    (value) => onUpdateField('teaching_end_chapter_content', value),
+                    3,
+                  ),
                 )}
               </td>
             </tr>
@@ -588,6 +1117,9 @@ export function CurriculumPlanHomepageLabPage() {
   const [isLoadingList, setIsLoadingList] = useState(false);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [isSavingHomepage, setIsSavingHomepage] = useState(false);
+  const [isPreviewingPrefill, setIsPreviewingPrefill] = useState(false);
+  const [loadingReferenceKey, setLoadingReferenceKey] = useState<string | null>(null);
+  const [loadingEndChapterKey, setLoadingEndChapterKey] = useState<string | null>(null);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
@@ -601,7 +1133,24 @@ export function CurriculumPlanHomepageLabPage() {
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
   const [detailResult, setDetailResult] = useState<CurriculumPlanHomepageDetailResult | null>(null);
   const [homepageDrafts, setHomepageDrafts] = useState<Record<string, Record<string, unknown>>>({});
+  const [referenceCandidateResults, setReferenceCandidateResults] = useState<
+    Record<string, CurriculumPlanHomepageReferenceCandidatesResult>
+  >({});
+  const [endChapterCandidateResults, setEndChapterCandidateResults] = useState<
+    Record<string, CurriculumPlanHomepageTeachingEndChapterCandidatesResult>
+  >({});
+  const [prefillPreviewUpdates, setPrefillPreviewUpdates] = useState<
+    Record<string, PrefillPreviewUpdate>
+  >({});
+  const [prefillModal, setPrefillModal] = useState<PrefillModalState | null>(null);
+  const [selectedReferenceCandidateKey, setSelectedReferenceCandidateKey] =
+    useState<string>('__none__');
+  const [selectedEndChapterCandidateKey, setSelectedEndChapterCandidateKey] = useState<
+    string | null
+  >(null);
+  const [suggestedFieldsByPlan, setSuggestedFieldsByPlan] = useState<SuggestedFieldsByPlan>({});
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
+  const prefillMode = resolvePrefillMode(currentAccount);
   const lockedUpstreamLoginUserId =
     !isAdminAccount && currentAccount?.staffId ? currentAccount.staffId : null;
   const {
@@ -626,6 +1175,11 @@ export function CurriculumPlanHomepageLabPage() {
     setSelectedPlanId(null);
     setDetailResult(null);
     setHomepageDrafts({});
+    setReferenceCandidateResults({});
+    setEndChapterCandidateResults({});
+    setPrefillPreviewUpdates({});
+    setPrefillModal(null);
+    setSuggestedFieldsByPlan({});
     setSaveSuccessMessage(null);
   }, []);
 
@@ -678,6 +1232,11 @@ export function CurriculumPlanHomepageLabPage() {
           setDetailResult(null);
           setSelectedPlanId(null);
           setHomepageDrafts({});
+          setReferenceCandidateResults({});
+          setEndChapterCandidateResults({});
+          setPrefillPreviewUpdates({});
+          setPrefillModal(null);
+          setSuggestedFieldsByPlan({});
           setSaveSuccessMessage(null);
 
           const result = await fetchCurriculumPlanHomepageList({
@@ -709,6 +1268,93 @@ export function CurriculumPlanHomepageLabPage() {
           return;
         }
 
+        if (action.type === 'prefillCandidates') {
+          const referenceKey = buildPhaseKey(action.item.planId, action.phase);
+          const endChapterKey = buildPhaseKey(action.item.planId, 'FINAL');
+
+          setLoadingReferenceKey(referenceKey);
+          setSaveSuccessMessage(null);
+
+          const referenceResult = await listCurriculumPlanHomepageReferenceCandidates({
+            context: buildReferenceContext(action.item, prefillMode),
+            mode: prefillMode,
+            phase: action.phase,
+            planId: action.item.planId,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
+          });
+          const nextSession = persistSessionFromResult(currentSession, referenceResult);
+
+          setReferenceCandidateResults((current) => ({
+            ...current,
+            [referenceKey]: referenceResult,
+          }));
+
+          if (action.phase !== 'FINAL') {
+            return;
+          }
+
+          setLoadingEndChapterKey(endChapterKey);
+
+          const endChapterResult = await listCurriculumPlanHomepageTeachingEndChapterCandidates({
+            context: buildTeachingEndChapterContext(action.item),
+            mode: prefillMode,
+            phase: 'FINAL',
+            planId: action.item.planId,
+            upstreamSessionToken: nextSession.upstreamSessionToken,
+          });
+
+          persistSessionFromResult(nextSession, endChapterResult);
+          setEndChapterCandidateResults((current) => ({
+            ...current,
+            [endChapterKey]: endChapterResult,
+          }));
+          return;
+        }
+
+        if (action.type === 'referenceCandidates') {
+          const key = buildPhaseKey(action.item.planId, action.phase);
+
+          setLoadingReferenceKey(key);
+          setSaveSuccessMessage(null);
+
+          const result = await listCurriculumPlanHomepageReferenceCandidates({
+            context: buildReferenceContext(action.item, prefillMode),
+            mode: prefillMode,
+            phase: action.phase,
+            planId: action.item.planId,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
+          });
+
+          persistSessionFromResult(currentSession, result);
+          setReferenceCandidateResults((current) => ({
+            ...current,
+            [key]: result,
+          }));
+          return;
+        }
+
+        if (action.type === 'teachingEndChapterCandidates') {
+          const key = buildPhaseKey(action.item.planId, action.phase);
+
+          setLoadingEndChapterKey(key);
+          setSaveSuccessMessage(null);
+
+          const result = await listCurriculumPlanHomepageTeachingEndChapterCandidates({
+            context: buildTeachingEndChapterContext(action.item),
+            mode: prefillMode,
+            phase: action.phase,
+            planId: action.item.planId,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
+          });
+
+          persistSessionFromResult(currentSession, result);
+          setEndChapterCandidateResults((current) => ({
+            ...current,
+            [key]: result,
+          }));
+          return;
+        }
+
         setIsLoadingDetail(true);
         setSaveSuccessMessage(null);
         setSelectedPlanId(action.item.planId);
@@ -724,6 +1370,11 @@ export function CurriculumPlanHomepageLabPage() {
           ...current,
           [result.planId]: buildHomepageDraftFromDetail(result),
         }));
+        setSuggestedFieldsByPlan((current) => {
+          const next = { ...current };
+          delete next[result.planId];
+          return next;
+        });
       };
 
       const handleActionError = (error: unknown) => {
@@ -740,6 +1391,18 @@ export function CurriculumPlanHomepageLabPage() {
           setActionError({
             message: resolveUpstreamErrorMessage(error, '暂时无法保存授课计划首页。'),
             target: 'save',
+          });
+          return;
+        }
+
+        if (
+          action.type === 'prefillCandidates' ||
+          action.type === 'referenceCandidates' ||
+          action.type === 'teachingEndChapterCandidates'
+        ) {
+          setActionError({
+            message: resolveUpstreamErrorMessage(error, '暂时无法读取授课计划首页候选。'),
+            target: 'candidate',
           });
           return;
         }
@@ -794,9 +1457,11 @@ export function CurriculumPlanHomepageLabPage() {
         setIsLoadingList(false);
         setIsLoadingDetail(false);
         setIsSavingHomepage(false);
+        setLoadingReferenceKey(null);
+        setLoadingEndChapterKey(null);
       }
     },
-    [clearResults, persistSessionFromResult, promptUpstreamLogin, refreshSession],
+    [clearResults, persistSessionFromResult, prefillMode, promptUpstreamLogin, refreshSession],
   );
 
   const ensureSessionAndRun = useCallback(
@@ -869,12 +1534,295 @@ export function CurriculumPlanHomepageLabPage() {
     [ensureSessionAndRun, homepageDrafts],
   );
 
+  const applyDraftUpdate = useCallback((planId: string, nextDraft: Record<string, unknown>) => {
+    setHomepageDrafts((current) => ({
+      ...current,
+      [planId]: nextDraft,
+    }));
+    setSaveSuccessMessage(null);
+  }, []);
+
+  const applyDraftUpdateWithSuggestions = useCallback(
+    (
+      planId: string,
+      beforeDraft: Record<string, unknown>,
+      nextDraft: Record<string, unknown>,
+      changes: readonly CurriculumPlanHomepageDraftChange[],
+    ) => {
+      applyDraftUpdate(planId, nextDraft);
+      setSuggestedFieldsByPlan((current) => {
+        const nextPlanSuggestions = {
+          ...(current[planId] ?? {}),
+        };
+
+        for (const change of changes) {
+          if (Object.is(beforeDraft[change.field], nextDraft[change.field])) {
+            delete nextPlanSuggestions[change.field];
+            continue;
+          }
+
+          nextPlanSuggestions[change.field] = {
+            before: current[planId]?.[change.field]?.before ?? beforeDraft[change.field],
+            label: change.label,
+          };
+        }
+
+        return {
+          ...current,
+          [planId]: nextPlanSuggestions,
+        };
+      });
+    },
+    [applyDraftUpdate],
+  );
+
+  const confirmSuggestedField = useCallback((planId: string, field: string) => {
+    setSuggestedFieldsByPlan((current) => {
+      const nextPlanSuggestions = { ...(current[planId] ?? {}) };
+      delete nextPlanSuggestions[field];
+
+      return {
+        ...current,
+        [planId]: nextPlanSuggestions,
+      };
+    });
+  }, []);
+
+  const revertSuggestedField = useCallback(
+    (planId: string, field: string) => {
+      const suggestion = suggestedFieldsByPlan[planId]?.[field];
+
+      if (!suggestion) {
+        return;
+      }
+
+      setHomepageDrafts((current) => ({
+        ...current,
+        [planId]: {
+          ...(current[planId] ?? {}),
+          [field]: suggestion.before,
+        },
+      }));
+      confirmSuggestedField(planId, field);
+      setSaveSuccessMessage(null);
+    },
+    [confirmSuggestedField, suggestedFieldsByPlan],
+  );
+
+  const confirmAllSuggestedFields = useCallback((planId: string) => {
+    setSuggestedFieldsByPlan((current) => ({
+      ...current,
+      [planId]: {},
+    }));
+  }, []);
+
+  const revertAllSuggestedFields = useCallback(
+    (planId: string) => {
+      const suggestions = suggestedFieldsByPlan[planId] ?? {};
+
+      if (!Object.keys(suggestions).length) {
+        return;
+      }
+
+      setHomepageDrafts((current) => {
+        const nextDraft = { ...(current[planId] ?? {}) };
+
+        for (const [field, suggestion] of Object.entries(suggestions)) {
+          nextDraft[field] = suggestion.before;
+        }
+
+        return {
+          ...current,
+          [planId]: nextDraft,
+        };
+      });
+      confirmAllSuggestedFields(planId);
+      setSaveSuccessMessage(null);
+    },
+    [confirmAllSuggestedFields, suggestedFieldsByPlan],
+  );
+
+  const handlePreviewPrefill = useCallback(
+    async (item: CurriculumPlanHomepageListItem, phase: CurriculumPlanHomepagePrefillPhase) => {
+      const draft = homepageDrafts[item.planId];
+      const key = buildPhaseKey(item.planId, phase);
+
+      if (!draft) {
+        setActionError({
+          message: '当前首页详情尚未加载完成，暂时无法预填。',
+          target: 'prefill',
+        });
+        return;
+      }
+
+      setIsPreviewingPrefill(true);
+      setActionError(null);
+      setPrefillPreviewUpdates((current) => {
+        const next = { ...current };
+        delete next[key];
+        return next;
+      });
+
+      try {
+        const result = await previewCurriculumPlanHomepagePrefill({
+          context: buildPrefillContext(item, prefillMode),
+          mode: prefillMode,
+          phase,
+          planId: item.planId,
+        });
+        const update = buildPrefillDraftUpdate({
+          currentDraft: draft,
+          fieldWriteRules: result.fieldWriteRules,
+          homepagePatch: result.homepagePatch,
+          removeGeneratedStopNoteLines: phase === 'INITIAL',
+          removeTeachingEndChapterPrefix: phase === 'INITIAL' ? '最终完成至：' : undefined,
+        });
+
+        setPrefillPreviewUpdates((current) => ({
+          ...current,
+          [key]: {
+            ...update,
+            fieldWriteRules: result.fieldWriteRules,
+            homepagePatch: result.homepagePatch,
+            warnings: result.warnings,
+          },
+        }));
+      } catch (error) {
+        setActionError({
+          message: resolveUpstreamErrorMessage(error, '暂时无法生成授课计划首页预填。'),
+          target: 'prefill',
+        });
+      } finally {
+        setIsPreviewingPrefill(false);
+      }
+    },
+    [homepageDrafts, prefillMode],
+  );
+
+  const handleOpenPrefillModal = useCallback(
+    async (item: CurriculumPlanHomepageListItem, phase: CurriculumPlanHomepagePrefillPhase) => {
+      if (!homepageDrafts[item.planId]) {
+        setActionError({
+          message: '当前首页详情尚未加载完成，暂时无法预填。',
+          target: 'prefill',
+        });
+        return;
+      }
+
+      setSelectedReferenceCandidateKey('__none__');
+      setSelectedEndChapterCandidateKey(null);
+      setPrefillModal({
+        item,
+        phase,
+      });
+
+      await handlePreviewPrefill(item, phase);
+      await ensureSessionAndRun({
+        item,
+        phase,
+        type: 'prefillCandidates',
+      });
+    },
+    [ensureSessionAndRun, handlePreviewPrefill, homepageDrafts],
+  );
+
+  const handleApplyPrefillModal = useCallback(() => {
+    if (!prefillModal) {
+      return;
+    }
+
+    const key = buildPhaseKey(prefillModal.item.planId, prefillModal.phase);
+    const update = prefillPreviewUpdates[key];
+    const draft = homepageDrafts[prefillModal.item.planId];
+
+    if (!update) {
+      setActionError({
+        message: '预填结果尚未加载完成，暂时无法应用。',
+        target: 'prefill',
+      });
+      return;
+    }
+
+    if (!draft) {
+      setActionError({
+        message: '当前首页详情尚未加载完成，暂时无法应用预填。',
+        target: 'prefill',
+      });
+      return;
+    }
+
+    let nextDraft = draft;
+    const changes: CurriculumPlanHomepageDraftChange[] = [];
+    const prefillUpdate = buildPrefillDraftUpdate({
+      currentDraft: nextDraft,
+      fieldWriteRules: update.fieldWriteRules,
+      homepagePatch: update.homepagePatch,
+      removeGeneratedStopNoteLines: prefillModal.phase === 'INITIAL',
+      removeTeachingEndChapterPrefix: prefillModal.phase === 'INITIAL' ? '最终完成至：' : undefined,
+    });
+
+    nextDraft = prefillUpdate.nextDraft;
+    changes.push(...prefillUpdate.changes);
+
+    const selectedReference = flattenReferenceCandidates(
+      referenceCandidateResults[key] ?? null,
+    ).find((option) => option.key === selectedReferenceCandidateKey);
+
+    if (selectedReference) {
+      const referenceUpdate = buildReferenceCandidateDraftUpdate({
+        currentDraft: nextDraft,
+        group: selectedReference.group,
+        item: selectedReference.item,
+      });
+
+      nextDraft = referenceUpdate.nextDraft;
+      changes.push(...referenceUpdate.changes);
+    }
+
+    if (prefillModal.phase === 'FINAL' && selectedEndChapterCandidateKey) {
+      const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
+      const selectedEndChapter = flattenEndChapterCandidates(
+        endChapterCandidateResults[endChapterKey] ?? null,
+      ).find((option) => option.key === selectedEndChapterCandidateKey);
+
+      if (selectedEndChapter) {
+        const endChapterUpdate = buildTeachingEndChapterDraftUpdate({
+          currentDraft: nextDraft,
+          group: selectedEndChapter.group,
+          item: selectedEndChapter.item,
+        });
+
+        nextDraft = endChapterUpdate.nextDraft;
+        changes.push(...endChapterUpdate.changes);
+      }
+    }
+
+    if (!changes.length) {
+      setSaveSuccessMessage('当前草稿与预填结果一致，无需应用。');
+      setPrefillModal(null);
+      return;
+    }
+
+    applyDraftUpdateWithSuggestions(prefillModal.item.planId, draft, nextDraft, changes);
+    setPrefillModal(null);
+  }, [
+    applyDraftUpdateWithSuggestions,
+    endChapterCandidateResults,
+    homepageDrafts,
+    prefillModal,
+    prefillPreviewUpdates,
+    referenceCandidateResults,
+    selectedEndChapterCandidateKey,
+    selectedReferenceCandidateKey,
+  ]);
+
   const planTabItems = useMemo(
     () =>
       (listResult?.items ?? []).map((item) => {
         const isActiveItem = selectedPlanId === item.planId;
         const matchedDetail = detailResult?.planId === item.planId ? detailResult : null;
         const draft = homepageDrafts[item.planId];
+        const suggestions = suggestedFieldsByPlan[item.planId] ?? {};
 
         return {
           children: (
@@ -889,7 +1837,24 @@ export function CurriculumPlanHomepageLabPage() {
                     <CurriculumPlanHomepageFormPreview
                       key={matchedDetail.planId}
                       homepage={draft}
+                      isLoadingPrefill={isPreviewingPrefill && isActiveItem}
                       isSaving={isSavingHomepage && isActiveItem}
+                      suggestions={suggestions}
+                      onConfirmAllSuggestions={() => {
+                        confirmAllSuggestedFields(item.planId);
+                      }}
+                      onConfirmSuggestion={(field) => {
+                        confirmSuggestedField(item.planId, field);
+                      }}
+                      onPreviewPrefill={(phase) => {
+                        void handleOpenPrefillModal(item, phase);
+                      }}
+                      onRevertAllSuggestions={() => {
+                        revertAllSuggestedFields(item.planId);
+                      }}
+                      onRevertSuggestion={(field) => {
+                        revertSuggestedField(item.planId, field);
+                      }}
                       onSave={() => {
                         void handleSaveHomepage(item.planId);
                       }}
@@ -964,16 +1929,68 @@ export function CurriculumPlanHomepageLabPage() {
       }),
     [
       detailResult,
+      confirmAllSuggestedFields,
+      confirmSuggestedField,
+      handleOpenPrefillModal,
       handleSaveHomepage,
       homepageDrafts,
       isLoadingDetail,
+      isPreviewingPrefill,
       isSavingHomepage,
       listResult?.items,
+      revertAllSuggestedFields,
+      revertSuggestedField,
       selectedPlanId,
+      suggestedFieldsByPlan,
       token,
       updateHomepageDraftField,
     ],
   );
+
+  const prefillModalKey = prefillModal
+    ? buildPhaseKey(prefillModal.item.planId, prefillModal.phase)
+    : null;
+  const prefillModalEndChapterKey = prefillModal
+    ? buildPhaseKey(prefillModal.item.planId, 'FINAL')
+    : null;
+  const currentPrefillUpdate = prefillModalKey
+    ? (prefillPreviewUpdates[prefillModalKey] ?? null)
+    : null;
+  const currentReferenceCandidates = prefillModalKey
+    ? (referenceCandidateResults[prefillModalKey] ?? null)
+    : null;
+  const currentEndChapterCandidates = prefillModalEndChapterKey
+    ? (endChapterCandidateResults[prefillModalEndChapterKey] ?? null)
+    : null;
+
+  useEffect(() => {
+    if (!prefillModalKey) {
+      return;
+    }
+
+    const referenceOptions = flattenReferenceCandidates(
+      referenceCandidateResults[prefillModalKey] ?? null,
+    );
+    const recommendedReference = referenceOptions.find((option) => option.item.recommended);
+
+    setSelectedReferenceCandidateKey(
+      recommendedReference?.key ?? referenceOptions[0]?.key ?? '__none__',
+    );
+  }, [prefillModalKey, referenceCandidateResults]);
+
+  useEffect(() => {
+    if (!prefillModal || prefillModal.phase !== 'FINAL') {
+      setSelectedEndChapterCandidateKey(null);
+      return;
+    }
+
+    const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
+    const endChapterOptions = flattenEndChapterCandidates(
+      endChapterCandidateResults[endChapterKey] ?? null,
+    );
+
+    setSelectedEndChapterCandidateKey(endChapterOptions[0]?.key ?? null);
+  }, [endChapterCandidateResults, prefillModal]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -1346,6 +2363,28 @@ export function CurriculumPlanHomepageLabPage() {
         onClearRememberedCredentials={clearRememberedCredentials}
         onFinish={(values) => {
           void handleLogin(values);
+        }}
+      />
+
+      <CurriculumPlanHomepagePrefillModal
+        modal={prefillModal}
+        endChapterCandidates={currentEndChapterCandidates}
+        isLoadingEndChapterCandidates={
+          Boolean(prefillModalEndChapterKey) && loadingEndChapterKey === prefillModalEndChapterKey
+        }
+        isLoadingPrefill={isPreviewingPrefill}
+        isLoadingReferenceCandidates={
+          Boolean(prefillModalKey) && loadingReferenceKey === prefillModalKey
+        }
+        prefillUpdate={currentPrefillUpdate}
+        referenceCandidates={currentReferenceCandidates}
+        selectedEndChapterKey={selectedEndChapterCandidateKey}
+        selectedReferenceKey={selectedReferenceCandidateKey}
+        setSelectedEndChapterKey={setSelectedEndChapterCandidateKey}
+        setSelectedReferenceKey={setSelectedReferenceCandidateKey}
+        onApply={handleApplyPrefillModal}
+        onClose={() => {
+          setPrefillModal(null);
         }}
       />
     </div>

@@ -55,6 +55,30 @@ type SaveCurriculumPlanHomepageResponse = {
   saveCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
 };
 
+type CurriculumPlanHomepagePrefillResponse = {
+  previewAcademicCurriculumPlanHomepagePrefill: CurriculumPlanHomepagePrefillResult;
+};
+
+type MyCurriculumPlanHomepagePrefillResponse = {
+  previewMyAcademicCurriculumPlanHomepagePrefill: CurriculumPlanHomepagePrefillResult;
+};
+
+type CurriculumPlanHomepageReferenceCandidatesResponse = {
+  listAcademicCurriculumPlanHomepageReferenceCandidates: CurriculumPlanHomepageReferenceCandidatesResult;
+};
+
+type MyCurriculumPlanHomepageReferenceCandidatesResponse = {
+  listMyAcademicCurriculumPlanHomepageReferenceCandidates: CurriculumPlanHomepageReferenceCandidatesResult;
+};
+
+type CurriculumPlanHomepageTeachingEndChapterCandidatesResponse = {
+  listAcademicCurriculumPlanHomepageTeachingEndChapterCandidates: CurriculumPlanHomepageTeachingEndChapterCandidatesResult;
+};
+
+type MyCurriculumPlanHomepageTeachingEndChapterCandidatesResponse = {
+  listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates: CurriculumPlanHomepageTeachingEndChapterCandidatesResult;
+};
+
 type DepartmentDTO = {
   departmentName: string;
   id: string;
@@ -70,6 +94,7 @@ export type CurrentCurriculumPlanHomepageAccount = {
   accessGroup: string[];
   accountId: number;
   displayName: string;
+  slotGroup: string[];
   staffId: string | null;
 };
 
@@ -82,6 +107,9 @@ export type CurriculumPlanHomepageListItem = {
   reviewStatus: string | null;
   schoolYear: string | null;
   semester: string | null;
+  staffId: string | null;
+  sstsCourseId: string | null;
+  sstsTeachingClassId: string | null;
   teachingClassId: string | null;
   weekCount: number | null;
   weekNumberText: string | null;
@@ -116,6 +144,105 @@ export type CurriculumPlanHomepageDepartmentOption = {
   id: string;
   isEnabled: boolean;
   shortName: string | null;
+};
+
+export type CurriculumPlanHomepagePrefillPhase = 'FINAL' | 'INITIAL';
+
+export type CurriculumPlanHomepagePrefillMode = 'managed' | 'my';
+
+export type CurriculumPlanHomepagePrefillFieldWriteRule = {
+  field: string;
+  mode: string;
+  value: string;
+};
+
+export type CurriculumPlanHomepagePrefillResult = {
+  fieldWriteRules: CurriculumPlanHomepagePrefillFieldWriteRule[];
+  homepagePatch: Record<string, unknown>;
+  warnings: string[];
+};
+
+export type CurriculumPlanHomepagePrefillContext = {
+  courseName: string | null;
+  schoolYear: string;
+  semester: string;
+  sstsCourseId: string;
+  sstsTeachingClassId: string;
+  staffId?: string;
+  weekCount: number | null;
+  weeklyHours: number | null;
+};
+
+export type CurriculumPlanHomepageReferenceCandidateValues = {
+  improvementMeasures: string | null;
+  teachingObjectives: string | null;
+  textbookName: string | null;
+};
+
+export type CurriculumPlanHomepageReferenceCandidateItem = {
+  courseName: string | null;
+  matchKind: string;
+  plannedLessons: number | null;
+  plannedLessonsDiff: number | null;
+  rank: number;
+  recommended: boolean;
+  schoolYear: string;
+  semester: string;
+  sourcePlanId: string;
+  teachingClassName: string | null;
+  values: CurriculumPlanHomepageReferenceCandidateValues;
+  weekCount: number | null;
+  weeklyHours: number | null;
+};
+
+export type CurriculumPlanHomepageReferenceCandidateGroup = {
+  applyMode: string;
+  groupKey: string;
+  items: CurriculumPlanHomepageReferenceCandidateItem[];
+  phase: CurriculumPlanHomepagePrefillPhase;
+  targetFields: string[];
+  title: string;
+};
+
+export type CurriculumPlanHomepageReferenceCandidatesResult = {
+  candidateGroups: CurriculumPlanHomepageReferenceCandidateGroup[];
+  expiresAt: string | null;
+  upstreamSessionToken: string;
+  warnings: string[];
+};
+
+export type CurriculumPlanHomepageTeachingEndChapterCandidateItem = {
+  displayText: string;
+  lecturePlanDetailId: string | null;
+  sectionId: string | null;
+  sectionName: string | null;
+  teachingChapterContent: string | null;
+  topicName: string | null;
+  value: string;
+  weekNumber: string | null;
+};
+
+export type CurriculumPlanHomepageTeachingEndChapterWriteRule = {
+  field: string;
+  mode: string;
+  prefix: string;
+};
+
+export type CurriculumPlanHomepageTeachingEndChapterCandidateGroup = {
+  applyMode: string;
+  groupKey: string;
+  items: CurriculumPlanHomepageTeachingEndChapterCandidateItem[];
+  phase: CurriculumPlanHomepagePrefillPhase;
+  targetFields: string[];
+  title: string;
+  writeRule: CurriculumPlanHomepageTeachingEndChapterWriteRule;
+};
+
+export type CurriculumPlanHomepageTeachingEndChapterCandidatesResult = {
+  candidateGroups: CurriculumPlanHomepageTeachingEndChapterCandidateGroup[];
+  expiresAt: string | null;
+  upstreamSessionToken: string;
+  warnings: string[];
 };
 
 const CURRENT_ACCOUNT_QUERY = `
@@ -170,6 +297,9 @@ const FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY = `
       items {
         planId
         teachingClassId
+        staffId
+        sstsCourseId
+        sstsTeachingClassId
         courseName
         className
         schoolYear
@@ -216,6 +346,224 @@ const SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
       success
       msg
       data
+    }
+  }
+`;
+
+const PREVIEW_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
+  query PreviewAcademicCurriculumPlanHomepagePrefill(
+    $planId: String!
+    $phase: String!
+    $context: CurriculumPlanHomepagePrefillContextInput!
+  ) {
+    previewAcademicCurriculumPlanHomepagePrefill(
+      planId: $planId
+      phase: $phase
+      context: $context
+    ) {
+      homepagePatch
+      fieldWriteRules {
+        field
+        mode
+        value
+      }
+      warnings
+    }
+  }
+`;
+
+const PREVIEW_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
+  query PreviewMyAcademicCurriculumPlanHomepagePrefill(
+    $planId: String!
+    $phase: String!
+    $context: MyCurriculumPlanHomepagePrefillContextInput!
+  ) {
+    previewMyAcademicCurriculumPlanHomepagePrefill(
+      planId: $planId
+      phase: $phase
+      context: $context
+    ) {
+      homepagePatch
+      fieldWriteRules {
+        field
+        mode
+        value
+      }
+      warnings
+    }
+  }
+`;
+
+const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY = `
+  query ListAcademicCurriculumPlanHomepageReferenceCandidates(
+    $upstreamSessionToken: String!
+    $planId: String!
+    $phase: String!
+    $context: CurriculumPlanHomepageReferenceCandidatesContextInput!
+  ) {
+    listAcademicCurriculumPlanHomepageReferenceCandidates(
+      upstreamSessionToken: $upstreamSessionToken
+      planId: $planId
+      phase: $phase
+      context: $context
+    ) {
+      upstreamSessionToken
+      expiresAt
+      warnings
+      candidateGroups {
+        groupKey
+        title
+        phase
+        applyMode
+        targetFields
+        items {
+          sourcePlanId
+          schoolYear
+          semester
+          courseName
+          teachingClassName
+          weekCount
+          weeklyHours
+          plannedLessons
+          plannedLessonsDiff
+          matchKind
+          rank
+          recommended
+          values {
+            textbookName
+            teachingObjectives
+            improvementMeasures
+          }
+        }
+      }
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY = `
+  query ListMyAcademicCurriculumPlanHomepageReferenceCandidates(
+    $upstreamSessionToken: String!
+    $planId: String!
+    $phase: String!
+    $context: MyCurriculumPlanHomepageReferenceCandidatesContextInput!
+  ) {
+    listMyAcademicCurriculumPlanHomepageReferenceCandidates(
+      upstreamSessionToken: $upstreamSessionToken
+      planId: $planId
+      phase: $phase
+      context: $context
+    ) {
+      upstreamSessionToken
+      expiresAt
+      warnings
+      candidateGroups {
+        groupKey
+        title
+        phase
+        applyMode
+        targetFields
+        items {
+          sourcePlanId
+          schoolYear
+          semester
+          courseName
+          teachingClassName
+          weekCount
+          weeklyHours
+          plannedLessons
+          plannedLessonsDiff
+          matchKind
+          rank
+          recommended
+          values {
+            textbookName
+            teachingObjectives
+            improvementMeasures
+          }
+        }
+      }
+    }
+  }
+`;
+
+const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY = `
+  query ListAcademicCurriculumPlanHomepageTeachingEndChapterCandidates(
+    $upstreamSessionToken: String!
+    $planId: String!
+    $phase: String!
+  ) {
+    listAcademicCurriculumPlanHomepageTeachingEndChapterCandidates(
+      upstreamSessionToken: $upstreamSessionToken
+      planId: $planId
+      phase: $phase
+    ) {
+      upstreamSessionToken
+      expiresAt
+      warnings
+      candidateGroups {
+        groupKey
+        title
+        phase
+        applyMode
+        targetFields
+        writeRule {
+          field
+          mode
+          prefix
+        }
+        items {
+          lecturePlanDetailId
+          weekNumber
+          sectionId
+          sectionName
+          topicName
+          teachingChapterContent
+          value
+          displayText
+        }
+      }
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY = `
+  query ListMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates(
+    $upstreamSessionToken: String!
+    $planId: String!
+    $phase: String!
+    $context: MyCurriculumPlanHomepageTeachingEndChapterCandidatesContextInput!
+  ) {
+    listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates(
+      upstreamSessionToken: $upstreamSessionToken
+      planId: $planId
+      phase: $phase
+      context: $context
+    ) {
+      upstreamSessionToken
+      expiresAt
+      warnings
+      candidateGroups {
+        groupKey
+        title
+        phase
+        applyMode
+        targetFields
+        writeRule {
+          field
+          mode
+          prefix
+        }
+        items {
+          lecturePlanDetailId
+          weekNumber
+          sectionId
+          sectionName
+          topicName
+          teachingChapterContent
+          value
+          displayText
+        }
+      }
     }
   }
 `;
@@ -287,6 +635,7 @@ export async function fetchCurrentCurriculumPlanHomepageAccount(): Promise<Curre
       accessGroup: response.me.userInfo.accessGroup,
       accountId: response.me.accountId,
       displayName: resolveDisplayName(response),
+      slotGroup: response.me.identity?.slotGroup ? [...response.me.identity.slotGroup] : [],
       staffId: response.me.identity?.__typename === 'StaffType' ? response.me.identity.id : null,
     };
   } catch (error) {
@@ -369,4 +718,201 @@ export async function saveCurriculumPlanHomepage(input: {
   });
 
   return response.saveCurriculumPlanHomepage;
+}
+
+export async function previewCurriculumPlanHomepagePrefill(input: {
+  context: CurriculumPlanHomepagePrefillContext;
+  mode: CurriculumPlanHomepagePrefillMode;
+  phase: CurriculumPlanHomepagePrefillPhase;
+  planId: string;
+}) {
+  const commonVariables = {
+    phase: input.phase,
+    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+  };
+
+  if (input.mode === 'managed') {
+    const response = await requestGraphQL<
+      CurriculumPlanHomepagePrefillResponse,
+      {
+        context: Required<CurriculumPlanHomepagePrefillContext>;
+        phase: CurriculumPlanHomepagePrefillPhase;
+        planId: string;
+      }
+    >(PREVIEW_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY, {
+      ...commonVariables,
+      context: {
+        courseName: input.context.courseName,
+        schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+        semester: normalizeRequiredString(input.context.semester, '学期'),
+        sstsCourseId: normalizeRequiredString(input.context.sstsCourseId, 'SSTS 课程 ID'),
+        sstsTeachingClassId: normalizeRequiredString(
+          input.context.sstsTeachingClassId,
+          'SSTS 教学班 ID',
+        ),
+        staffId: normalizeRequiredString(input.context.staffId, '教师 ID'),
+        weekCount: input.context.weekCount,
+        weeklyHours: input.context.weeklyHours,
+      },
+    });
+
+    return response.previewAcademicCurriculumPlanHomepagePrefill;
+  }
+
+  const response = await requestGraphQL<
+    MyCurriculumPlanHomepagePrefillResponse,
+    {
+      context: Omit<CurriculumPlanHomepagePrefillContext, 'staffId'>;
+      phase: CurriculumPlanHomepagePrefillPhase;
+      planId: string;
+    }
+  >(PREVIEW_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY, {
+    ...commonVariables,
+    context: {
+      courseName: input.context.courseName,
+      schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+      semester: normalizeRequiredString(input.context.semester, '学期'),
+      sstsCourseId: normalizeRequiredString(input.context.sstsCourseId, 'SSTS 课程 ID'),
+      sstsTeachingClassId: normalizeRequiredString(
+        input.context.sstsTeachingClassId,
+        'SSTS 教学班 ID',
+      ),
+      weekCount: input.context.weekCount,
+      weeklyHours: input.context.weeklyHours,
+    },
+  });
+
+  return response.previewMyAcademicCurriculumPlanHomepagePrefill;
+}
+
+export async function listCurriculumPlanHomepageReferenceCandidates(input: {
+  context: {
+    courseName: string | null;
+    schoolYear: string;
+    semester: string;
+    staffId?: string;
+    weekCount: number | null;
+    weeklyHours: number | null;
+  };
+  mode: CurriculumPlanHomepagePrefillMode;
+  phase: CurriculumPlanHomepagePrefillPhase;
+  planId: string;
+  upstreamSessionToken: string;
+}) {
+  const commonVariables = {
+    phase: input.phase,
+    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+    upstreamSessionToken: input.upstreamSessionToken,
+  };
+
+  if (input.mode === 'managed') {
+    const response = await requestGraphQL<
+      CurriculumPlanHomepageReferenceCandidatesResponse,
+      {
+        context: {
+          courseName: string | null;
+          schoolYear: string;
+          semester: string;
+          staffId: string;
+          weekCount: number | null;
+          weeklyHours: number | null;
+        };
+        phase: CurriculumPlanHomepagePrefillPhase;
+        planId: string;
+        upstreamSessionToken: string;
+      }
+    >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {
+      ...commonVariables,
+      context: {
+        courseName: input.context.courseName,
+        schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+        semester: normalizeRequiredString(input.context.semester, '学期'),
+        staffId: normalizeRequiredString(input.context.staffId, '教师 ID'),
+        weekCount: input.context.weekCount,
+        weeklyHours: input.context.weeklyHours,
+      },
+    });
+
+    return response.listAcademicCurriculumPlanHomepageReferenceCandidates;
+  }
+
+  const response = await requestGraphQL<
+    MyCurriculumPlanHomepageReferenceCandidatesResponse,
+    {
+      context: {
+        courseName: string | null;
+        schoolYear: string;
+        semester: string;
+        weekCount: number | null;
+        weeklyHours: number | null;
+      };
+      phase: CurriculumPlanHomepagePrefillPhase;
+      planId: string;
+      upstreamSessionToken: string;
+    }
+  >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {
+    ...commonVariables,
+    context: {
+      courseName: input.context.courseName,
+      schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+      semester: normalizeRequiredString(input.context.semester, '学期'),
+      weekCount: input.context.weekCount,
+      weeklyHours: input.context.weeklyHours,
+    },
+  });
+
+  return response.listMyAcademicCurriculumPlanHomepageReferenceCandidates;
+}
+
+export async function listCurriculumPlanHomepageTeachingEndChapterCandidates(input: {
+  context: {
+    schoolYear: string;
+    semester: string;
+  };
+  mode: CurriculumPlanHomepagePrefillMode;
+  phase: CurriculumPlanHomepagePrefillPhase;
+  planId: string;
+  upstreamSessionToken: string;
+}) {
+  const commonVariables = {
+    phase: input.phase,
+    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+    upstreamSessionToken: input.upstreamSessionToken,
+  };
+
+  if (input.mode === 'managed') {
+    const response = await requestGraphQL<
+      CurriculumPlanHomepageTeachingEndChapterCandidatesResponse,
+      {
+        phase: CurriculumPlanHomepagePrefillPhase;
+        planId: string;
+        upstreamSessionToken: string;
+      }
+    >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY, {
+      ...commonVariables,
+    });
+
+    return response.listAcademicCurriculumPlanHomepageTeachingEndChapterCandidates;
+  }
+
+  const response = await requestGraphQL<
+    MyCurriculumPlanHomepageTeachingEndChapterCandidatesResponse,
+    {
+      context: {
+        schoolYear: string;
+        semester: string;
+      };
+      phase: CurriculumPlanHomepagePrefillPhase;
+      planId: string;
+      upstreamSessionToken: string;
+    }
+  >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY, {
+    ...commonVariables,
+    context: {
+      schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+      semester: normalizeRequiredString(input.context.semester, '学期'),
+    },
+  });
+
+  return response.listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates;
 }
