@@ -72,6 +72,7 @@ describe('navigation catalog', () => {
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-course-results-pull',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
@@ -127,6 +128,7 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-course-results-pull',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -183,8 +185,20 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-course-results-pull',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-course-results-pull',
+        buildFilter({
+          accountId: 1004,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
     expect(
       canAccessNavigationPath(
         '/upstream-data-sync/major-sync',
@@ -358,6 +372,26 @@ describe('navigation catalog', () => {
       false,
     );
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', buildFilter())).toBe(true);
+    expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-course-results-pull',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['CLASS_ADVISER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-course-results-pull',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(false);
     expect(
       canAccessNavigationPath('/academic-affairs/my-curriculum-plan-homepage', buildFilter()),
     ).toBe(true);
@@ -584,6 +618,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
+      '/labs/student-course-results-pull',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',

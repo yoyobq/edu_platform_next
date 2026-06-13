@@ -1,4 +1,10 @@
-import { type AuthAccessGroup, hasAdminOrAcademicOfficerAccess } from '@/shared/auth-access';
+import {
+  type AuthAccessGroup,
+  CLASS_ADVISER_SLOT_GROUP,
+  COUNSELOR_SLOT_GROUP,
+  hasAdminOrAcademicOfficerAccess,
+  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
+} from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -19,6 +25,21 @@ function hasZquizActivityBuilderNavigationAccess(filter: Parameters<NavigationIt
     accessGroup: filter.accessGroup,
     slotGroup: filter.slotGroup,
   });
+}
+
+function hasStudentCourseResultsPullNavigationAccess(
+  filter: Parameters<NavigationItemsProvider>[0],
+) {
+  if (filter.accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return (
+    filter.accessGroup.includes('STAFF') &&
+    (filter.slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
+      filter.slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
+      filter.slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
+  );
 }
 
 function hasLabNavigationAccess(
@@ -72,6 +93,20 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: 'Upstream 会话示例',
             navMode: 'rail' as const,
             path: '/labs/upstream-session-demo',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStudentCourseResultsPullNavigationAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/labs/student-course-results-pull',
+            label: '学生成绩拉取',
+            navMode: 'rail' as const,
+            path: '/labs/student-course-results-pull',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },

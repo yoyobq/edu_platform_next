@@ -38,6 +38,8 @@ import {
   type AcademicViewerRole,
   type AuthAccessGroup,
   canAccessPayloadCrypto,
+  CLASS_ADVISER_SLOT_GROUP,
+  COUNSELOR_SLOT_GROUP,
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
@@ -50,11 +52,16 @@ import {
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
+  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
+import {
+  loadStudentCourseResultsPullLabRouteModule,
+  studentCourseResultsPullLabAccess,
+} from '@/labs/student-course-results-pull';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -290,6 +297,25 @@ function hasLabEnvExposure(access: LabAccess): boolean {
 
 function hasGuestLabAccess(access: LabAccess): boolean {
   return access.allowedAccessLevels.includes('guest');
+}
+
+function hasStudentCourseResultsPullAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return (
+    accessGroup.includes('STAFF') &&
+    (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
+      slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
+      slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
+  );
 }
 
 function getRequestTarget(request: Request) {
@@ -681,6 +707,44 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   }
 
   if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(studentCourseResultsPullLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasLabAccess(studentCourseResultsPullLabAccess) ||
+    !hasStudentCourseResultsPullAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
     throw new Response('Forbidden', { status: 403 });
   }
 
@@ -1430,6 +1494,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'student-course-results-pull',
+            loader: studentCourseResultsPullLabLoader,
+            lazy: loadStudentCourseResultsPullLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',
