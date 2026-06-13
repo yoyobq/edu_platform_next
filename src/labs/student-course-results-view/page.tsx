@@ -1,6 +1,6 @@
 // src/labs/student-course-results-view/page.tsx
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   DatabaseOutlined,
   FileSearchOutlined,
@@ -21,8 +21,9 @@ import {
   Tabs,
   Tag,
   theme,
+  Typography,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, ColumnType } from 'antd/es/table';
 
 import {
   buildDepartmentSelectOptions,
@@ -40,6 +41,7 @@ import {
   type LocalClassOption,
   resolveUpstreamErrorMessage,
   type StudentCourseResultsFailure,
+  type StudentCourseResultsItem,
   type StudentCourseResultsResult,
   type StudentCourseResultsSource,
 } from './api';
@@ -83,20 +85,64 @@ type DisplayRow = {
   totalScore: string | null;
 };
 
+type PivotCourseColumn = {
+  courseId: string | null;
+  courseName: string | null;
+  key: string;
+  schoolYear: string | null;
+  semester: string | null;
+  teacherName: string | null;
+  title: string;
+};
+
+type PivotScoreCell = {
+  isPass: number | null;
+  periodicFinalTotalScore: string | null;
+  totalScore: string | null;
+};
+
+type PivotStudentRow = {
+  fetchedAt: string | null;
+  resultCount: number;
+  scores: Record<string, PivotScoreCell[]>;
+  source: StudentCourseResultsSource;
+  studentName: string | null;
+  studentNumber: string;
+};
+
+type PivotTableData = {
+  courseColumns: PivotCourseColumn[];
+  studentRows: PivotStudentRow[];
+};
+
 type TermTab = {
   key: string;
-  label: string;
+  primaryLabel: string;
+  secondaryLabel: string;
+  semesterOrdinal: number | null;
   schoolYear: string | null;
   semester: string | null;
 };
 
 const ALL_VALUE = 'ALL';
+const AUTO_TERM_VALUE = '__AUTO_TERM__';
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
+const STUDENT_NUMBER_COLUMN_WIDTH = 98;
+const STUDENT_NAME_COLUMN_WIDTH = 82;
+const FETCHED_AT_COLUMN_WIDTH = 76;
+const SOURCE_COLUMN_WIDTH = 60;
+const PIVOT_COURSE_COLUMN_WIDTH = 72;
+const PIVOT_BASE_SCROLL_X =
+  STUDENT_NUMBER_COLUMN_WIDTH +
+  STUDENT_NAME_COLUMN_WIDTH +
+  FETCHED_AT_COLUMN_WIDTH +
+  SOURCE_COLUMN_WIDTH;
+const SOURCE_TAG_WIDTH = 34;
 
 const SOURCE_LABELS: Record<StudentCourseResultsSource, string> = {
-  CACHE: '本地快照',
-  STALE_CACHE: '旧快照',
-  UPSTREAM: '本次上游',
+  CACHE: '本地',
+  STALE_CACHE: '旧',
+  UPSTREAM: '上游',
 };
 
 const SOURCE_COLORS: Record<StudentCourseResultsSource, string> = {
@@ -189,29 +235,150 @@ function formatNullableValue(value: boolean | number | string | null | undefined
   return String(value);
 }
 
-function formatDateTime(value: string | null | undefined) {
+function buildStableColumnStyle(width: number): CSSProperties {
+  return {
+    maxWidth: width,
+    minWidth: width,
+    width,
+  };
+}
+
+function buildStableColumnSizing<TRecord>(
+  width: number,
+): Pick<ColumnType<TRecord>, 'onCell' | 'onHeaderCell' | 'width'> {
+  return {
+    onCell: () => ({
+      style: buildStableColumnStyle(width),
+    }),
+    onHeaderCell: () => ({
+      style: {
+        ...buildStableColumnStyle(width),
+        textAlign: 'center',
+      },
+    }),
+    width,
+  };
+}
+
+function formatDateTimeParts(value: string | null | undefined) {
   if (!value) {
-    return '未返回';
+    return {
+      date: '未返回',
+      time: null,
+    };
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return value;
+    return {
+      date: value,
+      time: null,
+    };
   }
 
-  return date.toLocaleString('zh-CN', {
-    day: '2-digit',
-    hour: '2-digit',
-    hour12: false,
-    minute: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+  return {
+    date: date.toLocaleDateString('zh-CN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+    }),
+    time: date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      hour12: false,
+      minute: '2-digit',
+    }),
+  };
+}
+
+function renderFetchedAt(value: string | null) {
+  const parts = formatDateTimeParts(value);
+  const dateFontSize = 10;
+  const timeFontSize = 9;
+
+  return (
+    <span
+      style={{
+        display: 'block',
+        overflow: 'hidden',
+        textAlign: 'center',
+        textOverflow: 'ellipsis',
+        width: '100%',
+      }}
+    >
+      <span
+        style={{
+          display: 'block',
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1.05,
+          width: '100%',
+        }}
+      >
+        <span
+          style={{
+            display: 'block',
+            fontSize: dateFontSize,
+            lineHeight: 1.05,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {parts.date}
+        </span>
+        <span
+          className="text-text-secondary"
+          style={{
+            display: 'block',
+            fontSize: timeFontSize,
+            lineHeight: 1.05,
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {parts.time ?? '\u00A0'}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function renderStableTextCell(value: string | null | undefined) {
+  if (!value) {
+    return <span className="text-text-secondary">-</span>;
+  }
+
+  return (
+    <span
+      title={value}
+      style={{
+        display: 'block',
+        fontVariantNumeric: 'tabular-nums',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+        width: '100%',
+      }}
+    >
+      {value}
+    </span>
+  );
 }
 
 function formatSchoolYear(value: string | null) {
-  return value?.trim() ? `${value} 学年` : '未返回学年';
+  const schoolYear = value?.trim();
+
+  if (!schoolYear) {
+    return '未返回学年';
+  }
+
+  if (/^\d{4}$/.test(schoolYear)) {
+    const startYear = Number(schoolYear);
+    const endYearSuffix = String((startYear + 1) % 100).padStart(2, '0');
+
+    return `${schoolYear.slice(-2)}-${endYearSuffix}学年`;
+  }
+
+  return `${schoolYear} 学年`;
 }
 
 function formatSemester(value: string | null) {
@@ -224,22 +391,6 @@ function formatSemester(value: string | null) {
   }
 
   return value?.trim() ? `第 ${value} 学期` : '未返回学期';
-}
-
-function renderSourceTag(source: StudentCourseResultsSource) {
-  return <Tag color={SOURCE_COLORS[source]}>{SOURCE_LABELS[source]}</Tag>;
-}
-
-function renderPassTag(value: number | null) {
-  if (value === 1) {
-    return <Tag color="green">通过</Tag>;
-  }
-
-  if (value === 0) {
-    return <Tag color="red">未通过</Tag>;
-  }
-
-  return <Tag>未返回</Tag>;
 }
 
 function buildTermKey(schoolYear: string | null, semester: string | null) {
@@ -257,17 +408,13 @@ function compareRows(a: DisplayRow, b: DisplayRow) {
   return (
     compareTextValue(a.studentNumber, b.studentNumber) ||
     compareTextValue(b.schoolYear, a.schoolYear) ||
-    compareTextValue(a.semester, b.semester) ||
+    compareTextValue(b.semester, a.semester) ||
     compareTextValue(a.courseName, b.courseName)
   );
 }
 
-function flattenRows(result: StudentCourseResultsResult | null): DisplayRow[] {
-  if (!result) {
-    return [];
-  }
-
-  return result.items
+function flattenStudentItems(items: readonly StudentCourseResultsItem[]): DisplayRow[] {
+  return items
     .flatMap((student) =>
       student.results.map((record) => ({
         ...record,
@@ -281,6 +428,21 @@ function flattenRows(result: StudentCourseResultsResult | null): DisplayRow[] {
 }
 
 function buildTermTabs(rows: readonly DisplayRow[]): TermTab[] {
+  const termRows = [...rows]
+    .sort(
+      (a, b) =>
+        compareTextValue(a.schoolYear, b.schoolYear) || compareTextValue(a.semester, b.semester),
+    )
+    .filter((row, index, source) => {
+      const currentKey = buildTermKey(row.schoolYear, row.semester);
+      const previousKey =
+        index > 0 ? buildTermKey(source[index - 1].schoolYear, source[index - 1].semester) : null;
+
+      return currentKey !== previousKey;
+    });
+  const ordinalByKey = new Map(
+    termRows.map((row, index) => [buildTermKey(row.schoolYear, row.semester), index + 1] as const),
+  );
   const tabByKey = new Map<string, TermTab>();
 
   for (const row of rows) {
@@ -292,36 +454,33 @@ function buildTermTabs(rows: readonly DisplayRow[]): TermTab[] {
 
     tabByKey.set(key, {
       key,
-      label: `${formatSchoolYear(row.schoolYear)} · ${formatSemester(row.semester)}`,
+      primaryLabel: formatSchoolYear(row.schoolYear),
+      secondaryLabel: formatSemester(row.semester),
+      semesterOrdinal: ordinalByKey.get(key) ?? null,
       schoolYear: row.schoolYear,
       semester: row.semester,
     });
   }
 
-  return [
-    {
-      key: ALL_VALUE,
-      label: '全部',
-      schoolYear: null,
-      semester: null,
-    },
-    ...[...tabByKey.values()].sort(
-      (a, b) =>
-        compareTextValue(b.schoolYear, a.schoolYear) || compareTextValue(a.semester, b.semester),
-    ),
-  ];
+  return [...tabByKey.values()].sort(
+    (a, b) =>
+      compareTextValue(b.schoolYear, a.schoolYear) || compareTextValue(b.semester, a.semester),
+  );
 }
 
-function filterRowsBySearch(rows: readonly DisplayRow[], keyword: string | undefined) {
+function filterStudentItemsBySearch(
+  items: readonly StudentCourseResultsItem[],
+  keyword: string | undefined,
+) {
   const normalizedKeyword = keyword?.trim().toLowerCase();
 
   if (!normalizedKeyword) {
-    return [...rows];
+    return [...items];
   }
 
-  return rows.filter((row) => {
-    const studentNumber = row.studentNumber.toLowerCase();
-    const studentName = row.studentName?.toLowerCase() ?? '';
+  return items.filter((item) => {
+    const studentNumber = item.studentNumber.toLowerCase();
+    const studentName = item.studentName?.toLowerCase() ?? '';
 
     return studentNumber.includes(normalizedKeyword) || studentName.includes(normalizedKeyword);
   });
@@ -333,6 +492,269 @@ function filterRowsByTerm(rows: readonly DisplayRow[], activeTermKey: string) {
   }
 
   return rows.filter((row) => buildTermKey(row.schoolYear, row.semester) === activeTermKey);
+}
+
+function shouldIncludeResultInTerm(input: {
+  activeTermKey: string;
+  schoolYear: string | null;
+  semester: string | null;
+}) {
+  return (
+    input.activeTermKey === ALL_VALUE ||
+    buildTermKey(input.schoolYear, input.semester) === input.activeTermKey
+  );
+}
+
+function resolveEffectiveActiveTermKey(activeTermKey: string, termTabs: readonly TermTab[]) {
+  if (activeTermKey === AUTO_TERM_VALUE) {
+    return termTabs[0]?.key ?? ALL_VALUE;
+  }
+
+  if (termTabs.some((tab) => tab.key === activeTermKey)) {
+    return activeTermKey;
+  }
+
+  return termTabs[0]?.key ?? ALL_VALUE;
+}
+
+function buildCourseKey(row: DisplayRow) {
+  return [
+    row.schoolYear ?? 'no-year',
+    row.semester ?? 'no-semester',
+    row.courseId?.trim() || row.courseName?.trim() || 'no-course',
+    row.teacherName?.trim() || 'no-teacher',
+  ].join('::');
+}
+
+function resolveCourseName(row: DisplayRow) {
+  return row.courseName?.trim() || row.courseId?.trim() || '未返回课程';
+}
+
+function buildCourseTitle(row: DisplayRow, activeTermKey: string) {
+  const courseName = resolveCourseName(row);
+
+  if (activeTermKey === ALL_VALUE) {
+    return `${formatSchoolYear(row.schoolYear)} ${formatSemester(row.semester)} ${courseName}`;
+  }
+
+  return courseName;
+}
+
+function compareCourseColumns(a: PivotCourseColumn, b: PivotCourseColumn) {
+  return (
+    compareTextValue(b.schoolYear, a.schoolYear) ||
+    compareTextValue(b.semester, a.semester) ||
+    compareTextValue(a.courseName, b.courseName) ||
+    compareTextValue(a.teacherName, b.teacherName)
+  );
+}
+
+function buildScoreParts(cell: PivotScoreCell) {
+  const totalScore = cell.totalScore?.trim();
+  const periodicScore = cell.periodicFinalTotalScore?.trim();
+
+  if (totalScore && periodicScore && totalScore !== periodicScore) {
+    return [totalScore, periodicScore];
+  }
+
+  return [totalScore || periodicScore || '-'];
+}
+
+function isFailingScoreText(value: string) {
+  if (!/^-?\d+(?:\.\d+)?$/.test(value)) {
+    return false;
+  }
+
+  return Number(value) < 60;
+}
+
+function renderScorePart(value: string, index: number) {
+  const content = isFailingScoreText(value) ? (
+    <span style={{ color: 'var(--ant-color-error)' }}>{value}</span>
+  ) : (
+    value
+  );
+
+  if (index === 0) {
+    return <span key={`${value}:${index}`}>{content}</span>;
+  }
+
+  return (
+    <span key={`${value}:${index}`}>
+      <span className="text-text-tertiary"> / </span>
+      {content}
+    </span>
+  );
+}
+
+function renderScoreCells(cells: readonly PivotScoreCell[] | undefined) {
+  if (!cells?.length) {
+    return <span className="text-text-secondary">-</span>;
+  }
+
+  const scoreParts = cells.flatMap(buildScoreParts);
+
+  return <span>{scoreParts.map(renderScorePart)}</span>;
+}
+
+function buildPivotTableData(
+  items: readonly StudentCourseResultsItem[],
+  activeTermKey: string,
+): PivotTableData {
+  const courseColumnByKey = new Map<string, PivotCourseColumn>();
+  const studentRows = items
+    .map<PivotStudentRow>((item) => {
+      const scores: Record<string, PivotScoreCell[]> = {};
+      let resultCount = 0;
+
+      for (const record of item.results) {
+        if (
+          !shouldIncludeResultInTerm({
+            activeTermKey,
+            schoolYear: record.schoolYear,
+            semester: record.semester,
+          })
+        ) {
+          continue;
+        }
+
+        resultCount += 1;
+        const row: DisplayRow = {
+          ...record,
+          fetchedAt: item.fetchedAt,
+          source: item.source,
+          studentName: item.studentName,
+          studentNumber: item.studentNumber,
+        };
+        const courseKey = buildCourseKey(row);
+
+        if (!courseColumnByKey.has(courseKey)) {
+          courseColumnByKey.set(courseKey, {
+            courseId: row.courseId,
+            courseName: row.courseName,
+            key: courseKey,
+            schoolYear: row.schoolYear,
+            semester: row.semester,
+            teacherName: row.teacherName,
+            title: buildCourseTitle(row, activeTermKey),
+          });
+        }
+
+        scores[courseKey] = [
+          ...(scores[courseKey] ?? []),
+          {
+            isPass: row.isPass,
+            periodicFinalTotalScore: row.periodicFinalTotalScore,
+            totalScore: row.totalScore,
+          },
+        ];
+      }
+
+      return {
+        fetchedAt: item.fetchedAt,
+        resultCount,
+        scores,
+        source: item.source,
+        studentName: item.studentName,
+        studentNumber: item.studentNumber,
+      };
+    })
+    .sort((a, b) => compareTextValue(a.studentNumber, b.studentNumber));
+
+  return {
+    courseColumns: [...courseColumnByKey.values()].sort(compareCourseColumns),
+    studentRows,
+  };
+}
+
+function buildPivotColumns(
+  courseColumns: readonly PivotCourseColumn[],
+  isCompactViewport: boolean,
+  token: ReturnType<typeof theme.useToken>['token'],
+): ColumnsType<PivotStudentRow> {
+  return [
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(STUDENT_NUMBER_COLUMN_WIDTH),
+      align: 'center' as const,
+      dataIndex: 'studentNumber',
+      fixed: isCompactViewport ? undefined : 'left',
+      key: 'studentNumber',
+      render: (studentNumber: string) => renderStableTextCell(studentNumber),
+      title: '学号',
+    },
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(STUDENT_NAME_COLUMN_WIDTH),
+      dataIndex: 'studentName',
+      fixed: isCompactViewport ? undefined : 'left',
+      key: 'studentName',
+      render: (studentName: string | null) => renderStableTextCell(studentName),
+      title: '姓名',
+    },
+    ...courseColumns.map((course) => ({
+      ...buildStableColumnSizing<PivotStudentRow>(PIVOT_COURSE_COLUMN_WIDTH),
+      align: 'center' as const,
+      key: course.key,
+      render: (_: unknown, record: PivotStudentRow) => renderScoreCells(record.scores[course.key]),
+      title: (
+        <span
+          style={{
+            color: token.colorText,
+            display: 'block',
+            fontSize: token.fontSizeSM,
+            lineHeight: token.lineHeightSM,
+            marginInline: 'auto',
+            maxWidth: '4em',
+            textAlign: 'center',
+            whiteSpace: 'normal',
+            wordBreak: 'break-all',
+          }}
+        >
+          {course.title}
+        </span>
+      ),
+    })),
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(FETCHED_AT_COLUMN_WIDTH),
+      align: 'center' as const,
+      dataIndex: 'fetchedAt',
+      fixed: isCompactViewport ? undefined : 'right',
+      key: 'fetchedAt',
+      render: (fetchedAt: string | null) => renderFetchedAt(fetchedAt),
+      title: <span style={{ fontSize: token.fontSizeXS, lineHeight: 1.15 }}>更新时间</span>,
+    },
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(SOURCE_COLUMN_WIDTH),
+      align: 'center' as const,
+      dataIndex: 'source',
+      fixed: isCompactViewport ? undefined : 'right',
+      key: 'source',
+      render: (source: StudentCourseResultsSource) => (
+        <Tag
+          color={SOURCE_COLORS[source]}
+          style={{
+            alignItems: 'center',
+            boxSizing: 'border-box',
+            display: 'inline-flex',
+            fontSize: token.fontSizeXS,
+            height: token.controlHeightXS,
+            justifyContent: 'center',
+            lineHeight: 1,
+            marginInlineEnd: 0,
+            paddingInline: 0,
+            verticalAlign: 'middle',
+            width: SOURCE_TAG_WIDTH,
+          }}
+        >
+          {SOURCE_LABELS[source]}
+        </Tag>
+      ),
+      title: <span style={{ fontSize: token.fontSizeXS, lineHeight: 1.15 }}>来源</span>,
+    },
+  ];
+}
+
+function resolvePivotScrollX(courseColumnCount: number) {
+  return PIVOT_BASE_SCROLL_X + courseColumnCount * PIVOT_COURSE_COLUMN_WIDTH;
 }
 
 function resolveQuerySchoolYear(value: string) {
@@ -375,7 +797,8 @@ export function StudentCourseResultsViewLabPage() {
   const { token } = theme.useToken();
   const [form] = Form.useForm<SearchFormValues>();
   const isCompactViewport = useCompactViewport();
-  const [activeTermKey, setActiveTermKey] = useState(ALL_VALUE);
+  const [activeTermKey, setActiveTermKey] = useState(AUTO_TERM_VALUE);
+  const [selectedStudentNumber, setSelectedStudentNumber] = useState<string | null>(null);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isLoadingResults, setIsLoadingResults] = useState(false);
@@ -398,125 +821,36 @@ export function StudentCourseResultsViewLabPage() {
     () => classes.find((item) => item.classCode === selectedClassCode) ?? null,
     [classes, selectedClassCode],
   );
-  const allRows = useMemo(() => flattenRows(resultState?.data ?? null), [resultState]);
-  const searchedRows = useMemo(
-    () => filterRowsBySearch(allRows, studentSearch),
-    [allRows, studentSearch],
+  const resultItems = useMemo(() => resultState?.data.items ?? [], [resultState]);
+  const searchedItems = useMemo(
+    () => filterStudentItemsBySearch(resultItems, studentSearch),
+    [resultItems, studentSearch],
   );
+  const searchedRows = useMemo(() => flattenStudentItems(searchedItems), [searchedItems]);
   const termTabs = useMemo(() => buildTermTabs(searchedRows), [searchedRows]);
-  const effectiveActiveTermKey = termTabs.some((item) => item.key === activeTermKey)
-    ? activeTermKey
-    : ALL_VALUE;
+  const effectiveActiveTermKey = resolveEffectiveActiveTermKey(activeTermKey, termTabs);
   const visibleRows = useMemo(
     () => filterRowsByTerm(searchedRows, effectiveActiveTermKey),
     [effectiveActiveTermKey, searchedRows],
   );
+  const activePivotData = useMemo(
+    () => buildPivotTableData(searchedItems, effectiveActiveTermKey),
+    [effectiveActiveTermKey, searchedItems],
+  );
+  const activePivotColumns = useMemo(
+    () => buildPivotColumns(activePivotData.courseColumns, isCompactViewport, token),
+    [activePivotData.courseColumns, isCompactViewport, token],
+  );
   const result = resultState?.data ?? null;
 
-  const resultColumns = useMemo<ColumnsType<DisplayRow>>(
-    () => [
-      {
-        dataIndex: 'studentNumber',
-        fixed: isCompactViewport ? undefined : 'left',
-        key: 'studentNumber',
-        title: '学号',
-        width: 150,
-      },
-      {
-        dataIndex: 'studentName',
-        key: 'studentName',
-        render: (studentName: string | null) => formatNullableValue(studentName),
-        title: '姓名',
-        width: 120,
-      },
-      {
-        dataIndex: 'schoolYear',
-        key: 'schoolYear',
-        render: (schoolYear: string | null) => formatNullableValue(schoolYear),
-        title: '学年',
-        width: 100,
-      },
-      {
-        dataIndex: 'semester',
-        key: 'semester',
-        render: (semester: string | null) => formatNullableValue(semester),
-        title: '学期',
-        width: 90,
-      },
-      {
-        dataIndex: 'courseName',
-        ellipsis: true,
-        key: 'courseName',
-        render: (courseName: string | null) => formatNullableValue(courseName),
-        title: '课程名称',
-        width: 240,
-      },
-      {
-        dataIndex: 'teacherName',
-        key: 'teacherName',
-        render: (teacherName: string | null) => formatNullableValue(teacherName),
-        title: '任课教师',
-        width: 140,
-      },
-      {
-        dataIndex: 'totalScore',
-        key: 'totalScore',
-        render: (totalScore: string | null) => formatNullableValue(totalScore),
-        title: '总评成绩',
-        width: 110,
-      },
-      {
-        dataIndex: 'isPass',
-        key: 'isPass',
-        render: (isPass: number | null) => renderPassTag(isPass),
-        title: '是否通过',
-        width: 110,
-      },
-      {
-        dataIndex: 'periodicFinalTotalScore',
-        key: 'periodicFinalTotalScore',
-        render: (score: string | null) => formatNullableValue(score),
-        title: '阶段/期末',
-        width: 120,
-      },
-      {
-        dataIndex: 'courseNature',
-        key: 'courseNature',
-        render: (courseNature: string | null) => formatNullableValue(courseNature),
-        title: '课程性质',
-        width: 130,
-      },
-      {
-        dataIndex: 'courseDivide',
-        key: 'courseDivide',
-        render: (courseDivide: string | null) => formatNullableValue(courseDivide),
-        title: '课程分类',
-        width: 130,
-      },
-      {
-        dataIndex: 'attendExamType',
-        key: 'attendExamType',
-        render: (attendExamType: string | null) => formatNullableValue(attendExamType),
-        title: '考试类型',
-        width: 130,
-      },
-      {
-        dataIndex: 'source',
-        key: 'source',
-        render: (source: StudentCourseResultsSource) => renderSourceTag(source),
-        title: '来源',
-        width: 120,
-      },
-      {
-        dataIndex: 'fetchedAt',
-        key: 'fetchedAt',
-        render: (fetchedAt: string | null) => formatDateTime(fetchedAt),
-        title: '更新时间',
-        width: 170,
-      },
-    ],
-    [isCompactViewport],
-  );
+  useEffect(() => {
+    if (
+      selectedStudentNumber &&
+      !activePivotData.studentRows.some((row) => row.studentNumber === selectedStudentNumber)
+    ) {
+      setSelectedStudentNumber(null);
+    }
+  }, [activePivotData.studentRows, selectedStudentNumber]);
 
   const loadDepartments = useCallback(async () => {
     setIsLoadingDepartments(true);
@@ -596,7 +930,7 @@ export function StudentCourseResultsViewLabPage() {
           semester: resolveQuerySemester(values.semester),
         });
 
-        setActiveTermKey(ALL_VALUE);
+        setActiveTermKey(AUTO_TERM_VALUE);
         setResultState({
           data: nextResult,
           query: {
@@ -775,7 +1109,7 @@ export function StudentCourseResultsViewLabPage() {
               <Descriptions.Item label="查询学年">
                 {resultState?.query.schoolYear === ALL_VALUE
                   ? '全部学年'
-                  : `${resultState?.query.schoolYear} 学年`}
+                  : formatSchoolYear(resultState?.query.schoolYear ?? null)}
               </Descriptions.Item>
               <Descriptions.Item label="查询学期">
                 {resultState?.query.semester === ALL_VALUE
@@ -789,7 +1123,13 @@ export function StudentCourseResultsViewLabPage() {
               <Descriptions.Item label="上游返回">
                 {result.upstreamFetchedStudentCount}
               </Descriptions.Item>
-              <Descriptions.Item label="当前可见">{visibleRows.length}</Descriptions.Item>
+              <Descriptions.Item label="当前学生">
+                {activePivotData.studentRows.length}
+              </Descriptions.Item>
+              <Descriptions.Item label="当前课程">
+                {activePivotData.courseColumns.length}
+              </Descriptions.Item>
+              <Descriptions.Item label="当前成绩行">{visibleRows.length}</Descriptions.Item>
             </Descriptions>
 
             {result.failures.length > 0 ? (
@@ -825,44 +1165,125 @@ export function StudentCourseResultsViewLabPage() {
             <Spin size="large" />
           </div>
         ) : result ? (
-          <Tabs
-            activeKey={effectiveActiveTermKey}
-            items={termTabs.map((tab) => {
-              const tabRows = filterRowsByTerm(searchedRows, tab.key);
+          <div className="student-course-results-view-table-shell">
+            <Tabs
+              activeKey={effectiveActiveTermKey}
+              items={termTabs.map((tab) => {
+                const isActiveTab = tab.key === effectiveActiveTermKey;
 
-              return {
-                key: tab.key,
-                label: tab.label,
-                children: (
-                  <Table<DisplayRow>
-                    columns={resultColumns}
-                    dataSource={tabRows}
-                    locale={{
-                      emptyText: (
-                        <Empty description="暂无成绩行" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-                      ),
-                    }}
-                    pagination={{ pageSize: 30, showSizeChanger: true }}
-                    rowKey={(record, index) =>
-                      [
-                        record.studentNumber,
-                        record.schoolYear ?? 'no-year',
-                        record.semester ?? 'no-semester',
-                        record.courseId ?? record.courseName ?? 'course',
-                        index ?? 0,
-                      ].join(':')
-                    }
-                    scroll={{ x: 1740 }}
-                    size="small"
-                  />
-                ),
-              };
-            })}
-            size="small"
-            tabBarGutter={token.marginXS}
-            tabPosition={isCompactViewport ? 'top' : 'left'}
-            onChange={setActiveTermKey}
-          />
+                return {
+                  key: tab.key,
+                  label: (
+                    <div style={{ maxWidth: isCompactViewport ? 180 : 200 }}>
+                      <div
+                        style={{
+                          fontWeight: isActiveTab ? token.fontWeightStrong : undefined,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {tab.primaryLabel}
+                      </div>
+                      <Typography.Text
+                        style={{
+                          fontSize: token.fontSizeSM,
+                          display: 'block',
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        type="secondary"
+                      >
+                        <span
+                          style={{
+                            alignItems: 'center',
+                            display: 'inline-flex',
+                            gap: token.marginXXS,
+                            maxWidth: '100%',
+                          }}
+                        >
+                          <span
+                            style={{
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {tab.secondaryLabel}
+                          </span>
+                          {tab.semesterOrdinal ? (
+                            <span
+                              style={{
+                                alignItems: 'center',
+                                background: token.colorFillTertiary,
+                                borderRadius: token.borderRadiusSM * 999,
+                                color: token.colorTextSecondary,
+                                display: 'inline-flex',
+                                flex: 'none',
+                                fontSize: token.fontSizeSM,
+                                fontVariantNumeric: 'tabular-nums',
+                                height: 18,
+                                justifyContent: 'center',
+                                lineHeight: 1,
+                                minWidth: tab.semesterOrdinal >= 10 ? 22 : 18,
+                                paddingInline: tab.semesterOrdinal >= 10 ? 4 : 0,
+                              }}
+                            >
+                              {tab.semesterOrdinal}
+                            </span>
+                          ) : null}
+                        </span>
+                      </Typography.Text>
+                    </div>
+                  ),
+                  children: isActiveTab ? (
+                    <Table<PivotStudentRow>
+                      columns={activePivotColumns}
+                      dataSource={activePivotData.studentRows}
+                      locale={{
+                        emptyText: (
+                          <Empty description="暂无学生成绩" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                        ),
+                      }}
+                      onRow={(record, index) => ({
+                        className: [
+                          index !== undefined && index % 2 === 0
+                            ? 'student-course-results-view-row-even'
+                            : 'student-course-results-view-row-odd',
+                          record.studentNumber === selectedStudentNumber
+                            ? 'student-course-results-view-row-selected'
+                            : null,
+                          'cursor-pointer',
+                        ]
+                          .filter(Boolean)
+                          .join(' '),
+                        onClick: () => {
+                          setSelectedStudentNumber((current) =>
+                            current === record.studentNumber ? null : record.studentNumber,
+                          );
+                        },
+                      })}
+                      pagination={{
+                        defaultPageSize: 60,
+                        pageSizeOptions: [30, 60],
+                        showSizeChanger: true,
+                      }}
+                      rowKey={(record) => record.studentNumber}
+                      scroll={{ x: resolvePivotScrollX(activePivotData.courseColumns.length) }}
+                      size="small"
+                      tableLayout="fixed"
+                    />
+                  ) : null,
+                };
+              })}
+              size="small"
+              tabBarGutter={token.marginXS}
+              tabPosition={isCompactViewport ? 'top' : 'left'}
+              onChange={setActiveTermKey}
+            />
+          </div>
         ) : (
           <div
             className="flex items-center justify-center"
@@ -898,6 +1319,29 @@ export function StudentCourseResultsViewLabPage() {
           />
         )}
       </Card>
+
+      <style>{`
+        .student-course-results-view-table-shell .ant-table-tbody > tr.student-course-results-view-row-even > td,
+        .student-course-results-view-table-shell
+          .ant-table-tbody
+          > tr.student-course-results-view-row-even:hover
+          > td {
+          background: var(--ant-color-fill-quaternary);
+        }
+        .student-course-results-view-table-shell .ant-table-tbody > tr.student-course-results-view-row-odd:hover > td {
+          background: var(--ant-color-fill-tertiary);
+        }
+        .student-course-results-view-table-shell .ant-table-tbody > tr.student-course-results-view-row-selected > td,
+        .student-course-results-view-table-shell
+          .ant-table-tbody
+          > tr.student-course-results-view-row-selected:hover
+          > td {
+          background: var(--ant-color-primary-bg);
+        }
+        .student-course-results-view-table-shell .ant-table-tbody > tr > td {
+          transition: background-color 0.2s ease;
+        }
+      `}</style>
     </div>
   );
 }
