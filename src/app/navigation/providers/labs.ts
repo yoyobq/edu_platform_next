@@ -27,7 +27,7 @@ function hasZquizActivityBuilderNavigationAccess(filter: Parameters<NavigationIt
   });
 }
 
-function hasStudentCourseResultsPullNavigationAccess(
+function hasStudentCourseResultsLabNavigationAccess(
   filter: Parameters<NavigationItemsProvider>[0],
 ) {
   if (filter.accessGroup.includes('ADMIN')) {
@@ -98,7 +98,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasStudentCourseResultsPullNavigationAccess(filter)
+    ...(hasStudentCourseResultsLabNavigationAccess(filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
@@ -107,6 +107,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             label: '学生成绩拉取',
             navMode: 'rail' as const,
             path: '/labs/student-course-results-pull',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'TableOutlined',
+            key: '/labs/student-course-results-view',
+            label: '学生成绩查看',
+            navMode: 'rail' as const,
+            path: '/labs/student-course-results-view',
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },

@@ -73,6 +73,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
+      '/labs/student-course-results-view',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
@@ -129,6 +130,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
+      '/labs/student-course-results-view',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -186,11 +188,23 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/student-course-results-pull',
+      '/labs/student-course-results-view',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-pull',
+        buildFilter({
+          accountId: 1004,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-course-results-view',
         buildFilter({
           accountId: 1004,
           primaryAccessGroup: 'STAFF',
@@ -373,6 +387,7 @@ describe('navigation catalog', () => {
     );
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
+    expect(canAccessNavigationPath('/labs/student-course-results-view', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-pull',
@@ -385,7 +400,26 @@ describe('navigation catalog', () => {
     ).toBe(true);
     expect(
       canAccessNavigationPath(
+        '/labs/student-course-results-view',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['CLASS_ADVISER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
         '/labs/student-course-results-pull',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-course-results-view',
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
@@ -619,6 +653,7 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
+      '/labs/student-course-results-view',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',

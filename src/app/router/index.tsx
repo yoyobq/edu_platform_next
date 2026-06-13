@@ -63,6 +63,10 @@ import {
   studentCourseResultsPullLabAccess,
 } from '@/labs/student-course-results-pull';
 import {
+  loadStudentCourseResultsViewLabRouteModule,
+  studentCourseResultsViewLabAccess,
+} from '@/labs/student-course-results-view';
+import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
@@ -299,7 +303,7 @@ function hasGuestLabAccess(access: LabAccess): boolean {
   return access.allowedAccessLevels.includes('guest');
 }
 
-function hasStudentCourseResultsPullAccess(input: {
+function hasStudentCourseResultsLabAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
@@ -740,7 +744,45 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
 
   if (
     !hasLabAccess(studentCourseResultsPullLabAccess) ||
-    !hasStudentCourseResultsPullAccess({
+    !hasStudentCourseResultsLabAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return null;
+}
+
+async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
+  if (!hasLabEnvExposure(studentCourseResultsViewLabAccess)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasLabAccess(studentCourseResultsViewLabAccess) ||
+    !hasStudentCourseResultsLabAccess({
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     })
@@ -1499,6 +1541,11 @@ const router = createBrowserRouter([
             path: 'student-course-results-pull',
             loader: studentCourseResultsPullLabLoader,
             lazy: loadStudentCourseResultsPullLabRouteModule,
+          },
+          {
+            path: 'student-course-results-view',
+            loader: studentCourseResultsViewLabLoader,
+            lazy: loadStudentCourseResultsViewLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',
