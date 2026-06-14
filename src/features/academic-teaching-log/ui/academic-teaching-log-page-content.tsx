@@ -1496,6 +1496,7 @@ export function AcademicTeachingLogPageContent({
   } = useUpstreamSession({
     account: liveUpstreamAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({

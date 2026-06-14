@@ -45,3 +45,16 @@ export function canUseRememberedUpstreamLoginCredentials(input: {
 
   return !lockedUserId || input.rememberedCredentials.userId === lockedUserId;
 }
+
+export function canUseStoredUpstreamSessionForLockedUser(input: {
+  lockedUserId?: string | null;
+  session?: { upstreamLoginId?: string | null } | null;
+}) {
+  const lockedUserId = input.lockedUserId?.trim();
+
+  if (!lockedUserId || !input.session) {
+    return true;
+  }
+
+  return input.session.upstreamLoginId?.trim() === lockedUserId;
+}

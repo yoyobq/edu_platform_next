@@ -70,6 +70,7 @@ function StaffInvitePanel({
   const [form] = Form.useForm<StaffInviteFormValues>();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const staffInviteFlow = useStaffInviteFlow({
+    lockedUpstreamLoginUserId,
     onFeedback,
   });
   const {

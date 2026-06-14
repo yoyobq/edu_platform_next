@@ -43,6 +43,7 @@ import {
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -1526,8 +1527,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const prefillMode = resolvePrefillMode(currentAccount);
   const canSelectDepartment = prefillMode === 'managed';
-  const lockedUpstreamLoginUserId =
-    !isAdminAccount && currentAccount?.staffId ? currentAccount.staffId : null;
+  const lockedUpstreamLoginUserId = currentAccount?.staffId ? currentAccount.staffId : null;
   const {
     clear,
     clearRememberedCredentials,
@@ -1540,6 +1540,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
   } = useUpstreamSession({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     lockedUserId: lockedUpstreamLoginUserId,
@@ -1852,9 +1853,26 @@ export function AcademicCurriculumPlanHomepagePageContent({
         return;
       }
 
+      if (
+        !canUseStoredUpstreamSessionForLockedUser({
+          lockedUserId: lockedUpstreamLoginUserId,
+          session: storedSession,
+        })
+      ) {
+        clearCurrentSession({
+          message: '请使用当前登录账号对应的工号登录智慧校园。',
+          target: 'session',
+        });
+        openLoginModal({
+          action,
+          message: '请使用当前登录账号对应的工号登录智慧校园。',
+        });
+        return;
+      }
+
       await performAction(storedSession, action);
     },
-    [openLoginModal, performAction, storedSession],
+    [clearCurrentSession, lockedUpstreamLoginUserId, openLoginModal, performAction, storedSession],
   );
 
   const handleSelectPlan = useCallback(
@@ -2189,6 +2207,22 @@ export function AcademicCurriculumPlanHomepagePageContent({
         throw new Error('请先登录智慧校园后再读取参考教学计划。');
       }
 
+      if (
+        !canUseStoredUpstreamSessionForLockedUser({
+          lockedUserId: lockedUpstreamLoginUserId,
+          session: storedSession,
+        })
+      ) {
+        clearCurrentSession({
+          message: '请使用当前登录账号对应的工号登录智慧校园。',
+          target: 'session',
+        });
+        openLoginModal({
+          message: '请使用当前登录账号对应的工号登录智慧校园。',
+        });
+        throw new Error('请使用当前登录账号对应的工号登录智慧校园。');
+      }
+
       const runWithSession = async (currentSession: StoredUpstreamSession) => {
         const result = await fetchCurriculumPlanHomepageDetail({
           planId: sourcePlanId,
@@ -2232,7 +2266,14 @@ export function AcademicCurriculumPlanHomepagePageContent({
         }
       }
     },
-    [openLoginModal, persistSessionFromResult, refreshSession, storedSession],
+    [
+      clearCurrentSession,
+      lockedUpstreamLoginUserId,
+      openLoginModal,
+      persistSessionFromResult,
+      refreshSession,
+      storedSession,
+    ],
   );
 
   const handleApplyPrefillModal = useCallback(async () => {

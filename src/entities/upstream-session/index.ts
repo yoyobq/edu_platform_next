@@ -9,6 +9,7 @@ export {
 export {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
   type UpstreamLoginCredentials,
 } from './application/upstream-login-credentials';
 export type {

@@ -6,6 +6,7 @@ import { Form, type FormInstance } from 'antd';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
 } from '../application/upstream-login-credentials';
 import {
   type UpstreamAccountIdentity,
@@ -80,12 +81,18 @@ export function useUpstreamLoginModalController<TPendingAction = never>({
   } = useUpstreamSession({
     account,
     keepAlive,
+    lockedUserId,
     refreshLeadTimeMs,
   });
   const hasRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     lockedUserId,
     rememberedCredentials,
   });
+  const canUseStoredSession = canUseStoredUpstreamSessionForLockedUser({
+    lockedUserId,
+    session,
+  });
+  const effectiveSession = canUseStoredSession ? session : null;
 
   const setLoginFormInitialValues = useCallback(
     (fallbackUserId?: string | null) => {
@@ -161,6 +168,12 @@ export function useUpstreamLoginModalController<TPendingAction = never>({
   );
 
   useEffect(() => {
+    if (session && !canUseStoredSession) {
+      clear();
+    }
+  }, [canUseStoredSession, clear, session]);
+
+  useEffect(() => {
     if (!keepAliveFailure) {
       return;
     }
@@ -203,6 +216,6 @@ export function useUpstreamLoginModalController<TPendingAction = never>({
     openLoginModalForExpiredSession,
     persistSessionFromResult,
     refreshSession,
-    session,
+    session: effectiveSession,
   };
 }

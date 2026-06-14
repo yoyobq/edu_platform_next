@@ -844,6 +844,7 @@ async function classAffairsCourseResultsPageLoader({ request }: LoaderFunctionAr
     currentAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     },
     isForbidden: false,
   };

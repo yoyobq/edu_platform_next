@@ -10,6 +10,7 @@ export function ClassAffairsCourseResultsPage() {
     currentAccount?: {
       accountId: number;
       displayName: string;
+      staffId: string | null;
     };
     isForbidden?: boolean;
   } | null;

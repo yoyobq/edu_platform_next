@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
 } from './upstream-login-credentials';
 
 describe('buildUpstreamLoginCredentialsInitialValues', () => {
@@ -60,6 +61,28 @@ describe('buildUpstreamLoginCredentialsInitialValues', () => {
           password: 'alice-password',
           rememberCredentials: true,
           userId: 'staff-001',
+        },
+      }),
+    ).toBe(true);
+  });
+
+  it('rejects stored upstream sessions when locked staff id differs', () => {
+    expect(
+      canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: 'staff-002',
+        session: {
+          upstreamLoginId: 'staff-001',
+        },
+      }),
+    ).toBe(false);
+  });
+
+  it('accepts stored upstream sessions when locked staff id matches', () => {
+    expect(
+      canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: 'staff-001',
+        session: {
+          upstreamLoginId: 'staff-001',
         },
       }),
     ).toBe(true);

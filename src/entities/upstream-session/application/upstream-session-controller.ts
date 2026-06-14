@@ -18,7 +18,10 @@ import {
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from './upstream-error-feedback';
-import type { UpstreamLoginCredentials } from './upstream-login-credentials';
+import {
+  canUseStoredUpstreamSessionForLockedUser,
+  type UpstreamLoginCredentials,
+} from './upstream-login-credentials';
 import {
   hasRollingUpstreamSessionResult,
   type RollingUpstreamSessionResult,
@@ -43,6 +46,7 @@ export type UpstreamSessionKeepAliveFailure = {
 type UseUpstreamSessionOptions = {
   account: UpstreamAccountIdentity | null;
   keepAlive?: boolean;
+  lockedUserId?: string | null;
   refreshLeadTimeMs?: number;
 };
 
@@ -96,7 +100,14 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
   );
   const refreshPromiseRef = useRef<Promise<StoredUpstreamSession> | null>(null);
   const accountId = options.account?.accountId ?? null;
-  const session = accountId ? readStoredUpstreamSession(accountId) : null;
+  const lockedUserId = options.lockedUserId?.trim() || null;
+  const storedSession = accountId ? readStoredUpstreamSession(accountId) : null;
+  const session = canUseStoredUpstreamSessionForLockedUser({
+    lockedUserId,
+    session: storedSession,
+  })
+    ? storedSession
+    : null;
   const rememberedCredentials = accountId
     ? readRememberedUpstreamLoginCredentials(accountId)
     : null;
@@ -144,6 +155,12 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
     refreshStoredSession();
   }, [accountId, refreshStoredSession]);
 
+  useEffect(() => {
+    if (storedSession && !session) {
+      clear();
+    }
+  }, [clear, session, storedSession]);
+
   const commitSession = useCallback(
     (nextSession: StoredUpstreamSession) => {
       writeStoredUpstreamSession(nextSession);
@@ -158,7 +175,7 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
         throw new Error('当前登录账号尚未就绪，请稍后再试。');
       }
 
-      const normalizedUserId = input.userId.trim();
+      const normalizedUserId = lockedUserId || input.userId.trim();
       const upstreamSession = await requestUpstreamLoginSession({
         password: input.password,
         userId: normalizedUserId,
@@ -184,7 +201,7 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
       setKeepAliveFailure(null);
       return nextSession;
     },
-    [accountId, commitSession],
+    [accountId, commitSession, lockedUserId],
   );
 
   const refreshSession = useCallback(

@@ -71,6 +71,7 @@ type ClassSyncResultState = {
 type ClassSyncPageContentProps = {
   currentAccount: UpstreamAccountIdentity | null;
   isAuthenticating: boolean;
+  lockedUpstreamLoginUserId?: string | null;
 };
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
@@ -265,6 +266,7 @@ const upstreamClassListResultColumns: ColumnsType<ClassSyncResultItem> = [
 export function ClassSyncPageContent({
   currentAccount,
   isAuthenticating,
+  lockedUpstreamLoginUserId = null,
 }: ClassSyncPageContentProps) {
   const [form] = Form.useForm<ClassSyncFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
@@ -283,6 +285,7 @@ export function ClassSyncPageContent({
   } = useUpstreamLoginModalController<PendingClassSyncRequest>({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
     resolveLoginErrorMessage: resolveClassSyncErrorMessage,
     onLoginSuccess: async ({ pendingAction, session }) => {
       if (!pendingAction) {

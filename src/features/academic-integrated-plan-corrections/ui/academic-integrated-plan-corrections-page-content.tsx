@@ -27,6 +27,7 @@ import {
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
   isExpiredUpstreamSessionError,
   resolveStaffDirectoryCache,
   resolveStaffDirectoryTeacherStaffId,
@@ -874,9 +875,10 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
   } = useUpstreamSession({
     account: upstreamAccount,
     keepAlive: true,
+    lockedUserId: defaultStaffId || null,
   });
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    lockedUserId: isStaffViewer && defaultStaffId ? defaultStaffId : null,
+    lockedUserId: defaultStaffId || null,
     rememberedCredentials,
   });
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
@@ -1061,7 +1063,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: storedSession?.upstreamLoginId,
-        lockedUserId: isStaffViewer && defaultStaffId ? defaultStaffId : null,
+        lockedUserId: defaultStaffId || null,
         rememberedCredentials,
       }),
     );
@@ -1081,6 +1083,18 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     if (!session) {
       setShouldRunQueryAfterLogin(true);
       openLoginModal();
+      return;
+    }
+
+    if (
+      !canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: defaultStaffId || null,
+        session,
+      })
+    ) {
+      clear();
+      setShouldRunQueryAfterLogin(true);
+      openLoginModal('请使用当前登录账号对应的工号登录智慧校园。');
       return;
     }
 
@@ -1279,6 +1293,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={defaultStaffId || null}
         open={isLoginModalOpen}
         title="连接校园网"
         onClearRememberedCredentials={clearRememberedCredentials}

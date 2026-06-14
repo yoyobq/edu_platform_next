@@ -25,6 +25,7 @@ import { buildDepartmentSelectOptions, DepartmentSelect } from '@/entities/depar
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -110,6 +111,7 @@ type ResultFilterKey = 'focus' | 'all' | RosterReviewKind;
 
 type StudentRosterMembershipReconciliationPageContentProps = {
   accessGroup?: readonly AuthAccessGroup[];
+  lockedUpstreamLoginUserId?: string | null;
   refreshSiteSession?: () => Promise<void>;
   slotGroup?: readonly string[];
 };
@@ -122,6 +124,7 @@ type ClassAdviserClaimNotice = {
 const PAGE_DESCRIPTION = '按单个本地班级对齐校园网班级名册与本地学生班级归属。';
 
 const RESULT_TABLE_DEFAULT_PAGE_SIZE = 8;
+const LOCKED_UPSTREAM_SESSION_MISMATCH_MESSAGE = '请使用当前登录账号对应的工号登录智慧校园。';
 
 const PRIMARY_STATUS_TAG_STYLE = {
   backgroundColor: 'var(--ant-color-primary-bg)',
@@ -384,6 +387,7 @@ function renderReasonCode(
 
 export function StudentRosterMembershipReconciliationPageContent({
   accessGroup = [],
+  lockedUpstreamLoginUserId = null,
   refreshSiteSession,
   slotGroup = [],
 }: StudentRosterMembershipReconciliationPageContentProps) {
@@ -444,8 +448,10 @@ export function StudentRosterMembershipReconciliationPageContent({
   } = useUpstreamSession({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
   const canUseLocalClassOptions = hasRosterMembershipLocalClassOptionsAccess({
@@ -607,11 +613,12 @@ export function StudentRosterMembershipReconciliationPageContent({
       loginForm.setFieldsValue(
         buildUpstreamLoginCredentialsInitialValues({
           fallbackUserId: input.session?.upstreamLoginId,
+          lockedUserId: lockedUpstreamLoginUserId,
           rememberedCredentials,
         }),
       );
     },
-    [clearCurrentSession, loginForm, rememberedCredentials],
+    [clearCurrentSession, lockedUpstreamLoginUserId, loginForm, rememberedCredentials],
   );
 
   const handleActionError = useCallback((action: PendingRosterAction, error: unknown) => {
@@ -870,11 +877,22 @@ export function StudentRosterMembershipReconciliationPageContent({
         return;
       }
 
-      if (!storedSession) {
+      const canUseStoredSession = canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: lockedUpstreamLoginUserId,
+        session: storedSession,
+      });
+
+      if (!storedSession || !canUseStoredSession) {
+        if (storedSession && !canUseStoredSession) {
+          clear();
+          setLoginError(LOCKED_UPSTREAM_SESSION_MISMATCH_MESSAGE);
+        }
+
         setPendingAction(action);
         setIsLoginModalOpen(true);
         loginForm.setFieldsValue(
           buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
             rememberedCredentials,
           }),
         );
@@ -883,7 +901,15 @@ export function StudentRosterMembershipReconciliationPageContent({
 
       await performAction(storedSession, action);
     },
-    [currentAccount, loginForm, performAction, rememberedCredentials, storedSession],
+    [
+      clear,
+      currentAccount,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      performAction,
+      rememberedCredentials,
+      storedSession,
+    ],
   );
 
   useEffect(() => {
@@ -928,11 +954,18 @@ export function StudentRosterMembershipReconciliationPageContent({
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: keepAliveFailure.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
         rememberedCredentials,
       }),
     );
     setIsLoginModalOpen(true);
-  }, [clearCurrentSession, keepAliveFailure, loginForm, rememberedCredentials]);
+  }, [
+    clearCurrentSession,
+    keepAliveFailure,
+    lockedUpstreamLoginUserId,
+    loginForm,
+    rememberedCredentials,
+  ]);
 
   useEffect(() => {
     if (!canUseLocalClassOptions || !currentAccount) {
@@ -1032,6 +1065,16 @@ export function StudentRosterMembershipReconciliationPageContent({
       return;
     }
 
+    if (
+      !canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: lockedUpstreamLoginUserId,
+        session: storedSession,
+      })
+    ) {
+      clear();
+      return;
+    }
+
     setHasAutoLoadedClassList(true);
     void performAction(storedSession, {
       type: 'load-class-list',
@@ -1039,8 +1082,10 @@ export function StudentRosterMembershipReconciliationPageContent({
   }, [
     canUseLocalClassOptions,
     classListResult,
+    clear,
     currentAccount,
     hasAutoLoadedClassList,
+    lockedUpstreamLoginUserId,
     performAction,
     storedSession,
   ]);
@@ -1063,6 +1108,7 @@ export function StudentRosterMembershipReconciliationPageContent({
     setLoginError(null);
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
+        lockedUserId: lockedUpstreamLoginUserId,
         rememberedCredentials,
       }),
     );
@@ -1949,6 +1995,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
         open={isLoginModalOpen}
         onClearRememberedCredentials={clearRememberedCredentials}
         onCancel={() => {

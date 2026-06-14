@@ -67,9 +67,10 @@ export function filterTeacherOption(inputValue: string, option?: TeacherSearchOp
 }
 
 export function useStaffInviteFlow(input: {
+  lockedUpstreamLoginUserId?: string | null;
   onFeedback: (feedback: VerificationIssuanceFeedback) => void;
 }) {
-  const { onFeedback } = input;
+  const { lockedUpstreamLoginUserId = null, onFeedback } = input;
   const [account, setAccount] = useState<VerificationIssuanceCurrentAccount | null>(null);
   const {
     clear,
@@ -82,6 +83,7 @@ export function useStaffInviteFlow(input: {
   } = useUpstreamSession({
     account,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const [directory, setDirectory] = useState<StaffDirectoryResult | null>(null);
   const [directoryError, setDirectoryError] = useState<string | null>(null);

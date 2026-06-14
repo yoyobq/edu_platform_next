@@ -158,6 +158,7 @@ export function WeeklyTimetablePageContent({
     session: storedSession,
   } = useUpstreamSession({
     account: upstreamAccount,
+    lockedUserId: defaultStaffId,
   });
   const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
   const loaderDefaultStaffId = defaultStaffId?.trim() || '';

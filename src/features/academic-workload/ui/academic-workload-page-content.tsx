@@ -152,6 +152,7 @@ export function AcademicWorkloadPageContent({
     session: storedSession,
   } = useUpstreamSession({
     account: upstreamAccount,
+    lockedUserId: defaultStaffId,
   });
   const storedSessionDirectoryKey = storedSession
     ? [

@@ -10,6 +10,7 @@ export function StudentRosterMembershipReconciliationPage() {
   const authSession = useAuthSessionState();
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
   const snapshot = authSession.snapshot;
+  const staffId = snapshot?.identity?.kind === 'STAFF' ? snapshot.identity.id : null;
 
   if (loaderData?.isForbidden) {
     return <Error403 />;
@@ -18,6 +19,7 @@ export function StudentRosterMembershipReconciliationPage() {
   return (
     <StudentRosterMembershipReconciliationPageContent
       accessGroup={snapshot?.userInfo.accessGroup}
+      lockedUpstreamLoginUserId={staffId}
       refreshSiteSession={async () => {
         await refreshSession();
       }}

@@ -55,6 +55,7 @@ type MajorSyncResultAction = MajorSyncDryRunAction | MajorSyncCommitAction;
 type MajorSyncPageContentProps = {
   currentAccount: UpstreamAccountIdentity | null;
   isAuthenticating: boolean;
+  lockedUpstreamLoginUserId?: string | null;
 };
 
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
@@ -165,6 +166,7 @@ const resultColumns: ColumnsType<MajorSyncResultItem> = [
 export function MajorSyncPageContent({
   currentAccount,
   isAuthenticating,
+  lockedUpstreamLoginUserId = null,
 }: MajorSyncPageContentProps) {
   const [form] = Form.useForm<MajorSyncFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
@@ -183,6 +185,7 @@ export function MajorSyncPageContent({
   } = useUpstreamLoginModalController<PendingMajorSyncRequest>({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
     resolveLoginErrorMessage: resolveMajorSyncErrorMessage,
     onLoginSuccess: async ({ pendingAction, session }) => {
       if (!pendingAction) {

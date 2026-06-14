@@ -17,6 +17,7 @@ import {
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
+  canUseStoredUpstreamSessionForLockedUser,
   isExpiredUpstreamSessionError,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
@@ -42,6 +43,7 @@ import './class-affairs-course-results-page-content.css';
 type CurrentAccount = {
   accountId: number;
   displayName: string;
+  staffId: string | null;
 };
 
 type PendingRefreshRequest = {
@@ -523,6 +525,7 @@ export function ClassAffairsCourseResultsPageContent({
   const [pendingRefreshRequest, setPendingRefreshRequest] = useState<PendingRefreshRequest | null>(
     null,
   );
+  const lockedUpstreamLoginUserId = currentAccount.staffId?.trim() || null;
   const {
     clear,
     clearRememberedCredentials,
@@ -534,8 +537,10 @@ export function ClassAffairsCourseResultsPageContent({
   } = useUpstreamSession({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const hasRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
+    lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
   const terms = useMemo(
@@ -663,6 +668,7 @@ export function ClassAffairsCourseResultsPageContent({
           loginForm.setFieldsValue(
             buildUpstreamLoginCredentialsInitialValues({
               fallbackUserId: session.upstreamLoginId,
+              lockedUserId: lockedUpstreamLoginUserId,
               rememberedCredentials,
             }),
           );
@@ -675,7 +681,7 @@ export function ClassAffairsCourseResultsPageContent({
         setIsLoadingResults(false);
       }
     },
-    [clear, loginForm, persistSessionFromResult, rememberedCredentials],
+    [clear, lockedUpstreamLoginUserId, loginForm, persistSessionFromResult, rememberedCredentials],
   );
 
   const handleClassChange = useCallback(
@@ -748,9 +754,20 @@ export function ClassAffairsCourseResultsPageContent({
       setPendingRefreshRequest(nextRequest);
       setLoginError(null);
 
-      if (!storedSession) {
+      const canUseStoredSession = canUseStoredUpstreamSessionForLockedUser({
+        lockedUserId: lockedUpstreamLoginUserId,
+        session: storedSession,
+      });
+
+      if (!storedSession || !canUseStoredSession) {
+        if (storedSession && !canUseStoredSession) {
+          clear();
+          setLoginError('请使用当前登录账号对应的工号登录智慧校园。');
+        }
+
         loginForm.setFieldsValue(
           buildUpstreamLoginCredentialsInitialValues({
+            lockedUserId: lockedUpstreamLoginUserId,
             rememberedCredentials,
           }),
         );
@@ -760,7 +777,15 @@ export function ClassAffairsCourseResultsPageContent({
 
       await runRefresh(storedSession, nextRequest);
     },
-    [loginForm, rememberedCredentials, runRefresh, selectedClassCode, storedSession],
+    [
+      clear,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      rememberedCredentials,
+      runRefresh,
+      selectedClassCode,
+      storedSession,
+    ],
   );
 
   const handleLoginFinish = useCallback(
@@ -824,11 +849,12 @@ export function ClassAffairsCourseResultsPageContent({
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: keepAliveFailure.upstreamLoginId,
+        lockedUserId: lockedUpstreamLoginUserId,
         rememberedCredentials,
       }),
     );
     setIsLoginModalOpen(true);
-  }, [clear, keepAliveFailure, loginForm, rememberedCredentials]);
+  }, [clear, keepAliveFailure, lockedUpstreamLoginUserId, loginForm, rememberedCredentials]);
 
   useEffect(() => {
     if (terms.length === 0) {
@@ -1088,6 +1114,7 @@ export function ClassAffairsCourseResultsPageContent({
         hasRememberedCredentials={hasRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
+        lockedUserId={lockedUpstreamLoginUserId}
         okText="授权并同步"
         open={isLoginModalOpen}
         title="需要登录智慧校园"

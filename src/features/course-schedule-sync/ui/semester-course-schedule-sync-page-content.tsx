@@ -60,6 +60,7 @@ type SemesterCourseScheduleSyncCurrentAccount = {
 type SemesterCourseScheduleSyncPageContentProps = {
   currentAccount: SemesterCourseScheduleSyncCurrentAccount | null;
   isAuthenticating: boolean;
+  lockedUpstreamLoginUserId?: string | null;
 };
 
 const REVIEW_STATUS_OPTIONS: Array<{
@@ -92,6 +93,7 @@ function resolveResultSemanticMessage(result: CourseScheduleSyncResult) {
 export function SemesterCourseScheduleSyncPageContent({
   currentAccount,
   isAuthenticating,
+  lockedUpstreamLoginUserId = null,
 }: SemesterCourseScheduleSyncPageContentProps) {
   const [syncForm] = Form.useForm<SyncFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
@@ -113,6 +115,7 @@ export function SemesterCourseScheduleSyncPageContent({
   } = useUpstreamLoginModalController<PendingSyncRequest>({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
     resolveLoginErrorMessage: (error) => resolveCourseScheduleSyncErrorMessage(error, 'login'),
     onLoginSuccess: async ({ pendingAction, session }) => {
       if (!pendingAction) {
