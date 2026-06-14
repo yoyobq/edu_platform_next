@@ -24,14 +24,11 @@ import {
   resolveDepartmentDefaultId,
 } from '@/entities/department';
 import {
-  buildUpstreamLoginCredentialsInitialValues,
-  canUseRememberedUpstreamLoginCredentials,
   formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
   type UpstreamAccountIdentity,
-  type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  useUpstreamSession,
+  useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -270,32 +267,30 @@ export function ClassSyncPageContent({
   isAuthenticating,
 }: ClassSyncPageContentProps) {
   const [form] = Form.useForm<ClassSyncFormValues>();
-  const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<ClassSyncResultState | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
-  const [pendingClassSyncRequest, setPendingClassSyncRequest] =
-    useState<PendingClassSyncRequest | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const {
-    clear,
-    clearRememberedCredentials,
-    login: loginUpstream,
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
     persistSessionFromResult,
-    rememberedCredentials,
     session: storedSession,
-  } = useUpstreamSession({
+  } = useUpstreamLoginModalController<PendingClassSyncRequest>({
     account: currentAccount,
     keepAlive: true,
-  });
-  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    rememberedCredentials,
+    resolveLoginErrorMessage: resolveClassSyncErrorMessage,
+    onLoginSuccess: async ({ pendingAction, session }) => {
+      if (!pendingAction) {
+        return;
+      }
+
+      await performClassSync(session, pendingAction.values, pendingAction.mode);
+    },
   });
   const selectedDepartmentId = Form.useWatch('departmentId', form);
   const selectedDepartment = useMemo(
@@ -308,11 +303,6 @@ export function ClassSyncPageContent({
     () => (resultMode === 'dryRun' ? upstreamClassListResultColumns : baseResultColumns),
     [resultMode],
   );
-
-  const clearCurrentSession = useCallback(() => {
-    clear();
-    setPendingClassSyncRequest(null);
-  }, [clear]);
 
   const loadOptions = useCallback(async () => {
     setIsLoadingOptions(true);
@@ -374,7 +364,6 @@ export function ClassSyncPageContent({
 
       setPreviewError(null);
       setResultState(null);
-      setPendingClassSyncRequest(null);
 
       try {
         const input = {
@@ -392,16 +381,11 @@ export function ClassSyncPageContent({
         });
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-          setPendingClassSyncRequest({ mode, values });
-          setLoginError(getExpiredSessionMessage(mode));
-          setIsLoginModalOpen(true);
-          loginForm.setFieldsValue(
-            buildUpstreamLoginCredentialsInitialValues({
-              fallbackUserId: session.upstreamLoginId,
-              rememberedCredentials,
-            }),
-          );
+          openLoginModalForExpiredSession({
+            loginError: getExpiredSessionMessage(mode),
+            pendingAction: { mode, values },
+            session,
+          });
           return;
         }
 
@@ -414,7 +398,7 @@ export function ClassSyncPageContent({
         }
       }
     },
-    [clearCurrentSession, loginForm, persistSessionFromResult, rememberedCredentials],
+    [openLoginModalForExpiredSession, persistSessionFromResult],
   );
 
   const handleRunSync = useCallback(
@@ -422,7 +406,6 @@ export function ClassSyncPageContent({
       const values = await form.validateFields();
 
       setPreviewError(null);
-      setLoginError(null);
 
       if (!currentAccount) {
         setPreviewError('当前登录会话尚未恢复，请稍后重试。');
@@ -430,53 +413,15 @@ export function ClassSyncPageContent({
       }
 
       if (!storedSession) {
-        setPendingClassSyncRequest({ mode, values });
-        setIsLoginModalOpen(true);
-        loginForm.setFieldsValue(
-          buildUpstreamLoginCredentialsInitialValues({
-            rememberedCredentials,
-          }),
-        );
+        openLoginModal({
+          pendingAction: { mode, values },
+        });
         return;
       }
 
       await performClassSync(storedSession, values, mode);
     },
-    [currentAccount, form, loginForm, performClassSync, rememberedCredentials, storedSession],
-  );
-
-  const handleLoginFinish = useCallback(
-    async (values: UpstreamLoginFormValues) => {
-      if (!currentAccount) {
-        setLoginError('当前登录账号尚未就绪，请稍后再试。');
-        return;
-      }
-
-      setIsSubmittingLogin(true);
-      setLoginError(null);
-
-      try {
-        const nextStoredSession = await loginUpstream(values);
-        const nextPendingRequest = pendingClassSyncRequest;
-
-        setPendingClassSyncRequest(null);
-        setIsLoginModalOpen(false);
-        loginForm.resetFields();
-
-        if (nextPendingRequest) {
-          await performClassSync(
-            nextStoredSession,
-            nextPendingRequest.values,
-            nextPendingRequest.mode,
-          );
-        }
-      } catch (error) {
-        setLoginError(resolveClassSyncErrorMessage(error));
-      } finally {
-        setIsSubmittingLogin(false);
-      }
-    },
-    [currentAccount, loginForm, loginUpstream, pendingClassSyncRequest, performClassSync],
+    [currentAccount, form, openLoginModal, performClassSync, storedSession],
   );
 
   if (isAuthenticating) {
@@ -620,20 +565,7 @@ export function ClassSyncPageContent({
         )}
       </Card>
 
-      <UpstreamLoginModal
-        form={loginForm}
-        hasRememberedCredentials={canUseRememberedCredentials}
-        isSubmitting={isSubmittingLogin}
-        loginError={loginError}
-        open={isLoginModalOpen}
-        onClearRememberedCredentials={clearRememberedCredentials}
-        onCancel={() => {
-          setIsLoginModalOpen(false);
-          setPendingClassSyncRequest(null);
-          setLoginError(null);
-        }}
-        onFinish={handleLoginFinish}
-      />
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }

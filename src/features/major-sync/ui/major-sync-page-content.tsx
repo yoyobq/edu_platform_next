@@ -13,14 +13,11 @@ import {
   resolveDepartmentDefaultId,
 } from '@/entities/department';
 import {
-  buildUpstreamLoginCredentialsInitialValues,
-  canUseRememberedUpstreamLoginCredentials,
   formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
   type UpstreamAccountIdentity,
-  type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  useUpstreamSession,
+  useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -170,43 +167,36 @@ export function MajorSyncPageContent({
   isAuthenticating,
 }: MajorSyncPageContentProps) {
   const [form] = Form.useForm<MajorSyncFormValues>();
-  const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(false);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [result, setResult] = useState<MajorSyncResult | null>(null);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
-  const [pendingMajorSyncRequest, setPendingMajorSyncRequest] =
-    useState<PendingMajorSyncRequest | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const {
-    clear,
-    clearRememberedCredentials,
-    login: loginUpstream,
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
     persistSessionFromResult,
-    rememberedCredentials,
     session: storedSession,
-  } = useUpstreamSession({
+  } = useUpstreamLoginModalController<PendingMajorSyncRequest>({
     account: currentAccount,
     keepAlive: true,
-  });
-  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    rememberedCredentials,
+    resolveLoginErrorMessage: resolveMajorSyncErrorMessage,
+    onLoginSuccess: async ({ pendingAction, session }) => {
+      if (!pendingAction) {
+        return;
+      }
+
+      await performMajorSync(session, pendingAction.values, pendingAction.mode);
+    },
   });
   const selectedDepartmentId = Form.useWatch('departmentId', form);
   const selectedDepartment = useMemo(
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
-
-  const clearCurrentSession = useCallback(() => {
-    clear();
-    setPendingMajorSyncRequest(null);
-  }, [clear]);
 
   const loadOptions = useCallback(async () => {
     setIsLoadingOptions(true);
@@ -268,7 +258,6 @@ export function MajorSyncPageContent({
 
       setPreviewError(null);
       setResult(null);
-      setPendingMajorSyncRequest(null);
 
       try {
         const input = {
@@ -283,20 +272,13 @@ export function MajorSyncPageContent({
         setResult(syncResult);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-          setPendingMajorSyncRequest({ mode, values });
-          setLoginError(
-            isDryRun
+          openLoginModalForExpiredSession({
+            loginError: isDryRun
               ? 'upstream 会话已失效，请重新登录后继续预览。'
               : 'upstream 会话已失效，请重新登录后继续落库。',
-          );
-          setIsLoginModalOpen(true);
-          loginForm.setFieldsValue(
-            buildUpstreamLoginCredentialsInitialValues({
-              fallbackUserId: session.upstreamLoginId,
-              rememberedCredentials,
-            }),
-          );
+            pendingAction: { mode, values },
+            session,
+          });
           return;
         }
 
@@ -309,7 +291,7 @@ export function MajorSyncPageContent({
         }
       }
     },
-    [clearCurrentSession, loginForm, persistSessionFromResult, rememberedCredentials],
+    [openLoginModalForExpiredSession, persistSessionFromResult],
   );
 
   const handleRunSync = useCallback(
@@ -317,7 +299,6 @@ export function MajorSyncPageContent({
       const values = await form.validateFields();
 
       setPreviewError(null);
-      setLoginError(null);
 
       if (!currentAccount) {
         setPreviewError('当前登录会话尚未恢复，请稍后重试。');
@@ -325,53 +306,15 @@ export function MajorSyncPageContent({
       }
 
       if (!storedSession) {
-        setPendingMajorSyncRequest({ mode, values });
-        setIsLoginModalOpen(true);
-        loginForm.setFieldsValue(
-          buildUpstreamLoginCredentialsInitialValues({
-            rememberedCredentials,
-          }),
-        );
+        openLoginModal({
+          pendingAction: { mode, values },
+        });
         return;
       }
 
       await performMajorSync(storedSession, values, mode);
     },
-    [currentAccount, form, loginForm, performMajorSync, rememberedCredentials, storedSession],
-  );
-
-  const handleLoginFinish = useCallback(
-    async (values: UpstreamLoginFormValues) => {
-      if (!currentAccount) {
-        setLoginError('当前登录账号尚未就绪，请稍后再试。');
-        return;
-      }
-
-      setIsSubmittingLogin(true);
-      setLoginError(null);
-
-      try {
-        const nextStoredSession = await loginUpstream(values);
-        const nextPendingRequest = pendingMajorSyncRequest;
-
-        setPendingMajorSyncRequest(null);
-        setIsLoginModalOpen(false);
-        loginForm.resetFields();
-
-        if (nextPendingRequest) {
-          await performMajorSync(
-            nextStoredSession,
-            nextPendingRequest.values,
-            nextPendingRequest.mode,
-          );
-        }
-      } catch (error) {
-        setLoginError(resolveMajorSyncErrorMessage(error));
-      } finally {
-        setIsSubmittingLogin(false);
-      }
-    },
-    [currentAccount, loginForm, loginUpstream, pendingMajorSyncRequest, performMajorSync],
+    [currentAccount, form, openLoginModal, performMajorSync, storedSession],
   );
 
   if (isAuthenticating) {
@@ -508,20 +451,7 @@ export function MajorSyncPageContent({
         )}
       </Card>
 
-      <UpstreamLoginModal
-        form={loginForm}
-        hasRememberedCredentials={canUseRememberedCredentials}
-        isSubmitting={isSubmittingLogin}
-        loginError={loginError}
-        open={isLoginModalOpen}
-        onClearRememberedCredentials={clearRememberedCredentials}
-        onCancel={() => {
-          setIsLoginModalOpen(false);
-          setPendingMajorSyncRequest(null);
-          setLoginError(null);
-        }}
-        onFinish={handleLoginFinish}
-      />
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }

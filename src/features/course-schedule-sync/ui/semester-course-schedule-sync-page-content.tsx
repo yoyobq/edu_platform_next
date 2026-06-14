@@ -17,13 +17,10 @@ import {
   resolveDepartmentDefaultId,
 } from '@/entities/department';
 import {
-  buildUpstreamLoginCredentialsInitialValues,
-  canUseRememberedUpstreamLoginCredentials,
   formatUpstreamSessionDateTime,
   type StoredUpstreamSession,
-  type UpstreamLoginFormValues,
   UpstreamLoginModal,
-  useUpstreamSession,
+  useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -97,45 +94,39 @@ export function SemesterCourseScheduleSyncPageContent({
   isAuthenticating,
 }: SemesterCourseScheduleSyncPageContentProps) {
   const [syncForm] = Form.useForm<SyncFormValues>();
-  const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [isLoadingOptions, setIsLoadingOptions] = useState(true);
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null);
-  const [loginError, setLoginError] = useState<string | null>(null);
   const [semesterOptionsError, setSemesterOptionsError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [result, setResult] = useState<CourseScheduleSyncResult | null>(null);
   const [semesterOptions, setSemesterOptions] = useState<AcademicSemesterPeriodOption[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
-  const [pendingSyncRequest, setPendingSyncRequest] = useState<PendingSyncRequest | null>(null);
   const {
-    clear,
-    clearRememberedCredentials,
-    login: loginUpstream,
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
     persistSessionFromResult,
-    rememberedCredentials,
     session: storedSession,
-  } = useUpstreamSession({
+  } = useUpstreamLoginModalController<PendingSyncRequest>({
     account: currentAccount,
     keepAlive: true,
-  });
-  const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    rememberedCredentials,
+    resolveLoginErrorMessage: (error) => resolveCourseScheduleSyncErrorMessage(error, 'login'),
+    onLoginSuccess: async ({ pendingAction, session }) => {
+      if (!pendingAction) {
+        return;
+      }
+
+      await performSync(session, pendingAction.values, pendingAction.mode);
+    },
   });
   const selectedDepartmentId = Form.useWatch('departmentId', syncForm);
   const selectedDepartment = useMemo(
     () => departmentOptions.find((department) => department.value === selectedDepartmentId) ?? null,
     [departmentOptions, selectedDepartmentId],
   );
-
-  const clearCurrentSession = useCallback(() => {
-    clear();
-    setPendingSyncRequest(null);
-  }, [clear]);
 
   const performSync = useCallback(
     async (session: StoredUpstreamSession, values: SyncFormValues, mode: SyncRunMode) => {
@@ -149,7 +140,6 @@ export function SemesterCourseScheduleSyncPageContent({
 
       setSyncError(null);
       setResult(null);
-      setPendingSyncRequest(null);
 
       try {
         const input = {
@@ -166,23 +156,15 @@ export function SemesterCourseScheduleSyncPageContent({
 
         persistSessionFromResult(session, syncResult);
         setResult(syncResult);
-        setPendingSyncRequest(null);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-          setPendingSyncRequest({ mode, values });
-          setLoginError(
-            isDryRun
+          openLoginModalForExpiredSession({
+            loginError: isDryRun
               ? 'upstream 会话已失效，请重新登录后继续预览。'
               : 'upstream 会话已失效，请重新登录后继续落库。',
-          );
-          setIsLoginModalOpen(true);
-          loginForm.setFieldsValue(
-            buildUpstreamLoginCredentialsInitialValues({
-              fallbackUserId: session.upstreamLoginId,
-              rememberedCredentials,
-            }),
-          );
+            pendingAction: { mode, values },
+            session,
+          });
           return;
         }
 
@@ -196,7 +178,7 @@ export function SemesterCourseScheduleSyncPageContent({
         }
       }
     },
-    [clearCurrentSession, loginForm, persistSessionFromResult, rememberedCredentials],
+    [openLoginModalForExpiredSession, persistSessionFromResult],
   );
 
   const handleRunSync = useCallback(
@@ -204,7 +186,6 @@ export function SemesterCourseScheduleSyncPageContent({
       const values = await syncForm.validateFields();
 
       setSyncError(null);
-      setLoginError(null);
 
       if (!currentAccount) {
         setSyncError('当前登录会话尚未恢复，请稍后重试。');
@@ -212,19 +193,15 @@ export function SemesterCourseScheduleSyncPageContent({
       }
 
       if (!storedSession) {
-        setPendingSyncRequest({ mode, values });
-        setIsLoginModalOpen(true);
-        loginForm.setFieldsValue(
-          buildUpstreamLoginCredentialsInitialValues({
-            rememberedCredentials,
-          }),
-        );
+        openLoginModal({
+          pendingAction: { mode, values },
+        });
         return;
       }
 
       await performSync(storedSession, values, mode);
     },
-    [currentAccount, loginForm, performSync, rememberedCredentials, storedSession, syncForm],
+    [currentAccount, openLoginModal, performSync, storedSession, syncForm],
   );
 
   useEffect(() => {
@@ -310,40 +287,6 @@ export function SemesterCourseScheduleSyncPageContent({
       isCancelled = true;
     };
   }, [syncForm]);
-
-  const handleLoginFinish = useCallback(
-    async (values: UpstreamLoginFormValues) => {
-      if (!currentAccount) {
-        setLoginError('当前登录账号尚未就绪，请稍后再试。');
-        return;
-      }
-
-      setIsSubmittingLogin(true);
-      setLoginError(null);
-
-      try {
-        const nextStoredSession = await loginUpstream(values);
-        const nextPendingSyncRequest = pendingSyncRequest;
-
-        setPendingSyncRequest(null);
-        setIsLoginModalOpen(false);
-        loginForm.resetFields();
-
-        if (nextPendingSyncRequest) {
-          await performSync(
-            nextStoredSession,
-            nextPendingSyncRequest.values,
-            nextPendingSyncRequest.mode,
-          );
-        }
-      } catch (error) {
-        setLoginError(resolveCourseScheduleSyncErrorMessage(error, 'login'));
-      } finally {
-        setIsSubmittingLogin(false);
-      }
-    },
-    [currentAccount, loginForm, loginUpstream, pendingSyncRequest, performSync],
-  );
 
   if (isAuthenticating) {
     return (
@@ -497,20 +440,7 @@ export function SemesterCourseScheduleSyncPageContent({
         )}
       </Card>
 
-      <UpstreamLoginModal
-        form={loginForm}
-        hasRememberedCredentials={canUseRememberedCredentials}
-        isSubmitting={isSubmittingLogin}
-        loginError={loginError}
-        open={isLoginModalOpen}
-        onClearRememberedCredentials={clearRememberedCredentials}
-        onCancel={() => {
-          setIsLoginModalOpen(false);
-          setPendingSyncRequest(null);
-          setLoginError(null);
-        }}
-        onFinish={handleLoginFinish}
-      />
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }

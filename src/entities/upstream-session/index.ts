@@ -58,3 +58,11 @@ export type { StoredUpstreamSession } from './infrastructure/upstream-session-st
 export type { StaffDirectoryTeacherAutoCompleteProps } from './ui/staff-directory-teacher-autocomplete';
 export { StaffDirectoryTeacherAutoComplete } from './ui/staff-directory-teacher-autocomplete';
 export { type UpstreamLoginFormValues, UpstreamLoginModal } from './ui/upstream-login-modal';
+export type {
+  OpenExpiredUpstreamLoginModalInput,
+  OpenUpstreamLoginModalInput,
+  UpstreamLoginModalControllerProps,
+  UpstreamLoginSuccessInput,
+  UseUpstreamLoginModalControllerOptions,
+} from './ui/upstream-login-modal-controller';
+export { useUpstreamLoginModalController } from './ui/upstream-login-modal-controller';
