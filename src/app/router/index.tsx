@@ -18,6 +18,7 @@ import { canAccessNavigationPath } from '@/app/navigation';
 import { HomePage } from '@/pages/home';
 import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
 import {
+  type AuthSessionSnapshot,
   buildWelcomeRedirectTarget,
   getAuthSessionSnapshot,
   getAuthSessionState,
@@ -70,6 +71,10 @@ import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
+import {
+  loadUpstreamSessionReferenceLabRouteModule,
+  upstreamSessionReferenceLabAccess,
+} from '@/labs/upstream-session-reference';
 import {
   loadZquizActivityBuilderLabRouteModule,
   zquizActivityBuilderLabAccess,
@@ -248,6 +253,10 @@ const loadStudentRosterMembershipReconciliationRouteModule = loadPageRouteModule
   () => import('@/pages/student-roster-membership-reconciliation'),
   'StudentRosterMembershipReconciliationPage',
 );
+const loadClassAffairsCourseResultsRouteModule = loadPageRouteModule(
+  () => import('@/pages/class-affairs-course-results'),
+  'ClassAffairsCourseResultsPage',
+);
 const loadAcademicWorkloadRouteModule = loadPageRouteModule(
   () => import('@/pages/academic-workload'),
   'AcademicWorkloadPage',
@@ -301,6 +310,54 @@ function hasLabEnvExposure(access: LabAccess): boolean {
 
 function hasGuestLabAccess(access: LabAccess): boolean {
   return access.allowedAccessLevels.includes('guest');
+}
+
+type LabRouteLoaderOptions<TData> = {
+  access: LabAccess;
+  canAccess?: (snapshot: AuthSessionSnapshot) => boolean;
+  getData?: (snapshot: AuthSessionSnapshot) => TData;
+  request: Request;
+};
+
+async function loadLabRoute<TData = null>({
+  access,
+  canAccess,
+  getData,
+  request,
+}: LabRouteLoaderOptions<TData>) {
+  if (!hasLabEnvExposure(access)) {
+    throw new Response('Not Found', { status: 404 });
+  }
+
+  if (hasHydratingSession()) {
+    void restoreSession({ background: true });
+  } else {
+    await restoreSession();
+  }
+
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    if (hasHydratingSession()) {
+      return null;
+    }
+
+    if (hasGuestLabAccess(access)) {
+      return null;
+    }
+
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (!hasLabAccess(access) || (canAccess && !canAccess(snapshot))) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return getData?.(snapshot) ?? null;
 }
 
 function hasStudentCourseResultsLabAccess(input: {
@@ -587,38 +644,10 @@ async function inviteIntentLoader({ params }: LoaderFunctionArgs) {
 }
 
 async function demoLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(demoLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(demoLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(demoLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: demoLabAccess,
+    request,
+  });
 }
 
 async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
@@ -646,297 +675,87 @@ async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
 }
 
 async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(inviteIssuerLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(inviteIssuerLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(inviteIssuerLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: inviteIssuerLabAccess,
+    request,
+  });
 }
 
 async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(upstreamSessionDemoLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
+  return loadLabRoute({
+    access: upstreamSessionDemoLabAccess,
+    request,
+  });
+}
 
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(upstreamSessionDemoLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(upstreamSessionDemoLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+async function upstreamSessionReferenceLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: upstreamSessionReferenceLabAccess,
+    getData: (snapshot) => ({
+      currentAccount: {
+        accountId: snapshot.accountId,
+        displayName: snapshot.displayName,
+      },
+    }),
+    request,
+  });
 }
 
 async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(studentCourseResultsPullLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (
-    !hasLabAccess(studentCourseResultsPullLabAccess) ||
-    !hasStudentCourseResultsLabAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: studentCourseResultsPullLabAccess,
+    canAccess: (snapshot) =>
+      hasStudentCourseResultsLabAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
+    request,
+  });
 }
 
 async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(studentCourseResultsViewLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (
-    !hasLabAccess(studentCourseResultsViewLabAccess) ||
-    !hasStudentCourseResultsLabAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: studentCourseResultsViewLabAccess,
+    canAccess: (snapshot) =>
+      hasStudentCourseResultsLabAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
+    request,
+  });
 }
 
 async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(zquizPracticeActivitiesLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(zquizPracticeActivitiesLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(zquizPracticeActivitiesLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: zquizPracticeActivitiesLabAccess,
+    request,
+  });
 }
 
 async function zquizExamActivitiesLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(zquizExamActivitiesLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(zquizExamActivitiesLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(zquizExamActivitiesLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: zquizExamActivitiesLabAccess,
+    request,
+  });
 }
 
 async function zquizExamTeacherGradebookLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(zquizExamTeacherGradebookLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    if (hasGuestLabAccess(zquizExamTeacherGradebookLabAccess)) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (!hasLabAccess(zquizExamTeacherGradebookLabAccess)) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: zquizExamTeacherGradebookLabAccess,
+    request,
+  });
 }
 
 async function zquizActivityBuilderLabLoader({ request }: LoaderFunctionArgs) {
-  if (!hasLabEnvExposure(zquizActivityBuilderLabAccess)) {
-    throw new Response('Not Found', { status: 404 });
-  }
-
-  if (hasHydratingSession()) {
-    void restoreSession({ background: true });
-  } else {
-    await restoreSession();
-  }
-
-  const snapshot = getAuthSessionSnapshot();
-
-  if (!snapshot) {
-    if (hasHydratingSession()) {
-      return null;
-    }
-
-    throw redirect(buildLoginRedirectURL(request));
-  }
-
-  if (snapshot.needsProfileCompletion) {
-    throw redirect(buildWelcomeRedirectURL(request));
-  }
-
-  if (
-    !hasLabAccess(zquizActivityBuilderLabAccess) ||
-    !hasAdminOrAcademicOfficerAccess({
-      accessGroup: snapshot.userInfo.accessGroup,
-      slotGroup: snapshot.slotGroup,
-    })
-  ) {
-    throw new Response('Forbidden', { status: 403 });
-  }
-
-  return null;
+  return loadLabRoute({
+    access: zquizActivityBuilderLabAccess,
+    canAccess: (snapshot) =>
+      hasAdminOrAcademicOfficerAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
+    request,
+  });
 }
 
 async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionArgs) {
@@ -1005,6 +824,27 @@ async function studentRosterMembershipReconciliationPageLoader({ request }: Load
   }
 
   return {
+    isForbidden: false,
+  };
+}
+
+async function classAffairsCourseResultsPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
     isForbidden: false,
   };
 }
@@ -1498,6 +1338,11 @@ const router = createBrowserRouter([
         lazy: loadStudentRosterMembershipReconciliationRouteModule,
       },
       {
+        path: '/class-affairs/course-results-summary',
+        loader: classAffairsCourseResultsPageLoader,
+        lazy: loadClassAffairsCourseResultsRouteModule,
+      },
+      {
         path: '/academic-assistant/academic-workload',
         loader: academicWorkloadPageLoader,
         lazy: loadAcademicWorkloadRouteModule,
@@ -1536,6 +1381,11 @@ const router = createBrowserRouter([
             path: 'upstream-session-demo',
             loader: upstreamSessionDemoLabLoader,
             lazy: loadUpstreamSessionDemoLabRouteModule,
+          },
+          {
+            path: 'upstream-session-reference',
+            loader: upstreamSessionReferenceLabLoader,
+            lazy: loadUpstreamSessionReferenceLabRouteModule,
           },
           {
             path: 'student-course-results-pull',

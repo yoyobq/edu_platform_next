@@ -32,6 +32,8 @@
 - `upstream session` 明确归属 `entities/upstream-session`；任何 upstream 登录、恢复、
   rolling token、staff directory 或 upstream proxy GraphQL 需求，都必须使用
   `@/entities/upstream-session` 的公开 API。
+- labs 页面不得直接依赖 `features/auth` 读取本站登录态；需要当前本站账号时，由
+  `app/router` 的 labs loader 注入最小 `currentAccount` 数据。
 - lab 自己的实验 API、mock、页面流程仍收束在当前 lab 内部。
 
 ## 推荐结构
@@ -80,7 +82,7 @@ src/labs/<lab-name>/
 ```ts
 {
   env: ['dev', 'prod'],
-  roles: ['admin', 'teacher'],
+  allowedAccessLevels: ['admin', 'staff'],
   menu: false,
 }
 ```
@@ -90,6 +92,10 @@ src/labs/<lab-name>/
 - 未命中 access list 时，不得暴露入口
 - 未命中 access list 时，不得直接访问成功
 - access list 不是“只隐藏菜单”，而是实验功能的暴露控制
+- `app/router` 统一使用 labs loader helper 执行环境、登录、profile completion 与权限检查；
+  新 lab 不应在页面内自行恢复本站登录态。
+- 若 lab 需要 loader 数据，loader 只注入页面所需的最小稳定数据，例如
+  `{ currentAccount: { accountId, displayName } }`。
 
 ## meta.ts
 
@@ -127,6 +133,11 @@ export const demoLabMeta = {
   - 用于演示“前端持有 upstream token、后端代访问 upstream”的当前标准链路
   - 当前使用教师字典、班级列表、历史班主任、教职工身份、教学计划等 upstream 代理接口作为示例数据源
   - 若后续出现正式 upstream 业务页，应优先迁入正式区拥有者切片，而不是让 labs 长期承担正式入口
+- `/labs/upstream-session-reference`
+  - 用于展示新 labs 接入 upstream session 的最小标准样板
+  - 页面只展示登录、恢复、pending action 与 modal controller，不绑定具体 upstream 业务接口
+  - 后续需要 upstream session 的 lab，应优先参考该页，而不是复制业务型
+    `/labs/upstream-session-demo`
 - `/labs/student-course-results-pull`
   - 用于验证按本地班级 classCode、学年和可选学期拉取学生课程成绩并写入本地加密快照的链路
   - 仅作为成绩快照拉取流程的实验入口；若后续成为正式查询或管理能力，应迁入正式区拥有者切片

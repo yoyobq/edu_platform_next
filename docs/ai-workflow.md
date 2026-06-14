@@ -30,6 +30,11 @@
 - `upstream session` 是当前明确的稳定业务对象；任何需要 upstream 登录、恢复、rolling
   token、staff directory 或 upstream proxy GraphQL 的 lab，都必须使用
   `@/entities/upstream-session` 的公开 API。
+- 需要 upstream session 的 lab，应优先参考 `/labs/upstream-session-reference` 的最小样板：
+  `app/router` loader 注入当前本站账号，页面使用 `useUpstreamLoginModalController` 与
+  `UpstreamLoginModal`，业务请求使用 `executeUpstreamSessionGraphQL`。
+- AI 不得为了拿当前登录账号让 lab 直接依赖 `features/auth`；登录态恢复、权限与 lab 暴露判断
+  统一留在 `app/router` loader。
 - lab 自己的实验 API、mock、页面流程仍留在当前 lab 内部；只有稳定业务对象和通用技术底座可
   通过 public API 复用。
 

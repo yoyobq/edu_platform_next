@@ -23,6 +23,10 @@
 - 正式区不得依赖 `sandbox`
 - 正式区不得依赖 `labs`
 - 当前已人工确认 `app/router` 可依赖 `labs` 与 `sandbox` 的公开入口，仅用于路由注册与入口治理
+- `app/router` 同时负责 labs 的统一 loader / guard：环境暴露、本站登录恢复、profile
+  completion、权限检查，以及必要的最小 loader data 注入。
+- 上述 router 例外不下放给 `labs` 页面；`labs` 页面仍不得为了读取本站登录态依赖
+  `features/auth`。
 
 ## 规则执行方式
 
@@ -48,5 +52,6 @@
 - ESLint 不会自动根据 `labs/<name>/meta.ts` 中的 `exception` 放行
 - 真实例外必须先人工确认，再写入对应 `meta.ts`
 - 不允许通过深层 import、相对路径或关闭规则来绕过
-- `app/router` 接入 `labs` / `sandbox` 已作为当前人工确认例外落地；其他正式区模块仍不得依赖它们
+- `app/router` 接入 `labs` / `sandbox` 并统一 labs loader 已作为当前人工确认例外落地；
+  其他正式区模块仍不得依赖它们
 - `app/` 作为全局壳层域，内部子目录可相互协作；但仍应优先通过 `@/app/<module>` 这类公开出口导入，避免继续扩散深层路径依赖

@@ -88,6 +88,8 @@
 当前补充说明：
 
 - `app/router` 作为组合根，可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册、暴露控制与环境隔离
+- `app/router` 也是 labs loader / guard 的统一宿主，负责把本站 auth snapshot 收敛成 lab
+  需要的最小 loader data；lab 页面不直接消费 `features/auth`
 - 该能力不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
 - `app/router` 应尽量收窄为路由树、loader / guard 与注册逻辑
 - 全局 layout、入口 Sidecar、全局 provider 等应用壳层实现，应优先放在 `app/layout`、`app/providers` 等 `app/` 子目录中

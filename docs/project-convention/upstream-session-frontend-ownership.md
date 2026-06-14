@@ -2,7 +2,8 @@
 
 # Upstream Session Frontend Ownership
 
-本文件记录当前项目里 `upstream` 会话的前端主权约定，以及当前示例页的稳定前端行为。
+本文件记录当前项目里 `upstream` 会话的前端主权约定、最小接入参考页，以及当前业务型
+示例页的稳定前端行为。
 
 后端 schema 真相以 [../backend/README.md](../backend/README.md) 指向的来源为准；本文件只收口当前前端已经确认的边界，不反推后端内部实现。
 
@@ -53,7 +54,7 @@
 - `fetchClassDirectory({ sessionToken, departmentId, schoolYear?, semester?, annualMajorId? })`
 - `fetchPreviousClassAdviserClasses({ sessionToken })`
 - 业务页面自己的 upstream 代理接口，例如教学日志对账查询/保存
-- shared Staff Directory Cache 的显式填充接口 `populateStaffDirectory`
+- Staff Directory Cache 的显式填充接口 `populateStaffDirectory`
 
 当前 upstream 会话返回值包括：
 
@@ -75,21 +76,33 @@
 - 调用方只消费 entity 暴露的 hook、controller、UI 或 request adapter，不直接组合 storage 与 login mutation
 - `shared/graphql` 只保留 transport/runtime，不承载 `loginUpstreamSession` 这类业务 facade
 - `entities/academic-semester` 承接学期列表读取；`shared/graphql` 不再 re-export 业务查询 facade
+- labs 若需要当前本站账号，应由 `app/router` labs loader 注入最小 `currentAccount`，不要在 lab
+  页面内直接依赖 `features/auth`
 
 ## 当前示例页
 
-当前示例页路由为：
+当前 upstream session 参考与示例页路由为：
 
+- `/labs/upstream-session-reference`
 - `/labs/upstream-session-demo`
 
 访问范围当前为：
 
 - `ADMIN`
-- `STAFF`
 
-而其他现有 admin-only labs 仍保持只对 admin 可见，不因这个示例页一并放开。
+其中 `/labs/upstream-session-reference` 是新 labs 的最小接入基准：
 
-当前示例页的固定行为是：
+1. `app/router` loader 注入 `currentAccount`
+2. 页面调用 `useUpstreamLoginModalController`
+3. 登录 UI 只渲染 `UpstreamLoginModal`
+4. 业务动作只保存为页面自己的 `pendingAction`
+5. upstream 代理请求统一使用 `executeUpstreamSessionGraphQL`
+
+`/labs/upstream-session-demo` 是业务型演示页，使用教师字典、班级列表、历史班主任、
+教职工身份、教学计划等 upstream 代理接口作为示例数据源。后续新 lab 应优先参考
+`/labs/upstream-session-reference`，不要复制业务型 demo 的复杂页面结构。
+
+当前业务型 demo 页的固定行为是：
 
 1. 先确认当前本站登录账号
 2. 读取当前账号绑定的本地 upstream token
@@ -100,7 +113,7 @@
 7. 启用 keepAlive 时，按 `expiresAt` 提前刷新 token
 8. 若 token 已失效或刷新失败，则清空本地 token 并回到 upstream 登录表单
 
-当前示例页只演示：
+当前业务型 demo 页只演示：
 
 - upstream 登录
 - 前端持有 token

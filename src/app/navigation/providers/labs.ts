@@ -82,6 +82,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+          {
+            allowedAccessGroups: ['ADMIN'] as const,
+            iconKey: 'ApiOutlined',
+            key: '/labs/upstream-session-reference',
+            label: 'Upstream 会话基准',
+            navMode: 'rail' as const,
+            path: '/labs/upstream-session-reference',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
         ]
       : []),
     ...(hasLabNavigationAccess(['admin'], filter)

@@ -130,6 +130,19 @@ export function hasStudentRosterMembershipReconciliationAccess(input: {
   return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
 }
 
+export function hasClassAffairsCourseResultsAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  return (
+    accessGroup.includes('STAFF') &&
+    (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) || slotGroup.includes(COUNSELOR_SLOT_GROUP))
+  );
+}
+
 export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   const accessGroup = input.accessGroup ?? [];
 

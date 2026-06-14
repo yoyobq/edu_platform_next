@@ -261,7 +261,8 @@ src/
 
 当前人工确认例外：
 
-- `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，仅用于路由注册、暴露控制与环境隔离
+- `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册、暴露控制、环境隔离
+  以及 labs loader / guard
 - 其余依赖限制仍以第 5 节为准；这不代表正式区其他模块可直接依赖 `labs` 或 `sandbox`
 
 边界提醒：
@@ -541,13 +542,16 @@ src/sandbox/<prototype-name>/
 
 - `app` 作为全局壳层域，不列入上面的业务链条
 - `app` 默认以组合和挂载为主，向下消费正式区公开内容
-- 当前唯一已确认例外是 `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册与入口治理
+- 当前唯一已确认例外是 `app/router` 可读取 `labs` 与 `sandbox` 的公开入口，用于路由注册、
+  入口治理与 labs loader / guard
 
 补充规则：
 
 - `app` 不得因为 `app/router` 这个例外，进一步承接 `labs` / `sandbox` 的业务实现
 - `labs` 只允许依赖 `shared`，必要时可依赖 `entities` 的公开内容
 - `labs` 默认不得依赖 `pages`、`widgets`、`features`
+- `labs` 页面不得为了读取本站登录态直接依赖 `features/auth`；需要当前账号时由
+  `app/router` 的 labs loader 注入最小 loader data
 - 如确有必要，必须在该 `labs` 模块的 `meta.ts` 中声明 `exception`，而不是默认放开
 - `sandbox` 只允许依赖 `shared`，必要时可有限依赖 `entities` 的公开内容做验证
 - `sandbox` 默认不得依赖 `pages`、`widgets`、`features`
@@ -590,7 +594,7 @@ access list 只解决三件事：
 ```ts
 {
   env: ['dev', 'prod'],
-  roles: ['admin', 'teacher'],
+  allowedAccessLevels: ['admin', 'staff'],
   menu: false,
 }
 ```
@@ -604,7 +608,8 @@ access list 只解决三件事：
 推荐落地方式：
 
 - `labs` 的 access list 以独立 `access.ts` 作为唯一配置源
-- 页面级实验默认由路由表读取该配置，并通过路由 `meta` 或等价字段完成入口控制与路由拦截
+- 页面级实验默认由 `app/router` 的 labs loader helper 读取该配置，并完成入口控制与路由拦截
+- 若 lab 页面需要当前账号，只注入 `{ accountId, displayName }` 这类最小稳定数据
 - 若实验能力以局部模块形式嵌入页面，可复用同一套 access 判断逻辑进行组件级控制
 - 初期以路由级控制为主，组件级控制为补充，不要求一开始同时实现完整抽象
 
