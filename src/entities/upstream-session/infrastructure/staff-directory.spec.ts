@@ -1,3 +1,4 @@
+// src/entities/upstream-session/infrastructure/staff-directory.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock } = vi.hoisted(() => ({
@@ -65,7 +66,7 @@ describe('staff directory shared api', () => {
 
     await expect(
       populateStaffDirectory({
-        sessionToken: ' rolling-token-001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).resolves.toEqual(payload);
 
@@ -148,7 +149,7 @@ describe('staff directory shared api', () => {
 
     await expect(
       readVerifiedStaffIdentity({
-        sessionToken: ' rolling-token-001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).resolves.toEqual(payload);
 
@@ -240,7 +241,7 @@ describe('staff directory shared api', () => {
     });
 
     expect(populateStaffDirectoryFn).toHaveBeenCalledWith({
-      sessionToken: 'rolling-token-001',
+      upstreamSessionToken: 'rolling-token-001',
     });
     expect(persistSessionFromResult).toHaveBeenCalledWith(session, populatedDirectory);
   });

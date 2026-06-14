@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -25,6 +27,7 @@ import {
 describe('major-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('loads enabled departments for admin viewers', async () => {
@@ -87,7 +90,7 @@ describe('major-sync api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       dryRunSyncMajorsFromUpstream: payload,
     });
 
@@ -98,7 +101,7 @@ describe('major-sync api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('DryRunSyncMajorsFromUpstream');
     expect(query).toContain('dryRunSyncMajorsFromUpstream');
@@ -110,16 +113,13 @@ describe('major-sync api', () => {
     expect(query).not.toContain('annualMajorId');
     expect(query).not.toContain('code');
     expect(query).not.toContain('value');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('DryRunSyncMajorsFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-001',
         },
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -158,7 +158,7 @@ describe('major-sync api', () => {
       upstreamSessionToken: 'rolling-token-003',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       syncMajorsFromUpstream: payload,
     });
 
@@ -169,7 +169,7 @@ describe('major-sync api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('SyncMajorsFromUpstream');
     expect(query).toContain('syncMajorsFromUpstream');
@@ -181,16 +181,13 @@ describe('major-sync api', () => {
     expect(query).toContain('trainingLevel');
     expect(query).not.toContain('previewedCount');
     expect(query).not.toContain('annualMajorId');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('SyncMajorsFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-002',
         },
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -211,5 +208,6 @@ describe('major-sync api', () => {
     ).rejects.toThrow('upstreamSessionToken 为必填。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 });

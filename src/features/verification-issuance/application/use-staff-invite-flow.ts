@@ -2,18 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
   isExpiredUpstreamSessionError,
+  populateStaffDirectory,
+  readStaffDirectory,
   resolveUpstreamErrorMessage,
+  type StaffDirectoryEntry,
+  type StaffDirectoryResult,
   type StoredUpstreamSession,
   type UpstreamLoginCredentials,
   useUpstreamSession,
 } from '@/entities/upstream-session';
-
-import {
-  populateStaffDirectory,
-  readStaffDirectory,
-  type StaffDirectoryEntry,
-  type StaffDirectoryResult,
-} from '@/shared/upstream';
 
 import {
   fetchVerificationIssuanceCurrentAccount,
@@ -123,7 +120,7 @@ export function useStaffInviteFlow(input: {
 
   const refreshDirectory = useCallback(
     async (
-      sessionToken: string,
+      upstreamSessionToken: string,
       options: { forceRefresh?: boolean; sourceSession?: StoredUpstreamSession } = {},
     ) => {
       setIsRefreshingDirectory(true);
@@ -134,7 +131,7 @@ export function useStaffInviteFlow(input: {
       try {
         const result = await populateStaffDirectory({
           forceRefresh: options.forceRefresh,
-          sessionToken,
+          upstreamSessionToken,
         });
 
         const sourceSession = options.sourceSession ?? session;

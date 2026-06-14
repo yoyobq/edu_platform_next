@@ -497,8 +497,8 @@ export function StudentCourseResultsPullLabPage() {
           refreshMode: mode,
           schoolYear: values.allSchoolYears ? undefined : values.schoolYear,
           semester: values.semester,
-          sessionToken: shouldSendSession ? session?.upstreamSessionToken : null,
           studentNumbers,
+          upstreamSessionToken: shouldSendSession ? session?.upstreamSessionToken : null,
         });
 
         if (session) {

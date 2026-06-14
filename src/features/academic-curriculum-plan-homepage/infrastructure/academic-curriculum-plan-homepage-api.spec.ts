@@ -2,6 +2,8 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
+
 import { executeGraphQL, hasGraphQLErrorCode } from '@/shared/graphql';
 
 import {
@@ -17,9 +19,18 @@ import {
   saveCurriculumPlanHomepage,
 } from './academic-curriculum-plan-homepage-api';
 
-const { executeGraphQLMock, hasGraphQLErrorCodeMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  hasGraphQLErrorCodeMock: vi.fn(() => false),
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLErrorCodeMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    hasGraphQLErrorCodeMock: vi.fn(() => false),
+  }));
+
+vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
+  isExpiredUpstreamSessionError: vi.fn(() => false),
+  resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
+    error instanceof Error ? error.message : fallback,
 }));
 
 vi.mock('@/shared/graphql', () => ({
@@ -27,18 +38,20 @@ vi.mock('@/shared/graphql', () => ({
   hasGraphQLErrorCode: hasGraphQLErrorCodeMock,
 }));
 
+const mockedExecuteUpstreamSessionGraphQL = vi.mocked(executeUpstreamSessionGraphQL);
 const mockedExecuteGraphQL = vi.mocked(executeGraphQL);
 const mockedHasGraphQLErrorCode = vi.mocked(hasGraphQLErrorCode);
 
 describe('academic curriculum plan homepage api', () => {
   beforeEach(() => {
+    mockedExecuteUpstreamSessionGraphQL.mockReset();
     mockedExecuteGraphQL.mockReset();
     mockedHasGraphQLErrorCode.mockReset();
     mockedHasGraphQLErrorCode.mockReturnValue(false);
   });
 
   it('fetches homepage list with trimmed term variables and nullable department', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       fetchCurriculumPlanHomepageList: {
         count: 1,
         expiresAt: '2026-06-01T08:00:00.000Z',
@@ -70,7 +83,7 @@ describe('academic curriculum plan homepage api', () => {
         departmentId: '   ',
         schoolYear: ' 2025 ',
         semester: ' 2 ',
-        sessionToken: 'upstream-token-000',
+        upstreamSessionToken: 'upstream-token-000',
       }),
     ).resolves.toMatchObject({
       count: 1,
@@ -84,17 +97,14 @@ describe('academic curriculum plan homepage api', () => {
       ],
       upstreamSessionToken: 'upstream-token-001',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query FetchCurriculumPlanHomepageList',
     );
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       departmentId: null,
       schoolYear: '2025',
       semester: '2',
       sessionToken: 'upstream-token-000',
-    });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
   });
 
@@ -133,7 +143,7 @@ describe('academic curriculum plan homepage api', () => {
   });
 
   it('fetches homepage detail by trimmed plan id', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       fetchCurriculumPlanHomepageDetail: {
         expiresAt: '2026-06-01T08:00:00.000Z',
         homepage: {
@@ -147,7 +157,7 @@ describe('academic curriculum plan homepage api', () => {
     await expect(
       fetchCurriculumPlanHomepageDetail({
         planId: ' plan-001 ',
-        sessionToken: 'upstream-token-001',
+        upstreamSessionToken: 'upstream-token-001',
       }),
     ).resolves.toMatchObject({
       homepage: {
@@ -156,20 +166,17 @@ describe('academic curriculum plan homepage api', () => {
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-002',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query FetchCurriculumPlanHomepageDetail',
     );
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       planId: 'plan-001',
       sessionToken: 'upstream-token-001',
-    });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
   });
 
   it('saves the full upstream-style homepage object without remapping keys', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       saveCurriculumPlanHomepage: {
         code: '0',
         data: { saved: true },
@@ -190,23 +197,20 @@ describe('academic curriculum plan homepage api', () => {
     await expect(
       saveCurriculumPlanHomepage({
         homepage,
-        sessionToken: 'upstream-token-002',
+        upstreamSessionToken: 'upstream-token-002',
       }),
     ).resolves.toMatchObject({
       success: true,
       upstreamSessionToken: 'upstream-token-003',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'mutation SaveCurriculumPlanHomepage',
     );
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       input: {
         homepage,
         sessionToken: 'upstream-token-002',
       },
-    });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
   });
 
@@ -342,7 +346,7 @@ describe('academic curriculum plan homepage api', () => {
   });
 
   it('loads managed historical reference candidates and keeps upstream session result', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       listAcademicCurriculumPlanHomepageReferenceCandidates: {
         candidateGroups: [
           {
@@ -398,10 +402,10 @@ describe('academic curriculum plan homepage api', () => {
     ).resolves.toMatchObject({
       upstreamSessionToken: 'upstream-token-004',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query ListAcademicCurriculumPlanHomepageReferenceCandidates',
     );
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toMatchObject({
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toMatchObject({
       context: {
         courseName: '网页设计与制作',
         schoolYear: '2025',
@@ -414,13 +418,10 @@ describe('academic curriculum plan homepage api', () => {
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-003',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
-    });
   });
 
   it('loads my teaching end chapter candidates with ownership context', async () => {
-    mockedExecuteGraphQL.mockResolvedValueOnce({
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates: {
         candidateGroups: [
           {
@@ -464,10 +465,10 @@ describe('academic curriculum plan homepage api', () => {
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-004',
     });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query ListMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates',
     );
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       context: {
         schoolYear: '2025',
         semester: '2',
@@ -475,9 +476,6 @@ describe('academic curriculum plan homepage api', () => {
       phase: 'FINAL',
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-004',
-    });
-    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
   });
 });

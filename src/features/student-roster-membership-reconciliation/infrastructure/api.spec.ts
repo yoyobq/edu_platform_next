@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -28,6 +30,7 @@ import {
 describe('student roster membership reconciliation api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('loads previous class adviser classes without site JWT auth mode', async () => {
@@ -46,26 +49,23 @@ describe('student roster membership reconciliation api', () => {
       upstreamSessionToken: '{"token":"rolling"}',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchPreviousClassAdviserClasses: payload,
     });
 
     await expect(
       fetchPreviousClassAdviserClasses({
-        sessionToken: ' {"token":"current"} ',
+        upstreamSessionToken: ' {"token":"current"} ',
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1];
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('StudentRosterMembershipPreviousClassAdviserClasses'),
       {
         sessionToken: '{"token":"current"}',
-      },
-      {
-        authMode: 'none',
       },
     );
     expect(query).toContain('fetchPreviousClassAdviserClasses');
@@ -169,7 +169,7 @@ describe('student roster membership reconciliation api', () => {
       upstreamSessionToken: '{"token":"rolling"}',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       dryRunReconcileUpstreamStudentRoster: payload,
     });
 
@@ -180,8 +180,8 @@ describe('student roster membership reconciliation api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1];
 
     expect(query).toContain('DryRunReconcileUpstreamStudentRosterInput');
     expect(query).toContain('UpstreamStudentRosterReconciliationResultFields');
@@ -194,9 +194,6 @@ describe('student roster membership reconciliation api', () => {
         classCode: '1031301',
         upstreamSessionToken: '{"token":"current"}',
       },
-    });
-    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
     expect(JSON.stringify(variables)).not.toContain('classListCodes');
     expect(JSON.stringify(variables)).not.toContain('departmentIds');
@@ -214,7 +211,7 @@ describe('student roster membership reconciliation api', () => {
       upstreamSessionToken: '{"token":"rolling"}',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       claimClassAdviserForRosterSync: payload,
     });
 
@@ -225,8 +222,8 @@ describe('student roster membership reconciliation api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1];
 
     expect(query).toContain('ClaimClassAdviserForRosterSyncInput');
     expect(query).toContain('claimClassAdviserForRosterSync');
@@ -235,9 +232,6 @@ describe('student roster membership reconciliation api', () => {
         classCode: '1031301',
         upstreamSessionToken: '{"token":"current"}',
       },
-    });
-    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
   });
 
@@ -266,7 +260,7 @@ describe('student roster membership reconciliation api', () => {
       upstreamSessionToken: '{"token":"rolling"}',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       commitUpstreamStudentRosterReconciliation: payload,
     });
 
@@ -291,8 +285,8 @@ describe('student roster membership reconciliation api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1];
 
     expect(query).toContain('CommitUpstreamStudentRosterReconciliationInput');
     expect(query).toContain('commitUpstreamStudentRosterReconciliation');
@@ -318,9 +312,6 @@ describe('student roster membership reconciliation api', () => {
         ],
         upstreamSessionToken: '{"token":"current"}',
       },
-    });
-    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
-      logoutOnRetryAuthFailure: false,
     });
     expect(JSON.stringify(variables)).not.toContain('items');
     expect(JSON.stringify(variables)).not.toContain('classListCodes');

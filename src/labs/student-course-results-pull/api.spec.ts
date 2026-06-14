@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -26,6 +28,7 @@ import {
 describe('student-course-results-pull api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('normalizes fetch input without treating local class id as classCode', () => {
@@ -35,8 +38,8 @@ describe('student-course-results-pull api', () => {
         refreshMode: 'REFRESH',
         schoolYear: ' 2024 ',
         semester: ' 1 ',
-        sessionToken: ' rolling-token-001 ',
         studentNumbers: [' 219010401 ', '', '219010401', '219010402'],
+        upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).toEqual({
       classCode: '1021904',
@@ -54,7 +57,7 @@ describe('student-course-results-pull api', () => {
         classCode: '1021904',
         refreshMode: 'REFRESH',
         schoolYear: ' ',
-        sessionToken: 'rolling-token-001',
+        upstreamSessionToken: 'rolling-token-001',
       }),
     ).toEqual({
       classCode: '1021904',
@@ -137,7 +140,7 @@ describe('student-course-results-pull api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchClassStudentCourseResults: payload,
     });
 
@@ -146,18 +149,18 @@ describe('student-course-results-pull api', () => {
         classCode: ' 1021904 ',
         refreshMode: 'REFRESH',
         schoolYear: ' 2024 ',
-        sessionToken: ' rolling-token-001 ',
         studentNumbers: [' 219010401 ', '219010402'],
+        upstreamSessionToken: ' rolling-token-001 ',
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('FetchClassStudentCourseResults');
     expect(query).toContain('fetchClassStudentCourseResults');
     expect(query).toContain('studentNumber');
     expect(query).toContain('periodicFinalTotalScore');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('FetchClassStudentCourseResults'),
       {
         input: {
@@ -167,9 +170,6 @@ describe('student-course-results-pull api', () => {
           sessionToken: 'rolling-token-001',
           studentNumbers: ['219010401', '219010402'],
         },
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });

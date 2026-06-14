@@ -1,3 +1,5 @@
+export type { UseStaffDirectoryTeachersResult } from './application/staff-directory-teachers-hook';
+export { useStaffDirectoryTeachers } from './application/staff-directory-teachers-hook';
 export {
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
@@ -21,6 +23,28 @@ export type {
 } from './application/upstream-session-rolling';
 export { hasRollingUpstreamSessionResult } from './application/upstream-session-rolling';
 export type {
+  PersistStaffDirectoryCacheSessionFromResult,
+  PopulateStaffDirectoryResult,
+  ResolveStaffDirectoryCacheResult,
+  StaffDirectoryCacheSession,
+  StaffDirectoryCacheStatus,
+  StaffDirectoryEntriesResult,
+  StaffDirectoryEntry,
+  StaffDirectoryResult,
+  VerifiedStaffIdentityResult,
+} from './infrastructure/staff-directory';
+export {
+  formatStaffDirectoryTeacherInputValue,
+  formatStaffDirectoryTeacherLabel,
+  populateStaffDirectory,
+  readStaffDirectory,
+  readVerifiedStaffIdentity,
+  resolveStaffDirectoryCache,
+  resolveStaffDirectoryEntries,
+  resolveStaffDirectoryTeacherInputValue,
+  resolveStaffDirectoryTeacherStaffId,
+} from './infrastructure/staff-directory';
+export type {
   UpstreamLoginSessionResult,
   UpstreamSessionRefreshResult,
 } from './infrastructure/upstream-session-api';
@@ -28,5 +52,9 @@ export {
   requestUpstreamLoginSession,
   requestUpstreamSessionRefresh,
 } from './infrastructure/upstream-session-api';
+export type { ExecuteUpstreamSessionGraphQLOptions } from './infrastructure/upstream-session-graphql';
+export { executeUpstreamSessionGraphQL } from './infrastructure/upstream-session-graphql';
 export type { StoredUpstreamSession } from './infrastructure/upstream-session-storage';
+export type { StaffDirectoryTeacherAutoCompleteProps } from './ui/staff-directory-teacher-autocomplete';
+export { StaffDirectoryTeacherAutoComplete } from './ui/staff-directory-teacher-autocomplete';
 export { type UpstreamLoginFormValues, UpstreamLoginModal } from './ui/upstream-login-modal';

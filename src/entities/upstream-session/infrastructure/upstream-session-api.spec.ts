@@ -58,7 +58,7 @@ describe('upstream-session api', () => {
 
     await expect(
       requestUpstreamSessionRefresh({
-        sessionToken: 'token-002',
+        upstreamSessionToken: 'token-002',
       }),
     ).resolves.toEqual(payload);
 

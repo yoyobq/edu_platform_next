@@ -3,6 +3,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -155,18 +156,11 @@ const SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
-  options?: {
-    logoutOnRetryAuthFailure?: boolean;
-  },
 ): Promise<TData> {
-  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
+  return executeGraphQL(query, variables);
 }
 
 function toDepartmentOption(department: DepartmentDTO): MajorSyncDepartmentOption | null {
@@ -215,35 +209,27 @@ export async function fetchMajorSyncDepartmentOptions() {
 }
 
 export async function dryRunSyncMajorsFromUpstream(input: DryRunSyncMajorsFromUpstreamInput) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     DryRunSyncMajorsFromUpstreamResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(
-    DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION,
-    {
-      input: normalizeDryRunInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
+    input: normalizeDryRunInput(input),
+  });
 
   return response.dryRunSyncMajorsFromUpstream;
 }
 
 export async function syncMajorsFromUpstream(input: SyncMajorsFromUpstreamInput) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     SyncMajorsFromUpstreamResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(
-    SYNC_MAJORS_FROM_UPSTREAM_MUTATION,
-    {
-      input: normalizeDryRunInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
+    input: normalizeDryRunInput(input),
+  });
 
   return response.syncMajorsFromUpstream;
 }

@@ -639,7 +639,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             setClassListError(null);
             setReconciliationError(null);
             const result = await fetchPreviousClassAdviserClasses({
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromResult(currentSession, result);

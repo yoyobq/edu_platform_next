@@ -1,4 +1,4 @@
-// src/shared/upstream/staff-directory-teacher-autocomplete.tsx
+// src/entities/upstream-session/ui/staff-directory-teacher-autocomplete.tsx
 import { type ReactNode, useMemo, useState } from 'react';
 import { AutoComplete, type AutoCompleteProps } from 'antd';
 
@@ -7,7 +7,7 @@ import {
   formatStaffDirectoryTeacherLabel,
   resolveStaffDirectoryTeacherInputValue,
   type StaffDirectoryEntry,
-} from './staff-directory';
+} from '../infrastructure/staff-directory';
 
 export type StaffDirectoryTeacherAutoCompleteProps = Omit<
   AutoCompleteProps<string>,

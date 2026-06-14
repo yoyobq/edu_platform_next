@@ -55,7 +55,9 @@ export type PublicAuthApiPort = {
     expiresAt: string;
     upstreamSessionToken: string;
   }>;
-  fetchVerifiedStaffIdentity: (input: { sessionToken: string }) => Promise<StaffInviteIdentity>;
+  fetchVerifiedStaffIdentity: (input: {
+    upstreamSessionToken: string;
+  }) => Promise<StaffInviteIdentity>;
   consumeStaffInvite: (input: {
     verificationCode: string;
     upstreamSessionToken: string;

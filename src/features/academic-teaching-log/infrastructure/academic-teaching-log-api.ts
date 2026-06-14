@@ -1,6 +1,9 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { isExpiredUpstreamSessionError } from '@/entities/upstream-session';
+import {
+  executeUpstreamSessionGraphQL,
+  isExpiredUpstreamSessionError,
+} from '@/entities/upstream-session';
 
 import {
   normalizeOptionalTextValue,
@@ -286,18 +289,11 @@ const SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
-  options?: {
-    logoutOnRetryAuthFailure?: boolean;
-  },
 ): Promise<TData> {
-  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
+  return executeGraphQL(query, variables);
 }
 
 function normalizeOptionalString(value?: string) {
@@ -310,10 +306,6 @@ function normalizeRequiredString(value: string, fieldName: string) {
 
 function normalizeOptionalNumber(value?: number) {
   return typeof value === 'number' ? value : undefined;
-}
-
-function resolveUpstreamSessionGraphQLOptions(input: { upstreamSessionToken?: string }) {
-  return input.upstreamSessionToken ? UPSTREAM_SESSION_GRAPHQL_OPTIONS : undefined;
 }
 
 function normalizeFetchAcademicTeachingLogPrefillInput(
@@ -434,18 +426,17 @@ export async function fetchAcademicTeachingLogPrefillItems(
 ) {
   try {
     const variables = normalizeFetchAcademicTeachingLogPrefillInput(input);
-    const response = await requestGraphQL<
+    const fetchPrefill = variables.upstreamSessionToken
+      ? executeUpstreamSessionGraphQL
+      : requestGraphQL;
+    const response = await fetchPrefill<
       AcademicTeachingLogPrefillResponse,
       FetchAcademicTeachingLogPrefillInput & {
         endDate?: string;
         startDate?: string;
         upstreamSessionToken?: string;
       }
-    >(
-      LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
-      variables,
-      resolveUpstreamSessionGraphQLOptions(variables),
-    );
+    >(LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY, variables);
 
     return response.listAcademicTeachingLogPrefillItems;
   } catch (error) {
@@ -464,18 +455,17 @@ export async function fetchMyAcademicTeachingLogPrefillItems(
 ) {
   try {
     const variables = normalizeFetchMyAcademicTeachingLogPrefillInput(input);
-    const response = await requestGraphQL<
+    const fetchPrefill = variables.upstreamSessionToken
+      ? executeUpstreamSessionGraphQL
+      : requestGraphQL;
+    const response = await fetchPrefill<
       MyAcademicTeachingLogPrefillResponse,
       FetchMyAcademicTeachingLogPrefillInput & {
         endDate?: string;
         startDate?: string;
         upstreamSessionToken?: string;
       }
-    >(
-      LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
-      variables,
-      resolveUpstreamSessionGraphQLOptions(variables),
-    );
+    >(LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY, variables);
 
     return response.listMyAcademicTeachingLogPrefillItems;
   } catch (error) {
@@ -491,18 +481,14 @@ export async function fetchMyAcademicTeachingLogPrefillItems(
 
 export async function saveAcademicTheoryTeachingLog(input: SaveAcademicTheoryTeachingLogInput) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       SaveAcademicTheoryTeachingLogResponse,
       {
         input: ReturnType<typeof normalizeSaveAcademicTheoryTeachingLogInput>;
       }
-    >(
-      SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION,
-      {
-        input: normalizeSaveAcademicTheoryTeachingLogInput(input),
-      },
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicTheoryTeachingLogInput(input),
+    });
 
     return response.saveAcademicTheoryTeachingLog;
   } catch (error) {
@@ -518,18 +504,14 @@ export async function saveAcademicTheoryTeachingLog(input: SaveAcademicTheoryTea
 
 export async function saveAcademicPracticeTeachingLog(input: SaveAcademicPracticeTeachingLogInput) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       SaveAcademicPracticeTeachingLogResponse,
       {
         input: ReturnType<typeof normalizeSaveAcademicPracticeTeachingLogInput>;
       }
-    >(
-      SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION,
-      {
-        input: normalizeSaveAcademicPracticeTeachingLogInput(input),
-      },
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicPracticeTeachingLogInput(input),
+    });
 
     return response.saveAcademicPracticeTeachingLog;
   } catch (error) {
@@ -547,18 +529,14 @@ export async function saveAcademicIntegratedTeachingLog(
   input: SaveAcademicIntegratedTeachingLogInput,
 ) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       SaveAcademicIntegratedTeachingLogResponse,
       {
         input: ReturnType<typeof normalizeSaveAcademicIntegratedTeachingLogInput>;
       }
-    >(
-      SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION,
-      {
-        input: normalizeSaveAcademicIntegratedTeachingLogInput(input),
-      },
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION, {
+      input: normalizeSaveAcademicIntegratedTeachingLogInput(input),
+    });
 
     return response.saveAcademicIntegratedTeachingLog;
   } catch (error) {

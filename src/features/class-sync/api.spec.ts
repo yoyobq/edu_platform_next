@@ -2,11 +2,13 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -25,6 +27,7 @@ import {
 describe('class-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('loads enabled departments for admin viewers', async () => {
@@ -103,7 +106,7 @@ describe('class-sync api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       dryRunSyncClassesFromUpstream: payload,
     });
 
@@ -114,7 +117,7 @@ describe('class-sync api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('DryRunSyncClassesFromUpstream');
     expect(query).toContain('dryRunSyncClassesFromUpstream');
@@ -130,16 +133,13 @@ describe('class-sync api', () => {
     expect(query).not.toContain('DryRunSyncClassesFromAnnualMajorClassList');
     expect(query).not.toContain('dryRunSyncClassesFromUpstreamDirectory');
     expect(query).not.toContain('annualMajorId');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('DryRunSyncClassesFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-001',
         },
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -183,7 +183,7 @@ describe('class-sync api', () => {
       upstreamSessionToken: 'rolling-token-003',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       syncClassesFromUpstream: payload,
     });
 
@@ -194,7 +194,7 @@ describe('class-sync api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('SyncClassesFromUpstream');
     expect(query).toContain('syncClassesFromUpstream');
@@ -207,16 +207,13 @@ describe('class-sync api', () => {
     expect(query).toContain('conflictReason');
     expect(query).not.toContain('previewedCount');
     expect(query).not.toContain('annualMajorId');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('SyncClassesFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-002',
         },
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -237,5 +234,6 @@ describe('class-sync api', () => {
     ).rejects.toThrow('upstreamSessionToken 为必填。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 });

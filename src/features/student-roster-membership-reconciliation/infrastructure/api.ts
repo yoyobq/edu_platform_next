@@ -3,6 +3,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -203,16 +204,11 @@ const COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
   options?: {
     authMode?: GraphQLAuthMode;
-    logoutOnRetryAuthFailure?: boolean;
   },
 ): Promise<TData> {
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
@@ -272,23 +268,17 @@ export async function fetchCurrentRosterMembershipAccount(): Promise<CurrentRost
   }
 }
 
-export async function fetchPreviousClassAdviserClasses(input: { sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchPreviousClassAdviserClasses(input: { upstreamSessionToken: string }) {
+  const response = await executeUpstreamSessionGraphQL<
     PreviousClassAdviserClassesResponse,
     {
       sessionToken: string;
     }
-  >(
-    FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY,
-    {
-      sessionToken: normalizeRequiredTextValue(input.sessionToken, {
-        message: 'upstreamSessionToken 为必填。',
-      }),
-    },
-    {
-      authMode: 'none',
-    },
-  );
+  >(FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY, {
+    sessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
+      message: 'upstreamSessionToken 为必填。',
+    }),
+  });
 
   return response.fetchPreviousClassAdviserClasses;
 }
@@ -332,35 +322,27 @@ export async function listLocalClassOptions(input: ListLocalClassOptionsInput = 
 export async function dryRunReconcileUpstreamStudentRoster(
   input: DryRunReconcileUpstreamStudentRosterInput,
 ) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     DryRunReconcileUpstreamStudentRosterResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(
-    DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION,
-    {
-      input: normalizeDryRunInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION, {
+    input: normalizeDryRunInput(input),
+  });
 
   return response.dryRunReconcileUpstreamStudentRoster;
 }
 
 export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserForRosterSyncInput) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     ClaimClassAdviserForRosterSyncResponse,
     {
       input: ReturnType<typeof normalizeClaimClassAdviserInput>;
     }
-  >(
-    CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION,
-    {
-      input: normalizeClaimClassAdviserInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION, {
+    input: normalizeClaimClassAdviserInput(input),
+  });
 
   return response.claimClassAdviserForRosterSync;
 }
@@ -368,18 +350,14 @@ export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserFor
 export async function commitUpstreamStudentRosterReconciliation(
   input: CommitUpstreamStudentRosterReconciliationInput,
 ) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     CommitUpstreamStudentRosterReconciliationResponse,
     {
       input: ReturnType<typeof normalizeCommitInput>;
     }
-  >(
-    COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION,
-    {
-      input: normalizeCommitInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION, {
+    input: normalizeCommitInput(input),
+  });
 
   return response.commitUpstreamStudentRosterReconciliation;
 }

@@ -3,6 +3,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -369,16 +370,11 @@ const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
   options?: {
     authMode?: GraphQLAuthMode;
-    logoutOnRetryAuthFailure?: boolean;
   },
 ): Promise<TData> {
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
@@ -446,9 +442,9 @@ export async function fetchCurriculumPlanHomepageList(input: {
   departmentId?: string | null;
   schoolYear: string;
   semester: string;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     CurriculumPlanHomepageListResponse,
     {
       departmentId: string | null;
@@ -456,16 +452,12 @@ export async function fetchCurriculumPlanHomepageList(input: {
       semester: string;
       sessionToken: string;
     }
-  >(
-    FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY,
-    {
-      departmentId: normalizeOptionalString(input.departmentId),
-      schoolYear: normalizeRequiredString(input.schoolYear, '学年'),
-      semester: normalizeRequiredString(input.semester, '学期'),
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY, {
+    departmentId: normalizeOptionalString(input.departmentId),
+    schoolYear: normalizeRequiredString(input.schoolYear, '学年'),
+    semester: normalizeRequiredString(input.semester, '学期'),
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchCurriculumPlanHomepageList;
 }
@@ -485,31 +477,27 @@ export async function fetchCurriculumPlanHomepageDepartmentOptions() {
 
 export async function fetchCurriculumPlanHomepageDetail(input: {
   planId: string;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     CurriculumPlanHomepageDetailResponse,
     {
       planId: string;
       sessionToken: string;
     }
-  >(
-    FETCH_CURRICULUM_PLAN_HOMEPAGE_DETAIL_QUERY,
-    {
-      planId: normalizeRequiredString(input.planId, '教学计划 ID'),
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_CURRICULUM_PLAN_HOMEPAGE_DETAIL_QUERY, {
+    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchCurriculumPlanHomepageDetail;
 }
 
 export async function saveCurriculumPlanHomepage(input: {
   homepage: Record<string, unknown>;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     SaveCurriculumPlanHomepageResponse,
     {
       input: {
@@ -517,16 +505,12 @@ export async function saveCurriculumPlanHomepage(input: {
         sessionToken: string;
       };
     }
-  >(
-    SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION,
-    {
-      input: {
-        homepage: input.homepage,
-        sessionToken: input.sessionToken,
-      },
+  >(SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION, {
+    input: {
+      homepage: input.homepage,
+      sessionToken: input.upstreamSessionToken,
     },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  });
 
   return response.saveCurriculumPlanHomepage;
 }
@@ -625,7 +609,7 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
   };
 
   if (input.mode === 'managed') {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       CurriculumPlanHomepageReferenceCandidatesResponse,
       {
         context: {
@@ -640,26 +624,22 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
         planId: string;
         upstreamSessionToken: string;
       }
-    >(
-      LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY,
-      {
-        ...commonVariables,
-        context: {
-          courseName: input.context.courseName,
-          schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
-          semester: normalizeRequiredString(input.context.semester, '学期'),
-          staffId: normalizeRequiredString(input.context.staffId ?? '', '教师 ID'),
-          weekCount: input.context.weekCount,
-          weeklyHours: input.context.weeklyHours,
-        },
+    >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {
+      ...commonVariables,
+      context: {
+        courseName: input.context.courseName,
+        schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+        semester: normalizeRequiredString(input.context.semester, '学期'),
+        staffId: normalizeRequiredString(input.context.staffId ?? '', '教师 ID'),
+        weekCount: input.context.weekCount,
+        weeklyHours: input.context.weeklyHours,
       },
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    });
 
     return response.listAcademicCurriculumPlanHomepageReferenceCandidates;
   }
 
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     MyCurriculumPlanHomepageReferenceCandidatesResponse,
     {
       context: {
@@ -673,20 +653,16 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
       planId: string;
       upstreamSessionToken: string;
     }
-  >(
-    LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY,
-    {
-      ...commonVariables,
-      context: {
-        courseName: input.context.courseName,
-        schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
-        semester: normalizeRequiredString(input.context.semester, '学期'),
-        weekCount: input.context.weekCount,
-        weeklyHours: input.context.weeklyHours,
-      },
+  >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {
+    ...commonVariables,
+    context: {
+      courseName: input.context.courseName,
+      schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+      semester: normalizeRequiredString(input.context.semester, '学期'),
+      weekCount: input.context.weekCount,
+      weeklyHours: input.context.weeklyHours,
     },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  });
 
   return response.listMyAcademicCurriculumPlanHomepageReferenceCandidates;
 }
@@ -708,25 +684,21 @@ export async function listCurriculumPlanHomepageTeachingEndChapterCandidates(inp
   };
 
   if (input.mode === 'managed') {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       CurriculumPlanHomepageTeachingEndChapterCandidatesResponse,
       {
         phase: CurriculumPlanHomepagePrefillPhase;
         planId: string;
         upstreamSessionToken: string;
       }
-    >(
-      LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY,
-      {
-        ...commonVariables,
-      },
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY, {
+      ...commonVariables,
+    });
 
     return response.listAcademicCurriculumPlanHomepageTeachingEndChapterCandidates;
   }
 
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     MyCurriculumPlanHomepageTeachingEndChapterCandidatesResponse,
     {
       context: {
@@ -737,17 +709,13 @@ export async function listCurriculumPlanHomepageTeachingEndChapterCandidates(inp
       planId: string;
       upstreamSessionToken: string;
     }
-  >(
-    LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY,
-    {
-      ...commonVariables,
-      context: {
-        schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
-        semester: normalizeRequiredString(input.context.semester, '学期'),
-      },
+  >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_QUERY, {
+    ...commonVariables,
+    context: {
+      schoolYear: normalizeRequiredString(input.context.schoolYear, '学年'),
+      semester: normalizeRequiredString(input.context.semester, '学期'),
     },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  });
 
   return response.listMyAcademicCurriculumPlanHomepageTeachingEndChapterCandidates;
 }

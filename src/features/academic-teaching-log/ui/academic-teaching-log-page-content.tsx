@@ -42,22 +42,20 @@ import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
   isExpiredUpstreamSessionError,
+  readVerifiedStaffIdentity,
+  resolveStaffDirectoryTeacherStaffId,
+  type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
   useUpstreamSession,
+  type VerifiedStaffIdentityResult,
 } from '@/entities/upstream-session';
 
 import type { AcademicViewerRole } from '@/shared/auth-access';
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import {
-  readVerifiedStaffIdentity,
-  resolveStaffDirectoryTeacherStaffId,
-  type StaffDirectoryResult,
-  StaffDirectoryTeacherAutoComplete,
-  type VerifiedStaffIdentityResult,
-} from '@/shared/upstream';
 
 import {
   isIntegratedCourseCategory,
@@ -1595,10 +1593,6 @@ export function AcademicTeachingLogPageContent({
 
   const persistSessionFromVerifiedIdentity = useCallback(
     (session: StoredUpstreamSession, identity: VerifiedStaffIdentityResult) => {
-      if (identity.upstreamSessionToken === session.upstreamSessionToken) {
-        return session;
-      }
-
       return persistSessionFromResult(session, identity);
     },
     [persistSessionFromResult],
@@ -1622,7 +1616,7 @@ export function AcademicTeachingLogPageContent({
     async function loadUpstreamIdentity() {
       try {
         const identity = await readVerifiedStaffIdentity({
-          sessionToken: activeSession.upstreamSessionToken,
+          upstreamSessionToken: activeSession.upstreamSessionToken,
         });
 
         if (cancelled) {
@@ -1856,7 +1850,7 @@ export function AcademicTeachingLogPageContent({
       options: { action: 'query' | 'save' },
     ) => {
       const identity = await readVerifiedStaffIdentity({
-        sessionToken: session.upstreamSessionToken,
+        upstreamSessionToken: session.upstreamSessionToken,
       });
       setUpstreamIdentity(identity);
       const nextSession = persistSessionFromVerifiedIdentity(session, identity);

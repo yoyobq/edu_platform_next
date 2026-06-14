@@ -1,7 +1,6 @@
 // src/features/academic-integrated-plan-corrections/infrastructure/academic-integrated-plan-corrections-api.ts
-import type { OperationVariables } from '@apollo/client';
-
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -10,7 +9,6 @@ import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
-import { executeGraphQL } from '@/shared/graphql';
 
 export type IntegratedPlanCorrectionDiff = string;
 export type IntegratedPlanCorrectionAlignmentStatus = 'CURRENT_ONLY' | 'EXPECTED_ONLY' | 'MATCHED';
@@ -346,20 +344,6 @@ const LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
-async function requestGraphQL<TData, TVariables extends OperationVariables>(
-  query: string,
-  variables: TVariables,
-  options?: {
-    logoutOnRetryAuthFailure?: boolean;
-  },
-): Promise<TData> {
-  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
-}
-
 function normalizeOptionalString(value?: string) {
   return normalizeOptionalTextValue(value, 'to_undefined');
 }
@@ -391,14 +375,10 @@ export async function listIntegratedPlanCorrectionSuggestions(
   input: ListIntegratedPlanCorrectionSuggestionsInput,
 ) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       ListIntegratedPlanCorrectionSuggestionsResponse,
       ReturnType<typeof normalizeInput>
-    >(
-      LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY,
-      normalizeInput(input),
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeInput(input));
 
     return response.listAcademicIntegratedPlanCorrectionSuggestions;
   } catch (error) {
@@ -414,14 +394,10 @@ export async function listMyIntegratedPlanCorrectionSuggestions(
   input: ListMyIntegratedPlanCorrectionSuggestionsInput,
 ) {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       ListMyIntegratedPlanCorrectionSuggestionsResponse,
       ReturnType<typeof normalizeMyInput>
-    >(
-      LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY,
-      normalizeMyInput(input),
-      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-    );
+    >(LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeMyInput(input));
 
     return response.listMyAcademicIntegratedPlanCorrectionSuggestions;
   } catch (error) {

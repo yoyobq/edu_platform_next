@@ -1,11 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, isExpiredUpstreamSessionErrorMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  isExpiredUpstreamSessionErrorMock: vi.fn(() => false),
-}));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, isExpiredUpstreamSessionErrorMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    isExpiredUpstreamSessionErrorMock: vi.fn(() => false),
+  }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
   readUpstreamGraphQLErrorDetail: () => null,
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
@@ -27,6 +30,7 @@ import {
 describe('academic-teaching-log api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReturnValue(false);
   });
@@ -103,7 +107,7 @@ describe('academic-teaching-log api', () => {
       warnings: [],
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       listAcademicTeachingLogPrefillItems: payload,
     });
 
@@ -117,7 +121,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitContent'),
       {
         endDate: '2026-05-01',
@@ -126,28 +130,21 @@ describe('academic-teaching-log api', () => {
         startDate: '2026-04-01',
         upstreamSessionToken: 'rolling-token-004',
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitTarget'),
       expect.any(Object),
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitAchievement'),
       expect.any(Object),
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('departmentId');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('\n      canFill\n      expiresAt');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('reconciliation');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('unmatchedPlanItems');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).not.toContain('departmentId');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      '\n      canFill\n      expiresAt',
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('reconciliation');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('unmatchedPlanItems');
   });
 
   it('requests my teaching log prefill without sending staffId', async () => {
@@ -162,7 +159,7 @@ describe('academic-teaching-log api', () => {
       warnings: [],
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       listMyAcademicTeachingLogPrefillItems: payload,
     });
 
@@ -175,7 +172,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('listMyAcademicTeachingLogPrefillItems'),
       {
         endDate: '2026-05-01',
@@ -183,12 +180,9 @@ describe('academic-teaching-log api', () => {
         startDate: '2026-04-01',
         upstreamSessionToken: 'rolling-token-004',
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId: $staffId');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId: $staffId');
   });
 
   it('rejects prefill loading without staffId', async () => {
@@ -200,6 +194,7 @@ describe('academic-teaching-log api', () => {
     ).rejects.toThrow('staffId 为必填。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 
   it('saves theory logs with sectionId only', async () => {
@@ -212,7 +207,7 @@ describe('academic-teaching-log api', () => {
       upstreamSessionToken: 'rolling-token-005',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       saveAcademicTheoryTeachingLog: payload,
     });
 
@@ -231,7 +226,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('saveAcademicTheoryTeachingLog'),
       {
         input: {
@@ -250,9 +245,6 @@ describe('academic-teaching-log api', () => {
           weekNumber: '8',
         },
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
   });
 
@@ -266,7 +258,7 @@ describe('academic-teaching-log api', () => {
       upstreamSessionToken: 'rolling-token-006',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       saveAcademicPracticeTeachingLog: payload,
     });
 
@@ -287,7 +279,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('saveAcademicPracticeTeachingLog'),
       {
         input: expect.objectContaining({
@@ -306,9 +298,6 @@ describe('academic-teaching-log api', () => {
           weekNumber: '9',
         }),
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
   });
 
@@ -322,7 +311,7 @@ describe('academic-teaching-log api', () => {
       upstreamSessionToken: 'rolling-token-007',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       saveAcademicIntegratedTeachingLog: payload,
     });
 
@@ -340,7 +329,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('saveAcademicIntegratedTeachingLog'),
       {
         input: {
@@ -362,9 +351,6 @@ describe('academic-teaching-log api', () => {
           weekNumber: '10',
         },
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
   });
 
@@ -378,7 +364,7 @@ describe('academic-teaching-log api', () => {
       upstreamSessionToken: 'rolling-token-008',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       saveAcademicIntegratedTeachingLog: payload,
     });
 
@@ -396,7 +382,7 @@ describe('academic-teaching-log api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('saveAcademicIntegratedTeachingLog'),
       {
         input: expect.objectContaining({
@@ -405,9 +391,6 @@ describe('academic-teaching-log api', () => {
           lecturePlanDetailId: 'PLAN-DETAIL-001',
           upstreamSessionToken: 'rolling-token-007',
         }),
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });

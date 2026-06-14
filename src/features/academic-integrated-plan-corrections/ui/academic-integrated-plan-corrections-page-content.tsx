@@ -28,6 +28,10 @@ import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
   isExpiredUpstreamSessionError,
+  resolveStaffDirectoryCache,
+  resolveStaffDirectoryTeacherStaffId,
+  type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
@@ -36,12 +40,6 @@ import {
 
 import type { AcademicViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import {
-  resolveStaffDirectoryCache,
-  resolveStaffDirectoryTeacherStaffId,
-  type StaffDirectoryResult,
-  StaffDirectoryTeacherAutoComplete,
-} from '@/shared/upstream';
 
 import { canViewIntegratedPlanCorrectionRepairGroups } from '../application/correction-view-policy';
 import {

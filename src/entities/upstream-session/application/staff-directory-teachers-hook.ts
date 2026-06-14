@@ -1,11 +1,11 @@
-// src/shared/upstream/staff-directory-teachers-hook.ts
+// src/entities/upstream-session/application/staff-directory-teachers-hook.ts
 import { useEffect, useState } from 'react';
 
 import {
   readStaffDirectory,
   type StaffDirectoryEntry,
   type StaffDirectoryResult,
-} from './staff-directory';
+} from '../infrastructure/staff-directory';
 
 type UseStaffDirectoryTeachersOptions = {
   enabled?: boolean;

@@ -62,7 +62,7 @@ export async function requestUpstreamLoginSession(input: { password: string; use
   return response.loginUpstreamSession;
 }
 
-export async function requestUpstreamSessionRefresh(input: { sessionToken: string }) {
+export async function requestUpstreamSessionRefresh(input: { upstreamSessionToken: string }) {
   const response = await executeGraphQL<
     RefreshUpstreamSessionResponse,
     OperationVariables & {
@@ -73,7 +73,9 @@ export async function requestUpstreamSessionRefresh(input: { sessionToken: strin
   >(
     REFRESH_UPSTREAM_SESSION_MUTATION,
     {
-      input,
+      input: {
+        sessionToken: input.upstreamSessionToken,
+      },
     },
     UPSTREAM_SESSION_GRAPHQL_OPTIONS,
   );

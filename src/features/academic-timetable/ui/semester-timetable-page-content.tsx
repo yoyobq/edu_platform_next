@@ -3,15 +3,15 @@ import { TableOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, Select, Skeleton, Typography } from 'antd';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
-
-import type { AcademicInternalViewerRole } from '@/shared/auth-access';
-import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   resolveStaffDirectoryEntries,
   resolveStaffDirectoryTeacherStaffId,
   StaffDirectoryTeacherAutoComplete,
   useStaffDirectoryTeachers,
-} from '@/shared/upstream';
+} from '@/entities/upstream-session';
+
+import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import type {
   AcademicTeacherSemesterScheduleItem,

@@ -21,18 +21,16 @@ import {
 } from '@/entities/academic-semester';
 import {
   isExpiredUpstreamSessionError,
+  resolveStaffDirectoryCache,
+  resolveStaffDirectoryTeacherStaffId,
+  type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type UpstreamAccountIdentity,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
-import {
-  resolveStaffDirectoryCache,
-  resolveStaffDirectoryTeacherStaffId,
-  type StaffDirectoryResult,
-  StaffDirectoryTeacherAutoComplete,
-} from '@/shared/upstream';
 
 import {
   type AcademicWorkloadTableViewFilter,

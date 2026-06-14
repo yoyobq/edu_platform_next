@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -26,6 +28,7 @@ import {
 describe('upstream-session-demo api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('requests lecture journals with a trimmed teaching class id', async () => {
@@ -45,25 +48,22 @@ describe('upstream-session-demo api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchLectureJournalList: payload,
     });
 
     await expect(
       fetchLectureJournalList({
-        sessionToken: 'rolling-token-001',
         teachingClassId: ' TC-2025-001 ',
+        upstreamSessionToken: 'rolling-token-001',
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('fetchLectureJournalList'),
       {
         sessionToken: 'rolling-token-001',
         teachingClassId: 'TC-2025-001',
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -117,25 +117,22 @@ describe('upstream-session-demo api', () => {
       upstreamSessionToken: 'rolling-token-004',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchMajorDirectory: payload,
     });
 
     await expect(
       fetchMajorDirectory({
         departmentId: ' ORG0302 ',
-        sessionToken: 'rolling-token-003',
+        upstreamSessionToken: 'rolling-token-003',
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('FetchMajorDirectory'),
       {
         departmentId: 'ORG0302',
         sessionToken: 'rolling-token-003',
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -155,7 +152,7 @@ describe('upstream-session-demo api', () => {
       upstreamSessionToken: 'rolling-token-005',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchClassDirectory: payload,
     });
 
@@ -165,17 +162,17 @@ describe('upstream-session-demo api', () => {
         departmentId: ' ORG0302 ',
         schoolYear: ' ',
         semester: ' ',
-        sessionToken: 'rolling-token-004',
+        upstreamSessionToken: 'rolling-token-004',
       }),
     ).resolves.toEqual(payload);
 
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
     expect(query).toContain('$schoolYear: String');
     expect(query).toContain('$semester: String');
     expect(query).not.toContain('$schoolYear: String!');
     expect(query).not.toContain('$semester: String!');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('FetchClassDirectory'),
       {
         annualMajorId: null,
@@ -183,9 +180,6 @@ describe('upstream-session-demo api', () => {
         schoolYear: null,
         semester: null,
         sessionToken: 'rolling-token-004',
-      },
-      {
-        authMode: 'none',
       },
     );
   });
@@ -206,23 +200,20 @@ describe('upstream-session-demo api', () => {
       upstreamSessionToken: 'rolling-token-006',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchPreviousClassAdviserClasses: payload,
     });
 
     await expect(
       fetchPreviousClassAdviserClasses({
-        sessionToken: 'rolling-token-005',
+        upstreamSessionToken: 'rolling-token-005',
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('FetchPreviousClassAdviserClasses'),
       {
         sessionToken: 'rolling-token-005',
-      },
-      {
-        authMode: 'none',
       },
     );
   });
@@ -242,25 +233,22 @@ describe('upstream-session-demo api', () => {
       upstreamSessionToken: 'rolling-token-003',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       fetchCurriculumPlanDetail: payload,
     });
 
     await expect(
       fetchCurriculumPlanDetail({
         planId: 'PLAN-001',
-        sessionToken: 'rolling-token-002',
+        upstreamSessionToken: 'rolling-token-002',
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('fetchCurriculumPlanDetail'),
       {
         planId: 'PLAN-001',
         sessionToken: 'rolling-token-002',
-      },
-      {
-        logoutOnRetryAuthFailure: false,
       },
     );
   });

@@ -1,6 +1,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -394,15 +395,10 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   variables: TVariables,
   options?: {
     authMode?: GraphQLAuthMode;
-    logoutOnRetryAuthFailure?: boolean;
   },
 ): Promise<TData> {
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
-
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
 
 export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstreamDemoAccount> {
   try {
@@ -422,38 +418,33 @@ export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstream
   }
 }
 
-export async function fetchTeacherDirectory(input: { sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchTeacherDirectory(input: { upstreamSessionToken: string }) {
+  const response = await executeUpstreamSessionGraphQL<
     TeacherDirectoryResponse,
     {
       sessionToken: string;
     }
-  >(
-    FETCH_TEACHER_DIRECTORY_QUERY,
-    {
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_TEACHER_DIRECTORY_QUERY, {
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchTeacherDirectory;
 }
 
-export async function fetchMajorDirectory(input: { departmentId: string; sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchMajorDirectory(input: {
+  departmentId: string;
+  upstreamSessionToken: string;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
     MajorDirectoryResponse,
     {
       departmentId: string;
       sessionToken: string;
     }
-  >(
-    FETCH_MAJOR_DIRECTORY_QUERY,
-    {
-      departmentId: input.departmentId.trim(),
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_MAJOR_DIRECTORY_QUERY, {
+    departmentId: input.departmentId.trim(),
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchMajorDirectory;
 }
@@ -463,9 +454,9 @@ export async function fetchClassDirectory(input: {
   departmentId: string;
   schoolYear?: string | null;
   semester?: string | null;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     ClassDirectoryResponse,
     {
       annualMajorId: string | null;
@@ -474,38 +465,26 @@ export async function fetchClassDirectory(input: {
       semester: string | null;
       sessionToken: string;
     }
-  >(
-    FETCH_CLASS_DIRECTORY_QUERY,
-    {
-      annualMajorId: input.annualMajorId?.trim() || null,
-      departmentId: input.departmentId.trim(),
-      schoolYear: input.schoolYear?.trim() || null,
-      semester: input.semester?.trim() || null,
-      sessionToken: input.sessionToken,
-    },
-    {
-      authMode: 'none',
-    },
-  );
+  >(FETCH_CLASS_DIRECTORY_QUERY, {
+    annualMajorId: input.annualMajorId?.trim() || null,
+    departmentId: input.departmentId.trim(),
+    schoolYear: input.schoolYear?.trim() || null,
+    semester: input.semester?.trim() || null,
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchClassDirectory;
 }
 
-export async function fetchPreviousClassAdviserClasses(input: { sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchPreviousClassAdviserClasses(input: { upstreamSessionToken: string }) {
+  const response = await executeUpstreamSessionGraphQL<
     PreviousClassAdviserClassesResponse,
     {
       sessionToken: string;
     }
-  >(
-    FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY,
-    {
-      sessionToken: input.sessionToken,
-    },
-    {
-      authMode: 'none',
-    },
-  );
+  >(FETCH_PREVIOUS_CLASS_ADVISER_CLASSES_QUERY, {
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchPreviousClassAdviserClasses;
 }
@@ -514,9 +493,9 @@ export async function fetchCurriculumPlanList(input: {
   departmentId?: string;
   schoolYear: string;
   semester: string;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     CurriculumPlanListResponse,
     {
       departmentId?: string;
@@ -524,16 +503,12 @@ export async function fetchCurriculumPlanList(input: {
       semester: string;
       sessionToken: string;
     }
-  >(
-    FETCH_CURRICULUM_PLAN_LIST_QUERY,
-    {
-      departmentId: input.departmentId?.trim() || undefined,
-      schoolYear: String(input.schoolYear || '').trim(),
-      semester: String(input.semester || '').trim(),
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_CURRICULUM_PLAN_LIST_QUERY, {
+    departmentId: input.departmentId?.trim() || undefined,
+    schoolYear: String(input.schoolYear || '').trim(),
+    semester: String(input.semester || '').trim(),
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchCurriculumPlanList;
 }
@@ -543,10 +518,10 @@ export async function fetchDepartmentCurriculumPlanList(input: {
   reviewStatus?: DepartmentCurriculumPlanReviewStatus;
   schoolYear: string;
   semester: string;
-  sessionToken: string;
   teacherId?: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     DepartmentCurriculumPlanListResponse,
     {
       departmentId: string;
@@ -556,76 +531,63 @@ export async function fetchDepartmentCurriculumPlanList(input: {
       sessionToken: string;
       teacherId?: string;
     }
-  >(
-    FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY,
-    {
-      departmentId: input.departmentId.trim(),
-      reviewStatus: input.reviewStatus,
-      schoolYear: String(input.schoolYear || '').trim(),
-      semester: String(input.semester || '').trim(),
-      sessionToken: input.sessionToken,
-      teacherId: input.teacherId?.trim() || undefined,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY, {
+    departmentId: input.departmentId.trim(),
+    reviewStatus: input.reviewStatus,
+    schoolYear: String(input.schoolYear || '').trim(),
+    semester: String(input.semester || '').trim(),
+    teacherId: input.teacherId?.trim() || undefined,
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchDepartmentCurriculumPlanList;
 }
 
-export async function fetchCurriculumPlanDetail(input: { planId: string; sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchCurriculumPlanDetail(input: {
+  planId: string;
+  upstreamSessionToken: string;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
     CurriculumPlanDetailResponse,
     {
       planId: string;
       sessionToken: string;
     }
-  >(
-    FETCH_CURRICULUM_PLAN_DETAIL_QUERY,
-    {
-      planId: input.planId,
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_CURRICULUM_PLAN_DETAIL_QUERY, {
+    planId: input.planId,
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchCurriculumPlanDetail;
 }
 
-export async function fetchVerifiedStaffIdentity(input: { sessionToken: string }) {
-  const response = await requestGraphQL<
+export async function fetchVerifiedStaffIdentity(input: { upstreamSessionToken: string }) {
+  const response = await executeUpstreamSessionGraphQL<
     VerifiedStaffIdentityResponse,
     {
       sessionToken: string;
     }
-  >(
-    FETCH_VERIFIED_STAFF_IDENTITY_QUERY,
-    {
-      sessionToken: input.sessionToken,
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchVerifiedStaffIdentity;
 }
 
 export async function fetchLectureJournalList(input: {
-  sessionToken: string;
   teachingClassId: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     LectureJournalListResponse,
     {
       sessionToken: string;
       teachingClassId: string;
     }
-  >(
-    FETCH_LECTURE_JOURNAL_LIST_QUERY,
-    {
-      sessionToken: input.sessionToken,
-      teachingClassId: input.teachingClassId.trim(),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_LECTURE_JOURNAL_LIST_QUERY, {
+    teachingClassId: input.teachingClassId.trim(),
+    sessionToken: input.upstreamSessionToken,
+  });
 
   return response.fetchLectureJournalList;
 }

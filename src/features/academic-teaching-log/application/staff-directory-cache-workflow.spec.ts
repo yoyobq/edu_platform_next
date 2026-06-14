@@ -96,7 +96,7 @@ describe('academic-teaching-log staff directory cache workflow', () => {
 
     expect(readStaffDirectoryFn).toHaveBeenCalledTimes(1);
     expect(populateStaffDirectoryFn).toHaveBeenCalledWith({
-      sessionToken: 'token-001',
+      upstreamSessionToken: 'token-001',
     });
     expect(persistSessionFromResult).toHaveBeenCalledWith(session, populatedDirectory);
   });

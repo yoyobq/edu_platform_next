@@ -2,12 +2,15 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, hasGraphQLErrorCodeMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  hasGraphQLErrorCodeMock: vi.fn(),
-}));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLErrorCodeMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    hasGraphQLErrorCodeMock: vi.fn(),
+  }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   requestUpstreamLoginSession: vi.fn(),
   resolveStaffInviteUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -26,6 +29,7 @@ import { publicAuthApi } from './public-auth-api';
 describe('public auth api student registration', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
     hasGraphQLErrorCodeMock.mockReset();
     hasGraphQLErrorCodeMock.mockReturnValue(false);
   });

@@ -1617,7 +1617,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
           const result = await fetchCurriculumPlanHomepageList({
             ...action.values,
-            sessionToken: currentSession.upstreamSessionToken,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
           });
 
           persistSessionFromResult(currentSession, result);
@@ -1631,7 +1631,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
           const result = await saveCurriculumPlanHomepage({
             homepage: action.homepage,
-            sessionToken: currentSession.upstreamSessionToken,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
           });
 
           persistSessionFromResult(currentSession, result);
@@ -1737,7 +1737,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
         const result = await fetchCurriculumPlanHomepageDetail({
           planId: action.item.planId,
-          sessionToken: currentSession.upstreamSessionToken,
+          upstreamSessionToken: currentSession.upstreamSessionToken,
         });
 
         persistSessionFromResult(currentSession, result);
@@ -2192,7 +2192,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
       const runWithSession = async (currentSession: StoredUpstreamSession) => {
         const result = await fetchCurriculumPlanHomepageDetail({
           planId: sourcePlanId,
-          sessionToken: currentSession.upstreamSessionToken,
+          upstreamSessionToken: currentSession.upstreamSessionToken,
         });
 
         persistSessionFromResult(currentSession, result);

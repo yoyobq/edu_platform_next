@@ -3,6 +3,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
@@ -100,8 +101,8 @@ export type FetchClassStudentCourseResultsInput = {
   refreshMode: StudentCourseResultsRefreshMode;
   schoolYear?: string | null;
   semester?: string | null;
-  sessionToken?: string | null;
   studentNumbers?: readonly string[] | null;
+  upstreamSessionToken?: string | null;
 };
 
 type CurrentAccountResponse = {
@@ -236,18 +237,11 @@ const FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
-  options?: {
-    logoutOnRetryAuthFailure?: boolean;
-  },
 ): Promise<TData> {
-  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
+  return executeGraphQL(query, variables);
 }
 
 function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
@@ -286,7 +280,7 @@ export function normalizeFetchClassStudentCourseResultsInput(
     refreshMode: input.refreshMode,
     schoolYear: normalizeOptionalTextValue(input.schoolYear, 'to_undefined'),
     semester: normalizeOptionalTextValue(input.semester, 'to_undefined'),
-    sessionToken: normalizeOptionalTextValue(input.sessionToken, 'to_undefined'),
+    sessionToken: normalizeOptionalTextValue(input.upstreamSessionToken, 'to_undefined'),
     studentNumbers: studentNumbers.length > 0 ? studentNumbers : undefined,
   });
 }
@@ -347,16 +341,15 @@ export async function fetchClassStudentCourseResults(input: FetchClassStudentCou
   const variables = {
     input: normalizeFetchClassStudentCourseResultsInput(input),
   };
-  const response = await requestGraphQL<
+  const fetchResults = variables.input.sessionToken
+    ? executeUpstreamSessionGraphQL
+    : requestGraphQL;
+  const response = await fetchResults<
     FetchClassStudentCourseResultsResponse,
     {
       input: ReturnType<typeof normalizeFetchClassStudentCourseResultsInput>;
     }
-  >(
-    FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION,
-    variables,
-    variables.input.sessionToken ? UPSTREAM_SESSION_GRAPHQL_OPTIONS : undefined,
-  );
+  >(FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION, variables);
 
   return response.fetchClassStudentCourseResults;
 }

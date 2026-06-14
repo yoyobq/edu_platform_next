@@ -1,12 +1,15 @@
 // src/features/academic-integrated-plan-corrections/infrastructure/academic-integrated-plan-corrections-api.spec.ts
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, isExpiredUpstreamSessionErrorMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  isExpiredUpstreamSessionErrorMock: vi.fn(() => false),
-}));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, isExpiredUpstreamSessionErrorMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    isExpiredUpstreamSessionErrorMock: vi.fn(() => false),
+  }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: isExpiredUpstreamSessionErrorMock,
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
@@ -24,6 +27,7 @@ import {
 describe('integrated-plan-corrections api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReset();
     isExpiredUpstreamSessionErrorMock.mockReturnValue(false);
   });
@@ -99,7 +103,7 @@ describe('integrated-plan-corrections api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       listAcademicIntegratedPlanCorrectionSuggestions: payload,
     });
 
@@ -113,7 +117,7 @@ describe('integrated-plan-corrections api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('listAcademicIntegratedPlanCorrectionSuggestions'),
       {
         lecturePlanId: 'PLAN-001',
@@ -122,25 +126,22 @@ describe('integrated-plan-corrections api', () => {
         teachingClassId: 'CLASS-001',
         upstreamSessionToken: 'token-001',
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('repairGroups');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('teachingClassGroups');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('itemOriginalIndexes');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('repairGroupIds');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('alignmentStatus');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('currentOriginalIndex');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('expectedIndex');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('suggestedOccurrences');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('items');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('upstreamSessionToken');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('expiresAt');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('repairGroups');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('teachingClassGroups');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('itemOriginalIndexes');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('repairGroupIds');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('alignmentStatus');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('currentOriginalIndex');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('expectedIndex');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('suggestedOccurrences');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('items');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('upstreamSessionToken');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('expiresAt');
   });
 
   it('normalizes empty optional filters to undefined', async () => {
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       listAcademicIntegratedPlanCorrectionSuggestions: {
         expiresAt: null,
         items: [],
@@ -165,19 +166,13 @@ describe('integrated-plan-corrections api', () => {
       upstreamSessionToken: 'token-001',
     });
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.any(String),
-      {
-        lecturePlanId: undefined,
-        semesterId: 202601,
-        staffId: 'STAFF-001',
-        teachingClassId: undefined,
-        upstreamSessionToken: 'token-001',
-      },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
-    );
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
+      lecturePlanId: undefined,
+      semesterId: 202601,
+      staffId: 'STAFF-001',
+      teachingClassId: undefined,
+      upstreamSessionToken: 'token-001',
+    });
   });
 
   it('requests my correction suggestions without sending staffId', async () => {
@@ -196,7 +191,7 @@ describe('integrated-plan-corrections api', () => {
       upstreamSessionToken: 'rolling-token-002',
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       listMyAcademicIntegratedPlanCorrectionSuggestions: payload,
     });
 
@@ -207,18 +202,15 @@ describe('integrated-plan-corrections api', () => {
       }),
     ).resolves.toEqual(payload);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('listMyAcademicIntegratedPlanCorrectionSuggestions'),
       {
         semesterId: 202601,
         upstreamSessionToken: 'token-001',
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId:');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).not.toContain('staffId:');
   });
 
   it('rejects required fields before requesting', async () => {
@@ -246,12 +238,13 @@ describe('integrated-plan-corrections api', () => {
     ).rejects.toThrow('upstreamSessionToken 为必填。');
 
     expect(executeGraphQLMock).not.toHaveBeenCalled();
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 
   it('rethrows expired upstream session errors', async () => {
     const expiredError = new Error('expired');
 
-    executeGraphQLMock.mockRejectedValueOnce(expiredError);
+    executeUpstreamSessionGraphQLMock.mockRejectedValueOnce(expiredError);
     isExpiredUpstreamSessionErrorMock.mockReturnValueOnce(true);
 
     await expect(

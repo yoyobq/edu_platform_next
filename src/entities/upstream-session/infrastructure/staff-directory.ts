@@ -1,6 +1,9 @@
+// src/entities/upstream-session/infrastructure/staff-directory.ts
 import type { OperationVariables } from '@apollo/client';
 
 import { executeGraphQL } from '@/shared/graphql';
+
+import { executeUpstreamSessionGraphQL } from './upstream-session-graphql';
 
 export type StaffDirectoryCacheStatus = 'FRESH' | 'MISS' | 'STALE';
 
@@ -190,10 +193,6 @@ const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 function normalizeRequiredString(value: string, fieldName: string) {
   const normalizedValue = value.trim();
 
@@ -240,9 +239,9 @@ export async function resolveStaffDirectoryEntries(staffIds: string[]) {
 
 export async function populateStaffDirectory(input: {
   forceRefresh?: boolean;
-  sessionToken: string;
+  upstreamSessionToken: string;
 }) {
-  const response = await executeGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     PopulateStaffDirectoryResponse,
     {
       input: {
@@ -250,33 +249,25 @@ export async function populateStaffDirectory(input: {
         sessionToken: string;
       };
     }
-  >(
-    POPULATE_STAFF_DIRECTORY_MUTATION,
-    {
-      input: {
-        forceRefresh: Boolean(input.forceRefresh),
-        sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
-      },
+  >(POPULATE_STAFF_DIRECTORY_MUTATION, {
+    input: {
+      forceRefresh: Boolean(input.forceRefresh),
+      sessionToken: normalizeRequiredString(input.upstreamSessionToken, 'upstreamSessionToken'),
     },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  });
 
   return response.populateStaffDirectory;
 }
 
-export async function readVerifiedStaffIdentity(input: { sessionToken: string }) {
-  const response = await executeGraphQL<
+export async function readVerifiedStaffIdentity(input: { upstreamSessionToken: string }) {
+  const response = await executeUpstreamSessionGraphQL<
     VerifiedStaffIdentityResponse,
     {
       sessionToken: string;
     }
-  >(
-    FETCH_VERIFIED_STAFF_IDENTITY_QUERY,
-    {
-      sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
+    sessionToken: normalizeRequiredString(input.upstreamSessionToken, 'upstreamSessionToken'),
+  });
 
   return response.fetchVerifiedStaffIdentity;
 }
@@ -312,7 +303,7 @@ export async function resolveStaffDirectoryCache<
   }
 
   const populateResult = await populateDirectory({
-    sessionToken: input.session.upstreamSessionToken,
+    upstreamSessionToken: input.session.upstreamSessionToken,
   });
   const nextSession = input.persistSessionFromResult(input.session, populateResult);
 

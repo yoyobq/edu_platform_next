@@ -2,6 +2,7 @@ import type { OperationVariables } from '@apollo/client';
 
 import { requestAcademicSemesters } from '@/entities/academic-semester';
 import {
+  executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
   readUpstreamGraphQLErrorDetail,
   resolveUpstreamErrorMessage,
@@ -157,18 +158,11 @@ const DEPARTMENTS_QUERY = `
   }
 `;
 
-const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
-  logoutOnRetryAuthFailure: false,
-} as const;
-
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
-  options?: {
-    logoutOnRetryAuthFailure?: boolean;
-  },
 ): Promise<TData> {
-  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
+  return executeGraphQL(query, variables);
 }
 
 function normalizeCourseScheduleSyncInput(input: CourseScheduleSyncInput) {
@@ -215,18 +209,14 @@ export async function fetchCourseScheduleSyncDepartmentOptions() {
 export async function dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
   input: CourseScheduleSyncInput,
 ) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     DryRunSyncCourseSchedulesResponse,
     {
       input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
     }
-  >(
-    DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION,
-    {
-      input: normalizeCourseScheduleSyncInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION, {
+    input: normalizeCourseScheduleSyncInput(input),
+  });
 
   return response.dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;
 }
@@ -234,18 +224,14 @@ export async function dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumP
 export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
   input: CourseScheduleSyncInput,
 ) {
-  const response = await requestGraphQL<
+  const response = await executeUpstreamSessionGraphQL<
     SyncCourseSchedulesResponse,
     {
       input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
     }
-  >(
-    SYNC_COURSE_SCHEDULES_MUTATION,
-    {
-      input: normalizeCourseScheduleSyncInput(input),
-    },
-    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
-  );
+  >(SYNC_COURSE_SCHEDULES_MUTATION, {
+    input: normalizeCourseScheduleSyncInput(input),
+  });
 
   return response.syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;
 }

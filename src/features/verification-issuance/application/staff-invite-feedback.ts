@@ -1,4 +1,4 @@
-import type { StaffDirectoryEntry } from '@/shared/upstream';
+import type { StaffDirectoryEntry } from '@/entities/upstream-session';
 
 function includesAnyKeyword(value: string, keywords: readonly string[]) {
   const normalizedValue = value.toLowerCase();

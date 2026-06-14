@@ -7,18 +7,16 @@ import { Alert, Button, Card, Empty, InputNumber, Select, Skeleton, Typography }
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   isExpiredUpstreamSessionError,
+  resolveStaffDirectoryCache,
+  resolveStaffDirectoryTeacherStaffId,
+  type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
   type UpstreamAccountIdentity,
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import {
-  resolveStaffDirectoryCache,
-  resolveStaffDirectoryTeacherStaffId,
-  type StaffDirectoryResult,
-  StaffDirectoryTeacherAutoComplete,
-} from '@/shared/upstream';
 
 import {
   buildAcademicTeachingClassOptionLabel,

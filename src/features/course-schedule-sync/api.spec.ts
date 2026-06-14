@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, requestAcademicSemestersMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  requestAcademicSemestersMock: vi.fn(),
-}));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, requestAcademicSemestersMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    requestAcademicSemestersMock: vi.fn(),
+  }));
 
 vi.mock('@/entities/academic-semester', () => ({
   requestAcademicSemesters: requestAcademicSemestersMock,
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
   readUpstreamGraphQLErrorDetail: vi.fn(() => null),
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
@@ -28,6 +31,7 @@ import {
 describe('course-schedule-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
     requestAcademicSemestersMock.mockReset();
   });
 
@@ -85,7 +89,7 @@ describe('course-schedule-sync api', () => {
       updatedCount: 1,
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
       dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans: dryRunResult,
     });
 
@@ -100,7 +104,7 @@ describe('course-schedule-sync api', () => {
       }),
     ).resolves.toEqual(dryRunResult);
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('mutation DryRunSyncCourseSchedules'),
       {
         input: {
@@ -112,13 +116,10 @@ describe('course-schedule-sync api', () => {
           upstreamSessionToken: 'token-1',
         },
       },
-      {
-        logoutOnRetryAuthFailure: false,
-      },
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
       'dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans',
     );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('previewedCount');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('previewedCount');
   });
 });

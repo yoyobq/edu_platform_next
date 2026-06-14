@@ -668,10 +668,6 @@ export function UpstreamSessionDemoLabPage() {
 
   const persistSessionFromVerifiedIdentity = useCallback(
     (session: StoredUpstreamSession, result: VerifiedStaffIdentityResult) => {
-      if (result.upstreamSessionToken === session.upstreamSessionToken) {
-        return session;
-      }
-
       return persistSessionFromResult(session, result);
     },
     [persistSessionFromResult],
@@ -824,7 +820,7 @@ export function UpstreamSessionDemoLabPage() {
       const loadDetailWithSession = async (currentSession: StoredUpstreamSession) => {
         const result = await fetchCurriculumPlanDetail({
           planId,
-          sessionToken: currentSession.upstreamSessionToken,
+          upstreamSessionToken: currentSession.upstreamSessionToken,
         });
 
         persistSessionFromResult(currentSession, result);
@@ -905,7 +901,7 @@ export function UpstreamSessionDemoLabPage() {
           case 'teacher-directory': {
             setIsLoadingDirectory(true);
             const result = await fetchTeacherDirectory({
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromResult(currentSession, result);
@@ -916,7 +912,7 @@ export function UpstreamSessionDemoLabPage() {
             setIsLoadingMajorDirectory(true);
             const result = await fetchMajorDirectory({
               departmentId: action.departmentId,
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromResult(currentSession, result);
@@ -927,7 +923,7 @@ export function UpstreamSessionDemoLabPage() {
             setIsLoadingClassList(true);
             const result = await fetchClassDirectory({
               ...action.values,
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromResult(currentSession, result);
@@ -937,7 +933,7 @@ export function UpstreamSessionDemoLabPage() {
           case 'previous-class-adviser-classes': {
             setIsLoadingPreviousClassAdviserClasses(true);
             const result = await fetchPreviousClassAdviserClasses({
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromResult(currentSession, result);
@@ -947,7 +943,7 @@ export function UpstreamSessionDemoLabPage() {
           case 'lecture-journal': {
             setIsLoadingLectureJournal(true);
             const result = await fetchLectureJournalList({
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
               teachingClassId: action.teachingClassId,
             });
 
@@ -958,7 +954,7 @@ export function UpstreamSessionDemoLabPage() {
           case 'verified-staff-identity': {
             setIsLoadingIdentity(true);
             const result = await fetchVerifiedStaffIdentity({
-              sessionToken: currentSession.upstreamSessionToken,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
             });
 
             persistSessionFromVerifiedIdentity(currentSession, result);
@@ -978,11 +974,11 @@ export function UpstreamSessionDemoLabPage() {
               action.scope === 'personal'
                 ? await fetchCurriculumPlanList({
                     ...(action.values as PersonalCurriculumPlanFormValues),
-                    sessionToken: currentSession.upstreamSessionToken,
+                    upstreamSessionToken: currentSession.upstreamSessionToken,
                   })
                 : await fetchDepartmentCurriculumPlanList({
                     ...(action.values as DepartmentCurriculumPlanFormValues),
-                    sessionToken: currentSession.upstreamSessionToken,
+                    upstreamSessionToken: currentSession.upstreamSessionToken,
                   });
 
             persistSessionFromResult(currentSession, result);

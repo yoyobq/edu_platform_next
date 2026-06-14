@@ -1,7 +1,7 @@
-import type { StoredUpstreamSession } from '@/entities/upstream-session';
 import {
   hasRollingUpstreamSessionResult,
   type PersistUpstreamSessionFromResult,
+  type StoredUpstreamSession,
 } from '@/entities/upstream-session';
 
 import type {

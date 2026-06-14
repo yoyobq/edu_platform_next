@@ -200,7 +200,7 @@ export function useUpstreamSession(options: UseUpstreamSessionOptions) {
       refreshPromiseRef.current = (async () => {
         try {
           const result = await requestUpstreamSessionRefresh({
-            sessionToken: currentSession.upstreamSessionToken,
+            upstreamSessionToken: currentSession.upstreamSessionToken,
           });
           const nextSession = persistSessionFromResult(currentSession, result);
 

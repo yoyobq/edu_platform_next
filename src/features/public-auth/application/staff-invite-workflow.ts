@@ -28,7 +28,7 @@ export async function verifyStaffInviteIdentity(
   try {
     const session = await ports.api.loginUpstreamSession(input);
     const identity = await ports.api.fetchVerifiedStaffIdentity({
-      sessionToken: session.upstreamSessionToken,
+      upstreamSessionToken: session.upstreamSessionToken,
     });
 
     return {

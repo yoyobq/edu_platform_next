@@ -1,6 +1,7 @@
 import type { OperationVariables } from '@apollo/client';
 
 import {
+  executeUpstreamSessionGraphQL,
   requestUpstreamLoginSession,
   resolveStaffInviteUpstreamErrorMessage,
   resolveUpstreamErrorMessage,
@@ -1013,17 +1014,23 @@ async function loginUpstreamSession(input: { password: string; userId: string })
 }
 
 async function fetchVerifiedStaffIdentity(input: {
-  sessionToken: string;
+  upstreamSessionToken: string;
 }): Promise<StaffInviteIdentity> {
   try {
-    const response = await requestGraphQL<
+    const response = await executeUpstreamSessionGraphQL<
       FetchVerifiedStaffIdentityResponse,
       {
         sessionToken: string;
       }
-    >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
-      sessionToken: input.sessionToken,
-    });
+    >(
+      FETCH_VERIFIED_STAFF_IDENTITY_QUERY,
+      {
+        sessionToken: input.upstreamSessionToken,
+      },
+      {
+        authMode: 'none',
+      },
+    );
     const identity = response.fetchVerifiedStaffIdentity;
 
     if (!identity.identityKind.toUpperCase().includes('STAFF')) {
