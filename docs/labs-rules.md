@@ -21,6 +21,19 @@
 - 必须说明撤回方式
 - `reviewAt` 到期后必须复查，并给出“删除 / 延期 / 迁入 stable”之一的结论
 
+## 依赖边界
+
+生成或扩展 `labs` 时先看本节。
+
+- `labs` 默认不得依赖 `stable` 的 `pages / widgets / features` 实现。
+- `labs` 不得 deep import stable 私有文件；跨模块只能走公开 barrel。
+- `labs` 可以依赖 `shared`，必要时可以依赖 `entities` 的公开 API。
+- 已经确定为稳定业务对象的能力，应从一开始统一走对应 `entity`，不要在各个 lab 内复制。
+- `upstream session` 明确归属 `entities/upstream-session`；任何 upstream 登录、恢复、
+  rolling token、staff directory 或 upstream proxy GraphQL 需求，都必须使用
+  `@/entities/upstream-session` 的公开 API。
+- lab 自己的实验 API、mock、页面流程仍收束在当前 lab 内部。
+
 ## 推荐结构
 
 ```txt

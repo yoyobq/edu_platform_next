@@ -12,7 +12,7 @@
 
 1. 页面先调用 `staffDirectory` 或 `staffDirectoryEntries`
 2. 若返回 `cacheStatus = MISS`，复用当前页面的 upstream 登录流程取得 `upstreamSessionToken`
-3. 调用 `populateStaffDirectory({ sessionToken, forceRefresh: false })`
+3. 调用 `populateStaffDirectory({ upstreamSessionToken, forceRefresh: false })`
 4. 使用 mutation 返回数据，或重新调用只读接口渲染页面
 
 缓存由 API 进程持有，不落前端本地数据库，也不落 MySQL。API 重启或多实例部署时，不同进程可能出现各自的 `MISS`。
@@ -37,7 +37,7 @@
 - 返回为空时，保留本地已有 token
 - `staffDirectory` 和 `staffDirectoryEntries` 不参与 token 更新
 
-`fetchVerifiedStaffIdentity` 只用于确认当前 upstream 身份，不作为主动续期接口。只有当它返回的 token 与当前本地 token 不同时，才覆盖本地 upstream session。
+`fetchVerifiedStaffIdentity` 只用于确认当前 upstream 身份，不作为主动续期接口。若它返回有效 `upstreamSessionToken` 与 `expiresAt`，前端应复用 `persistSessionFromResult` 更新本地 upstream session；即使 token 字符串不变，也要保留后端延长后的 `expiresAt`。
 
 ## 页面选择
 
@@ -47,7 +47,7 @@
 
 ## 公共教师选择 UI
 
-需要按教师筛选的页面统一使用 `src/shared/upstream` 暴露的 `StaffDirectoryTeacherAutoComplete`，不要在各页面重复实现教师 AutoComplete。
+需要按教师筛选的页面统一使用 `@/entities/upstream-session` 暴露的 `StaffDirectoryTeacherAutoComplete`，不要在各页面重复实现教师 AutoComplete。
 
 组件规则：
 
@@ -63,7 +63,7 @@
 
 ## 当前落点
 
-- `src/shared/upstream` 暴露 Staff Directory Cache client
-- `src/shared/upstream` 暴露 `StaffDirectoryTeacherAutoComplete`、`useStaffDirectoryTeachers` 与教师输入解析 helper
+- `src/entities/upstream-session` 暴露 Staff Directory Cache client
+- `src/entities/upstream-session` 暴露 `StaffDirectoryTeacherAutoComplete`、`useStaffDirectoryTeachers` 与教师输入解析 helper
 - `src/features/academic-teaching-log` 的 `My 教学日志` 页面消费完整教师目录
 - `src/features/academic-timetable`、`src/features/academic-integrated-plan-corrections`、`src/features/academic-workload` 复用同一套教师选择 UI

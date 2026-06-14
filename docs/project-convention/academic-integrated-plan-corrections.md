@@ -10,7 +10,7 @@
 - feature owner：`src/features/academic-integrated-plan-corrections`
 - API client 归 feature infrastructure，统一通过 `executeGraphQL()` 调用后端
 - upstream 会话统一从 `@/entities/upstream-session` 消费，不在页面内自建 token 存储
-- 教师选择统一使用 `@/shared/upstream` 的公共教师目录 UI 与解析 helper
+- 教师选择统一使用 `@/entities/upstream-session` 的公共教师目录 UI 与解析 helper
 
 ## 视角与权限
 

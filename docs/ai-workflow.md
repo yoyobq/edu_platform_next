@@ -18,6 +18,21 @@
 - 有明确用途、准备进入真实观察：优先进 `labs`（`labs` 本身应具备基本分层）
 - 长期保留：在人工确认下，由 AI 协助整理后进 `stable`
 
+## 生成 Labs 时的稳定依赖
+
+这是生成新 `labs` 时的前置规则：
+
+- `labs` 默认不得依赖 `stable` 的 `pages / widgets / features` 实现，也不得 deep import
+  任何 stable 私有文件。
+- `labs` 可以依赖 `shared`，必要时可以依赖 `entities` 的公开 API。
+- 对已经确定为稳定业务对象的能力，不要在每个 lab 内复制实现，应从一开始统一走对应
+  `entity`。
+- `upstream session` 是当前明确的稳定业务对象；任何需要 upstream 登录、恢复、rolling
+  token、staff directory 或 upstream proxy GraphQL 的 lab，都必须使用
+  `@/entities/upstream-session` 的公开 API。
+- lab 自己的实验 API、mock、页面流程仍留在当前 lab 内部；只有稳定业务对象和通用技术底座可
+  通过 public API 复用。
+
 ## AI 不得绕过的边界
 
 - 不得让 `stable` 直接依赖 `sandbox`
