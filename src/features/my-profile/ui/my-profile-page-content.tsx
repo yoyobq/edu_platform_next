@@ -475,8 +475,9 @@ function BasicTab({
             type="success"
             showIcon
             title={success}
-            closable
-            onClose={() => setSuccess(null)}
+            closable={{
+              onClose: () => setSuccess(null),
+            }}
           />
         ) : null}
 
@@ -485,8 +486,9 @@ function BasicTab({
             type="error"
             showIcon
             title={submitError}
-            closable
-            onClose={() => setSubmitError(null)}
+            closable={{
+              onClose: () => setSubmitError(null),
+            }}
           />
         ) : null}
 
@@ -778,8 +780,9 @@ function ChangeEmailCard({
           type="success"
           showIcon
           title={success}
-          closable
-          onClose={() => setSuccess(null)}
+          closable={{
+            onClose: () => setSuccess(null),
+          }}
           style={{ marginBottom: 16 }}
         />
       ) : null}
@@ -789,8 +792,9 @@ function ChangeEmailCard({
           type="error"
           showIcon
           title={submitError}
-          closable
-          onClose={() => setSubmitError(null)}
+          closable={{
+            onClose: () => setSubmitError(null),
+          }}
           style={{ marginBottom: 16 }}
         />
       ) : null}
@@ -878,8 +882,9 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
           type="success"
           showIcon
           title={success}
-          closable
-          onClose={() => setSuccess(null)}
+          closable={{
+            onClose: () => setSuccess(null),
+          }}
           style={{ marginBottom: 16 }}
         />
       ) : null}
@@ -889,8 +894,9 @@ function ResetPasswordCard({ currentLoginEmail }: { currentLoginEmail: string | 
           type="error"
           showIcon
           title={submitError}
-          closable
-          onClose={() => setSubmitError(null)}
+          closable={{
+            onClose: () => setSubmitError(null),
+          }}
           style={{ marginBottom: 16 }}
         />
       ) : null}

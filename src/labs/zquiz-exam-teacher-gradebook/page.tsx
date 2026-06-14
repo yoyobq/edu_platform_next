@@ -642,9 +642,7 @@ export function ZquizExamTeacherGradebookLabPage() {
 
     return (
       <Flex vertical gap={16}>
-        {gradebookState.error ? (
-          <Alert showIcon type="error" message={gradebookState.error} />
-        ) : null}
+        {gradebookState.error ? <Alert showIcon type="error" title={gradebookState.error} /> : null}
         {gradebookState.data ? (
           <>
             {renderGradebookSummary(gradebookState.data)}
@@ -674,7 +672,7 @@ export function ZquizExamTeacherGradebookLabPage() {
 
     return (
       <Flex vertical gap={16}>
-        {analysisState.error ? <Alert showIcon type="error" message={analysisState.error} /> : null}
+        {analysisState.error ? <Alert showIcon type="error" title={analysisState.error} /> : null}
         {analysisState.data ? (
           <>
             {renderAnalysisSummary(analysisState.data)}
@@ -733,13 +731,13 @@ export function ZquizExamTeacherGradebookLabPage() {
       <Card title="查询条件">
         <Flex vertical gap={16}>
           {activitiesState.error ? (
-            <Alert showIcon type="error" message={activitiesState.error} />
+            <Alert showIcon type="error" title={activitiesState.error} />
           ) : null}
-          {targetsState.error ? <Alert showIcon type="error" message={targetsState.error} /> : null}
+          {targetsState.error ? <Alert showIcon type="error" title={targetsState.error} /> : null}
           <Alert
             showIcon
             type="info"
-            message="成绩单与按题分析只统计已完成 attempt；进行中 attempt 只在最新 attempt 中展示。"
+            title="成绩单与按题分析只统计已完成 attempt；进行中 attempt 只在最新 attempt 中展示。"
           />
           <Form<FilterFormValues>
             form={form}

@@ -821,7 +821,7 @@ const JournalDraftCard = memo(function JournalDraftCard({
                     .filter(Boolean)
                     .join(' ')}
                 >
-                  <Tag bordered={false}>{courseCategoryMeta.label}</Tag>
+                  <Tag variant="filled">{courseCategoryMeta.label}</Tag>
                 </span>
               ) : null}
             </span>
@@ -2523,8 +2523,12 @@ export function AcademicTeachingLogPageContent({
               {isAdminViewer ? (
                 <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
                   <StaffDirectoryTeacherAutoComplete
+                    classNames={{
+                      popup: {
+                        root: 'lecture-journal-teacher-autocomplete-popup',
+                      },
+                    }}
                     loading={isLoadingStaffDirectory}
-                    popupClassName="lecture-journal-teacher-autocomplete-popup"
                     popupMatchSelectWidth={220}
                     placeholder={liveDefaultStaffId || 'ID 或姓名'}
                     teachers={staffDirectoryTeachers}

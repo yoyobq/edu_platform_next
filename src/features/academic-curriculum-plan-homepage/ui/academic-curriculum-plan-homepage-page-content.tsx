@@ -964,13 +964,13 @@ function CurriculumPlanHomepagePrefillModal({
     >
       <Space orientation="vertical" size="small" style={{ width: '100%' }}>
         {prefillUpdate?.warnings.length ? (
-          <Alert showIcon message={prefillUpdate.warnings.join('、')} type="warning" />
+          <Alert showIcon title={prefillUpdate.warnings.join('、')} type="warning" />
         ) : null}
         {referenceCandidates?.warnings.length ? (
-          <Alert showIcon message={referenceCandidates.warnings.join('、')} type="warning" />
+          <Alert showIcon title={referenceCandidates.warnings.join('、')} type="warning" />
         ) : null}
         {endChapterCandidates?.warnings.length ? (
-          <Alert showIcon message={endChapterCandidates.warnings.join('、')} type="warning" />
+          <Alert showIcon title={endChapterCandidates.warnings.join('、')} type="warning" />
         ) : null}
 
         <Space orientation="vertical" size="small" style={{ width: '100%' }}>
@@ -1200,13 +1200,13 @@ function CurriculumPlanHomepageFormPreview({
         </Space>
       </Flex>
 
-      {statusMessage ? <Alert showIcon message={statusMessage} type="success" /> : null}
-      {validationMessage ? <Alert showIcon message={validationMessage} type="warning" /> : null}
+      {statusMessage ? <Alert showIcon title={statusMessage} type="success" /> : null}
+      {validationMessage ? <Alert showIcon title={validationMessage} type="warning" /> : null}
 
       {suggestionCount ? (
         <Alert
           showIcon
-          message={
+          title={
             <Flex align="center" justify="space-between" gap={token.marginSM} wrap="wrap">
               <span>已填入 {suggestionCount} 项建议。</span>
               <Space>
@@ -2814,9 +2814,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
         title="My 计划首页"
       />
 
-      {actionError ? <Alert showIcon message={actionError.message} type="warning" /> : null}
+      {actionError ? <Alert showIcon title={actionError.message} type="warning" /> : null}
       {academicSemestersError ? (
-        <Alert showIcon message={academicSemestersError} type="warning" />
+        <Alert showIcon title={academicSemestersError} type="warning" />
       ) : null}
 
       <Card size="small">
@@ -2872,7 +2872,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
           </Form.Item>
         </Form>
         {canSelectDepartment && departmentOptionsError ? (
-          <Alert showIcon message={departmentOptionsError} type="warning" />
+          <Alert showIcon title={departmentOptionsError} type="warning" />
         ) : null}
       </Card>
 
@@ -2882,7 +2882,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
           items={planTabItems}
           size="small"
           tabBarGutter={token.marginXS}
-          tabPosition={isCompactViewport ? 'top' : 'left'}
+          tabPlacement={isCompactViewport ? 'top' : 'start'}
           onChange={(nextPlanId) => {
             const nextItem = listResult.items.find((item) => item.planId === nextPlanId);
 

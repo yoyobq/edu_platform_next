@@ -65,6 +65,7 @@ function createPorts(input: {
   return {
     api: {
       login: vi.fn(),
+      logout: vi.fn(),
       refresh: vi.fn(),
       restore: vi.fn(async () => input.restoredSession),
     },

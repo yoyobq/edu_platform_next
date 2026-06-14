@@ -2404,8 +2404,8 @@ function ZquizExamActivitiesLabPageContent({
   function renderList() {
     return (
       <>
-        {listState.error ? <Alert showIcon message={listState.error} type="error" /> : null}
-        {paperState.error ? <Alert showIcon message={paperState.error} type="error" /> : null}
+        {listState.error ? <Alert showIcon title={listState.error} type="error" /> : null}
+        {paperState.error ? <Alert showIcon title={paperState.error} type="error" /> : null}
 
         <Card>
           {listState.error ? null : (
@@ -2476,7 +2476,7 @@ function ZquizExamActivitiesLabPageContent({
       return (
         <Card>
           {paperState.error ? (
-            <Alert showIcon message={paperState.error} type="error" />
+            <Alert showIcon title={paperState.error} type="error" />
           ) : (
             <Empty description="暂无考试卷面" />
           )}
@@ -2522,15 +2522,15 @@ function ZquizExamActivitiesLabPageContent({
 
         <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
           {autosaveState.error ? (
-            <Alert showIcon message={autosaveState.error} type="warning" />
+            <Alert showIcon title={autosaveState.error} type="warning" />
           ) : null}
 
-          {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
+          {submitState.error ? <Alert showIcon title={submitState.error} type="error" /> : null}
 
           {isAfterDeadline ? (
             <Alert
               showIcon
-              message="考试已截止，答题、自动保存和交卷已停止，系统将以最后一次成功保存的答案作为收卷依据。"
+              title="考试已截止，答题、自动保存和交卷已停止，系统将以最后一次成功保存的答案作为收卷依据。"
               type="warning"
             />
           ) : null}
@@ -2647,7 +2647,7 @@ function ZquizExamActivitiesLabPageContent({
           extra={extra}
         >
           <div className="flex flex-col gap-4">
-            {submitState.error ? <Alert showIcon message={submitState.error} type="error" /> : null}
+            {submitState.error ? <Alert showIcon title={submitState.error} type="error" /> : null}
             {result ? (
               <Descriptions
                 bordered
@@ -2708,14 +2708,12 @@ function ZquizExamActivitiesLabPageContent({
             {attempt.gradingStatus === 'MANUAL_PENDING' ? (
               <Alert
                 showIcon
-                message="本次考试包含待人工批改题，当前总分只包含已自动评分的部分。"
+                title="本次考试包含待人工批改题，当前总分只包含已自动评分的部分。"
                 type="warning"
               />
             ) : null}
 
-            {submitState.error ? (
-              <Alert showIcon message={submitState.error} type="warning" />
-            ) : null}
+            {submitState.error ? <Alert showIcon title={submitState.error} type="warning" /> : null}
 
             <Descriptions
               bordered

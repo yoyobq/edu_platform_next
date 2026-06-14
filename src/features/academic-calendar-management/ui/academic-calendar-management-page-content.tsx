@@ -562,7 +562,7 @@ export function AcademicCalendarManagementPageContent({
             type: 'radio',
           }}
           scroll={{ x: 1120 }}
-          size="middle"
+          size="medium"
           onRow={(record) => ({
             className: 'cursor-pointer',
             onClick: () => setSelectedSemesterId(record.id),
@@ -670,12 +670,12 @@ export function AcademicCalendarManagementPageContent({
           pagination={{ pageSize: 12, showSizeChanger: false }}
           rowKey="id"
           scroll={{ x: 1180 }}
-          size="middle"
+          size="medium"
         />
       </Card>
 
       <Drawer
-        destroyOnClose
+        destroyOnHidden
         extra={
           <Space>
             <Button onClick={closeSemesterDrawer}>取消</Button>
@@ -784,7 +784,7 @@ export function AcademicCalendarManagementPageContent({
       </Drawer>
 
       <Drawer
-        destroyOnClose
+        destroyOnHidden
         extra={
           <Space>
             <Button onClick={closeEventDrawer}>取消</Button>

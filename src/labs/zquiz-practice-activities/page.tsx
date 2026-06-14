@@ -956,12 +956,12 @@ export function ZquizPracticeActivitiesLabPage() {
                 重试
               </Button>
             }
-            message={listState.error}
+            title={listState.error}
             type="error"
           />
         ) : null}
         {view === 'list' && paperState.error ? (
-          <Alert showIcon message={paperState.error} type="error" />
+          <Alert showIcon title={paperState.error} type="error" />
         ) : null}
 
         <Card title="我的可选练习">
@@ -1050,7 +1050,7 @@ export function ZquizPracticeActivitiesLabPage() {
       return (
         <Card extra={extra} title={title}>
           {paperState.error ? (
-            <Alert showIcon message={paperState.error} type="error" />
+            <Alert showIcon title={paperState.error} type="error" />
           ) : (
             <Empty description="暂无卷面" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           )}
@@ -1062,11 +1062,11 @@ export function ZquizPracticeActivitiesLabPage() {
       <div className="flex flex-col gap-5">
         <Card extra={extra} title={title}>
           <div className="flex flex-col gap-4">
-            {paperState.error ? <Alert showIcon message={paperState.error} type="error" /> : null}
+            {paperState.error ? <Alert showIcon title={paperState.error} type="error" /> : null}
             <Alert
               showIcon
               icon={<CheckCircleOutlined />}
-              message="答案会本地暂存，提交后后端立即保存作答和评分结果。"
+              title="答案会本地暂存，提交后后端立即保存作答和评分结果。"
               type="info"
             />
 
@@ -1156,7 +1156,7 @@ export function ZquizPracticeActivitiesLabPage() {
       return (
         <Card extra={extra} title={title}>
           {attemptState.error ? (
-            <Alert showIcon message={attemptState.error} type="error" />
+            <Alert showIcon title={attemptState.error} type="error" />
           ) : (
             <Empty description="暂无练习结果" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           )}
@@ -1171,11 +1171,11 @@ export function ZquizPracticeActivitiesLabPage() {
             {attempt.gradingStatus === 'MANUAL_PENDING' ? (
               <Alert
                 showIcon
-                message="本次练习包含待人工批改题，当前总分只包含已自动评分的部分。"
+                title="本次练习包含待人工批改题，当前总分只包含已自动评分的部分。"
                 type="warning"
               />
             ) : (
-              <Alert showIcon message="本次练习已完成自动评分。" type="success" />
+              <Alert showIcon title="本次练习已完成自动评分。" type="success" />
             )}
 
             <Descriptions

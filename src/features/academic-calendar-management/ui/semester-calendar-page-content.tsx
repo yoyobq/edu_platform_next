@@ -768,7 +768,7 @@ export function SemesterCalendarPageContent({
         )}
       </Card>
       <Drawer
-        destroyOnClose
+        destroyOnHidden
         open={selectedDayEvents !== null}
         placement="right"
         size={520}

@@ -102,6 +102,7 @@ describe('login session hydration', () => {
     const ports: AuthPorts = {
       api: {
         login: vi.fn(async () => pendingLoginSession),
+        logout: vi.fn(),
         refresh: vi.fn(),
         restore: vi.fn((session) => {
           if (session.accessToken === oldSession.accessToken) {

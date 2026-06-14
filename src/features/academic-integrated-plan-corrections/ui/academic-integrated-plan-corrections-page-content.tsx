@@ -409,7 +409,9 @@ function LocatorCopyText({ text }: { text: string }) {
   return (
     <span className="integrated-plan-corrections-locator-copy">
       <Tooltip
-        overlayClassName="integrated-plan-corrections-locator-tooltip"
+        classNames={{
+          root: 'integrated-plan-corrections-locator-tooltip',
+        }}
         title={<pre>{text}</pre>}
       >
         <Button
@@ -1193,12 +1195,16 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
               <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-staff">
                 <span>教师</span>
                 <StaffDirectoryTeacherAutoComplete
+                  classNames={{
+                    popup: {
+                      root: 'integrated-plan-corrections-teacher-autocomplete-popup',
+                    },
+                  }}
                   disabled={isStaffViewer}
                   directoryUnavailableContent={
                     staffDirectoryError ? '目录不可用，可手动输入' : undefined
                   }
                   loading={isLoadingStaffDirectory}
-                  popupClassName="integrated-plan-corrections-teacher-autocomplete-popup"
                   popupMatchSelectWidth={240}
                   placeholder={isStaffViewer ? '当前登录教师' : 'ID 或姓名'}
                   teachers={staffDirectoryTeachers}

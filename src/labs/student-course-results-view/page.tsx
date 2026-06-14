@@ -720,7 +720,7 @@ function buildPivotColumns(
       fixed: isCompactViewport ? undefined : 'right',
       key: 'fetchedAt',
       render: (fetchedAt: string | null) => renderFetchedAt(fetchedAt),
-      title: <span style={{ fontSize: token.fontSizeXS, lineHeight: 1.15 }}>更新时间</span>,
+      title: <span style={{ fontSize: token.fontSizeSM, lineHeight: 1.15 }}>更新时间</span>,
     },
     {
       ...buildStableColumnSizing<PivotStudentRow>(SOURCE_COLUMN_WIDTH),
@@ -735,7 +735,7 @@ function buildPivotColumns(
             alignItems: 'center',
             boxSizing: 'border-box',
             display: 'inline-flex',
-            fontSize: token.fontSizeXS,
+            fontSize: token.fontSizeSM,
             height: token.controlHeightXS,
             justifyContent: 'center',
             lineHeight: 1,
@@ -748,7 +748,7 @@ function buildPivotColumns(
           {SOURCE_LABELS[source]}
         </Tag>
       ),
-      title: <span style={{ fontSize: token.fontSizeXS, lineHeight: 1.15 }}>来源</span>,
+      title: <span style={{ fontSize: token.fontSizeSM, lineHeight: 1.15 }}>来源</span>,
     },
   ];
 }
@@ -1280,7 +1280,7 @@ export function StudentCourseResultsViewLabPage() {
               })}
               size="small"
               tabBarGutter={token.marginXS}
-              tabPosition={isCompactViewport ? 'top' : 'left'}
+              tabPlacement={isCompactViewport ? 'top' : 'start'}
               onChange={setActiveTermKey}
             />
           </div>

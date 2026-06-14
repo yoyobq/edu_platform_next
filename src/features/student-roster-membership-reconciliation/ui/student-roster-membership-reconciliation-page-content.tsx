@@ -1837,7 +1837,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             }}
             rowKey="rowKey"
             scroll={{ x: 1120 }}
-            size="middle"
+            size="medium"
           />
         ) : (
           <Alert

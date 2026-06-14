@@ -1061,7 +1061,7 @@ export function ClassAffairsCourseResultsPageContent({
             })}
             size="small"
             tabBarGutter={token.marginXS}
-            tabPosition="left"
+            tabPlacement="start"
             onChange={(key) => void handleTermChange(key)}
           />
         ) : (

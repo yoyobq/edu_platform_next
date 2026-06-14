@@ -876,9 +876,10 @@ export function AdminUserListPageContent({
               <Alert
                 type="error"
                 showIcon
-                closable
                 title={accountStatusUpdateErrorMessage}
-                onClose={() => setAccountStatusUpdateErrorMessage(null)}
+                closable={{
+                  onClose: () => setAccountStatusUpdateErrorMessage(null),
+                }}
               />
             </div>
           )}
@@ -887,9 +888,10 @@ export function AdminUserListPageContent({
               <Alert
                 type="error"
                 showIcon
-                closable
                 title={staffEmploymentStatusUpdateErrorMessage}
-                onClose={() => setStaffEmploymentStatusUpdateErrorMessage(null)}
+                closable={{
+                  onClose: () => setStaffEmploymentStatusUpdateErrorMessage(null),
+                }}
               />
             </div>
           )}

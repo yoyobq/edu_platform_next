@@ -937,7 +937,7 @@ export function ZquizActivityBuilderLabPage() {
         dataIndex: 'title',
         key: 'title',
         render: (title: string, activity) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Typography.Text strong>{title}</Typography.Text>
             <Typography.Text type="secondary">
               {bankById.get(activity.bankId)?.name ?? `题库 #${activity.bankId}`}
@@ -969,7 +969,7 @@ export function ZquizActivityBuilderLabPage() {
       {
         key: 'rules',
         render: (_, activity) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Typography.Text>{formatDuration(activity.durationMinutes)}</Typography.Text>
             <Typography.Text type="secondary">
               {formatAttemptLimit(activity.attemptLimit)}
@@ -1016,7 +1016,7 @@ export function ZquizActivityBuilderLabPage() {
       {
         key: 'question',
         render: (_, item) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Typography.Text>{getQuestionLabel(item.question, item.questionId)}</Typography.Text>
             <Typography.Text type="secondary">
               {item.question ? QUESTION_TYPE_LABELS[item.question.type] : '题目已不可用'}
@@ -1236,7 +1236,7 @@ export function ZquizActivityBuilderLabPage() {
         dataIndex: 'stem',
         key: 'stem',
         render: (stem: string, question) => (
-          <Space direction="vertical" size={2}>
+          <Space orientation="vertical" size={2}>
             <Typography.Text>{stem}</Typography.Text>
             <Typography.Text type="secondary">
               {question.options.length > 0 ? `${question.options.length} 个选项` : '无选项'}
@@ -1349,12 +1349,12 @@ export function ZquizActivityBuilderLabPage() {
         }
       >
         <Flex vertical gap={12}>
-          {!bankId ? <Alert showIcon message="请选择题库后配置随机抽题规则。" type="info" /> : null}
+          {!bankId ? <Alert showIcon title="请选择题库后配置随机抽题规则。" type="info" /> : null}
           {knowledgeNodesState.error ? (
-            <Alert showIcon message={knowledgeNodesState.error} type="error" />
+            <Alert showIcon title={knowledgeNodesState.error} type="error" />
           ) : null}
           {randomQuestionCount > 200 ? (
-            <Alert showIcon message="随机组卷总题量不能超过 200 题。" type="warning" />
+            <Alert showIcon title="随机组卷总题量不能超过 200 题。" type="warning" />
           ) : null}
 
           <Table<RandomRuleDraft>
@@ -1404,7 +1404,7 @@ export function ZquizActivityBuilderLabPage() {
       >
         <Flex vertical gap={12}>
           {examProgressState.error ? (
-            <Alert showIcon message={examProgressState.error} type="error" />
+            <Alert showIcon title={examProgressState.error} type="error" />
           ) : null}
 
           {examProgressState.loading && !progress ? (
@@ -1570,7 +1570,7 @@ export function ZquizActivityBuilderLabPage() {
             </Button>
           </ResponsiveGrid>
 
-          {activitiesState.error ? <Alert type="error" message={activitiesState.error} /> : null}
+          {activitiesState.error ? <Alert type="error" title={activitiesState.error} /> : null}
 
           <Table<ZquizTeacherActivitySummary>
             columns={activityColumns}
@@ -1631,11 +1631,11 @@ export function ZquizActivityBuilderLabPage() {
           ) : (
             <Flex vertical gap={16}>
               {submitError ? (
-                <Alert showIcon type="error" message="操作未完成" description={submitError} />
+                <Alert showIcon type="error" title="操作未完成" description={submitError} />
               ) : null}
 
               {readOnly ? (
-                <Alert showIcon type="info" message="该活动已离开草稿状态，只能查看配置。" />
+                <Alert showIcon type="info" title="该活动已离开草稿状态，只能查看配置。" />
               ) : null}
 
               {renderExamProgressCard()}
@@ -1712,7 +1712,7 @@ export function ZquizActivityBuilderLabPage() {
                 </ResponsiveGrid>
               </Form>
 
-              {classesState.error ? <Alert type="error" message={classesState.error} /> : null}
+              {classesState.error ? <Alert type="error" title={classesState.error} /> : null}
 
               {renderExamGenerationStrategyCard()}
 
@@ -1780,9 +1780,9 @@ export function ZquizActivityBuilderLabPage() {
                         </Button>
                       </ResponsiveGrid>
 
-                      {banksState.error ? <Alert type="error" message={banksState.error} /> : null}
+                      {banksState.error ? <Alert type="error" title={banksState.error} /> : null}
                       {questionsState.error ? (
-                        <Alert type="error" message={questionsState.error} />
+                        <Alert type="error" title={questionsState.error} />
                       ) : null}
 
                       <Table<ZquizAssemblyQuestion>
