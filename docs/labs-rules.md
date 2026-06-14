@@ -96,6 +96,9 @@ src/labs/<lab-name>/
   新 lab 不应在页面内自行恢复本站登录态。
 - 若 lab 需要 loader 数据，loader 只注入页面所需的最小稳定数据，例如
   `{ currentAccount: { accountId, displayName } }`。
+- `src/app/navigation/providers/labs.ts` 必须与对应 lab `access.ts` 使用同一暴露范围
+- 若某个 lab 需要额外 `canAccess` 条件，router guard 与 navigation provider 必须同步同一能力 helper
+- staff lab 暴露默认不等于所有 staff 都有相同业务数据范围；具体数据权限仍以后端接口为准
 
 ## meta.ts
 
@@ -140,16 +143,29 @@ export const demoLabMeta = {
     `/labs/upstream-session-demo`
 - `/labs/student-course-results-pull`
   - 用于验证按本地班级 classCode、学年和可选学期拉取学生课程成绩并写入本地加密快照的链路
+  - 当前只对 `ADMIN` 暴露，不进入 staff labs
   - 仅作为成绩快照拉取流程的实验入口；若后续成为正式查询或管理能力，应迁入正式区拥有者切片
 - `/labs/student-course-results-view`
   - 用于验证默认 `CACHE_FIRST`、不带 upstream token 的班级学生课程成绩快照展示
+  - 当前只对 `ADMIN` 暴露，不进入 staff labs
   - 仅作为成绩快照展示流程的实验入口；若后续成为正式成绩查看入口，应迁入正式区拥有者切片
+- `/labs/zquiz-activity-builder`
+  - 用于验证教师侧 Zquiz 组卷与活动发布流程
+  - 当前对 `ADMIN / STAFF` 暴露，不要求教务 slot
+- `/labs/zquiz-exam-teacher-gradebook`
+  - 用于验证教师侧考试成绩分析体验
+  - 当前对 `ADMIN / STAFF` 暴露
+- `/labs/zquiz-exam-activities`
+  - 用于验证学生侧可选考试列表与考试入口
+  - 当前对 `STUDENT` 暴露
 - `/labs/zquiz-practice-activities`
   - 用于验证学生侧可选练习列表、状态展示与开始练习接口联调体验
+  - 当前对 `STUDENT` 暴露
   - 若后续作为正式学生练习入口，应迁入正式区拥有者切片
 - `/labs/student-roster-membership-reconciliation`
   - 用于验证单班学生名册归属核对 dry-run、确认与 commit 流程
-  - 若后续作为正式业务入口，应迁入正式区拥有者切片
+  - 当前正式入口已迁入 `/academic-affairs/student-roster-membership-reconciliation`，在“班务管理 / 本地建班”中暴露
+  - labs 路由只保留历史兼容重定向或遗留代码治理语义，不再作为 staff labs 入口
 
 ## 例外声明位置
 

@@ -1498,7 +1498,7 @@ export function ZquizActivityBuilderLabPage() {
             <Tag color="blue">负责人：{zquizActivityBuilderLabMeta.owner}</Tag>
             <Tag color="purple">复核时间：{zquizActivityBuilderLabMeta.reviewAt}</Tag>
             <Tag color="green">环境：{zquizActivityBuilderLabAccess.env.join(', ')}</Tag>
-            <Tag color="gold">权限：ADMIN / ACADEMIC_OFFICER</Tag>
+            <Tag color="gold">权限：ADMIN / STAFF</Tag>
           </Flex>
           <Typography.Paragraph style={{ marginBottom: 0 }}>
             {zquizActivityBuilderLabMeta.purpose}

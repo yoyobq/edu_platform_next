@@ -27,7 +27,8 @@
 - 当前管理视角允许 `ADMIN`、`STAFF + ACADEMIC_OFFICER`、`STAFF + TEACHING_GROUP_LEADER`
 - `STAFF + CLASS_ADVISER` 当前没有教学日志管理视角，仍走本人自助视角
 - 自助视角调用本人 prefill 查询，管理视角调用指定教师 prefill 查询
-- 这里的管理视角只决定列表 / prefill 查询分流，不代表保存、上游 session 或具体资源范围自动放开
+- 这里的管理视角只决定列表 / prefill 查询分流，不代表保存或具体资源范围自动放开
+- upstream 登录 staffId 锁定单独走 `resolveUpstreamLoginLockedUserId({ context: 'academicStaffManager' })`，当前与教学日志管理视角对齐
 
 ## 业务策略
 

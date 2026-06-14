@@ -242,6 +242,36 @@
 - JWT payload 中的 `slotGroup`：服务端对当前 access token 做授权判断时使用；可能要等 refresh 或重新登录后才更新
 - `me.identity.slotGroup`：后端实时解析出的当前职责槽位；前端展示、菜单和页面分流优先使用这一处
 
+## 当前前端权限体系总口径
+
+前端权限分为四层，不能互相替代：
+
+- 身份事实：来自 hydrated auth snapshot，包括 `accessGroup`、`slotGroup` 与 `identity`
+- 能力判断：统一收敛在 `src/shared/auth-access/index.ts` 的 `hasXxxAccess` /
+  `resolveXxx` helper
+- 入口治理：router loader / guard 负责登录态、profile completion、页面准入和必要的
+  loader data
+- 展示投影：`src/app/navigation/` 只用同一批能力结果决定菜单与本地入口是否可见
+
+实现边界：
+
+- 页面和 feature 不应直接写 `accessGroup.includes(...)` 或 slot 字符串判断来决定全局权限
+- 页面若需要自助 / 管理分流，应消费 loader 解析好的 `viewerRole`、`defaultStaffId`、
+  `lockedUpstreamLoginUserId` 等最小结果
+- 导航可见不等于业务数据权限；后端接口仍是数据安全真源
+- router 直达守卫必须与 navigation 使用同一套能力口径，不能出现“菜单隐藏但 URL 可进”的另一套真相
+- labs 的基础暴露范围来自各 lab 自己的 `access.ts`；若额外加 `canAccess`，导航 provider
+  必须同步同一规则
+
+当前全局能力辅助入口包括：
+
+- `hasAcademicStaffManagerAccess`：`ADMIN`、`STAFF + ACADEMIC_OFFICER`、
+  `STAFF + TEACHING_GROUP_LEADER`
+- `hasClassAffairsCourseResultsAccess`：`STAFF + CLASS_ADVISER` 或 `STAFF + COUNSELOR`
+- `hasUpstreamDataSyncAccess`：`ADMIN`
+- `resolveUpstreamLoginLockedUserId`：解析 upstream 登录是否锁定当前 staffId，细节见
+  [upstream-session-frontend-ownership.md](./upstream-session-frontend-ownership.md)
+
 ## 当前自助/管理视角口径
 
 前端页面在同一功能内区分自助视角与管理视角：
@@ -256,14 +286,24 @@
 - 管理视角只表达当前功能的页面 / 查询分流，不自动继承为同域其他操作、保存 mutation 或资源范围能力
 - 需要按部门、班级、教研组等业务范围裁剪时，继续依赖后端接口与业务关系结果，不从 `slotGroup` 反推 scope
 
-以“我的教学日志”列表 / prefill 查询为例：
+当前 `academicStaffManager` 视角覆盖同一组教务自助 / 管理页面：
+
+- `My 教学日志`
+- `My 计划首页`
+- `一体化对齐`
+- `工作量明细`
+
+在这些页面中：
 
 - `STAFF` 默认走本人自助查询
 - `ADMIN` 走管理查询
-- `STAFF + ACADEMIC_OFFICER` 走教学日志管理查询
-- `STAFF + TEACHING_GROUP_LEADER` 走教学日志管理查询
-- `STAFF + CLASS_ADVISER` 当前没有教学日志管理能力，仍走本人自助查询
-- 如果前端已经切到管理 query，但后端 policy 没有承认同一 `slotGroup`，页面会表现为“有 slotGroup 后反而没有 STAFF 权限”；这属于前后端功能级管理口径不一致，不是 `STAFF` 自助权限被移除
+- `STAFF + ACADEMIC_OFFICER` 走管理查询
+- `STAFF + TEACHING_GROUP_LEADER` 走管理查询
+- `STAFF + CLASS_ADVISER`、`STAFF + COUNSELOR`、`STAFF + STUDENT_AFFAIRS_OFFICER`
+  当前没有该组教务管理视角，仍走本人自助查询
+- 如果前端已经切到管理 query，但后端 policy 没有承认同一 `slotGroup`，页面会表现为
+  “有 slotGroup 后反而没有 STAFF 权限”；这属于前后端功能级管理口径不一致，不是
+  `STAFF` 自助权限被移除
 
 在个人资料语义上：
 
@@ -279,17 +319,21 @@
 - 纯 `STUDENT` 当前使用独立轻量导航入口与账户菜单，不复用 staff/admin 完整分组骨架
 - `REGISTRANT` 不进入正式菜单体系，只保留补全过程所需壳层与入口
 - `slotGroup` 只承接跨页面持续存在的全局职责插槽
-- 进入 `slotGroup` 的职责必须具备独立 landing page
+- 进入全局菜单的职责能力必须具备独立 landing page 或明确所属业务入口
 - 页面内对象权限、临时能力与资源关系不进入全局菜单
 
-当前第一版 slot 示例锚点为：
+当前前端已消费的 slot 摘要包括：
 
+- `ACADEMIC_OFFICER`
+- `TEACHING_GROUP_LEADER`
 - `CLASS_ADVISER`
+- `COUNSELOR`
+- `STUDENT_AFFAIRS_OFFICER`
 
 注意：
 
-- 这表示前端菜单与会话语义允许这类职责型插槽
-- 不自动代表后端已经稳定下发该值
+- 这些 slot 只是当前功能显式承认时才产生增量能力
+- 一个 slot 在某页面可用，不代表它自动拥有同域其它页面的管理能力
 
 当前明确不进入 `accessGroup / slotGroup` 的包括：
 
@@ -355,7 +399,8 @@
 
 不满足以上条件的能力，继续留在页面级 action、首页模块入口或 Sidecar / command 入口，不进入全局菜单。
 
-**第一版示例锚点：** `CLASS_ADVISER`（在正式进入 token / `me` contract 之前先作导航语义示例）
+**当前稳定 slot 摘要：** `ACADEMIC_OFFICER`、`TEACHING_GROUP_LEADER`、
+`CLASS_ADVISER`、`COUNSELOR`、`STUDENT_AFFAIRS_OFFICER`。
 
 **呈现规则：**
 
@@ -367,4 +412,4 @@
 **枚举策略：**
 
 - `slotGroup` 的值应进入受控枚举，不允许任意字符串散长
-- canonical 枚举表待后续补充；补充时同步更新本节
+- 新增 slot 时必须同步 `src/shared/auth-access/index.ts`、导航规则、router guard 与本节文档

@@ -21,6 +21,8 @@
 - STAFF 自助视角：所有 `STAFF` 可查本人，不要求 slotGroup
 - 非管理视角不传 `staffId`，调用 `listMyAcademicIntegratedPlanCorrectionSuggestions`
 - 管理视角继续传 `staffId`，调用 `listAcademicIntegratedPlanCorrectionSuggestions`
+- upstream 登录 staffId 锁定走 `resolveUpstreamLoginLockedUserId({ context: 'academicStaffManager' })`
+- 页面不直接判断 `accessGroup` / `slotGroup` 来决定 upstream 登录范围
 
 ## UI 策略
 

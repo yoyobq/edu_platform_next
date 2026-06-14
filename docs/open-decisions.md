@@ -43,7 +43,7 @@
 - 若出现完整 onboarding，需要新增明确阶段字段，不继续扩张 `needsProfileCompletion`
 - 页面访问配置只有出现多租户差异、后台动态配置、不发版调整或审计需求时，才评估 DB 化
 - token 存储若要从 localStorage 收敛到 HttpOnly cookie，需要同时重新评估 refresh / me、CSRF、跨域和服务端吊销语义
-- `slotGroup` 正式进入更多页面消费后，再补 canonical 枚举与页面级正反路径 E2E
+- `slotGroup` 当前前端消费枚举已记录在 `identity-access-session.md`；后续新增 slot 或需要审计矩阵时，再补页面级正反路径 E2E
 
 ## 5. Public Auth 后续项
 

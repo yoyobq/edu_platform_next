@@ -21,7 +21,7 @@
 当前启用范围：
 
 - `ADMIN` 账号：只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用正式侧栏；菜单可包含首页、校历课表、教务助手、教务管理、上游数据同步、labs / sandbox 与系统管理等入口，其中 sandbox 仅在 dev / test 暴露。
-- `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表与教务助手，部分 `slotGroup` 会增加每周课表、教务管理等入口。
+- `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表、教务助手、班务管理与 staff labs，部分 `slotGroup` 会增加每周课表、成绩汇总、教务管理等入口。
 - 纯 `STUDENT` 入口：当前已有独立轻量导航与账户菜单，最终导航树至少包含首页 `/`、`/calendar-schedule/semester-calendar` 学期校历与学生可见 labs；它不是 staff/admin 那套完整分组骨架。
 - public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
 
@@ -42,15 +42,16 @@
 - `student`：纯 `STUDENT` 账号的独立业务入口，当前贡献 `/calendar-schedule/semester-calendar`；首页仍由 `home` provider 贡献
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
-  - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
-  - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`
+  - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
+  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/course-results-summary`
+  - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
-- `labs`：`/labs/invite-issuer`、`/labs/upstream-session-reference`、
-  `/labs/upstream-session-demo`、`/labs/student-course-results-pull`、
-  `/labs/student-course-results-view`、`/labs/zquiz-practice-activities`、
-  `/labs/student-roster-membership-reconciliation`
+- `labs`：
+  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-course-results-pull`、`/labs/student-course-results-view`
+  - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
+  - student：`/labs/zquiz-exam-activities`、`/labs/zquiz-practice-activities`
 - `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：
@@ -58,6 +59,26 @@
 - `admin user detail` 当前不是导航叶子项，仍通过列表页进入
 - `src/app/layout/navigation-meta.ts` 当前只作为兼容 shim，不再承载真实导航数据
 - 新导航项应优先落到对应业务域 provider，而不是回填到 `layout`
+
+## 导航与权限的关系
+
+导航只做入口投影，不另建权限体系。
+
+当前稳定口径：
+
+- 权限能力 helper 统一归 `src/shared/auth-access/index.ts`
+- router loader / guard 负责登录态、profile completion 与直达路由准入
+- navigation provider 使用同一批 helper 产出菜单候选
+- `canAccessNavigationPath()` 使用过滤后的 navigation leaf 判断路由是否可通过导航体系访问
+- 页面 / feature 不应因为菜单可见而跳过自己的业务视角分流或后端接口权限
+
+当前不允许：
+
+- 菜单里写一套 slot 判断，router loader 再写另一套不同判断
+- 页面组件内硬编码 slot 字符串来决定全局入口权限
+- 只隐藏菜单但允许同一身份手输 URL 进入
+
+如果某个入口需要在 `access.ts`、provider、router guard 之外再加业务条件，三处必须同步同一能力口径，并补导航测试。
 
 ## 菜单状态机
 
@@ -213,6 +234,9 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 - `payload-crypto`：稳定页位于 `/system/payload-crypto`，只对特定 admin 账号开放
 - `sandbox/playground`：只在 `dev / test` 暴露
 - `sandbox/playground`：路径仍保持 `/sandbox/...`，只是导航展示合并进 Labs 分组
+- `student-course-results-pull` / `student-course-results-view`：只对 admin 暴露，不对 staff labs 暴露
+- `zquiz-activity-builder`：对 admin / staff 暴露，不要求教务 slot
+- `class-affairs/course-results-summary`：只对 `STAFF + CLASS_ADVISER` 或 `STAFF + COUNSELOR` 暴露
 
 这些特殊规则应继续跟随业务域 provider 归属，不回流到 layout 层。
 

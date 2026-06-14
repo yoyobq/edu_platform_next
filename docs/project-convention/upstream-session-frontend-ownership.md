@@ -43,6 +43,35 @@
 - 不进入本站当前 auth session snapshot
 - 不被本站后端作为服务器端 session 保存
 
+## 当前 upstream 登录身份范围
+
+upstream 登录表单可被页面锁定到当前 staffId，也可允许用户输入其它 upstream staffId。
+这不是页面私有判断，统一由 `src/shared/auth-access/index.ts` 的
+`resolveUpstreamLoginLockedUserId()` 解析。
+
+当前规则：
+
+- `ADMIN`：不锁定 upstream staffId
+- 普通 `STAFF`：默认锁定当前本站 staff identity 的 `staffId`
+- `academicStaffManager` 上下文：`ADMIN`、`STAFF + ACADEMIC_OFFICER`、
+  `STAFF + TEACHING_GROUP_LEADER` 不锁定 upstream staffId
+- 非 staff 或无本地 staff identity：不合成锁定值
+
+当前使用 `academicStaffManager` 上下文的页面：
+
+- `/academic-affairs/my-teaching-logs`
+- `/academic-affairs/my-curriculum-plan-homepage`
+- `/academic-affairs/integrated-plan-corrections`
+- `/academic-assistant/academic-workload`
+
+实现约束：
+
+- router loader 或页面入口只计算一次 `lockedUpstreamLoginUserId`，feature 只消费该结果
+- feature 不直接判断 `accessGroup` / `slotGroup` 来决定 upstream 登录范围
+- `lockedUpstreamLoginUserId === null` 表示允许输入其它 upstream 用户 ID
+- 存在锁定值时，`entities/upstream-session` 会过滤不匹配的本地 upstream session 与 remembered credentials
+- 该前端策略只控制 upstream 登录入口与本地会话复用；具体数据安全仍以本站后端接口权限为准
+
 ## 当前前端 contract
 
 当前前端已接入并使用的 upstream contract 包括：
