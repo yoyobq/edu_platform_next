@@ -173,11 +173,18 @@ const SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function toDepartmentOption(department: DepartmentDTO): ClassSyncDepartmentOption | null {
@@ -231,9 +238,13 @@ export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFrom
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
+  >(
+    DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION,
+    {
+      input: normalizeDryRunInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.dryRunSyncClassesFromUpstream;
 }
@@ -244,9 +255,13 @@ export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInpu
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(SYNC_CLASSES_FROM_UPSTREAM_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
+  >(
+    SYNC_CLASSES_FROM_UPSTREAM_MUTATION,
+    {
+      input: normalizeDryRunInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.syncClassesFromUpstream;
 }

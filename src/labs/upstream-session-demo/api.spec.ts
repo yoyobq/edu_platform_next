@@ -62,6 +62,9 @@ describe('upstream-session-demo api', () => {
         sessionToken: 'rolling-token-001',
         teachingClassId: 'TC-2025-001',
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
   });
 
@@ -130,6 +133,9 @@ describe('upstream-session-demo api', () => {
       {
         departmentId: 'ORG0302',
         sessionToken: 'rolling-token-003',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -252,6 +258,9 @@ describe('upstream-session-demo api', () => {
       {
         planId: 'PLAN-001',
         sessionToken: 'rolling-token-002',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });

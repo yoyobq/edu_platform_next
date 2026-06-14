@@ -346,11 +346,18 @@ const LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function normalizeOptionalString(value?: string) {
@@ -387,7 +394,11 @@ export async function listIntegratedPlanCorrectionSuggestions(
     const response = await requestGraphQL<
       ListIntegratedPlanCorrectionSuggestionsResponse,
       ReturnType<typeof normalizeInput>
-    >(LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeInput(input));
+    >(
+      LIST_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY,
+      normalizeInput(input),
+      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+    );
 
     return response.listAcademicIntegratedPlanCorrectionSuggestions;
   } catch (error) {
@@ -406,7 +417,11 @@ export async function listMyIntegratedPlanCorrectionSuggestions(
     const response = await requestGraphQL<
       ListMyIntegratedPlanCorrectionSuggestionsResponse,
       ReturnType<typeof normalizeMyInput>
-    >(LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY, normalizeMyInput(input));
+    >(
+      LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY,
+      normalizeMyInput(input),
+      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+    );
 
     return response.listMyAcademicIntegratedPlanCorrectionSuggestions;
   } catch (error) {

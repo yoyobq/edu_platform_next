@@ -112,6 +112,9 @@ describe('course-schedule-sync api', () => {
           upstreamSessionToken: 'token-1',
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
       'dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans',

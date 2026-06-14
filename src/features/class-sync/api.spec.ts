@@ -138,6 +138,9 @@ describe('class-sync api', () => {
           upstreamSessionToken: 'rolling-token-001',
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
   });
 
@@ -211,6 +214,9 @@ describe('class-sync api', () => {
           departmentId: 'ORG0302',
           upstreamSessionToken: 'rolling-token-002',
         },
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });

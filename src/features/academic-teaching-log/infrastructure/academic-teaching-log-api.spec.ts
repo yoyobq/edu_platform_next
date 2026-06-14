@@ -126,14 +126,23 @@ describe('academic-teaching-log api', () => {
         startDate: '2026-04-01',
         upstreamSessionToken: 'rolling-token-004',
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitTarget'),
       expect.any(Object),
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('teachingUnitAchievement'),
       expect.any(Object),
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('departmentId');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('\n      canFill\n      expiresAt');
@@ -173,6 +182,9 @@ describe('academic-teaching-log api', () => {
         semesterId: 202601,
         startDate: '2026-04-01',
         upstreamSessionToken: 'rolling-token-004',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');
@@ -238,6 +250,9 @@ describe('academic-teaching-log api', () => {
           weekNumber: '8',
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
   });
 
@@ -290,6 +305,9 @@ describe('academic-teaching-log api', () => {
           upstreamSessionToken: 'rolling-token-005',
           weekNumber: '9',
         }),
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });
@@ -344,6 +362,9 @@ describe('academic-teaching-log api', () => {
           weekNumber: '10',
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
   });
 
@@ -384,6 +405,9 @@ describe('academic-teaching-log api', () => {
           lecturePlanDetailId: 'PLAN-DETAIL-001',
           upstreamSessionToken: 'rolling-token-007',
         }),
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });

@@ -38,6 +38,10 @@ const REFRESH_UPSTREAM_SESSION_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  allowAuthRetry: false,
+} as const;
+
 export async function requestUpstreamLoginSession(input: { password: string; userId: string }) {
   const response = await executeGraphQL<
     LoginUpstreamSessionResponse,
@@ -47,9 +51,13 @@ export async function requestUpstreamLoginSession(input: { password: string; use
         userId: string;
       };
     }
-  >(LOGIN_UPSTREAM_SESSION_MUTATION, {
-    input,
-  });
+  >(
+    LOGIN_UPSTREAM_SESSION_MUTATION,
+    {
+      input,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.loginUpstreamSession;
 }
@@ -62,9 +70,13 @@ export async function requestUpstreamSessionRefresh(input: { sessionToken: strin
         sessionToken: string;
       };
     }
-  >(REFRESH_UPSTREAM_SESSION_MUTATION, {
-    input,
-  });
+  >(
+    REFRESH_UPSTREAM_SESSION_MUTATION,
+    {
+      input,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.refreshUpstreamSession;
 }

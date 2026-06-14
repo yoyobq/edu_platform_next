@@ -236,11 +236,18 @@ const FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
@@ -337,14 +344,19 @@ export async function listLocalDepartmentOptions() {
 }
 
 export async function fetchClassStudentCourseResults(input: FetchClassStudentCourseResultsInput) {
+  const variables = {
+    input: normalizeFetchClassStudentCourseResultsInput(input),
+  };
   const response = await requestGraphQL<
     FetchClassStudentCourseResultsResponse,
     {
       input: ReturnType<typeof normalizeFetchClassStudentCourseResultsInput>;
     }
-  >(FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION, {
-    input: normalizeFetchClassStudentCourseResultsInput(input),
-  });
+  >(
+    FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION,
+    variables,
+    variables.input.sessionToken ? UPSTREAM_SESSION_GRAPHQL_OPTIONS : undefined,
+  );
 
   return response.fetchClassStudentCourseResults;
 }

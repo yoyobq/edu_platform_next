@@ -77,6 +77,9 @@ describe('staff directory shared api', () => {
           sessionToken: 'rolling-token-001',
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('upstreamSessionToken');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('expiresAt');
@@ -153,6 +156,9 @@ describe('staff directory shared api', () => {
       expect.stringContaining('query FetchVerifiedStaffIdentity'),
       {
         sessionToken: 'rolling-token-001',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
   });

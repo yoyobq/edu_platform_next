@@ -93,6 +93,9 @@ describe('academic curriculum plan homepage api', () => {
       semester: '2',
       sessionToken: 'upstream-token-000',
     });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
+    });
   });
 
   it('loads enabled department options for the dropdown', async () => {
@@ -160,6 +163,9 @@ describe('academic curriculum plan homepage api', () => {
       planId: 'plan-001',
       sessionToken: 'upstream-token-001',
     });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
+    });
   });
 
   it('saves the full upstream-style homepage object without remapping keys', async () => {
@@ -198,6 +204,9 @@ describe('academic curriculum plan homepage api', () => {
         homepage,
         sessionToken: 'upstream-token-002',
       },
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
     });
   });
 
@@ -405,6 +414,9 @@ describe('academic curriculum plan homepage api', () => {
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-003',
     });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
+    });
   });
 
   it('loads my teaching end chapter candidates with ownership context', async () => {
@@ -463,6 +475,9 @@ describe('academic curriculum plan homepage api', () => {
       phase: 'FINAL',
       planId: 'plan-001',
       upstreamSessionToken: 'upstream-token-004',
+    });
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
     });
   });
 });

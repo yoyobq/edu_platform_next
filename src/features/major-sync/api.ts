@@ -155,11 +155,18 @@ const SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function toDepartmentOption(department: DepartmentDTO): MajorSyncDepartmentOption | null {
@@ -213,9 +220,13 @@ export async function dryRunSyncMajorsFromUpstream(input: DryRunSyncMajorsFromUp
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
+  >(
+    DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION,
+    {
+      input: normalizeDryRunInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.dryRunSyncMajorsFromUpstream;
 }
@@ -226,9 +237,13 @@ export async function syncMajorsFromUpstream(input: SyncMajorsFromUpstreamInput)
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
+  >(
+    SYNC_MAJORS_FROM_UPSTREAM_MUTATION,
+    {
+      input: normalizeDryRunInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.syncMajorsFromUpstream;
 }

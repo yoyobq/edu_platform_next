@@ -122,6 +122,9 @@ describe('integrated-plan-corrections api', () => {
         teachingClassId: 'CLASS-001',
         upstreamSessionToken: 'token-001',
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('repairGroups');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('teachingClassGroups');
@@ -162,13 +165,19 @@ describe('integrated-plan-corrections api', () => {
       upstreamSessionToken: 'token-001',
     });
 
-    expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
-      lecturePlanId: undefined,
-      semesterId: 202601,
-      staffId: 'STAFF-001',
-      teachingClassId: undefined,
-      upstreamSessionToken: 'token-001',
-    });
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.any(String),
+      {
+        lecturePlanId: undefined,
+        semesterId: 202601,
+        staffId: 'STAFF-001',
+        teachingClassId: undefined,
+        upstreamSessionToken: 'token-001',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
+    );
   });
 
   it('requests my correction suggestions without sending staffId', async () => {
@@ -203,6 +212,9 @@ describe('integrated-plan-corrections api', () => {
       {
         semesterId: 202601,
         upstreamSessionToken: 'token-001',
+      },
+      {
+        logoutOnRetryAuthFailure: false,
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('$staffId');

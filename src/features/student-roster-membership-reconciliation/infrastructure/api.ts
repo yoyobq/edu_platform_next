@@ -203,11 +203,16 @@ const COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
   options?: {
     authMode?: GraphQLAuthMode;
+    logoutOnRetryAuthFailure?: boolean;
   },
 ): Promise<TData> {
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
@@ -332,9 +337,13 @@ export async function dryRunReconcileUpstreamStudentRoster(
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION, {
-    input: normalizeDryRunInput(input),
-  });
+  >(
+    DRY_RUN_RECONCILE_UPSTREAM_STUDENT_ROSTER_MUTATION,
+    {
+      input: normalizeDryRunInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.dryRunReconcileUpstreamStudentRoster;
 }
@@ -345,9 +354,13 @@ export async function claimClassAdviserForRosterSync(input: ClaimClassAdviserFor
     {
       input: ReturnType<typeof normalizeClaimClassAdviserInput>;
     }
-  >(CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION, {
-    input: normalizeClaimClassAdviserInput(input),
-  });
+  >(
+    CLAIM_CLASS_ADVISER_FOR_ROSTER_SYNC_MUTATION,
+    {
+      input: normalizeClaimClassAdviserInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.claimClassAdviserForRosterSync;
 }
@@ -360,9 +373,13 @@ export async function commitUpstreamStudentRosterReconciliation(
     {
       input: ReturnType<typeof normalizeCommitInput>;
     }
-  >(COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION, {
-    input: normalizeCommitInput(input),
-  });
+  >(
+    COMMIT_UPSTREAM_STUDENT_ROSTER_RECONCILIATION_MUTATION,
+    {
+      input: normalizeCommitInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.commitUpstreamStudentRosterReconciliation;
 }

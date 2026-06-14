@@ -286,11 +286,18 @@ const SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function normalizeOptionalString(value?: string) {
@@ -303,6 +310,10 @@ function normalizeRequiredString(value: string, fieldName: string) {
 
 function normalizeOptionalNumber(value?: number) {
   return typeof value === 'number' ? value : undefined;
+}
+
+function resolveUpstreamSessionGraphQLOptions(input: { upstreamSessionToken?: string }) {
+  return input.upstreamSessionToken ? UPSTREAM_SESSION_GRAPHQL_OPTIONS : undefined;
 }
 
 function normalizeFetchAcademicTeachingLogPrefillInput(
@@ -422,6 +433,7 @@ export async function fetchAcademicTeachingLogPrefillItems(
   input: FetchAcademicTeachingLogPrefillInput,
 ) {
   try {
+    const variables = normalizeFetchAcademicTeachingLogPrefillInput(input);
     const response = await requestGraphQL<
       AcademicTeachingLogPrefillResponse,
       FetchAcademicTeachingLogPrefillInput & {
@@ -431,7 +443,8 @@ export async function fetchAcademicTeachingLogPrefillItems(
       }
     >(
       LIST_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
-      normalizeFetchAcademicTeachingLogPrefillInput(input),
+      variables,
+      resolveUpstreamSessionGraphQLOptions(variables),
     );
 
     return response.listAcademicTeachingLogPrefillItems;
@@ -450,6 +463,7 @@ export async function fetchMyAcademicTeachingLogPrefillItems(
   input: FetchMyAcademicTeachingLogPrefillInput,
 ) {
   try {
+    const variables = normalizeFetchMyAcademicTeachingLogPrefillInput(input);
     const response = await requestGraphQL<
       MyAcademicTeachingLogPrefillResponse,
       FetchMyAcademicTeachingLogPrefillInput & {
@@ -459,7 +473,8 @@ export async function fetchMyAcademicTeachingLogPrefillItems(
       }
     >(
       LIST_MY_ACADEMIC_TEACHING_LOG_PREFILL_ITEMS_QUERY,
-      normalizeFetchMyAcademicTeachingLogPrefillInput(input),
+      variables,
+      resolveUpstreamSessionGraphQLOptions(variables),
     );
 
     return response.listMyAcademicTeachingLogPrefillItems;
@@ -481,9 +496,13 @@ export async function saveAcademicTheoryTeachingLog(input: SaveAcademicTheoryTea
       {
         input: ReturnType<typeof normalizeSaveAcademicTheoryTeachingLogInput>;
       }
-    >(SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION, {
-      input: normalizeSaveAcademicTheoryTeachingLogInput(input),
-    });
+    >(
+      SAVE_ACADEMIC_THEORY_TEACHING_LOG_MUTATION,
+      {
+        input: normalizeSaveAcademicTheoryTeachingLogInput(input),
+      },
+      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+    );
 
     return response.saveAcademicTheoryTeachingLog;
   } catch (error) {
@@ -504,9 +523,13 @@ export async function saveAcademicPracticeTeachingLog(input: SaveAcademicPractic
       {
         input: ReturnType<typeof normalizeSaveAcademicPracticeTeachingLogInput>;
       }
-    >(SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION, {
-      input: normalizeSaveAcademicPracticeTeachingLogInput(input),
-    });
+    >(
+      SAVE_ACADEMIC_PRACTICE_TEACHING_LOG_MUTATION,
+      {
+        input: normalizeSaveAcademicPracticeTeachingLogInput(input),
+      },
+      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+    );
 
     return response.saveAcademicPracticeTeachingLog;
   } catch (error) {
@@ -529,9 +552,13 @@ export async function saveAcademicIntegratedTeachingLog(
       {
         input: ReturnType<typeof normalizeSaveAcademicIntegratedTeachingLogInput>;
       }
-    >(SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION, {
-      input: normalizeSaveAcademicIntegratedTeachingLogInput(input),
-    });
+    >(
+      SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION,
+      {
+        input: normalizeSaveAcademicIntegratedTeachingLogInput(input),
+      },
+      UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+    );
 
     return response.saveAcademicIntegratedTeachingLog;
   } catch (error) {

@@ -394,10 +394,15 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   variables: TVariables,
   options?: {
     authMode?: GraphQLAuthMode;
+    logoutOnRetryAuthFailure?: boolean;
   },
 ): Promise<TData> {
   return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
+
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
 
 export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstreamDemoAccount> {
   try {
@@ -423,9 +428,13 @@ export async function fetchTeacherDirectory(input: { sessionToken: string }) {
     {
       sessionToken: string;
     }
-  >(FETCH_TEACHER_DIRECTORY_QUERY, {
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_TEACHER_DIRECTORY_QUERY,
+    {
+      sessionToken: input.sessionToken,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchTeacherDirectory;
 }
@@ -437,10 +446,14 @@ export async function fetchMajorDirectory(input: { departmentId: string; session
       departmentId: string;
       sessionToken: string;
     }
-  >(FETCH_MAJOR_DIRECTORY_QUERY, {
-    departmentId: input.departmentId.trim(),
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_MAJOR_DIRECTORY_QUERY,
+    {
+      departmentId: input.departmentId.trim(),
+      sessionToken: input.sessionToken,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchMajorDirectory;
 }
@@ -511,12 +524,16 @@ export async function fetchCurriculumPlanList(input: {
       semester: string;
       sessionToken: string;
     }
-  >(FETCH_CURRICULUM_PLAN_LIST_QUERY, {
-    departmentId: input.departmentId?.trim() || undefined,
-    schoolYear: String(input.schoolYear || '').trim(),
-    semester: String(input.semester || '').trim(),
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_CURRICULUM_PLAN_LIST_QUERY,
+    {
+      departmentId: input.departmentId?.trim() || undefined,
+      schoolYear: String(input.schoolYear || '').trim(),
+      semester: String(input.semester || '').trim(),
+      sessionToken: input.sessionToken,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchCurriculumPlanList;
 }
@@ -539,14 +556,18 @@ export async function fetchDepartmentCurriculumPlanList(input: {
       sessionToken: string;
       teacherId?: string;
     }
-  >(FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY, {
-    departmentId: input.departmentId.trim(),
-    reviewStatus: input.reviewStatus,
-    schoolYear: String(input.schoolYear || '').trim(),
-    semester: String(input.semester || '').trim(),
-    sessionToken: input.sessionToken,
-    teacherId: input.teacherId?.trim() || undefined,
-  });
+  >(
+    FETCH_DEPARTMENT_CURRICULUM_PLAN_LIST_QUERY,
+    {
+      departmentId: input.departmentId.trim(),
+      reviewStatus: input.reviewStatus,
+      schoolYear: String(input.schoolYear || '').trim(),
+      semester: String(input.semester || '').trim(),
+      sessionToken: input.sessionToken,
+      teacherId: input.teacherId?.trim() || undefined,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchDepartmentCurriculumPlanList;
 }
@@ -558,10 +579,14 @@ export async function fetchCurriculumPlanDetail(input: { planId: string; session
       planId: string;
       sessionToken: string;
     }
-  >(FETCH_CURRICULUM_PLAN_DETAIL_QUERY, {
-    planId: input.planId,
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_CURRICULUM_PLAN_DETAIL_QUERY,
+    {
+      planId: input.planId,
+      sessionToken: input.sessionToken,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchCurriculumPlanDetail;
 }
@@ -572,9 +597,13 @@ export async function fetchVerifiedStaffIdentity(input: { sessionToken: string }
     {
       sessionToken: string;
     }
-  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
-    sessionToken: input.sessionToken,
-  });
+  >(
+    FETCH_VERIFIED_STAFF_IDENTITY_QUERY,
+    {
+      sessionToken: input.sessionToken,
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchVerifiedStaffIdentity;
 }
@@ -589,10 +618,14 @@ export async function fetchLectureJournalList(input: {
       sessionToken: string;
       teachingClassId: string;
     }
-  >(FETCH_LECTURE_JOURNAL_LIST_QUERY, {
-    sessionToken: input.sessionToken,
-    teachingClassId: input.teachingClassId.trim(),
-  });
+  >(
+    FETCH_LECTURE_JOURNAL_LIST_QUERY,
+    {
+      sessionToken: input.sessionToken,
+      teachingClassId: input.teachingClassId.trim(),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchLectureJournalList;
 }

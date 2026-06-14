@@ -195,6 +195,9 @@ describe('student roster membership reconciliation api', () => {
         upstreamSessionToken: '{"token":"current"}',
       },
     });
+    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
+    });
     expect(JSON.stringify(variables)).not.toContain('classListCodes');
     expect(JSON.stringify(variables)).not.toContain('departmentIds');
   });
@@ -232,6 +235,9 @@ describe('student roster membership reconciliation api', () => {
         classCode: '1031301',
         upstreamSessionToken: '{"token":"current"}',
       },
+    });
+    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
     });
   });
 
@@ -312,6 +318,9 @@ describe('student roster membership reconciliation api', () => {
         ],
         upstreamSessionToken: '{"token":"current"}',
       },
+    });
+    expect(executeGraphQLMock.mock.calls[0]?.[2]).toEqual({
+      logoutOnRetryAuthFailure: false,
     });
     expect(JSON.stringify(variables)).not.toContain('items');
     expect(JSON.stringify(variables)).not.toContain('classListCodes');

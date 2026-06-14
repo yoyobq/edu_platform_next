@@ -168,6 +168,9 @@ describe('student-course-results-pull api', () => {
           studentNumbers: ['219010401', '219010402'],
         },
       },
+      {
+        logoutOnRetryAuthFailure: false,
+      },
     );
   });
 });

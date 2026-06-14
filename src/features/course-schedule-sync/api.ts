@@ -157,11 +157,18 @@ const DEPARTMENTS_QUERY = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
+  options?: {
+    logoutOnRetryAuthFailure?: boolean;
+  },
 ): Promise<TData> {
-  return executeGraphQL(query, variables);
+  return options ? executeGraphQL(query, variables, options) : executeGraphQL(query, variables);
 }
 
 function normalizeCourseScheduleSyncInput(input: CourseScheduleSyncInput) {
@@ -213,9 +220,13 @@ export async function dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumP
     {
       input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
     }
-  >(DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION, {
-    input: normalizeCourseScheduleSyncInput(input),
-  });
+  >(
+    DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION,
+    {
+      input: normalizeCourseScheduleSyncInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;
 }
@@ -228,9 +239,13 @@ export async function syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(
     {
       input: ReturnType<typeof normalizeCourseScheduleSyncInput>;
     }
-  >(SYNC_COURSE_SCHEDULES_MUTATION, {
-    input: normalizeCourseScheduleSyncInput(input),
-  });
+  >(
+    SYNC_COURSE_SCHEDULES_MUTATION,
+    {
+      input: normalizeCourseScheduleSyncInput(input),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans;
 }

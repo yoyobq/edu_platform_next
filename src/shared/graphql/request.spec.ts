@@ -143,6 +143,32 @@ describe('executeGraphQL', () => {
     expect(clientQueryMock).toHaveBeenCalledTimes(1);
   });
 
+  it('does not run reactive refresh when auth retry is disabled', async () => {
+    const refreshSession = vi.fn();
+    const onAuthFailure = vi.fn();
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      onAuthFailure,
+      refreshSession,
+    });
+    clientQueryMock.mockRejectedValueOnce(
+      new GraphQLIngressError({
+        message: 'Upstream session expired',
+        type: 'auth',
+      }),
+    );
+
+    await expect(
+      executeGraphQL('query UpstreamProxy { upstream { id } }', {}, { allowAuthRetry: false }),
+    ).rejects.toMatchObject({
+      type: 'auth',
+    });
+
+    expect(refreshSession).not.toHaveBeenCalled();
+    expect(onAuthFailure).not.toHaveBeenCalled();
+    expect(clientQueryMock).toHaveBeenCalledTimes(1);
+  });
+
   it('calls auth failure when reactive refresh fails with auth', async () => {
     const refreshSession = vi.fn(async () => {
       throw new GraphQLIngressError({
@@ -170,5 +196,43 @@ describe('executeGraphQL', () => {
     expect(refreshSession).toHaveBeenCalledTimes(1);
     expect(onAuthFailure).toHaveBeenCalledTimes(1);
     expect(clientQueryMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call auth failure after retry when retry auth logout is disabled', async () => {
+    const refreshSession = vi.fn(async () => undefined);
+    const onAuthFailure = vi.fn();
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      onAuthFailure,
+      refreshSession,
+    });
+    clientQueryMock
+      .mockRejectedValueOnce(
+        new GraphQLIngressError({
+          message: 'Access token expired',
+          type: 'auth',
+        }),
+      )
+      .mockRejectedValueOnce(
+        new GraphQLIngressError({
+          message: 'Upstream session expired',
+          type: 'auth',
+        }),
+      );
+
+    await expect(
+      executeGraphQL(
+        'query UpstreamProxyAfterRefresh { upstream { id } }',
+        {},
+        { logoutOnRetryAuthFailure: false },
+      ),
+    ).rejects.toMatchObject({
+      message: 'Upstream session expired',
+      type: 'auth',
+    });
+
+    expect(refreshSession).toHaveBeenCalledTimes(1);
+    expect(onAuthFailure).not.toHaveBeenCalled();
+    expect(clientQueryMock).toHaveBeenCalledTimes(2);
   });
 });

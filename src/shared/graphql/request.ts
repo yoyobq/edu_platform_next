@@ -11,6 +11,7 @@ type ExecuteGraphQLOptions = {
   allowAuthRetry?: boolean;
   authMode?: GraphQLAuthMode;
   fetchPolicy?: FetchPolicy;
+  logoutOnRetryAuthFailure?: boolean;
 };
 
 type ParsedGraphQLDocument = {
@@ -164,7 +165,7 @@ export async function executeGraphQL<TData, TVariables extends OperationVariable
         operationName: ingressError.operationName,
       });
 
-      if (retryIngressError.type === 'auth') {
+      if (retryIngressError.type === 'auth' && options.logoutOnRetryAuthFailure !== false) {
         onAuthFailure?.();
       }
 

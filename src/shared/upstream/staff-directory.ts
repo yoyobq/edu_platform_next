@@ -190,6 +190,10 @@ const FETCH_VERIFIED_STAFF_IDENTITY_QUERY = `
   }
 `;
 
+const UPSTREAM_SESSION_GRAPHQL_OPTIONS = {
+  logoutOnRetryAuthFailure: false,
+} as const;
+
 function normalizeRequiredString(value: string, fieldName: string) {
   const normalizedValue = value.trim();
 
@@ -246,12 +250,16 @@ export async function populateStaffDirectory(input: {
         sessionToken: string;
       };
     }
-  >(POPULATE_STAFF_DIRECTORY_MUTATION, {
-    input: {
-      forceRefresh: Boolean(input.forceRefresh),
-      sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
+  >(
+    POPULATE_STAFF_DIRECTORY_MUTATION,
+    {
+      input: {
+        forceRefresh: Boolean(input.forceRefresh),
+        sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
+      },
     },
-  });
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.populateStaffDirectory;
 }
@@ -262,9 +270,13 @@ export async function readVerifiedStaffIdentity(input: { sessionToken: string })
     {
       sessionToken: string;
     }
-  >(FETCH_VERIFIED_STAFF_IDENTITY_QUERY, {
-    sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
-  });
+  >(
+    FETCH_VERIFIED_STAFF_IDENTITY_QUERY,
+    {
+      sessionToken: normalizeRequiredString(input.sessionToken, 'sessionToken'),
+    },
+    UPSTREAM_SESSION_GRAPHQL_OPTIONS,
+  );
 
   return response.fetchVerifiedStaffIdentity;
 }

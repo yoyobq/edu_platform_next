@@ -40,6 +40,9 @@ describe('upstream-session api', () => {
           userId: 'teacher001',
         },
       },
+      {
+        allowAuthRetry: false,
+      },
     );
   });
 
@@ -65,6 +68,9 @@ describe('upstream-session api', () => {
         input: {
           sessionToken: 'token-002',
         },
+      },
+      {
+        allowAuthRetry: false,
       },
     );
   });
