@@ -15,6 +15,7 @@ export function WeeklyTimetablePage() {
   const loaderData = useLoaderData() as {
     defaultStaffId?: string | null;
     isForbidden?: boolean;
+    lockedUpstreamLoginUserId?: string | null;
     upstreamAccount?: {
       accountId: number;
       displayName: string;
@@ -31,6 +32,7 @@ export function WeeklyTimetablePage() {
       listAcademicSemesters={requestAcademicSemesters}
       listAcademicTeachingClassOptions={requestAcademicTeachingClassOptions}
       listAcademicWeeklyTimetableItems={requestAcademicWeeklyTimetableItems}
+      lockedUpstreamLoginUserId={loaderData?.lockedUpstreamLoginUserId}
       upstreamAccount={loaderData?.upstreamAccount ?? null}
     />
   );

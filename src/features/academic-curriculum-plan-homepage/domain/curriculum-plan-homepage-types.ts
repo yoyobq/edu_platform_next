@@ -6,6 +6,7 @@ export type CurrentCurriculumPlanHomepageAccount = {
   accessGroup: AuthAccessGroup[];
   accountId: number;
   displayName: string;
+  lockedUpstreamLoginUserId: string | null;
   slotGroup: string[];
   staffId: string | null;
 };

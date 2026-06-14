@@ -1527,7 +1527,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const prefillMode = resolvePrefillMode(currentAccount);
   const canSelectDepartment = prefillMode === 'managed';
-  const lockedUpstreamLoginUserId = currentAccount?.staffId ? currentAccount.staffId : null;
+  const lockedUpstreamLoginUserId = currentAccount?.lockedUpstreamLoginUserId ?? null;
   const {
     clear,
     clearRememberedCredentials,

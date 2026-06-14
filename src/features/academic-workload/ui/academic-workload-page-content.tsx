@@ -59,6 +59,7 @@ import './academic-workload-page-content.css';
 export type AcademicWorkloadPageContentProps = {
   canManageWorkload?: boolean;
   defaultStaffId?: string | null;
+  lockedUpstreamLoginUserId?: string | null;
   upstreamAccount?: UpstreamAccountIdentity | null;
 };
 
@@ -131,6 +132,7 @@ function formatLogicalWeekdayNotice(item: AcademicStableWorkloadOccurrence) {
 export function AcademicWorkloadPageContent({
   canManageWorkload: rawCanManageWorkload = false,
   defaultStaffId = null,
+  lockedUpstreamLoginUserId = null,
   upstreamAccount = null,
 }: AcademicWorkloadPageContentProps) {
   const canManageWorkload = Boolean(rawCanManageWorkload);
@@ -152,7 +154,7 @@ export function AcademicWorkloadPageContent({
     session: storedSession,
   } = useUpstreamSession({
     account: upstreamAccount,
-    lockedUserId: defaultStaffId,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const storedSessionDirectoryKey = storedSession
     ? [

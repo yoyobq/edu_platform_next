@@ -3,6 +3,7 @@ export const AUTH_ACCESS_GROUPS = ['ADMIN', 'GUEST', 'REGISTRANT', 'STAFF', 'STU
 export type AuthAccessGroup = (typeof AUTH_ACCESS_GROUPS)[number];
 export type AcademicViewerRole = 'admin' | 'authenticated' | 'staff';
 export type AcademicInternalViewerRole = Exclude<AcademicViewerRole, 'authenticated'>;
+export type UpstreamLoginIdentityContext = 'default' | 'academicStaffManager';
 
 export const ACADEMIC_OFFICER_SLOT_GROUP = 'ACADEMIC_OFFICER';
 export const CLASS_ADVISER_SLOT_GROUP = 'CLASS_ADVISER';
@@ -79,6 +80,13 @@ export function hasAcademicTeachingLogManagerAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
+  return hasAcademicStaffManagerAccess(input);
+}
+
+export function hasAcademicStaffManagerAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
   const accessGroup = input.accessGroup ?? [];
   const slotGroup = input.slotGroup ?? [];
 
@@ -91,6 +99,35 @@ export function hasAcademicTeachingLogManagerAccess(input: {
     (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
       slotGroup.includes(TEACHING_GROUP_LEADER_SLOT_GROUP))
   );
+}
+
+export function resolveUpstreamLoginLockedUserId(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  context?: UpstreamLoginIdentityContext;
+  slotGroup?: readonly string[];
+  staffId?: string | null;
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return null;
+  }
+
+  if (
+    input.context === 'academicStaffManager' &&
+    hasAcademicStaffManagerAccess({
+      accessGroup,
+      slotGroup: input.slotGroup,
+    })
+  ) {
+    return null;
+  }
+
+  if (!accessGroup.includes('STAFF')) {
+    return null;
+  }
+
+  return input.staffId?.trim() || null;
 }
 
 export function hasAcademicIntegratedPlanCorrectionsAccess(input: {

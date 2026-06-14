@@ -43,6 +43,7 @@ import './class-affairs-course-results-page-content.css';
 type CurrentAccount = {
   accountId: number;
   displayName: string;
+  lockedUpstreamLoginUserId: string | null;
   staffId: string | null;
 };
 
@@ -525,7 +526,7 @@ export function ClassAffairsCourseResultsPageContent({
   const [pendingRefreshRequest, setPendingRefreshRequest] = useState<PendingRefreshRequest | null>(
     null,
   );
-  const lockedUpstreamLoginUserId = currentAccount.staffId?.trim() || null;
+  const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId?.trim() || null;
   const {
     clear,
     clearRememberedCredentials,

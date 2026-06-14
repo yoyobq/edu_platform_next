@@ -39,8 +39,6 @@ import {
   type AcademicViewerRole,
   type AuthAccessGroup,
   canAccessPayloadCrypto,
-  CLASS_ADVISER_SLOT_GROUP,
-  COUNSELOR_SLOT_GROUP,
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
@@ -53,7 +51,7 @@ import {
   hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
-  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
+  resolveUpstreamLoginLockedUserId,
 } from '@/shared/auth-access';
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
@@ -360,23 +358,10 @@ async function loadLabRoute<TData = null>({
   return getData?.(snapshot) ?? null;
 }
 
-function hasStudentCourseResultsLabAccess(input: {
-  accessGroup?: readonly AuthAccessGroup[];
-  slotGroup?: readonly string[];
-}) {
+function hasStudentCourseResultsLabAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   const accessGroup = input.accessGroup ?? [];
-  const slotGroup = input.slotGroup ?? [];
 
-  if (accessGroup.includes('ADMIN')) {
-    return true;
-  }
-
-  return (
-    accessGroup.includes('STAFF') &&
-    (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
-      slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
-      slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
-  );
+  return accessGroup.includes('ADMIN');
 }
 
 function getRequestTarget(request: Request) {
@@ -611,6 +596,11 @@ async function weeklyTimetablePageLoader({ request }: LoaderFunctionArgs) {
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
+    lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    }),
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
@@ -707,7 +697,6 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
     canAccess: (snapshot) =>
       hasStudentCourseResultsLabAccess({
         accessGroup: snapshot.userInfo.accessGroup,
-        slotGroup: snapshot.slotGroup,
       }),
     request,
   });
@@ -719,7 +708,6 @@ async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs
     canAccess: (snapshot) =>
       hasStudentCourseResultsLabAccess({
         accessGroup: snapshot.userInfo.accessGroup,
-        slotGroup: snapshot.slotGroup,
       }),
     request,
   });
@@ -749,11 +737,6 @@ async function zquizExamTeacherGradebookLabLoader({ request }: LoaderFunctionArg
 async function zquizActivityBuilderLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: zquizActivityBuilderLabAccess,
-    canAccess: (snapshot) =>
-      hasAdminOrAcademicOfficerAccess({
-        accessGroup: snapshot.userInfo.accessGroup,
-        slotGroup: snapshot.slotGroup,
-      }),
     request,
   });
 }
@@ -793,6 +776,12 @@ async function integratedPlanCorrectionsPageLoader({ request }: LoaderFunctionAr
 
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+      accessGroup,
+      context: 'academicStaffManager',
+      slotGroup: snapshot.slotGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    }),
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
@@ -844,6 +833,11 @@ async function classAffairsCourseResultsPageLoader({ request }: LoaderFunctionAr
     currentAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
       staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     },
     isForbidden: false,
@@ -882,6 +876,12 @@ async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
   return {
     canManageWorkload,
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+      accessGroup,
+      context: 'academicStaffManager',
+      slotGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    }),
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
@@ -1011,6 +1011,12 @@ async function myTeachingLogsPageLoader({ request }: LoaderFunctionArgs) {
 
   return {
     defaultStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+      accessGroup,
+      context: 'academicStaffManager',
+      slotGroup: snapshot.slotGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    }),
     upstreamAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
@@ -1045,6 +1051,12 @@ async function myCurriculumPlanHomepagePageLoader({ request }: LoaderFunctionArg
       accessGroup: [...snapshot.userInfo.accessGroup],
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        context: 'academicStaffManager',
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
       slotGroup: [...snapshot.slotGroup],
       staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     },

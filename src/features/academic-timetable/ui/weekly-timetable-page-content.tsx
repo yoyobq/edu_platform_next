@@ -45,6 +45,7 @@ type WeeklyTimetablePageContentProps = {
   listAcademicWeeklyTimetableItems: (
     input: AcademicWeeklyTimetableQueryFilters,
   ) => Promise<AcademicTimetableItem[]>;
+  lockedUpstreamLoginUserId?: string | null;
   upstreamAccount?: UpstreamAccountIdentity | null;
 };
 
@@ -150,6 +151,7 @@ export function WeeklyTimetablePageContent({
   listAcademicSemesters,
   listAcademicTeachingClassOptions,
   listAcademicWeeklyTimetableItems,
+  lockedUpstreamLoginUserId = null,
   upstreamAccount = null,
 }: WeeklyTimetablePageContentProps) {
   const {
@@ -158,7 +160,7 @@ export function WeeklyTimetablePageContent({
     session: storedSession,
   } = useUpstreamSession({
     account: upstreamAccount,
-    lockedUserId: defaultStaffId,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const storedSessionRef = useRef<StoredUpstreamSession | null>(storedSession);
   const loaderDefaultStaffId = defaultStaffId?.trim() || '';

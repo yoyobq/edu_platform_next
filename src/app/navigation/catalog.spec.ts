@@ -169,8 +169,19 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
+    expect(
+      canAccessNavigationPath(
+        '/labs/zquiz-activity-builder',
+        buildFilter({
+          accountId: 1001,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(true);
   });
 
   it('shows class affairs course results only to class advisers and counselors', () => {
@@ -230,8 +241,7 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/student-course-results-pull',
-      '/labs/student-course-results-view',
+      '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(
@@ -244,7 +254,7 @@ describe('navigation catalog', () => {
           slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-view',
@@ -255,7 +265,7 @@ describe('navigation catalog', () => {
           slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/upstream-data-sync/major-sync',
@@ -322,6 +332,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
@@ -446,7 +457,7 @@ describe('navigation catalog', () => {
           slotGroup: ['CLASS_ADVISER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-view',
@@ -456,7 +467,7 @@ describe('navigation catalog', () => {
           slotGroup: ['CLASS_ADVISER'],
         }),
       ),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-pull',

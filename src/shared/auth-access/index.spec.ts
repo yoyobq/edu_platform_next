@@ -17,6 +17,7 @@ import {
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
   hasUpstreamDataSyncAccess,
+  resolveUpstreamLoginLockedUserId,
 } from './index';
 
 describe('auth access policy helpers', () => {
@@ -176,5 +177,57 @@ describe('auth access policy helpers', () => {
     expect(canAccessPayloadCrypto({ accountId: 2, accessGroup: ['ADMIN'] })).toBe(true);
     expect(canAccessPayloadCrypto({ accountId: 3, accessGroup: ['ADMIN'] })).toBe(false);
     expect(canAccessPayloadCrypto({ accountId: 1, accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('resolves upstream login locked identity from access group and context', () => {
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['ADMIN', 'STAFF'],
+        staffId: 'staff-001',
+      }),
+    ).toBeNull();
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        staffId: 'staff-001',
+      }),
+    ).toBe('staff-001');
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+        staffId: 'staff-001',
+      }),
+    ).toBe('staff-001');
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        context: 'academicStaffManager',
+        slotGroup: ['ACADEMIC_OFFICER'],
+        staffId: 'staff-001',
+      }),
+    ).toBeNull();
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        context: 'academicStaffManager',
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+        staffId: 'staff-001',
+      }),
+    ).toBeNull();
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        context: 'academicStaffManager',
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        staffId: 'staff-001',
+      }),
+    ).toBe('staff-001');
+    expect(
+      resolveUpstreamLoginLockedUserId({
+        accessGroup: ['STAFF'],
+        staffId: null,
+      }),
+    ).toBeNull();
   });
 });

@@ -1,10 +1,4 @@
-import {
-  type AuthAccessGroup,
-  CLASS_ADVISER_SLOT_GROUP,
-  COUNSELOR_SLOT_GROUP,
-  hasAdminOrAcademicOfficerAccess,
-  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
-} from '@/shared/auth-access';
+import { type AuthAccessGroup } from '@/shared/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
@@ -20,26 +14,10 @@ function hasStudentNavigationAccess(input: { accessGroup?: readonly AuthAccessGr
   return input.accessGroup?.includes('STUDENT') ?? false;
 }
 
-function hasZquizActivityBuilderNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
-  return hasAdminOrAcademicOfficerAccess({
-    accessGroup: filter.accessGroup,
-    slotGroup: filter.slotGroup,
-  });
-}
-
 function hasStudentCourseResultsLabNavigationAccess(
   filter: Parameters<NavigationItemsProvider>[0],
 ) {
-  if (filter.accessGroup.includes('ADMIN')) {
-    return true;
-  }
-
-  return (
-    filter.accessGroup.includes('STAFF') &&
-    (filter.slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
-      filter.slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
-      filter.slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
-  );
+  return filter.accessGroup.includes('ADMIN');
 }
 
 function hasLabNavigationAccess(
@@ -111,7 +89,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
     ...(hasStudentCourseResultsLabNavigationAccess(filter)
       ? [
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'FileSearchOutlined',
             key: '/labs/student-course-results-pull',
             label: '学生成绩拉取',
@@ -121,7 +99,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             slotGroup: null,
           },
           {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'TableOutlined',
             key: '/labs/student-course-results-view',
             label: '学生成绩查看',
@@ -132,7 +110,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasZquizActivityBuilderNavigationAccess(filter)
+    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,

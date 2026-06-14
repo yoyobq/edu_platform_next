@@ -13,6 +13,7 @@ export function AcademicWorkloadPage() {
     <AcademicWorkloadPageContent
       canManageWorkload={loaderData?.canManageWorkload}
       defaultStaffId={loaderData?.defaultStaffId}
+      lockedUpstreamLoginUserId={loaderData?.lockedUpstreamLoginUserId}
       upstreamAccount={loaderData?.upstreamAccount ?? null}
     />
   );

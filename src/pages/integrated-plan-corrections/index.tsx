@@ -12,6 +12,7 @@ export function IntegratedPlanCorrectionsPage() {
   return (
     <AcademicIntegratedPlanCorrectionsPageContent
       defaultStaffId={loaderData?.defaultStaffId}
+      lockedUpstreamLoginUserId={loaderData?.lockedUpstreamLoginUserId}
       upstreamAccount={loaderData?.upstreamAccount ?? null}
       viewerRole={loaderData?.viewerRole}
     />

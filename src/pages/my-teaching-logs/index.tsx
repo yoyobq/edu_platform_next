@@ -9,12 +9,11 @@ export function MyTeachingLogsPage() {
   const loaderData = useLoaderData() as AcademicTeachingLogPageLoaderData;
   const defaultStaffId = loaderData?.defaultStaffId ?? null;
   const viewerRole = loaderData?.viewerRole ?? 'authenticated';
-  const lockedUpstreamLoginUserId = defaultStaffId;
 
   return (
     <AcademicTeachingLogPageContent
       defaultStaffId={defaultStaffId}
-      lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
+      lockedUpstreamLoginUserId={loaderData?.lockedUpstreamLoginUserId ?? null}
       upstreamAccount={loaderData?.upstreamAccount ?? null}
       viewerRole={viewerRole}
     />

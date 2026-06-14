@@ -6,11 +6,18 @@ import { refreshSession, useAuthSessionState } from '@/features/auth';
 import { Error403 } from '@/features/error-feedback';
 import { StudentRosterMembershipReconciliationPageContent } from '@/features/student-roster-membership-reconciliation';
 
+import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+
 export function StudentRosterMembershipReconciliationPage() {
   const authSession = useAuthSessionState();
   const loaderData = useLoaderData() as { isForbidden?: boolean } | null;
   const snapshot = authSession.snapshot;
   const staffId = snapshot?.identity?.kind === 'STAFF' ? snapshot.identity.id : null;
+  const lockedUpstreamLoginUserId = resolveUpstreamLoginLockedUserId({
+    accessGroup: snapshot?.userInfo.accessGroup,
+    slotGroup: snapshot?.slotGroup,
+    staffId,
+  });
 
   if (loaderData?.isForbidden) {
     return <Error403 />;
@@ -19,7 +26,7 @@ export function StudentRosterMembershipReconciliationPage() {
   return (
     <StudentRosterMembershipReconciliationPageContent
       accessGroup={snapshot?.userInfo.accessGroup}
-      lockedUpstreamLoginUserId={staffId}
+      lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
       refreshSiteSession={async () => {
         await refreshSession();
       }}

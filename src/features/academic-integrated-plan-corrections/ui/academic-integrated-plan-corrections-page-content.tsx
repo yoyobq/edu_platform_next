@@ -59,6 +59,7 @@ import './academic-integrated-plan-corrections-page-content.css';
 
 export type AcademicIntegratedPlanCorrectionsPageLoaderData = {
   defaultStaffId?: string | null;
+  lockedUpstreamLoginUserId?: string | null;
   upstreamAccount?: {
     accountId: number;
     displayName: string;
@@ -858,10 +859,12 @@ function TeachingClassAlignmentTabs({
 
 export function AcademicIntegratedPlanCorrectionsPageContent({
   defaultStaffId: rawDefaultStaffId,
+  lockedUpstreamLoginUserId: rawLockedUpstreamLoginUserId = null,
   upstreamAccount = null,
   viewerRole = 'authenticated',
 }: AcademicIntegratedPlanCorrectionsPageContentProps) {
   const defaultStaffId = rawDefaultStaffId?.trim() ?? '';
+  const lockedUpstreamLoginUserId = rawLockedUpstreamLoginUserId?.trim() || null;
   const isStaffViewer = viewerRole === 'staff';
   const showRepairGroups = canViewIntegratedPlanCorrectionRepairGroups(viewerRole);
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
@@ -875,10 +878,10 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
   } = useUpstreamSession({
     account: upstreamAccount,
     keepAlive: true,
-    lockedUserId: defaultStaffId || null,
+    lockedUserId: lockedUpstreamLoginUserId,
   });
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
-    lockedUserId: defaultStaffId || null,
+    lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
@@ -1063,7 +1066,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     loginForm.setFieldsValue(
       buildUpstreamLoginCredentialsInitialValues({
         fallbackUserId: storedSession?.upstreamLoginId,
-        lockedUserId: defaultStaffId || null,
+        lockedUserId: lockedUpstreamLoginUserId,
         rememberedCredentials,
       }),
     );
@@ -1088,7 +1091,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
 
     if (
       !canUseStoredUpstreamSessionForLockedUser({
-        lockedUserId: defaultStaffId || null,
+        lockedUserId: lockedUpstreamLoginUserId,
         session,
       })
     ) {
@@ -1293,7 +1296,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
         hasRememberedCredentials={canUseRememberedCredentials}
         isSubmitting={isSubmittingLogin}
         loginError={loginError}
-        lockedUserId={defaultStaffId || null}
+        lockedUserId={lockedUpstreamLoginUserId}
         open={isLoginModalOpen}
         title="连接校园网"
         onClearRememberedCredentials={clearRememberedCredentials}

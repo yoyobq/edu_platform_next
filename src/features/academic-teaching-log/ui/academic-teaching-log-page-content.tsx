@@ -128,6 +128,7 @@ import './academic-teaching-log-page-content.css';
 
 export type AcademicTeachingLogPageLoaderData = {
   defaultStaffId?: string | null;
+  lockedUpstreamLoginUserId?: string | null;
   upstreamAccount?: {
     accountId: number;
     displayName: string;
