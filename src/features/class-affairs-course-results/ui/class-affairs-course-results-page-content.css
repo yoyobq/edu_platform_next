@@ -1,0 +1,92 @@
+/* src/features/class-affairs-course-results/ui/class-affairs-course-results-page-content.css */
+
+.class-affairs-course-results-term-tab-label {
+  display: block;
+  max-width: 200px;
+}
+
+.class-affairs-course-results-term-tab-primary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-affairs-course-results-term-tab-primary-active {
+  font-weight: var(--ant-font-weight-strong, 600);
+}
+
+.class-affairs-course-results-term-tab-secondary {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  font-size: var(--ant-font-size-sm);
+  gap: var(--ant-margin-xxs, 4px);
+  max-width: 100%;
+}
+
+.class-affairs-course-results-term-tab-secondary-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.class-affairs-course-results-term-tab-badge {
+  align-items: center;
+  background: var(--ant-color-fill-tertiary);
+  border-radius: 999px;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  flex: none;
+  font-size: var(--ant-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 18px;
+  padding-inline: 0;
+}
+
+.class-affairs-course-results-term-tab-badge-pending {
+  min-width: 42px;
+  padding-inline: 6px;
+}
+
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-even
+  > td,
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-even:hover
+  > td {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-odd:hover
+  > td {
+  background: var(--ant-color-fill-tertiary);
+}
+
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-selected
+  > td,
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-selected:hover
+  > td {
+  background: var(--ant-color-primary-bg);
+}
+
+.class-affairs-course-results-table-shell
+  .ant-table-tbody
+  > tr.class-affairs-course-results-row-clickable {
+  cursor: pointer;
+}
+
+.class-affairs-course-results-table-shell .ant-table-tbody > tr > td {
+  transition: background-color 0.2s ease;
+}

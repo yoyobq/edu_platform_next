@@ -7,6 +7,7 @@ import {
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
   hasAdminOrAcademicOfficerAccess,
+  hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
 } from '@/shared/auth-access';
@@ -192,22 +193,6 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
-    ...(hasStudentRosterMembershipReconciliationAccess({
-      accessGroup: filter.accessGroup,
-    })
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'ReconciliationOutlined',
-            key: '/academic-affairs/student-roster-membership-reconciliation',
-            label: '班级名册对齐',
-            navMode: 'rail' as const,
-            path: '/academic-affairs/student-roster-membership-reconciliation',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasAcademicWorkloadAccess({
       accessGroup: filter.accessGroup,
     })
@@ -219,6 +204,41 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '工作量明细',
             navMode: 'rail' as const,
             path: '/academic-assistant/academic-workload',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+  ];
+  const classAffairsChildren: NavigationLeafItem[] = [
+    ...(hasStudentRosterMembershipReconciliationAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['STAFF'] as const,
+            iconKey: 'ReconciliationOutlined',
+            key: '/academic-affairs/student-roster-membership-reconciliation',
+            label: '本地建班',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/student-roster-membership-reconciliation',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasClassAffairsCourseResultsAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['STAFF'] as const,
+            iconKey: 'TableOutlined',
+            key: '/class-affairs/course-results-summary',
+            label: '成绩汇总',
+            navMode: 'rail' as const,
+            path: '/class-affairs/course-results-summary',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
@@ -247,6 +267,18 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             iconKey: 'FormOutlined',
             key: 'academic-assistant',
             label: '教务助手',
+            navMode: 'rail' as const,
+          },
+        ]
+      : []),
+    ...(classAffairsChildren.length > 0
+      ? [
+          {
+            allowedAccessGroups: ['STAFF'] as const,
+            children: classAffairsChildren,
+            iconKey: 'TeamOutlined',
+            key: 'class-affairs',
+            label: '班务管理',
             navMode: 'rail' as const,
           },
         ]
