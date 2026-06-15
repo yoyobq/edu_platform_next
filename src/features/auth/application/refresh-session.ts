@@ -89,10 +89,18 @@ export function refreshSessionWithLock(
     const pendingSession = await ports.api.refresh({
       refreshToken,
     });
+    const retainedSnapshot = fallbackSnapshot
+      ? buildRetainedSnapshot(fallbackSnapshot, pendingSession)
+      : null;
 
     if (isRefreshTokenStillCurrent(ports, refreshToken)) {
-      ports.storage.writeSession(pendingSession);
-      setHydratingSession(pendingSession);
+      if (retainedSnapshot) {
+        ports.storage.writeSession(retainedSnapshot);
+        setAuthenticatedSession(retainedSnapshot);
+      } else {
+        ports.storage.writeSession(pendingSession);
+        setHydratingSession(pendingSession);
+      }
     }
 
     let refreshedSnapshot: AuthSessionSnapshot;
@@ -110,12 +118,7 @@ export function refreshSessionWithLock(
         throw error;
       }
 
-      if (fallbackSnapshot) {
-        const retainedSnapshot = buildRetainedSnapshot(fallbackSnapshot, pendingSession);
-
-        ports.storage.writeSession(retainedSnapshot);
-        setAuthenticatedSession(retainedSnapshot);
-
+      if (retainedSnapshot) {
         return retainedSnapshot;
       }
 

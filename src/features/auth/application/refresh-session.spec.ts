@@ -74,6 +74,11 @@ describe('auth refresh locking', () => {
       accessToken: 'refreshed-pending-access-token',
       refreshToken: 'refreshed-pending-refresh-token',
     });
+    const retainedPendingSession = {
+      ...currentSession,
+      accessToken: pendingSession.accessToken,
+      refreshToken: pendingSession.refreshToken,
+    };
     const refreshedSession = buildSessionSnapshot({
       accessToken: 'refreshed-access-token',
       refreshToken: 'refreshed-refresh-token',
@@ -111,7 +116,7 @@ describe('auth refresh locking', () => {
     expect(ports.api.restore).toHaveBeenCalledTimes(1);
     expect(ports.api.restore).toHaveBeenCalledWith(pendingSession);
     expect(storage.writeSession).toHaveBeenCalledTimes(2);
-    expect(storage.writeSession).toHaveBeenNthCalledWith(1, pendingSession);
+    expect(storage.writeSession).toHaveBeenNthCalledWith(1, retainedPendingSession);
     expect(storage.writeSession).toHaveBeenNthCalledWith(2, refreshedSession);
   });
 
@@ -121,6 +126,11 @@ describe('auth refresh locking', () => {
       accessToken: 'rotated-access-token',
       refreshToken: 'rotated-refresh-token',
     });
+    const retainedPendingSession = {
+      ...currentSession,
+      accessToken: pendingSession.accessToken,
+      refreshToken: pendingSession.refreshToken,
+    };
     const refreshedSession = buildSessionSnapshot({
       accessToken: 'hydrated-access-token',
       refreshToken: 'rotated-refresh-token',
@@ -146,7 +156,7 @@ describe('auth refresh locking', () => {
     const refreshPromise = refreshSession(ports);
 
     await vi.waitFor(() => {
-      expect(storage.writeSession).toHaveBeenCalledWith(pendingSession);
+      expect(storage.writeSession).toHaveBeenCalledWith(retainedPendingSession);
     });
     expect(ports.api.restore).toHaveBeenCalledWith(pendingSession);
 
@@ -199,8 +209,8 @@ describe('auth refresh locking', () => {
 
     await expect(refreshSession(ports)).resolves.toEqual(retainedSession);
 
-    expect(storage.writeSession).toHaveBeenNthCalledWith(1, pendingSession);
-    expect(storage.writeSession).toHaveBeenNthCalledWith(2, retainedSession);
+    expect(storage.writeSession).toHaveBeenCalledTimes(1);
+    expect(storage.writeSession).toHaveBeenNthCalledWith(1, retainedSession);
     expect(storage.clearSession).not.toHaveBeenCalled();
     expect(getAuthSessionSnapshot()).toEqual(retainedSession);
   });
@@ -245,7 +255,11 @@ describe('auth refresh locking', () => {
       type: 'auth',
     });
 
-    expect(storage.writeSession).toHaveBeenCalledWith(pendingSession);
+    expect(storage.writeSession).toHaveBeenCalledWith({
+      ...currentSession,
+      accessToken: pendingSession.accessToken,
+      refreshToken: pendingSession.refreshToken,
+    });
     expect(storage.clearSession).toHaveBeenCalledTimes(1);
     expect(getAuthSessionSnapshot()).toBeNull();
   });
