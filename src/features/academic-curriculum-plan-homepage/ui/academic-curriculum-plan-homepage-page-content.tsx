@@ -7,6 +7,7 @@ import {
   FlagOutlined,
   SaveOutlined,
   SearchOutlined,
+  SwapOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -170,15 +171,17 @@ const SEMESTER_OPTIONS = [
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const DAY_MS = 24 * 60 * 60 * 1000;
+const PLAN_TAB_COURSE_NAME_MAX_LENGTH = 6;
 const CALCULATED_SUGGESTION_FIELDS = new Set([
   'compensated_lessons',
   'completed_lessons',
   'extra_lessons',
+  'planned_lessons',
   'reduced_lessons',
   'total_lessons',
   'training_lessons',
 ]);
-const SCHEDULE_SUGGESTION_FIELDS = new Set(['planned_lessons', 'teaching_weeks', 'weekly_lessons']);
+const SCHEDULE_SUGGESTION_FIELDS = new Set(['teaching_weeks', 'weekly_lessons']);
 
 function useCompactViewport() {
   const [isCompactViewport, setIsCompactViewport] = useState(() =>
@@ -754,6 +757,25 @@ function formatPrefillModalCourseTitle(item: CurriculumPlanHomepageListItem) {
   }
 
   return `${courseName} — ${item.weekCount * item.weeklyHours}课时`;
+}
+
+function formatPlanTabCourseName(courseName: string | null) {
+  const normalizedCourseName = courseName || '未命名课程';
+  const chars = Array.from(normalizedCourseName);
+
+  if (chars.length <= PLAN_TAB_COURSE_NAME_MAX_LENGTH) {
+    return normalizedCourseName;
+  }
+
+  return `${chars.slice(0, PLAN_TAB_COURSE_NAME_MAX_LENGTH).join('')}...`;
+}
+
+function formatUpstreamSessionLoginUser(session: StoredUpstreamSession | null) {
+  if (!session) {
+    return '未连接';
+  }
+
+  return session.upstreamLoginId?.trim() || '已连接';
 }
 
 function renderReferenceCandidateDescription(
@@ -2491,7 +2513,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
           ),
           key: item.planId,
           label: (
-            <div style={{ maxWidth: isCompactViewport ? 180 : 200 }}>
+            <div
+              style={{ maxWidth: isCompactViewport ? 180 : 200 }}
+              title={item.courseName || '未命名课程'}
+            >
               <div
                 style={{
                   fontWeight: isActiveItem ? token.fontWeightStrong : undefined,
@@ -2500,7 +2525,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
                   whiteSpace: 'nowrap',
                 }}
               >
-                {item.courseName || '未命名课程'}
+                {formatPlanTabCourseName(item.courseName)}
               </div>
               <Typography.Text
                 style={{
@@ -2774,6 +2799,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
       if (action) {
         await performAction(nextSession, action);
+      } else {
+        clearResults();
+        setActionError(null);
       }
     } catch (error) {
       setLoginError(resolveUpstreamErrorMessage(error, 'upstream 登录失败，请检查账号或密码。'));
@@ -2820,57 +2848,84 @@ export function AcademicCurriculumPlanHomepagePageContent({
       ) : null}
 
       <Card size="small">
-        <Form<SearchFormValues>
-          form={searchForm}
-          initialValues={defaultSearchValues}
-          layout="inline"
-          requiredMark={false}
-          size="small"
-          style={{ rowGap: token.marginXS }}
-          onFinish={(values) => {
-            void handleFetchList(values);
-          }}
-        >
-          <Form.Item
-            label="学年"
-            name="schoolYear"
-            rules={[{ required: true, message: '请选择学年' }]}
+        <Flex align="center" gap={token.marginSM} justify="space-between" wrap>
+          <Form<SearchFormValues>
+            form={searchForm}
+            initialValues={defaultSearchValues}
+            layout="inline"
+            requiredMark={false}
+            size="small"
+            style={{ flex: '1 1 auto', rowGap: token.marginXS }}
+            onFinish={(values) => {
+              void handleFetchList(values);
+            }}
           >
-            <Select options={schoolYearOptions} style={{ width: 124 }} />
-          </Form.Item>
-          <Form.Item
-            label="学期"
-            name="semester"
-            rules={[{ required: true, message: '请选择学期' }]}
-          >
-            <Select options={SEMESTER_OPTIONS} style={{ width: 108 }} />
-          </Form.Item>
-          {canSelectDepartment ? (
-            <DepartmentFormItem
-              label="系部"
-              loading={isLoadingDepartments}
-              options={departmentOptions}
-              required
-              selectProps={{
-                size: 'small',
-                style: { width: 200 },
-              }}
-              validateStatus={departmentOptionsError ? 'warning' : undefined}
-            />
-          ) : null}
-          <Form.Item>
-            <Button
-              disabled={canSelectDepartment && isLoadingDepartments}
-              htmlType="submit"
-              icon={<SearchOutlined />}
-              loading={isLoadingList}
-              size="small"
-              type="primary"
+            <Form.Item
+              label="学年"
+              name="schoolYear"
+              rules={[{ required: true, message: '请选择学年' }]}
             >
-              读取计划列表
-            </Button>
-          </Form.Item>
-        </Form>
+              <Select options={schoolYearOptions} style={{ width: 124 }} />
+            </Form.Item>
+            <Form.Item
+              label="学期"
+              name="semester"
+              rules={[{ required: true, message: '请选择学期' }]}
+            >
+              <Select options={SEMESTER_OPTIONS} style={{ width: 108 }} />
+            </Form.Item>
+            {canSelectDepartment ? (
+              <DepartmentFormItem
+                label="系部"
+                loading={isLoadingDepartments}
+                options={departmentOptions}
+                required
+                selectProps={{
+                  size: 'small',
+                  style: { width: 200 },
+                }}
+                validateStatus={departmentOptionsError ? 'warning' : undefined}
+              />
+            ) : null}
+            <Form.Item>
+              <Button
+                disabled={canSelectDepartment && isLoadingDepartments}
+                htmlType="submit"
+                icon={<SearchOutlined />}
+                loading={isLoadingList}
+                size="small"
+                type="primary"
+              >
+                读取计划列表
+              </Button>
+            </Form.Item>
+          </Form>
+
+          {isAdminAccount ? (
+            <Flex align="center" gap={token.marginXS} style={{ flex: '0 0 auto' }} wrap>
+              <Typography.Text
+                style={{
+                  color: token.colorTextSecondary,
+                  fontSize: token.fontSizeSM,
+                  lineHeight: token.lineHeightSM,
+                }}
+              >
+                智慧校园账号：{formatUpstreamSessionLoginUser(storedSession)}
+              </Typography.Text>
+              <Button
+                icon={<SwapOutlined />}
+                size="small"
+                onClick={() => {
+                  setPendingAction(null);
+                  setLoginError(null);
+                  openLoginModal();
+                }}
+              >
+                {storedSession ? '切换账号' : '连接账号'}
+              </Button>
+            </Flex>
+          ) : null}
+        </Flex>
         {canSelectDepartment && departmentOptionsError ? (
           <Alert showIcon title={departmentOptionsError} type="warning" />
         ) : null}
