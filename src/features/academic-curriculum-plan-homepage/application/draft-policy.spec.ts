@@ -207,6 +207,71 @@ describe('curriculum plan homepage draft policy', () => {
     ]);
   });
 
+  it('allocates remaining initial lessons by 1:2 in two-hour units', () => {
+    const result = buildInitialReferenceLessonDistributionDraftUpdate({
+      currentDraft: {
+        total_lessons: 22,
+      },
+      plannedLessonsDiff: 0,
+      referenceHomepage: {
+        flexible_lessons: 2,
+        review_exam_lessons: 4,
+      },
+      strategy: 'ratio_1_to_2',
+    });
+
+    expect(result.nextDraft).toMatchObject({
+      flexible_lessons: 2,
+      lecture_lessons: 4,
+      review_exam_lessons: 4,
+      total_lessons: 22,
+      training_lessons: 12,
+    });
+    expect(result.calculatedFields).toEqual(['lecture_lessons', 'training_lessons']);
+  });
+
+  it('gives odd remaining initial lesson remainder to training lessons', () => {
+    const result = buildInitialReferenceLessonDistributionDraftUpdate({
+      currentDraft: {
+        total_lessons: 23,
+      },
+      plannedLessonsDiff: 0,
+      referenceHomepage: {
+        flexible_lessons: 2,
+        review_exam_lessons: 4,
+      },
+      strategy: 'ratio_1_to_2',
+    });
+
+    expect(result.nextDraft).toMatchObject({
+      flexible_lessons: 2,
+      lecture_lessons: 4,
+      review_exam_lessons: 4,
+      total_lessons: 23,
+      training_lessons: 13,
+    });
+  });
+
+  it('does not allocate 1:2 lessons when review and flexible exceed total lessons', () => {
+    const result = buildInitialReferenceLessonDistributionDraftUpdate({
+      currentDraft: {
+        total_lessons: 4,
+      },
+      plannedLessonsDiff: 0,
+      referenceHomepage: {
+        flexible_lessons: 2,
+        review_exam_lessons: 4,
+      },
+      strategy: 'ratio_1_to_2',
+    });
+
+    expect(result.nextDraft).toEqual({
+      total_lessons: 4,
+    });
+    expect(result.calculatedFields).toEqual([]);
+    expect(result.changes).toEqual([]);
+  });
+
   it('does not reuse reference lesson distribution when lesson diff is too large', () => {
     const result = buildInitialReferenceLessonDistributionDraftUpdate({
       currentDraft: {

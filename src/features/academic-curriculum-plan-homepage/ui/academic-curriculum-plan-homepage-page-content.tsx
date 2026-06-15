@@ -60,6 +60,8 @@ import {
   buildReferenceCandidateDraftUpdate,
   buildTeachingEndChapterDraftUpdate,
   type CurriculumPlanHomepageDraftChange,
+  type CurriculumPlanHomepageDraftUpdate,
+  type InitialReferenceLessonDistributionStrategy,
   validateCurriculumPlanHomepageBeforeSave,
 } from '../application/draft-policy';
 import {
@@ -158,6 +160,14 @@ type PrefillActionState = {
   tooltip?: string;
 };
 
+type InitialLessonDistributionStrategyOption = {
+  description: string;
+  disabled: boolean;
+  key: InitialReferenceLessonDistributionStrategy;
+  title: string;
+  update: CurriculumPlanHomepageDraftUpdate | null;
+};
+
 const SEMESTER_OPTIONS = [
   {
     label: '第一学期',
@@ -172,6 +182,8 @@ const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PLAN_TAB_COURSE_NAME_MAX_LENGTH = 6;
+const DEFAULT_INITIAL_LESSON_DISTRIBUTION_STRATEGY =
+  'ratio_1_to_2' satisfies InitialReferenceLessonDistributionStrategy;
 const CALCULATED_SUGGESTION_FIELDS = new Set([
   'compensated_lessons',
   'completed_lessons',
@@ -923,35 +935,167 @@ function formatEndChapterCandidateTitle(
   return contentText || weekText || item.displayText;
 }
 
+function readPreviewNumberValue(source: Record<string, unknown>, field: string) {
+  const value = source[field];
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return Number.isInteger(value) ? String(value) : String(Number(value.toFixed(4)));
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+
+    if (Number.isFinite(parsed)) {
+      return Number.isInteger(parsed) ? String(parsed) : String(Number(parsed.toFixed(4)));
+    }
+  }
+
+  return '--';
+}
+
+function hasAvailableLessonDistributionUpdate(update: CurriculumPlanHomepageDraftUpdate | null) {
+  return Boolean(update?.calculatedFields?.length);
+}
+
+function buildInitialLessonDistributionStrategyOptions(input: {
+  currentDraft: Record<string, unknown> | null;
+  plannedLessonsDiff: number | null;
+  referenceHomepage: Record<string, unknown> | null;
+}): InitialLessonDistributionStrategyOption[] {
+  const buildOption = (
+    strategy: InitialReferenceLessonDistributionStrategy,
+    title: string,
+    description: string,
+  ): InitialLessonDistributionStrategyOption => {
+    const update =
+      input.currentDraft && input.referenceHomepage
+        ? buildInitialReferenceLessonDistributionDraftUpdate({
+            currentDraft: input.currentDraft,
+            plannedLessonsDiff: input.plannedLessonsDiff,
+            referenceHomepage: input.referenceHomepage,
+            strategy,
+          })
+        : null;
+
+    return {
+      description,
+      disabled: !hasAvailableLessonDistributionUpdate(update),
+      key: strategy,
+      title,
+      update,
+    };
+  };
+
+  return [
+    buildOption('ratio_1_to_2', '按 1:2 分配', '扣掉复习考试和机动后，讲课与实训按 1:2 分配。'),
+    buildOption('history', '保持历史参考', '沿用历史讲课、复习考试和机动课时，剩余课时给实训。'),
+  ];
+}
+
+function renderLessonDistributionPreview(
+  update: CurriculumPlanHomepageDraftUpdate | null,
+  token: ReturnType<typeof theme.useToken>['token'],
+) {
+  if (!hasAvailableLessonDistributionUpdate(update)) {
+    return <Typography.Text type="secondary">暂不可用</Typography.Text>;
+  }
+
+  return (
+    <Space size={token.marginXS} wrap>
+      <Typography.Text type="secondary">
+        讲课 {readPreviewNumberValue(update.nextDraft, 'lecture_lessons')}
+      </Typography.Text>
+      <Typography.Text type="secondary">
+        实训 {readPreviewNumberValue(update.nextDraft, 'training_lessons')}
+      </Typography.Text>
+      <Typography.Text type="secondary">
+        复习考试 {readPreviewNumberValue(update.nextDraft, 'review_exam_lessons')}
+      </Typography.Text>
+      <Typography.Text type="secondary">
+        机动 {readPreviewNumberValue(update.nextDraft, 'flexible_lessons')}
+      </Typography.Text>
+    </Space>
+  );
+}
+
+function renderInitialLessonDistributionStrategyOption(input: {
+  isSelected: boolean;
+  option: InitialLessonDistributionStrategyOption;
+  token: ReturnType<typeof theme.useToken>['token'];
+}) {
+  return (
+    <Radio
+      key={input.option.key}
+      disabled={input.option.disabled}
+      style={{
+        alignItems: 'flex-start',
+        background: input.isSelected ? input.token.colorFillTertiary : undefined,
+        border: `1px solid ${
+          input.isSelected ? input.token.colorPrimaryBorder : input.token.colorBorderSecondary
+        }`,
+        borderRadius: input.token.borderRadius,
+        marginInlineEnd: 0,
+        padding: `${input.token.paddingXS}px ${input.token.paddingSM}px`,
+        width: '100%',
+      }}
+      value={input.option.key}
+    >
+      <Space orientation="vertical" size={input.token.marginXXS} style={{ minWidth: 0 }}>
+        <Flex align="center" gap={input.token.marginXS} wrap="wrap">
+          <Typography.Text strong>{input.option.title}</Typography.Text>
+          {input.option.key === DEFAULT_INITIAL_LESSON_DISTRIBUTION_STRATEGY ? (
+            <Tag color="processing">默认</Tag>
+          ) : null}
+          {input.option.disabled ? <Tag>不可用</Tag> : null}
+        </Flex>
+        <Typography.Text type="secondary">{input.option.description}</Typography.Text>
+        {renderLessonDistributionPreview(input.option.update, input.token)}
+      </Space>
+    </Radio>
+  );
+}
+
 function CurriculumPlanHomepagePrefillModal({
   endChapterCandidates,
   isLoadingEndChapterCandidates,
   isApplying,
   isLoadingPrefill,
+  isLoadingLessonDistributionPreview,
   isLoadingReferenceCandidates,
+  lessonDistributionPreviewError,
+  lessonDistributionStrategyOptions,
   modal,
   onApply,
   onClose,
   prefillUpdate,
   referenceCandidates,
   selectedEndChapterKey,
+  selectedLessonDistributionStrategy,
   selectedReferenceKey,
   setSelectedEndChapterKey,
+  setSelectedLessonDistributionStrategy,
   setSelectedReferenceKey,
 }: {
   endChapterCandidates: CurriculumPlanHomepageTeachingEndChapterCandidatesResult | null;
   isLoadingEndChapterCandidates: boolean;
   isApplying: boolean;
   isLoadingPrefill: boolean;
+  isLoadingLessonDistributionPreview: boolean;
   isLoadingReferenceCandidates: boolean;
+  lessonDistributionPreviewError: string | null;
+  lessonDistributionStrategyOptions: readonly InitialLessonDistributionStrategyOption[];
   modal: PrefillModalState | null;
   onApply: () => Promise<void> | void;
   onClose: () => void;
   prefillUpdate: PrefillPreviewUpdate | null;
   referenceCandidates: CurriculumPlanHomepageReferenceCandidatesResult | null;
   selectedEndChapterKey: string | null;
+  selectedLessonDistributionStrategy: InitialReferenceLessonDistributionStrategy;
   selectedReferenceKey: string;
   setSelectedEndChapterKey: (key: string | null) => void;
+  setSelectedLessonDistributionStrategy: (
+    strategy: InitialReferenceLessonDistributionStrategy,
+  ) => void;
   setSelectedReferenceKey: (key: string) => void;
 }) {
   const { token } = theme.useToken();
@@ -967,7 +1111,10 @@ function CurriculumPlanHomepagePrefillModal({
     isApplying ||
     isLoadingPrefill ||
     isLoadingReferenceCandidates ||
+    isLoadingLessonDistributionPreview ||
     (phase === 'FINAL' && isLoadingEndChapterCandidates);
+  const shouldShowLessonDistributionStrategy =
+    phase === 'INITIAL' && selectedReferenceKey !== '__none__';
 
   return (
     <Modal
@@ -1037,6 +1184,39 @@ function CurriculumPlanHomepagePrefillModal({
             </Radio.Group>
           )}
         </Space>
+
+        {shouldShowLessonDistributionStrategy ? (
+          <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+            <Typography.Text strong>课时分配策略</Typography.Text>
+            {isLoadingLessonDistributionPreview ? (
+              <Flex align="center" justify="center" style={{ minHeight: 72 }}>
+                <Spin />
+              </Flex>
+            ) : lessonDistributionPreviewError ? (
+              <Alert showIcon title={lessonDistributionPreviewError} type="warning" />
+            ) : (
+              <Radio.Group
+                style={{ width: '100%' }}
+                value={selectedLessonDistributionStrategy}
+                onChange={(event) => {
+                  setSelectedLessonDistributionStrategy(
+                    event.target.value as InitialReferenceLessonDistributionStrategy,
+                  );
+                }}
+              >
+                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
+                  {lessonDistributionStrategyOptions.map((option) =>
+                    renderInitialLessonDistributionStrategyOption({
+                      isSelected: selectedLessonDistributionStrategy === option.key,
+                      option,
+                      token,
+                    }),
+                  )}
+                </Space>
+              </Radio.Group>
+            )}
+          </Space>
+        ) : null}
 
         {phase === 'FINAL' ? (
           <Space orientation="vertical" size="small" style={{ width: '100%' }}>
@@ -1533,6 +1713,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const [referenceCandidateResults, setReferenceCandidateResults] = useState<
     Record<string, CurriculumPlanHomepageReferenceCandidatesResult>
   >({});
+  const [referenceHomepageDetails, setReferenceHomepageDetails] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
   const [endChapterCandidateResults, setEndChapterCandidateResults] = useState<
     Record<string, CurriculumPlanHomepageTeachingEndChapterCandidatesResult>
   >({});
@@ -1542,9 +1725,19 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const [prefillModal, setPrefillModal] = useState<PrefillModalState | null>(null);
   const [selectedReferenceCandidateKey, setSelectedReferenceCandidateKey] =
     useState<string>('__none__');
+  const [selectedInitialLessonDistributionStrategy, setSelectedInitialLessonDistributionStrategy] =
+    useState<InitialReferenceLessonDistributionStrategy>(
+      DEFAULT_INITIAL_LESSON_DISTRIBUTION_STRATEGY,
+    );
   const [selectedEndChapterCandidateKey, setSelectedEndChapterCandidateKey] = useState<
     string | null
   >(null);
+  const [loadingReferenceHomepagePlanId, setLoadingReferenceHomepagePlanId] = useState<
+    string | null
+  >(null);
+  const [referenceHomepageDetailError, setReferenceHomepageDetailError] = useState<string | null>(
+    null,
+  );
   const [suggestedFieldsByPlan, setSuggestedFieldsByPlan] = useState<SuggestedFieldsByPlan>({});
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const prefillMode = resolvePrefillMode(currentAccount);
@@ -1574,12 +1767,15 @@ export function AcademicCurriculumPlanHomepagePageContent({
     setDetailResult(null);
     setHomepageDrafts({});
     setReferenceCandidateResults({});
+    setReferenceHomepageDetails({});
     setEndChapterCandidateResults({});
     setPrefillPreviewUpdates({});
     setPrefillModal(null);
     setSuggestedFieldsByPlan({});
     setSaveValidationMessagesByPlan({});
     setSaveSuccessMessage(null);
+    setReferenceHomepageDetailError(null);
+    setLoadingReferenceHomepagePlanId(null);
   }, []);
 
   const clearCurrentSession = useCallback(
@@ -1632,10 +1828,13 @@ export function AcademicCurriculumPlanHomepagePageContent({
           setSelectedPlanId(null);
           setHomepageDrafts({});
           setReferenceCandidateResults({});
+          setReferenceHomepageDetails({});
           setEndChapterCandidateResults({});
           setPrefillPreviewUpdates({});
           setPrefillModal(null);
           setSuggestedFieldsByPlan({});
+          setReferenceHomepageDetailError(null);
+          setLoadingReferenceHomepagePlanId(null);
           setSaveSuccessMessage(null);
 
           const result = await fetchCurriculumPlanHomepageList({
@@ -2200,7 +2399,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
       }
 
       setSelectedReferenceCandidateKey('__none__');
+      setSelectedInitialLessonDistributionStrategy(DEFAULT_INITIAL_LESSON_DISTRIBUTION_STRATEGY);
       setSelectedEndChapterCandidateKey(null);
+      setReferenceHomepageDetailError(null);
       setPrefillModal({
         item,
         phase,
@@ -2366,19 +2567,33 @@ export function AcademicCurriculumPlanHomepagePageContent({
           selectedReference.item.plannedLessonsDiff !== null &&
           selectedReference.item.plannedLessonsDiff <= 20
         ) {
-          const referenceHomepage = await fetchReferenceHomepageDetail(
-            selectedReference.item.sourcePlanId,
-          );
+          let referenceHomepage = referenceHomepageDetails[selectedReference.item.sourcePlanId];
+
+          if (!referenceHomepage) {
+            referenceHomepage = await fetchReferenceHomepageDetail(
+              selectedReference.item.sourcePlanId,
+            );
+
+            setReferenceHomepageDetails((current) => ({
+              ...current,
+              [selectedReference.item.sourcePlanId]: referenceHomepage,
+            }));
+          }
 
           if (referenceHomepage) {
             const lessonDistributionUpdate = buildInitialReferenceLessonDistributionDraftUpdate({
               currentDraft: nextDraft,
               plannedLessonsDiff: selectedReference.item.plannedLessonsDiff,
               referenceHomepage,
+              strategy: selectedInitialLessonDistributionStrategy,
             });
 
             nextDraft = lessonDistributionUpdate.nextDraft;
             changes.push(...lessonDistributionUpdate.changes);
+
+            for (const field of lessonDistributionUpdate.calculatedFields ?? []) {
+              sourceOverrides[field] = 'calculated';
+            }
           }
         }
       }
@@ -2432,7 +2647,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
     prefillModal,
     prefillPreviewUpdates,
     referenceCandidateResults,
+    referenceHomepageDetails,
     selectedEndChapterCandidateKey,
+    selectedInitialLessonDistributionStrategy,
     selectedReferenceCandidateKey,
   ]);
 
@@ -2584,6 +2801,37 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const currentEndChapterCandidates = prefillModalEndChapterKey
     ? (endChapterCandidateResults[prefillModalEndChapterKey] ?? null)
     : null;
+  const currentReferenceOptions = useMemo(
+    () => flattenReferenceCandidates(currentReferenceCandidates),
+    [currentReferenceCandidates],
+  );
+  const selectedReferenceOption = useMemo(
+    () => currentReferenceOptions.find((option) => option.key === selectedReferenceCandidateKey),
+    [currentReferenceOptions, selectedReferenceCandidateKey],
+  );
+  const selectedReferenceSourcePlanId = selectedReferenceOption?.item.sourcePlanId ?? null;
+  const selectedReferencePlannedLessonsDiff =
+    selectedReferenceOption?.item.plannedLessonsDiff ?? null;
+  const selectedReferenceHomepage = selectedReferenceSourcePlanId
+    ? (referenceHomepageDetails[selectedReferenceSourcePlanId] ?? null)
+    : null;
+  const currentLessonDistributionStrategyOptions = useMemo(
+    () =>
+      buildInitialLessonDistributionStrategyOptions({
+        currentDraft:
+          prefillModal?.phase === 'INITIAL' && currentPrefillUpdate
+            ? currentPrefillUpdate.nextDraft
+            : null,
+        plannedLessonsDiff: selectedReferencePlannedLessonsDiff,
+        referenceHomepage: selectedReferenceHomepage,
+      }),
+    [
+      currentPrefillUpdate,
+      prefillModal?.phase,
+      selectedReferenceHomepage,
+      selectedReferencePlannedLessonsDiff,
+    ],
+  );
 
   useEffect(() => {
     if (!prefillModalKey) {
@@ -2601,6 +2849,100 @@ export function AcademicCurriculumPlanHomepagePageContent({
       recommendedReference?.key ?? referenceOptions[0]?.key ?? '__none__',
     );
   }, [prefillModalKey, referenceCandidateResults]);
+
+  useEffect(() => {
+    if (
+      !prefillModal ||
+      prefillModal.phase !== 'INITIAL' ||
+      !selectedReferenceSourcePlanId ||
+      selectedReferencePlannedLessonsDiff === null ||
+      selectedReferencePlannedLessonsDiff > 20 ||
+      selectedReferenceCandidateKey === '__none__'
+    ) {
+      setReferenceHomepageDetailError(null);
+      setLoadingReferenceHomepagePlanId(null);
+      return;
+    }
+
+    if (referenceHomepageDetails[selectedReferenceSourcePlanId]) {
+      setReferenceHomepageDetailError(null);
+      setLoadingReferenceHomepagePlanId(null);
+      return;
+    }
+
+    let isCancelled = false;
+
+    setLoadingReferenceHomepagePlanId(selectedReferenceSourcePlanId);
+    setReferenceHomepageDetailError(null);
+
+    fetchReferenceHomepageDetail(selectedReferenceSourcePlanId)
+      .then((referenceHomepage) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setReferenceHomepageDetails((current) => ({
+          ...current,
+          [selectedReferenceSourcePlanId]: referenceHomepage,
+        }));
+      })
+      .catch((error: unknown) => {
+        if (isCancelled) {
+          return;
+        }
+
+        setReferenceHomepageDetailError(
+          resolveUpstreamErrorMessage(error, '暂时无法读取参考教学计划课时分配。'),
+        );
+      })
+      .finally(() => {
+        if (!isCancelled) {
+          setLoadingReferenceHomepagePlanId(null);
+        }
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    fetchReferenceHomepageDetail,
+    prefillModal,
+    referenceHomepageDetails,
+    selectedReferenceCandidateKey,
+    selectedReferencePlannedLessonsDiff,
+    selectedReferenceSourcePlanId,
+  ]);
+
+  useEffect(() => {
+    if (!prefillModal || prefillModal.phase !== 'INITIAL') {
+      return;
+    }
+
+    if (selectedReferenceCandidateKey === '__none__') {
+      return;
+    }
+
+    const selectedStrategyOption = currentLessonDistributionStrategyOptions.find(
+      (option) => option.key === selectedInitialLessonDistributionStrategy,
+    );
+
+    if (!selectedStrategyOption || !selectedStrategyOption.disabled) {
+      return;
+    }
+
+    const availableOption = currentLessonDistributionStrategyOptions.find(
+      (option) => !option.disabled,
+    );
+
+    if (availableOption) {
+      setSelectedInitialLessonDistributionStrategy(availableOption.key);
+    }
+  }, [
+    currentLessonDistributionStrategyOptions,
+    prefillModal,
+    selectedInitialLessonDistributionStrategy,
+    selectedReferenceCandidateKey,
+  ]);
 
   useEffect(() => {
     if (!prefillModal || prefillModal.phase !== 'FINAL') {
@@ -2989,15 +3331,23 @@ export function AcademicCurriculumPlanHomepagePageContent({
         isLoadingEndChapterCandidates={
           Boolean(prefillModalEndChapterKey) && loadingEndChapterKey === prefillModalEndChapterKey
         }
+        isLoadingLessonDistributionPreview={
+          Boolean(selectedReferenceSourcePlanId) &&
+          loadingReferenceHomepagePlanId === selectedReferenceSourcePlanId
+        }
         isLoadingPrefill={isPreviewingPrefill}
         isLoadingReferenceCandidates={
           Boolean(prefillModalKey) && loadingReferenceKey === prefillModalKey
         }
+        lessonDistributionPreviewError={referenceHomepageDetailError}
+        lessonDistributionStrategyOptions={currentLessonDistributionStrategyOptions}
         prefillUpdate={currentPrefillUpdate}
         referenceCandidates={currentReferenceCandidates}
         selectedEndChapterKey={selectedEndChapterCandidateKey}
+        selectedLessonDistributionStrategy={selectedInitialLessonDistributionStrategy}
         selectedReferenceKey={selectedReferenceCandidateKey}
         setSelectedEndChapterKey={setSelectedEndChapterCandidateKey}
+        setSelectedLessonDistributionStrategy={setSelectedInitialLessonDistributionStrategy}
         setSelectedReferenceKey={setSelectedReferenceCandidateKey}
         onApply={handleApplyPrefillModal}
         onClose={() => {

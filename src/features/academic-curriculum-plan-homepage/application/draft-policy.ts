@@ -22,6 +22,8 @@ export type CurriculumPlanHomepageDraftUpdate = {
   nextDraft: Record<string, unknown>;
 };
 
+export type InitialReferenceLessonDistributionStrategy = 'history' | 'ratio_1_to_2';
+
 export type CurriculumPlanHomepageSaveValidationResult = {
   errors: string[];
   valid: boolean;
@@ -343,6 +345,28 @@ function setDraftValue(input: {
   });
 }
 
+function buildRatioLessonDistribution(input: {
+  flexibleLessons: number;
+  reviewExamLessons: number;
+  totalLessons: number;
+}) {
+  const remainingLessons = input.totalLessons - input.reviewExamLessons - input.flexibleLessons;
+
+  if (remainingLessons < 0) {
+    return null;
+  }
+
+  const twoHourUnits = Math.floor(remainingLessons / 2);
+  const lectureUnits = Math.floor(twoHourUnits / 3);
+  const lectureLessons = lectureUnits * 2;
+  const trainingLessons = (twoHourUnits - lectureUnits) * 2 + (remainingLessons % 2);
+
+  return {
+    lectureLessons,
+    trainingLessons,
+  };
+}
+
 export function buildPrefillDraftUpdate(input: {
   currentDraft: Record<string, unknown>;
   fieldWriteRules: readonly CurriculumPlanHomepagePrefillFieldWriteRule[];
@@ -421,9 +445,11 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
   currentDraft: Record<string, unknown>;
   plannedLessonsDiff: number | null;
   referenceHomepage: Record<string, unknown>;
+  strategy?: InitialReferenceLessonDistributionStrategy;
 }): CurriculumPlanHomepageDraftUpdate {
   const nextDraft = { ...input.currentDraft };
   const changes: CurriculumPlanHomepageDraftChange[] = [];
+  const strategy = input.strategy ?? 'history';
 
   if (input.plannedLessonsDiff === null || input.plannedLessonsDiff > 20) {
     return {
@@ -434,16 +460,11 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
   }
 
   const totalLessons = readNumberValue(nextDraft, 'total_lessons');
-  const lectureLessons = readNumberValue(input.referenceHomepage, 'lecture_lessons');
+  const referenceLectureLessons = readNumberValue(input.referenceHomepage, 'lecture_lessons');
   const reviewExamLessons = readNumberValue(input.referenceHomepage, 'review_exam_lessons');
   const flexibleLessons = readNumberValue(input.referenceHomepage, 'flexible_lessons');
 
-  if (
-    totalLessons === null ||
-    lectureLessons === null ||
-    reviewExamLessons === null ||
-    flexibleLessons === null
-  ) {
+  if (totalLessons === null || reviewExamLessons === null || flexibleLessons === null) {
     return {
       calculatedFields: [],
       changes,
@@ -451,7 +472,40 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
     };
   }
 
-  const trainingLessons = totalLessons - lectureLessons - reviewExamLessons - flexibleLessons;
+  const calculatedFields =
+    strategy === 'ratio_1_to_2' ? ['lecture_lessons', 'training_lessons'] : ['training_lessons'];
+  let lectureLessons: number;
+  let trainingLessons: number;
+
+  if (strategy === 'ratio_1_to_2') {
+    const distribution = buildRatioLessonDistribution({
+      flexibleLessons,
+      reviewExamLessons,
+      totalLessons,
+    });
+
+    if (!distribution) {
+      return {
+        calculatedFields: [],
+        changes,
+        nextDraft,
+      };
+    }
+
+    lectureLessons = distribution.lectureLessons;
+    trainingLessons = distribution.trainingLessons;
+  } else {
+    if (referenceLectureLessons === null) {
+      return {
+        calculatedFields: [],
+        changes,
+        nextDraft,
+      };
+    }
+
+    lectureLessons = referenceLectureLessons;
+    trainingLessons = totalLessons - lectureLessons - reviewExamLessons - flexibleLessons;
+  }
 
   if (trainingLessons < 0) {
     return {
@@ -491,7 +545,7 @@ export function buildInitialReferenceLessonDistributionDraftUpdate(input: {
   });
 
   return {
-    calculatedFields: ['training_lessons'],
+    calculatedFields,
     changes,
     nextDraft,
   };
