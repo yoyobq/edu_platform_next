@@ -327,7 +327,9 @@ async function loadLabRoute<TData = null>({
     throw new Response('Not Found', { status: 404 });
   }
 
-  if (hasHydratingSession()) {
+  if (hasHydratingSession() && !hasGuestLabAccess(access)) {
+    await restoreSession({ waitForPending: true });
+  } else if (hasHydratingSession()) {
     void restoreSession({ background: true });
   } else {
     await restoreSession();
@@ -336,7 +338,7 @@ async function loadLabRoute<TData = null>({
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
-    if (hasHydratingSession()) {
+    if (hasHydratingSession() && hasGuestLabAccess(access)) {
       return null;
     }
 

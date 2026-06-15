@@ -886,6 +886,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
+  const canLoadBackendData = Boolean(upstreamAccount);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [filters, setFilters] = useState<QueryFilters>({
@@ -969,6 +970,10 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
   }, [result, showConsistentRows]);
 
   useEffect(() => {
+    if (!canLoadBackendData) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadSemesters() {
@@ -1002,7 +1007,7 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [canLoadBackendData]);
 
   useEffect(() => {
     if (isStaffViewer) {
@@ -1018,6 +1023,10 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
   }, [defaultStaffId, filters.staffId, isStaffViewer]);
 
   useEffect(() => {
+    if (!canLoadBackendData) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadStaffDirectory() {
@@ -1054,7 +1063,13 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
     return () => {
       cancelled = true;
     };
-  }, [clear, persistSessionFromResult, storedSession, storedSessionDirectoryKey]);
+  }, [
+    canLoadBackendData,
+    clear,
+    persistSessionFromResult,
+    storedSession,
+    storedSessionDirectoryKey,
+  ]);
 
   function updateFilter(key: keyof QueryFilters, value: string) {
     setFilters((current) => ({

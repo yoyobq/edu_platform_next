@@ -953,7 +953,9 @@ function readPreviewNumberValue(source: Record<string, unknown>, field: string) 
   return '--';
 }
 
-function hasAvailableLessonDistributionUpdate(update: CurriculumPlanHomepageDraftUpdate | null) {
+function hasAvailableLessonDistributionUpdate(
+  update: CurriculumPlanHomepageDraftUpdate | null,
+): update is CurriculumPlanHomepageDraftUpdate {
   return Boolean(update?.calculatedFields?.length);
 }
 
@@ -2567,17 +2569,22 @@ export function AcademicCurriculumPlanHomepagePageContent({
           selectedReference.item.plannedLessonsDiff !== null &&
           selectedReference.item.plannedLessonsDiff <= 20
         ) {
-          let referenceHomepage = referenceHomepageDetails[selectedReference.item.sourcePlanId];
+          const cachedReferenceHomepage =
+            referenceHomepageDetails[selectedReference.item.sourcePlanId];
+          let referenceHomepage = cachedReferenceHomepage ?? null;
 
           if (!referenceHomepage) {
-            referenceHomepage = await fetchReferenceHomepageDetail(
+            const fetchedReferenceHomepage = await fetchReferenceHomepageDetail(
               selectedReference.item.sourcePlanId,
             );
 
-            setReferenceHomepageDetails((current) => ({
-              ...current,
-              [selectedReference.item.sourcePlanId]: referenceHomepage,
-            }));
+            if (fetchedReferenceHomepage) {
+              referenceHomepage = fetchedReferenceHomepage;
+              setReferenceHomepageDetails((current) => ({
+                ...current,
+                [selectedReference.item.sourcePlanId]: fetchedReferenceHomepage,
+              }));
+            }
           }
 
           if (referenceHomepage) {
@@ -2877,7 +2884,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
     fetchReferenceHomepageDetail(selectedReferenceSourcePlanId)
       .then((referenceHomepage) => {
-        if (isCancelled) {
+        if (isCancelled || !referenceHomepage) {
           return;
         }
 
