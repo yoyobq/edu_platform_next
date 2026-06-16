@@ -21,6 +21,11 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import {
+  type AcademicSemesterRecord,
+  AcademicSemesterSelect,
+  sortAcademicSemestersForDisplay,
+} from '@/entities/academic-semester';
 import { buildDepartmentSelectOptions, DepartmentSelect } from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -56,6 +61,7 @@ import {
   type PreRegisteredReviewDraft,
   type PreRegisteredReviewOutcome,
   REASON_CODE_LABELS,
+  requiresEffectiveSemester,
   requiresPreRegisteredLocalReview,
 } from '../application/confirmation-policy';
 import {
@@ -93,6 +99,7 @@ import {
   fetchRosterMembershipDepartmentOptions,
   isExpiredUpstreamSessionError,
   listLocalClassOptions,
+  requestAcademicSemesters,
   resolveStudentRosterMembershipErrorMessage,
 } from '../infrastructure/api';
 import { isRosterMembershipPermissionError } from '../infrastructure/api-errors';
@@ -397,6 +404,7 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [isLoadingClassList, setIsLoadingClassList] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isLoadingLocalClassOptions, setIsLoadingLocalClassOptions] = useState(false);
+  const [isLoadingAcademicSemesters, setIsLoadingAcademicSemesters] = useState(false);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isCommitting, setIsCommitting] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -405,6 +413,7 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [classListError, setClassListError] = useState<string | null>(null);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [localClassOptionsError, setLocalClassOptionsError] = useState<string | null>(null);
+  const [academicSemestersError, setAcademicSemestersError] = useState<string | null>(null);
   const [reconciliationError, setReconciliationError] = useState<string | null>(null);
   const [classAdviserClaimNotice, setClassAdviserClaimNotice] =
     useState<ClassAdviserClaimNotice | null>(null);
@@ -423,6 +432,7 @@ export function StudentRosterMembershipReconciliationPageContent({
     RosterMembershipDepartmentOption[]
   >([]);
   const [localClassOptions, setLocalClassOptions] = useState<LocalRosterClassOption[]>([]);
+  const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [localClassKeyword, setLocalClassKeyword] = useState('');
   const [localClassOptionsRefreshKey, setLocalClassOptionsRefreshKey] = useState(0);
   const [selectedDepartmentId, setSelectedDepartmentId] = useState<string | undefined>();
@@ -458,6 +468,10 @@ export function StudentRosterMembershipReconciliationPageContent({
     accessGroup,
     slotGroup,
   });
+  const academicSemesterOptions = useMemo(
+    () => sortAcademicSemestersForDisplay(academicSemesters),
+    [academicSemesters],
+  );
   const departmentOptions = useMemo(
     () => buildDepartmentSelectOptions(departmentOptionRecords),
     [departmentOptionRecords],
@@ -968,6 +982,43 @@ export function StudentRosterMembershipReconciliationPageContent({
   ]);
 
   useEffect(() => {
+    if (!currentAccount) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    async function loadAcademicSemesters() {
+      setIsLoadingAcademicSemesters(true);
+      setAcademicSemestersError(null);
+
+      try {
+        const semesters = await requestAcademicSemesters();
+
+        if (!isCancelled) {
+          setAcademicSemesters(semesters);
+          setAcademicSemestersError(null);
+        }
+      } catch (error) {
+        if (!isCancelled) {
+          setAcademicSemesters([]);
+          setAcademicSemestersError(resolveStudentRosterMembershipErrorMessage(error));
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingAcademicSemesters(false);
+        }
+      }
+    }
+
+    void loadAcademicSemesters();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [currentAccount]);
+
+  useEffect(() => {
     if (!canUseLocalClassOptions || !currentAccount) {
       return;
     }
@@ -1135,12 +1186,12 @@ export function StudentRosterMembershipReconciliationPageContent({
     }
 
     if (commitConfirmations.invalidItems.length > 0) {
-      setReconciliationError('存在无法提交的确认项，请检查学生编号和确认选项。');
+      setReconciliationError('存在无法提交的确认项，请检查学生编号、确认选项和生效学期。');
       return;
     }
 
     if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
-      setReconciliationError('存在无法提交的预报到改判项，请检查学生编号。');
+      setReconciliationError('存在无法提交的预报到改判项，请检查学生编号和生效学期。');
       return;
     }
 
@@ -1189,6 +1240,27 @@ export function StudentRosterMembershipReconciliationPageContent({
     }));
   }
 
+  function renderEffectiveSemesterSelect(input: {
+    onChange: (effectiveSemesterId: number | null) => void;
+    value?: number | null;
+  }) {
+    return (
+      <AcademicSemesterSelect
+        allowClear
+        emptyText={academicSemestersError ?? '当前没有可选学期'}
+        loading={isLoadingAcademicSemesters}
+        placeholder="选择生效学期"
+        records={academicSemesterOptions}
+        showHiddenState
+        style={{ width: '100%' }}
+        value={input.value ?? undefined}
+        onChange={(value) => {
+          input.onChange(value ?? null);
+        }}
+      />
+    );
+  }
+
   function renderConfirmationEditor(item: StudentRosterMembershipReconciliationItem) {
     if (!item.requiresConfirmation) {
       return null;
@@ -1217,9 +1289,14 @@ export function StudentRosterMembershipReconciliationPageContent({
                 htmlType="button"
                 {...getDecisionOutcomeButtonProps(option.decisionOutcome, isSelected)}
                 onClick={() => {
+                  const nextReasonCode = option.defaultReasonCode;
+
                   updateConfirmationDraft(item, (current) => ({
                     decisionOutcome: option.decisionOutcome,
-                    reasonCode: option.defaultReasonCode,
+                    effectiveSemesterId: requiresEffectiveSemester(nextReasonCode)
+                      ? current?.effectiveSemesterId
+                      : undefined,
+                    reasonCode: nextReasonCode,
                     reasonText: current?.reasonText,
                   }));
                 }}
@@ -1238,11 +1315,30 @@ export function StudentRosterMembershipReconciliationPageContent({
           onChange={(reasonCode) => {
             updateConfirmationDraft(item, (current) => ({
               decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
+              effectiveSemesterId: requiresEffectiveSemester(reasonCode)
+                ? current?.effectiveSemesterId
+                : undefined,
               reasonCode,
               reasonText: current?.reasonText,
             }));
           }}
         />
+        {requiresEffectiveSemester(draft.reasonCode) ? (
+          <div className="flex flex-col gap-1">
+            <span className="text-text-secondary">生效学期</span>
+            {renderEffectiveSemesterSelect({
+              value: draft.effectiveSemesterId,
+              onChange: (effectiveSemesterId) => {
+                updateConfirmationDraft(item, (current) => ({
+                  decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
+                  effectiveSemesterId,
+                  reasonCode: current?.reasonCode ?? draft.reasonCode,
+                  reasonText: current?.reasonText,
+                }));
+              },
+            })}
+          </div>
+        ) : null}
         <Input.TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
           maxLength={255}
@@ -1252,6 +1348,7 @@ export function StudentRosterMembershipReconciliationPageContent({
           onChange={(event) => {
             updateConfirmationDraft(item, (current) => ({
               decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
+              effectiveSemesterId: current?.effectiveSemesterId,
               reasonCode: current?.reasonCode ?? draft.reasonCode,
               reasonText: event.target.value,
             }));
@@ -1279,13 +1376,13 @@ export function StudentRosterMembershipReconciliationPageContent({
             }));
           }}
         >
-          结束保留裁定
+          撤销此裁定
         </Checkbox>
         {draft.selected ? (
           <Input.TextArea
             autoSize={{ maxRows: 3, minRows: 2 }}
             maxLength={255}
-            placeholder="可选结束原因"
+            placeholder="可选撤销原因"
             showCount
             value={draft.endReason}
             onChange={(event) => {
@@ -1453,26 +1550,47 @@ export function StudentRosterMembershipReconciliationPageContent({
             },
           ]}
           onChange={(event) => {
+            const nextOutcome = event.target.value as PreRegisteredReviewOutcome;
+
             updatePreRegisteredReviewDraft(item, (current) => ({
+              effectiveSemesterId: nextOutcome === 'DROPPED' ? current?.effectiveSemesterId : null,
               note: current?.note,
-              outcome: event.target.value as PreRegisteredReviewOutcome,
+              outcome: nextOutcome,
             }));
           }}
         />
         {draft.outcome !== 'PRE_REGISTERED' ? (
-          <Input.TextArea
-            autoSize={{ maxRows: 3, minRows: 2 }}
-            maxLength={255}
-            placeholder="可选处理说明"
-            showCount
-            value={draft.note}
-            onChange={(event) => {
-              updatePreRegisteredReviewDraft(item, (current) => ({
-                note: event.target.value,
-                outcome: current?.outcome,
-              }));
-            }}
-          />
+          <>
+            {draft.outcome === 'DROPPED' ? (
+              <div className="flex flex-col gap-1">
+                <span className="text-text-secondary">生效学期</span>
+                {renderEffectiveSemesterSelect({
+                  value: draft.effectiveSemesterId,
+                  onChange: (effectiveSemesterId) => {
+                    updatePreRegisteredReviewDraft(item, (current) => ({
+                      effectiveSemesterId,
+                      note: current?.note,
+                      outcome: current?.outcome ?? draft.outcome,
+                    }));
+                  },
+                })}
+              </div>
+            ) : null}
+            <Input.TextArea
+              autoSize={{ maxRows: 3, minRows: 2 }}
+              maxLength={255}
+              placeholder="可选处理说明"
+              showCount
+              value={draft.note}
+              onChange={(event) => {
+                updatePreRegisteredReviewDraft(item, (current) => ({
+                  effectiveSemesterId: current?.effectiveSemesterId,
+                  note: event.target.value,
+                  outcome: current?.outcome,
+                }));
+              }}
+            />
+          </>
         ) : null}
       </div>
     );
@@ -1541,6 +1659,21 @@ export function StudentRosterMembershipReconciliationPageContent({
         </Descriptions.Item>
         <Descriptions.Item label="active decision">
           {formatNullableValue(item.activeDecisionId)}
+        </Descriptions.Item>
+        <Descriptions.Item label="active decision 生效学期">
+          {formatNullableValue(item.activeDecisionEffectiveSemesterId)}
+        </Descriptions.Item>
+        <Descriptions.Item label="推断入学年">
+          {formatNullableValue(item.inferredAdmissionYear)}
+        </Descriptions.Item>
+        <Descriptions.Item label="推断原班序号">
+          {formatNullableValue(item.inferredOriginalClassSeq)}
+        </Descriptions.Item>
+        <Descriptions.Item label="推断目标班序号">
+          {formatNullableValue(item.inferredTargetClassSeq)}
+        </Descriptions.Item>
+        <Descriptions.Item label="推断原班级">
+          {formatNullableValue(item.inferredOriginalClassCode)}
         </Descriptions.Item>
         <Descriptions.Item label="推荐裁定">
           {renderDecisionOutcome(item.recommendedDecisionOutcome)}
@@ -1867,13 +2000,24 @@ export function StudentRosterMembershipReconciliationPageContent({
       );
     }
 
+    if (academicSemestersError) {
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          title="暂时无法加载生效学期"
+          description={academicSemestersError}
+        />
+      );
+    }
+
     if (commitConfirmations.invalidItems.length > 0) {
       return (
         <Alert
           type="warning"
           showIcon
           title="存在无法提交的确认项"
-          description="后端要求必须确认的项需要完整提交；请检查这些项是否缺少学生编号或确认策略。"
+          description="后端要求必须确认的项需要完整提交；请检查这些项是否缺少学生编号、确认策略或生效学期。"
         />
       );
     }
@@ -1884,7 +2028,7 @@ export function StudentRosterMembershipReconciliationPageContent({
           type="warning"
           showIcon
           title="存在无法提交的预报到改判项"
-          description="改判为不再报到或退学时，必须能定位本地学生编号；请检查学生编号。"
+          description="改判为不再报到或退学时，必须能定位本地学生编号；退学还需要选择生效学期。"
         />
       );
     }

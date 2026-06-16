@@ -25,6 +25,7 @@ import {
   fetchPreviousClassAdviserClasses,
   fetchRosterMembershipDepartmentOptions,
   listLocalClassOptions,
+  requestAcademicSemesters,
 } from './api';
 
 describe('student roster membership reconciliation api', () => {
@@ -144,6 +145,43 @@ describe('student roster membership reconciliation api', () => {
     });
   });
 
+  it('loads all academic semesters for roster decision effective semester selectors', async () => {
+    const payload = [
+      {
+        createdAt: '2026-04-01T00:00:00.000Z',
+        endDate: '2026-07-10',
+        examStartDate: '2026-06-22',
+        firstTeachingDate: '2026-02-20',
+        id: 3,
+        isCurrent: true,
+        isVisible: false,
+        name: '2025-2026 第二学期',
+        schoolYear: 2025,
+        sortOrder: 10,
+        startDate: '2026-02-17',
+        termNumber: 2,
+        updatedAt: '2026-04-02T00:00:00.000Z',
+      },
+    ];
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      academicSemesters: payload,
+    });
+
+    await expect(requestAcademicSemesters()).resolves.toEqual(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+    const variables = executeGraphQLMock.mock.calls[0]?.[1];
+
+    expect(query).toContain('StudentRosterMembershipAcademicSemesters');
+    expect(query).toContain('academicSemesters(limit: $limit)');
+    expect(query).toContain('isVisible');
+    expect(query).not.toContain('isVisible: $isVisible');
+    expect(variables).toEqual({
+      limit: 500,
+    });
+  });
+
   it('dry-runs the single-class reconciliation without deleted range fields', async () => {
     const payload = {
       autoAppliedCount: 1,
@@ -186,6 +224,10 @@ describe('student roster membership reconciliation api', () => {
     expect(query).toContain('DryRunReconcileUpstreamStudentRosterInput');
     expect(query).toContain('UpstreamStudentRosterReconciliationResultFields');
     expect(query).toContain('dryRunReconcileUpstreamStudentRoster');
+    expect(query).toContain('activeDecisionEffectiveSemesterId');
+    expect(query).toContain('activeDecisionReasonCode');
+    expect(query).toContain('inferredAdmissionYear');
+    expect(query).toContain('inferredOriginalClassCode');
     expect(query).not.toContain('dryRunReconcileStudentRosterMembership');
     expect(query).not.toContain('classListCodes');
     expect(query).not.toContain('departmentIds');
@@ -270,6 +312,7 @@ describe('student roster membership reconciliation api', () => {
         confirmations: [
           {
             decisionOutcome: 'EXCLUDE',
+            effectiveSemesterId: 3,
             reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
             reasonText: ' 确认已转出 ',
             studentId: ' 20240001 ',
@@ -299,6 +342,7 @@ describe('student roster membership reconciliation api', () => {
         confirmations: [
           {
             decisionOutcome: 'EXCLUDE',
+            effectiveSemesterId: 3,
             reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
             reasonText: '确认已转出',
             studentId: '20240001',

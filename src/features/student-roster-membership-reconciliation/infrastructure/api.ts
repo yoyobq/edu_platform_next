@@ -2,6 +2,7 @@
 
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -48,6 +49,10 @@ type RosterMembershipDepartmentsResponse = {
 
 type ListLocalClassOptionsResponse = {
   listLocalClassOptions: LocalRosterClassOption[];
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
 };
 
 type DryRunReconcileUpstreamStudentRosterResponse = {
@@ -113,6 +118,26 @@ const LIST_LOCAL_CLASS_OPTIONS_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query StudentRosterMembershipAcademicSemesters($limit: Int) {
+    academicSemesters(limit: $limit) {
+      id
+      schoolYear
+      termNumber
+      name
+      startDate
+      firstTeachingDate
+      examStartDate
+      endDate
+      isCurrent
+      isVisible
+      sortOrder
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 const UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS = `
   fragment UpstreamStudentRosterReconciliationResultFields
     on UpstreamStudentRosterReconciliationResultDTO {
@@ -157,7 +182,13 @@ const UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS = `
       currentClassCode
       currentClassName
       activeDecisionId
+      activeDecisionEffectiveSemesterId
       activeDecisionOutcome
+      activeDecisionReasonCode
+      inferredAdmissionYear
+      inferredOriginalClassSeq
+      inferredTargetClassSeq
+      inferredOriginalClassCode
       recommendedDecisionOutcome
       recommendedReasonCode
       reason
@@ -241,6 +272,7 @@ function normalizeCommitInput(input: CommitUpstreamStudentRosterReconciliationIn
     ...normalizedInput,
     confirmations: input.confirmations?.map((confirmation) => ({
       decisionOutcome: confirmation.decisionOutcome,
+      effectiveSemesterId: confirmation.effectiveSemesterId ?? undefined,
       reasonCode: confirmation.reasonCode,
       reasonText: normalizeOptionalTextValue(confirmation.reasonText, 'to_undefined'),
       studentId: normalizeRequiredTextValue(confirmation.studentId, { label: '学生编号' }),
@@ -316,6 +348,23 @@ export async function listLocalClassOptions(input: ListLocalClassOptionsInput = 
     return response.listLocalClassOptions;
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本地班级选项。'));
+  }
+}
+
+export async function requestAcademicSemesters() {
+  try {
+    const response = await requestGraphQL<
+      AcademicSemestersResponse,
+      {
+        limit: number;
+      }
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, {
+      limit: 500,
+    });
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
   }
 }
 

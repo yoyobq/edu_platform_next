@@ -99,6 +99,10 @@ function buildRequiredConfirmationSummary(item: StudentRosterMembershipReconcili
       : '上游在当前班返回，但本地没有当前班归属，需确认是否为当前班学生。';
   }
 
+  if (item.action === 'INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION') {
+    return '上游在当前班返回，且学号/班级序号显示可能存在转班、留级或复学，需人工确认。';
+  }
+
   if (item.action === 'MISSING_REQUIRES_CONFIRMATION') {
     return '本地仍有当前班 active 归属，但本次上游名单未返回，需确认保留或结束归属。';
   }
@@ -115,7 +119,28 @@ function buildRequiredConfirmationDetail(item: StudentRosterMembershipReconcilia
     return `默认原因：${recommendedReason}`;
   }
 
+  if (item.action === 'INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION') {
+    const details = [
+      item.inferredAdmissionYear ? `推断入学年份：${item.inferredAdmissionYear}` : null,
+      item.inferredOriginalClassCode ? `推断原班级：${item.inferredOriginalClassCode}` : null,
+      item.inferredOriginalClassSeq ? `原班序号：${item.inferredOriginalClassSeq}` : null,
+      item.inferredTargetClassSeq ? `目标班序号：${item.inferredTargetClassSeq}` : null,
+    ]
+      .filter((detail): detail is string => Boolean(detail))
+      .join('；');
+
+    return details || item.reason;
+  }
+
   return item.reason;
+}
+
+function buildActiveIncludeDecisionSummary(item: StudentRosterMembershipReconciliationItem) {
+  const reasonLabel = item.activeDecisionReasonCode
+    ? REASON_CODE_LABELS[item.activeDecisionReasonCode]
+    : null;
+
+  return reasonLabel ? `已裁定为：${reasonLabel}。` : '已裁定为当前班归属。';
 }
 
 function buildBusinessSummary(
@@ -129,7 +154,7 @@ function buildBusinessSummary(
       return '校园网显示该生未报到，实际情况可能并不一致。';
     case 'local-decision':
       if (canEndDecision(item)) {
-        return '已有本地保留裁定，且上游已恢复返回，可选择结束该裁定。';
+        return buildActiveIncludeDecisionSummary(item);
       }
 
       return '已有本地裁定，上游返回不会自动覆盖；本次不重复提醒。';
@@ -182,7 +207,7 @@ function buildDefaultOperationLabel(
     case 'enrollment-review':
       return '保留预报到';
     case 'local-decision':
-      return canEndDecision(item) ? '可结束裁定' : '保持当前裁定';
+      return canEndDecision(item) ? '可撤销裁定' : '保持当前裁定';
     case 'data-issue':
       return '仅观察';
     case 'automatic':
@@ -200,7 +225,7 @@ function buildCommitImpactLabel(
     case 'enrollment-review':
       return '改判后记录裁定';
     case 'local-decision':
-      return canEndDecision(item) ? '勾选后结束裁定' : '本地裁定不变';
+      return canEndDecision(item) ? '勾选后撤销裁定' : '本地裁定不变';
     case 'data-issue':
       return '不自动处理';
     case 'automatic':
@@ -258,12 +283,8 @@ export function buildRosterReviewItems(
 }
 
 export function isFocusedRosterReviewItem(item: RosterReviewItem) {
-  if (item.kind === 'automatic') {
+  if (item.kind === 'automatic' || item.kind === 'local-decision') {
     return false;
-  }
-
-  if (item.kind === 'local-decision') {
-    return canEndDecision(item.item);
   }
 
   return true;

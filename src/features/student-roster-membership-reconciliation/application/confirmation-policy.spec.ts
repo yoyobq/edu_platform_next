@@ -23,13 +23,19 @@ function buildItem(
   return {
     action: 'NO_CHANGE',
     activeDecisionId: null,
+    activeDecisionEffectiveSemesterId: null,
     activeDecisionOutcome: null,
+    activeDecisionReasonCode: null,
     category: 'AUTO_APPLY',
     classCode: '1031301',
     className: '信息1301班',
     currentClassCode: null,
     currentClassName: null,
     currentMembershipId: null,
+    inferredAdmissionYear: null,
+    inferredOriginalClassCode: null,
+    inferredOriginalClassSeq: null,
+    inferredTargetClassSeq: null,
     isEnrolled: null,
     isInSchool: null,
     key: 'item-1',
@@ -58,7 +64,12 @@ describe('student roster membership confirmation policy', () => {
         decisionOutcome: 'INCLUDE',
         defaultReasonCode: 'TRANSFERRED_IN_CONFIRMED',
         label: '在本班就读',
-        reasonOptions: ['TRANSFERRED_IN_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
+        reasonOptions: [
+          'TRANSFERRED_IN_CONFIRMED',
+          'REENROLLED_CONFIRMED',
+          'RETAINED_GRADE_CONFIRMED',
+          'CLASS_MEMBERSHIP_CORRECTION',
+        ],
       },
       {
         decisionOutcome: 'EXCLUDE',
@@ -67,6 +78,26 @@ describe('student roster membership confirmation policy', () => {
         reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
       },
     ]);
+  });
+
+  it('uses transfer-like options for inferred membership confirmations', () => {
+    const item = buildItem({
+      action: 'INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION',
+      category: 'DIFFERENCE',
+      recommendedDecisionOutcome: 'INCLUDE',
+      recommendedReasonCode: 'RETAINED_GRADE_CONFIRMED',
+      requiresConfirmation: true,
+    });
+
+    expect(getConfirmationDecisionOptions(item.action)).toEqual(
+      getConfirmationDecisionOptions('TRANSFER_IN_REQUIRES_CONFIRMATION'),
+    );
+    expect(buildDefaultConfirmationDraft(item)).toEqual({
+      decisionOutcome: 'INCLUDE',
+      effectiveSemesterId: undefined,
+      reasonCode: 'RETAINED_GRADE_CONFIRMED',
+      reasonText: undefined,
+    });
   });
 
   it('uses backend recommendation when it matches the action option set', () => {
@@ -80,6 +111,7 @@ describe('student roster membership confirmation policy', () => {
 
     expect(buildDefaultConfirmationDraft(item)).toEqual({
       decisionOutcome: 'EXCLUDE',
+      effectiveSemesterId: undefined,
       reasonCode: 'DROPPED_CONFIRMED',
       reasonText: undefined,
     });
@@ -117,6 +149,7 @@ describe('student roster membership confirmation policy', () => {
 
     expect(buildDefaultConfirmationDraft(item)).toEqual({
       decisionOutcome: 'INCLUDE',
+      effectiveSemesterId: undefined,
       reasonCode: 'TRANSFERRED_IN_CONFIRMED',
       reasonText: undefined,
     });
@@ -142,11 +175,13 @@ describe('student roster membership confirmation policy', () => {
       studentId: null,
     });
     const drafts = buildDefaultConfirmationDrafts([validItem, invalidItem]);
+    drafts.valid.effectiveSemesterId = 3;
 
     expect(buildCommitConfirmations([validItem, invalidItem], drafts)).toEqual({
       confirmations: [
         {
           decisionOutcome: 'EXCLUDE',
+          effectiveSemesterId: 3,
           reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
           reasonText: undefined,
           studentId: '20240001',
@@ -156,31 +191,84 @@ describe('student roster membership confirmation policy', () => {
     });
   });
 
-  it('only allows explicit ending for END_INCLUDE_DECISION_AVAILABLE items', () => {
-    const endableItem = buildItem({
+  it('requires effective semester for manual confirmations except not checked in', () => {
+    const transferredOutItem = buildItem({
+      action: 'MISSING_REQUIRES_CONFIRMATION',
+      category: 'DIFFERENCE',
+      key: 'transferred-out',
+      recommendedDecisionOutcome: 'EXCLUDE',
+      recommendedReasonCode: 'TRANSFERRED_OUT_CONFIRMED',
+      requiresConfirmation: true,
+      studentId: '20240001',
+    });
+    const notCheckedInItem = buildItem({
+      action: 'MISSING_REQUIRES_CONFIRMATION',
+      category: 'DIFFERENCE',
+      key: 'not-checked-in',
+      recommendedDecisionOutcome: 'EXCLUDE',
+      recommendedReasonCode: 'NOT_CHECKED_IN_CONFIRMED',
+      requiresConfirmation: true,
+      studentId: '20240002',
+    });
+    const drafts = buildDefaultConfirmationDrafts([transferredOutItem, notCheckedInItem]);
+
+    expect(buildCommitConfirmations([transferredOutItem, notCheckedInItem], drafts)).toEqual({
+      confirmations: [
+        {
+          decisionOutcome: 'EXCLUDE',
+          effectiveSemesterId: undefined,
+          reasonCode: 'NOT_CHECKED_IN_CONFIRMED',
+          reasonText: undefined,
+          studentId: '20240002',
+        },
+      ],
+      invalidItems: [transferredOutItem],
+    });
+  });
+
+  it('only allows explicit ending for end-decision-available items', () => {
+    const includeEndableItem = buildItem({
       action: 'END_INCLUDE_DECISION_AVAILABLE',
       activeDecisionId: '12',
       category: 'SUPPRESSED',
-      key: 'endable',
+      key: 'include-endable',
+    });
+    const excludeEndableItem = buildItem({
+      action: 'END_EXCLUDE_DECISION_AVAILABLE',
+      activeDecisionId: '13',
+      category: 'SUPPRESSED',
+      key: 'exclude-endable',
     });
     const suppressedItem = buildItem({
       action: 'SUPPRESSED_BY_EXCLUDE_DECISION',
-      activeDecisionId: '13',
+      activeDecisionId: '14',
       category: 'SUPPRESSED',
       key: 'suppressed',
     });
-    const drafts = buildDefaultEndDecisionDrafts([endableItem, suppressedItem]);
+    const drafts = buildDefaultEndDecisionDrafts([
+      includeEndableItem,
+      excludeEndableItem,
+      suppressedItem,
+    ]);
 
-    expect(canEndDecision(endableItem)).toBe(true);
+    expect(canEndDecision(includeEndableItem)).toBe(true);
+    expect(canEndDecision(excludeEndableItem)).toBe(true);
     expect(canEndDecision(suppressedItem)).toBe(false);
     expect(drafts).toEqual({
-      endable: {
+      'exclude-endable': {
+        selected: false,
+      },
+      'include-endable': {
         selected: false,
       },
     });
     expect(
-      buildCommitEndDecisions([endableItem, suppressedItem], {
-        endable: {
+      buildCommitEndDecisions([includeEndableItem, excludeEndableItem, suppressedItem], {
+        'exclude-endable': {
+          endReason: ' 已重新确认在读 ',
+          selected: true,
+        },
+        'include-endable': {
           endReason: ' upstream 已恢复返回 ',
           selected: true,
         },
@@ -192,6 +280,10 @@ describe('student roster membership confirmation policy', () => {
       {
         decisionId: '12',
         endReason: 'upstream 已恢复返回',
+      },
+      {
+        decisionId: '13',
+        endReason: '已重新确认在读',
       },
     ]);
   });
@@ -229,6 +321,7 @@ describe('student roster membership confirmation policy', () => {
         [preRegisteredItem, notCheckedInItem, droppedItem, ignoredRequiredItem],
         {
           dropped: {
+            effectiveSemesterId: 3,
             note: ' 已确认报到后退学 ',
             outcome: 'DROPPED',
           },
@@ -248,12 +341,14 @@ describe('student roster membership confirmation policy', () => {
       confirmations: [
         {
           decisionOutcome: 'EXCLUDE',
+          effectiveSemesterId: undefined,
           reasonCode: 'NOT_CHECKED_IN_CONFIRMED',
           reasonText: '已确认不再报到',
           studentId: '20240002',
         },
         {
           decisionOutcome: 'EXCLUDE',
+          effectiveSemesterId: 3,
           reasonCode: 'DROPPED_CONFIRMED',
           reasonText: '已确认报到后退学',
           studentId: '20240003',

@@ -66,6 +66,8 @@ export type StudentRosterMembershipDecisionOutcome = 'INCLUDE' | 'EXCLUDE';
 export type StudentRosterMembershipReasonCode =
   | 'DROPPED_CONFIRMED'
   | 'NOT_CHECKED_IN_CONFIRMED'
+  | 'REENROLLED_CONFIRMED'
+  | 'RETAINED_GRADE_CONFIRMED'
   | 'TRANSFERRED_OUT_CONFIRMED'
   | 'TRANSFERRED_IN_CONFIRMED'
   | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
@@ -85,7 +87,9 @@ export type UpstreamRosterPresence = 'RETURNED' | 'MISSING' | 'UNKNOWN';
 export type StudentRosterMembershipReconciliationItem = {
   action: string;
   activeDecisionId: string | null;
+  activeDecisionEffectiveSemesterId: number | null;
   activeDecisionOutcome: StudentRosterMembershipDecisionOutcome | null;
+  activeDecisionReasonCode: StudentRosterMembershipReasonCode | null;
   category: StudentRosterMembershipCategory;
   classCode: string;
   className: string;
@@ -94,6 +98,10 @@ export type StudentRosterMembershipReconciliationItem = {
   currentMembershipId: string | null;
   isEnrolled: string | null;
   isInSchool: string | null;
+  inferredAdmissionYear: number | null;
+  inferredOriginalClassCode: string | null;
+  inferredOriginalClassSeq: string | null;
+  inferredTargetClassSeq: string | null;
   key: string;
   reason: string | null;
   recommendedDecisionOutcome: StudentRosterMembershipDecisionOutcome | null;
@@ -142,6 +150,7 @@ export type ClaimClassAdviserForRosterSyncInput = DryRunReconcileUpstreamStudent
 
 export type StudentRosterMembershipConfirmationInput = {
   decisionOutcome: StudentRosterMembershipDecisionOutcome;
+  effectiveSemesterId?: number | null;
   reasonCode: StudentRosterMembershipReasonCode;
   reasonText?: string;
   studentId: string;

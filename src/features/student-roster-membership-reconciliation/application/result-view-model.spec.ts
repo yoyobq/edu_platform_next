@@ -15,13 +15,19 @@ function buildItem(
   return {
     action: 'NO_CHANGE',
     activeDecisionId: null,
+    activeDecisionEffectiveSemesterId: null,
     activeDecisionOutcome: null,
+    activeDecisionReasonCode: null,
     category: 'AUTO_APPLY',
     classCode: '1031301',
     className: '信息1301班',
     currentClassCode: null,
     currentClassName: null,
     currentMembershipId: null,
+    inferredAdmissionYear: null,
+    inferredOriginalClassCode: null,
+    inferredOriginalClassSeq: null,
+    inferredTargetClassSeq: null,
     isEnrolled: null,
     isInSchool: null,
     key: 'item-1',
@@ -60,6 +66,7 @@ describe('student roster membership result view model', () => {
       action: 'END_INCLUDE_DECISION_AVAILABLE',
       activeDecisionId: 'decision-1',
       activeDecisionOutcome: 'INCLUDE',
+      activeDecisionReasonCode: 'TRANSFERRED_IN_CONFIRMED',
       category: 'SUPPRESSED',
       key: 'local-decision',
     });
@@ -97,6 +104,40 @@ describe('student roster membership result view model', () => {
       businessSummary: '校园网显示该生未报到，实际情况可能并不一致。',
       commitImpactLabel: '改判后记录裁定',
       defaultOperationLabel: '保留预报到',
+    });
+    expect(reviewItems[2]).toMatchObject({
+      businessSummary: '已裁定为：确认平级转入当前班。',
+      defaultOperationLabel: '可撤销裁定',
+      kind: 'local-decision',
+    });
+  });
+
+  it('describes inferred membership confirmations with inferred class fields', () => {
+    const reviewItems = buildRosterReviewItems(
+      [
+        buildItem({
+          action: 'INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION',
+          category: 'DIFFERENCE',
+          inferredAdmissionYear: 2019,
+          inferredOriginalClassCode: '1031901',
+          inferredOriginalClassSeq: '01',
+          inferredTargetClassSeq: '04',
+          key: 'inferred',
+          recommendedDecisionOutcome: 'INCLUDE',
+          recommendedReasonCode: null,
+          requiresConfirmation: true,
+        }),
+      ],
+      (item) => item.key,
+    );
+
+    expect(reviewItems[0]).toMatchObject({
+      businessDetail: '推断入学年份：2019；推断原班级：1031901；原班序号：01；目标班序号：04',
+      businessSummary:
+        '上游在当前班返回，且学号/班级序号显示可能存在转班、留级或复学，需人工确认。',
+      commitImpactLabel: '提交时记录确认',
+      defaultOperationLabel: '提交所选确认',
+      kind: 'required-confirmation',
     });
   });
 
@@ -231,7 +272,7 @@ describe('student roster membership result view model', () => {
     });
   });
 
-  it('keeps suppressed local decisions out of focus unless they can be ended', () => {
+  it('keeps local decisions out of focus even when they can be revoked', () => {
     const reviewItems = buildRosterReviewItems(
       [
         buildItem({
@@ -245,16 +286,38 @@ describe('student roster membership result view model', () => {
           action: 'END_INCLUDE_DECISION_AVAILABLE',
           activeDecisionId: 'decision-2',
           activeDecisionOutcome: 'INCLUDE',
+          activeDecisionReasonCode: 'REENROLLED_CONFIRMED',
           category: 'SUPPRESSED',
           key: 'endable',
+        }),
+        buildItem({
+          action: 'END_EXCLUDE_DECISION_AVAILABLE',
+          activeDecisionId: 'decision-3',
+          activeDecisionOutcome: 'EXCLUDE',
+          activeDecisionReasonCode: 'DROPPED_CONFIRMED',
+          category: 'SUPPRESSED',
+          key: 'exclude-endable',
         }),
       ],
       (item) => item.key,
     );
 
-    expect(filterRosterReviewItems(reviewItems, 'focus').map((item) => item.rowKey)).toEqual([
-      'endable',
+    expect(filterRosterReviewItems(reviewItems, 'focus')).toEqual([]);
+    expect(filterRosterReviewItems(reviewItems, 'local-decision')).toEqual([
+      expect.objectContaining({
+        businessSummary: '已裁定为：确认复学转入当前班。',
+        commitImpactLabel: '勾选后撤销裁定',
+        rowKey: 'endable',
+      }),
+      expect.objectContaining({
+        businessSummary: '已裁定为：确认报到后退学。',
+        commitImpactLabel: '勾选后撤销裁定',
+        rowKey: 'exclude-endable',
+      }),
+      expect.objectContaining({
+        businessSummary: '已有本地裁定，上游返回不会自动覆盖；本次不重复提醒。',
+        rowKey: 'suppressed',
+      }),
     ]);
-    expect(filterRosterReviewItems(reviewItems, 'local-decision')).toHaveLength(2);
   });
 });

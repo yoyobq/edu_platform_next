@@ -17,6 +17,7 @@ export type ConfirmationDecisionOption = {
 
 export type ConfirmationDraft = {
   decisionOutcome: StudentRosterMembershipDecisionOutcome;
+  effectiveSemesterId?: number | null;
   reasonCode: StudentRosterMembershipReasonCode;
   reasonText?: string;
 };
@@ -29,6 +30,7 @@ export type EndDecisionDraft = {
 export type PreRegisteredReviewOutcome = 'PRE_REGISTERED' | 'NOT_CHECKED_IN' | 'DROPPED';
 
 export type PreRegisteredReviewDraft = {
+  effectiveSemesterId?: number | null;
   note?: string;
   outcome?: PreRegisteredReviewOutcome;
 };
@@ -48,8 +50,10 @@ export const CATEGORY_COLORS = {
 } as const;
 
 export const ACTION_LABELS: Record<string, string> = {
-  END_INCLUDE_DECISION_AVAILABLE: '可结束保留裁定',
+  END_INCLUDE_DECISION_AVAILABLE: '可撤销本地裁定',
+  END_EXCLUDE_DECISION_AVAILABLE: '可撤销本地裁定',
   ENSURE_MEMBERSHIP: '建立/刷新归属',
+  INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION: '需确认推断归属',
   MISSING_REQUIRES_CONFIRMATION: '需确认缺失',
   NO_CHANGE: '无变化',
   SUPPRESSED_BY_EXCLUDE_DECISION: '本地排除裁定压制',
@@ -71,7 +75,9 @@ export const REASON_CODE_LABELS: Record<StudentRosterMembershipReasonCode, strin
   CLASS_MEMBERSHIP_CORRECTION: '班级归属修正',
   DROPPED_CONFIRMED: '确认报到后退学',
   NOT_CHECKED_IN_CONFIRMED: '确认未报到且不再报到',
-  TRANSFERRED_IN_CONFIRMED: '确认转入',
+  REENROLLED_CONFIRMED: '确认复学转入当前班',
+  RETAINED_GRADE_CONFIRMED: '确认留级至当前班',
+  TRANSFERRED_IN_CONFIRMED: '确认平级转入当前班',
   TRANSFERRED_OUT_CONFIRMED: '确认转出',
   UPSTREAM_ROSTER_ERROR_CONFIRMED: '确认 upstream 名册异常',
 };
@@ -81,7 +87,12 @@ const TRANSFER_IN_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
     decisionOutcome: 'INCLUDE',
     defaultReasonCode: 'TRANSFERRED_IN_CONFIRMED',
     label: '在本班就读',
-    reasonOptions: ['TRANSFERRED_IN_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
+    reasonOptions: [
+      'TRANSFERRED_IN_CONFIRMED',
+      'REENROLLED_CONFIRMED',
+      'RETAINED_GRADE_CONFIRMED',
+      'CLASS_MEMBERSHIP_CORRECTION',
+    ],
   },
   {
     decisionOutcome: 'EXCLUDE',
@@ -116,7 +127,10 @@ export function getActionLabel(action: string) {
 }
 
 export function getConfirmationDecisionOptions(action: string): ConfirmationDecisionOption[] {
-  if (action === 'TRANSFER_IN_REQUIRES_CONFIRMATION') {
+  if (
+    action === 'TRANSFER_IN_REQUIRES_CONFIRMATION' ||
+    action === 'INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION'
+  ) {
     return TRANSFER_IN_CONFIRMATION_OPTIONS;
   }
 
@@ -128,7 +142,17 @@ export function getConfirmationDecisionOptions(action: string): ConfirmationDeci
 }
 
 export function canEndDecision(item: StudentRosterMembershipReconciliationItem) {
-  return item.action === 'END_INCLUDE_DECISION_AVAILABLE' && Boolean(item.activeDecisionId);
+  return (
+    (item.action === 'END_INCLUDE_DECISION_AVAILABLE' ||
+      item.action === 'END_EXCLUDE_DECISION_AVAILABLE') &&
+    Boolean(item.activeDecisionId)
+  );
+}
+
+export function requiresEffectiveSemester(
+  reasonCode: StudentRosterMembershipReasonCode | null | undefined,
+) {
+  return reasonCode !== 'NOT_CHECKED_IN_CONFIRMED';
 }
 
 export function isPreRegisteredUpstreamStatus(item: StudentRosterMembershipReconciliationItem) {
@@ -172,6 +196,7 @@ export function buildDefaultConfirmationDraft(
 
   return {
     decisionOutcome: selectedOption.decisionOutcome,
+    effectiveSemesterId: undefined,
     reasonCode,
     reasonText: undefined,
   };
@@ -238,13 +263,18 @@ export function buildCommitConfirmations(
 
     const draft = drafts[item.key];
 
-    if (!item.studentId || !draft) {
+    if (
+      !item.studentId ||
+      !draft ||
+      (requiresEffectiveSemester(draft.reasonCode) && !draft.effectiveSemesterId)
+    ) {
       invalidItems.push(item);
       continue;
     }
 
     confirmations.push({
       decisionOutcome: draft.decisionOutcome,
+      effectiveSemesterId: draft.effectiveSemesterId ?? undefined,
       reasonCode: draft.reasonCode,
       reasonText: draft.reasonText?.trim() || undefined,
       studentId: item.studentId,
@@ -283,17 +313,19 @@ export function buildPreRegisteredReviewCommitPayload(
 
     overriddenItems.push(item);
 
-    if (!item.studentId) {
+    const reasonCode: StudentRosterMembershipReasonCode =
+      draft.outcome === 'NOT_CHECKED_IN' ? 'NOT_CHECKED_IN_CONFIRMED' : 'DROPPED_CONFIRMED';
+
+    if (!item.studentId || (requiresEffectiveSemester(reasonCode) && !draft.effectiveSemesterId)) {
       invalidItems.push(item);
       continue;
     }
 
-    const reasonCode: StudentRosterMembershipReasonCode =
-      draft.outcome === 'NOT_CHECKED_IN' ? 'NOT_CHECKED_IN_CONFIRMED' : 'DROPPED_CONFIRMED';
     const reasonText = draft.note?.trim() || undefined;
 
     confirmations.push({
       decisionOutcome: 'EXCLUDE',
+      effectiveSemesterId: draft.effectiveSemesterId ?? undefined,
       reasonCode,
       reasonText,
       studentId: item.studentId,
