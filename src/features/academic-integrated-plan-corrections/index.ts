@@ -18,6 +18,7 @@ export type {
 export {
   listIntegratedPlanCorrectionSuggestions,
   listMyIntegratedPlanCorrectionSuggestions,
+  requestAcademicSemesters,
 } from './infrastructure/academic-integrated-plan-corrections-api';
 export {
   AcademicIntegratedPlanCorrectionsPageContent,

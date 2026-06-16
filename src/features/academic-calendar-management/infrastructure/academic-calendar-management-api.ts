@@ -1,10 +1,5 @@
 import type { OperationVariables } from '@apollo/client';
 
-import {
-  type AcademicSemesterRecord as AcademicSemesterEntityRecord,
-  requestAcademicSemesters as requestEntityAcademicSemesters,
-} from '@/entities/academic-semester';
-
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type {
@@ -25,8 +20,10 @@ const ACADEMIC_SEMESTER_FIELDS = `
   firstTeachingDate
   id
   isCurrent
+  isVisible
   name
   schoolYear
+  sortOrder
   startDate
   termNumber
   updatedAt
@@ -119,7 +116,21 @@ const DELETE_ACADEMIC_CALENDAR_EVENT_MUTATION = `
   }
 `;
 
-type AcademicSemesterDTO = AcademicSemesterEntityRecord;
+type AcademicSemesterDTO = {
+  createdAt: string;
+  endDate: string;
+  examStartDate: string;
+  firstTeachingDate: string;
+  id: number;
+  isCurrent: boolean;
+  isVisible: boolean;
+  name: string;
+  schoolYear: number;
+  sortOrder: number;
+  startDate: string;
+  termNumber: number;
+  updatedAt: string;
+};
 type AcademicCalendarEventDTO = AcademicCalendarEventRecord;
 type StudentAcademicSemesterDTO = {
   endDate: string;
@@ -127,8 +138,10 @@ type StudentAcademicSemesterDTO = {
   firstTeachingDate: string;
   id: number;
   isCurrent: boolean;
+  isVisible?: boolean;
   name: string;
   schoolYear: number;
+  sortOrder?: number;
   startDate: string;
   termNumber: number;
 };
@@ -156,6 +169,26 @@ const LIST_STUDENT_ACADEMIC_SEMESTERS_QUERY = `
       examStartDate
       endDate
       isCurrent
+    }
+  }
+`;
+
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      ${ACADEMIC_SEMESTER_FIELDS}
     }
   }
 `;
@@ -191,8 +224,10 @@ function mapAcademicSemesterRecord(record: AcademicSemesterDTO): AcademicSemeste
     firstTeachingDate: record.firstTeachingDate,
     id: record.id,
     isCurrent: record.isCurrent,
+    isVisible: record.isVisible,
     name: record.name,
     schoolYear: record.schoolYear,
+    sortOrder: record.sortOrder,
     startDate: record.startDate,
     termNumber: record.termNumber,
     updatedAt: record.updatedAt,
@@ -230,8 +265,10 @@ function mapStudentAcademicSemesterRecord(
     firstTeachingDate: record.firstTeachingDate,
     id: record.id,
     isCurrent: record.isCurrent,
+    isVisible: record.isVisible ?? true,
     name: record.name,
     schoolYear: record.schoolYear,
+    sortOrder: record.sortOrder ?? 0,
     startDate: record.startDate,
     termNumber: record.termNumber,
     updatedAt: '',
@@ -276,9 +313,12 @@ function resolveAcademicCalendarErrorMessage(error: unknown, fallback: string) {
 
 export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
   try {
-    const response = await requestEntityAcademicSemesters(input);
+    const response = await requestGraphQL<
+      { academicSemesters: AcademicSemesterDTO[] },
+      ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
 
-    return response.map(mapAcademicSemesterRecord);
+    return response.academicSemesters.map(mapAcademicSemesterRecord);
   } catch (error) {
     throw new Error(resolveAcademicCalendarErrorMessage(error, '暂时无法加载学期列表。'));
   }

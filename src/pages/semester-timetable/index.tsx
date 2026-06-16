@@ -1,13 +1,12 @@
 import { useLoaderData } from 'react-router';
 
 import {
+  requestAcademicSemesters,
   requestAcademicTeacherSemesterScheduleItems,
   requestMyAcademicTeacherSemesterScheduleItems,
   SemesterTimetablePageContent,
 } from '@/features/academic-timetable';
 import { Error403 } from '@/features/error-feedback';
-
-import { requestAcademicSemesters } from '@/entities/academic-semester';
 
 import type { AcademicInternalViewerRole } from '@/shared/auth-access';
 

@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TableOutlined } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, InputNumber, Select, Skeleton, Typography } from 'antd';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+import {
+  type AcademicSemesterRecord,
+  AcademicSemesterSelect,
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
+} from '@/entities/academic-semester';
 import {
   isExpiredUpstreamSessionError,
   resolveStaffDirectoryCache,
@@ -30,6 +36,7 @@ import type {
   AcademicTeachingClassOptionsQueryFilters,
   AcademicTimetableItem,
   AcademicWeeklyTimetableQueryFilters,
+  ListAcademicSemestersInput,
 } from '../infrastructure/academic-timetable-api';
 
 import { WeeklyTimetableGrid } from './timetable-grid';
@@ -38,7 +45,7 @@ import './weekly-timetable-page-content.css';
 
 type WeeklyTimetablePageContentProps = {
   defaultStaffId?: string | null;
-  listAcademicSemesters: (input: { limit?: number }) => Promise<AcademicSemesterRecord[]>;
+  listAcademicSemesters: (input: ListAcademicSemestersInput) => Promise<AcademicSemesterRecord[]>;
   listAcademicTeachingClassOptions: (
     input: AcademicTeachingClassOptionsQueryFilters,
   ) => Promise<AcademicTeachingClassOption[]>;
@@ -69,29 +76,11 @@ const DEFAULT_FILTERS: WeeklyTimetableFilters = {
 };
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection: number | null) {
-  if (currentSelection !== null && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
+  return pickAcademicSemesterId(records, currentSelection);
 }
 
 function normalizeStringFilter(value: string) {
@@ -245,7 +234,9 @@ export function WeeklyTimetablePageContent({
     setSemesterError(null);
 
     try {
-      const result = sortSemesters(await listAcademicSemesters({ limit: 500 }));
+      const result = sortSemesters(
+        await listAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+      );
 
       setSemesters(result);
       setSelectedSemesterId((currentSelection) => pickNextSemesterId(result, currentSelection));
@@ -536,12 +527,9 @@ export function WeeklyTimetablePageContent({
           <div className="weekly-timetable-control-field">
             <Typography.Text strong>学期</Typography.Text>
             <div className="weekly-timetable-control-input">
-              <Select
+              <AcademicSemesterSelect
                 value={selectedSemesterId ?? undefined}
-                options={semesters.map((semester) => ({
-                  label: semester.isCurrent ? `${semester.name} · 当前` : semester.name,
-                  value: semester.id,
-                }))}
+                records={semesters}
                 onChange={(value) => setSelectedSemesterId(value)}
               />
             </div>

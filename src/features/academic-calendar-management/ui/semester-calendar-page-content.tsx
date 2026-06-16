@@ -23,12 +23,16 @@ import {
   Descriptions,
   Drawer,
   Empty,
-  Select,
   Skeleton,
   Tag,
   Tooltip,
   Typography,
 } from 'antd';
+
+import {
+  AcademicSemesterSelect,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
+} from '@/entities/academic-semester';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
@@ -80,7 +84,7 @@ const DAY_PERIOD_LABELS_FULL: Record<AcademicCalendarEventDayPeriod, string> = {
 };
 
 const TOOLTIP_EVENT_LIMIT = 5;
-const DEFAULT_SEMESTER_QUERY_INPUT = { limit: 500 } as const;
+const DEFAULT_SEMESTER_QUERY_INPUT = VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT;
 
 const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   ACTIVITY: '活动',
@@ -351,45 +355,6 @@ export function SemesterCalendarPageContent({
   const eventBuckets = useMemo(() => buildEventBuckets(events), [events]);
   const teachingWeekCount = useMemo(() => countTeachingWeeks(weeks), [weeks]);
   const hasCurrentWeek = useMemo(() => weeks.some((week) => week.hasToday), [weeks]);
-  const semesterSelectOptions = useMemo(() => {
-    const groups = new Map<number, AcademicSemesterRecord[]>();
-
-    for (const semester of semesters) {
-      const existing = groups.get(semester.schoolYear) ?? [];
-      existing.push(semester);
-      groups.set(semester.schoolYear, existing);
-    }
-
-    const options: {
-      label: React.ReactNode;
-      options: { value: number; plainLabel: string; label: React.ReactNode }[];
-    }[] = [];
-
-    for (const [schoolYear, groupSemesters] of groups) {
-      options.push({
-        label: `${schoolYear}-${schoolYear + 1} 学年`,
-        options: groupSemesters.map((semester) => ({
-          value: semester.id,
-          plainLabel: semester.name,
-          label: (
-            <div className="flex items-center gap-2">
-              <span>{semester.name}</span>
-              {semester.isCurrent ? (
-                <span
-                  aria-label="当前学期"
-                  title="当前学期"
-                  className="semester-calendar-current-dot"
-                />
-              ) : null}
-            </div>
-          ),
-        })),
-      });
-    }
-
-    return options;
-  }, [semesters]);
-
   const scrollToCurrentWeek = useCallback(() => {
     const anchor = currentWeekAnchorRef.current;
 
@@ -468,13 +433,12 @@ export function SemesterCalendarPageContent({
               加载学期
             </Button>
           ) : semesters.length > 0 ? (
-            <Select
+            <AcademicSemesterSelect
               aria-label="选择学期"
-              optionLabelProp="plainLabel"
-              popupMatchSelectWidth={false}
+              records={semesters}
+              showCurrentInSelection={false}
               size="large"
               value={selectedSemesterId}
-              options={semesterSelectOptions}
               onChange={(value) => setSelectedSemesterId(value)}
             />
           ) : null}

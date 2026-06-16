@@ -1,6 +1,8 @@
 // src/features/academic-workload/infrastructure/academic-workload-api.ts
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
@@ -13,6 +15,20 @@ export type AcademicStableWorkloadCalcEffect =
   | 'SWAP_OUT';
 
 export type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemesterDTO = AcademicSemesterRecord;
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterDTO[];
+};
 
 export type AcademicStableWorkloadOccurrence = {
   calcEffect: AcademicStableWorkloadCalcEffect;
@@ -263,6 +279,38 @@ const ACADEMIC_WORKLOAD_DEPARTMENT_OPTIONS_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
@@ -327,6 +375,19 @@ export async function requestAcademicStableWorkloadOccurrences(
     return response.listAcademicStableWorkloadOccurrences;
   } catch (error) {
     throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载教师工作量。'));
+  }
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await executeGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载学期列表。'));
   }
 }
 

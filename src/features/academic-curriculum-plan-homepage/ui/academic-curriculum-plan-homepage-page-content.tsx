@@ -20,7 +20,6 @@ import {
   InputNumber,
   Modal,
   Radio,
-  Select,
   Space,
   Spin,
   Tabs,
@@ -31,8 +30,11 @@ import {
 } from 'antd';
 
 import {
+  AcademicSemesterPeriodFormItems,
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  buildAcademicSemesterPeriodOptions,
+  buildAcademicSemesterSchoolYearOptions,
+  resolveAcademicSemesterPeriodValues,
 } from '@/entities/academic-semester';
 import {
   buildDepartmentSelectOptions,
@@ -86,6 +88,7 @@ import {
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
+  requestAcademicSemesters,
   resolveCurriculumPlanHomepagePrefillErrorMessage,
   resolveUpstreamErrorMessage,
   saveCurriculumPlanHomepage,
@@ -168,16 +171,6 @@ type InitialLessonDistributionStrategyOption = {
   update: CurriculumPlanHomepageDraftUpdate | null;
 };
 
-const SEMESTER_OPTIONS = [
-  {
-    label: '第一学期',
-    value: '1',
-  },
-  {
-    label: '第二学期',
-    value: '2',
-  },
-];
 const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -458,16 +451,6 @@ function buildTeachingEndChapterContext(item: CurriculumPlanHomepageListItem) {
     schoolYear: requireListItemValue(item.schoolYear, '学年'),
     semester: requireListItemValue(item.semester, '学期'),
   };
-}
-
-function buildSchoolYearOptions(selectedYear: string) {
-  const parsedYear = Number.parseInt(selectedYear, 10);
-  const baseYear = Number.isFinite(parsedYear) ? parsedYear : new Date().getFullYear();
-
-  return Array.from({ length: 6 }, (_, index) => baseYear + 1 - index).map((year) => ({
-    label: `${year}-${year + 1}`,
-    value: String(year),
-  }));
 }
 
 function formatJson(value: unknown) {
@@ -1680,10 +1663,6 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const { token } = theme.useToken();
   const isCompactViewport = useCompactViewport();
   const defaultSearchValues = useMemo(() => getDefaultAcademicTerm(), []);
-  const schoolYearOptions = useMemo(
-    () => buildSchoolYearOptions(defaultSearchValues.schoolYear),
-    [defaultSearchValues.schoolYear],
-  );
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [searchForm] = Form.useForm<SearchFormValues>();
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -1698,6 +1677,14 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const [isLoadingAcademicSemesters, setIsLoadingAcademicSemesters] = useState(false);
   const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [academicSemestersError, setAcademicSemestersError] = useState<string | null>(null);
+  const academicSemesterPeriodOptions = useMemo(
+    () => buildAcademicSemesterPeriodOptions(academicSemesters),
+    [academicSemesters],
+  );
+  const schoolYearOptions = useMemo(
+    () => buildAcademicSemesterSchoolYearOptions(academicSemesterPeriodOptions),
+    [academicSemesterPeriodOptions],
+  );
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
@@ -2973,13 +2960,21 @@ export function AcademicCurriculumPlanHomepagePageContent({
       setAcademicSemestersError(null);
 
       try {
-        const nextSemesters = await requestAcademicSemesters({ limit: 500 });
+        const nextSemesters = await requestAcademicSemesters({ isVisible: true, limit: 500 });
 
         if (isCancelled) {
           return;
         }
 
         setAcademicSemesters(nextSemesters);
+        searchForm.setFieldsValue(
+          resolveAcademicSemesterPeriodValues({
+            currentValues: searchForm.isFieldsTouched(['schoolYear', 'semester'])
+              ? searchForm.getFieldsValue(['schoolYear', 'semester'])
+              : {},
+            options: buildAcademicSemesterPeriodOptions(nextSemesters),
+          }),
+        );
       } catch (error) {
         if (isCancelled) {
           return;
@@ -3001,7 +2996,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [searchForm]);
 
   useEffect(() => {
     let isCancelled = false;
@@ -3209,20 +3204,20 @@ export function AcademicCurriculumPlanHomepagePageContent({
               void handleFetchList(values);
             }}
           >
-            <Form.Item
-              label="学年"
-              name="schoolYear"
-              rules={[{ required: true, message: '请选择学年' }]}
-            >
-              <Select options={schoolYearOptions} style={{ width: 124 }} />
-            </Form.Item>
-            <Form.Item
-              label="学期"
-              name="semester"
-              rules={[{ required: true, message: '请选择学期' }]}
-            >
-              <Select options={SEMESTER_OPTIONS} style={{ width: 108 }} />
-            </Form.Item>
+            <AcademicSemesterPeriodFormItems
+              loading={isLoadingAcademicSemesters}
+              schoolYearHelp={academicSemestersError ? '学年依赖学期列表。' : undefined}
+              schoolYearOptions={schoolYearOptions}
+              schoolYearSelectProps={{
+                style: { width: 124 },
+              }}
+              schoolYearValidateStatus={academicSemestersError ? 'warning' : undefined}
+              semesterHelp={academicSemestersError ? '学期依赖学期列表。' : undefined}
+              semesterSelectProps={{
+                style: { width: 108 },
+              }}
+              semesterValidateStatus={academicSemestersError ? 'warning' : undefined}
+            />
             {canSelectDepartment ? (
               <DepartmentFormItem
                 label="系部"

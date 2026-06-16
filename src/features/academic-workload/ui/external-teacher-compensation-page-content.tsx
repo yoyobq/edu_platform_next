@@ -1,4 +1,5 @@
 // src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Table, Tabs, Tooltip } from 'antd';
@@ -6,7 +7,8 @@ import type { ColumnsType } from 'antd/es/table';
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  AcademicSemesterSelect,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -25,6 +27,7 @@ import {
   DEFAULT_WORKLOAD_DEPARTMENT_ID,
   ensureSelectedAcademicWorkloadDepartmentOption,
 } from '../application/workload-department-options';
+import { requestAcademicSemesters } from '../infrastructure/academic-workload-api';
 import {
   type AcademicAdjustedWorkloadReportEnvelope,
   type AcademicAdjustedWorkloadReportItem,
@@ -565,7 +568,9 @@ export function ExternalTeacherCompensationPageContent({
       setSemesterError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const result = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (!cancelled) {
           setSemesters(result);
@@ -1087,13 +1092,10 @@ export function ExternalTeacherCompensationPageContent({
             <div className="external-teacher-compensation-filters">
               <label>
                 <span>学期</span>
-                <Select
+                <AcademicSemesterSelect
                   aria-label="学期"
-                  options={semesters.map((semester) => ({
-                    label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                    value: semester.id,
-                  }))}
                   placeholder="选择学期"
+                  records={semesters}
                   value={selectedSemesterId ?? undefined}
                   onChange={(value) => {
                     invalidateReport();

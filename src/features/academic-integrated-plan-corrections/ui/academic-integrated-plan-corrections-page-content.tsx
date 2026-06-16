@@ -6,23 +6,14 @@ import {
   QuestionCircleOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Empty,
-  Form,
-  Select,
-  Skeleton,
-  Switch,
-  Tabs,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd';
+import { Alert, Button, Empty, Form, Skeleton, Switch, Tabs, Tag, Tooltip, Typography } from 'antd';
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  AcademicSemesterSelect,
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -53,6 +44,7 @@ import {
   type IntegratedPlanCorrectionTeachingClassGroup,
   listIntegratedPlanCorrectionSuggestions,
   listMyIntegratedPlanCorrectionSuggestions,
+  requestAcademicSemesters,
 } from '../infrastructure/academic-integrated-plan-corrections-api';
 
 import './academic-integrated-plan-corrections-page-content.css';
@@ -118,29 +110,11 @@ const PRIMARY_DIFF_PRIORITY = [
 ] as const;
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection: number | null) {
-  if (currentSelection !== null && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
+  return pickAcademicSemesterId(records, currentSelection);
 }
 
 function formatNullable(value: number | string | null | undefined) {
@@ -924,14 +898,6 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
         storedSession.upstreamSessionToken,
       ].join(':')
     : 'none';
-  const semesterOptions = useMemo(
-    () =>
-      semesters.map((semester) => ({
-        label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-        value: semester.id,
-      })),
-    [semesters],
-  );
   const canQuery = Boolean(
     selectedSemester && (isStaffViewer ? defaultStaffId : normalizedStaffId),
   );
@@ -981,7 +947,9 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
       setSemesterError(null);
 
       try {
-        const nextSemesters = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const nextSemesters = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (cancelled) {
           return;
@@ -1199,10 +1167,10 @@ export function AcademicIntegratedPlanCorrectionsPageContent({
             >
               <label className="integrated-plan-corrections-query-field integrated-plan-corrections-query-field-semester">
                 <span>学期</span>
-                <Select
+                <AcademicSemesterSelect
                   loading={isLoadingSemesters}
-                  options={semesterOptions}
                   placeholder="选择学期"
+                  records={semesters}
                   value={selectedSemesterId ?? undefined}
                   onChange={setSelectedSemesterId}
                 />

@@ -1,6 +1,8 @@
 // src/features/staff-semester-profiles/infrastructure/staff-semester-profiles-api.ts
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export type AcademicTeacherEngagementType =
@@ -12,6 +14,18 @@ export type AcademicTeacherEngagementType =
 export type StaffSemesterProfileSortBy = 'staffId' | 'staffName' | 'updatedAt';
 
 export type SortDirection = 'ASC' | 'DESC';
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
 
 export type StaffSemesterProfileBackfillAction =
   | 'already_exists'
@@ -219,6 +233,38 @@ const BACKFILL_STAFF_SEMESTER_PROFILES_FROM_COURSE_SCHEDULES_MUTATION = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 function normalizeStringFilter(value?: string) {
   const normalizedValue = value?.trim();
 
@@ -319,6 +365,19 @@ export async function requestStaffSemesterProfiles(input: RequestStaffSemesterPr
     return response.staffSemesterProfiles;
   } catch (error) {
     throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法加载教师学期归属。'));
+  }
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await executeGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveStaffSemesterProfilesErrorMessage(error, '暂时无法加载学期列表。'));
   }
 }
 

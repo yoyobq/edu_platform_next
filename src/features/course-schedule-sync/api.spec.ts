@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, requestAcademicSemestersMock } =
-  vi.hoisted(() => ({
-    executeGraphQLMock: vi.fn(),
-    executeUpstreamSessionGraphQLMock: vi.fn(),
-    requestAcademicSemestersMock: vi.fn(),
-  }));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
+  executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
+}));
 
 vi.mock('@/entities/academic-semester', () => ({
-  requestAcademicSemesters: requestAcademicSemestersMock,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT: {
+    isVisible: true,
+    limit: 500,
+  },
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
@@ -26,13 +27,13 @@ vi.mock('@/shared/graphql', () => ({
 import {
   dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
+  fetchCourseScheduleSyncSemesterOptions,
 } from './api';
 
 describe('course-schedule-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
-    requestAcademicSemestersMock.mockReset();
   });
 
   it('loads department options through the shared departments query shape', async () => {
@@ -61,6 +62,38 @@ describe('course-schedule-sync api', () => {
       { limit: 500 },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('isEnabled: $isEnabled');
+  });
+
+  it('loads only visible semester options for ordinary selectors', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      academicSemesters: [
+        {
+          id: 1,
+          isCurrent: true,
+          schoolYear: 2025,
+          sortOrder: 10,
+          termNumber: 2,
+        },
+      ],
+    });
+
+    await expect(fetchCourseScheduleSyncSemesterOptions()).resolves.toEqual([
+      {
+        id: 1,
+        isCurrent: true,
+        schoolYear: 2025,
+        sortOrder: 10,
+        termNumber: 2,
+      },
+    ]);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query CourseScheduleSyncAcademicSemesters'),
+      {
+        isVisible: true,
+        limit: 500,
+      },
+    );
   });
 
   it('previews course schedule sync through the independent dry-run mutation', async () => {

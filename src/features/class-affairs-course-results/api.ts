@@ -2,6 +2,7 @@
 
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   resolveUpstreamErrorMessage,
@@ -17,6 +18,18 @@ export { resolveUpstreamErrorMessage };
 
 export type ManagedCourseResultsRefreshMode = 'CACHE_FIRST' | 'REFRESH';
 export type ManagedCourseResultsSource = 'CACHE' | 'STALE_CACHE' | 'UPSTREAM';
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
 
 export type ManagedClassCourseResultsClass = {
   classCode: string | null;
@@ -96,6 +109,38 @@ const MY_MANAGED_CLASSES_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 const FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION = `
   mutation FetchClassStudentCourseResults($input: FetchClassStudentCourseResultsInput!) {
     fetchClassStudentCourseResults(input: $input) {
@@ -163,6 +208,19 @@ export async function listMyManagedClasses() {
     return response.myManagedClasses;
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本地负责班级。'));
+  }
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await requestGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
   }
 }
 

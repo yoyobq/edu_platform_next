@@ -3,13 +3,12 @@
 import { useLoaderData } from 'react-router';
 
 import {
+  requestAcademicSemesters,
   requestAcademicTeachingClassOptions,
   requestAcademicWeeklyTimetableItems,
   WeeklyTimetablePageContent,
 } from '@/features/academic-timetable';
 import { Error403 } from '@/features/error-feedback';
-
-import { requestAcademicSemesters } from '@/entities/academic-semester';
 
 export function WeeklyTimetablePage() {
   const loaderData = useLoaderData() as {

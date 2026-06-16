@@ -22,8 +22,10 @@ function buildSemester(overrides: Partial<AcademicSemesterRecord>): AcademicSeme
     firstTeachingDate: '2026-02-23',
     id: 1,
     isCurrent: false,
+    isVisible: true,
     name: '2025-2026 第二学期',
     schoolYear: 2025,
+    sortOrder: 0,
     startDate: '2026-02-20',
     termNumber: 2,
     updatedAt: '2026-04-02T00:00:00.000Z',
@@ -52,14 +54,14 @@ function buildEvent(overrides: Partial<AcademicCalendarEventRecord>): AcademicCa
 }
 
 describe('academic-calendar-management application', () => {
-  it('prioritizes current semester and newer terms when sorting semesters', () => {
+  it('sorts semesters by display order before academic time', () => {
     const sorted = sortSemesters([
-      buildSemester({ id: 3, isCurrent: false, schoolYear: 2024, termNumber: 1 }),
-      buildSemester({ id: 2, isCurrent: true, schoolYear: 2024, termNumber: 2 }),
-      buildSemester({ id: 1, isCurrent: false, schoolYear: 2025, termNumber: 1 }),
+      buildSemester({ id: 3, schoolYear: 2024, sortOrder: 20, termNumber: 1 }),
+      buildSemester({ id: 2, isCurrent: true, schoolYear: 2024, sortOrder: 10, termNumber: 2 }),
+      buildSemester({ id: 1, schoolYear: 2025, sortOrder: 10, termNumber: 1 }),
     ]);
 
-    expect(sorted.map((item) => item.id)).toEqual([2, 1, 3]);
+    expect(sorted.map((item) => item.id)).toEqual([1, 2, 3]);
   });
 
   it('keeps event ordering stable by date then day period then id', () => {
@@ -93,8 +95,10 @@ describe('academic-calendar-management application', () => {
         examStartDate: '2026-06-20',
         firstTeachingDate: '2026-02-20',
         isCurrent: true,
+        isVisible: false,
         name: ' 2025-2026 学年第二学期 ',
         schoolYear: 2025,
+        sortOrder: 20,
         startDate: '2026-02-17',
         termNumber: 2,
       }),
@@ -103,8 +107,10 @@ describe('academic-calendar-management application', () => {
       examStartDate: '2026-06-20',
       firstTeachingDate: '2026-02-20',
       isCurrent: true,
+      isVisible: false,
       name: '2025-2026 学年第二学期',
       schoolYear: 2025,
+      sortOrder: 20,
       startDate: '2026-02-17',
       termNumber: 2,
     });
@@ -156,8 +162,10 @@ describe('academic-calendar-management application', () => {
       examStartDate: '',
       firstTeachingDate: '',
       isCurrent: false,
+      isVisible: true,
       name: '',
       schoolYear: 2026,
+      sortOrder: 0,
       startDate: '',
       termNumber: 1,
     });

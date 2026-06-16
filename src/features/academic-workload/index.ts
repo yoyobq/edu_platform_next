@@ -8,11 +8,13 @@ export type {
   AcademicWorkloadReportEnvelope,
   AcademicWorkloadReportItem,
   AcademicWorkloadReportTotal,
+  ListAcademicSemestersInput,
   RequestAcademicStableWorkloadInput,
   RequestAcademicWorkloadReportInput,
   RequestMyAcademicStableWorkloadInput,
 } from './infrastructure/academic-workload-api';
 export {
+  requestAcademicSemesters,
   requestAcademicStableWorkloadOccurrences,
   requestAcademicWorkloadDepartmentOptions,
   requestAcademicWorkloadReport,

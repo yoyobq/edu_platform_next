@@ -1,23 +1,13 @@
 // src/features/academic-workload/ui/academic-workload-page-content.tsx
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CarryOutOutlined } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  Select,
-  Skeleton,
-  Table,
-  Tag,
-  Tooltip,
-  Typography,
-} from 'antd';
+import { Alert, Button, Card, Empty, Skeleton, Table, Tag, Tooltip, Typography } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  AcademicSemesterSelect,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 import {
   isExpiredUpstreamSessionError,
@@ -47,6 +37,7 @@ import {
   type AcademicStableWorkloadCalcEffect,
   type AcademicStableWorkloadEnvelope,
   type AcademicStableWorkloadOccurrence,
+  requestAcademicSemesters,
   requestAcademicStableWorkloadOccurrences,
   requestMyAcademicStableWorkloadOccurrences,
 } from '../infrastructure/academic-workload-api';
@@ -185,7 +176,9 @@ export function AcademicWorkloadPageContent({
       setSemesterError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const result = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (cancelled) {
           return;
@@ -455,13 +448,10 @@ export function AcademicWorkloadPageContent({
             <div className="academic-workload-query-main">
               <div className="academic-workload-query-fields">
                 <label className="academic-workload-field">
-                  <Select
+                  <AcademicSemesterSelect
                     aria-label="学期"
-                    options={semesters.map((semester) => ({
-                      label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                      value: semester.id,
-                    }))}
                     placeholder="选择学期"
+                    records={semesters}
                     value={selectedSemesterId ?? undefined}
                     onChange={(value) => setSelectedSemesterId(value)}
                   />

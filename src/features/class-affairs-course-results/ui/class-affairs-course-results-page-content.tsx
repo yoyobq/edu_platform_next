@@ -10,10 +10,7 @@ import {
 import { Alert, Button, Empty, Form, Input, Select, Spin, Table, Tabs, Tag, theme } from 'antd';
 import type { ColumnsType, ColumnType } from 'antd/es/table';
 
-import {
-  type AcademicSemesterRecord,
-  requestAcademicSemesters,
-} from '@/entities/academic-semester';
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -35,6 +32,7 @@ import {
   type ManagedCourseResultRecord,
   type ManagedCourseResultsItem,
   type ManagedCourseResultsResult,
+  requestAcademicSemesters,
   resolveUpstreamErrorMessage,
 } from '../api';
 
@@ -588,7 +586,7 @@ export function ClassAffairsCourseResultsPageContent({
     try {
       const [nextClasses, currentSemesters] = await Promise.all([
         listMyManagedClasses(),
-        requestAcademicSemesters({ isCurrent: true, limit: 1 }),
+        requestAcademicSemesters({ isCurrent: true, isVisible: true, limit: 1 }),
       ]);
       const nextUsableClasses = nextClasses
         .filter((item) => resolveClassCode(item))

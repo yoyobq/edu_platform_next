@@ -1,4 +1,9 @@
 import {
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
+} from '@/entities/academic-semester';
+
+import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
@@ -50,21 +55,7 @@ export function getSemesterDisplayName(record: AcademicSemesterRecord) {
 }
 
 export function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function getDayPeriodOrder(value: AcademicCalendarEventDayPeriod) {
@@ -99,15 +90,7 @@ export function pickNextSemesterId(
   currentSelection: number | null,
   preferredSelection?: number | null,
 ) {
-  if (preferredSelection && records.some((record) => record.id === preferredSelection)) {
-    return preferredSelection;
-  }
-
-  if (currentSelection && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records[0]?.id ?? null;
+  return pickAcademicSemesterId(records, currentSelection, { preferredSelection });
 }
 
 export function buildAcademicCalendarEventQueryInput(
@@ -139,8 +122,10 @@ export function buildDefaultSemesterFormValues(
     examStartDate: '',
     firstTeachingDate: '',
     isCurrent: false,
+    isVisible: true,
     name: '',
     schoolYear: now.getFullYear(),
+    sortOrder: 0,
     startDate: '',
     termNumber: 1,
   };
@@ -171,8 +156,10 @@ export function normalizeSemesterFormValues(
     examStartDate: values.examStartDate,
     firstTeachingDate: values.firstTeachingDate,
     isCurrent: values.isCurrent,
+    isVisible: values.isVisible,
     name: normalizeRequiredText(values.name, '学期名称'),
     schoolYear: values.schoolYear,
+    sortOrder: values.sortOrder,
     startDate: values.startDate,
     termNumber: values.termNumber,
   };

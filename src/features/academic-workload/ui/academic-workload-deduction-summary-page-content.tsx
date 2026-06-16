@@ -1,4 +1,5 @@
 // src/features/academic-workload/ui/academic-workload-deduction-summary-page-content.tsx
+
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { BarChartOutlined, DownloadOutlined, ScheduleOutlined } from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Switch, Table, Tabs, Tag, Tooltip } from 'antd';
@@ -6,7 +7,8 @@ import type { ColumnsType } from 'antd/es/table';
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  AcademicSemesterSelect,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -35,6 +37,7 @@ import {
   DEFAULT_WORKLOAD_DEPARTMENT_ID,
   ensureSelectedAcademicWorkloadDepartmentOption,
 } from '../application/workload-department-options';
+import { requestAcademicSemesters } from '../infrastructure/academic-workload-api';
 import {
   type AcademicWorkloadDeductionDepartmentSummary,
   type AcademicWorkloadDeductionSummaryEnvelope,
@@ -952,7 +955,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       setSemesterError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const result = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (cancelled) {
           return;
@@ -1279,13 +1284,10 @@ export function AcademicWorkloadDeductionSummaryPageContent({
             <div className="academic-workload-deduction-summary-filters">
               <label>
                 <span>学期</span>
-                <Select
+                <AcademicSemesterSelect
                   aria-label="学期"
-                  options={semesters.map((semester) => ({
-                    label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                    value: semester.id,
-                  }))}
                   placeholder="选择学期"
+                  records={semesters}
                   value={selectedSemesterId ?? undefined}
                   onChange={(value) => setSelectedSemesterId(value)}
                 />

@@ -8,6 +8,7 @@ import { Link, useNavigate } from 'react-router';
 
 import {
   type AcademicTimetableItem,
+  requestAcademicSemesters,
   requestAcademicWeeklyTimetableItems,
   requestMyAcademicSemesterTimetableItems,
   resolveCurrentTeachingWeekIndex,
@@ -22,7 +23,8 @@ import { buildHomePageViewModel, OPEN_ENTRY_SIDECAR_ACTION_ID } from '@/features
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 
 import { type AcademicViewerRole, hasAcademicTeachingLogAccess } from '@/shared/auth-access';
@@ -101,21 +103,7 @@ function resolveStudentDisplayName(authSession: AuthSessionState) {
 }
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickWorkbenchSemester(records: AcademicSemesterRecord[]) {
@@ -295,7 +283,9 @@ function WorkbenchWeeklyTimetable({
       setIsLoading(true);
 
       try {
-        const semester = pickWorkbenchSemester(await requestAcademicSemesters({ limit: 500 }));
+        const semester = pickWorkbenchSemester(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (!semester) {
           if (isActive) {

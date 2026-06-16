@@ -20,10 +20,12 @@ export type {
   AcademicTimetableItem,
   AcademicTimetableQueryFilters,
   AcademicWeeklyTimetableQueryFilters,
+  ListAcademicSemestersInput,
   MyAcademicTeacherSemesterScheduleQueryFilters,
   MyAcademicTimetableQueryFilters,
 } from './infrastructure/academic-timetable-api';
 export {
+  requestAcademicSemesters,
   requestAcademicSemesterTimetableItems,
   requestAcademicTeacherSemesterScheduleItems,
   requestAcademicTeachingClassOptions,

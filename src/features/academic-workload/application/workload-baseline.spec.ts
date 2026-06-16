@@ -23,8 +23,10 @@ function buildSemester(patch: Partial<AcademicSemesterRecord>): AcademicSemester
     firstTeachingDate: '2026-03-02',
     id: 1,
     isCurrent: false,
+    isVisible: true,
     name: '2025-2026-2',
     schoolYear: 2025,
+    sortOrder: 0,
     startDate: '2026-02-23',
     termNumber: 2,
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -50,14 +52,14 @@ function buildOccurrence(
 }
 
 describe('academic workload baseline helpers', () => {
-  it('sorts semesters with current semester first and keeps current selection when available', () => {
+  it('sorts semesters by display order and keeps current selection when available', () => {
     const semesters = sortSemesters([
-      buildSemester({ id: 1, isCurrent: false, schoolYear: 2024, termNumber: 2 }),
-      buildSemester({ id: 2, isCurrent: true, schoolYear: 2025, termNumber: 1 }),
-      buildSemester({ id: 3, isCurrent: false, schoolYear: 2025, termNumber: 2 }),
+      buildSemester({ id: 1, schoolYear: 2024, sortOrder: 20, termNumber: 2 }),
+      buildSemester({ id: 2, isCurrent: true, schoolYear: 2025, sortOrder: 10, termNumber: 1 }),
+      buildSemester({ id: 3, schoolYear: 2025, sortOrder: 10, termNumber: 2 }),
     ]);
 
-    expect(semesters.map((semester) => semester.id)).toEqual([2, 3, 1]);
+    expect(semesters.map((semester) => semester.id)).toEqual([3, 2, 1]);
     expect(pickNextSemesterId(semesters, 3)).toBe(3);
     expect(pickNextSemesterId(semesters, 99)).toBe(2);
   });

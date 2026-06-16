@@ -1,6 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { requestAcademicSemesters } from '@/entities/academic-semester';
+import { VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -66,6 +66,7 @@ export type CourseScheduleSyncSemesterOption = {
   id: number;
   isCurrent: boolean;
   schoolYear: number;
+  sortOrder: number;
   termNumber: number;
 };
 
@@ -78,6 +79,16 @@ export type CourseScheduleSyncDepartmentOption = {
 
 type DepartmentOptionsResponse = {
   departments: CourseScheduleSyncDepartmentOption[];
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: Array<{
+    id: number;
+    isCurrent: boolean;
+    schoolYear: number;
+    sortOrder: number;
+    termNumber: number;
+  }>;
 };
 
 type SyncCourseSchedulesResponse = {
@@ -158,6 +169,18 @@ const DEPARTMENTS_QUERY = `
   }
 `;
 
+const ACADEMIC_SEMESTERS_QUERY = `
+  query CourseScheduleSyncAcademicSemesters($isVisible: Boolean, $limit: Int) {
+    academicSemesters(isVisible: $isVisible, limit: $limit) {
+      id
+      isCurrent
+      schoolYear
+      sortOrder
+      termNumber
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -178,12 +201,16 @@ function normalizeCourseScheduleSyncInput(input: CourseScheduleSyncInput) {
 
 export async function fetchCourseScheduleSyncSemesterOptions() {
   try {
-    const response = await requestAcademicSemesters({ limit: 500 });
+    const response = await requestGraphQL<
+      AcademicSemestersResponse,
+      typeof VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT
+    >(ACADEMIC_SEMESTERS_QUERY, VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT);
 
-    return response.map((semester) => ({
+    return response.academicSemesters.map((semester) => ({
       id: semester.id,
       isCurrent: semester.isCurrent,
       schoolYear: semester.schoolYear,
+      sortOrder: semester.sortOrder,
       termNumber: semester.termNumber,
     }));
   } catch (error) {

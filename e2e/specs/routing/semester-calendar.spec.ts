@@ -17,8 +17,10 @@ type AcademicSemesterSeed = {
   firstTeachingDate: string;
   id: number;
   isCurrent: boolean;
+  isVisible: boolean;
   name: string;
   schoolYear: number;
+  sortOrder: number;
   startDate: string;
   termNumber: number;
   updatedAt: string;
@@ -57,8 +59,10 @@ function buildAcademicCalendarState() {
       firstTeachingDate: '2026-02-20',
       id: 101,
       isCurrent: true,
+      isVisible: true,
       name: '2025-2026 学年第二学期',
       schoolYear: 2025,
+      sortOrder: 10,
       startDate: '2026-02-17',
       termNumber: 2,
       updatedAt: '2026-04-02T00:00:00.000Z',
@@ -70,8 +74,10 @@ function buildAcademicCalendarState() {
       firstTeachingDate: '2026-09-07',
       id: 102,
       isCurrent: false,
+      isVisible: true,
       name: '2026-2027 学年第一学期',
       schoolYear: 2026,
+      sortOrder: 20,
       startDate: '2026-09-01',
       termNumber: 1,
       updatedAt: '2026-04-04T00:00:00.000Z',
@@ -236,10 +242,15 @@ async function mockAcademicCalendarGraphQL(page: Page) {
 
     if (query.includes('query AcademicSemesters')) {
       requestCounters.academicSemesters += 1;
+      const semesters =
+        typeof variables.isVisible === 'boolean'
+          ? state.semesters.filter((semester) => semester.isVisible === variables.isVisible)
+          : state.semesters;
+
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            academicSemesters: state.semesters,
+            academicSemesters: semesters,
           },
         }),
         contentType: 'application/json',

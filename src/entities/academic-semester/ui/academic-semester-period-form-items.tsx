@@ -1,6 +1,6 @@
 // src/entities/academic-semester/ui/academic-semester-period-form-items.tsx
 
-import type { FormItemProps } from 'antd';
+import type { FormItemProps, SelectProps } from 'antd';
 import { Form, Select } from 'antd';
 import type { ReactNode } from 'react';
 
@@ -15,9 +15,11 @@ type AcademicSemesterPeriodFormItemsProps = {
   schoolYearHelp?: ReactNode;
   schoolYearName?: FormItemProps['name'];
   schoolYearOptions: readonly AcademicSemesterSchoolYearOption[];
+  schoolYearSelectProps?: Omit<SelectProps<string>, 'disabled' | 'loading' | 'options'>;
   schoolYearValidateStatus?: FormItemProps['validateStatus'];
   semesterHelp?: ReactNode;
   semesterName?: FormItemProps['name'];
+  semesterSelectProps?: Omit<SelectProps<string>, 'disabled' | 'loading' | 'options'>;
   semesterValidateStatus?: FormItemProps['validateStatus'];
 };
 
@@ -27,9 +29,11 @@ export function AcademicSemesterPeriodFormItems({
   schoolYearHelp,
   schoolYearName = 'schoolYear',
   schoolYearOptions,
+  schoolYearSelectProps,
   schoolYearValidateStatus,
   semesterHelp,
   semesterName = 'semester',
+  semesterSelectProps,
   semesterValidateStatus,
 }: AcademicSemesterPeriodFormItemsProps) {
   const selectDisabled = disabled || loading || schoolYearOptions.length === 0;
@@ -44,12 +48,13 @@ export function AcademicSemesterPeriodFormItems({
         validateStatus={schoolYearValidateStatus}
       >
         <Select
+          {...schoolYearSelectProps}
           disabled={selectDisabled}
           loading={loading}
-          optionFilterProp="label"
+          optionFilterProp={schoolYearSelectProps?.optionFilterProp ?? 'label'}
           options={[...schoolYearOptions]}
-          placeholder="选择学年"
-          showSearch
+          placeholder={schoolYearSelectProps?.placeholder ?? '选择学年'}
+          showSearch={schoolYearSelectProps?.showSearch ?? true}
         />
       </Form.Item>
 
@@ -61,10 +66,11 @@ export function AcademicSemesterPeriodFormItems({
         validateStatus={semesterValidateStatus}
       >
         <Select
+          {...semesterSelectProps}
           disabled={selectDisabled}
           loading={loading}
           options={[...ACADEMIC_SEMESTER_TERM_OPTIONS]}
-          placeholder="选择学期"
+          placeholder={semesterSelectProps?.placeholder ?? '选择学期'}
         />
       </Form.Item>
     </>

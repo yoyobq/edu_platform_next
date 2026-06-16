@@ -29,8 +29,10 @@ export type AcademicSemesterRecord = {
   firstTeachingDate: string;
   id: number;
   isCurrent: boolean;
+  isVisible: boolean;
   name: string;
   schoolYear: number;
+  sortOrder: number;
   startDate: string;
   termNumber: number;
   updatedAt: string;
@@ -55,6 +57,7 @@ export type AcademicCalendarEventRecord = {
 
 export type ListAcademicSemestersInput = {
   isCurrent?: boolean;
+  isVisible?: boolean;
   limit?: number;
   schoolYear?: number;
   termNumber?: number;
@@ -65,8 +68,10 @@ export type CreateAcademicSemesterInput = {
   examStartDate: string;
   firstTeachingDate: string;
   isCurrent: boolean;
+  isVisible?: boolean;
   name: string;
   schoolYear: number;
+  sortOrder?: number;
   startDate: string;
   termNumber: number;
 };
@@ -105,8 +110,10 @@ export type SemesterFormValues = {
   examStartDate: string;
   firstTeachingDate: string;
   isCurrent: boolean;
+  isVisible: boolean;
   name: string;
   schoolYear: number;
+  sortOrder: number;
   startDate: string;
   termNumber: number;
 };

@@ -18,6 +18,7 @@ export type {
 } from './infrastructure/staff-semester-profiles-api';
 export {
   backfillStaffSemesterProfilesFromCourseSchedules,
+  requestAcademicSemesters,
   requestStaffSemesterProfileDepartments,
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,

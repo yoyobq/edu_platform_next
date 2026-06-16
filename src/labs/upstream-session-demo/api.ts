@@ -1,5 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -79,6 +80,16 @@ type LectureJournalTeachingClassSamplesResponse = {
   listAcademicTeacherSemesterScheduleItems: {
     items: LectureJournalTeachingClassRecord[];
   };
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
 };
 
 export type CurrentUpstreamDemoAccount = {
@@ -360,6 +371,26 @@ const LIST_LECTURE_JOURNAL_TEACHING_CLASS_SAMPLES_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters($isCurrent: Boolean, $isVisible: Boolean, $limit: Int) {
+    academicSemesters(isCurrent: $isCurrent, isVisible: $isVisible, limit: $limit) {
+      id
+      schoolYear
+      termNumber
+      name
+      startDate
+      firstTeachingDate
+      examStartDate
+      endDate
+      isCurrent
+      isVisible
+      sortOrder
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
 const CURRENT_ACCOUNT_QUERY = `
   query Me {
     me {
@@ -415,6 +446,19 @@ export async function fetchCurrentUpstreamDemoAccount(): Promise<CurrentUpstream
     };
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法确认当前登录账号。'));
+  }
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await requestGraphQL<AcademicSemestersResponse, ListAcademicSemestersInput>(
+      LIST_ACADEMIC_SEMESTERS_QUERY,
+      input,
+    );
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
   }
 }
 

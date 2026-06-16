@@ -26,7 +26,6 @@ import {
   InputNumber,
   Popover,
   Segmented,
-  Select,
   Skeleton,
   Switch,
   Tag,
@@ -36,7 +35,10 @@ import {
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  AcademicSemesterSelect,
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -119,6 +121,7 @@ import {
 import {
   fetchAcademicTeachingLogPrefillItems,
   fetchMyAcademicTeachingLogPrefillItems,
+  requestAcademicSemesters,
   saveAcademicIntegratedTeachingLog,
   saveAcademicPracticeTeachingLog,
   saveAcademicTheoryTeachingLog,
@@ -202,21 +205,7 @@ type SaveFeedback = {
 type SaveFeedbackMap = Record<string, SaveFeedback | undefined>;
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickNextSemesterId(
@@ -224,15 +213,7 @@ function pickNextSemesterId(
   currentSelection: number | null,
   options: { canKeepCurrentSelection: boolean },
 ) {
-  if (
-    options.canKeepCurrentSelection &&
-    currentSelection !== null &&
-    records.some((record) => record.id === currentSelection)
-  ) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
+  return pickAcademicSemesterId(records, currentSelection, options);
 }
 
 function normalizeOptionalString(value: string) {
@@ -1738,7 +1719,9 @@ export function AcademicTeachingLogPageContent({
       setSemesterError(null);
 
       try {
-        const nextSemesters = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const nextSemesters = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (cancelled) {
           return;
@@ -2503,12 +2486,9 @@ export function AcademicTeachingLogPageContent({
                 </span>
               ) : (
                 <span className="lecture-journal-filter-control lecture-journal-filter-control-semester">
-                  <Select
+                  <AcademicSemesterSelect
                     variant="borderless"
-                    options={semesters.map((semester) => ({
-                      label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                      value: semester.id,
-                    }))}
+                    records={semesters}
                     value={selectedSemesterId ?? undefined}
                     onChange={(value) => setSelectedSemesterId(value)}
                   />

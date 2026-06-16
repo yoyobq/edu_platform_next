@@ -15,7 +15,8 @@ import {
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -49,6 +50,7 @@ import {
   type LectureJournalTeachingClassRecord,
   type MajorDirectoryResult,
   type PreviousClassAdviserClassesResult,
+  requestAcademicSemesters,
   resolveUpstreamErrorMessage,
   type TeacherDirectoryResult,
   type VerifiedStaffIdentityResult,
@@ -451,21 +453,7 @@ function findMatchingCurriculumPlans(
 }
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection?: number) {
@@ -1200,7 +1188,12 @@ export function UpstreamSessionDemoLabPage() {
       setLectureJournalSemesterError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 200 }));
+        const result = sortSemesters(
+          await requestAcademicSemesters({
+            ...VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
+            limit: 200,
+          }),
+        );
 
         if (isCancelled) {
           return;

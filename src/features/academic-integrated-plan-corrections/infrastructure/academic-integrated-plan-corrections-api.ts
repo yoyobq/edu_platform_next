@@ -1,4 +1,7 @@
 // src/features/academic-integrated-plan-corrections/infrastructure/academic-integrated-plan-corrections-api.ts
+import type { OperationVariables } from '@apollo/client';
+
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -9,9 +12,22 @@ import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
+import { executeGraphQL } from '@/shared/graphql';
 
 export type IntegratedPlanCorrectionDiff = string;
 export type IntegratedPlanCorrectionAlignmentStatus = 'CURRENT_ONLY' | 'EXPECTED_ONLY' | 'MATCHED';
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
 
 export type IntegratedPlanCorrectionCurrentPlan = {
   learningSessionContent: string | null;
@@ -344,6 +360,38 @@ const LIST_MY_INTEGRATED_PLAN_CORRECTION_SUGGESTIONS_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 function normalizeOptionalString(value?: string) {
   return normalizeOptionalTextValue(value, 'to_undefined');
 }
@@ -369,6 +417,19 @@ function normalizeMyInput(input: ListMyIntegratedPlanCorrectionSuggestionsInput)
       message: 'upstreamSessionToken 为必填。',
     }),
   };
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await executeGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
+  }
 }
 
 export async function listIntegratedPlanCorrectionSuggestions(

@@ -1,0 +1,24 @@
+/* src/entities/academic-semester/ui/academic-semester-select.css */
+
+.academic-semester-select-option {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.academic-semester-select-option-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.academic-semester-current-dot {
+  background: var(--ant-color-success);
+  border-radius: 999px;
+  display: block;
+  flex-shrink: 0;
+  height: 6px;
+  width: 6px;
+}

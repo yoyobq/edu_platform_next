@@ -19,7 +19,7 @@ import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/t
 
 import {
   type AcademicSemesterRecord,
-  requestAcademicSemesters,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
@@ -55,6 +55,7 @@ import {
   type AcademicTeacherEngagementType,
   backfillStaffSemesterProfilesFromCourseSchedules,
   type BackfillStaffSemesterProfilesFromCourseSchedulesResult,
+  requestAcademicSemesters,
   requestStaffSemesterProfileDepartments,
   requestStaffSemesterProfileOptionRecords,
   requestStaffSemesterProfiles,
@@ -163,7 +164,9 @@ export function StaffSemesterProfilesPageContent({
       setSemesterError(null);
 
       try {
-        const result = sortSemesters(await requestAcademicSemesters({ limit: 500 }));
+        const result = sortSemesters(
+          await requestAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+        );
 
         if (cancelled) {
           return;

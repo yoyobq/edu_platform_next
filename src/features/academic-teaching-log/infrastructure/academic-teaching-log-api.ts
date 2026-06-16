@@ -1,5 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -58,6 +59,18 @@ type SaveAcademicPracticeTeachingLogResponse = {
 
 type SaveAcademicIntegratedTeachingLogResponse = {
   saveAcademicIntegratedTeachingLog: AcademicTeachingLogSaveResult;
+};
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
 };
 
 const ACADEMIC_TEACHING_LOG_PREFILL_RESULT_FIELDS = `
@@ -289,6 +302,38 @@ const SAVE_ACADEMIC_INTEGRATED_TEACHING_LOG_MUTATION = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -419,6 +464,19 @@ function normalizeSaveAcademicIntegratedTeachingLogInput(
     ),
     weekNumber: normalizeRequiredString(input.weekNumber, 'weekNumber'),
   };
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await executeGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveLectureJournalUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
+  }
 }
 
 export async function fetchAcademicTeachingLogPrefillItems(

@@ -1,5 +1,7 @@
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export type AcademicTimetableCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';
@@ -339,6 +341,38 @@ const LIST_MY_ACADEMIC_TEACHER_SEMESTER_SCHEDULE_ITEMS_QUERY = `
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 const LIST_ACADEMIC_TEACHING_CLASS_OPTIONS_QUERY = `
   query ListAcademicTeachingClassOptions($semesterId: Int!, $keyword: String, $limit: Int) {
     listAcademicTeachingClassOptions(semesterId: $semesterId, keyword: $keyword, limit: $limit) {
@@ -527,6 +561,19 @@ export async function requestMyAcademicSemesterTimetableItems(
   }
 }
 
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await requestGraphQL<AcademicSemestersResponse, ListAcademicSemestersInput>(
+      LIST_ACADEMIC_SEMESTERS_QUERY,
+      input,
+    );
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载学期列表。'));
+  }
+}
+
 export async function requestAcademicWeeklyTimetableItems(
   input: AcademicWeeklyTimetableQueryFilters,
 ) {
@@ -604,3 +651,16 @@ export async function requestMyAcademicTeacherSemesterScheduleItems(
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载本人学期课表。'));
   }
 }
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemesterDTO = AcademicSemesterRecord;
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterDTO[];
+};

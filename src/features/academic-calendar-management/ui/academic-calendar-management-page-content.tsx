@@ -20,6 +20,8 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
+import { AcademicSemesterFormItem } from '@/entities/academic-semester';
+
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
@@ -171,11 +173,6 @@ export function AcademicCalendarManagementPageContent({
   const [editingEvent, setEditingEvent] = useState<AcademicCalendarEventRecord | null>(null);
   const [eventSubmitting, setEventSubmitting] = useState(false);
 
-  const semesterOptions = semesters.map((record) => ({
-    label: getSemesterDisplayName(record),
-    value: record.id,
-  }));
-
   const selectedSemester =
     selectedSemesterId === null
       ? null
@@ -253,8 +250,10 @@ export function AcademicCalendarManagementPageContent({
       examStartDate: record.examStartDate,
       firstTeachingDate: record.firstTeachingDate,
       isCurrent: record.isCurrent,
+      isVisible: record.isVisible,
       name: record.name,
       schoolYear: record.schoolYear,
+      sortOrder: record.sortOrder,
       startDate: record.startDate,
       termNumber: record.termNumber,
     });
@@ -313,6 +312,11 @@ export function AcademicCalendarManagementPageContent({
                 当前学期
               </Tag>
             ) : null}
+            {record.isVisible ? null : (
+              <Tag color="default" bordered={false}>
+                隐藏
+              </Tag>
+            )}
           </Space>
         </div>
       ),
@@ -330,6 +334,13 @@ export function AcademicCalendarManagementPageContent({
       key: 'termNumber',
       render: (value: number) => `第 ${value} 学期`,
       title: '学期号',
+      width: 100,
+    },
+    {
+      align: 'right',
+      dataIndex: 'sortOrder',
+      key: 'sortOrder',
+      title: '展示排序',
       width: 100,
     },
     {
@@ -780,6 +791,18 @@ export function AcademicCalendarManagementPageContent({
           <Form.Item label="当前学期" name="isCurrent" valuePropName="checked">
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
+          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+            <Form.Item label="普通选择器展示" name="isVisible" valuePropName="checked">
+              <Switch checkedChildren="展示" unCheckedChildren="隐藏" />
+            </Form.Item>
+            <Form.Item
+              label="展示排序"
+              name="sortOrder"
+              rules={[{ message: '请输入展示排序值。', required: true }]}
+            >
+              <InputNumber precision={0} style={{ width: '100%' }} />
+            </Form.Item>
+          </ResponsiveGrid>
         </Form>
       </Drawer>
 
@@ -842,13 +865,14 @@ export function AcademicCalendarManagementPageContent({
             }
           }}
         >
-          <Form.Item
+          <AcademicSemesterFormItem
             label="归属学期"
             name="semesterId"
-            rules={[{ message: '请选择归属学期。', required: true }]}
-          >
-            <Select showSearch optionFilterProp="label" options={semesterOptions} />
-          </Form.Item>
+            placeholder="请选择归属学期"
+            records={semesters}
+            required
+            selectProps={{ showHiddenState: true }}
+          />
           <Form.Item
             label="事件标题"
             name="topic"

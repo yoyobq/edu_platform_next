@@ -1,7 +1,7 @@
 // src/features/staff-semester-profiles/ui/filters-card.tsx
 import { Alert, Button, Card, Select, Skeleton, Typography } from 'antd';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+import { type AcademicSemesterRecord, AcademicSemesterSelect } from '@/entities/academic-semester';
 
 import { TEACHER_ENGAGEMENT_TYPE_OPTIONS } from '../application/labels';
 import type { EntitySelectOption } from '../application/options';
@@ -56,12 +56,9 @@ export function StaffSemesterProfilesFiltersCard({
             <div className="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-4">
               <label className="flex flex-col gap-2">
                 <Typography.Text strong>学期</Typography.Text>
-                <Select
-                  options={semesters.map((semester) => ({
-                    label: `${semester.name}${semester.isCurrent ? ' · 当前' : ''}`,
-                    value: semester.id,
-                  }))}
+                <AcademicSemesterSelect
                   placeholder="请选择学期"
+                  records={semesters}
                   value={selectedSemesterId ?? undefined}
                   onChange={onSemesterChange}
                 />

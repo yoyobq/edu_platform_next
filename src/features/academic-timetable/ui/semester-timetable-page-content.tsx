@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { TableOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Empty, Select, Skeleton, Typography } from 'antd';
+import { Alert, Button, Card, Empty, Skeleton, Typography } from 'antd';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+import {
+  type AcademicSemesterRecord,
+  AcademicSemesterSelect,
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
+  VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
+} from '@/entities/academic-semester';
 import {
   resolveStaffDirectoryEntries,
   resolveStaffDirectoryTeacherStaffId,
@@ -16,6 +22,7 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import type {
   AcademicTeacherSemesterScheduleItem,
   AcademicTeacherSemesterScheduleQueryFilters,
+  ListAcademicSemestersInput,
   MyAcademicTeacherSemesterScheduleQueryFilters,
 } from '../infrastructure/academic-timetable-api';
 
@@ -25,7 +32,7 @@ import './semester-timetable-page-content.css';
 
 type SemesterTimetablePageContentProps = {
   defaultStaffId?: string | null;
-  listAcademicSemesters: (input: { limit?: number }) => Promise<AcademicSemesterRecord[]>;
+  listAcademicSemesters: (input: ListAcademicSemestersInput) => Promise<AcademicSemesterRecord[]>;
   listAcademicTeacherSemesterScheduleItems: (
     input: AcademicTeacherSemesterScheduleQueryFilters,
   ) => Promise<AcademicTeacherSemesterScheduleItem[]>;
@@ -42,29 +49,11 @@ type SemesterTimetableFilters = {
 const REQUIRED_STAFF_ID_FILTER_MESSAGE = '请选择或输入教师后再查询学期课表';
 
 function sortSemesters(records: AcademicSemesterRecord[]) {
-  return [...records].sort((left, right) => {
-    if (left.isCurrent !== right.isCurrent) {
-      return left.isCurrent ? -1 : 1;
-    }
-
-    if (left.schoolYear !== right.schoolYear) {
-      return right.schoolYear - left.schoolYear;
-    }
-
-    if (left.termNumber !== right.termNumber) {
-      return right.termNumber - left.termNumber;
-    }
-
-    return right.id - left.id;
-  });
+  return sortAcademicSemestersForDisplay(records);
 }
 
 function pickNextSemesterId(records: AcademicSemesterRecord[], currentSelection: number | null) {
-  if (currentSelection !== null && records.some((record) => record.id === currentSelection)) {
-    return currentSelection;
-  }
-
-  return records.find((record) => record.isCurrent)?.id ?? records[0]?.id ?? null;
+  return pickAcademicSemesterId(records, currentSelection);
 }
 
 function formatSemesterDate(value: string) {
@@ -133,7 +122,9 @@ export function SemesterTimetablePageContent({
     setSemesterError(null);
 
     try {
-      const result = sortSemesters(await listAcademicSemesters({ limit: 500 }));
+      const result = sortSemesters(
+        await listAcademicSemesters(VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT),
+      );
 
       setSemesters(result);
       setSelectedSemesterId((currentSelection) => pickNextSemesterId(result, currentSelection));
@@ -327,12 +318,9 @@ export function SemesterTimetablePageContent({
             <div className="semester-timetable-control-field">
               <Typography.Text strong>学期</Typography.Text>
               <div className="semester-timetable-control-input">
-                <Select
+                <AcademicSemesterSelect
                   value={selectedSemesterId ?? undefined}
-                  options={semesters.map((semester) => ({
-                    label: semester.isCurrent ? `${semester.name} · 当前` : semester.name,
-                    value: semester.id,
-                  }))}
+                  records={semesters}
                   onChange={(value) => setSelectedSemesterId(value)}
                 />
               </div>

@@ -2,6 +2,7 @@
 
 import type { OperationVariables } from '@apollo/client';
 
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -24,6 +25,18 @@ import type {
 } from '../domain/curriculum-plan-homepage-types';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
+
+export type ListAcademicSemestersInput = {
+  isCurrent?: boolean;
+  isVisible?: boolean;
+  limit?: number;
+  schoolYear?: number;
+  termNumber?: number;
+};
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
 
 type CurriculumPlanHomepageListResponse = {
   fetchCurriculumPlanHomepageList: CurriculumPlanHomepageListResult;
@@ -370,6 +383,38 @@ const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHING_END_CHAPTER_CANDIDATES_
   }
 `;
 
+const LIST_ACADEMIC_SEMESTERS_QUERY = `
+  query AcademicSemesters(
+    $isCurrent: Boolean
+    $isVisible: Boolean
+    $limit: Int
+    $schoolYear: Int
+    $termNumber: Int
+  ) {
+    academicSemesters(
+      isCurrent: $isCurrent
+      isVisible: $isVisible
+      limit: $limit
+      schoolYear: $schoolYear
+      termNumber: $termNumber
+    ) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
   query: string,
   variables: TVariables,
@@ -411,6 +456,19 @@ export function resolveCurriculumPlanHomepagePrefillErrorMessage(
   }
 
   return resolveUpstreamErrorMessage(error, fallback);
+}
+
+export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+  try {
+    const response = await requestGraphQL<
+      AcademicSemestersResponse,
+      OperationVariables & ListAcademicSemestersInput
+    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
+
+    return response.academicSemesters;
+  } catch (error) {
+    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
+  }
 }
 
 function toDepartmentOption(
