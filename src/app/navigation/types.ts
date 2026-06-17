@@ -1,6 +1,6 @@
 import type { NavMode } from '@/app/providers';
 
-import type { AuthAccessGroup } from '@/features/auth';
+import type { AuthAccessGroup } from '@/entities/auth-access';
 
 type NavigationLocalEntryMeta = {
   description: string;

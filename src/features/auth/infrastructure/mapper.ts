@@ -1,13 +1,13 @@
 // src/features/auth/infrastructure/mapper.ts
 
+import { type AuthAccessGroup, isAuthAccessGroup } from '@/entities/auth-access';
+
 import {
-  type AuthAccessGroup,
   type AuthPendingSession,
   type AuthSessionIdentity,
   type AuthSessionSnapshot,
   type AuthSlotGroup,
   type AuthStoredSession,
-  isAuthAccessGroup,
   isAuthPendingSession,
   resolvePrimaryAccessGroup,
 } from '../application/types';

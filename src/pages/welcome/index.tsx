@@ -3,7 +3,6 @@ import { Alert, Flex, Spin, Typography } from 'antd';
 import { useLocation, useNavigate } from 'react-router';
 
 import {
-  type AuthAccessGroup,
   forceLogout,
   queueAuthRefreshRecoveredMessage,
   refreshSession,
@@ -17,6 +16,8 @@ import {
   type ProfileCompletionTargetIdentity,
   submitProfileCompletion,
 } from '@/features/profile-completion';
+
+import type { AuthAccessGroup } from '@/entities/auth-access';
 function resolveInitialTargetIdentity(
   identityHint: AuthAccessGroup | null | undefined,
 ): ProfileCompletionTargetIdentity | undefined {

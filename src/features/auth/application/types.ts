@@ -2,9 +2,6 @@
 
 import type { AuthAccessGroup } from '@/entities/auth-access';
 
-export type { AuthAccessGroup } from '@/entities/auth-access';
-export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/entities/auth-access';
-
 export type AuthSlotGroup = string;
 
 export type AuthSessionIdentity =

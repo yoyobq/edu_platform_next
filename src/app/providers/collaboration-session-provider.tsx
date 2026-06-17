@@ -10,7 +10,9 @@ import {
   matchLocalEntryCards,
 } from '@/app/lib';
 
-import { type AuthAccessGroup, useAuthSessionState } from '@/features/auth';
+import { useAuthSessionState } from '@/features/auth';
+
+import type { AuthAccessGroup } from '@/entities/auth-access';
 
 import {
   resolveThirdWorkspaceDemoTrigger,

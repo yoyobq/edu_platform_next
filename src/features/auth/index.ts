@@ -1,8 +1,5 @@
 // src/features/auth/index.ts
 
-export type { AuthAccessGroup } from '@/entities/auth-access';
-export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/entities/auth-access';
-
 import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
