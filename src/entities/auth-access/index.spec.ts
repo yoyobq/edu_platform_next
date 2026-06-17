@@ -17,6 +17,7 @@ import {
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
+  hasAdminAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
@@ -31,6 +32,14 @@ describe('auth access policy', () => {
     expect(isAuthAccessGroup('ADMIN')).toBe(true);
     expect(isAuthAccessGroup('STAFF')).toBe(true);
     expect(isAuthAccessGroup('UNKNOWN')).toBe(false);
+  });
+
+  it('recognizes admin access from access groups', () => {
+    expect(hasAdminAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasAdminAccess({ accessGroup: ['ADMIN', 'STAFF'] })).toBe(true);
+    expect(hasAdminAccess({ accessGroup: ['STAFF'] })).toBe(false);
+    expect(hasAdminAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+    expect(hasAdminAccess({})).toBe(false);
   });
 
   it('keeps academic calendar management limited to admins and academic officers', () => {

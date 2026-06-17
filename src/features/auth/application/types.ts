@@ -120,11 +120,3 @@ export function resolvePrimaryAccessGroup(input: {
 
   return 'GUEST';
 }
-
-export function getSessionAccessGroup(snapshot: AuthSessionSnapshot | null | undefined) {
-  return snapshot?.userInfo.accessGroup ?? [];
-}
-
-export function hasAdminAccess(snapshot: AuthSessionSnapshot | null | undefined) {
-  return getSessionAccessGroup(snapshot).includes('ADMIN');
-}

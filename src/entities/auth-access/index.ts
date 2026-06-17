@@ -53,6 +53,12 @@ function hasAcademicStaffManagerAccess(input: {
   );
 }
 
+export function hasAdminAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN');
+}
+
 export function hasAcademicCalendarReadAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   const accessGroup = input.accessGroup ?? [];
 

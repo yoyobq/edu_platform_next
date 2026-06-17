@@ -28,6 +28,18 @@
 - 上述 router 例外不下放给 `labs` 页面；`labs` 页面仍不得为了读取本站登录态依赖
   `features/auth`。
 
+## 权限入口与依赖方向
+
+- `src/shared/auth-access` 只承载 access group、slot group 等 primitive / backend contract：
+  常量、类型与 type guard，不承载具体页面或业务能力判断。
+- `src/entities/auth-access` 是稳定业务权限语义入口，承载 `hasXxxAccess`、
+  `canAccessXxx`、`resolveXxx` 等 helper；`app/router`、`app/navigation`、`pages`、
+  `features` 应通过 `@/entities/auth-access` 消费全局业务权限。
+- 单向依赖不变：`entities` 不得依赖其他 `entities`。同层 entity 若只需要 access
+  primitive 类型或常量，可以直接依赖 `src/shared/auth-access`。
+- `features/auth` 只承载登录、会话恢复、刷新、存储、snapshot 类型与 session 映射逻辑，
+  不作为全局业务权限 helper 的二级入口。
+
 ## 规则执行方式
 
 - 依赖方向：由 ESLint 的 `boundaries` 插件自动检查

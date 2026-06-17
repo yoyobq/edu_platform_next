@@ -34,12 +34,7 @@ export type {
   AuthStatus,
   AuthStoredSession,
 } from './application/types';
-export {
-  getSessionAccessGroup,
-  hasAdminAccess,
-  isAuthPendingSession,
-  resolvePrimaryAccessGroup,
-} from './application/types';
+export { isAuthPendingSession, resolvePrimaryAccessGroup } from './application/types';
 export {
   buildWelcomeRedirectTarget,
   resolveAuthenticatedRedirectTarget,

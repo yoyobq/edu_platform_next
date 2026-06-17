@@ -22,7 +22,6 @@ import {
   buildWelcomeRedirectTarget,
   getAuthSessionSnapshot,
   getAuthSessionState,
-  hasAdminAccess,
   isAuthPendingSession,
   logout,
   readStoredAuthSession,
@@ -49,6 +48,7 @@ import {
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
+  hasAdminAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveUpstreamLoginLockedUserId,
@@ -490,7 +490,11 @@ async function adminUsersLoader({ request }: LoaderFunctionArgs) {
     return null;
   }
 
-  if (!hasAdminAccess(snapshot)) {
+  if (
+    !hasAdminAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
     return {
       isForbidden: true,
     };

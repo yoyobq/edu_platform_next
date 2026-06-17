@@ -266,6 +266,7 @@
 
 当前全局能力辅助入口统一为 `@/entities/auth-access`，包括：
 
+- `hasAdminAccess`
 - 各教务页面自己的自助 / 管理能力 helper
 - `hasClassAffairsCourseResultsAccess`
 - `hasStudentRosterMembershipReconciliationAccess`
@@ -273,6 +274,9 @@
 - `canAccessPayloadCrypto`
 - `resolveUpstreamLoginLockedUserId`：解析 upstream 登录是否锁定当前 staffId，细节见
   [upstream-session-frontend-ownership.md](./upstream-session-frontend-ownership.md)
+
+`src/features/auth` 只承载登录、会话恢复、刷新、存储、snapshot 类型与 session 映射逻辑；
+不得作为 router / navigation / page 的全局业务权限 helper 入口。
 
 ## 当前自助/管理视角口径
 
