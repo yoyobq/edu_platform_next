@@ -790,7 +790,8 @@ export function ClassAffairsCourseResultsPageContent({
     try {
       const [nextClasses, nextAcademicSemesters] = await Promise.all([
         listMyManagedClasses(),
-        requestAcademicSemesters({ isVisible: true, limit: 500 }),
+        // Historical result tabs and membership effective semesters may be hidden.
+        requestAcademicSemesters({ limit: 500 }),
       ]);
       const nextUsableClasses = nextClasses
         .filter((item) => resolveClassCode(item))
