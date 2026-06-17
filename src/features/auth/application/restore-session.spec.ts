@@ -119,9 +119,15 @@ describe('restoreSession pending hydration', () => {
   it('persists rotated tokens when access-token restore falls back to refresh', async () => {
     const expiredSession = buildSessionSnapshot({
       accessToken: 'expired-access-token',
+      displayName: 'stale-staff-user',
       refreshToken: 'old-refresh-token',
     });
     const pendingSession = buildPendingSession();
+    const retainedSession = {
+      ...expiredSession,
+      accessToken: pendingSession.accessToken,
+      refreshToken: pendingSession.refreshToken,
+    };
     const restoredSession = buildSessionSnapshot({
       accessToken: pendingSession.accessToken,
       refreshToken: pendingSession.refreshToken,
@@ -155,7 +161,7 @@ describe('restoreSession pending hydration', () => {
     expect(ports.api.refresh).toHaveBeenCalledWith({
       refreshToken: expiredSession.refreshToken,
     });
-    expect(storage.writeSession).toHaveBeenNthCalledWith(1, pendingSession);
+    expect(storage.writeSession).toHaveBeenNthCalledWith(1, retainedSession);
     expect(storage.writeSession).toHaveBeenNthCalledWith(2, restoredSession);
     expect(getAuthSessionSnapshot()).toEqual(restoredSession);
   });
@@ -194,6 +200,11 @@ describe('restoreSession pending hydration', () => {
       refreshToken: 'old-refresh-token',
     });
     const pendingSession = buildPendingSession();
+    const retainedSession = {
+      ...expiredSession,
+      accessToken: pendingSession.accessToken,
+      refreshToken: pendingSession.refreshToken,
+    };
     let storedSession: AuthStoredSession | null = expiredSession;
     const ports: AuthPorts = {
       api: {
@@ -227,7 +238,7 @@ describe('restoreSession pending hydration', () => {
 
     await expect(restoreSession(ports, { waitForPending: true })).resolves.toBeNull();
 
-    expect(ports.storage.writeSession).toHaveBeenCalledWith(pendingSession);
+    expect(ports.storage.writeSession).toHaveBeenCalledWith(retainedSession);
     expect(ports.storage.clearSession).toHaveBeenCalledTimes(1);
     expect(getAuthSessionState().status).toBe('unauthenticated');
     expect(getCurrentAuthSession()).toBeNull();
@@ -275,8 +286,8 @@ describe('restoreSession pending hydration', () => {
 
     await expect(restoreSession(ports, { waitForPending: true })).resolves.toEqual(retainedSession);
 
-    expect(ports.storage.writeSession).toHaveBeenNthCalledWith(1, pendingSession);
-    expect(ports.storage.writeSession).toHaveBeenNthCalledWith(2, retainedSession);
+    expect(ports.storage.writeSession).toHaveBeenCalledTimes(1);
+    expect(ports.storage.writeSession).toHaveBeenNthCalledWith(1, retainedSession);
     expect(ports.storage.clearSession).not.toHaveBeenCalled();
     expect(getAuthSessionState().status).toBe('authenticated');
     expect(getAuthSessionSnapshot()).toEqual(retainedSession);
