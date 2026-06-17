@@ -19,7 +19,6 @@ function buildItem(
 ): ManagedCourseResultsItem {
   return {
     fetchedAt: null,
-    resultDisplayEffectiveSemesterId: null,
     resultDisplayMessage: null,
     results: [],
     source: 'CACHE',
