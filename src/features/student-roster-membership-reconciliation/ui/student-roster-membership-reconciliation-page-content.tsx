@@ -57,6 +57,8 @@ import {
   type EndDecisionDraft,
   getActionLabel,
   getConfirmationDecisionOptions,
+  getEffectiveSemesterHelpText,
+  getEffectiveSemesterLabel,
   mergeCommitEndDecisions,
   type PreRegisteredReviewDraft,
   type PreRegisteredReviewOutcome,
@@ -1191,7 +1193,7 @@ export function StudentRosterMembershipReconciliationPageContent({
     }
 
     if (preRegisteredReviewCommitPayload.invalidItems.length > 0) {
-      setReconciliationError('存在无法提交的预报到改判项，请检查学生编号和生效学期。');
+      setReconciliationError('存在无法提交的预报到改判项，请检查学生编号和退学起始学期。');
       return;
     }
 
@@ -1261,6 +1263,25 @@ export function StudentRosterMembershipReconciliationPageContent({
     );
   }
 
+  function renderEffectiveSemesterField(input: {
+    onChange: (effectiveSemesterId: number | null) => void;
+    reasonCode: StudentRosterMembershipReconciliationItem['recommendedReasonCode'];
+    value?: number | null;
+  }) {
+    const helpText = getEffectiveSemesterHelpText(input.reasonCode);
+
+    return (
+      <div className="flex flex-col gap-1">
+        <span className="text-text-secondary">{getEffectiveSemesterLabel(input.reasonCode)}</span>
+        {renderEffectiveSemesterSelect({
+          value: input.value,
+          onChange: input.onChange,
+        })}
+        {helpText ? <span className="text-text-secondary">{helpText}</span> : null}
+      </div>
+    );
+  }
+
   function renderConfirmationEditor(item: StudentRosterMembershipReconciliationItem) {
     if (!item.requiresConfirmation) {
       return null;
@@ -1323,10 +1344,9 @@ export function StudentRosterMembershipReconciliationPageContent({
             }));
           }}
         />
-        {requiresEffectiveSemester(draft.reasonCode) ? (
-          <div className="flex flex-col gap-1">
-            <span className="text-text-secondary">生效学期</span>
-            {renderEffectiveSemesterSelect({
+        {requiresEffectiveSemester(draft.reasonCode)
+          ? renderEffectiveSemesterField({
+              reasonCode: draft.reasonCode,
               value: draft.effectiveSemesterId,
               onChange: (effectiveSemesterId) => {
                 updateConfirmationDraft(item, (current) => ({
@@ -1336,9 +1356,8 @@ export function StudentRosterMembershipReconciliationPageContent({
                   reasonText: current?.reasonText,
                 }));
               },
-            })}
-          </div>
-        ) : null}
+            })
+          : null}
         <Input.TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
           maxLength={255}
@@ -1561,10 +1580,9 @@ export function StudentRosterMembershipReconciliationPageContent({
         />
         {draft.outcome !== 'PRE_REGISTERED' ? (
           <>
-            {draft.outcome === 'DROPPED' ? (
-              <div className="flex flex-col gap-1">
-                <span className="text-text-secondary">生效学期</span>
-                {renderEffectiveSemesterSelect({
+            {draft.outcome === 'DROPPED'
+              ? renderEffectiveSemesterField({
+                  reasonCode: 'DROPPED_CONFIRMED',
                   value: draft.effectiveSemesterId,
                   onChange: (effectiveSemesterId) => {
                     updatePreRegisteredReviewDraft(item, (current) => ({
@@ -1573,9 +1591,8 @@ export function StudentRosterMembershipReconciliationPageContent({
                       outcome: current?.outcome ?? draft.outcome,
                     }));
                   },
-                })}
-              </div>
-            ) : null}
+                })
+              : null}
             <Input.TextArea
               autoSize={{ maxRows: 3, minRows: 2 }}
               maxLength={255}
@@ -1660,7 +1677,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         <Descriptions.Item label="active decision">
           {formatNullableValue(item.activeDecisionId)}
         </Descriptions.Item>
-        <Descriptions.Item label="active decision 生效学期">
+        <Descriptions.Item label={getEffectiveSemesterLabel(item.activeDecisionReasonCode)}>
           {formatNullableValue(item.activeDecisionEffectiveSemesterId)}
         </Descriptions.Item>
         <Descriptions.Item label="推断入学年">
@@ -2028,7 +2045,7 @@ export function StudentRosterMembershipReconciliationPageContent({
           type="warning"
           showIcon
           title="存在无法提交的预报到改判项"
-          description="改判为不再报到或退学时，必须能定位本地学生编号；退学还需要选择生效学期。"
+          description="改判为不再报到或退学时，必须能定位本地学生编号；退学还需要选择退学起始学期。"
         />
       );
     }

@@ -82,6 +82,23 @@ export const REASON_CODE_LABELS: Record<StudentRosterMembershipReasonCode, strin
   UPSTREAM_ROSTER_ERROR_CONFIRMED: '确认 upstream 名册异常',
 };
 
+export const EFFECTIVE_SEMESTER_LABELS: Record<StudentRosterMembershipReasonCode, string> = {
+  CLASS_MEMBERSHIP_CORRECTION: '裁定生效学期',
+  DROPPED_CONFIRMED: '退学起始学期',
+  NOT_CHECKED_IN_CONFIRMED: '裁定生效学期',
+  REENROLLED_CONFIRMED: '进入当前班生效学期',
+  RETAINED_GRADE_CONFIRMED: '进入当前班生效学期',
+  TRANSFERRED_IN_CONFIRMED: '进入当前班生效学期',
+  TRANSFERRED_OUT_CONFIRMED: '转出当前班生效学期',
+  UPSTREAM_ROSTER_ERROR_CONFIRMED: '裁定生效学期',
+};
+
+export const EFFECTIVE_SEMESTER_HELP_TEXTS: Partial<
+  Record<StudentRosterMembershipReasonCode, string>
+> = {
+  DROPPED_CONFIRMED: '从该学期起按退学处理；成绩仅记录到上一个学期。',
+};
+
 const TRANSFER_IN_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
   {
     decisionOutcome: 'INCLUDE',
@@ -153,6 +170,18 @@ export function requiresEffectiveSemester(
   reasonCode: StudentRosterMembershipReasonCode | null | undefined,
 ) {
   return reasonCode !== 'NOT_CHECKED_IN_CONFIRMED';
+}
+
+export function getEffectiveSemesterLabel(
+  reasonCode: StudentRosterMembershipReasonCode | null | undefined,
+) {
+  return reasonCode ? EFFECTIVE_SEMESTER_LABELS[reasonCode] : '裁定生效学期';
+}
+
+export function getEffectiveSemesterHelpText(
+  reasonCode: StudentRosterMembershipReasonCode | null | undefined,
+) {
+  return reasonCode ? (EFFECTIVE_SEMESTER_HELP_TEXTS[reasonCode] ?? null) : null;
 }
 
 export function isPreRegisteredUpstreamStatus(item: StudentRosterMembershipReconciliationItem) {

@@ -12,6 +12,8 @@ import {
   buildPreRegisteredReviewCommitPayload,
   canEndDecision,
   getConfirmationDecisionOptions,
+  getEffectiveSemesterHelpText,
+  getEffectiveSemesterLabel,
   mergeCommitEndDecisions,
   REASON_CODE_LABELS,
 } from './confirmation-policy';
@@ -136,6 +138,15 @@ describe('student roster membership confirmation policy', () => {
   it('distinguishes not reported from active class membership history in reason labels', () => {
     expect(REASON_CODE_LABELS.NOT_CHECKED_IN_CONFIRMED).toBe('确认未报到且不再报到');
     expect(REASON_CODE_LABELS.DROPPED_CONFIRMED).toBe('确认报到后退学');
+  });
+
+  it('uses reason-specific effective semester copy for dropout decisions', () => {
+    expect(getEffectiveSemesterLabel('DROPPED_CONFIRMED')).toBe('退学起始学期');
+    expect(getEffectiveSemesterHelpText('DROPPED_CONFIRMED')).toBe(
+      '从该学期起按退学处理；成绩仅记录到上一个学期。',
+    );
+    expect(getEffectiveSemesterLabel('TRANSFERRED_IN_CONFIRMED')).toBe('进入当前班生效学期');
+    expect(getEffectiveSemesterHelpText('TRANSFERRED_IN_CONFIRMED')).toBeNull();
   });
 
   it('falls back to the action default when recommendation is outside the allowed reason set', () => {
