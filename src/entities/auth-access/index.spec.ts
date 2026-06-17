@@ -20,6 +20,7 @@ import {
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
+  hasUpstreamDataSyncAccess,
   isAuthAccessGroup,
   resolveUpstreamLoginLockedUserId,
 } from './index';
@@ -177,6 +178,14 @@ describe('auth access policy', () => {
       false,
     );
     expect(hasStudentRosterMembershipReconciliationAccess({ accessGroup: ['GUEST'] })).toBe(false);
+  });
+
+  it('limits upstream data sync to admins', () => {
+    expect(hasUpstreamDataSyncAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasUpstreamDataSyncAccess({ accessGroup: ['STAFF'] })).toBe(false);
+    expect(hasUpstreamDataSyncAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+    expect(hasUpstreamDataSyncAccess({ accessGroup: ['GUEST'] })).toBe(false);
+    expect(hasUpstreamDataSyncAccess({})).toBe(false);
   });
 
   it('allows class affairs course results to class advisers and counselors only', () => {

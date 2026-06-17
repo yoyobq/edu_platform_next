@@ -1,3 +1,5 @@
+// src/features/auth/infrastructure/account-switch-api.ts
+
 import { type AuthAccessGroup, isAuthAccessGroup } from '@/entities/auth-access';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';

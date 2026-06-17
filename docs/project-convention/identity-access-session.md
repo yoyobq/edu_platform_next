@@ -269,6 +269,7 @@
 - 各教务页面自己的自助 / 管理能力 helper
 - `hasClassAffairsCourseResultsAccess`
 - `hasStudentRosterMembershipReconciliationAccess`
+- `hasUpstreamDataSyncAccess`
 - `canAccessPayloadCrypto`
 - `resolveUpstreamLoginLockedUserId`：解析 upstream 登录是否锁定当前 staffId，细节见
   [upstream-session-frontend-ownership.md](./upstream-session-frontend-ownership.md)

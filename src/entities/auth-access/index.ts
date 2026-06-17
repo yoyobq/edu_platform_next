@@ -158,6 +158,12 @@ export function hasStudentRosterMembershipReconciliationAccess(input: {
   return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
 }
 
+export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN');
+}
+
 export function hasClassAffairsCourseResultsAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

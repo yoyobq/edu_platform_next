@@ -1,3 +1,5 @@
+// src/features/auth/infrastructure/account-switch-storage.ts
+
 import { AUTH_SESSION_STORAGE_KEY } from '@/shared/auth-session';
 
 import { type AccountSwitchLabSession, canUseAccountSwitchLabSession } from './account-switch-api';
