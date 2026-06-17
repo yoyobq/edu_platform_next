@@ -4,8 +4,12 @@ export type {
   ManagedClassCourseResultsClass,
   ManagedClassCourseResultsTerm,
   ManagedCourseResultRecord,
+  ManagedCourseResultsDisplayDecisionOutcome,
+  ManagedCourseResultsDisplayReasonCode,
+  ManagedCourseResultsDisplayStatus,
   ManagedCourseResultsItem,
   ManagedCourseResultsResult,
+  ManagedCourseResultsStudentStatus,
 } from './api';
 export {
   fetchManagedClassCourseResults,

@@ -115,6 +115,14 @@ describe('class affairs course results api', () => {
         },
       },
     );
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('studentStatus');
+    expect(query).toContain('resultDisplayStatus');
+    expect(query).toContain('resultDisplayDecisionOutcome');
+    expect(query).toContain('resultDisplayReasonCode');
+    expect(query).toContain('resultDisplayEffectiveSemesterId');
+    expect(query).toContain('resultDisplayMessage');
   });
 
   it('refreshes managed class results through upstream session graphql', async () => {

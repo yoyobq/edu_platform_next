@@ -18,6 +18,24 @@ export { resolveUpstreamErrorMessage };
 
 export type ManagedCourseResultsRefreshMode = 'CACHE_FIRST' | 'REFRESH';
 export type ManagedCourseResultsSource = 'CACHE' | 'STALE_CACHE' | 'UPSTREAM';
+export type ManagedCourseResultsStudentStatus =
+  | 'PRE_REGISTERED'
+  | 'NOT_CHECKED_IN'
+  | 'ENROLLED'
+  | 'OFF_CAMPUS_INTERNSHIP'
+  | 'SUSPENDED'
+  | 'GRADUATED'
+  | 'DROPPED';
+export type ManagedCourseResultsDisplayStatus = 'NORMAL' | 'SPECIAL_CASE';
+export type ManagedCourseResultsDisplayDecisionOutcome = 'INCLUDE' | 'EXCLUDE';
+export type ManagedCourseResultsDisplayReasonCode =
+  | 'DROPPED_CONFIRMED'
+  | 'TRANSFERRED_OUT_CONFIRMED'
+  | 'TRANSFERRED_IN_CONFIRMED'
+  | 'RETAINED_GRADE_CONFIRMED'
+  | 'REENROLLED_CONFIRMED'
+  | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
+  | 'CLASS_MEMBERSHIP_CORRECTION';
 
 export type ListAcademicSemestersInput = {
   isCurrent?: boolean;
@@ -43,6 +61,7 @@ export type ManagedClassCourseResultsTerm = {
   canPullFromUpstream: boolean;
   disabledReason: string | null;
   hasLocalData: boolean;
+  id: number | null;
   isCurrent: boolean;
   label: string;
   schoolYear: string;
@@ -66,9 +85,15 @@ export type ManagedCourseResultRecord = {
 export type ManagedCourseResultsItem = {
   fetchedAt: string | null;
   results: ManagedCourseResultRecord[];
+  resultDisplayDecisionOutcome: ManagedCourseResultsDisplayDecisionOutcome | null;
+  resultDisplayEffectiveSemesterId: number | null;
+  resultDisplayMessage: string | null;
+  resultDisplayReasonCode: ManagedCourseResultsDisplayReasonCode | null;
+  resultDisplayStatus: ManagedCourseResultsDisplayStatus;
   source: ManagedCourseResultsSource;
   studentName: string | null;
   studentNumber: string;
+  studentStatus: ManagedCourseResultsStudentStatus | null;
 };
 
 export type ManagedCourseResultsResult = {
@@ -153,6 +178,12 @@ const FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION = `
       items {
         studentNumber
         studentName
+        studentStatus
+        resultDisplayStatus
+        resultDisplayDecisionOutcome
+        resultDisplayReasonCode
+        resultDisplayEffectiveSemesterId
+        resultDisplayMessage
         source
         fetchedAt
         results {

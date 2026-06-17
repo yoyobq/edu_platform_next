@@ -1,6 +1,14 @@
 // src/features/class-affairs-course-results/ui/class-affairs-course-results-page-content.tsx
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import {
+  type CSSProperties,
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   CloudSyncOutlined,
   FileSearchOutlined,
@@ -30,11 +38,20 @@ import {
   type ManagedClassCourseResultsClass,
   type ManagedClassCourseResultsTerm,
   type ManagedCourseResultRecord,
+  type ManagedCourseResultsDisplayDecisionOutcome,
+  type ManagedCourseResultsDisplayReasonCode,
+  type ManagedCourseResultsDisplayStatus,
   type ManagedCourseResultsItem,
   type ManagedCourseResultsResult,
+  type ManagedCourseResultsStudentStatus,
   requestAcademicSemesters,
   resolveUpstreamErrorMessage,
 } from '../api';
+import {
+  COURSE_RESULTS_REASON_LABELS,
+  COURSE_RESULTS_STUDENT_STATUS_LABELS,
+  splitCourseResultsItemsForDisplay,
+} from '../lib/result-display';
 
 import './class-affairs-course-results-page-content.css';
 
@@ -71,16 +88,29 @@ type PivotCourseColumn = {
 
 type PivotStudentRow = {
   resultCount: number;
+  resultDisplayDecisionOutcome: ManagedCourseResultsDisplayDecisionOutcome | null;
+  resultDisplayMessage: string | null;
+  resultDisplayReasonCode: ManagedCourseResultsDisplayReasonCode | null;
+  resultDisplayStatus: ManagedCourseResultsDisplayStatus;
   scores: Record<string, PivotScoreCell[]>;
   studentName: string | null;
   studentNumber: string;
+  studentStatus: ManagedCourseResultsStudentStatus | null;
 };
 
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const STUDENT_NUMBER_COLUMN_WIDTH = 98;
 const STUDENT_NAME_COLUMN_WIDTH = 82;
+const SPECIAL_STATUS_COLUMN_WIDTH = 92;
+const SPECIAL_REASON_COLUMN_WIDTH = 128;
+const SPECIAL_MESSAGE_COLUMN_WIDTH = 220;
 const PIVOT_COURSE_COLUMN_WIDTH = 72;
 const PIVOT_BASE_SCROLL_X = STUDENT_NUMBER_COLUMN_WIDTH + STUDENT_NAME_COLUMN_WIDTH;
+const SPECIAL_PIVOT_BASE_SCROLL_X =
+  PIVOT_BASE_SCROLL_X +
+  SPECIAL_STATUS_COLUMN_WIDTH +
+  SPECIAL_REASON_COLUMN_WIDTH +
+  SPECIAL_MESSAGE_COLUMN_WIDTH;
 const LOCAL_CLASS_SETUP_PATH = '/academic-affairs/student-roster-membership-reconciliation';
 const STUDENT_ROSTER_SYNC_REQUIRED_PREFIX = '目标班级尚未同步学生名单';
 const STUDENT_ROSTER_SYNC_LINK_TEXT = '同步学生名单';
@@ -221,6 +251,42 @@ function renderStableTextCell(value: string | null | undefined) {
   );
 }
 
+function resolveStudentStatusTagColor(status: ManagedCourseResultsStudentStatus | null) {
+  switch (status) {
+    case 'DROPPED':
+      return 'red';
+    case 'SUSPENDED':
+      return 'orange';
+    case 'ENROLLED':
+      return 'green';
+    default:
+      return 'blue';
+  }
+}
+
+function renderTagCell(label: string | null, color: string) {
+  if (!label) {
+    return <span className="text-text-secondary">-</span>;
+  }
+
+  return (
+    <Tag color={color} style={{ marginInlineEnd: 0 }}>
+      {label}
+    </Tag>
+  );
+}
+
+function renderStudentStatusCell(status: ManagedCourseResultsStudentStatus | null) {
+  return renderTagCell(
+    status ? COURSE_RESULTS_STUDENT_STATUS_LABELS[status] : null,
+    resolveStudentStatusTagColor(status),
+  );
+}
+
+function renderDisplayReasonCell(reasonCode: ManagedCourseResultsDisplayReasonCode | null) {
+  return renderTagCell(reasonCode ? COURSE_RESULTS_REASON_LABELS[reasonCode] : '特殊情况', 'gold');
+}
+
 function buildScoreParts(cell: PivotScoreCell) {
   const totalScore = cell.totalScore?.trim();
   const periodicScore = cell.periodicFinalTotalScore?.trim();
@@ -352,8 +418,15 @@ function resolveCurrentTermKey(currentSemester: AcademicSemesterRecord | null) {
 
 function buildTermsFromResult(
   result: ManagedCourseResultsResult | null,
-  currentSemester: AcademicSemesterRecord | null,
+  academicSemesters: readonly AcademicSemesterRecord[],
 ) {
+  const semesterByTermKey = new Map(
+    academicSemesters.map((semester) => [
+      `${semester.schoolYear}::${semester.termNumber}`,
+      semester,
+    ]),
+  );
+  const currentSemester = academicSemesters.find((semester) => semester.isCurrent) ?? null;
   const currentTermKey = resolveCurrentTermKey(currentSemester);
   const termByKey = new Map<string, ManagedClassCourseResultsTerm>();
 
@@ -372,10 +445,13 @@ function buildTermsFromResult(
         continue;
       }
 
+      const matchedSemester = semesterByTermKey.get(key) ?? null;
+
       termByKey.set(key, {
         canPullFromUpstream: true,
         disabledReason: null,
         hasLocalData: true,
+        id: matchedSemester?.id ?? null,
         isCurrent: key === currentTermKey,
         label: buildTermLabel(schoolYear, semester),
         schoolYear,
@@ -426,9 +502,14 @@ function buildPivotTableData(items: readonly ManagedCourseResultsItem[]) {
 
       return {
         resultCount: item.results.length,
+        resultDisplayDecisionOutcome: item.resultDisplayDecisionOutcome,
+        resultDisplayMessage: item.resultDisplayMessage,
+        resultDisplayReasonCode: item.resultDisplayReasonCode,
+        resultDisplayStatus: item.resultDisplayStatus,
         scores,
         studentName: item.studentName,
         studentNumber: item.studentNumber,
+        studentStatus: item.studentStatus,
       };
     })
     .sort((a, b) => compareTextValue(a.studentNumber, b.studentNumber));
@@ -447,6 +528,13 @@ function buildPivotColumns(
   token: ReturnType<typeof theme.useToken>['token'],
 ): ColumnsType<PivotStudentRow> {
   return [
+    ...buildStudentIdentityColumns(isCompactViewport),
+    ...buildCourseScoreColumns(courseColumns, token),
+  ];
+}
+
+function buildStudentIdentityColumns(isCompactViewport: boolean): ColumnsType<PivotStudentRow> {
+  return [
     {
       ...buildStableColumnSizing<PivotStudentRow>(STUDENT_NUMBER_COLUMN_WIDTH),
       align: 'center' as const,
@@ -464,34 +552,112 @@ function buildPivotColumns(
       render: (studentName: string | null) => renderStableTextCell(studentName),
       title: '姓名',
     },
-    ...courseColumns.map((course) => ({
-      ...buildStableColumnSizing<PivotStudentRow>(PIVOT_COURSE_COLUMN_WIDTH),
+  ];
+}
+
+function buildCourseScoreColumns(
+  courseColumns: readonly PivotCourseColumn[],
+  token: ReturnType<typeof theme.useToken>['token'],
+): ColumnsType<PivotStudentRow> {
+  return courseColumns.map((course) => ({
+    ...buildStableColumnSizing<PivotStudentRow>(PIVOT_COURSE_COLUMN_WIDTH),
+    align: 'center' as const,
+    key: course.key,
+    render: (_: unknown, record: PivotStudentRow) => renderScoreCells(record.scores[course.key]),
+    title: (
+      <span
+        style={{
+          color: token.colorText,
+          display: 'block',
+          fontSize: token.fontSizeSM,
+          lineHeight: token.lineHeightSM,
+          marginInline: 'auto',
+          maxWidth: '4em',
+          textAlign: 'center',
+          whiteSpace: 'normal',
+          wordBreak: 'break-all',
+        }}
+      >
+        {course.title}
+      </span>
+    ),
+  }));
+}
+
+function buildSpecialPivotColumns(
+  courseColumns: readonly PivotCourseColumn[],
+  isCompactViewport: boolean,
+  token: ReturnType<typeof theme.useToken>['token'],
+): ColumnsType<PivotStudentRow> {
+  return [
+    ...buildStudentIdentityColumns(isCompactViewport),
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_STATUS_COLUMN_WIDTH),
       align: 'center' as const,
-      key: course.key,
-      render: (_: unknown, record: PivotStudentRow) => renderScoreCells(record.scores[course.key]),
-      title: (
-        <span
-          style={{
-            color: token.colorText,
-            display: 'block',
-            fontSize: token.fontSizeSM,
-            lineHeight: token.lineHeightSM,
-            marginInline: 'auto',
-            maxWidth: '4em',
-            textAlign: 'center',
-            whiteSpace: 'normal',
-            wordBreak: 'break-all',
-          }}
-        >
-          {course.title}
-        </span>
-      ),
-    })),
+      key: 'studentStatus',
+      render: (_: unknown, record: PivotStudentRow) =>
+        renderStudentStatusCell(record.studentStatus),
+      title: '学生状态',
+    },
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_REASON_COLUMN_WIDTH),
+      align: 'center' as const,
+      key: 'resultDisplayReasonCode',
+      render: (_: unknown, record: PivotStudentRow) =>
+        renderDisplayReasonCell(record.resultDisplayReasonCode),
+      title: '特殊原因',
+    },
+    {
+      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_MESSAGE_COLUMN_WIDTH),
+      key: 'resultDisplayMessage',
+      render: (_: unknown, record: PivotStudentRow) =>
+        renderStableTextCell(record.resultDisplayMessage || '该学生当前学期成绩按特殊情况展示'),
+      title: '说明',
+    },
+    ...buildCourseScoreColumns(courseColumns, token),
   ];
 }
 
 function resolveScrollX(courseColumnCount: number) {
   return PIVOT_BASE_SCROLL_X + courseColumnCount * PIVOT_COURSE_COLUMN_WIDTH;
+}
+
+function resolveSpecialScrollX(courseColumnCount: number) {
+  return SPECIAL_PIVOT_BASE_SCROLL_X + courseColumnCount * PIVOT_COURSE_COLUMN_WIDTH;
+}
+
+function buildCourseResultsRowClassName(
+  record: Pick<PivotStudentRow, 'studentNumber'>,
+  index: number | undefined,
+  selectedStudentNumber: string | null,
+) {
+  return [
+    index !== undefined && index % 2 === 0
+      ? 'class-affairs-course-results-row-even'
+      : 'class-affairs-course-results-row-odd',
+    record.studentNumber === selectedStudentNumber
+      ? 'class-affairs-course-results-row-selected'
+      : null,
+    'class-affairs-course-results-row-clickable',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildCourseResultsTableRowProps(
+  record: Pick<PivotStudentRow, 'studentNumber'>,
+  index: number | undefined,
+  selectedStudentNumber: string | null,
+  setSelectedStudentNumber: Dispatch<SetStateAction<string | null>>,
+) {
+  return {
+    className: buildCourseResultsRowClassName(record, index, selectedStudentNumber),
+    onClick: () => {
+      setSelectedStudentNumber((current) =>
+        current === record.studentNumber ? null : record.studentNumber,
+      );
+    },
+  };
 }
 
 function resolveRefreshScope(term: ManagedClassCourseResultsTerm) {
@@ -507,7 +673,7 @@ export function ClassAffairsCourseResultsPageContent({
   const isCompactViewport = useCompactViewport();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [classes, setClasses] = useState<ManagedClassCourseResultsClass[]>([]);
-  const [currentSemester, setCurrentSemester] = useState<AcademicSemesterRecord | null>(null);
+  const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedClassCode, setSelectedClassCode] = useState<string | null>(null);
   const [activeTermKey, setActiveTermKey] = useState<string | null>(null);
   const [result, setResult] = useState<ManagedCourseResultsResult | null>(null);
@@ -543,8 +709,8 @@ export function ClassAffairsCourseResultsPageContent({
     rememberedCredentials,
   });
   const terms = useMemo(
-    () => buildTermsFromResult(result, currentSemester),
-    [currentSemester, result],
+    () => buildTermsFromResult(result, academicSemesters),
+    [academicSemesters, result],
   );
   const termOrdinalByKey = useMemo(() => buildTermOrdinalByKey(terms), [terms]);
   const hasManagedClasses = classes.length > 0;
@@ -573,10 +739,29 @@ export function ClassAffairsCourseResultsPageContent({
     () => filterItemsByTerm(searchedItems, activeTerm),
     [activeTerm, searchedItems],
   );
-  const pivotData = useMemo(() => buildPivotTableData(visibleItems), [visibleItems]);
+  const displayItems = useMemo(
+    () =>
+      splitCourseResultsItemsForDisplay(visibleItems, {
+        activeSemesterId: activeTerm?.id ?? null,
+        semesters: academicSemesters,
+      }),
+    [academicSemesters, activeTerm?.id, visibleItems],
+  );
+  const regularPivotData = useMemo(
+    () => buildPivotTableData(displayItems.regularItems),
+    [displayItems.regularItems],
+  );
+  const specialPivotData = useMemo(
+    () => buildPivotTableData(displayItems.specialItems),
+    [displayItems.specialItems],
+  );
   const pivotColumns = useMemo(
-    () => buildPivotColumns(pivotData.courseColumns, isCompactViewport, token),
-    [isCompactViewport, pivotData.courseColumns, token],
+    () => buildPivotColumns(regularPivotData.courseColumns, isCompactViewport, token),
+    [isCompactViewport, regularPivotData.courseColumns, token],
+  );
+  const specialPivotColumns = useMemo(
+    () => buildSpecialPivotColumns(specialPivotData.courseColumns, isCompactViewport, token),
+    [isCompactViewport, specialPivotData.courseColumns, token],
   );
 
   const loadManagedClasses = useCallback(async () => {
@@ -584,9 +769,9 @@ export function ClassAffairsCourseResultsPageContent({
     setOverviewError(null);
 
     try {
-      const [nextClasses, currentSemesters] = await Promise.all([
+      const [nextClasses, nextAcademicSemesters] = await Promise.all([
         listMyManagedClasses(),
-        requestAcademicSemesters({ isCurrent: true, isVisible: true, limit: 1 }),
+        requestAcademicSemesters({ isVisible: true, limit: 500 }),
       ]);
       const nextUsableClasses = nextClasses
         .filter((item) => resolveClassCode(item))
@@ -594,14 +779,14 @@ export function ClassAffairsCourseResultsPageContent({
       const nextClassCode = resolveClassCode(nextUsableClasses[0] ?? { classCode: null });
 
       setClasses(nextClasses);
-      setCurrentSemester(currentSemesters[0] ?? null);
+      setAcademicSemesters(nextAcademicSemesters);
       setSelectedClassCode(nextClassCode);
       setActiveTermKey(null);
       setHasLoadedAllLocalTerms(false);
       return nextClassCode;
     } catch (error) {
       setClasses([]);
-      setCurrentSemester(null);
+      setAcademicSemesters([]);
       setSelectedClassCode(null);
       setActiveTermKey(null);
       setOverviewError(error instanceof Error ? error.message : '暂时无法加载本地负责班级。');
@@ -983,43 +1168,72 @@ export function ClassAffairsCourseResultsPageContent({
                       ) : null}
                       <Table<PivotStudentRow>
                         columns={pivotColumns}
-                        dataSource={pivotData.studentRows}
+                        dataSource={regularPivotData.studentRows}
                         locale={{
                           emptyText: (
                             <Empty
-                              description="暂无学生成绩"
+                              description={
+                                specialPivotData.studentRows.length > 0
+                                  ? '当前学期普通学生暂无成绩'
+                                  : '暂无学生成绩'
+                              }
                               image={Empty.PRESENTED_IMAGE_SIMPLE}
                             />
                           ),
                         }}
-                        onRow={(record, index) => ({
-                          className: [
-                            index !== undefined && index % 2 === 0
-                              ? 'class-affairs-course-results-row-even'
-                              : 'class-affairs-course-results-row-odd',
-                            record.studentNumber === selectedStudentNumber
-                              ? 'class-affairs-course-results-row-selected'
-                              : null,
-                            'class-affairs-course-results-row-clickable',
-                          ]
-                            .filter(Boolean)
-                            .join(' '),
-                          onClick: () => {
-                            setSelectedStudentNumber((current) =>
-                              current === record.studentNumber ? null : record.studentNumber,
-                            );
-                          },
-                        })}
+                        onRow={(record, index) =>
+                          buildCourseResultsTableRowProps(
+                            record,
+                            index,
+                            selectedStudentNumber,
+                            setSelectedStudentNumber,
+                          )
+                        }
                         pagination={{
                           defaultPageSize: 60,
                           pageSizeOptions: [30, 60],
                           showSizeChanger: true,
                         }}
                         rowKey={(record) => record.studentNumber}
-                        scroll={{ x: resolveScrollX(pivotData.courseColumns.length) }}
+                        scroll={{ x: resolveScrollX(regularPivotData.courseColumns.length) }}
                         size="small"
                         tableLayout="fixed"
                       />
+                      {specialPivotData.studentRows.length > 0 ? (
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-base font-medium text-text">
+                              特殊情况学生成绩
+                            </span>
+                            <span className="text-sm text-text-secondary">
+                              转出、休学、退学及转入前、复学前、留级前成绩在此单独展示。
+                            </span>
+                          </div>
+                          <Table<PivotStudentRow>
+                            columns={specialPivotColumns}
+                            dataSource={specialPivotData.studentRows}
+                            onRow={(record, index) =>
+                              buildCourseResultsTableRowProps(
+                                record,
+                                index,
+                                selectedStudentNumber,
+                                setSelectedStudentNumber,
+                              )
+                            }
+                            pagination={{
+                              defaultPageSize: 30,
+                              pageSizeOptions: [15, 30],
+                              showSizeChanger: true,
+                            }}
+                            rowKey={(record) => record.studentNumber}
+                            scroll={{
+                              x: resolveSpecialScrollX(specialPivotData.courseColumns.length),
+                            }}
+                            size="small"
+                            tableLayout="fixed"
+                          />
+                        </div>
+                      ) : null}
                     </div>
                   ) : (
                     emptyState
@@ -1091,6 +1305,7 @@ export function ClassAffairsCourseResultsPageContent({
                         canPullFromUpstream: true,
                         disabledReason: null,
                         hasLocalData: false,
+                        id: null,
                         isCurrent: false,
                         label: '该班成绩',
                         schoolYear: '',
