@@ -208,4 +208,50 @@ describe('course results display split', () => {
       'retained-before-entry',
     ]);
   });
+
+  it('uses selected term as fallback when entry case term has no semester id', () => {
+    const { regularItems, specialItems } = splitCourseResultsItemsForDisplay(
+      [
+        buildItem({
+          resultDisplayDecisionOutcome: 'INCLUDE',
+          resultDisplayEffectiveSemesterId: 2,
+          resultDisplayReasonCode: 'TRANSFERRED_IN_CONFIRMED',
+          resultDisplayStatus: 'SPECIAL_CASE',
+          studentNumber: 'transferred-in-before-entry',
+          studentStatus: 'ENROLLED',
+        }),
+      ],
+      {
+        activeSemesterId: null,
+        activeTerm: { schoolYear: 2024, termNumber: 1 },
+        semesters,
+      },
+    );
+
+    expect(regularItems).toEqual([]);
+    expect(specialItems.map((item) => item.studentNumber)).toEqual(['transferred-in-before-entry']);
+  });
+
+  it('keeps entry cases in the regular table when selected term fallback reaches entry', () => {
+    const { regularItems, specialItems } = splitCourseResultsItemsForDisplay(
+      [
+        buildItem({
+          resultDisplayDecisionOutcome: 'INCLUDE',
+          resultDisplayEffectiveSemesterId: 2,
+          resultDisplayReasonCode: 'TRANSFERRED_IN_CONFIRMED',
+          resultDisplayStatus: 'SPECIAL_CASE',
+          studentNumber: 'transferred-in-after-entry',
+          studentStatus: 'ENROLLED',
+        }),
+      ],
+      {
+        activeSemesterId: null,
+        activeTerm: { schoolYear: 2024, termNumber: 2 },
+        semesters,
+      },
+    );
+
+    expect(regularItems.map((item) => item.studentNumber)).toEqual(['transferred-in-after-entry']);
+    expect(specialItems).toEqual([]);
+  });
 });

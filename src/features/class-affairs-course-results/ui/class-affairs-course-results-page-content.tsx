@@ -145,6 +145,24 @@ function buildTermKey(term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | '
   return `${term.schoolYear}::${term.semester}`;
 }
 
+function toDisplayTerm(term: ManagedClassCourseResultsTerm | null) {
+  if (!term) {
+    return null;
+  }
+
+  const schoolYear = Number(term.schoolYear);
+  const termNumber = Number(term.semester);
+
+  if (!Number.isSafeInteger(schoolYear) || !Number.isSafeInteger(termNumber)) {
+    return null;
+  }
+
+  return {
+    schoolYear,
+    termNumber,
+  };
+}
+
 function formatClassLabel(item: ManagedClassCourseResultsClass) {
   return `${item.className || item.classCode}（${item.classCode}）`;
 }
@@ -743,9 +761,10 @@ export function ClassAffairsCourseResultsPageContent({
     () =>
       splitCourseResultsItemsForDisplay(visibleItems, {
         activeSemesterId: activeTerm?.id ?? null,
+        activeTerm: toDisplayTerm(activeTerm),
         semesters: academicSemesters,
       }),
-    [academicSemesters, activeTerm?.id, visibleItems],
+    [academicSemesters, activeTerm, visibleItems],
   );
   const regularPivotData = useMemo(
     () => buildPivotTableData(displayItems.regularItems),

@@ -12,8 +12,14 @@ export type CourseResultsDisplaySemester = {
   termNumber: number;
 };
 
+export type CourseResultsDisplayTerm = {
+  schoolYear: number;
+  termNumber: number;
+};
+
 export type CourseResultsDisplaySplitContext = {
   activeSemesterId: number | null;
+  activeTerm?: CourseResultsDisplayTerm | null;
   semesters: readonly CourseResultsDisplaySemester[];
 };
 
@@ -52,7 +58,7 @@ const EXCLUDE_REASON_CODES = new Set<ManagedCourseResultsDisplayReasonCode>([
   'UPSTREAM_ROSTER_ERROR_CONFIRMED',
 ]);
 
-function resolveSemesterOrder(semester: CourseResultsDisplaySemester) {
+function resolveSemesterOrder(semester: CourseResultsDisplayTerm) {
   return semester.schoolYear * 10 + semester.termNumber;
 }
 
@@ -60,13 +66,16 @@ function isActiveSemesterBeforeEffectiveSemester(
   context: CourseResultsDisplaySplitContext,
   effectiveSemesterId: number | null,
 ) {
-  if (!context.activeSemesterId || !effectiveSemesterId) {
+  if (effectiveSemesterId === null) {
     return false;
   }
 
-  const activeSemester = context.semesters.find(
-    (semester) => semester.id === context.activeSemesterId,
-  );
+  const activeSemester =
+    context.activeSemesterId !== null
+      ? (context.semesters.find((semester) => semester.id === context.activeSemesterId) ??
+        context.activeTerm ??
+        null)
+      : (context.activeTerm ?? null);
   const effectiveSemester = context.semesters.find(
     (semester) => semester.id === effectiveSemesterId,
   );
