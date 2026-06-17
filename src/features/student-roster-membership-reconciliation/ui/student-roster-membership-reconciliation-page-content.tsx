@@ -1,12 +1,7 @@
 // src/features/student-roster-membership-reconciliation/ui/student-roster-membership-reconciliation-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import {
-  ReconciliationOutlined,
-  ReloadOutlined,
-  RollbackOutlined,
-  SwapOutlined,
-} from '@ant-design/icons';
+import { ReconciliationOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -47,28 +42,33 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { hasAutomaticRosterCommitWork } from '../application/commit-work';
 import {
   buildCommitConfirmations,
-  buildCommitEndDecisions,
   buildDefaultConfirmationDrafts,
-  buildDefaultEndDecisionDrafts,
   buildDefaultPreRegisteredReviewDrafts,
+  buildDefaultReplacementDecisionDrafts,
   buildPreRegisteredReviewCommitPayload,
+  buildReplacementDecisionCommitPayload,
   canEndDecision,
   CATEGORY_COLORS,
   CATEGORY_LABELS,
   type ConfirmationDraft,
   DECISION_OUTCOME_COLORS,
   DECISION_OUTCOME_LABELS,
-  type EndDecisionDraft,
   getActionLabel,
   getConfirmationDecisionOptions,
   getEffectiveSemesterHelpText,
   getEffectiveSemesterLabel,
+  getReplacementDecisionOptions,
   mergeCommitEndDecisions,
   type PreRegisteredReviewDraft,
   type PreRegisteredReviewOutcome,
   REASON_CODE_LABELS,
+  type ReplacementDecisionDraft,
   requiresEffectiveSemester,
   requiresPreRegisteredLocalReview,
+  switchConfirmationDraftDecisionOutcome,
+  updateConfirmationDraftEffectiveSemester,
+  updateConfirmationDraftReasonCode,
+  updateConfirmationDraftReasonText,
 } from '../application/confirmation-policy';
 import {
   buildRosterReviewItems,
@@ -250,27 +250,6 @@ function renderCommitImpactTag(reviewItem: RosterReviewItem) {
   return <Tag color={getCommitImpactTagColor(reviewItem)}>{reviewItem.commitImpactLabel}</Tag>;
 }
 
-function getDecisionOutcomeButtonProps(
-  outcome: StudentRosterMembershipConfirmationInput['decisionOutcome'],
-  isSelected: boolean,
-) {
-  if (outcome === 'INCLUDE') {
-    return isSelected
-      ? {
-          type: 'primary' as const,
-        }
-      : {
-          color: 'primary' as const,
-          variant: 'outlined' as const,
-        };
-  }
-
-  return {
-    color: 'orange' as const,
-    variant: isSelected ? ('solid' as const) : ('outlined' as const),
-  };
-}
-
 function getStudentDisplayName(item: StudentRosterMembershipReconciliationItem) {
   return item.studentName || item.studentId || item.upstreamStudentId || item.key;
 }
@@ -448,7 +427,9 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [confirmationDrafts, setConfirmationDrafts] = useState<Record<string, ConfirmationDraft>>(
     {},
   );
-  const [endDecisionDrafts, setEndDecisionDrafts] = useState<Record<string, EndDecisionDraft>>({});
+  const [replacementDecisionDrafts, setReplacementDecisionDrafts] = useState<
+    Record<string, ReplacementDecisionDraft>
+  >({});
   const [preRegisteredReviewDrafts, setPreRegisteredReviewDrafts] = useState<
     Record<string, PreRegisteredReviewDraft>
   >({});
@@ -512,27 +493,27 @@ export function StudentRosterMembershipReconciliationPageContent({
     [reconciliationResult],
   );
   const reviewCounts = useMemo(() => countRosterReviewItemsByKind(reviewItems), [reviewItems]);
-  const pendingEndDecisionKeys = useMemo(
+  const pendingReplacementDecisionKeys = useMemo(
     () =>
       new Set(
-        Object.entries(endDecisionDrafts)
+        Object.entries(replacementDecisionDrafts)
           .filter(([, draft]) => draft.selected)
           .map(([itemKey]) => itemKey),
       ),
-    [endDecisionDrafts],
+    [replacementDecisionDrafts],
   );
   const focusReviewItems = useMemo(() => {
     const focusedItems = filterRosterReviewItems(reviewItems, 'focus');
     const focusedRowKeys = new Set(focusedItems.map((item) => item.rowKey));
-    const selectedEndDecisionItems = reviewItems.filter(
+    const selectedReplacementDecisionItems = reviewItems.filter(
       (item) =>
         item.kind === 'local-decision' &&
-        pendingEndDecisionKeys.has(item.item.key) &&
+        pendingReplacementDecisionKeys.has(item.item.key) &&
         !focusedRowKeys.has(item.rowKey),
     );
 
-    return [...focusedItems, ...selectedEndDecisionItems];
-  }, [pendingEndDecisionKeys, reviewItems]);
+    return [...focusedItems, ...selectedReplacementDecisionItems];
+  }, [pendingReplacementDecisionKeys, reviewItems]);
   const visibleReviewItems = useMemo(
     () =>
       resultFilter === 'focus'
@@ -560,9 +541,13 @@ export function StudentRosterMembershipReconciliationPageContent({
     () => buildCommitConfirmations(reconciliationResult?.items ?? [], confirmationDrafts),
     [confirmationDrafts, reconciliationResult],
   );
-  const selectedEndDecisions = useMemo(
-    () => buildCommitEndDecisions(reconciliationResult?.items ?? [], endDecisionDrafts),
-    [endDecisionDrafts, reconciliationResult],
+  const replacementDecisionCommitPayload = useMemo(
+    () =>
+      buildReplacementDecisionCommitPayload(
+        reconciliationResult?.items ?? [],
+        replacementDecisionDrafts,
+      ),
+    [reconciliationResult, replacementDecisionDrafts],
   );
   const preRegisteredReviewCommitPayload = useMemo(
     () =>
@@ -576,17 +561,33 @@ export function StudentRosterMembershipReconciliationPageContent({
     [preRegisteredReviewDrafts, reconciliationResult],
   );
   const commitConfirmationsPayload = useMemo(
-    () => [...commitConfirmations.confirmations, ...preRegisteredReviewCommitPayload.confirmations],
-    [commitConfirmations.confirmations, preRegisteredReviewCommitPayload.confirmations],
+    () => [
+      ...commitConfirmations.confirmations,
+      ...preRegisteredReviewCommitPayload.confirmations,
+      ...replacementDecisionCommitPayload.confirmations,
+    ],
+    [
+      commitConfirmations.confirmations,
+      preRegisteredReviewCommitPayload.confirmations,
+      replacementDecisionCommitPayload.confirmations,
+    ],
   );
   const commitEndDecisions = useMemo(
     () =>
-      mergeCommitEndDecisions(selectedEndDecisions, preRegisteredReviewCommitPayload.endDecisions),
-    [preRegisteredReviewCommitPayload.endDecisions, selectedEndDecisions],
+      mergeCommitEndDecisions(
+        preRegisteredReviewCommitPayload.endDecisions,
+        replacementDecisionCommitPayload.endDecisions,
+      ),
+    [preRegisteredReviewCommitPayload.endDecisions, replacementDecisionCommitPayload.endDecisions],
   );
+  const hasInvalidCommitWork =
+    commitConfirmations.invalidItems.length > 0 ||
+    preRegisteredReviewCommitPayload.invalidItems.length > 0 ||
+    replacementDecisionCommitPayload.invalidItems.length > 0;
   const hasCommitWork =
     commitConfirmationsPayload.length > 0 ||
     commitEndDecisions.length > 0 ||
+    hasInvalidCommitWork ||
     hasAutomaticRosterCommitWork(reconciliationResult?.items ?? []);
   const isLoadingClassSelection =
     isLoadingClassList || isLoadingDepartments || isLoadingLocalClassOptions;
@@ -596,13 +597,14 @@ export function StudentRosterMembershipReconciliationPageContent({
     hasCommitWork &&
     commitConfirmations.invalidItems.length === 0 &&
     preRegisteredReviewCommitPayload.invalidItems.length === 0 &&
+    replacementDecisionCommitPayload.invalidItems.length === 0 &&
     !isRunningAction;
 
   const applyReconciliationResult = useCallback(
     (result: StudentRosterMembershipReconciliationResult) => {
       setReconciliationResult(result);
       setConfirmationDrafts(buildDefaultConfirmationDrafts(result.items));
-      setEndDecisionDrafts(buildDefaultEndDecisionDrafts(result.items));
+      setReplacementDecisionDrafts(buildDefaultReplacementDecisionDrafts(result.items));
       setPreRegisteredReviewDrafts(
         buildDefaultPreRegisteredReviewDrafts(result.items, {
           resolveItemKey: getResultRowKey,
@@ -627,7 +629,7 @@ export function StudentRosterMembershipReconciliationPageContent({
       setPostCommitRefreshNotice(null);
       setHasAutoLoadedClassList(false);
       setConfirmationDrafts({});
-      setEndDecisionDrafts({});
+      setReplacementDecisionDrafts({});
       setPreRegisteredReviewDrafts({});
       setResultFilter('focus');
       setResultTablePage(1);
@@ -702,7 +704,7 @@ export function StudentRosterMembershipReconciliationPageContent({
             setClassAdviserClaimNotice(null);
             setPostCommitRefreshNotice(null);
             setConfirmationDrafts({});
-            setEndDecisionDrafts({});
+            setReplacementDecisionDrafts({});
             setPreRegisteredReviewDrafts({});
             setResultFilter('focus');
             setResultTablePage(1);
@@ -1221,6 +1223,11 @@ export function StudentRosterMembershipReconciliationPageContent({
       return;
     }
 
+    if (replacementDecisionCommitPayload.invalidItems.length > 0) {
+      setReconciliationError('存在无法提交的人工复核裁定项，请检查学生编号、确认选项和生效学期。');
+      return;
+    }
+
     if (!hasCommitWork) {
       setReconciliationError(null);
       return;
@@ -1244,11 +1251,11 @@ export function StudentRosterMembershipReconciliationPageContent({
     }));
   }
 
-  function updateEndDecisionDraft(
+  function updateReplacementDecisionDraft(
     item: StudentRosterMembershipReconciliationItem,
-    updater: (draft: EndDecisionDraft | undefined) => EndDecisionDraft,
+    updater: (draft: ReplacementDecisionDraft | undefined) => ReplacementDecisionDraft,
   ) {
-    setEndDecisionDrafts((current) => ({
+    setReplacementDecisionDrafts((current) => ({
       ...current,
       [item.key]: updater(current[item.key]),
     }));
@@ -1306,6 +1313,70 @@ export function StudentRosterMembershipReconciliationPageContent({
     );
   }
 
+  function renderConfirmationDraftEditor(input: {
+    draft: ConfirmationDraft;
+    onChange: (draft: ConfirmationDraft) => void;
+    options: ReturnType<typeof getConfirmationDecisionOptions>;
+  }) {
+    const { draft, onChange, options } = input;
+    const selectedOption = options.find(
+      (option) => option.decisionOutcome === draft.decisionOutcome,
+    );
+
+    return (
+      <div className="flex min-w-[320px] flex-col gap-2">
+        <Radio.Group
+          optionType="button"
+          value={draft.decisionOutcome}
+          onChange={(event) => {
+            const nextOption = options.find(
+              (option) => option.decisionOutcome === event.target.value,
+            );
+
+            if (nextOption) {
+              onChange(switchConfirmationDraftDecisionOutcome(draft, nextOption));
+            }
+          }}
+        >
+          {options.map((option) => (
+            <Radio.Button key={option.decisionOutcome} value={option.decisionOutcome}>
+              {option.label}
+            </Radio.Button>
+          ))}
+        </Radio.Group>
+        <Select
+          value={draft.reasonCode}
+          options={(selectedOption?.reasonOptions ?? []).map((reasonCode) => ({
+            label: REASON_CODE_LABELS[reasonCode],
+            value: reasonCode,
+          }))}
+          onChange={(reasonCode) => {
+            onChange(updateConfirmationDraftReasonCode(draft, reasonCode));
+          }}
+        />
+        {requiresEffectiveSemester(draft.reasonCode)
+          ? renderEffectiveSemesterField({
+              reasonCode: draft.reasonCode,
+              value: draft.effectiveSemesterId,
+              onChange: (effectiveSemesterId) => {
+                onChange(updateConfirmationDraftEffectiveSemester(draft, effectiveSemesterId));
+              },
+            })
+          : null}
+        <Input.TextArea
+          autoSize={{ maxRows: 4, minRows: 2 }}
+          maxLength={255}
+          placeholder="可选备注"
+          showCount
+          value={draft.reasonText}
+          onChange={(event) => {
+            onChange(updateConfirmationDraftReasonText(draft, event.target.value));
+          }}
+        />
+      </div>
+    );
+  }
+
   function renderConfirmationEditor(item: StudentRosterMembershipReconciliationItem) {
     if (!item.requiresConfirmation) {
       return null;
@@ -1318,108 +1389,65 @@ export function StudentRosterMembershipReconciliationPageContent({
       return <Alert type="warning" showIcon title="该确认项缺少可提交的学生编号或确认策略。" />;
     }
 
-    const selectedOption = options.find(
-      (option) => option.decisionOutcome === draft.decisionOutcome,
-    );
-
-    return (
-      <div className="flex min-w-[320px] flex-col gap-2">
-        <div className="flex flex-wrap gap-2">
-          {options.map((option) => {
-            const isSelected = option.decisionOutcome === draft.decisionOutcome;
-
-            return (
-              <Button
-                key={option.decisionOutcome}
-                htmlType="button"
-                {...getDecisionOutcomeButtonProps(option.decisionOutcome, isSelected)}
-                onClick={() => {
-                  const nextReasonCode = option.defaultReasonCode;
-
-                  updateConfirmationDraft(item, (current) => ({
-                    decisionOutcome: option.decisionOutcome,
-                    effectiveSemesterId: requiresEffectiveSemester(nextReasonCode)
-                      ? current?.effectiveSemesterId
-                      : undefined,
-                    reasonCode: nextReasonCode,
-                    reasonText: current?.reasonText,
-                  }));
-                }}
-              >
-                {option.label}
-              </Button>
-            );
-          })}
-        </div>
-        <Select
-          value={draft.reasonCode}
-          options={(selectedOption?.reasonOptions ?? []).map((reasonCode) => ({
-            label: REASON_CODE_LABELS[reasonCode],
-            value: reasonCode,
-          }))}
-          onChange={(reasonCode) => {
-            updateConfirmationDraft(item, (current) => ({
-              decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
-              effectiveSemesterId: requiresEffectiveSemester(reasonCode)
-                ? current?.effectiveSemesterId
-                : undefined,
-              reasonCode,
-              reasonText: current?.reasonText,
-            }));
-          }}
-        />
-        {requiresEffectiveSemester(draft.reasonCode)
-          ? renderEffectiveSemesterField({
-              reasonCode: draft.reasonCode,
-              value: draft.effectiveSemesterId,
-              onChange: (effectiveSemesterId) => {
-                updateConfirmationDraft(item, (current) => ({
-                  decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
-                  effectiveSemesterId,
-                  reasonCode: current?.reasonCode ?? draft.reasonCode,
-                  reasonText: current?.reasonText,
-                }));
-              },
-            })
-          : null}
-        <Input.TextArea
-          autoSize={{ maxRows: 4, minRows: 2 }}
-          maxLength={255}
-          placeholder="可选备注"
-          showCount
-          value={draft.reasonText}
-          onChange={(event) => {
-            updateConfirmationDraft(item, (current) => ({
-              decisionOutcome: current?.decisionOutcome ?? draft.decisionOutcome,
-              effectiveSemesterId: current?.effectiveSemesterId,
-              reasonCode: current?.reasonCode ?? draft.reasonCode,
-              reasonText: event.target.value,
-            }));
-          }}
-        />
-      </div>
-    );
+    return renderConfirmationDraftEditor({
+      draft,
+      options,
+      onChange: (nextDraft) => {
+        updateConfirmationDraft(item, () => nextDraft);
+      },
+    });
   }
 
-  function renderEndDecisionEditor(item: StudentRosterMembershipReconciliationItem) {
+  function renderReplacementDecisionEditor(
+    item: StudentRosterMembershipReconciliationItem,
+    mode: 'focus' | 'local-decision',
+  ) {
     if (!canEndDecision(item)) {
       return null;
     }
 
-    const draft = endDecisionDrafts[item.key] ?? { selected: false };
+    const options = getReplacementDecisionOptions(item.action);
+    const draft = replacementDecisionDrafts[item.key];
+
+    if (!item.studentId || options.length === 0 || !draft) {
+      return (
+        <Alert type="warning" showIcon title="该本地裁定缺少可人工复核的学生编号或确认策略。" />
+      );
+    }
+
+    const confirmationEditor = draft.selected
+      ? renderConfirmationDraftEditor({
+          draft,
+          options,
+          onChange: (nextDraft) => {
+            updateReplacementDecisionDraft(item, (current) => ({
+              ...nextDraft,
+              selected: current?.selected ?? true,
+            }));
+          },
+        })
+      : null;
+
+    if (mode === 'focus' && draft.selected) {
+      return (
+        <div className="flex min-w-[320px] flex-col gap-2">
+          <Alert type="info" showIcon title="提交时会结束当前本地裁定，并记录以下新裁定。" />
+          {confirmationEditor}
+        </div>
+      );
+    }
 
     return (
-      <div className="flex min-w-[280px] flex-col gap-2">
+      <div className="flex min-w-[320px] flex-col gap-2">
         <div className="self-start">
           <Button
-            danger={draft.selected}
-            icon={<RollbackOutlined />}
+            icon={<SwapOutlined />}
             type={draft.selected ? 'primary' : 'default'}
             onClick={() => {
               const nextSelected = !draft.selected;
 
-              updateEndDecisionDraft(item, (current) => ({
-                endReason: current?.endReason,
+              updateReplacementDecisionDraft(item, (current) => ({
+                ...(current ?? draft),
                 selected: nextSelected,
               }));
 
@@ -1429,24 +1457,13 @@ export function StudentRosterMembershipReconciliationPageContent({
               }
             }}
           >
-            {draft.selected ? '取消撤销' : '撤销'}
+            {draft.selected ? '取消人工复核' : '撤销并人工复核'}
           </Button>
         </div>
         {draft.selected ? (
-          <Input.TextArea
-            autoSize={{ maxRows: 3, minRows: 2 }}
-            maxLength={255}
-            placeholder="可选撤销原因"
-            showCount
-            value={draft.endReason}
-            onChange={(event) => {
-              updateEndDecisionDraft(item, (current) => ({
-                selected: current?.selected ?? true,
-                endReason: event.target.value,
-              }));
-            }}
-          />
+          <Alert type="info" showIcon title="提交时会结束当前本地裁定，并记录下面的新裁定。" />
         ) : null}
+        {confirmationEditor}
       </div>
     );
   }
@@ -1662,10 +1679,14 @@ export function StudentRosterMembershipReconciliationPageContent({
 
   function renderOperationCell(reviewItem: RosterReviewItem) {
     const item = reviewItem.item;
+    const isReplacementFocusItem =
+      resultFilter === 'focus' &&
+      reviewItem.kind === 'local-decision' &&
+      Boolean(replacementDecisionDrafts[item.key]?.selected);
     const editor =
       renderConfirmationEditor(item) ??
       renderPreRegisteredReviewEditor(item) ??
-      renderEndDecisionEditor(item);
+      renderReplacementDecisionEditor(item, isReplacementFocusItem ? 'focus' : 'local-decision');
 
     return (
       <div className="flex flex-col gap-3">
@@ -1789,7 +1810,7 @@ export function StudentRosterMembershipReconciliationPageContent({
     setClassAdviserClaimNotice(null);
     setPostCommitRefreshNotice(null);
     setConfirmationDrafts({});
-    setEndDecisionDrafts({});
+    setReplacementDecisionDrafts({});
     setPreRegisteredReviewDrafts({});
     setResultFilter('focus');
     setResultTablePage(1);
@@ -2099,6 +2120,17 @@ export function StudentRosterMembershipReconciliationPageContent({
           showIcon
           title="存在无法提交的预报到改判项"
           description="改判为不再报到或退学时，必须能定位本地学生编号；退学还需要选择退学起始学期。"
+        />
+      );
+    }
+
+    if (replacementDecisionCommitPayload.invalidItems.length > 0) {
+      return (
+        <Alert
+          type="warning"
+          showIcon
+          title="存在无法提交的人工复核裁定项"
+          description="人工复核本地裁定时，需要完整的新裁定信息；请检查学生编号、确认选项和生效学期。"
         />
       );
     }

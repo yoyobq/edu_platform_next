@@ -18,12 +18,18 @@ export type ConfirmationDecisionOption = {
 export type ConfirmationDraft = {
   decisionOutcome: StudentRosterMembershipDecisionOutcome;
   effectiveSemesterId?: number | null;
+  outcomeDrafts?: Partial<Record<StudentRosterMembershipDecisionOutcome, ConfirmationOutcomeDraft>>;
   reasonCode: StudentRosterMembershipReasonCode;
   reasonText?: string;
 };
 
-export type EndDecisionDraft = {
-  endReason?: string;
+export type ConfirmationOutcomeDraft = {
+  effectiveSemesterId?: number | null;
+  reasonCode: StudentRosterMembershipReasonCode;
+  reasonText?: string;
+};
+
+export type ReplacementDecisionDraft = ConfirmationDraft & {
   selected: boolean;
 };
 
@@ -50,8 +56,8 @@ export const CATEGORY_COLORS = {
 } as const;
 
 export const ACTION_LABELS: Record<string, string> = {
-  END_INCLUDE_DECISION_AVAILABLE: '可撤销本地裁定',
-  END_EXCLUDE_DECISION_AVAILABLE: '可撤销本地裁定',
+  END_INCLUDE_DECISION_AVAILABLE: '可人工复核本地裁定',
+  END_EXCLUDE_DECISION_AVAILABLE: '可人工复核本地裁定',
   ENSURE_MEMBERSHIP: '建立/刷新归属',
   INFERRED_MEMBERSHIP_REQUIRES_CONFIRMATION: '需确认推断归属',
   MISSING_REQUIRES_CONFIRMATION: '需确认缺失',
@@ -115,7 +121,12 @@ const TRANSFER_IN_CONFIRMATION_OPTIONS: ConfirmationDecisionOption[] = [
     decisionOutcome: 'EXCLUDE',
     defaultReasonCode: 'UPSTREAM_ROSTER_ERROR_CONFIRMED',
     label: '不在本班就读',
-    reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
+    reasonOptions: [
+      'UPSTREAM_ROSTER_ERROR_CONFIRMED',
+      'NOT_CHECKED_IN_CONFIRMED',
+      'DROPPED_CONFIRMED',
+      'CLASS_MEMBERSHIP_CORRECTION',
+    ],
   },
 ];
 
@@ -153,6 +164,18 @@ export function getConfirmationDecisionOptions(action: string): ConfirmationDeci
 
   if (action === 'MISSING_REQUIRES_CONFIRMATION') {
     return MISSING_CONFIRMATION_OPTIONS;
+  }
+
+  return [];
+}
+
+export function getReplacementDecisionOptions(action: string): ConfirmationDecisionOption[] {
+  if (action === 'END_INCLUDE_DECISION_AVAILABLE') {
+    return MISSING_CONFIRMATION_OPTIONS;
+  }
+
+  if (action === 'END_EXCLUDE_DECISION_AVAILABLE') {
+    return TRANSFER_IN_CONFIRMATION_OPTIONS;
   }
 
   return [];
@@ -215,20 +238,7 @@ export function buildDefaultConfirmationDraft(
     return null;
   }
 
-  const selectedOption =
-    options.find((option) => option.decisionOutcome === item.recommendedDecisionOutcome) ??
-    options[0];
-  const reasonCode =
-    item.recommendedReasonCode && selectedOption.reasonOptions.includes(item.recommendedReasonCode)
-      ? item.recommendedReasonCode
-      : selectedOption.defaultReasonCode;
-
-  return {
-    decisionOutcome: selectedOption.decisionOutcome,
-    effectiveSemesterId: undefined,
-    reasonCode,
-    reasonText: undefined,
-  };
+  return buildConfirmationDraftFromOptions(options, item);
 }
 
 export function buildDefaultConfirmationDrafts(
@@ -245,18 +255,180 @@ export function buildDefaultConfirmationDrafts(
   }, {});
 }
 
-export function buildDefaultEndDecisionDrafts(
+export function buildDefaultReplacementDecisionDrafts(
   items: readonly StudentRosterMembershipReconciliationItem[],
 ) {
-  return items.reduce<Record<string, EndDecisionDraft>>((drafts, item) => {
+  return items.reduce<Record<string, ReplacementDecisionDraft>>((drafts, item) => {
     if (canEndDecision(item)) {
-      drafts[item.key] = {
-        selected: false,
-      };
+      const replacementDraft = buildDefaultReplacementDecisionDraft(item);
+
+      if (!replacementDraft) {
+        return drafts;
+      }
+
+      drafts[item.key] = replacementDraft;
     }
 
     return drafts;
   }, {});
+}
+
+export function buildDefaultReplacementDecisionDraft(
+  item: StudentRosterMembershipReconciliationItem,
+): ReplacementDecisionDraft | null {
+  const options = getReplacementDecisionOptions(item.action);
+
+  if (!canEndDecision(item) || options.length === 0) {
+    return null;
+  }
+
+  const confirmationDraft = buildConfirmationDraftFromOptions(options, item);
+
+  return confirmationDraft
+    ? {
+        ...confirmationDraft,
+        selected: false,
+      }
+    : null;
+}
+
+function buildConfirmationDraftFromOptions(
+  options: readonly ConfirmationDecisionOption[],
+  item: Pick<
+    StudentRosterMembershipReconciliationItem,
+    'recommendedDecisionOutcome' | 'recommendedReasonCode'
+  >,
+): ConfirmationDraft | null {
+  const selectedOption =
+    options.find((option) => option.decisionOutcome === item.recommendedDecisionOutcome) ??
+    options[0];
+
+  if (!selectedOption) {
+    return null;
+  }
+
+  const reasonCode = resolveConfirmationReasonCode(selectedOption, item.recommendedReasonCode);
+
+  return {
+    decisionOutcome: selectedOption.decisionOutcome,
+    effectiveSemesterId: undefined,
+    outcomeDrafts: {
+      [selectedOption.decisionOutcome]: {
+        effectiveSemesterId: undefined,
+        reasonCode,
+        reasonText: undefined,
+      },
+    },
+    reasonCode,
+    reasonText: undefined,
+  };
+}
+
+function resolveConfirmationReasonCode(
+  option: ConfirmationDecisionOption,
+  preferredReasonCode: StudentRosterMembershipReasonCode | null | undefined,
+) {
+  return preferredReasonCode && option.reasonOptions.includes(preferredReasonCode)
+    ? preferredReasonCode
+    : option.defaultReasonCode;
+}
+
+function snapshotConfirmationOutcomeDraft(draft: ConfirmationDraft): ConfirmationOutcomeDraft {
+  return {
+    effectiveSemesterId: draft.effectiveSemesterId,
+    reasonCode: draft.reasonCode,
+    reasonText: draft.reasonText,
+  };
+}
+
+export function switchConfirmationDraftDecisionOutcome(
+  draft: ConfirmationDraft,
+  option: ConfirmationDecisionOption,
+): ConfirmationDraft {
+  const nextOutcomeDrafts = {
+    ...draft.outcomeDrafts,
+    [draft.decisionOutcome]: snapshotConfirmationOutcomeDraft(draft),
+  };
+  const memorizedDraft = nextOutcomeDrafts[option.decisionOutcome];
+  const nextReasonCode =
+    memorizedDraft && option.reasonOptions.includes(memorizedDraft.reasonCode)
+      ? memorizedDraft.reasonCode
+      : option.defaultReasonCode;
+  const nextEffectiveSemesterId = requiresEffectiveSemester(nextReasonCode)
+    ? memorizedDraft?.effectiveSemesterId
+    : undefined;
+
+  return {
+    decisionOutcome: option.decisionOutcome,
+    effectiveSemesterId: nextEffectiveSemesterId,
+    outcomeDrafts: {
+      ...nextOutcomeDrafts,
+      [option.decisionOutcome]: {
+        effectiveSemesterId: nextEffectiveSemesterId,
+        reasonCode: nextReasonCode,
+        reasonText: memorizedDraft?.reasonText ?? draft.reasonText,
+      },
+    },
+    reasonCode: nextReasonCode,
+    reasonText: memorizedDraft?.reasonText ?? draft.reasonText,
+  };
+}
+
+export function updateConfirmationDraftReasonCode(
+  draft: ConfirmationDraft,
+  reasonCode: StudentRosterMembershipReasonCode,
+): ConfirmationDraft {
+  const nextDraft = {
+    ...draft,
+    effectiveSemesterId: requiresEffectiveSemester(reasonCode)
+      ? draft.effectiveSemesterId
+      : undefined,
+    reasonCode,
+  };
+
+  return {
+    ...nextDraft,
+    outcomeDrafts: {
+      ...draft.outcomeDrafts,
+      [draft.decisionOutcome]: snapshotConfirmationOutcomeDraft(nextDraft),
+    },
+  };
+}
+
+export function updateConfirmationDraftEffectiveSemester(
+  draft: ConfirmationDraft,
+  effectiveSemesterId: number | null,
+): ConfirmationDraft {
+  const nextDraft = {
+    ...draft,
+    effectiveSemesterId,
+  };
+
+  return {
+    ...nextDraft,
+    outcomeDrafts: {
+      ...draft.outcomeDrafts,
+      [draft.decisionOutcome]: snapshotConfirmationOutcomeDraft(nextDraft),
+    },
+  };
+}
+
+export function updateConfirmationDraftReasonText(
+  draft: ConfirmationDraft,
+  reasonText: string,
+): ConfirmationDraft {
+  const nextDraft = {
+    ...draft,
+    reasonText,
+  };
+
+  return {
+    ...nextDraft,
+    outcomeDrafts: {
+      ...draft.outcomeDrafts,
+      [draft.decisionOutcome]: snapshotConfirmationOutcomeDraft(nextDraft),
+    },
+  };
 }
 
 export function buildDefaultPreRegisteredReviewDrafts(
@@ -376,24 +548,53 @@ export function buildPreRegisteredReviewCommitPayload(
   };
 }
 
-export function buildCommitEndDecisions(
+export function buildReplacementDecisionCommitPayload(
   items: readonly StudentRosterMembershipReconciliationItem[],
-  drafts: Record<string, EndDecisionDraft>,
+  drafts: Record<string, ReplacementDecisionDraft>,
 ) {
-  return items.reduce<StudentRosterMembershipEndDecisionInput[]>((endDecisions, item) => {
+  const confirmations: StudentRosterMembershipConfirmationInput[] = [];
+  const endDecisions: StudentRosterMembershipEndDecisionInput[] = [];
+  const invalidItems: StudentRosterMembershipReconciliationItem[] = [];
+  const replacedItems: StudentRosterMembershipReconciliationItem[] = [];
+
+  for (const item of items) {
     const draft = drafts[item.key];
 
     if (!draft?.selected || !canEndDecision(item) || !item.activeDecisionId) {
-      return endDecisions;
+      continue;
     }
 
+    replacedItems.push(item);
+
+    if (
+      !item.studentId ||
+      (requiresEffectiveSemester(draft.reasonCode) && !draft.effectiveSemesterId)
+    ) {
+      invalidItems.push(item);
+      continue;
+    }
+
+    const reasonText = draft.reasonText?.trim() || undefined;
+
+    confirmations.push({
+      decisionOutcome: draft.decisionOutcome,
+      effectiveSemesterId: draft.effectiveSemesterId ?? undefined,
+      reasonCode: draft.reasonCode,
+      reasonText,
+      studentId: item.studentId,
+    });
     endDecisions.push({
       decisionId: item.activeDecisionId,
-      endReason: draft.endReason?.trim() || undefined,
+      endReason: reasonText,
     });
+  }
 
-    return endDecisions;
-  }, []);
+  return {
+    confirmations,
+    endDecisions,
+    invalidItems,
+    replacedItems,
+  };
 }
 
 export function mergeCommitEndDecisions(

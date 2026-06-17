@@ -4,18 +4,21 @@ import { describe, expect, it } from 'vitest';
 
 import {
   buildCommitConfirmations,
-  buildCommitEndDecisions,
   buildDefaultConfirmationDraft,
   buildDefaultConfirmationDrafts,
-  buildDefaultEndDecisionDrafts,
   buildDefaultPreRegisteredReviewDrafts,
+  buildDefaultReplacementDecisionDrafts,
   buildPreRegisteredReviewCommitPayload,
+  buildReplacementDecisionCommitPayload,
   canEndDecision,
   getConfirmationDecisionOptions,
   getEffectiveSemesterHelpText,
   getEffectiveSemesterLabel,
   mergeCommitEndDecisions,
   REASON_CODE_LABELS,
+  switchConfirmationDraftDecisionOutcome,
+  updateConfirmationDraftEffectiveSemester,
+  updateConfirmationDraftReasonCode,
 } from './confirmation-policy';
 import type { StudentRosterMembershipReconciliationItem } from './types';
 
@@ -77,7 +80,12 @@ describe('student roster membership confirmation policy', () => {
         decisionOutcome: 'EXCLUDE',
         defaultReasonCode: 'UPSTREAM_ROSTER_ERROR_CONFIRMED',
         label: '不在本班就读',
-        reasonOptions: ['UPSTREAM_ROSTER_ERROR_CONFIRMED', 'CLASS_MEMBERSHIP_CORRECTION'],
+        reasonOptions: [
+          'UPSTREAM_ROSTER_ERROR_CONFIRMED',
+          'NOT_CHECKED_IN_CONFIRMED',
+          'DROPPED_CONFIRMED',
+          'CLASS_MEMBERSHIP_CORRECTION',
+        ],
       },
     ]);
   });
@@ -94,7 +102,7 @@ describe('student roster membership confirmation policy', () => {
     expect(getConfirmationDecisionOptions(item.action)).toEqual(
       getConfirmationDecisionOptions('TRANSFER_IN_REQUIRES_CONFIRMATION'),
     );
-    expect(buildDefaultConfirmationDraft(item)).toEqual({
+    expect(buildDefaultConfirmationDraft(item)).toMatchObject({
       decisionOutcome: 'INCLUDE',
       effectiveSemesterId: undefined,
       reasonCode: 'RETAINED_GRADE_CONFIRMED',
@@ -111,7 +119,7 @@ describe('student roster membership confirmation policy', () => {
       requiresConfirmation: true,
     });
 
-    expect(buildDefaultConfirmationDraft(item)).toEqual({
+    expect(buildDefaultConfirmationDraft(item)).toMatchObject({
       decisionOutcome: 'EXCLUDE',
       effectiveSemesterId: undefined,
       reasonCode: 'DROPPED_CONFIRMED',
@@ -158,7 +166,7 @@ describe('student roster membership confirmation policy', () => {
       requiresConfirmation: true,
     });
 
-    expect(buildDefaultConfirmationDraft(item)).toEqual({
+    expect(buildDefaultConfirmationDraft(item)).toMatchObject({
       decisionOutcome: 'INCLUDE',
       effectiveSemesterId: undefined,
       reasonCode: 'TRANSFERRED_IN_CONFIRMED',
@@ -237,7 +245,7 @@ describe('student roster membership confirmation policy', () => {
     });
   });
 
-  it('only allows explicit ending for end-decision-available items', () => {
+  it('builds replacement confirmations and end decisions for end-decision-available items', () => {
     const includeEndableItem = buildItem({
       action: 'END_INCLUDE_DECISION_AVAILABLE',
       activeDecisionId: '12',
@@ -256,7 +264,7 @@ describe('student roster membership confirmation policy', () => {
       category: 'SUPPRESSED',
       key: 'suppressed',
     });
-    const drafts = buildDefaultEndDecisionDrafts([
+    const drafts = buildDefaultReplacementDecisionDrafts([
       includeEndableItem,
       excludeEndableItem,
       suppressedItem,
@@ -266,37 +274,129 @@ describe('student roster membership confirmation policy', () => {
     expect(canEndDecision(excludeEndableItem)).toBe(true);
     expect(canEndDecision(suppressedItem)).toBe(false);
     expect(drafts).toEqual({
-      'exclude-endable': {
+      'include-endable': expect.objectContaining({
+        decisionOutcome: 'EXCLUDE',
+        reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
         selected: false,
-      },
-      'include-endable': {
+      }),
+      'exclude-endable': expect.objectContaining({
+        decisionOutcome: 'INCLUDE',
+        reasonCode: 'TRANSFERRED_IN_CONFIRMED',
         selected: false,
-      },
+      }),
     });
     expect(
-      buildCommitEndDecisions([includeEndableItem, excludeEndableItem, suppressedItem], {
-        'exclude-endable': {
-          endReason: ' 已重新确认在读 ',
-          selected: true,
+      buildReplacementDecisionCommitPayload(
+        [includeEndableItem, excludeEndableItem, suppressedItem],
+        {
+          'exclude-endable': {
+            ...drafts['exclude-endable'],
+            effectiveSemesterId: 4,
+            reasonText: ' 已重新确认在读 ',
+            selected: true,
+          },
+          'include-endable': {
+            ...drafts['include-endable'],
+            effectiveSemesterId: 3,
+            reasonText: ' upstream 已确认转出 ',
+            selected: true,
+          },
         },
+      ),
+    ).toEqual({
+      confirmations: [
+        {
+          decisionOutcome: 'EXCLUDE',
+          effectiveSemesterId: 3,
+          reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
+          reasonText: 'upstream 已确认转出',
+          studentId: '20240001',
+        },
+        {
+          decisionOutcome: 'INCLUDE',
+          effectiveSemesterId: 4,
+          reasonCode: 'TRANSFERRED_IN_CONFIRMED',
+          reasonText: '已重新确认在读',
+          studentId: '20240001',
+        },
+      ],
+      endDecisions: [
+        {
+          decisionId: '12',
+          endReason: 'upstream 已确认转出',
+        },
+        {
+          decisionId: '13',
+          endReason: '已重新确认在读',
+        },
+      ],
+      invalidItems: [],
+      replacedItems: [includeEndableItem, excludeEndableItem],
+    });
+  });
+
+  it('remembers confirmation reason and semester per decision outcome', () => {
+    const item = buildItem({
+      action: 'MISSING_REQUIRES_CONFIRMATION',
+      recommendedDecisionOutcome: 'EXCLUDE',
+      recommendedReasonCode: 'TRANSFERRED_OUT_CONFIRMED',
+      requiresConfirmation: true,
+    });
+    const options = getConfirmationDecisionOptions(item.action);
+    const includeOption = options.find((option) => option.decisionOutcome === 'INCLUDE');
+    const excludeOption = options.find((option) => option.decisionOutcome === 'EXCLUDE');
+    const initialDraft = buildDefaultConfirmationDraft(item);
+
+    expect(initialDraft).toMatchObject({
+      decisionOutcome: 'EXCLUDE',
+      reasonCode: 'TRANSFERRED_OUT_CONFIRMED',
+    });
+    expect(includeOption).toBeDefined();
+    expect(excludeOption).toBeDefined();
+
+    const transferredOutDraft = updateConfirmationDraftEffectiveSemester(
+      updateConfirmationDraftReasonCode(initialDraft!, 'DROPPED_CONFIRMED'),
+      3,
+    );
+    const includeDraft = switchConfirmationDraftDecisionOutcome(
+      transferredOutDraft,
+      includeOption!,
+    );
+    const upstreamErrorDraft = updateConfirmationDraftEffectiveSemester(includeDraft, 4);
+    const restoredExcludeDraft = switchConfirmationDraftDecisionOutcome(
+      upstreamErrorDraft,
+      excludeOption!,
+    );
+
+    expect(restoredExcludeDraft).toMatchObject({
+      decisionOutcome: 'EXCLUDE',
+      effectiveSemesterId: 3,
+      reasonCode: 'DROPPED_CONFIRMED',
+    });
+  });
+
+  it('reports replacement decisions invalid without required effective semester', () => {
+    const includeEndableItem = buildItem({
+      action: 'END_INCLUDE_DECISION_AVAILABLE',
+      activeDecisionId: '12',
+      category: 'SUPPRESSED',
+      key: 'include-endable',
+    });
+    const drafts = buildDefaultReplacementDecisionDrafts([includeEndableItem]);
+
+    expect(
+      buildReplacementDecisionCommitPayload([includeEndableItem], {
         'include-endable': {
-          endReason: ' upstream 已恢复返回 ',
-          selected: true,
-        },
-        suppressed: {
+          ...drafts['include-endable'],
           selected: true,
         },
       }),
-    ).toEqual([
-      {
-        decisionId: '12',
-        endReason: 'upstream 已恢复返回',
-      },
-      {
-        decisionId: '13',
-        endReason: '已重新确认在读',
-      },
-    ]);
+    ).toEqual({
+      confirmations: [],
+      endDecisions: [],
+      invalidItems: [includeEndableItem],
+      replacedItems: [includeEndableItem],
+    });
   });
 
   it('builds optional NOT_CHECKED_IN and DROPPED confirmations for reviewed IS_ENROLLED=0 auto items', () => {

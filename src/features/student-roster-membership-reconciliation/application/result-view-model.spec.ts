@@ -107,7 +107,7 @@ describe('student roster membership result view model', () => {
     });
     expect(reviewItems[2]).toMatchObject({
       businessSummary: '已裁定为：确认平级转入当前班。',
-      defaultOperationLabel: '可撤销裁定',
+      defaultOperationLabel: '可人工复核裁定',
       kind: 'local-decision',
     });
   });
@@ -306,12 +306,12 @@ describe('student roster membership result view model', () => {
     expect(filterRosterReviewItems(reviewItems, 'local-decision')).toEqual([
       expect.objectContaining({
         businessSummary: '已裁定为：确认复学转入当前班。',
-        commitImpactLabel: '勾选后撤销裁定',
+        commitImpactLabel: '选中后人工复核裁定',
         rowKey: 'endable',
       }),
       expect.objectContaining({
         businessSummary: '已裁定为：确认报到后退学。',
-        commitImpactLabel: '勾选后撤销裁定',
+        commitImpactLabel: '选中后人工复核裁定',
         rowKey: 'exclude-endable',
       }),
       expect.objectContaining({

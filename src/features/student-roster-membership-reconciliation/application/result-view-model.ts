@@ -207,7 +207,7 @@ function buildDefaultOperationLabel(
     case 'enrollment-review':
       return '保留预报到';
     case 'local-decision':
-      return canEndDecision(item) ? '可撤销裁定' : '保持当前裁定';
+      return canEndDecision(item) ? '可人工复核裁定' : '保持当前裁定';
     case 'data-issue':
       return '仅观察';
     case 'automatic':
@@ -225,7 +225,7 @@ function buildCommitImpactLabel(
     case 'enrollment-review':
       return '改判后记录裁定';
     case 'local-decision':
-      return canEndDecision(item) ? '勾选后撤销裁定' : '本地裁定不变';
+      return canEndDecision(item) ? '选中后人工复核裁定' : '本地裁定不变';
     case 'data-issue':
       return '不自动处理';
     case 'automatic':
