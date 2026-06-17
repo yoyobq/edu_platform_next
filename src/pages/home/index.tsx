@@ -26,8 +26,8 @@ import {
   sortAcademicSemestersForDisplay,
   VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
+import { type AcademicViewerRole, hasAcademicTeachingLogAccess } from '@/entities/auth-access';
 
-import { type AcademicViewerRole, hasAcademicTeachingLogAccess } from '@/shared/auth-access';
 import { HexAvatar } from '@/shared/hex-avatar';
 import {
   type HomeModuleAction,

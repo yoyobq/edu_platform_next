@@ -15,6 +15,7 @@ import {
   sortAcademicSemestersForDisplay,
   VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
+import type { AcademicViewerRole } from '@/entities/auth-access';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -30,7 +31,6 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
-import type { AcademicViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import { canViewIntegratedPlanCorrectionRepairGroups } from '../application/correction-view-policy';

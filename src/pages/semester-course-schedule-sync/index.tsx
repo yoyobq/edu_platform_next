@@ -4,7 +4,7 @@ import { useAuthSessionState } from '@/features/auth';
 import { SemesterCourseScheduleSyncPageContent } from '@/features/course-schedule-sync';
 import { Error403 } from '@/features/error-feedback';
 
-import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+import { resolveUpstreamLoginLockedUserId } from '@/entities/auth-access';
 
 export function SemesterCourseScheduleSyncPage() {
   const authSession = useAuthSessionState();

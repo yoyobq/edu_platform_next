@@ -1,3 +1,5 @@
+// src/features/course-schedule-sync/infrastructure/course-schedule-sync-api.spec.ts
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
@@ -28,7 +30,7 @@ import {
   dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
   fetchCourseScheduleSyncSemesterOptions,
-} from './api';
+} from './course-schedule-sync-api';
 
 describe('course-schedule-sync api', () => {
   beforeEach(() => {

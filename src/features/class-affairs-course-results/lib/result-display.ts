@@ -4,7 +4,7 @@ import type {
   ManagedCourseResultsDisplayReasonCode,
   ManagedCourseResultsItem,
   ManagedCourseResultsStudentStatus,
-} from '../api';
+} from '../infrastructure/class-affairs-course-results-api';
 
 export type CourseResultsDisplaySemester = {
   id: number;

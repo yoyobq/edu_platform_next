@@ -1,15 +1,16 @@
 import { useState } from 'react';
 import { CloseOutlined, PlusOutlined } from '@ant-design/icons';
 
-import { useWorkbenchCustomItemDrag } from './workbench-custom-item-dnd-context';
-import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
-import { DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR } from './workbench-custom-item-options';
 import {
   createWorkbenchLocalCustomItemId,
   readWorkbenchLocalCustomItems,
   type WorkbenchLocalCustomItem,
   writeWorkbenchLocalCustomItems,
-} from './workbench-local-custom-items';
+} from '@/features/workbench-home';
+
+import { useWorkbenchCustomItemDrag } from './workbench-custom-item-dnd-context';
+import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
+import { DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR } from './workbench-custom-item-options';
 
 const WORKBENCH_TODOS_STORAGE_PREFIX = 'edu-mate:home-workbench-other-todos:v1';
 

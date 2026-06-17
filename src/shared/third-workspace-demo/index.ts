@@ -11,5 +11,4 @@ export {
   THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
   THIRD_WORKSPACE_DEMO_TRIGGER,
   withThirdWorkspaceDemo,
-  withWorkbenchSearch,
 } from './model';

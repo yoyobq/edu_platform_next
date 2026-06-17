@@ -77,12 +77,6 @@ export function stripThirdWorkspaceDemo(search: string) {
   return nextSearch ? `?${nextSearch}` : '';
 }
 
-export function withWorkbenchSearch(pathname: string, search: string) {
-  return pathname === '/labs/demo'
-    ? `${pathname}${search}`
-    : `${pathname}${stripThirdWorkspaceDemo(search)}`;
-}
-
 export function resolveThirdWorkspaceDemoTrigger(query: string) {
   const normalizedQuery = query.trim().toLowerCase();
 

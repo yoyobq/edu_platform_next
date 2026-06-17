@@ -1,4 +1,5 @@
-import { type AuthAccessGroup, isAuthAccessGroup } from '@/shared/auth-access';
+import { type AuthAccessGroup, isAuthAccessGroup } from '@/entities/auth-access';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export type AccountSwitchLabIdentity =

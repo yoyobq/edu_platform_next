@@ -6,7 +6,7 @@ import { refreshSession, useAuthSessionState } from '@/features/auth';
 import { Error403 } from '@/features/error-feedback';
 import { StudentRosterMembershipReconciliationPageContent } from '@/features/student-roster-membership-reconciliation';
 
-import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+import { resolveUpstreamLoginLockedUserId } from '@/entities/auth-access';
 
 export function StudentRosterMembershipReconciliationPage() {
   const authSession = useAuthSessionState();

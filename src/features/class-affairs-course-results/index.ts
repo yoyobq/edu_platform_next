@@ -10,10 +10,10 @@ export type {
   ManagedCourseResultsItem,
   ManagedCourseResultsResult,
   ManagedCourseResultsStudentStatus,
-} from './api';
+} from './infrastructure/class-affairs-course-results-api';
 export {
   fetchManagedClassCourseResults,
   listMyManagedClasses,
   requestAcademicSemesters,
-} from './api';
+} from './infrastructure/class-affairs-course-results-api';
 export { ClassAffairsCourseResultsPageContent } from './ui/class-affairs-course-results-page-content';

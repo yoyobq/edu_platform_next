@@ -6,7 +6,7 @@ import { useAuthSessionState } from '@/features/auth';
 import { Error403 } from '@/features/error-feedback';
 import { MajorSyncPageContent } from '@/features/major-sync';
 
-import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+import { resolveUpstreamLoginLockedUserId } from '@/entities/auth-access';
 
 export function MajorSyncPage() {
   const authSession = useAuthSessionState();

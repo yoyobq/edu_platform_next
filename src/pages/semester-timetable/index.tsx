@@ -8,7 +8,7 @@ import {
 } from '@/features/academic-timetable';
 import { Error403 } from '@/features/error-feedback';
 
-import type { AcademicInternalViewerRole } from '@/shared/auth-access';
+import type { AcademicInternalViewerRole } from '@/entities/auth-access';
 
 export function SemesterTimetablePage() {
   const loaderData = useLoaderData() as {

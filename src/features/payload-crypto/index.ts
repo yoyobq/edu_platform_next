@@ -1,4 +1,3 @@
-export { canAccessPayloadCrypto } from './application/access';
 export {
   requestPayloadDecryption,
   requestPayloadEncryption,

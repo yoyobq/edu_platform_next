@@ -25,6 +25,7 @@ import {
   AcademicSemesterSelect,
   sortAcademicSemestersForDisplay,
 } from '@/entities/academic-semester';
+import type { AuthAccessGroup } from '@/entities/auth-access';
 import { buildDepartmentSelectOptions, DepartmentSelect } from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
@@ -36,7 +37,6 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import { hasAutomaticRosterCommitWork } from '../application/commit-work';

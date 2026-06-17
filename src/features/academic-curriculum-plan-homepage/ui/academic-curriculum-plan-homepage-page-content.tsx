@@ -36,6 +36,7 @@ import {
   buildAcademicSemesterSchoolYearOptions,
   resolveAcademicSemesterPeriodValues,
 } from '@/entities/academic-semester';
+import { hasAcademicCurriculumPlanHomepageManagerAccess } from '@/entities/auth-access';
 import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
@@ -53,7 +54,6 @@ import {
   useUpstreamSession,
 } from '@/entities/upstream-session';
 
-import { hasAcademicCurriculumPlanHomepageManagerAccess } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {

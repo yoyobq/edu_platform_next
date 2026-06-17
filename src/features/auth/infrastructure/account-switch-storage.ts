@@ -1,6 +1,6 @@
 import { AUTH_SESSION_STORAGE_KEY } from '@/shared/auth-session';
 
-import { type AccountSwitchLabSession, canUseAccountSwitchLabSession } from './api';
+import { type AccountSwitchLabSession, canUseAccountSwitchLabSession } from './account-switch-api';
 
 export type AccountSwitchLabRecord = {
   addedAt: string;

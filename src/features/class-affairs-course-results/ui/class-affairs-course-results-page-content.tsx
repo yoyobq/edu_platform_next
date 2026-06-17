@@ -46,7 +46,7 @@ import {
   type ManagedCourseResultsStudentStatus,
   requestAcademicSemesters,
   resolveUpstreamErrorMessage,
-} from '../api';
+} from '../infrastructure/class-affairs-course-results-api';
 import {
   COURSE_RESULTS_REASON_LABELS,
   COURSE_RESULTS_STUDENT_STATUS_LABELS,

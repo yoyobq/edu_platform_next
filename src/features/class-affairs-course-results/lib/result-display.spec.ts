@@ -2,7 +2,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { ManagedCourseResultsItem } from '../api';
+import type { ManagedCourseResultsItem } from '../infrastructure/class-affairs-course-results-api';
 
 import { splitCourseResultsItemsForDisplay } from './result-display';
 

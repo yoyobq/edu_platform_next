@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { type AdminUserListResult, requestAdminUsers } from '@/entities/admin-user';
+import type { AdminUserListResult } from '@/entities/admin-user';
+import type { AuthAccessGroup } from '@/entities/auth-access';
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import { requestVerificationAccountPickerUsers } from '../infrastructure/verification-issuance-api';
 
 import { resolveResultMessage } from './verification-issuance-feedback';
 
@@ -44,7 +45,7 @@ export function useVerificationAccountPicker(input: {
       setErrorMessage(null);
 
       try {
-        const nextResult = await requestAdminUsers({
+        const nextResult = await requestVerificationAccountPickerUsers({
           accessGroups,
           limit: pageSize,
           page,

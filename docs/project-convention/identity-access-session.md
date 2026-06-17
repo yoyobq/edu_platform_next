@@ -247,8 +247,9 @@
 前端权限分为四层，不能互相替代：
 
 - 身份事实：来自 hydrated auth snapshot，包括 `accessGroup`、`slotGroup` 与 `identity`
-- 能力判断：统一收敛在 `src/shared/auth-access/index.ts` 的 `hasXxxAccess` /
-  `resolveXxx` helper
+- 能力判断：具体 `hasXxxAccess` / `resolveXxx` helper 集中收敛在
+  `src/entities/auth-access/index.ts`，并通过 `@/entities/auth-access` 消费；
+  `src/shared/auth-access/index.ts` 只保留稳定 access group、slot group 常量与跨域类型
 - 入口治理：router loader / guard 负责登录态、profile completion、页面准入和必要的
   loader data
 - 展示投影：`src/app/navigation/` 只用同一批能力结果决定菜单与本地入口是否可见
@@ -263,12 +264,12 @@
 - labs 的基础暴露范围来自各 lab 自己的 `access.ts`；若额外加 `canAccess`，导航 provider
   必须同步同一规则
 
-当前全局能力辅助入口包括：
+当前全局能力辅助入口统一为 `@/entities/auth-access`，包括：
 
-- `hasAcademicStaffManagerAccess`：`ADMIN`、`STAFF + ACADEMIC_OFFICER`、
-  `STAFF + TEACHING_GROUP_LEADER`
-- `hasClassAffairsCourseResultsAccess`：`STAFF + CLASS_ADVISER` 或 `STAFF + COUNSELOR`
-- `hasUpstreamDataSyncAccess`：`ADMIN`
+- 各教务页面自己的自助 / 管理能力 helper
+- `hasClassAffairsCourseResultsAccess`
+- `hasStudentRosterMembershipReconciliationAccess`
+- `canAccessPayloadCrypto`
 - `resolveUpstreamLoginLockedUserId`：解析 upstream 登录是否锁定当前 staffId，细节见
   [upstream-session-frontend-ownership.md](./upstream-session-frontend-ownership.md)
 
@@ -412,4 +413,5 @@
 **枚举策略：**
 
 - `slotGroup` 的值应进入受控枚举，不允许任意字符串散长
-- 新增 slot 时必须同步 `src/shared/auth-access/index.ts`、导航规则、router guard 与本节文档
+- 新增 slot 时必须同步 `src/shared/auth-access/index.ts` 的受控枚举、对应 feature 的能力
+  helper、导航规则、router guard 与本节文档

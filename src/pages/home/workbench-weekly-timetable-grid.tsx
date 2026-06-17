@@ -18,6 +18,13 @@ import {
   resolveCourseCategoryMeta,
   resolveTimetablePeriodCount,
 } from '@/features/academic-timetable';
+import {
+  createWorkbenchLocalCustomItemId,
+  isWorkbenchLocalCustomItem,
+  readWorkbenchLocalCustomItems,
+  type WorkbenchLocalCustomItem,
+  writeWorkbenchLocalCustomItems,
+} from '@/features/workbench-home';
 
 import { useWorkbenchCustomItemDrag } from './workbench-custom-item-dnd-context';
 import { WorkbenchCustomItemEditor } from './workbench-custom-item-editor';
@@ -25,13 +32,6 @@ import {
   DEFAULT_CUSTOM_ITEM_BACKGROUND_COLOR,
   PURPLE_CUSTOM_ITEM_BACKGROUND_COLOR,
 } from './workbench-custom-item-options';
-import {
-  createWorkbenchLocalCustomItemId,
-  isWorkbenchLocalCustomItem,
-  readWorkbenchLocalCustomItems,
-  type WorkbenchLocalCustomItem,
-  writeWorkbenchLocalCustomItems,
-} from './workbench-local-custom-items';
 
 import './workbench-weekly-timetable-grid.css';
 

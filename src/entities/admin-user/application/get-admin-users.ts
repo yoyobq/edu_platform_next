@@ -67,10 +67,6 @@ export type AdminUserListQuery = {
   status?: AdminUserAccountStatus;
 };
 
-export type AdminUserListPort = {
-  listAdminUsers: (input: AdminUserListQuery) => Promise<AdminUserListResult>;
-};
-
 export const DEFAULT_ADMIN_USER_LIST_QUERY: Required<
   Pick<AdminUserListQuery, 'hasStaff' | 'limit' | 'page' | 'sortBy' | 'sortOrder'>
 > = {
@@ -116,11 +112,4 @@ export function normalizeAdminUserListQuery(input: AdminUserListQuery): AdminUse
       ? input.status
       : undefined,
   };
-}
-
-export async function getAdminUsers(
-  port: AdminUserListPort,
-  input: AdminUserListQuery,
-): Promise<AdminUserListResult> {
-  return port.listAdminUsers(normalizeAdminUserListQuery(input));
 }

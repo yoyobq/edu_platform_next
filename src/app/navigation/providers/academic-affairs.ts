@@ -1,4 +1,5 @@
 import {
+  hasAcademicCalendarManagementAccess,
   hasAcademicCalendarReadAccess,
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
@@ -6,17 +7,16 @@ import {
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
-  hasAdminOrAcademicOfficerAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
-} from '@/shared/auth-access';
+} from '@/entities/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 import type { NavigationLeafItem } from '../types';
 
 function hasAcademicAffairsNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
-  return hasAdminOrAcademicOfficerAccess({
+  return hasAcademicCalendarManagementAccess({
     accessGroup: filter.accessGroup,
     slotGroup: filter.slotGroup,
   });

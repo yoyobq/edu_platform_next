@@ -1,4 +1,4 @@
-// src/shared/account-switch/api.spec.ts
+// src/features/auth/infrastructure/account-switch-api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,7 +17,7 @@ import {
   createAccountSwitchLabSession,
   isAccountSwitchLabAccountMismatchError,
   restoreAccountSwitchLabSession,
-} from './api';
+} from './account-switch-api';
 
 function buildSession(overrides: Partial<AccountSwitchLabSession> = {}): AccountSwitchLabSession {
   return {

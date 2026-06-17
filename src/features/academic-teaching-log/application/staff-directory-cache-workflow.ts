@@ -1,3 +1,4 @@
+import type { AcademicViewerRole } from '@/entities/auth-access';
 import {
   type PersistUpstreamSessionFromResult,
   populateStaffDirectory,
@@ -6,8 +7,6 @@ import {
   type StaffDirectoryResult,
   type StoredUpstreamSession,
 } from '@/entities/upstream-session';
-
-import type { AcademicViewerRole } from '@/shared/auth-access';
 
 type StaffDirectoryWorkflowDeps = {
   populateStaffDirectoryFn?: typeof populateStaffDirectory;

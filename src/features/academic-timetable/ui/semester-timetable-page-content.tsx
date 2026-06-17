@@ -9,6 +9,7 @@ import {
   sortAcademicSemestersForDisplay,
   VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
+import type { AcademicInternalViewerRole } from '@/entities/auth-access';
 import {
   resolveStaffDirectoryEntries,
   resolveStaffDirectoryTeacherStaffId,
@@ -16,7 +17,6 @@ import {
   useStaffDirectoryTeachers,
 } from '@/entities/upstream-session';
 
-import type { AcademicInternalViewerRole } from '@/shared/auth-access';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import type {

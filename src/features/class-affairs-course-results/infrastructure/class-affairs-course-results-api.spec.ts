@@ -1,4 +1,4 @@
-// src/features/class-affairs-course-results/api.spec.ts
+// src/features/class-affairs-course-results/infrastructure/class-affairs-course-results-api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,7 +21,7 @@ import {
   fetchManagedClassCourseResults,
   listMyManagedClasses,
   normalizeFetchManagedClassCourseResultsInput,
-} from './api';
+} from './class-affairs-course-results-api';
 
 describe('class affairs course results api', () => {
   beforeEach(() => {

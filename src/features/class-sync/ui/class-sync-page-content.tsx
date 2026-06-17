@@ -46,7 +46,7 @@ import {
   isExpiredUpstreamSessionError,
   resolveClassSyncErrorMessage,
   syncClassesFromUpstream,
-} from '../api';
+} from '../infrastructure/class-sync-api';
 
 type ClassSyncFormValues = {
   departmentId: string;

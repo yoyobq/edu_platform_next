@@ -39,6 +39,7 @@ import {
   type AcademicViewerRole,
   type AuthAccessGroup,
   canAccessPayloadCrypto,
+  hasAcademicCalendarManagementAccess,
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
@@ -48,11 +49,11 @@ import {
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
-  hasAdminOrAcademicOfficerAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveUpstreamLoginLockedUserId,
-} from '@/shared/auth-access';
+} from '@/entities/auth-access';
+
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
@@ -908,7 +909,7 @@ async function resolveAcademicWorkloadManagerScope(request: Request) {
   const slotGroup = snapshot.slotGroup;
 
   if (
-    !hasAdminOrAcademicOfficerAccess({
+    !hasAcademicCalendarManagementAccess({
       accessGroup,
       slotGroup,
     })

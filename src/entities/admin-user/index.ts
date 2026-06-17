@@ -7,14 +7,11 @@ export {
   type AdminUserAccountStatus,
   type AdminUserEmploymentStatus,
   type AdminUserListItem,
-  type AdminUserListPort,
   type AdminUserListQuery,
   type AdminUserListResult,
   type AdminUserSortField,
   type AdminUserSortOrder,
   type AdminUserState,
   DEFAULT_ADMIN_USER_LIST_QUERY,
-  getAdminUsers,
   normalizeAdminUserListQuery,
 } from './application/get-admin-users';
-export { requestAdminUsers } from './infrastructure/admin-user-api';

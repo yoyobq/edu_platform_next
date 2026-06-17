@@ -1,4 +1,4 @@
-// src/features/class-affairs-course-results/api.ts
+// src/features/class-affairs-course-results/infrastructure/class-affairs-course-results-api.ts
 
 import type { OperationVariables } from '@apollo/client';
 

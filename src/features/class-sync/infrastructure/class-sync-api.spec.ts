@@ -1,4 +1,4 @@
-// src/features/major-sync/api.spec.ts
+// src/features/class-sync/infrastructure/class-sync-api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -19,12 +19,12 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
-  dryRunSyncMajorsFromUpstream,
-  fetchMajorSyncDepartmentOptions,
-  syncMajorsFromUpstream,
-} from './api';
+  dryRunSyncClassesFromUpstream,
+  fetchClassSyncDepartmentOptions,
+  syncClassesFromUpstream,
+} from './class-sync-api';
 
-describe('major-sync api', () => {
+describe('class-sync api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
@@ -48,7 +48,7 @@ describe('major-sync api', () => {
       ],
     });
 
-    await expect(fetchMajorSyncDepartmentOptions()).resolves.toEqual([
+    await expect(fetchClassSyncDepartmentOptions()).resolves.toEqual([
       {
         departmentName: '信息工程系',
         id: 'ORG0302',
@@ -58,44 +58,60 @@ describe('major-sync api', () => {
     ]);
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('MajorSyncDepartments'),
+      expect.stringContaining('ClassSyncDepartments'),
       {
         limit: 500,
       },
     );
   });
 
-  it('requests dry-run sync with normalized input and preview fields', async () => {
+  it('requests class list dry-run with normalized input and major context fields', async () => {
     const payload = {
+      conflictCount: 1,
       createdCount: 1,
       departmentId: 'ORG0302',
       dryRun: true,
       existsCount: 1,
-      expiresAt: '2026-05-18T12:00:00.000Z',
-      fetchedCount: 3,
+      expiresAt: '2026-05-19T12:00:00.000Z',
+      fetchedCount: 4,
       items: [
         {
-          action: 'UPDATE',
+          action: 'CREATE',
+          classCode: 'upstream-class-code-1031501',
+          classId: '1031501',
+          className: '信息1501班',
+          conflictReason: null,
           departmentId: 'ORG0302',
-          majorId: 'major-001',
-          majorName: '计算机游戏制作（5高级）',
-          shortName: '计算机游戏制作',
-          trainingLevel: '高级',
-          trainingYears: 5,
+          gradeYear: 2015,
+          majorId: 'M0302001',
+          majorName: '计算机网络应用',
+          sortOrder: 15,
+        },
+        {
+          action: 'SKIPPED_INVALID_UPSTREAM_GRADE',
+          classCode: 'upstream-class-code-103AB01',
+          classId: '103AB01',
+          className: '信息AB01班',
+          conflictReason: 'INVALID_UPSTREAM_GRADE',
+          departmentId: 'ORG0302',
+          gradeYear: null,
+          majorId: null,
+          majorName: '计算机网络应用',
+          sortOrder: null,
         },
       ],
-      previewedCount: 2,
+      previewedCount: 3,
       skippedCount: 1,
       updatedCount: 1,
       upstreamSessionToken: 'rolling-token-002',
     };
 
     executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
-      dryRunSyncMajorsFromUpstream: payload,
+      dryRunSyncClassesFromUpstream: payload,
     });
 
     await expect(
-      dryRunSyncMajorsFromUpstream({
+      dryRunSyncClassesFromUpstream({
         departmentId: ' ORG0302 ',
         upstreamSessionToken: ' rolling-token-001 ',
       }),
@@ -103,18 +119,22 @@ describe('major-sync api', () => {
 
     const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
-    expect(query).toContain('DryRunSyncMajorsFromUpstream');
-    expect(query).toContain('dryRunSyncMajorsFromUpstream');
+    expect(query).toContain('DryRunSyncClassesFromUpstream');
+    expect(query).toContain('dryRunSyncClassesFromUpstream');
     expect(query).toContain('previewedCount');
-    expect(query).toContain('updatedCount');
-    expect(query).toContain('shortName');
-    expect(query).toContain('trainingYears');
-    expect(query).toContain('trainingLevel');
+    expect(query).toContain('conflictCount');
+    expect(query).toContain('classId');
+    expect(query).toContain('classCode');
+    expect(query).toContain('majorId');
+    expect(query).toContain('majorName');
+    expect(query).toContain('gradeYear');
+    expect(query).toContain('sortOrder');
+    expect(query).toContain('conflictReason');
+    expect(query).not.toContain('DryRunSyncClassesFromAnnualMajorClassList');
+    expect(query).not.toContain('dryRunSyncClassesFromUpstreamDirectory');
     expect(query).not.toContain('annualMajorId');
-    expect(query).not.toContain('code');
-    expect(query).not.toContain('value');
     expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('DryRunSyncMajorsFromUpstream'),
+      expect.stringContaining('DryRunSyncClassesFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
@@ -124,46 +144,51 @@ describe('major-sync api', () => {
     );
   });
 
-  it('requests commit sync with the new result fields', async () => {
+  it('requests class commit sync with normalized input and processed fields', async () => {
     const payload = {
+      conflictCount: 1,
       createdCount: 1,
       departmentId: 'ORG0302',
       dryRun: false,
       existsCount: 1,
-      expiresAt: '2026-05-18T12:00:00.000Z',
-      fetchedCount: 3,
+      expiresAt: '2026-05-19T12:00:00.000Z',
+      fetchedCount: 4,
       items: [
         {
-          action: 'UPDATED',
+          action: 'CREATED',
+          classCode: 'upstream-class-code-1031501',
+          classId: '1031501',
+          className: '信息1501班',
+          conflictReason: null,
           departmentId: 'ORG0302',
-          majorId: 'major-001',
-          majorName: '计算机游戏制作（5高级）',
-          shortName: '计算机游戏制作',
-          trainingLevel: '高级',
-          trainingYears: 5,
+          gradeYear: 2015,
+          majorId: null,
+          sortOrder: 15,
         },
         {
-          action: 'CREATED',
+          action: 'CONFLICT',
+          classCode: 'upstream-class-code-1031502',
+          classId: '1031502',
+          className: '信息1502班',
+          conflictReason: 'classId 已被其他专业占用。',
           departmentId: 'ORG0302',
-          majorId: 'major-002',
-          majorName: '数字媒体技术',
-          shortName: null,
-          trainingLevel: null,
-          trainingYears: null,
+          gradeYear: 2015,
+          majorId: null,
+          sortOrder: 15,
         },
       ],
       processedCount: 3,
-      skippedCount: 0,
+      skippedCount: 1,
       updatedCount: 1,
       upstreamSessionToken: 'rolling-token-003',
     };
 
     executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
-      syncMajorsFromUpstream: payload,
+      syncClassesFromUpstream: payload,
     });
 
     await expect(
-      syncMajorsFromUpstream({
+      syncClassesFromUpstream({
         departmentId: ' ORG0302 ',
         upstreamSessionToken: ' rolling-token-002 ',
       }),
@@ -171,18 +196,19 @@ describe('major-sync api', () => {
 
     const query = executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0] as string;
 
-    expect(query).toContain('SyncMajorsFromUpstream');
-    expect(query).toContain('syncMajorsFromUpstream');
-    expect(query).toContain('dryRun');
+    expect(query).toContain('SyncClassesFromUpstream');
+    expect(query).toContain('syncClassesFromUpstream');
     expect(query).toContain('processedCount');
-    expect(query).toContain('updatedCount');
-    expect(query).toContain('shortName');
-    expect(query).toContain('trainingYears');
-    expect(query).toContain('trainingLevel');
+    expect(query).toContain('conflictCount');
+    expect(query).toContain('classId');
+    expect(query).toContain('classCode');
+    expect(query).toContain('gradeYear');
+    expect(query).toContain('sortOrder');
+    expect(query).toContain('conflictReason');
     expect(query).not.toContain('previewedCount');
     expect(query).not.toContain('annualMajorId');
     expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('SyncMajorsFromUpstream'),
+      expect.stringContaining('SyncClassesFromUpstream'),
       {
         input: {
           departmentId: 'ORG0302',
@@ -192,16 +218,16 @@ describe('major-sync api', () => {
     );
   });
 
-  it('rejects dry-run sync without a department id or upstream token', async () => {
+  it('rejects class dry-run without a department id or upstream token', async () => {
     await expect(
-      dryRunSyncMajorsFromUpstream({
+      dryRunSyncClassesFromUpstream({
         departmentId: ' ',
         upstreamSessionToken: 'rolling-token-001',
       }),
     ).rejects.toThrow('请输入系部。');
 
     await expect(
-      dryRunSyncMajorsFromUpstream({
+      dryRunSyncClassesFromUpstream({
         departmentId: 'ORG0302',
         upstreamSessionToken: ' ',
       }),

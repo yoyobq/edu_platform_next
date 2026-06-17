@@ -106,6 +106,8 @@ Mapper 落点规则：
 - 某个业务切片自己的 API DTO、mapper、repository、带业务字段语义的 URL params adapter，不放进 `shared`
 - 判断标准不是“多个地方可能会调用”，而是“它是否仍然带着明确业务拥有者”
 - 只要还带具体业务语义，就继续留在拥有它的 `feature/infrastructure/`
+- 页面目录不承接长期 `localStorage` / URL adapter / API adapter；这类实现即使只服务一个
+  page，也应先判断拥有者 feature，并收束到对应 `feature/infrastructure/`
 
 ### mock 规则
 

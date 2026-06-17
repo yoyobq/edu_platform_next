@@ -54,10 +54,6 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
-import {
-  THIRD_WORKSPACE_DEMO_SEARCH_PARAM,
-  withWorkbenchSearch,
-} from '@/shared/third-workspace-demo';
 import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
@@ -95,7 +91,16 @@ const ThirdWorkspaceDemoHost = lazy(() =>
 );
 
 function getBaseURL(pathname: string, search: string): string {
-  return withWorkbenchSearch(pathname, search);
+  if (pathname === '/labs/demo') {
+    return `${pathname}${search}`;
+  }
+
+  const searchParams = new URLSearchParams(search);
+
+  searchParams.delete('workspaceDemo');
+
+  const nextSearch = searchParams.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
 function isStudentWorkspaceSession(snapshot: AuthSessionSnapshot) {
@@ -131,9 +136,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
-  const shouldLoadThirdWorkspaceDemoHost =
-    location.pathname === '/labs/demo' ||
-    new URLSearchParams(location.search).has(THIRD_WORKSPACE_DEMO_SEARCH_PARAM);
+  const shouldLoadThirdWorkspaceDemoHost = location.pathname === '/labs/demo';
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
   const hasExplicitChildren = typeof children !== 'undefined';

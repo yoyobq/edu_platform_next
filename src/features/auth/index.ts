@@ -1,7 +1,7 @@
 // src/features/auth/index.ts
 
-export type { AuthAccessGroup } from '@/shared/auth-access';
-export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/shared/auth-access';
+export type { AuthAccessGroup } from '@/entities/auth-access';
+export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/entities/auth-access';
 
 import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
@@ -57,6 +57,23 @@ import {
   readAuthRefreshFeedbackFlash,
 } from './infrastructure/auth-refresh-feedback';
 import { authStorage } from './infrastructure/auth-storage';
+export {
+  AccountSwitchLabAccountMismatchError,
+  type AccountSwitchLabIdentity,
+  type AccountSwitchLabSession,
+  canUseAccountSwitchLabSession,
+  createAccountSwitchLabSession,
+  isAccountSwitchLabAccountMismatchError,
+  restoreAccountSwitchLabSession,
+} from './infrastructure/account-switch-api';
+export {
+  type AccountSwitchLabRecord,
+  readAccountSwitchLabRecords,
+  readCurrentAuthSession,
+  upsertAccountSwitchLabRecord,
+  writeAccountSwitchLabRecords,
+  writeCurrentAuthSession,
+} from './infrastructure/account-switch-storage';
 import {
   consumeExplicitLogoutRedirectHome,
   markExplicitLogoutRedirectHome,

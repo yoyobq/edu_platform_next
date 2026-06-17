@@ -1,3 +1,5 @@
+// src/features/workbench-home/infrastructure/workbench-local-custom-items.ts
+
 export type WorkbenchLocalCustomItem = {
   backgroundColor?: string;
   id: string;

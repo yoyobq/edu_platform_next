@@ -1,9 +1,9 @@
 // src/features/auth/application/types.ts
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import type { AuthAccessGroup } from '@/entities/auth-access';
 
-export type { AuthAccessGroup } from '@/shared/auth-access';
-export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/shared/auth-access';
+export type { AuthAccessGroup } from '@/entities/auth-access';
+export { AUTH_ACCESS_GROUPS, isAuthAccessGroup } from '@/entities/auth-access';
 
 export type AuthSlotGroup = string;
 

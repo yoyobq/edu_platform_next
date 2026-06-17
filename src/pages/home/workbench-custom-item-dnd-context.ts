@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react';
 
-import type { WorkbenchLocalCustomItem } from './workbench-local-custom-items';
+import type { WorkbenchLocalCustomItem } from '@/features/workbench-home';
 
 export type WorkbenchCustomItemDragSource = 'timetable' | 'todo';
 

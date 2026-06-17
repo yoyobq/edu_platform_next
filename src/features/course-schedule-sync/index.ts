@@ -6,7 +6,7 @@ export type {
   CourseScheduleSyncResult,
   CourseScheduleSyncSemesterOption,
   DepartmentCurriculumPlanReviewStatus,
-} from './api';
+} from './infrastructure/course-schedule-sync-api';
 export {
   dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
   fetchCourseScheduleSyncDepartmentOptions,
@@ -15,5 +15,5 @@ export {
   isExpiredUpstreamSessionError,
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
-} from './api';
+} from './infrastructure/course-schedule-sync-api';
 export { SemesterCourseScheduleSyncPageContent } from './ui/semester-course-schedule-sync-page-content';

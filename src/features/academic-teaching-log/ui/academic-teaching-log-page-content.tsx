@@ -40,6 +40,7 @@ import {
   sortAcademicSemestersForDisplay,
   VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from '@/entities/academic-semester';
+import type { AcademicViewerRole } from '@/entities/auth-access';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -55,7 +56,6 @@ import {
   type VerifiedStaffIdentityResult,
 } from '@/entities/upstream-session';
 
-import type { AcademicViewerRole } from '@/shared/auth-access';
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 

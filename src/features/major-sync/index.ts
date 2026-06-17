@@ -9,12 +9,12 @@ export type {
   MajorSyncDryRunItem,
   MajorSyncDryRunResult,
   MajorSyncItem,
-} from './api';
+} from './infrastructure/major-sync-api';
 export {
   dryRunSyncMajorsFromUpstream,
   fetchMajorSyncDepartmentOptions,
   isExpiredUpstreamSessionError,
   resolveMajorSyncErrorMessage,
   syncMajorsFromUpstream,
-} from './api';
+} from './infrastructure/major-sync-api';
 export { MajorSyncPageContent } from './ui/major-sync-page-content';

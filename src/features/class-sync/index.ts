@@ -9,12 +9,12 @@ export type {
   ClassSyncDryRunItem,
   ClassSyncDryRunResult,
   ClassSyncItem,
-} from './api';
+} from './infrastructure/class-sync-api';
 export {
   dryRunSyncClassesFromUpstream,
   fetchClassSyncDepartmentOptions,
   isExpiredUpstreamSessionError,
   resolveClassSyncErrorMessage,
   syncClassesFromUpstream,
-} from './api';
+} from './infrastructure/class-sync-api';
 export { ClassSyncPageContent } from './ui/class-sync-page-content';

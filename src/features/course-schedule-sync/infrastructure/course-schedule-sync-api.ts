@@ -1,3 +1,5 @@
+// src/features/course-schedule-sync/infrastructure/course-schedule-sync-api.ts
+
 import type { OperationVariables } from '@apollo/client';
 
 import { VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT } from '@/entities/academic-semester';

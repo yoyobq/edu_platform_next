@@ -23,21 +23,21 @@ import { useNavigate } from 'react-router';
 
 import { FONT_SCALE_OPTIONS, type FontScale } from '@/app/providers';
 
-import { type AuthSessionSnapshot, logout, revokeAuthSession } from '@/features/auth';
-
-import {
-  type AccountSwitchLabSession,
-  createAccountSwitchLabSession,
-  isAccountSwitchLabAccountMismatchError,
-  restoreAccountSwitchLabSession,
-} from '@/shared/account-switch/api';
 import {
   type AccountSwitchLabRecord,
+  type AccountSwitchLabSession,
+  type AuthSessionSnapshot,
+  createAccountSwitchLabSession,
+  isAccountSwitchLabAccountMismatchError,
+  logout,
   readAccountSwitchLabRecords,
+  restoreAccountSwitchLabSession,
+  revokeAuthSession,
   upsertAccountSwitchLabRecord,
   writeAccountSwitchLabRecords,
   writeCurrentAuthSession,
-} from '@/shared/account-switch/storage';
+} from '@/features/auth';
+
 import { getGraphQLClient, isGraphQLIngressError } from '@/shared/graphql';
 import { HexAvatar } from '@/shared/hex-avatar';
 

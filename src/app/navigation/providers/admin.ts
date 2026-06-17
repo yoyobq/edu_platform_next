@@ -1,4 +1,4 @@
-import { canAccessPayloadCrypto } from '@/shared/auth-access';
+import { canAccessPayloadCrypto } from '@/entities/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 

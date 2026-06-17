@@ -7,13 +7,28 @@ export {
   type AdminUserAccountStatus,
   type AdminUserEmploymentStatus,
   type AdminUserListItem,
-  type AdminUserListPort,
   type AdminUserListQuery,
   type AdminUserListResult,
   type AdminUserSortField,
   type AdminUserSortOrder,
   type AdminUserState,
   DEFAULT_ADMIN_USER_LIST_QUERY,
-  getAdminUsers,
   normalizeAdminUserListQuery,
 } from '@/entities/admin-user';
+
+import {
+  type AdminUserListQuery,
+  type AdminUserListResult,
+  normalizeAdminUserListQuery,
+} from '@/entities/admin-user';
+
+export type AdminUserListPort = {
+  listAdminUsers: (input: AdminUserListQuery) => Promise<AdminUserListResult>;
+};
+
+export async function getAdminUsers(
+  port: AdminUserListPort,
+  input: AdminUserListQuery,
+): Promise<AdminUserListResult> {
+  return port.listAdminUsers(normalizeAdminUserListQuery(input));
+}

@@ -35,7 +35,7 @@ import {
   isExpiredUpstreamSessionError,
   resolveCourseScheduleSyncErrorMessage,
   syncCourseSchedulesFromUpstreamDepartmentCurriculumPlans,
-} from '../api';
+} from '../infrastructure/course-schedule-sync-api';
 
 type SyncFormValues = {
   departmentId: string;

@@ -1,4 +1,5 @@
-import { type AuthAccessGroup } from '@/shared/auth-access';
+import { type AuthAccessGroup } from '@/entities/auth-access';
+
 import {
   normalizeDepartmentName,
   WHITE_HOUSE_DEPARTMENT_NAME,

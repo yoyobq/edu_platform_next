@@ -4,7 +4,8 @@ import { useMemo, useState } from 'react';
 import { DatePicker, Flex, Form, Input, Radio, Tag, Typography } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import type { AuthAccessGroup } from '@/entities/auth-access';
+
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import type { AdminUserDetail } from '../../application/get-admin-user-detail';

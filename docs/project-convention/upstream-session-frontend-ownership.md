@@ -46,8 +46,8 @@
 ## 当前 upstream 登录身份范围
 
 upstream 登录表单可被页面锁定到当前 staffId，也可允许用户输入其它 upstream staffId。
-这不是页面私有判断，统一由 `src/shared/auth-access/index.ts` 的
-`resolveUpstreamLoginLockedUserId()` 解析。
+这不是页面私有判断，统一由 `entities/auth-access` 的
+`resolveUpstreamLoginLockedUserId()` 解析，并通过 `@/entities/auth-access` public API 消费。
 
 当前规则：
 

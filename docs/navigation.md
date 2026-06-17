@@ -66,7 +66,9 @@
 
 当前稳定口径：
 
-- 权限能力 helper 统一归 `src/shared/auth-access/index.ts`
+- 具体权限能力 helper 集中归 `src/entities/auth-access/index.ts`，并通过
+  `@/entities/auth-access` 消费
+- `src/shared/auth-access/index.ts` 只保留 access group / slot group 常量、类型与弱业务语义约定
 - router loader / guard 负责登录态、profile completion 与直达路由准入
 - navigation provider 使用同一批 helper 产出菜单候选
 - `canAccessNavigationPath()` 使用过滤后的 navigation leaf 判断路由是否可通过导航体系访问

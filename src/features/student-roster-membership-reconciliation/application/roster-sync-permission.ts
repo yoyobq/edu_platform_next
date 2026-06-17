@@ -6,7 +6,7 @@ import {
   CLASS_ADVISER_SLOT_GROUP,
   COUNSELOR_SLOT_GROUP,
   STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
-} from '@/shared/auth-access';
+} from '@/entities/auth-access';
 
 export type RosterSyncPermissionStrategy =
   | 'claim-before-dry-run'

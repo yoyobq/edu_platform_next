@@ -1,4 +1,4 @@
-// src/features/major-sync/api.ts
+// src/features/class-sync/infrastructure/class-sync-api.ts
 
 import type { OperationVariables } from '@apollo/client';
 
@@ -13,40 +13,51 @@ import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 
-export type MajorSyncDepartmentOption = {
+export type ClassSyncDepartmentOption = {
   departmentName: string;
   id: string;
   isEnabled: boolean;
   shortName: string | null;
 };
 
-export type MajorSyncDryRunAction =
+export type ClassSyncDryRunAction =
   | 'CREATE'
   | 'UPDATE'
   | 'EXISTS'
-  | 'SKIPPED_DUPLICATE_UPSTREAM_NAME';
+  | 'CONFLICT'
+  | 'SKIPPED_INVALID_UPSTREAM_CODE'
+  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE'
+  | 'SKIPPED_INVALID_UPSTREAM_GRADE';
 
-export type MajorSyncCommitAction =
+export type ClassSyncCommitAction =
   | 'CREATED'
   | 'UPDATED'
   | 'EXISTS'
-  | 'SKIPPED_DUPLICATE_UPSTREAM_NAME';
+  | 'CONFLICT'
+  | 'SKIPPED_INVALID_UPSTREAM_CODE'
+  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
 
-export type MajorSyncItem<Action extends string> = {
+export type ClassSyncItem<Action extends string> = {
   action: Action;
+  classCode: string | null;
+  classId: string | null;
+  className: string;
+  conflictReason: string | null;
   departmentId: string;
+  gradeYear: number | null;
   majorId: string | null;
-  majorName: string;
-  shortName: string | null;
-  trainingLevel: string | null;
-  trainingYears: number | null;
+  majorName?: string | null;
+  sortOrder: number | null;
 };
 
-export type MajorSyncDryRunItem = MajorSyncItem<MajorSyncDryRunAction>;
+export type ClassSyncDryRunItem = ClassSyncItem<ClassSyncDryRunAction> & {
+  majorName: string | null;
+};
 
-export type MajorSyncCommitItem = MajorSyncItem<MajorSyncCommitAction>;
+export type ClassSyncCommitItem = ClassSyncItem<ClassSyncCommitAction>;
 
-type MajorSyncResultBase<Item> = {
+type ClassSyncResultBase<Item> = {
+  conflictCount: number;
   createdCount: number;
   departmentId: string;
   dryRun: boolean;
@@ -59,20 +70,20 @@ type MajorSyncResultBase<Item> = {
   upstreamSessionToken: string | null;
 };
 
-export type MajorSyncDryRunResult = MajorSyncResultBase<MajorSyncDryRunItem> & {
+export type ClassSyncDryRunResult = ClassSyncResultBase<ClassSyncDryRunItem> & {
   previewedCount: number;
 };
 
-export type MajorSyncCommitResult = MajorSyncResultBase<MajorSyncCommitItem> & {
+export type ClassSyncCommitResult = ClassSyncResultBase<ClassSyncCommitItem> & {
   processedCount: number;
 };
 
-export type DryRunSyncMajorsFromUpstreamInput = {
+export type DryRunSyncClassesFromUpstreamInput = {
   departmentId: string;
   upstreamSessionToken: string;
 };
 
-export type SyncMajorsFromUpstreamInput = DryRunSyncMajorsFromUpstreamInput;
+export type SyncClassesFromUpstreamInput = DryRunSyncClassesFromUpstreamInput;
 
 type DepartmentDTO = {
   departmentName: string;
@@ -85,16 +96,16 @@ type DepartmentsResponse = {
   departments: DepartmentDTO[];
 };
 
-type DryRunSyncMajorsFromUpstreamResponse = {
-  dryRunSyncMajorsFromUpstream: MajorSyncDryRunResult;
+type DryRunSyncClassesFromUpstreamResponse = {
+  dryRunSyncClassesFromUpstream: ClassSyncDryRunResult;
 };
 
-type SyncMajorsFromUpstreamResponse = {
-  syncMajorsFromUpstream: MajorSyncCommitResult;
+type SyncClassesFromUpstreamResponse = {
+  syncClassesFromUpstream: ClassSyncCommitResult;
 };
 
 const DEPARTMENTS_QUERY = `
-  query MajorSyncDepartments($limit: Int) {
+  query ClassSyncDepartments($limit: Int) {
     departments(limit: $limit) {
       departmentName
       id
@@ -104,9 +115,9 @@ const DEPARTMENTS_QUERY = `
   }
 `;
 
-const DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
-  mutation DryRunSyncMajorsFromUpstream($input: DryRunSyncMajorsFromUpstreamInput!) {
-    dryRunSyncMajorsFromUpstream(input: $input) {
+const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
+  mutation DryRunSyncClassesFromUpstream($input: DryRunSyncClassesFromUpstreamInput!) {
+    dryRunSyncClassesFromUpstream(input: $input) {
       dryRun
       upstreamSessionToken
       expiresAt
@@ -116,23 +127,27 @@ const DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
       createdCount
       updatedCount
       existsCount
+      conflictCount
       skippedCount
       items {
         action
         departmentId
+        classId
+        classCode
+        className
         majorId
         majorName
-        shortName
-        trainingYears
-        trainingLevel
+        gradeYear
+        sortOrder
+        conflictReason
       }
     }
   }
 `;
 
-const SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
-  mutation SyncMajorsFromUpstream($input: SyncMajorsFromUpstreamInput!) {
-    syncMajorsFromUpstream(input: $input) {
+const SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
+  mutation SyncClassesFromUpstream($input: SyncClassesFromUpstreamInput!) {
+    syncClassesFromUpstream(input: $input) {
       dryRun
       upstreamSessionToken
       expiresAt
@@ -142,15 +157,18 @@ const SYNC_MAJORS_FROM_UPSTREAM_MUTATION = `
       createdCount
       updatedCount
       existsCount
+      conflictCount
       skippedCount
       items {
         action
         departmentId
+        classId
+        classCode
+        className
         majorId
-        majorName
-        shortName
-        trainingYears
-        trainingLevel
+        gradeYear
+        sortOrder
+        conflictReason
       }
     }
   }
@@ -163,7 +181,7 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   return executeGraphQL(query, variables);
 }
 
-function toDepartmentOption(department: DepartmentDTO): MajorSyncDepartmentOption | null {
+function toDepartmentOption(department: DepartmentDTO): ClassSyncDepartmentOption | null {
   const id = department.id.trim();
 
   if (!id) {
@@ -181,12 +199,12 @@ function toDepartmentOption(department: DepartmentDTO): MajorSyncDepartmentOptio
 function buildEnabledDepartmentOptions(departments: readonly DepartmentDTO[]) {
   return departments
     .map(toDepartmentOption)
-    .filter((department): department is MajorSyncDepartmentOption =>
+    .filter((department): department is ClassSyncDepartmentOption =>
       Boolean(department && department.isEnabled),
     );
 }
 
-function normalizeDryRunInput(input: DryRunSyncMajorsFromUpstreamInput) {
+function normalizeDryRunInput(input: DryRunSyncClassesFromUpstreamInput) {
   return {
     departmentId: normalizeRequiredTextValue(input.departmentId, { label: '系部' }),
     upstreamSessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
@@ -195,7 +213,7 @@ function normalizeDryRunInput(input: DryRunSyncMajorsFromUpstreamInput) {
   };
 }
 
-export async function fetchMajorSyncDepartmentOptions() {
+export async function fetchClassSyncDepartmentOptions() {
   try {
     const response = await requestGraphQL<DepartmentsResponse, { limit: number }>(
       DEPARTMENTS_QUERY,
@@ -208,32 +226,32 @@ export async function fetchMajorSyncDepartmentOptions() {
   }
 }
 
-export async function dryRunSyncMajorsFromUpstream(input: DryRunSyncMajorsFromUpstreamInput) {
+export async function dryRunSyncClassesFromUpstream(input: DryRunSyncClassesFromUpstreamInput) {
   const response = await executeUpstreamSessionGraphQL<
-    DryRunSyncMajorsFromUpstreamResponse,
+    DryRunSyncClassesFromUpstreamResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(DRY_RUN_SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
+  >(DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION, {
     input: normalizeDryRunInput(input),
   });
 
-  return response.dryRunSyncMajorsFromUpstream;
+  return response.dryRunSyncClassesFromUpstream;
 }
 
-export async function syncMajorsFromUpstream(input: SyncMajorsFromUpstreamInput) {
+export async function syncClassesFromUpstream(input: SyncClassesFromUpstreamInput) {
   const response = await executeUpstreamSessionGraphQL<
-    SyncMajorsFromUpstreamResponse,
+    SyncClassesFromUpstreamResponse,
     {
       input: ReturnType<typeof normalizeDryRunInput>;
     }
-  >(SYNC_MAJORS_FROM_UPSTREAM_MUTATION, {
+  >(SYNC_CLASSES_FROM_UPSTREAM_MUTATION, {
     input: normalizeDryRunInput(input),
   });
 
-  return response.syncMajorsFromUpstream;
+  return response.syncClassesFromUpstream;
 }
 
-export function resolveMajorSyncErrorMessage(error: unknown) {
-  return resolveUpstreamErrorMessage(error, '暂时无法执行专业同步。');
+export function resolveClassSyncErrorMessage(error: unknown) {
+  return resolveUpstreamErrorMessage(error, '暂时无法执行班级同步。');
 }

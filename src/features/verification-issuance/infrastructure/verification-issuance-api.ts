@@ -1,3 +1,15 @@
+import {
+  type AdminUserAccountStatus,
+  type AdminUserEmploymentStatus,
+  type AdminUserListItem,
+  type AdminUserListQuery,
+  type AdminUserListResult,
+  type AdminUserSortField,
+  type AdminUserSortOrder,
+  type AdminUserState,
+  normalizeAdminUserListQuery,
+} from '@/entities/admin-user';
+
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 type IssueInviteResponse = {
@@ -48,6 +60,111 @@ type CurrentAccountResponse = {
   } | null;
 };
 
+type AdminUsersQueryResponse = {
+  adminUsers: {
+    current: number;
+    list: AdminUserListItemDTO[];
+    pageSize: number;
+    total: number;
+  };
+};
+
+type AdminUserListItemDTO = {
+  account: {
+    createdAt: string;
+    id: number;
+    identityHint: string | null;
+    loginEmail: string | null;
+    loginName: string | null;
+    status: AdminUserAccountStatus;
+  };
+  staff: {
+    departmentId: string | null;
+    employmentStatus: AdminUserEmploymentStatus;
+    id: string;
+    jobTitle: string | null;
+    name: string;
+  } | null;
+  slotGroups: readonly {
+    code: string;
+    name: string;
+  }[];
+  userInfo: {
+    accessGroup: AdminUserListItem['userInfo']['accessGroup'];
+    avatarUrl: string | null;
+    nickname: string;
+    phone: string | null;
+    userState: AdminUserState;
+  };
+};
+
+type AdminUsersQueryVariables = {
+  accessGroups?: readonly string[];
+  hasStaff?: boolean;
+  limit: number;
+  page: number;
+  query?: string;
+  sortBy: AdminUserSortField;
+  sortOrder: AdminUserSortOrder;
+  status?: AdminUserAccountStatus;
+};
+
+const ADMIN_USERS_QUERY = `
+  query VerificationAccountPickerAdminUsers(
+    $accessGroups: [IdentityTypeEnum!]
+    $hasStaff: Boolean
+    $limit: Int!
+    $page: Int!
+    $query: String
+    $sortBy: String!
+    $sortOrder: SortDirection!
+    $status: AccountStatus
+  ) {
+    adminUsers(
+      accessGroups: $accessGroups
+      hasStaff: $hasStaff
+      limit: $limit
+      page: $page
+      query: $query
+      sortBy: $sortBy
+      sortOrder: $sortOrder
+      status: $status
+    ) {
+      current
+      pageSize
+      total
+      list {
+        account {
+          createdAt
+          id
+          identityHint
+          loginEmail
+          loginName
+          status
+        }
+        slotGroups {
+          code
+          name
+        }
+        userInfo {
+          accessGroup
+          avatarUrl
+          nickname
+          phone
+          userState
+        }
+        staff {
+          departmentId
+          employmentStatus
+          id
+          jobTitle
+          name
+        }
+      }
+    }
+  }
+`;
+
 const INVITE_STAFF_MUTATION = `
   mutation InviteStaff($input: InviteStaffInput!) {
     inviteStaff(input: $input) {
@@ -86,6 +203,15 @@ const CURRENT_ACCOUNT_QUERY = `
     }
   }
 `;
+
+function mapAdminUserListItem(dto: AdminUserListItemDTO): AdminUserListItem {
+  return {
+    account: dto.account,
+    staff: dto.staff,
+    slotGroups: dto.slotGroups,
+    userInfo: dto.userInfo,
+  };
+}
 
 function normalizeIssueInviteResult(result: IssueInviteResponse): IssueInviteResult {
   return {
@@ -132,6 +258,32 @@ export function resolveVerificationIssuanceErrorMessage(error: unknown, fallback
   }
 
   return error instanceof Error ? error.message : fallback;
+}
+
+export async function requestVerificationAccountPickerUsers(
+  input: AdminUserListQuery,
+): Promise<AdminUserListResult> {
+  const query = normalizeAdminUserListQuery(input);
+  const response = await executeGraphQL<AdminUsersQueryResponse, AdminUsersQueryVariables>(
+    ADMIN_USERS_QUERY,
+    {
+      accessGroups: query.accessGroups,
+      hasStaff: query.hasStaff,
+      limit: query.limit ?? 50,
+      page: query.page ?? 1,
+      query: query.query,
+      sortBy: query.sortBy ?? 'createdAt',
+      sortOrder: query.sortOrder ?? 'DESC',
+      status: query.status,
+    },
+  );
+
+  return {
+    current: response.adminUsers.current,
+    list: response.adminUsers.list.map(mapAdminUserListItem),
+    pageSize: response.adminUsers.pageSize,
+    total: response.adminUsers.total,
+  };
 }
 
 export async function issueVerificationStaffInvite(input: {

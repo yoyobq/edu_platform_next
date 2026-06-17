@@ -1,6 +1,6 @@
 // src/features/academic-curriculum-plan-homepage/domain/curriculum-plan-homepage-types.ts
 
-import type { AuthAccessGroup } from '@/shared/auth-access';
+import type { AuthAccessGroup } from '@/entities/auth-access';
 
 export type CurrentCurriculumPlanHomepageAccount = {
   accessGroup: AuthAccessGroup[];

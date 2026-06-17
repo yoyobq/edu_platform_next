@@ -17,7 +17,8 @@ import {
 import type { FilterValue, SorterResult, TablePaginationConfig } from 'antd/es/table/interface';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 
-import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/shared/auth-access';
+import { AUTH_ACCESS_GROUPS, type AuthAccessGroup } from '@/entities/auth-access';
+
 import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 
 import {

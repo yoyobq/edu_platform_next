@@ -4,7 +4,7 @@ import { useAuthSessionState } from '@/features/auth';
 import { Error403 } from '@/features/error-feedback';
 import { VerificationIssuancePageContent } from '@/features/verification-issuance';
 
-import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+import { resolveUpstreamLoginLockedUserId } from '@/entities/auth-access';
 
 export function VerificationIssuancePage() {
   const authSession = useAuthSessionState();

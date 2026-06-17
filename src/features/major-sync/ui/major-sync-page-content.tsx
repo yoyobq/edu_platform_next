@@ -35,7 +35,7 @@ import {
   type MajorSyncDryRunResult,
   resolveMajorSyncErrorMessage,
   syncMajorsFromUpstream,
-} from '../api';
+} from '../infrastructure/major-sync-api';
 
 type MajorSyncFormValues = {
   departmentId: string;

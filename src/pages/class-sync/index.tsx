@@ -6,7 +6,7 @@ import { useAuthSessionState } from '@/features/auth';
 import { ClassSyncPageContent } from '@/features/class-sync';
 import { Error403 } from '@/features/error-feedback';
 
-import { resolveUpstreamLoginLockedUserId } from '@/shared/auth-access';
+import { resolveUpstreamLoginLockedUserId } from '@/entities/auth-access';
 
 export function ClassSyncPage() {
   const authSession = useAuthSessionState();

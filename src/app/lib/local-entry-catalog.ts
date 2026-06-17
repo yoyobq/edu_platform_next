@@ -2,8 +2,6 @@
 
 import { getNavigationLeafItems, type NavigationFilter } from '@/app/navigation';
 
-import { withWorkbenchSearch } from '@/shared/third-workspace-demo';
-
 import type { EntryCard } from './entry-card';
 
 type LocalEntryCatalogItem = EntryCard & {
@@ -15,7 +13,16 @@ type LocalEntryContext = NavigationFilter & {
 };
 
 function withSearch(pathname: string, search: string): string {
-  return withWorkbenchSearch(pathname, search);
+  if (pathname === '/labs/demo') {
+    return `${pathname}${search}`;
+  }
+
+  const searchParams = new URLSearchParams(search);
+
+  searchParams.delete('workspaceDemo');
+
+  const nextSearch = searchParams.toString();
+  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
 }
 
 function normalizeText(value: string): string {
