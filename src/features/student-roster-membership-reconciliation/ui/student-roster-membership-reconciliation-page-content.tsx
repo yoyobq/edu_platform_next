@@ -1,12 +1,16 @@
 // src/features/student-roster-membership-reconciliation/ui/student-roster-membership-reconciliation-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ReconciliationOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
+import {
+  ReconciliationOutlined,
+  ReloadOutlined,
+  RollbackOutlined,
+  SwapOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   Button,
   Card,
-  Checkbox,
   Descriptions,
   Form,
   Input,
@@ -508,13 +512,33 @@ export function StudentRosterMembershipReconciliationPageContent({
     [reconciliationResult],
   );
   const reviewCounts = useMemo(() => countRosterReviewItemsByKind(reviewItems), [reviewItems]);
-  const focusReviewItems = useMemo(
-    () => filterRosterReviewItems(reviewItems, 'focus'),
-    [reviewItems],
+  const pendingEndDecisionKeys = useMemo(
+    () =>
+      new Set(
+        Object.entries(endDecisionDrafts)
+          .filter(([, draft]) => draft.selected)
+          .map(([itemKey]) => itemKey),
+      ),
+    [endDecisionDrafts],
   );
+  const focusReviewItems = useMemo(() => {
+    const focusedItems = filterRosterReviewItems(reviewItems, 'focus');
+    const focusedRowKeys = new Set(focusedItems.map((item) => item.rowKey));
+    const selectedEndDecisionItems = reviewItems.filter(
+      (item) =>
+        item.kind === 'local-decision' &&
+        pendingEndDecisionKeys.has(item.item.key) &&
+        !focusedRowKeys.has(item.rowKey),
+    );
+
+    return [...focusedItems, ...selectedEndDecisionItems];
+  }, [pendingEndDecisionKeys, reviewItems]);
   const visibleReviewItems = useMemo(
-    () => filterRosterReviewItems(reviewItems, resultFilter),
-    [resultFilter, reviewItems],
+    () =>
+      resultFilter === 'focus'
+        ? focusReviewItems
+        : filterRosterReviewItems(reviewItems, resultFilter),
+    [focusReviewItems, resultFilter, reviewItems],
   );
   const resultFilterOptions = useMemo(() => {
     return [
@@ -1386,17 +1410,28 @@ export function StudentRosterMembershipReconciliationPageContent({
 
     return (
       <div className="flex min-w-[280px] flex-col gap-2">
-        <Checkbox
-          checked={draft.selected}
-          onChange={(event) => {
-            updateEndDecisionDraft(item, (current) => ({
-              endReason: current?.endReason,
-              selected: event.target.checked,
-            }));
-          }}
-        >
-          撤销此裁定
-        </Checkbox>
+        <div className="self-start">
+          <Button
+            danger={draft.selected}
+            icon={<RollbackOutlined />}
+            type={draft.selected ? 'primary' : 'default'}
+            onClick={() => {
+              const nextSelected = !draft.selected;
+
+              updateEndDecisionDraft(item, (current) => ({
+                endReason: current?.endReason,
+                selected: nextSelected,
+              }));
+
+              if (nextSelected) {
+                setResultFilter('focus');
+                setResultTablePage(1);
+              }
+            }}
+          >
+            {draft.selected ? '取消撤销' : '撤销'}
+          </Button>
+        </div>
         {draft.selected ? (
           <Input.TextArea
             autoSize={{ maxRows: 3, minRows: 2 }}
@@ -1468,7 +1503,7 @@ export function StudentRosterMembershipReconciliationPageContent({
   function shouldShowReviewBusinessText(reviewItem: RosterReviewItem) {
     const item = reviewItem.item;
 
-    if (reviewItem.kind === 'local-decision' && !canEndDecision(item)) {
+    if (reviewItem.kind === 'local-decision') {
       return false;
     }
 
@@ -1481,28 +1516,40 @@ export function StudentRosterMembershipReconciliationPageContent({
 
   function renderReviewSummaryCell(reviewItem: RosterReviewItem) {
     const shouldShowBusinessText = shouldShowReviewBusinessText(reviewItem);
-    const currentDecisionTag = reviewItem.item.activeDecisionOutcome
-      ? renderDecisionOutcomeTag(reviewItem.item.activeDecisionOutcome, '当前裁定')
+    const recommendedDecisionTag = reviewItem.item.recommendedDecisionOutcome
+      ? renderDecisionOutcomeTag(reviewItem.item.recommendedDecisionOutcome, '建议')
       : null;
 
     return (
       <div className="flex flex-col gap-2">
-        {currentDecisionTag ? (
-          <div className="flex flex-wrap gap-1">{currentDecisionTag}</div>
+        {recommendedDecisionTag ? (
+          <div className="flex flex-wrap gap-1">{recommendedDecisionTag}</div>
         ) : null}
-        <div className="flex flex-wrap gap-1">
-          {reviewItem.item.recommendedDecisionOutcome
-            ? renderDecisionOutcomeTag(reviewItem.item.recommendedDecisionOutcome, '建议')
-            : null}
-          {renderDefaultOperationTag(reviewItem)}
-          {renderCommitImpactTag(reviewItem)}
-        </div>
         {shouldShowBusinessText ? (
           <span className="font-medium text-text">{reviewItem.businessSummary}</span>
         ) : null}
         {shouldShowBusinessText && reviewItem.businessDetail ? (
           <span className="text-text-secondary">{reviewItem.businessDetail}</span>
         ) : null}
+      </div>
+    );
+  }
+
+  function renderActiveDecisionCell(item: StudentRosterMembershipReconciliationItem) {
+    if (!item.activeDecisionOutcome && !item.activeDecisionReasonCode) {
+      return <span className="text-text-secondary">-</span>;
+    }
+
+    return (
+      <div className="flex flex-col gap-1">
+        {item.activeDecisionOutcome ? (
+          <div className="flex flex-wrap gap-1">
+            {renderDecisionOutcomeTag(item.activeDecisionOutcome)}
+          </div>
+        ) : null}
+        <span className="text-text-secondary">
+          {renderReasonCode(item.activeDecisionReasonCode)}
+        </span>
       </div>
     );
   }
@@ -1724,10 +1771,16 @@ export function StudentRosterMembershipReconciliationPageContent({
       width: 220,
     },
     {
+      key: 'active-decision',
+      render: (_, item) => renderActiveDecisionCell(item.item),
+      title: '当前裁定',
+      width: 180,
+    },
+    {
       key: 'operation',
       render: (_, item) => renderOperationCell(item),
       title: '处理方式',
-      width: 520,
+      width: 460,
     },
   ];
 
