@@ -15,7 +15,7 @@ import {
 import type { NavigationItemsProvider } from '../types';
 import type { NavigationLeafItem } from '../types';
 
-function hasAcademicAffairsNavigationAccess(filter: Parameters<NavigationItemsProvider>[0]) {
+function canExposeAcademicAffairsManagementItems(filter: Parameters<NavigationItemsProvider>[0]) {
   return hasAcademicCalendarManagementAccess({
     accessGroup: filter.accessGroup,
     slotGroup: filter.slotGroup,
@@ -24,7 +24,7 @@ function hasAcademicAffairsNavigationAccess(filter: Parameters<NavigationItemsPr
 
 export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filter) => {
   const academicAffairsChildren: NavigationLeafItem[] = [
-    ...(hasAcademicAffairsNavigationAccess(filter)
+    ...(canExposeAcademicAffairsManagementItems(filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
@@ -55,7 +55,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
-    ...(hasAcademicAffairsNavigationAccess(filter)
+    ...(canExposeAcademicAffairsManagementItems(filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,

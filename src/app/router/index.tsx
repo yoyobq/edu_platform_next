@@ -261,7 +261,8 @@ const loadAcademicWorkloadRouteModule = loadPageRouteModule(
   'AcademicWorkloadPage',
 );
 
-function getCurrentSessionAccessLevels(): AppAccessLevel[] {
+// Lab access.ts uses coarse levels; router projects current auth groups into those levels.
+function getCurrentSessionLabAccessLevels(): AppAccessLevel[] {
   const snapshot = getAuthSessionSnapshot();
 
   if (!snapshot) {
@@ -290,7 +291,7 @@ function getCurrentSessionAccessLevels(): AppAccessLevel[] {
 }
 
 function hasLabAccess(access: LabAccess): boolean {
-  const accessLevels = getCurrentSessionAccessLevels();
+  const accessLevels = getCurrentSessionLabAccessLevels();
   const effectiveLabEnv = currentAppEnv === 'test' ? 'dev' : currentAppEnv;
 
   return (
@@ -359,12 +360,6 @@ async function loadLabRoute<TData = null>({
   }
 
   return getData?.(snapshot) ?? null;
-}
-
-function hasStudentCourseResultsLabAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
-  const accessGroup = input.accessGroup ?? [];
-
-  return accessGroup.includes('ADMIN');
 }
 
 function getRequestTarget(request: Request) {
@@ -701,10 +696,6 @@ async function upstreamSessionReferenceLabLoader({ request }: LoaderFunctionArgs
 async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentCourseResultsPullLabAccess,
-    canAccess: (snapshot) =>
-      hasStudentCourseResultsLabAccess({
-        accessGroup: snapshot.userInfo.accessGroup,
-      }),
     request,
   });
 }
@@ -712,10 +703,6 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
 async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentCourseResultsViewLabAccess,
-    canAccess: (snapshot) =>
-      hasStudentCourseResultsLabAccess({
-        accessGroup: snapshot.userInfo.accessGroup,
-      }),
     request,
   });
 }

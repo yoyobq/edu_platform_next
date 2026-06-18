@@ -4,7 +4,7 @@ import type { NavigationItemsProvider } from '../types';
 
 const STUDENT_ALLOWED_ACCESS_GROUPS = ['STUDENT'] as const;
 
-function hasStandaloneStudentAccess(filter: Parameters<NavigationItemsProvider>[0]) {
+function isStandaloneStudentNavigationSession(filter: Parameters<NavigationItemsProvider>[0]) {
   return (
     filter.accessGroup.includes('STUDENT') &&
     !filter.accessGroup.includes('ADMIN') &&
@@ -13,7 +13,7 @@ function hasStandaloneStudentAccess(filter: Parameters<NavigationItemsProvider>[
 }
 
 export const getStudentNavigationItems: NavigationItemsProvider = (filter) => {
-  if (!hasStandaloneStudentAccess(filter)) {
+  if (!isStandaloneStudentNavigationSession(filter)) {
     return [];
   }
 

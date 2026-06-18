@@ -39,6 +39,9 @@
   primitive 类型或常量，可以直接依赖 `src/shared/auth-access`。
 - `features/auth` 只承载登录、会话恢复、刷新、存储、snapshot 类型与 session 映射逻辑，
   不作为全局业务权限 helper 的二级入口。
+- 直接读取 `accessGroup` / `slotGroup` 只能用于本地 projection 或 workflow policy，例如
+  session 映射、loader data 派生、navigation manifest 过滤、lab 暴露投影、feature 表单规则
+  与同步范围规则；不得作为 router / navigation / page 的第二套全局准入真相。
 
 ## 规则执行方式
 

@@ -252,7 +252,8 @@
   `src/shared/auth-access/index.ts` 只保留稳定 access group、slot group 常量与跨域类型
 - 入口治理：router loader / guard 负责登录态、profile completion、页面准入和必要的
   loader data
-- 展示投影：`src/app/navigation/` 只用同一批能力结果决定菜单与本地入口是否可见
+- 展示投影：`src/app/navigation/` 使用同一批能力结果，或镜像 lab `access.ts` 的
+  暴露范围，决定菜单与本地入口是否可见
 
 实现边界：
 
@@ -263,6 +264,18 @@
 - router 直达守卫必须与 navigation 使用同一套能力口径，不能出现“菜单隐藏但 URL 可进”的另一套真相
 - labs 的基础暴露范围来自各 lab 自己的 `access.ts`；若额外加 `canAccess`，导航 provider
   必须同步同一规则
+- navigation 不 import `labs/*/access.ts`，避免稳定区反向依赖 labs；这类菜单暴露投影必须有
+  导航测试覆盖
+
+允许保留本地 `accessGroup.includes(...)` / `slotGroup.includes(...)` 的场景必须不是全局权限真相：
+
+- `features/auth` 内部从后端会话摘要解析 `primaryAccessGroup`
+- router / page loader 已通过集中 helper 守卫后，派生 `viewerRole`、`canSelect...`
+  等最小 loader data
+- navigation 聚合按 manifest 做通用过滤，或 labs provider 镜像 lab `access.ts`
+  做暴露投影
+- feature 内部工作流策略，例如字段锁定、表单合法性、局部同步范围；不得反向作为
+  router / navigation 的入口准入真相
 
 当前全局能力辅助入口统一为 `@/entities/auth-access`，包括：
 

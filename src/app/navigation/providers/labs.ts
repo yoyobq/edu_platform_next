@@ -2,43 +2,38 @@ import { type AuthAccessGroup } from '@/entities/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
 
-function hasAdminNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+// Stable navigation cannot import labs; these helpers only project menu exposure.
+function hasAdminLabExposure(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   return input.accessGroup?.includes('ADMIN') ?? false;
 }
 
-function hasStaffNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+function hasStaffLabExposure(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   return input.accessGroup?.includes('STAFF') ?? false;
 }
 
-function hasStudentNavigationAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+function hasStudentLabExposure(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   return input.accessGroup?.includes('STUDENT') ?? false;
 }
 
-function hasStudentCourseResultsLabNavigationAccess(
-  filter: Parameters<NavigationItemsProvider>[0],
-) {
-  return filter.accessGroup.includes('ADMIN');
-}
-
-function hasLabNavigationAccess(
+function hasAllowedLabExposure(
   allowedAccessLevels: readonly ('admin' | 'staff' | 'student' | 'guest')[],
   filter: Parameters<NavigationItemsProvider>[0],
 ) {
   return allowedAccessLevels.some((accessLevel) => {
     if (accessLevel === 'admin') {
-      return hasAdminNavigationAccess({
+      return hasAdminLabExposure({
         accessGroup: filter.accessGroup,
       });
     }
 
     if (accessLevel === 'staff') {
-      return hasStaffNavigationAccess({
+      return hasStaffLabExposure({
         accessGroup: filter.accessGroup,
       });
     }
 
     if (accessLevel === 'student') {
-      return hasStudentNavigationAccess({
+      return hasStudentLabExposure({
         accessGroup: filter.accessGroup,
       });
     }
@@ -49,7 +44,7 @@ function hasLabNavigationAccess(
 
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
   const children = [
-    ...(hasLabNavigationAccess(['admin'], filter)
+    ...(hasAllowedLabExposure(['admin'], filter)
       ? [
           {
             iconKey: 'SendOutlined',
@@ -72,7 +67,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin'], filter)
+    ...(hasAllowedLabExposure(['admin'], filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN'] as const,
@@ -86,7 +81,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasStudentCourseResultsLabNavigationAccess(filter)
+    ...(hasAllowedLabExposure(['admin'], filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN'] as const,
@@ -110,7 +105,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+    ...(hasAllowedLabExposure(['admin', 'staff'], filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
@@ -124,7 +119,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['admin', 'staff'], filter)
+    ...(hasAllowedLabExposure(['admin', 'staff'], filter)
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
@@ -138,7 +133,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasLabNavigationAccess(['student'], filter)
+    ...(hasAllowedLabExposure(['student'], filter)
       ? [
           {
             allowedAccessGroups: ['STUDENT'] as const,

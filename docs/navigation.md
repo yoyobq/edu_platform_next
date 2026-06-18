@@ -70,7 +70,11 @@
   `@/entities/auth-access` 消费
 - `src/shared/auth-access/index.ts` 只保留 access group / slot group 常量、类型与弱业务语义约定
 - router loader / guard 负责登录态、profile completion 与直达路由准入
-- navigation provider 使用同一批 helper 产出菜单候选
+- navigation provider 使用同一批 helper 产出正式区菜单候选
+- labs provider 只镜像各 lab 自己 `access.ts` 的 `allowedAccessLevels` 做菜单暴露投影，
+  不在导航层另写 lab 业务准入规则
+- 受“稳定区不得依赖 labs”的单向依赖限制，navigation 不 import `labs/*/access.ts`；
+  lab 暴露范围变更必须同步 provider 与导航测试
 - `canAccessNavigationPath()` 使用过滤后的 navigation leaf 判断路由是否可通过导航体系访问
 - 页面 / feature 不应因为菜单可见而跳过自己的业务视角分流或后端接口权限
 
@@ -79,6 +83,12 @@
 - 菜单里写一套 slot 判断，router loader 再写另一套不同判断
 - 页面组件内硬编码 slot 字符串来决定全局入口权限
 - 只隐藏菜单但允许同一身份手输 URL 进入
+
+导航层允许的 `accessGroup` / `slotGroup` 直接读取只限于：
+
+- 聚合层按 manifest 的 `allowedAccessGroups` / `slotGroup` 做通用过滤
+- provider 把已集中的 capability helper 或 lab `access.ts` 暴露范围投影成菜单项
+- 纯 student 这类壳层导航形态分流；命名必须体现 navigation/session projection
 
 如果某个入口需要在 `access.ts`、provider、router guard 之外再加业务条件，三处必须同步同一能力口径，并补导航测试。
 
