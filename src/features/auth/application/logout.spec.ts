@@ -103,6 +103,24 @@ describe('auth logout', () => {
     expect(getAuthSessionState().status).toBe('authenticated');
   });
 
+  it('throws remote revoke failures without clearing local session', async () => {
+    const session = buildSessionSnapshot();
+    const ports = createPorts({
+      logout: vi.fn(async () => {
+        throw new Error('logout failed');
+      }),
+    });
+
+    setAuthenticatedSession(session);
+
+    await expect(revokeAuthSession(ports, session)).rejects.toThrow('logout failed');
+
+    expect(ports.api.logout).toHaveBeenCalledWith({ accessToken: session.accessToken });
+    expect(ports.storage.clearSession).not.toHaveBeenCalled();
+    expect(getCurrentAuthSession()).toEqual(session);
+    expect(getAuthSessionState().status).toBe('authenticated');
+  });
+
   it('still clears local session when backend logout fails', async () => {
     const session = buildSessionSnapshot();
     const ports = createPorts({
