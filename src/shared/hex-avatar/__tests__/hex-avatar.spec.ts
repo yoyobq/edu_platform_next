@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { buildHexAvatarSpecV1 } from '../build-hex-avatar-spec';
+import { hashAvatarSeed } from '../hash-avatar-seed';
 import { renderHexAvatarSvgV1 } from '../render-hex-avatar-svg';
 import type { HexCell } from '../types';
 
@@ -59,6 +60,36 @@ function reflectCell(cell: Pick<HexCell, 'q' | 'r'>) {
     r: cell.r,
   };
 }
+
+describe('hashAvatarSeed', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('Web Crypto 不可用时使用确定性 fallback', async () => {
+    vi.stubGlobal('crypto', {});
+
+    const hashA1 = await hashAvatarSeed('1001');
+    const hashA2 = await hashAvatarSeed('1001');
+    const hashB = await hashAvatarSeed('1002');
+
+    expect(hashA1).toHaveLength(32);
+    expect(hashA1).toStrictEqual(hashA2);
+    expect(hashA1).not.toStrictEqual(hashB);
+  });
+
+  it('Web Crypto digest 失败时使用 fallback', async () => {
+    vi.stubGlobal('crypto', {
+      subtle: {
+        digest: vi.fn(async () => {
+          throw new Error('digest unavailable');
+        }),
+      },
+    });
+
+    await expect(hashAvatarSeed('1001')).resolves.toHaveLength(32);
+  });
+});
 
 describe('buildHexAvatarSpecV1', () => {
   it('同一输入重复生成一致', () => {
