@@ -11,6 +11,7 @@
 - 已有明确用途
 - 可快速验证真实效果
 - 不默认等同于正式功能
+- 保持短生命周期和低稳定性预期，可以撤回、删除或迁入 `stable`
 
 ## 基本要求
 
@@ -51,6 +52,8 @@ src/labs/<lab-name>/
 
 补充：
 
+- `labs` 要求基本分层：`access.ts` / `meta.ts` / route 入口 / 页面实现 / 实验内
+  `ui`、`lib`、`infrastructure` 等边界应按需要分开
 - `labs` 不要求完整第二维
 - 但 API、storage、URL 参数、SDK、mock 等外部边界，应收束在当前实验模块内
 - 简单实验可用 `mock.ts`
@@ -92,13 +95,18 @@ src/labs/<lab-name>/
 - 未命中 access list 时，不得暴露入口
 - 未命中 access list 时，不得直接访问成功
 - access list 不是“只隐藏菜单”，而是实验功能的暴露控制
+- `menu: false` 的 lab 可以只保留直达路由或内部联调入口，不要求进入 navigation provider
+- `menu: true` 的 lab 才需要出现在 `src/app/navigation/providers/labs.ts`
 - `app/router` 统一使用 labs loader helper 执行环境、登录、profile completion 与权限检查；
   新 lab 不应在页面内自行恢复本站登录态。
 - 若 lab 需要 loader 数据，loader 只注入页面所需的最小稳定数据，例如
   `{ currentAccount: { accountId, displayName } }`。
-- `src/app/navigation/providers/labs.ts` 必须与对应 lab `access.ts` 使用同一暴露范围
-- 若某个 lab 需要额外 `canAccess` 条件，router guard 与 navigation provider 必须同步同一能力 helper
+- 受“稳定区不得依赖 labs”的单向依赖限制，navigation 不 import `labs/*/access.ts`；若
+  lab 进入菜单，`src/app/navigation/providers/labs.ts` 只镜像对应 `access.ts` 的暴露范围
+- 若菜单可见的 lab 需要额外 `canAccess` 条件，router guard 与 navigation provider
+  必须同步同一能力 helper
 - staff lab 暴露默认不等于所有 staff 都有相同业务数据范围；具体数据权限仍以后端接口为准
+- 删除或撤回 lab 时，应同步移除路由注册、导航投影与相关测试断言
 
 ## meta.ts
 

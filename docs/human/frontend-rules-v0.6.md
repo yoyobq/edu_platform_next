@@ -426,6 +426,7 @@ src/
 - 实验页面
 - 小范围试用功能
 - 尚未完全正式化但有实际用途的能力
+- 短生命周期、可撤回或可删除的联调 / 验证入口
 
 要求：
 
@@ -436,10 +437,12 @@ src/
 - 必须说明撤回方式
 - `reviewAt` 到期后必须复查，并给出“删除 / 延期 / 迁入 stable”之一的结论
 - 不默认视为正式能力
+- 不承诺长期兼容；后续要么删除，要么迁入 `stable`
 
 目录建议：
 
-- 按实验单元组织，不要求复制正式区分层
+- 按实验单元组织，要求 labs 自身的轻量基本分层
+- 不要求复制正式区完整分层，也不要求补齐 `domain / application / infrastructure / ui`
 - 推荐形态：
 
 ```txt
@@ -604,12 +607,17 @@ access list 只解决三件事：
 - access list 只用于 `labs`
 - access list 不代替正式权限系统
 - access list 只做实验功能暴露控制
+- `menu: false` 的 lab 可以只保留直达路由或内部联调入口，不要求进入 navigation
+  provider
+- `menu: true` 的 lab 才需要同步 `src/app/navigation/providers/labs.ts`
 
 推荐落地方式：
 
 - `labs` 的 access list 以独立 `access.ts` 作为唯一配置源
 - 页面级实验默认由 `app/router` 的 labs loader helper 读取该配置，并完成入口控制与路由拦截
 - 若 lab 页面需要当前账号，只注入 `{ accountId, displayName }` 这类最小稳定数据
+- 受“稳定区不得依赖 labs”的单向依赖限制，navigation 不 import `labs/*/access.ts`；若
+  lab 进入菜单，navigation provider 只镜像对应 `access.ts` 的暴露范围
 - 若实验能力以局部模块形式嵌入页面，可复用同一套 access 判断逻辑进行组件级控制
 - 初期以路由级控制为主，组件级控制为补充，不要求一开始同时实现完整抽象
 
