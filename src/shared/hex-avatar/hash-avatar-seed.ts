@@ -2,13 +2,19 @@ const APP_SALT = 'aigc-friendly-frontend';
 const AVATAR_VERSION = 'v1';
 const HASH_BYTE_LENGTH = 32;
 
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+}
+
 async function digestSha256(encoded: Uint8Array): Promise<Uint8Array | null> {
   const subtle = globalThis.crypto?.subtle;
 
   if (!subtle) return null;
 
   try {
-    const buffer = await subtle.digest('SHA-256', encoded);
+    const buffer = await subtle.digest('SHA-256', toArrayBuffer(encoded));
     return new Uint8Array(buffer);
   } catch {
     return null;
