@@ -48,6 +48,7 @@ import {
   resolveUpstreamErrorMessage,
 } from '../infrastructure/class-affairs-course-results-api';
 import {
+  buildCourseResultsTermDisplayStateByKey,
   COURSE_RESULTS_REASON_LABELS,
   COURSE_RESULTS_STUDENT_STATUS_LABELS,
   splitCourseResultsItemsForDisplay,
@@ -414,18 +415,6 @@ function buildTermLabel(schoolYear: string, semester: string) {
   return `${formatSchoolYear(schoolYear)} ${formatSemester(semester)}`;
 }
 
-function buildTermOrdinalByKey(terms: readonly ManagedClassCourseResultsTerm[]) {
-  return new Map(
-    [...terms]
-      .sort(
-        (first, second) =>
-          compareTextValue(first.schoolYear, second.schoolYear) ||
-          compareTextValue(first.semester, second.semester),
-      )
-      .map((term, index) => [buildTermKey(term), index + 1] as const),
-  );
-}
-
 function resolveCurrentTermKey(currentSemester: AcademicSemesterRecord | null) {
   if (!currentSemester) {
     return null;
@@ -730,11 +719,18 @@ export function ClassAffairsCourseResultsPageContent({
     () => buildTermsFromResult(result, academicSemesters),
     [academicSemesters, result],
   );
-  const termOrdinalByKey = useMemo(() => buildTermOrdinalByKey(terms), [terms]);
   const hasManagedClasses = classes.length > 0;
   const usableClasses = useMemo(
     () => classes.filter((item) => resolveClassCode(item)).sort(compareManagedClasses),
     [classes],
+  );
+  const selectedClass = useMemo(
+    () => usableClasses.find((item) => resolveClassCode(item) === selectedClassCode) ?? null,
+    [selectedClassCode, usableClasses],
+  );
+  const termDisplayStateByKey = useMemo(
+    () => buildCourseResultsTermDisplayStateByKey(terms, selectedClass?.gradeYear ?? null),
+    [selectedClass?.gradeYear, terms],
   );
   const hasOnlyIncompleteClasses = hasManagedClasses && usableClasses.length === 0;
   const classOptions = useMemo(
@@ -1165,7 +1161,9 @@ export function ClassAffairsCourseResultsPageContent({
             items={terms.map((term) => {
               const termKey = buildTermKey(term);
               const isActive = termKey === activeTermKey;
-              const semesterOrdinal = termOrdinalByKey.get(termKey) ?? null;
+              const termDisplayState = termDisplayStateByKey.get(termKey) ?? null;
+              const semesterOrdinal = termDisplayState?.ordinal ?? null;
+              const isBeforeClassEntry = termDisplayState?.isBeforeClassEntry === true;
 
               return {
                 children: isActive ? (
@@ -1262,7 +1260,16 @@ export function ClassAffairsCourseResultsPageContent({
                 disabled: !term.hasLocalData && term.isCurrent && !term.canPullFromUpstream,
                 key: termKey,
                 label: (
-                  <span className="class-affairs-course-results-term-tab-label">
+                  <span
+                    className={[
+                      'class-affairs-course-results-term-tab-label',
+                      isBeforeClassEntry
+                        ? 'class-affairs-course-results-term-tab-label-before-entry'
+                        : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' ')}
+                  >
                     <span
                       className={[
                         'class-affairs-course-results-term-tab-primary',

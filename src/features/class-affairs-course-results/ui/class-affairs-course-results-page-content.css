@@ -16,6 +16,22 @@
   font-weight: var(--ant-font-weight-strong, 600);
 }
 
+.class-affairs-course-results-term-tab-label-before-entry
+  .class-affairs-course-results-term-tab-primary {
+  color: var(--ant-color-text-tertiary);
+}
+
+.class-affairs-course-results-term-tab-label-before-entry
+  .class-affairs-course-results-term-tab-secondary {
+  color: var(--ant-color-text-quaternary);
+}
+
+.class-affairs-course-results-term-tab-label-before-entry
+  .class-affairs-course-results-term-tab-badge {
+  background: var(--ant-color-fill-quaternary);
+  color: var(--ant-color-text-quaternary);
+}
+
 .class-affairs-course-results-term-tab-secondary {
   align-items: center;
   color: var(--ant-color-text-secondary);

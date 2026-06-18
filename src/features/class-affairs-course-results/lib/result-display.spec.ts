@@ -4,7 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { ManagedCourseResultsItem } from '../infrastructure/class-affairs-course-results-api';
 
-import { splitCourseResultsItemsForDisplay } from './result-display';
+import {
+  buildCourseResultsTermDisplayStateByKey,
+  splitCourseResultsItemsForDisplay,
+} from './result-display';
 
 function buildItem(
   input: Pick<
@@ -26,6 +29,80 @@ function buildItem(
     ...input,
   };
 }
+
+describe('course results term display state', () => {
+  it('keeps retained student history before class entry out of class term ordinals', () => {
+    const stateByKey = buildCourseResultsTermDisplayStateByKey(
+      [
+        buildTerm({ schoolYear: '2024', semester: '1' }),
+        buildTerm({ schoolYear: '2024', semester: '2' }),
+        buildTerm({ schoolYear: '2025', semester: '1' }),
+        buildTerm({ schoolYear: '2025', semester: '2' }),
+        buildTerm({ schoolYear: '2026', semester: '1' }),
+        buildTerm({ schoolYear: '2026', semester: '2' }),
+      ],
+      2025,
+    );
+
+    expect(stateByKey.get('2024::1')).toEqual({
+      isBeforeClassEntry: true,
+      ordinal: null,
+    });
+    expect(stateByKey.get('2024::2')).toEqual({
+      isBeforeClassEntry: true,
+      ordinal: null,
+    });
+    expect(stateByKey.get('2025::1')).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: 1,
+    });
+    expect(stateByKey.get('2025::2')).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: 2,
+    });
+    expect(stateByKey.get('2026::1')).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: 3,
+    });
+    expect(stateByKey.get('2026::2')).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: 4,
+    });
+  });
+
+  it('uses class grade year rather than the available result tab index', () => {
+    const stateByKey = buildCourseResultsTermDisplayStateByKey(
+      [buildTerm({ schoolYear: '2026', semester: '1' })],
+      2025,
+    );
+
+    expect(stateByKey.get('2026::1')).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: 3,
+    });
+  });
+
+  it('does not infer ordinals or class-entry state without reliable class or term input', () => {
+    expect(
+      buildCourseResultsTermDisplayStateByKey(
+        [buildTerm({ schoolYear: '2024', semester: '2' })],
+        null,
+      ).get('2024::2'),
+    ).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: null,
+    });
+    expect(
+      buildCourseResultsTermDisplayStateByKey(
+        [buildTerm({ schoolYear: 'invalid', semester: '2' })],
+        2025,
+      ).get('invalid::2'),
+    ).toEqual({
+      isBeforeClassEntry: false,
+      ordinal: null,
+    });
+  });
+});
 
 describe('course results display split', () => {
   const semesters = [
@@ -255,3 +332,16 @@ describe('course results display split', () => {
     expect(specialItems).toEqual([]);
   });
 });
+
+function buildTerm(input: { schoolYear: string; semester: string }) {
+  return {
+    canPullFromUpstream: true,
+    disabledReason: null,
+    hasLocalData: true,
+    id: null,
+    isCurrent: false,
+    label: `${input.schoolYear}-${input.semester}`,
+    schoolYear: input.schoolYear,
+    semester: input.semester,
+  };
+}

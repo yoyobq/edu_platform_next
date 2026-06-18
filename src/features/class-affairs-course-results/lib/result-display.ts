@@ -1,6 +1,7 @@
 // src/features/class-affairs-course-results/lib/result-display.ts
 
 import type {
+  ManagedClassCourseResultsTerm,
   ManagedCourseResultsDisplayReasonCode,
   ManagedCourseResultsItem,
   ManagedCourseResultsStudentStatus,
@@ -21,6 +22,11 @@ export type CourseResultsDisplaySplitContext = {
   activeSemesterId: number | null;
   activeTerm?: CourseResultsDisplayTerm | null;
   semesters: readonly CourseResultsDisplaySemester[];
+};
+
+export type CourseResultsTermDisplayState = {
+  isBeforeClassEntry: boolean;
+  ordinal: number | null;
 };
 
 export const COURSE_RESULTS_REASON_LABELS: Record<ManagedCourseResultsDisplayReasonCode, string> = {
@@ -57,6 +63,89 @@ const EXCLUDE_REASON_CODES = new Set<ManagedCourseResultsDisplayReasonCode>([
   'TRANSFERRED_OUT_CONFIRMED',
   'UPSTREAM_ROSTER_ERROR_CONFIRMED',
 ]);
+
+function parsePositiveInteger(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!/^\d+$/.test(normalizedValue)) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+
+  return Number.isSafeInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function isValidGradeYear(gradeYear: number | null | undefined): gradeYear is number {
+  return Number.isSafeInteger(gradeYear) && Number(gradeYear) > 0;
+}
+
+function parseCourseResultsTerm(
+  term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | 'semester'>,
+) {
+  const schoolYear = parsePositiveInteger(term.schoolYear);
+  const termNumber = parsePositiveInteger(term.semester);
+
+  if (schoolYear === null || termNumber === null) {
+    return null;
+  }
+
+  return {
+    schoolYear,
+    termNumber,
+  };
+}
+
+export function resolveClassTermOrdinal(
+  term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | 'semester'>,
+  gradeYear: number | null | undefined,
+) {
+  if (!isValidGradeYear(gradeYear)) {
+    return null;
+  }
+
+  const parsedTerm = parseCourseResultsTerm(term);
+
+  if (!parsedTerm) {
+    return null;
+  }
+
+  const ordinal = (parsedTerm.schoolYear - gradeYear) * 2 + parsedTerm.termNumber;
+
+  return ordinal > 0 ? ordinal : null;
+}
+
+export function isTermBeforeClassEntry(
+  term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | 'semester'>,
+  gradeYear: number | null | undefined,
+) {
+  if (!isValidGradeYear(gradeYear)) {
+    return false;
+  }
+
+  const parsedTerm = parseCourseResultsTerm(term);
+
+  if (!parsedTerm) {
+    return false;
+  }
+
+  return parsedTerm.schoolYear < gradeYear;
+}
+
+export function buildCourseResultsTermDisplayStateByKey(
+  terms: readonly ManagedClassCourseResultsTerm[],
+  gradeYear: number | null | undefined,
+) {
+  return new Map<string, CourseResultsTermDisplayState>(
+    terms.map((term) => [
+      `${term.schoolYear}::${term.semester}`,
+      {
+        isBeforeClassEntry: isTermBeforeClassEntry(term, gradeYear),
+        ordinal: resolveClassTermOrdinal(term, gradeYear),
+      },
+    ]),
+  );
+}
 
 function resolveSemesterOrder(semester: CourseResultsDisplayTerm) {
   return semester.schoolYear * 10 + semester.termNumber;
