@@ -57,7 +57,7 @@ function VerificationIntentShell({
               </Flex>
             </div>
 
-            <div className="min-w-85 flex-1">
+            <div className="min-w-0 flex-1">
               <Card styles={{ body: { padding: 24 } }}>
                 <Flex vertical gap={24}>
                   {children}
