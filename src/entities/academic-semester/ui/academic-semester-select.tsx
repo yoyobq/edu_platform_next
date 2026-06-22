@@ -49,7 +49,7 @@ function buildAcademicSemesterSelectOptions(
             <span aria-label="当前学期" className="academic-semester-current-dot" />
           ) : null}
           {showHiddenState && semester.isVisible === false ? (
-            <Tag color="default" bordered={false}>
+            <Tag color="default" variant="filled">
               隐藏
             </Tag>
           ) : null}

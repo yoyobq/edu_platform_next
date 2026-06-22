@@ -313,7 +313,7 @@ export function AcademicCalendarManagementPageContent({
               </Tag>
             ) : null}
             {record.isVisible ? null : (
-              <Tag color="default" bordered={false}>
+              <Tag color="default" variant="filled">
                 隐藏
               </Tag>
             )}
