@@ -36,6 +36,8 @@ This directory contains project documentation.
 - 想确认 `admin` 用户列表与详情页当前的路由、分层、列表字段和展示边界时，先看 [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - 想确认 `/profile` 个人资料页、身份信息页签与 `slotGroup` 展示边界时，先看 [project-convention/my-profile.md](./project-convention/my-profile.md)
 - 想确认 `My 教学日志` 的查询、保存、草稿、筛选与 upstream 会话边界时，先看 [project-convention/academic-teaching-log.md](./project-convention/academic-teaching-log.md)
+- 想确认 `My 计划首页` 的 prefill、候选下拉、保存、管理视角与 upstream 身份选择边界时，
+  先看 [课程计划首页文档](./project-convention/academic-curriculum-plan-homepage.md)
 - 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - 想确认学生注册链接注册、初始登录邮箱验证和重发验证邮件约定时，先看 [project-convention/public-auth-student-registration.md](./project-convention/public-auth-student-registration.md)
 - 想确认 public auth 一次性入口当前由谁承接、哪些已是真实流程、哪些仍是 shell 时，先看 [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
@@ -84,6 +86,7 @@ This directory contains project documentation.
 
 ## Project Convention Docs
 
+- [academic-curriculum-plan-homepage.md](./project-convention/academic-curriculum-plan-homepage.md)
 - [project-convention/academic-teaching-log.md](./project-convention/academic-teaching-log.md)
 - [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - [project-convention/course-category-visual-semantics.md](./project-convention/course-category-visual-semantics.md)

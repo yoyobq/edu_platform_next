@@ -82,7 +82,8 @@ upstream 登录表单可被页面锁定到当前 staffId，也可允许用户输
 - `fetchMajorDirectory({ sessionToken, departmentId })`
 - `fetchClassDirectory({ sessionToken, departmentId, schoolYear?, semester?, annualMajorId? })`
 - `fetchPreviousClassAdviserClasses({ sessionToken })`
-- 业务页面自己的 upstream 代理接口，例如教学日志对账查询/保存、学生名单归属核对
+- 业务页面自己的 upstream 代理接口，例如教学日志对账查询/保存、课程计划首页候选/保存、
+  学生名单归属核对
 - Staff Directory Cache 的显式填充接口 `populateStaffDirectory`
 
 当前 upstream 会话返回值包括：
@@ -155,6 +156,8 @@ upstream 登录表单可被页面锁定到当前 staffId，也可允许用户输
 - 前端主动 keepAlive 刷新 token
 
 稳定业务页不应继续把旧 `fetchTeacherDirectory(sessionToken)` 当作教师姓名常用入口。`staffId -> 教师姓名` 的前端约定见 [staff-directory-cache.md](./staff-directory-cache.md)。
+课程计划首页的权限与 upstream 身份选择口径见
+[academic-curriculum-plan-homepage.md](./academic-curriculum-plan-homepage.md)。
 学生名单归属核对的权限与错误提示口径见
 [student-roster-membership-reconciliation.md](./student-roster-membership-reconciliation.md)。
 

@@ -29,6 +29,11 @@
 - 自助视角调用本人 prefill 查询，管理视角调用指定教师 prefill 查询
 - 这里的管理视角只决定列表 / prefill 查询分流，不代表保存或具体资源范围自动放开
 - upstream 登录 staffId 锁定单独走 `resolveUpstreamLoginLockedUserId({ context: 'academicStaffManager' })`，当前与教学日志管理视角对齐
+- 教学日志保存由后端根据 `upstreamSessionToken` 执行 upstream identity selection gate：普通
+  `STAFF` 只能使用本人 upstream 登录账号，`ACADEMIC_OFFICER` 与
+  `TEACHING_GROUP_LEADER` 可使用其他教师 upstream 登录账号，其他身份拒绝
+- 该门禁不是 `ORG_*` resource ownership，前端不新增 `departmentId`、`teachingGroupId` 或课程派生
+  权限参数
 
 ## 业务策略
 
