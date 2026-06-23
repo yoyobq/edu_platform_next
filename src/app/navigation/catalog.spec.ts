@@ -74,6 +74,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
@@ -131,6 +132,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -448,6 +450,16 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/upstream-session-reference', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-view', buildFilter())).toBe(true);
+    expect(canAccessNavigationPath('/labs/student-private-profile', buildFilter())).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/labs/student-private-profile',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-pull',
@@ -714,6 +726,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',

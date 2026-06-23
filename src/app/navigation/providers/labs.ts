@@ -103,6 +103,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+          {
+            allowedAccessGroups: ['ADMIN'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/labs/student-private-profile',
+            label: '学生敏感资料',
+            navMode: 'rail' as const,
+            path: '/labs/student-private-profile',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
         ]
       : []),
     ...(hasAllowedLabExposure(['admin', 'staff'], filter)

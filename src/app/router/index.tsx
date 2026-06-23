@@ -34,10 +34,13 @@ import {
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
 import {
+  ACADEMIC_OFFICER_SLOT_GROUP,
   type AcademicInternalViewerRole,
   type AcademicViewerRole,
   type AuthAccessGroup,
   canAccessPayloadCrypto,
+  CLASS_ADVISER_SLOT_GROUP,
+  COUNSELOR_SLOT_GROUP,
   hasAcademicCalendarManagementAccess,
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
@@ -66,6 +69,10 @@ import {
   loadStudentCourseResultsViewLabRouteModule,
   studentCourseResultsViewLabAccess,
 } from '@/labs/student-course-results-view';
+import {
+  loadStudentPrivateProfileLabRouteModule,
+  studentPrivateProfileLabAccess,
+} from '@/labs/student-private-profile';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -703,6 +710,52 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
 async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentCourseResultsViewLabAccess,
+    request,
+  });
+}
+
+function resolveStudentPrivateProfileLockedUpstreamLoginUserId(snapshot: AuthSessionSnapshot) {
+  if (snapshot.userInfo.accessGroup.includes('ADMIN')) {
+    return null;
+  }
+
+  if (
+    snapshot.userInfo.accessGroup.includes('STAFF') &&
+    snapshot.slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP)
+  ) {
+    return null;
+  }
+
+  return snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null;
+}
+
+function resolveStudentPrivateProfileManualPatchAccess(snapshot: AuthSessionSnapshot) {
+  const accessGroup = snapshot.userInfo.accessGroup;
+  const slotGroup = snapshot.slotGroup;
+  const isAdmin = accessGroup.includes('ADMIN');
+  const isAcademicOfficer =
+    accessGroup.includes('STAFF') && slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP);
+  const isClassCareStaff =
+    accessGroup.includes('STAFF') &&
+    (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) || slotGroup.includes(COUNSELOR_SLOT_GROUP));
+
+  return {
+    contactAndAddress: isAdmin || isClassCareStaff,
+    sensitiveIdentifiers: isAdmin || isAcademicOfficer,
+  };
+}
+
+async function studentPrivateProfileLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: studentPrivateProfileLabAccess,
+    getData: (snapshot) => ({
+      currentAccount: {
+        accountId: snapshot.accountId,
+        displayName: snapshot.displayName,
+      },
+      lockedUpstreamLoginUserId: resolveStudentPrivateProfileLockedUpstreamLoginUserId(snapshot),
+      manualPatchAccess: resolveStudentPrivateProfileManualPatchAccess(snapshot),
+    }),
     request,
   });
 }
@@ -1403,6 +1456,11 @@ const router = createBrowserRouter([
             path: 'student-course-results-view',
             loader: studentCourseResultsViewLabLoader,
             lazy: loadStudentCourseResultsViewLabRouteModule,
+          },
+          {
+            path: 'student-private-profile',
+            loader: studentPrivateProfileLabLoader,
+            lazy: loadStudentPrivateProfileLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',
