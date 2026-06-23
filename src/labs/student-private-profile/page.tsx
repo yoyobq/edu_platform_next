@@ -8,6 +8,8 @@ import {
   EditOutlined,
   FileSearchOutlined,
   LoginOutlined,
+  PictureOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -17,6 +19,7 @@ import {
   Descriptions,
   Empty,
   Form,
+  Image,
   Input,
   Radio,
   Select,
@@ -45,18 +48,26 @@ import {
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
   normalizeStudentPrivateProfileStudentId,
+  patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
+  readStudentPrivateProfilePhoto,
+  readUpstreamGraphQLErrorDetail,
   refreshStudentPrivateProfileFromUpstream,
   resolveUpstreamErrorMessage,
   type StudentPrivateProfileClassOption,
   type StudentPrivateProfileCompareField,
   type StudentPrivateProfileCompareResult,
+  type StudentPrivateProfileFamilyMemberPatchField,
   type StudentPrivateProfileManualPatchAction,
   type StudentPrivateProfileManualPatchField,
+  type StudentPrivateProfilePhotoReadResult,
   type StudentPrivateProfileRefreshResult,
   type StudentPrivateProfileStudentOption,
   type StudentPrivateProfileSummary,
+  type StudentPrivateProfileSummaryEducationResume,
+  type StudentPrivateProfileSummaryFamilyMember,
   type StudentPrivateProfileSummaryField,
+  type StudentPrivateProfileSummaryRecordChange,
 } from './api';
 import { studentPrivateProfileLabMeta } from './meta';
 
@@ -66,18 +77,26 @@ type StudentPrivateProfileLabLoaderData = {
   manualPatchAccess: StudentPrivateProfileManualPatchAccess;
 };
 
-type RefreshPendingAction = {
-  studentId: string;
-  type: 'refresh';
-};
+type UpstreamPendingAction =
+  | {
+      studentId: string;
+      type: 'refresh';
+    }
+  | {
+      forceRefresh: boolean;
+      studentId: string;
+      type: 'photo';
+    };
 
 type StudentPrivateProfileManualPatchAccess = {
   contactAndAddress: boolean;
+  family: boolean;
   sensitiveIdentifiers: boolean;
 };
 
 const EMPTY_MANUAL_PATCH_ACCESS: StudentPrivateProfileManualPatchAccess = {
   contactAndAddress: false,
+  family: false,
   sensitiveIdentifiers: false,
 };
 
@@ -89,6 +108,13 @@ type CompareFormValues = {
 type PatchFormValues = {
   action?: StudentPrivateProfileManualPatchAction;
   fieldKey?: StudentPrivateProfileManualPatchField;
+  value?: string;
+};
+
+type FamilyPatchFormValues = {
+  action?: StudentPrivateProfileManualPatchAction;
+  fieldKey?: StudentPrivateProfileFamilyMemberPatchField;
+  itemKey?: string;
   value?: string;
 };
 
@@ -110,6 +136,16 @@ const PATCH_FIELD_OPTIONS: {
   ...COMPARE_FIELD_OPTIONS,
   { label: '家庭地址', value: 'HOME_ADDRESS' },
   { label: '通讯地址', value: 'MAILING_ADDRESS' },
+];
+
+const FAMILY_PATCH_FIELD_OPTIONS: {
+  label: string;
+  value: StudentPrivateProfileFamilyMemberPatchField;
+}[] = [
+  { label: '关系 code', value: 'RELATIONSHIP_CODE' },
+  { label: '姓名', value: 'NAME' },
+  { label: '电话', value: 'PHONE' },
+  { label: '工作单位', value: 'WORKPLACE' },
 ];
 
 const SENSITIVE_IDENTIFIER_PATCH_FIELDS = new Set<StudentPrivateProfileManualPatchField>([
@@ -141,6 +177,10 @@ const FIELD_LABELS = new Map<string, string>(
   PATCH_FIELD_OPTIONS.map((item) => [item.value, item.label]),
 );
 
+const FAMILY_FIELD_LABELS = new Map<string, string>(
+  FAMILY_PATCH_FIELD_OPTIONS.map((item) => [item.value, item.label]),
+);
+
 const FIELD_ORDER = new Map(PATCH_FIELD_OPTIONS.map((item, index) => [item.value, index]));
 
 function formatClassOption(option: StudentPrivateProfileClassOption) {
@@ -168,7 +208,7 @@ function displayText(value: string | null | undefined) {
   return value?.trim() || '未记录';
 }
 
-function formatApproxByteSize(byteSize: number) {
+function formatApproxByteSize(byteSize: number | null | undefined) {
   if (!Number.isFinite(byteSize) || byteSize <= 0) {
     return '约 0 KB';
   }
@@ -190,6 +230,28 @@ function formatUpstreamPhotoStatus(photo: StudentPrivateProfileSummary['photo'])
 
 function resolveFieldLabel(fieldKey: string) {
   return FIELD_LABELS.get(fieldKey) ?? fieldKey;
+}
+
+function resolveFamilyFieldLabel(fieldKey: string) {
+  return FAMILY_FIELD_LABELS.get(fieldKey) ?? fieldKey;
+}
+
+function formatFamilyMemberOption(member: StudentPrivateProfileSummaryFamilyMember) {
+  return [
+    member.relationshipCode,
+    member.maskedName ? `姓名 ${member.maskedName}` : null,
+    member.maskedPhone ? `电话 ${member.maskedPhone}` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+function buildPhotoDataUrl(result: StudentPrivateProfilePhotoReadResult | null) {
+  if (!result?.photoBase64 || !result.mimeType) {
+    return null;
+  }
+
+  return `data:${result.mimeType};base64,${result.photoBase64}`;
 }
 
 function resolveCompareResultColor(
@@ -230,6 +292,39 @@ function resolveStatusColor(status: string) {
   return 'default';
 }
 
+function resolvePhotoStatusColor(status: StudentPrivateProfilePhotoReadResult['photoStatus']) {
+  if (status === 'PRESENT') {
+    return 'success';
+  }
+
+  if (status === 'CACHE_RETAINED') {
+    return 'processing';
+  }
+
+  if (status === 'MISSING') {
+    return 'warning';
+  }
+
+  return 'error';
+}
+
+function resolveStudentPrivateProfileActionError(error: unknown, fallback: string) {
+  const detail = readUpstreamGraphQLErrorDetail(error);
+
+  if (
+    detail?.code === 'CONFLICT' ||
+    detail?.errorCode === 'STUDENT_PRIVATE_PROFILE_MANUAL_PATCH_BASELINE_CONFLICT'
+  ) {
+    return '资料基线已变化，请重新读取 summary 后再提交。';
+  }
+
+  if (detail?.code === 'INTERNAL_SERVER_ERROR') {
+    return '服务端暂时无法处理该资料，请保留 trace 信息并联系排查。';
+  }
+
+  return resolveUpstreamErrorMessage(error, fallback);
+}
+
 function sortSummaryFields(fields: StudentPrivateProfileSummaryField[]) {
   return [...fields].sort((left, right) => {
     const leftOrder =
@@ -258,6 +353,10 @@ function canPatchStudentPrivateProfileField(
   return false;
 }
 
+function canPatchStudentPrivateProfileFamily(access: StudentPrivateProfileManualPatchAccess) {
+  return access.family;
+}
+
 export function StudentPrivateProfileLabPage() {
   const loaderData = useLoaderData() as StudentPrivateProfileLabLoaderData | null;
   const currentAccount = loaderData?.currentAccount ?? null;
@@ -267,6 +366,7 @@ export function StudentPrivateProfileLabPage() {
   const [studentForm] = Form.useForm<{ studentId: string }>();
   const [compareForm] = Form.useForm<CompareFormValues>();
   const [patchForm] = Form.useForm<PatchFormValues>();
+  const [familyPatchForm] = Form.useForm<FamilyPatchFormValues>();
   const [summary, setSummary] = useState<StudentPrivateProfileSummary | null>(null);
   const [compareResult, setCompareResult] = useState<StudentPrivateProfileCompareResult | null>(
     null,
@@ -274,29 +374,47 @@ export function StudentPrivateProfileLabPage() {
   const [refreshResult, setRefreshResult] = useState<StudentPrivateProfileRefreshResult | null>(
     null,
   );
+  const [photoReadResult, setPhotoReadResult] =
+    useState<StudentPrivateProfilePhotoReadResult | null>(null);
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isReadingPhoto, setIsReadingPhoto] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [isPatching, setIsPatching] = useState(false);
+  const [isPatchingFamily, setIsPatchingFamily] = useState(false);
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
   const [students, setStudents] = useState<StudentPrivateProfileStudentOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [classOptionsError, setClassOptionsError] = useState<string | null>(null);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
-  const [loginRefreshRequest, setLoginRefreshRequest] = useState<{
+  const [upstreamActionRequest, setUpstreamActionRequest] = useState<{
+    action: UpstreamPendingAction;
     session: StoredUpstreamSession;
-    studentId: string;
   } | null>(null);
 
   const currentStudentId = Form.useWatch('studentId', studentForm);
   const patchAction = Form.useWatch('action', patchForm);
+  const familyPatchAction = Form.useWatch('action', familyPatchForm);
+  const photoDataUrl = useMemo(() => buildPhotoDataUrl(photoReadResult), [photoReadResult]);
 
   const summaryFields = useMemo(() => sortSummaryFields(summary?.fields ?? []), [summary]);
   const summaryFieldByKey = useMemo(
     () => new Map(summaryFields.map((field) => [field.fieldKey, field])),
     [summaryFields],
+  );
+  const familyMemberByItemKey = useMemo(
+    () => new Map((summary?.familyMembers ?? []).map((member) => [member.itemKey, member])),
+    [summary?.familyMembers],
+  );
+  const familyMemberOptions = useMemo(
+    () =>
+      (summary?.familyMembers ?? []).map((member) => ({
+        label: formatFamilyMemberOption(member),
+        value: member.itemKey,
+      })),
+    [summary?.familyMembers],
   );
   const patchFieldOptions = useMemo(
     () =>
@@ -382,6 +500,16 @@ export function StudentPrivateProfileLabPage() {
     patchForm.setFieldValue('fieldKey', patchFieldOptions[0]?.value);
   }, [patchFieldOptions, patchForm]);
 
+  useEffect(() => {
+    const currentItemKey = familyPatchForm.getFieldValue('itemKey') as string | undefined;
+
+    if (currentItemKey && familyMemberByItemKey.has(currentItemKey)) {
+      return;
+    }
+
+    familyPatchForm.setFieldValue('itemKey', familyMemberOptions[0]?.value);
+  }, [familyMemberByItemKey, familyMemberOptions, familyPatchForm]);
+
   const loadSummary = useCallback(
     async (studentIdValue: string | null | undefined) => {
       const studentId = normalizeStudentPrivateProfileStudentId(studentIdValue);
@@ -389,6 +517,7 @@ export function StudentPrivateProfileLabPage() {
       setIsLoadingSummary(true);
       setCompareResult(null);
       setRefreshResult(null);
+      setPhotoReadResult(null);
 
       try {
         const nextSummary = await getStudentPrivateProfileSummary({ studentId });
@@ -412,17 +541,17 @@ export function StudentPrivateProfileLabPage() {
     persistSessionFromResult,
     refreshSession,
     session: upstreamSession,
-  } = useUpstreamLoginModalController<RefreshPendingAction>({
+  } = useUpstreamLoginModalController<UpstreamPendingAction>({
     account: currentAccount,
     keepAlive: true,
     lockedUserId: lockedUpstreamLoginUserId,
     resolveLoginErrorMessage: (error) =>
       resolveUpstreamErrorMessage(error, 'upstream 登录失败，请检查账号或密码。'),
     onLoginSuccess: ({ pendingAction, session }) => {
-      if (pendingAction?.type === 'refresh') {
-        setLoginRefreshRequest({
+      if (pendingAction) {
+        setUpstreamActionRequest({
+          action: pendingAction,
           session,
-          studentId: pendingAction.studentId,
         });
       }
     },
@@ -485,14 +614,80 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
+  const runPhotoReadWithSession = useCallback(
+    async (session: StoredUpstreamSession, studentId: string, forceRefresh: boolean) => {
+      setIsReadingPhoto(true);
+
+      try {
+        const result = await readStudentPrivateProfilePhoto({
+          forceRefresh,
+          studentId,
+          upstreamSessionToken: session.upstreamSessionToken,
+        });
+
+        persistSessionFromResult(session, result);
+        setPhotoReadResult(result);
+        message.success(
+          result.photoStatus === 'PRESENT' ? '照片读取完成。' : '照片读取已返回状态。',
+        );
+      } catch (error) {
+        if (!isExpiredUpstreamSessionError(error)) {
+          message.error(resolveStudentPrivateProfileActionError(error, '暂时无法读取学生照片。'));
+          return;
+        }
+
+        try {
+          const refreshedSession = await refreshSession(session);
+          const result = await readStudentPrivateProfilePhoto({
+            forceRefresh,
+            studentId,
+            upstreamSessionToken: refreshedSession.upstreamSessionToken,
+          });
+
+          persistSessionFromResult(refreshedSession, result);
+          setPhotoReadResult(result);
+          message.success('upstream 会话已续期，照片读取完成。');
+        } catch (refreshError) {
+          openLoginModalForExpiredSession({
+            loginError: resolveUpstreamErrorMessage(
+              refreshError,
+              'upstream 会话已失效，请重新登录后继续读取照片。',
+            ),
+            pendingAction: {
+              forceRefresh,
+              studentId,
+              type: 'photo',
+            },
+            session,
+          });
+        }
+      } finally {
+        setIsReadingPhoto(false);
+      }
+    },
+    [message, openLoginModalForExpiredSession, persistSessionFromResult, refreshSession],
+  );
+
   useEffect(() => {
-    if (!loginRefreshRequest) {
+    if (!upstreamActionRequest) {
       return;
     }
 
-    setLoginRefreshRequest(null);
-    void runRefreshWithSession(loginRefreshRequest.session, loginRefreshRequest.studentId);
-  }, [loginRefreshRequest, runRefreshWithSession]);
+    setUpstreamActionRequest(null);
+    if (upstreamActionRequest.action.type === 'refresh') {
+      void runRefreshWithSession(
+        upstreamActionRequest.session,
+        upstreamActionRequest.action.studentId,
+      );
+      return;
+    }
+
+    void runPhotoReadWithSession(
+      upstreamActionRequest.session,
+      upstreamActionRequest.action.studentId,
+      upstreamActionRequest.action.forceRefresh,
+    );
+  }, [runPhotoReadWithSession, runRefreshWithSession, upstreamActionRequest]);
 
   const handleLoadSummary = useCallback(async () => {
     await loadSummary(currentStudentId);
@@ -535,6 +730,26 @@ export function StudentPrivateProfileLabPage() {
 
     await runRefreshWithSession(upstreamSession, studentId);
   }, [currentStudentId, openLoginModal, runRefreshWithSession, upstreamSession]);
+
+  const handleReadPhoto = useCallback(
+    async (forceRefresh: boolean) => {
+      const studentId = normalizeStudentPrivateProfileStudentId(currentStudentId);
+
+      if (!upstreamSession) {
+        openLoginModal({
+          pendingAction: {
+            forceRefresh,
+            studentId,
+            type: 'photo',
+          },
+        });
+        return;
+      }
+
+      await runPhotoReadWithSession(upstreamSession, studentId, forceRefresh);
+    },
+    [currentStudentId, openLoginModal, runPhotoReadWithSession, upstreamSession],
+  );
 
   const handleCompare = useCallback(
     async (values: CompareFormValues) => {
@@ -601,13 +816,76 @@ export function StudentPrivateProfileLabPage() {
         message.success(action === 'SET' ? '人工修正已写入。' : '人工修正已清除。');
       } catch (error) {
         message.error(
-          resolveUpstreamErrorMessage(error, '暂时无法保存人工修正，请重新读取 summary 后再试。'),
+          resolveStudentPrivateProfileActionError(
+            error,
+            '暂时无法保存人工修正，请重新读取 summary 后再试。',
+          ),
         );
       } finally {
         setIsPatching(false);
       }
     },
     [currentStudentId, manualPatchAccess, message, patchForm, summaryFieldByKey],
+  );
+
+  const handleFamilyPatch = useCallback(
+    async (values: FamilyPatchFormValues) => {
+      const itemKey = values.itemKey ?? '';
+      const fieldKey = values.fieldKey as StudentPrivateProfileFamilyMemberPatchField;
+      const action = values.action as StudentPrivateProfileManualPatchAction;
+      const familyMember = familyMemberByItemKey.get(itemKey);
+
+      if (!canPatchStudentPrivateProfileFamily(manualPatchAccess)) {
+        message.error('当前账号没有家庭成员资料的人工修正入口。');
+        return;
+      }
+
+      if (!familyMember) {
+        message.error('当前摘要没有该家庭成员行，请重新读取 summary。');
+        return;
+      }
+
+      if (action === 'SET' && !familyMember.upstreamBaselineToken) {
+        message.error('当前家庭成员行没有可用于 SET 的 baseline token，请重新读取 summary。');
+        return;
+      }
+
+      setIsPatchingFamily(true);
+
+      try {
+        const nextSummary = await patchStudentPrivateProfileFamilyMembers({
+          members: [
+            {
+              fields: [
+                {
+                  action,
+                  fieldKey,
+                  value: action === 'SET' ? values.value : undefined,
+                },
+              ],
+              itemKey,
+              upstreamBaselineToken:
+                action === 'SET' ? familyMember.upstreamBaselineToken : undefined,
+            },
+          ],
+          studentId: currentStudentId,
+        });
+
+        setSummary(nextSummary);
+        familyPatchForm.resetFields(['value']);
+        message.success(action === 'SET' ? '家庭成员人工修正已写入。' : '家庭成员人工修正已清除。');
+      } catch (error) {
+        message.error(
+          resolveStudentPrivateProfileActionError(
+            error,
+            '暂时无法保存家庭成员人工修正，请重新读取 summary 后再试。',
+          ),
+        );
+      } finally {
+        setIsPatchingFamily(false);
+      }
+    },
+    [currentStudentId, familyMemberByItemKey, familyPatchForm, manualPatchAccess, message],
   );
 
   const columns: ColumnsType<StudentPrivateProfileSummaryField> = [
@@ -648,6 +926,123 @@ export function StudentPrivateProfileLabPage() {
           ) : null}
         </Space>
       ),
+    },
+    {
+      dataIndex: 'sourceObservedAt',
+      key: 'sourceObservedAt',
+      title: '观察时间',
+      render: (value: string) => formatDateTime(value),
+    },
+  ];
+
+  const familyColumns: ColumnsType<StudentPrivateProfileSummaryFamilyMember> = [
+    {
+      dataIndex: 'relationshipCode',
+      key: 'relationshipCode',
+      title: '关系',
+      render: (value: string) => displayText(value),
+    },
+    {
+      dataIndex: 'maskedName',
+      key: 'maskedName',
+      title: '姓名',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'maskedPhone',
+      key: 'maskedPhone',
+      title: '电话',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'maskedWorkplace',
+      key: 'maskedWorkplace',
+      title: '工作单位',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      key: 'manual',
+      title: '复核',
+      render: (_, record) => (
+        <Space size="small" wrap>
+          {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
+          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">需复核</Tag> : null}
+          {record.manualPatchFieldKeys.map((fieldKey) => (
+            <Tag key={fieldKey}>{resolveFamilyFieldLabel(fieldKey)}</Tag>
+          ))}
+        </Space>
+      ),
+    },
+    {
+      dataIndex: 'sourceObservedAt',
+      key: 'sourceObservedAt',
+      title: '观察时间',
+      render: (value: string) => formatDateTime(value),
+    },
+  ];
+
+  const educationColumns: ColumnsType<StudentPrivateProfileSummaryEducationResume> = [
+    {
+      key: 'period',
+      title: '起止年月',
+      render: (_, record) => `${displayText(record.startMonth)} - ${displayText(record.endMonth)}`,
+    },
+    {
+      dataIndex: 'maskedReference',
+      key: 'maskedReference',
+      title: '经历',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'maskedOrganization',
+      key: 'maskedOrganization',
+      title: '组织',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'sourceUpdatedAt',
+      key: 'sourceUpdatedAt',
+      title: '上游更新',
+      render: (value: string | null) => formatDateTime(value),
+    },
+    {
+      dataIndex: 'sourceObservedAt',
+      key: 'sourceObservedAt',
+      title: '观察时间',
+      render: (value: string) => formatDateTime(value),
+    },
+  ];
+
+  const recordColumns: ColumnsType<StudentPrivateProfileSummaryRecordChange> = [
+    {
+      dataIndex: 'changeTime',
+      key: 'changeTime',
+      title: '变更时间',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'studentNoTypeCode',
+      key: 'studentNoTypeCode',
+      title: '异动类型',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'maskedStudentNumber',
+      key: 'maskedStudentNumber',
+      title: '学号',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'grade',
+      key: 'grade',
+      title: '年级',
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      key: 'majorClass',
+      title: '专业/班级',
+      render: (_, record) =>
+        [record.maskedMajorName, record.maskedClassName].filter(Boolean).join(' / ') || '未记录',
     },
     {
       dataIndex: 'sourceObservedAt',
@@ -813,6 +1208,36 @@ export function StudentPrivateProfileLabPage() {
               size="small"
             />
 
+            <Table
+              columns={familyColumns}
+              dataSource={summary.familyMembers}
+              locale={{ emptyText: '暂无家庭成员摘要' }}
+              pagination={false}
+              rowKey="itemKey"
+              size="small"
+              title={() => '家庭成员'}
+            />
+
+            <Table
+              columns={educationColumns}
+              dataSource={summary.educationResumes}
+              locale={{ emptyText: '暂无教育/简历经历摘要' }}
+              pagination={false}
+              rowKey="itemKey"
+              size="small"
+              title={() => '教育/简历经历'}
+            />
+
+            <Table
+              columns={recordColumns}
+              dataSource={summary.recordChanges}
+              locale={{ emptyText: '暂无学籍异动摘要' }}
+              pagination={false}
+              rowKey="itemKey"
+              size="small"
+              title={() => '学籍异动'}
+            />
+
             {summary.sectionStatuses.length > 0 ? (
               <Descriptions bordered column={2} size="small" title="Section 状态">
                 {summary.sectionStatuses.map((section) => (
@@ -926,6 +1351,129 @@ export function StudentPrivateProfileLabPage() {
               type="primary"
             >
               保存修正
+            </Button>
+          </Form>
+        </Card>
+
+        <Card title="照片读取">
+          <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+            <Space wrap>
+              <Button
+                icon={<PictureOutlined />}
+                loading={isReadingPhoto}
+                onClick={() => void handleReadPhoto(false)}
+                type="primary"
+              >
+                读取照片
+              </Button>
+              <Button
+                icon={<ReloadOutlined />}
+                loading={isReadingPhoto}
+                onClick={() => void handleReadPhoto(true)}
+              >
+                强制刷新照片
+              </Button>
+            </Space>
+
+            {photoReadResult ? (
+              <Descriptions bordered column={1} size="small">
+                <Descriptions.Item label="状态">
+                  <Space size="small" wrap>
+                    <Tag color={resolvePhotoStatusColor(photoReadResult.photoStatus)}>
+                      {photoReadResult.photoStatus}
+                    </Tag>
+                    {photoReadResult.source ? <Tag>{photoReadResult.source}</Tag> : null}
+                  </Space>
+                </Descriptions.Item>
+                <Descriptions.Item label="尺寸">
+                  {photoReadResult.width && photoReadResult.height
+                    ? `${photoReadResult.width} x ${photoReadResult.height}`
+                    : '未记录'}
+                </Descriptions.Item>
+                <Descriptions.Item label="大小">
+                  {formatApproxByteSize(photoReadResult.byteSize)}
+                </Descriptions.Item>
+                <Descriptions.Item label="物化时间">
+                  {formatDateTime(photoReadResult.materializedAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="traceId">{photoReadResult.traceId}</Descriptions.Item>
+              </Descriptions>
+            ) : null}
+
+            {photoDataUrl ? (
+              <Image
+                alt="学生照片"
+                src={photoDataUrl}
+                style={{ maxHeight: 220, objectFit: 'contain' }}
+              />
+            ) : null}
+
+            {photoReadResult?.warnings.length ? (
+              <Alert
+                showIcon
+                type="warning"
+                message="照片读取 warnings"
+                description={photoReadResult.warnings
+                  .map((warning) => `${warning.code}: ${warning.message}`)
+                  .join('\n')}
+                style={{ whiteSpace: 'pre-line' }}
+              />
+            ) : null}
+          </Space>
+        </Card>
+
+        <Card title="家庭成员修正">
+          <Form
+            form={familyPatchForm}
+            initialValues={{ action: 'SET', fieldKey: 'PHONE' }}
+            layout="vertical"
+            onFinish={handleFamilyPatch}
+          >
+            <Form.Item label="家庭成员" name="itemKey" rules={[{ required: true }]}>
+              <Select
+                disabled={
+                  !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
+                  familyMemberOptions.length === 0
+                }
+                options={familyMemberOptions}
+                placeholder="当前无可修正家庭成员"
+              />
+            </Form.Item>
+            <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
+              <Select
+                disabled={!canPatchStudentPrivateProfileFamily(manualPatchAccess)}
+                options={FAMILY_PATCH_FIELD_OPTIONS}
+              />
+            </Form.Item>
+            <Form.Item label="动作" name="action" rules={[{ required: true }]}>
+              <Radio.Group
+                options={[
+                  { label: 'SET', value: 'SET' },
+                  { label: 'CLEAR', value: 'CLEAR' },
+                ]}
+                optionType="button"
+              />
+            </Form.Item>
+            {familyPatchAction === 'SET' ? (
+              <Form.Item
+                label="修正值"
+                name="value"
+                rules={[{ required: true, message: '请输入修正值。', whitespace: true }]}
+              >
+                <Input.Password autoComplete="off" placeholder="提交后不在页面保存原文" />
+              </Form.Item>
+            ) : null}
+            <Button
+              disabled={
+                !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
+                familyMemberOptions.length === 0
+              }
+              htmlType="submit"
+              icon={<EditOutlined />}
+              loading={isPatchingFamily}
+              type="primary"
+            >
+              保存家庭成员修正
             </Button>
           </Form>
         </Card>

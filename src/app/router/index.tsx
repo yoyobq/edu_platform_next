@@ -738,9 +738,11 @@ function resolveStudentPrivateProfileManualPatchAccess(snapshot: AuthSessionSnap
   const isClassCareStaff =
     accessGroup.includes('STAFF') &&
     (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) || slotGroup.includes(COUNSELOR_SLOT_GROUP));
+  const hasLocalStudentPatchAccess = isAdmin || isAcademicOfficer || isClassCareStaff;
 
   return {
-    contactAndAddress: isAdmin || isClassCareStaff,
+    contactAndAddress: hasLocalStudentPatchAccess,
+    family: hasLocalStudentPatchAccess,
     sensitiveIdentifiers: isAdmin || isAcademicOfficer,
   };
 }

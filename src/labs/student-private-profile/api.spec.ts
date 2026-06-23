@@ -25,8 +25,12 @@ import {
   listStudentPrivateProfileClassStudentOptions,
   normalizeCompareStudentPrivateProfileFieldsInput,
   normalizeListClassStudentOptionsInput,
+  normalizePatchStudentPrivateProfileFamilyMembersInput,
   normalizePatchStudentPrivateProfileFieldsInput,
+  normalizeReadStudentPrivateProfilePhotoInput,
+  patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
+  readStudentPrivateProfilePhoto,
   refreshStudentPrivateProfileFromUpstream,
 } from './api';
 
@@ -38,6 +42,8 @@ describe('student-private-profile lab api', () => {
 
   it('loads summary with the documented query shape', async () => {
     const summary = {
+      educationResumes: [],
+      familyMembers: [],
       fields: [],
       lastManualUpdatedAt: null,
       lastSyncedAt: '2026-06-23T10:00:00.000Z',
@@ -54,6 +60,7 @@ describe('student-private-profile lab api', () => {
         recordObserved: false,
         sensitiveIdentifiersObserved: true,
       },
+      recordChanges: [],
       sectionStatuses: [],
       sourceObservedAt: '2026-06-23T10:00:00.000Z',
       studentId: 'S001',
@@ -77,6 +84,9 @@ describe('student-private-profile lab api', () => {
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('upstreamBaselineToken');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('manualOverrideActive');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('familyMembers');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('educationResumes');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('recordChanges');
   });
 
   it('refreshes through upstream-session GraphQL and sends local student id', async () => {
@@ -315,6 +325,8 @@ describe('student-private-profile lab api', () => {
 
     executeGraphQLMock.mockResolvedValueOnce({
       patchStudentPrivateProfileFields: {
+        educationResumes: [],
+        familyMembers: [],
         fields: [],
         lastManualUpdatedAt: '2026-06-23T10:00:00.000Z',
         lastSyncedAt: '2026-06-23T10:00:00.000Z',
@@ -331,6 +343,7 @@ describe('student-private-profile lab api', () => {
           recordObserved: false,
           sensitiveIdentifiersObserved: true,
         },
+        recordChanges: [],
         sectionStatuses: [],
         sourceObservedAt: '2026-06-23T10:00:00.000Z',
         studentId: 'S001',
@@ -358,6 +371,202 @@ describe('student-private-profile lab api', () => {
             fieldKey: 'STUDENT_PHONE',
             upstreamBaselineToken: 'baseline-001',
             value: '13800000000',
+          },
+        ],
+        studentId: 'S001',
+      },
+    });
+  });
+
+  it('reads photo through explicit photo mutation and keeps token optional', async () => {
+    expect(
+      normalizeReadStudentPrivateProfilePhotoInput({
+        forceRefresh: true,
+        studentId: ' S001 ',
+        upstreamSessionToken: ' upstream-token ',
+      }),
+    ).toEqual({
+      input: {
+        forceRefresh: true,
+        studentId: 'S001',
+        upstreamSessionToken: 'upstream-token',
+      },
+    });
+    expect(
+      normalizeReadStudentPrivateProfilePhotoInput({
+        forceRefresh: false,
+        studentId: ' S001 ',
+        upstreamSessionToken: ' ',
+      }),
+    ).toEqual({
+      input: {
+        forceRefresh: false,
+        studentId: 'S001',
+      },
+    });
+
+    const photoResult = {
+      byteSize: 1024,
+      expiresAt: '2026-06-23T11:00:00.000Z',
+      height: 120,
+      materializedAt: '2026-06-23T10:00:00.000Z',
+      mimeType: 'image/jpeg',
+      photoBase64: 'base64-photo',
+      photoStatus: 'PRESENT',
+      source: 'UPSTREAM',
+      sourceObservedAt: '2026-06-23T10:00:00.000Z',
+      studentId: 'S001',
+      traceId: 'trace-photo',
+      upstreamSessionToken: 'rolling-token-002',
+      warnings: [],
+      width: 90,
+    };
+
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      readStudentPrivateProfilePhoto: photoResult,
+    });
+
+    await expect(
+      readStudentPrivateProfilePhoto({
+        forceRefresh: true,
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).resolves.toEqual(photoResult);
+
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'StudentPrivateProfileLabReadPhoto',
+    );
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
+      input: {
+        forceRefresh: true,
+        studentId: 'S001',
+        upstreamSessionToken: 'rolling-token-001',
+      },
+    });
+  });
+
+  it('patches family members with row baseline only for SET', async () => {
+    expect(
+      normalizePatchStudentPrivateProfileFamilyMembersInput({
+        members: [
+          {
+            fields: [
+              {
+                action: 'SET',
+                fieldKey: 'PHONE',
+                value: ' 13900001111 ',
+              },
+              {
+                action: 'CLEAR',
+                fieldKey: 'WORKPLACE',
+                value: ' ignored ',
+              },
+            ],
+            itemKey: ' item-001 ',
+            upstreamBaselineToken: ' baseline-001 ',
+          },
+          {
+            fields: [
+              {
+                action: 'CLEAR',
+                fieldKey: 'NAME',
+              },
+            ],
+            itemKey: ' item-002 ',
+            upstreamBaselineToken: ' ignored ',
+          },
+        ],
+        studentId: ' S001 ',
+      }),
+    ).toEqual({
+      members: [
+        {
+          fields: [
+            {
+              action: 'SET',
+              fieldKey: 'PHONE',
+              value: '13900001111',
+            },
+            {
+              action: 'CLEAR',
+              fieldKey: 'WORKPLACE',
+            },
+          ],
+          itemKey: 'item-001',
+          upstreamBaselineToken: 'baseline-001',
+        },
+        {
+          fields: [
+            {
+              action: 'CLEAR',
+              fieldKey: 'NAME',
+            },
+          ],
+          itemKey: 'item-002',
+        },
+      ],
+      studentId: 'S001',
+    });
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      patchStudentPrivateProfileFamilyMembers: {
+        educationResumes: [],
+        familyMembers: [],
+        fields: [],
+        lastManualUpdatedAt: '2026-06-23T10:00:00.000Z',
+        lastSyncedAt: '2026-06-23T10:00:00.000Z',
+        photo: {
+          byteSize: 0,
+          present: false,
+          sourceObservedAt: '2026-06-23T10:00:00.000Z',
+        },
+        profileCompletenessFlags: {
+          educationObserved: false,
+          familyObserved: true,
+          personalObserved: true,
+          photoObserved: false,
+          recordObserved: false,
+          sensitiveIdentifiersObserved: true,
+        },
+        recordChanges: [],
+        sectionStatuses: [],
+        sourceObservedAt: '2026-06-23T10:00:00.000Z',
+        studentId: 'S001',
+      },
+    });
+
+    await patchStudentPrivateProfileFamilyMembers({
+      members: [
+        {
+          fields: [
+            {
+              action: 'SET',
+              fieldKey: 'PHONE',
+              value: ' 13900001111 ',
+            },
+          ],
+          itemKey: ' item-001 ',
+          upstreamBaselineToken: ' baseline-001 ',
+        },
+      ],
+      studentId: ' S001 ',
+    });
+
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('StudentPrivateProfileLabPatchFamily');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(expect.any(String), {
+      input: {
+        members: [
+          {
+            fields: [
+              {
+                action: 'SET',
+                fieldKey: 'PHONE',
+                value: '13900001111',
+              },
+            ],
+            itemKey: 'item-001',
+            upstreamBaselineToken: 'baseline-001',
           },
         ],
         studentId: 'S001',

@@ -5,13 +5,21 @@ import type { OperationVariables } from '@apollo/client';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
+  readUpstreamGraphQLErrorDetail,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import { normalizeRequiredTextValue } from '@/shared/form-normalization';
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
-export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
+export {
+  isExpiredUpstreamSessionError,
+  readUpstreamGraphQLErrorDetail,
+  resolveUpstreamErrorMessage,
+};
 
 export type StudentPrivateProfileCompareField =
   | 'ID_CARD'
@@ -26,6 +34,14 @@ export type StudentPrivateProfileManualPatchField =
   | 'MAILING_ADDRESS';
 
 export type StudentPrivateProfileManualPatchAction = 'CLEAR' | 'SET';
+
+export type StudentPrivateProfileFamilyMemberPatchField =
+  | 'RELATIONSHIP_CODE'
+  | 'NAME'
+  | 'PHONE'
+  | 'WORKPLACE';
+
+export type StudentPrivateProfilePhotoStatus = 'CACHE_RETAINED' | 'INVALID' | 'MISSING' | 'PRESENT';
 
 export type StudentPrivateProfileClassOption = {
   authorizationPath: string;
@@ -71,7 +87,46 @@ export type StudentPrivateProfileSummarySectionStatus = {
   warningCodes: string[];
 };
 
+export type StudentPrivateProfileSummaryFamilyMember = {
+  itemKey: string;
+  manualOverrideActive: boolean;
+  manualPatchFieldKeys: string[];
+  maskedName: string | null;
+  maskedPhone: string | null;
+  maskedWorkplace: string | null;
+  relationshipCode: string;
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+  upstreamBaselineToken: string;
+  upstreamChangedSinceManualPatch: boolean;
+};
+
+export type StudentPrivateProfileSummaryEducationResume = {
+  endMonth: string | null;
+  itemKey: string;
+  maskedOrganization: string | null;
+  maskedReference: string | null;
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+  startMonth: string | null;
+  upstreamBaselineToken: string;
+};
+
+export type StudentPrivateProfileSummaryRecordChange = {
+  changeTime: string | null;
+  grade: string | null;
+  itemKey: string;
+  maskedClassName: string | null;
+  maskedMajorName: string | null;
+  maskedStudentNumber: string | null;
+  sourceObservedAt: string;
+  studentNoTypeCode: string | null;
+  upstreamBaselineToken: string;
+};
+
 export type StudentPrivateProfileSummary = {
+  educationResumes: StudentPrivateProfileSummaryEducationResume[];
+  familyMembers: StudentPrivateProfileSummaryFamilyMember[];
   fields: StudentPrivateProfileSummaryField[];
   lastManualUpdatedAt: string | null;
   lastSyncedAt: string;
@@ -88,6 +143,7 @@ export type StudentPrivateProfileSummary = {
     recordObserved: boolean;
     sensitiveIdentifiersObserved: boolean;
   };
+  recordChanges: StudentPrivateProfileSummaryRecordChange[];
   sectionStatuses: StudentPrivateProfileSummarySectionStatus[];
   sourceObservedAt: string;
   studentId: string;
@@ -123,11 +179,45 @@ export type StudentPrivateProfileCompareResult = {
   studentId: string;
 };
 
+export type StudentPrivateProfilePhotoReadWarning = {
+  code: string;
+  message: string;
+};
+
+export type StudentPrivateProfilePhotoReadResult = {
+  byteSize: number | null;
+  expiresAt: string | null;
+  height: number | null;
+  materializedAt: string | null;
+  mimeType: string | null;
+  photoBase64: string | null;
+  photoStatus: StudentPrivateProfilePhotoStatus;
+  source: string | null;
+  sourceObservedAt: string | null;
+  studentId: string;
+  traceId: string;
+  upstreamSessionToken: string | null;
+  warnings: StudentPrivateProfilePhotoReadWarning[];
+  width: number | null;
+};
+
 export type PatchStudentPrivateProfileFieldInput = {
   action: StudentPrivateProfileManualPatchAction;
   fieldKey: StudentPrivateProfileManualPatchField;
   upstreamBaselineToken?: string | null;
   value?: string | null;
+};
+
+export type PatchStudentPrivateProfileFamilyMemberFieldInput = {
+  action: StudentPrivateProfileManualPatchAction;
+  fieldKey: StudentPrivateProfileFamilyMemberPatchField;
+  value?: string | null;
+};
+
+export type PatchStudentPrivateProfileFamilyMemberInput = {
+  fields: readonly PatchStudentPrivateProfileFamilyMemberFieldInput[];
+  itemKey: string;
+  upstreamBaselineToken?: string | null;
 };
 
 type StudentPrivateProfileSummaryResponse = {
@@ -154,6 +244,14 @@ type PatchStudentPrivateProfileResponse = {
   patchStudentPrivateProfileFields: StudentPrivateProfileSummary;
 };
 
+type ReadStudentPrivateProfilePhotoResponse = {
+  readStudentPrivateProfilePhoto: StudentPrivateProfilePhotoReadResult;
+};
+
+type PatchStudentPrivateProfileFamilyMembersResponse = {
+  patchStudentPrivateProfileFamilyMembers: StudentPrivateProfileSummary;
+};
+
 const STUDENT_PRIVATE_PROFILE_SUMMARY_FIELDS = `
   studentId
   sourceObservedAt
@@ -170,6 +268,40 @@ const STUDENT_PRIVATE_PROFILE_SUMMARY_FIELDS = `
     manualOverrideActive
     upstreamChangedSinceManualPatch
     upstreamBaselineToken
+  }
+  familyMembers {
+    itemKey
+    upstreamBaselineToken
+    relationshipCode
+    maskedName
+    maskedPhone
+    maskedWorkplace
+    manualOverrideActive
+    upstreamChangedSinceManualPatch
+    manualPatchFieldKeys
+    sourceUpdatedAt
+    sourceObservedAt
+  }
+  educationResumes {
+    itemKey
+    upstreamBaselineToken
+    startMonth
+    endMonth
+    maskedReference
+    maskedOrganization
+    sourceUpdatedAt
+    sourceObservedAt
+  }
+  recordChanges {
+    itemKey
+    upstreamBaselineToken
+    changeTime
+    studentNoTypeCode
+    maskedStudentNumber
+    grade
+    maskedMajorName
+    maskedClassName
+    sourceObservedAt
   }
   sectionStatuses {
     section
@@ -280,6 +412,40 @@ const PATCH_STUDENT_PRIVATE_PROFILE_MUTATION = `
   }
 `;
 
+const READ_STUDENT_PRIVATE_PROFILE_PHOTO_MUTATION = `
+  mutation StudentPrivateProfileLabReadPhoto($input: ReadStudentPrivateProfilePhotoInput!) {
+    readStudentPrivateProfilePhoto(input: $input) {
+      studentId
+      photoStatus
+      photoBase64
+      mimeType
+      byteSize
+      width
+      height
+      source
+      sourceObservedAt
+      materializedAt
+      upstreamSessionToken
+      expiresAt
+      traceId
+      warnings {
+        code
+        message
+      }
+    }
+  }
+`;
+
+const PATCH_STUDENT_PRIVATE_PROFILE_FAMILY_MEMBERS_MUTATION = `
+  mutation StudentPrivateProfileLabPatchFamily(
+    $input: PatchStudentPrivateProfileFamilyMembersInput!
+  ) {
+    patchStudentPrivateProfileFamilyMembers(input: $input) {
+      ${STUDENT_PRIVATE_PROFILE_SUMMARY_FIELDS}
+    }
+  }
+`;
+
 function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
@@ -340,6 +506,59 @@ export function normalizePatchStudentPrivateProfileFieldsInput(input: {
         value: normalizeRequiredTextValue(field.value, {
           label: '修正值',
         }),
+      });
+    }),
+    studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+  };
+}
+
+export function normalizeReadStudentPrivateProfilePhotoInput(input: {
+  forceRefresh?: boolean | null;
+  studentId: string | null | undefined;
+  upstreamSessionToken?: string | null;
+}) {
+  return {
+    input: compactInput({
+      forceRefresh: Boolean(input.forceRefresh),
+      studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+      upstreamSessionToken: normalizeOptionalTextValue(input.upstreamSessionToken, 'to_undefined'),
+    }),
+  };
+}
+
+export function normalizePatchStudentPrivateProfileFamilyMembersInput(input: {
+  members: readonly PatchStudentPrivateProfileFamilyMemberInput[];
+  studentId: string | null | undefined;
+}) {
+  return {
+    members: input.members.map((member) => {
+      const hasSetAction = member.fields.some((field) => field.action === 'SET');
+
+      return compactInput({
+        fields: member.fields.map((field) => {
+          if (field.action === 'CLEAR') {
+            return {
+              action: field.action,
+              fieldKey: field.fieldKey,
+            };
+          }
+
+          return {
+            action: field.action,
+            fieldKey: field.fieldKey,
+            value: normalizeRequiredTextValue(field.value, {
+              label: '家庭成员修正值',
+            }),
+          };
+        }),
+        itemKey: normalizeRequiredTextValue(member.itemKey, {
+          label: '家庭成员行标识',
+        }),
+        upstreamBaselineToken: hasSetAction
+          ? normalizeRequiredTextValue(member.upstreamBaselineToken, {
+              label: '家庭成员 baseline token',
+            })
+          : undefined,
       });
     }),
     studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
@@ -446,4 +665,34 @@ export async function patchStudentPrivateProfileFields(input: {
   });
 
   return response.patchStudentPrivateProfileFields;
+}
+
+export async function readStudentPrivateProfilePhoto(input: {
+  forceRefresh?: boolean | null;
+  studentId: string | null | undefined;
+  upstreamSessionToken?: string | null;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
+    ReadStudentPrivateProfilePhotoResponse,
+    OperationVariables & ReturnType<typeof normalizeReadStudentPrivateProfilePhotoInput>
+  >(
+    READ_STUDENT_PRIVATE_PROFILE_PHOTO_MUTATION,
+    normalizeReadStudentPrivateProfilePhotoInput(input),
+  );
+
+  return response.readStudentPrivateProfilePhoto;
+}
+
+export async function patchStudentPrivateProfileFamilyMembers(input: {
+  members: readonly PatchStudentPrivateProfileFamilyMemberInput[];
+  studentId: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    PatchStudentPrivateProfileFamilyMembersResponse,
+    OperationVariables & ReturnType<typeof normalizePatchStudentPrivateProfileFamilyMembersInput>
+  >(PATCH_STUDENT_PRIVATE_PROFILE_FAMILY_MEMBERS_MUTATION, {
+    input: normalizePatchStudentPrivateProfileFamilyMembersInput(input),
+  });
+
+  return response.patchStudentPrivateProfileFamilyMembers;
 }
