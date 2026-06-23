@@ -82,6 +82,7 @@ This directory contains project documentation.
 ## Plans
 
 - [../plans/staff-slot-management-plan.md](../plans/staff-slot-management-plan.md)
+- [../plans/student-private-profile-plan.md](../plans/student-private-profile-plan.md)
 - [../plans/ui-ux-evolution-direction.md](../plans/ui-ux-evolution-direction.md)
 
 ## Project Convention Docs
