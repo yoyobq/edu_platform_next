@@ -21,6 +21,7 @@ import {
   Form,
   Image,
   Input,
+  Modal,
   Radio,
   Select,
   Space,
@@ -45,26 +46,27 @@ import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 import {
   formatStudentPrivateProfileBoolean,
   formatStudentPrivateProfileCompletenessStatus,
-  normalizeStudentPrivateProfileFieldKey,
   resolveStudentPrivateProfileBatchStatusColor,
   resolveStudentPrivateProfileBatchStatusLabel,
+  resolveStudentPrivateProfileCompareField,
   resolveStudentPrivateProfileCompareResultColor,
   resolveStudentPrivateProfileCompareResultLabel,
   resolveStudentPrivateProfileFamilyFieldLabel,
   resolveStudentPrivateProfileFamilyRelationshipLabel,
   resolveStudentPrivateProfileFieldLabel,
   resolveStudentPrivateProfileFieldOrder,
+  resolveStudentPrivateProfileManualPatchField,
   resolveStudentPrivateProfilePhotoStatusColor,
   resolveStudentPrivateProfilePhotoStatusLabel,
   resolveStudentPrivateProfileRecordChangeTypeLabel,
   resolveStudentPrivateProfileSectionLabel,
+  resolveStudentPrivateProfileSourceColor,
+  resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
-  STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
-  STUDENT_PRIVATE_PROFILE_PATCH_FIELD_OPTIONS,
 } from './application/display-policy';
 import {
   compareStudentPrivateProfileFields,
@@ -139,19 +141,16 @@ const EMPTY_MANUAL_PATCH_ACCESS: StudentPrivateProfileManualPatchAccess = {
 
 type CompareFormValues = {
   candidateValue?: string;
-  fieldKey?: StudentPrivateProfileCompareField;
 };
 
 type PatchFormValues = {
   action?: StudentPrivateProfileManualPatchAction;
-  fieldKey?: StudentPrivateProfileManualPatchField;
   value?: string;
 };
 
 type FamilyPatchFormValues = {
   action?: StudentPrivateProfileManualPatchAction;
   fieldKey?: StudentPrivateProfileFamilyMemberPatchField;
-  itemKey?: string;
   value?: string;
 };
 
@@ -219,14 +218,16 @@ function formatSnapshotPhotoStatus(photo: StudentPrivateProfileSummary['photo'])
   return `已同步，${formatApproxByteSize(photo.byteSize)}`;
 }
 
-function formatFamilyMemberOption(member: StudentPrivateProfileSummaryFamilyMember) {
-  return [
-    resolveStudentPrivateProfileFamilyRelationshipLabel(member.relationshipCode),
-    member.maskedName ? `姓名 ${member.maskedName}` : null,
-    member.maskedPhone ? `电话 ${member.maskedPhone}` : null,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+function formatFamilyMemberSummary(member: StudentPrivateProfileSummaryFamilyMember) {
+  return (
+    [
+      resolveStudentPrivateProfileFamilyRelationshipLabel(member.relationshipCode),
+      member.maskedName ? `姓名 ${member.maskedName}` : null,
+      member.maskedPhone ? `电话 ${member.maskedPhone}` : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || member.itemKey
+  );
 }
 
 function buildPhotoDataUrl(result: StudentPrivateProfilePhotoReadResult | null) {
@@ -276,7 +277,11 @@ function canPatchStudentPrivateProfileField(
   fieldKey: string,
   access: StudentPrivateProfileManualPatchAccess,
 ) {
-  const patchFieldKey = normalizeStudentPrivateProfileFieldKey(fieldKey);
+  const patchFieldKey = resolveStudentPrivateProfileManualPatchField(fieldKey);
+
+  if (!patchFieldKey) {
+    return false;
+  }
 
   if (SENSITIVE_IDENTIFIER_PATCH_FIELDS.has(patchFieldKey)) {
     return access.sensitiveIdentifiers;
@@ -296,7 +301,16 @@ function canPatchStudentPrivateProfileFamily(access: StudentPrivateProfileManual
 function renderSummaryFieldValue(
   field: StudentPrivateProfileSummaryField,
   manualPatchAccess: StudentPrivateProfileManualPatchAccess,
+  actions: {
+    onCompare: (field: StudentPrivateProfileSummaryField) => void;
+    onPatch: (field: StudentPrivateProfileSummaryField) => void;
+  },
 ) {
+  const canCompare = Boolean(resolveStudentPrivateProfileCompareField(field.fieldKey));
+  const canPatch = Boolean(
+    field.upstreamBaselineToken &&
+    canPatchStudentPrivateProfileField(field.fieldKey, manualPatchAccess),
+  );
   const tags = [
     field.valueStatus === 'MISSING' ? (
       <Tag key="missing">{resolveStudentPrivateProfileStatusLabel(field.valueStatus)}</Tag>
@@ -311,18 +325,24 @@ function renderSummaryFieldValue(
         需要复核
       </Tag>
     ) : null,
-    field.upstreamBaselineToken &&
-    canPatchStudentPrivateProfileField(field.fieldKey, manualPatchAccess) ? (
-      <Tag key="patchable">可修正</Tag>
-    ) : null,
   ].filter(Boolean);
 
   return (
     <Space direction="vertical" size={4}>
       <span>{displayText(field.maskedValue)}</span>
-      {tags.length > 0 ? (
+      {tags.length > 0 || canCompare || canPatch ? (
         <Space size="small" wrap>
           {tags}
+          {canCompare ? (
+            <Button size="small" type="link" onClick={() => actions.onCompare(field)}>
+              核验
+            </Button>
+          ) : null}
+          {canPatch ? (
+            <Button size="small" type="link" onClick={() => actions.onPatch(field)}>
+              修正
+            </Button>
+          ) : null}
         </Space>
       ) : null}
     </Space>
@@ -333,6 +353,10 @@ function renderSummaryFieldSection(
   section: string,
   fields: StudentPrivateProfileSummaryField[],
   manualPatchAccess: StudentPrivateProfileManualPatchAccess,
+  actions: {
+    onCompare: (field: StudentPrivateProfileSummaryField) => void;
+    onPatch: (field: StudentPrivateProfileSummaryField) => void;
+  },
 ) {
   if (fields.length === 0) {
     return null;
@@ -351,7 +375,7 @@ function renderSummaryFieldSection(
           key={field.fieldKey}
           label={resolveStudentPrivateProfileFieldLabel(field.fieldKey)}
         >
-          {renderSummaryFieldValue(field, manualPatchAccess)}
+          {renderSummaryFieldValue(field, manualPatchAccess, actions)}
         </Descriptions.Item>
       ))}
     </Descriptions>
@@ -388,6 +412,12 @@ export function StudentPrivateProfileLabPage() {
   const [isComparing, setIsComparing] = useState(false);
   const [isPatching, setIsPatching] = useState(false);
   const [isPatchingFamily, setIsPatchingFamily] = useState(false);
+  const [activeCompareField, setActiveCompareField] =
+    useState<StudentPrivateProfileCompareField | null>(null);
+  const [activePatchField, setActivePatchField] =
+    useState<StudentPrivateProfileManualPatchField | null>(null);
+  const [activeFamilyPatchMember, setActiveFamilyPatchMember] =
+    useState<StudentPrivateProfileSummaryFamilyMember | null>(null);
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
   const [students, setStudents] = useState<StudentPrivateProfileStudentOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
@@ -426,31 +456,22 @@ export function StudentPrivateProfileLabPage() {
   const summaryFieldByKey = useMemo(
     () =>
       new Map(
-        summaryFields.map((field) => [
-          normalizeStudentPrivateProfileFieldKey(field.fieldKey),
-          field,
-        ]),
+        summaryFields
+          .map((field) => {
+            const patchFieldKey = resolveStudentPrivateProfileManualPatchField(field.fieldKey);
+
+            return patchFieldKey ? ([patchFieldKey, field] as const) : null;
+          })
+          .filter(
+            (
+              item,
+            ): item is readonly [
+              StudentPrivateProfileManualPatchField,
+              StudentPrivateProfileSummaryField,
+            ] => Boolean(item),
+          ),
       ),
     [summaryFields],
-  );
-  const familyMemberByItemKey = useMemo(
-    () => new Map((summary?.familyMembers ?? []).map((member) => [member.itemKey, member])),
-    [summary?.familyMembers],
-  );
-  const familyMemberOptions = useMemo(
-    () =>
-      (summary?.familyMembers ?? []).map((member) => ({
-        label: formatFamilyMemberOption(member),
-        value: member.itemKey,
-      })),
-    [summary?.familyMembers],
-  );
-  const patchFieldOptions = useMemo(
-    () =>
-      STUDENT_PRIVATE_PROFILE_PATCH_FIELD_OPTIONS.filter((option) =>
-        canPatchStudentPrivateProfileField(option.value, manualPatchAccess),
-      ),
-    [manualPatchAccess],
   );
   const classSelectOptions = useMemo(
     () =>
@@ -496,6 +517,15 @@ export function StudentPrivateProfileLabPage() {
   const shouldOfferSummaryReload = Boolean(
     summary?.studentId && batchUpdatedStudentIdsNeedingReload.includes(summary.studentId),
   );
+  const activeCompareFieldLabel = activeCompareField
+    ? resolveStudentPrivateProfileFieldLabel(activeCompareField)
+    : '资料项';
+  const activePatchFieldLabel = activePatchField
+    ? resolveStudentPrivateProfileFieldLabel(activePatchField)
+    : '资料项';
+  const activeFamilyPatchMemberLabel = activeFamilyPatchMember
+    ? formatFamilyMemberSummary(activeFamilyPatchMember)
+    : '家庭成员';
 
   const loadClasses = useCallback(async () => {
     setIsLoadingClasses(true);
@@ -545,28 +575,6 @@ export function StudentPrivateProfileLabPage() {
     void loadClasses();
   }, [currentAccount, loadClasses]);
 
-  useEffect(() => {
-    const currentFieldKey = patchForm.getFieldValue('fieldKey') as
-      | StudentPrivateProfileManualPatchField
-      | undefined;
-
-    if (currentFieldKey && patchFieldOptions.some((option) => option.value === currentFieldKey)) {
-      return;
-    }
-
-    patchForm.setFieldValue('fieldKey', patchFieldOptions[0]?.value);
-  }, [patchFieldOptions, patchForm]);
-
-  useEffect(() => {
-    const currentItemKey = familyPatchForm.getFieldValue('itemKey') as string | undefined;
-
-    if (currentItemKey && familyMemberByItemKey.has(currentItemKey)) {
-      return;
-    }
-
-    familyPatchForm.setFieldValue('itemKey', familyMemberOptions[0]?.value);
-  }, [familyMemberByItemKey, familyMemberOptions, familyPatchForm]);
-
   const resolveSummaryActionStudentId = useCallback(() => {
     if (!summary) {
       message.error('请先读取本地资料快照。');
@@ -587,6 +595,9 @@ export function StudentPrivateProfileLabPage() {
 
       setIsLoadingSummary(true);
       setCompareResult(null);
+      setActiveCompareField(null);
+      setActivePatchField(null);
+      setActiveFamilyPatchMember(null);
       if (!options.preserveRefreshResult) {
         setRefreshResult(null);
       }
@@ -1012,11 +1023,69 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
+  const openCompareModal = useCallback(
+    (field: StudentPrivateProfileSummaryField) => {
+      const compareFieldKey = resolveStudentPrivateProfileCompareField(field.fieldKey);
+
+      if (!compareFieldKey) {
+        return;
+      }
+
+      setCompareResult(null);
+      compareForm.resetFields();
+      setActiveCompareField(compareFieldKey);
+    },
+    [compareForm],
+  );
+
+  const closeCompareModal = useCallback(() => {
+    setActiveCompareField(null);
+    setCompareResult(null);
+    compareForm.resetFields();
+  }, [compareForm]);
+
+  const openPatchModal = useCallback(
+    (field: StudentPrivateProfileSummaryField) => {
+      const patchFieldKey = resolveStudentPrivateProfileManualPatchField(field.fieldKey);
+
+      if (!patchFieldKey) {
+        return;
+      }
+
+      patchForm.setFieldsValue({ action: 'SET', value: undefined });
+      setActivePatchField(patchFieldKey);
+    },
+    [patchForm],
+  );
+
+  const closePatchModal = useCallback(() => {
+    setActivePatchField(null);
+    patchForm.resetFields(['value']);
+  }, [patchForm]);
+
+  const openFamilyPatchModal = useCallback(
+    (member: StudentPrivateProfileSummaryFamilyMember) => {
+      familyPatchForm.setFieldsValue({ action: 'SET', fieldKey: 'PHONE', value: undefined });
+      setActiveFamilyPatchMember(member);
+    },
+    [familyPatchForm],
+  );
+
+  const closeFamilyPatchModal = useCallback(() => {
+    setActiveFamilyPatchMember(null);
+    familyPatchForm.resetFields(['value']);
+  }, [familyPatchForm]);
+
   const handleCompare = useCallback(
     async (values: CompareFormValues) => {
       const studentId = resolveSummaryActionStudentId();
 
       if (!studentId) {
+        return;
+      }
+
+      if (!activeCompareField) {
+        message.error('请选择需要核验的资料项。');
         return;
       }
 
@@ -1027,7 +1096,7 @@ export function StudentPrivateProfileLabPage() {
           fields: [
             {
               candidateValue: values.candidateValue,
-              fieldKey: values.fieldKey as StudentPrivateProfileCompareField,
+              fieldKey: activeCompareField,
             },
           ],
           studentId,
@@ -1042,7 +1111,7 @@ export function StudentPrivateProfileLabPage() {
         setIsComparing(false);
       }
     },
-    [compareForm, message, resolveSummaryActionStudentId],
+    [activeCompareField, compareForm, message, resolveSummaryActionStudentId],
   );
 
   const handlePatch = useCallback(
@@ -1053,9 +1122,14 @@ export function StudentPrivateProfileLabPage() {
         return;
       }
 
-      const fieldKey = values.fieldKey as StudentPrivateProfileManualPatchField;
+      if (!activePatchField) {
+        message.error('请选择需要修正的资料项。');
+        return;
+      }
+
+      const fieldKey = activePatchField;
       const action = values.action as StudentPrivateProfileManualPatchAction;
-      const summaryField = summaryFieldByKey.get(normalizeStudentPrivateProfileFieldKey(fieldKey));
+      const summaryField = summaryFieldByKey.get(fieldKey);
 
       if (!canPatchStudentPrivateProfileField(fieldKey, manualPatchAccess)) {
         message.error('当前账号没有该字段的人工修正入口。');
@@ -1085,6 +1159,7 @@ export function StudentPrivateProfileLabPage() {
 
         setSummary(nextSummary);
         setCompareResult(null);
+        setActivePatchField(null);
         patchForm.resetFields(['value']);
         message.success(action === 'SET' ? '人工修正已写入。' : '人工修正已清除。');
       } catch (error) {
@@ -1098,7 +1173,14 @@ export function StudentPrivateProfileLabPage() {
         setIsPatching(false);
       }
     },
-    [manualPatchAccess, message, patchForm, resolveSummaryActionStudentId, summaryFieldByKey],
+    [
+      activePatchField,
+      manualPatchAccess,
+      message,
+      patchForm,
+      resolveSummaryActionStudentId,
+      summaryFieldByKey,
+    ],
   );
 
   const handleFamilyPatch = useCallback(
@@ -1109,10 +1191,15 @@ export function StudentPrivateProfileLabPage() {
         return;
       }
 
-      const itemKey = values.itemKey ?? '';
+      if (!activeFamilyPatchMember) {
+        message.error('请选择需要修正的家庭成员。');
+        return;
+      }
+
+      const itemKey = activeFamilyPatchMember.itemKey;
       const fieldKey = values.fieldKey as StudentPrivateProfileFamilyMemberPatchField;
       const action = values.action as StudentPrivateProfileManualPatchAction;
-      const familyMember = familyMemberByItemKey.get(itemKey);
+      const familyMember = activeFamilyPatchMember;
 
       if (!canPatchStudentPrivateProfileFamily(manualPatchAccess)) {
         message.error('当前账号没有家庭成员资料的人工修正入口。');
@@ -1151,6 +1238,7 @@ export function StudentPrivateProfileLabPage() {
         });
 
         setSummary(nextSummary);
+        setActiveFamilyPatchMember(null);
         familyPatchForm.resetFields(['value']);
         message.success(action === 'SET' ? '家庭成员人工修正已写入。' : '家庭成员人工修正已清除。');
       } catch (error) {
@@ -1165,7 +1253,7 @@ export function StudentPrivateProfileLabPage() {
       }
     },
     [
-      familyMemberByItemKey,
+      activeFamilyPatchMember,
       familyPatchForm,
       manualPatchAccess,
       message,
@@ -1223,6 +1311,20 @@ export function StudentPrivateProfileLabPage() {
       title: '同步时间',
       width: 160,
       render: (value: string) => formatDateTime(value),
+    },
+    {
+      fixed: 'right',
+      key: 'action',
+      title: '操作',
+      width: 90,
+      render: (_, record) =>
+        canPatchStudentPrivateProfileFamily(manualPatchAccess) && record.upstreamBaselineToken ? (
+          <Button size="small" type="link" onClick={() => openFamilyPatchModal(record)}>
+            修正
+          </Button>
+        ) : (
+          '—'
+        ),
     },
   ];
 
@@ -1585,6 +1687,10 @@ export function StudentPrivateProfileLabPage() {
                             section,
                             summaryFieldsBySection.get(section) ?? [],
                             manualPatchAccess,
+                            {
+                              onCompare: openCompareModal,
+                              onPatch: openPatchModal,
+                            },
                           ),
                         )}
                       </ResponsiveGrid>
@@ -1664,247 +1770,95 @@ export function StudentPrivateProfileLabPage() {
                   <Alert showIcon type="warning" message={summaryActionDisabledReason} />
                 ) : null}
 
-                <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 2 }}>
-                  <Card title="输入值核验">
-                    <Form
-                      form={compareForm}
-                      initialValues={{ fieldKey: 'STUDENT_PHONE' }}
-                      layout="vertical"
-                      onFinish={handleCompare}
-                    >
-                      <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
-                        <Select options={STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS} />
-                      </Form.Item>
-                      <Form.Item
-                        label="候选值"
-                        name="candidateValue"
-                        rules={[{ required: true, message: '请输入候选值。', whitespace: true }]}
-                      >
-                        <Input.Password autoComplete="off" placeholder="仅用于本次 compare" />
-                      </Form.Item>
+                <Card title="照片">
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Space wrap>
                       <Button
                         disabled={isSummaryStudentIdMismatched}
-                        htmlType="submit"
-                        icon={<CheckCircleOutlined />}
-                        loading={isComparing}
+                        icon={<PictureOutlined />}
+                        loading={isReadingPhoto}
+                        onClick={() => void handleReadPhoto(false)}
                         type="primary"
                       >
-                        核验
+                        查看照片
                       </Button>
-                    </Form>
+                      <Button
+                        disabled={isSummaryStudentIdMismatched}
+                        icon={<ReloadOutlined />}
+                        loading={isReadingPhoto}
+                        onClick={() => void handleReadPhoto(true)}
+                      >
+                        从学工系统重读照片
+                      </Button>
+                    </Space>
 
-                    {compareResult ? (
-                      <Descriptions bordered column={1} size="small" style={{ marginTop: 16 }}>
-                        {compareResult.results.map((result) => (
-                          <Descriptions.Item
-                            key={result.fieldKey}
-                            label={resolveStudentPrivateProfileFieldLabel(result.fieldKey)}
-                          >
-                            <Space size="small" wrap>
+                    {photoReadResult ? (
+                      <Descriptions bordered column={1} size="small">
+                        <Descriptions.Item label="状态">
+                          <Space size="small" wrap>
+                            <Tag
+                              color={resolveStudentPrivateProfilePhotoStatusColor(
+                                photoReadResult.photoStatus,
+                              )}
+                            >
+                              {resolveStudentPrivateProfilePhotoStatusLabel(
+                                photoReadResult.photoStatus,
+                              )}
+                            </Tag>
+                            {photoReadResult.source ? (
                               <Tag
-                                color={resolveStudentPrivateProfileCompareResultColor(
-                                  result.result,
+                                color={resolveStudentPrivateProfileSourceColor(
+                                  photoReadResult.source,
                                 )}
                               >
-                                {resolveStudentPrivateProfileCompareResultLabel(result.result)}
+                                {resolveStudentPrivateProfileSourceLabel(photoReadResult.source)}
                               </Tag>
-                              <Tag>
-                                {resolveStudentPrivateProfileStatusLabel(result.valueStatus)}
-                              </Tag>
-                            </Space>
-                          </Descriptions.Item>
-                        ))}
+                            ) : null}
+                          </Space>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="尺寸">
+                          {photoReadResult.width && photoReadResult.height
+                            ? `${photoReadResult.width} x ${photoReadResult.height}`
+                            : '—'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="大小">
+                          {formatApproxByteSize(photoReadResult.byteSize)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="物化时间">
+                          {formatDateTime(photoReadResult.materializedAt)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="追踪 ID">
+                          {photoReadResult.traceId}
+                        </Descriptions.Item>
                       </Descriptions>
                     ) : null}
-                  </Card>
 
-                  <Card title="人工修正">
-                    <Form
-                      form={patchForm}
-                      initialValues={{ action: 'SET', fieldKey: 'STUDENT_PHONE' }}
-                      layout="vertical"
-                      onFinish={handlePatch}
-                    >
-                      <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
-                        <Select
-                          disabled={isSummaryStudentIdMismatched || patchFieldOptions.length === 0}
-                          options={patchFieldOptions}
-                          placeholder="当前账号无可修正字段"
-                        />
-                      </Form.Item>
-                      <Form.Item label="动作" name="action" rules={[{ required: true }]}>
-                        <Radio.Group
-                          options={[
-                            { label: '写入修正', value: 'SET' },
-                            { label: '清除修正', value: 'CLEAR' },
-                          ]}
-                          optionType="button"
-                        />
-                      </Form.Item>
-                      {patchAction === 'SET' ? (
-                        <Form.Item
-                          label="修正值"
-                          name="value"
-                          rules={[{ required: true, message: '请输入修正值。', whitespace: true }]}
-                        >
-                          <Input.Password autoComplete="off" placeholder="提交后不在页面保存原文" />
-                        </Form.Item>
-                      ) : null}
-                      <Button
-                        disabled={isSummaryStudentIdMismatched || patchFieldOptions.length === 0}
-                        htmlType="submit"
-                        icon={<EditOutlined />}
-                        loading={isPatching}
-                        type="primary"
-                      >
-                        保存修正
-                      </Button>
-                    </Form>
-                  </Card>
+                    {photoDataUrl ? (
+                      <Image
+                        alt="学生照片"
+                        src={photoDataUrl}
+                        style={{ maxHeight: 220, objectFit: 'contain' }}
+                      />
+                    ) : null}
 
-                  <Card title="照片">
-                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                      <Space wrap>
-                        <Button
-                          disabled={isSummaryStudentIdMismatched}
-                          icon={<PictureOutlined />}
-                          loading={isReadingPhoto}
-                          onClick={() => void handleReadPhoto(false)}
-                          type="primary"
-                        >
-                          查看照片
-                        </Button>
-                        <Button
-                          disabled={isSummaryStudentIdMismatched}
-                          icon={<ReloadOutlined />}
-                          loading={isReadingPhoto}
-                          onClick={() => void handleReadPhoto(true)}
-                        >
-                          从学工系统重读照片
-                        </Button>
-                      </Space>
-
-                      {photoReadResult ? (
-                        <Descriptions bordered column={1} size="small">
-                          <Descriptions.Item label="状态">
-                            <Space size="small" wrap>
-                              <Tag
-                                color={resolveStudentPrivateProfilePhotoStatusColor(
-                                  photoReadResult.photoStatus,
-                                )}
-                              >
-                                {resolveStudentPrivateProfilePhotoStatusLabel(
-                                  photoReadResult.photoStatus,
-                                )}
-                              </Tag>
-                              {photoReadResult.source ? <Tag>{photoReadResult.source}</Tag> : null}
-                            </Space>
-                          </Descriptions.Item>
-                          <Descriptions.Item label="尺寸">
-                            {photoReadResult.width && photoReadResult.height
-                              ? `${photoReadResult.width} x ${photoReadResult.height}`
-                              : '—'}
-                          </Descriptions.Item>
-                          <Descriptions.Item label="大小">
-                            {formatApproxByteSize(photoReadResult.byteSize)}
-                          </Descriptions.Item>
-                          <Descriptions.Item label="物化时间">
-                            {formatDateTime(photoReadResult.materializedAt)}
-                          </Descriptions.Item>
-                          <Descriptions.Item label="追踪 ID">
-                            {photoReadResult.traceId}
-                          </Descriptions.Item>
-                        </Descriptions>
-                      ) : null}
-
-                      {photoDataUrl ? (
-                        <Image
-                          alt="学生照片"
-                          src={photoDataUrl}
-                          style={{ maxHeight: 220, objectFit: 'contain' }}
-                        />
-                      ) : null}
-
-                      {photoReadResult?.warnings.length ? (
-                        <Alert
-                          showIcon
-                          type="warning"
-                          message="照片读取提醒"
-                          description={photoReadResult.warnings
-                            .map(
-                              (warning) =>
-                                `${resolveStudentPrivateProfileWarningCodeLabel(warning.code)}：${
-                                  warning.message
-                                }`,
-                            )
-                            .join('\n')}
-                          style={{ whiteSpace: 'pre-line' }}
-                        />
-                      ) : null}
-                    </Space>
-                  </Card>
-
-                  <Card title="家庭成员修正">
-                    <Form
-                      form={familyPatchForm}
-                      initialValues={{ action: 'SET', fieldKey: 'PHONE' }}
-                      layout="vertical"
-                      onFinish={handleFamilyPatch}
-                    >
-                      <Form.Item label="家庭成员" name="itemKey" rules={[{ required: true }]}>
-                        <Select
-                          disabled={
-                            !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
-                            isSummaryStudentIdMismatched ||
-                            familyMemberOptions.length === 0
-                          }
-                          options={familyMemberOptions}
-                          placeholder="当前无可修正家庭成员"
-                        />
-                      </Form.Item>
-                      <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
-                        <Select
-                          disabled={
-                            !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
-                            isSummaryStudentIdMismatched
-                          }
-                          options={STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS}
-                        />
-                      </Form.Item>
-                      <Form.Item label="动作" name="action" rules={[{ required: true }]}>
-                        <Radio.Group
-                          options={[
-                            { label: '写入修正', value: 'SET' },
-                            { label: '清除修正', value: 'CLEAR' },
-                          ]}
-                          optionType="button"
-                        />
-                      </Form.Item>
-                      {familyPatchAction === 'SET' ? (
-                        <Form.Item
-                          label="修正值"
-                          name="value"
-                          rules={[{ required: true, message: '请输入修正值。', whitespace: true }]}
-                        >
-                          <Input.Password autoComplete="off" placeholder="提交后不在页面保存原文" />
-                        </Form.Item>
-                      ) : null}
-                      <Button
-                        disabled={
-                          !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
-                          isSummaryStudentIdMismatched ||
-                          familyMemberOptions.length === 0
-                        }
-                        htmlType="submit"
-                        icon={<EditOutlined />}
-                        loading={isPatchingFamily}
-                        type="primary"
-                      >
-                        保存家庭成员修正
-                      </Button>
-                    </Form>
-                  </Card>
-                </ResponsiveGrid>
+                    {photoReadResult?.warnings.length ? (
+                      <Alert
+                        showIcon
+                        type="warning"
+                        message="照片读取提醒"
+                        description={photoReadResult.warnings
+                          .map(
+                            (warning) =>
+                              `${resolveStudentPrivateProfileWarningCodeLabel(warning.code)}：${
+                                warning.message
+                              }`,
+                          )
+                          .join('\n')}
+                        style={{ whiteSpace: 'pre-line' }}
+                      />
+                    ) : null}
+                  </Space>
+                </Card>
 
                 {refreshResult ? (
                   <Card title="最近一次学工系统刷新">
@@ -2086,6 +2040,131 @@ export function StudentPrivateProfileLabPage() {
           },
         ]}
       />
+
+      <Modal
+        footer={null}
+        open={Boolean(activeCompareField)}
+        title={`核验 ${activeCompareFieldLabel}`}
+        onCancel={closeCompareModal}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert showIcon type="info" message="候选值仅用于本次核验，提交后不会保留原文。" />
+          <Form form={compareForm} layout="vertical" onFinish={handleCompare}>
+            <Form.Item
+              label="候选值"
+              name="candidateValue"
+              rules={[{ required: true, message: '请输入候选值。', whitespace: true }]}
+            >
+              <Input.Password autoComplete="off" placeholder="输入需要核验的候选值" />
+            </Form.Item>
+            <Space wrap>
+              <Button onClick={closeCompareModal}>取消</Button>
+              <Button
+                htmlType="submit"
+                icon={<CheckCircleOutlined />}
+                loading={isComparing}
+                type="primary"
+              >
+                开始核验
+              </Button>
+            </Space>
+          </Form>
+
+          {compareResult ? (
+            <Descriptions bordered column={1} size="small">
+              {compareResult.results.map((result) => (
+                <Descriptions.Item
+                  key={result.fieldKey}
+                  label={resolveStudentPrivateProfileFieldLabel(result.fieldKey)}
+                >
+                  <Space size="small" wrap>
+                    <Tag color={resolveStudentPrivateProfileCompareResultColor(result.result)}>
+                      {resolveStudentPrivateProfileCompareResultLabel(result.result)}
+                    </Tag>
+                    <Tag>{resolveStudentPrivateProfileStatusLabel(result.valueStatus)}</Tag>
+                  </Space>
+                </Descriptions.Item>
+              ))}
+            </Descriptions>
+          ) : null}
+        </Space>
+      </Modal>
+
+      <Modal
+        footer={null}
+        open={Boolean(activePatchField)}
+        title={`修正 ${activePatchFieldLabel}`}
+        onCancel={closePatchModal}
+      >
+        <Form form={patchForm} layout="vertical" onFinish={handlePatch}>
+          <Form.Item label="动作" name="action" rules={[{ required: true }]}>
+            <Radio.Group
+              options={[
+                { label: '写入修正', value: 'SET' },
+                { label: '清除人工修正', value: 'CLEAR' },
+              ]}
+              optionType="button"
+            />
+          </Form.Item>
+          {patchAction === 'SET' ? (
+            <Form.Item
+              label="修正值"
+              name="value"
+              rules={[{ required: true, message: '请输入修正值。', whitespace: true }]}
+            >
+              <Input.Password autoComplete="off" placeholder="提交后不在页面保存原文" />
+            </Form.Item>
+          ) : null}
+          <Space wrap>
+            <Button onClick={closePatchModal}>取消</Button>
+            <Button htmlType="submit" icon={<EditOutlined />} loading={isPatching} type="primary">
+              保存修正
+            </Button>
+          </Space>
+        </Form>
+      </Modal>
+
+      <Modal
+        footer={null}
+        open={Boolean(activeFamilyPatchMember)}
+        title={`修正 ${activeFamilyPatchMemberLabel}`}
+        onCancel={closeFamilyPatchModal}
+      >
+        <Form form={familyPatchForm} layout="vertical" onFinish={handleFamilyPatch}>
+          <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
+            <Select options={STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS} />
+          </Form.Item>
+          <Form.Item label="动作" name="action" rules={[{ required: true }]}>
+            <Radio.Group
+              options={[
+                { label: '写入修正', value: 'SET' },
+                { label: '清除人工修正', value: 'CLEAR' },
+              ]}
+              optionType="button"
+            />
+          </Form.Item>
+          {familyPatchAction === 'SET' ? (
+            <Form.Item
+              label="修正值"
+              name="value"
+              rules={[{ required: true, message: '请输入修正值。', whitespace: true }]}
+            >
+              <Input.Password autoComplete="off" placeholder="提交后不在页面保存原文" />
+            </Form.Item>
+          ) : null}
+          <Space wrap>
+            <Button onClick={closeFamilyPatchModal}>取消</Button>
+            <Button
+              htmlType="submit"
+              icon={<EditOutlined />}
+              loading={isPatchingFamily}
+              type="primary"
+            >
+              保存修正
+            </Button>
+          </Space>
+        </Form>
+      </Modal>
 
       <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>

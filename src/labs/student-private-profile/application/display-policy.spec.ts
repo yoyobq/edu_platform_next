@@ -7,11 +7,13 @@ import {
   formatStudentPrivateProfileCompletenessStatus,
   normalizeStudentPrivateProfileFieldKey,
   resolveStudentPrivateProfileBatchStatusLabel,
+  resolveStudentPrivateProfileCompareField,
   resolveStudentPrivateProfileCompareResultLabel,
   resolveStudentPrivateProfileFamilyFieldLabel,
   resolveStudentPrivateProfileFamilyRelationshipLabel,
   resolveStudentPrivateProfileFieldLabel,
   resolveStudentPrivateProfileFieldOrder,
+  resolveStudentPrivateProfileManualPatchField,
   resolveStudentPrivateProfilePhotoStatusLabel,
   resolveStudentPrivateProfileRecordChangeTypeLabel,
   resolveStudentPrivateProfileSectionLabel,
@@ -27,6 +29,9 @@ describe('student private profile display policy', () => {
     expect(resolveStudentPrivateProfileFieldLabel('politicalStatus')).toBe('政治面貌');
     expect(resolveStudentPrivateProfileFieldLabel('home-address')).toBe('家庭地址');
     expect(normalizeStudentPrivateProfileFieldKey('idCard')).toBe('ID_CARD');
+    expect(resolveStudentPrivateProfileCompareField('studentPhone')).toBe('STUDENT_PHONE');
+    expect(resolveStudentPrivateProfileCompareField('homeAddress')).toBeNull();
+    expect(resolveStudentPrivateProfileManualPatchField('homeAddress')).toBe('HOME_ADDRESS');
     expect(resolveStudentPrivateProfileFieldOrder('gender')).toBeLessThan(
       resolveStudentPrivateProfileFieldOrder('idCard'),
     );
@@ -40,6 +45,7 @@ describe('student private profile display policy', () => {
 
   it('maps backend source and status enums to stable-facing labels', () => {
     expect(resolveStudentPrivateProfileSourceLabel('UPSTREAM')).toBe('学工系统');
+    expect(resolveStudentPrivateProfileSourceLabel('CACHE')).toBe('本地缓存');
     expect(resolveStudentPrivateProfileSourceLabel('CALCULATED')).toBe('系统推断');
     expect(resolveStudentPrivateProfileSourceLabel('MANUAL')).toBe('人工修正');
     expect(resolveStudentPrivateProfileStatusLabel('OBSERVED')).toBe('已同步');

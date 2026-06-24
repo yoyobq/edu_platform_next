@@ -84,6 +84,14 @@ const FIELD_ORDER_BY_KEY = new Map(
   SUMMARY_FIELD_ORDER.map((fieldKey, index) => [normalizeDisplayKey(fieldKey), index]),
 );
 
+const COMPARE_FIELD_KEYS = new Set<string>(
+  STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS.map((item) => normalizeDisplayKey(item.value)),
+);
+
+const MANUAL_PATCH_FIELD_KEYS = new Set<string>(
+  STUDENT_PRIVATE_PROFILE_PATCH_FIELD_OPTIONS.map((item) => normalizeDisplayKey(item.value)),
+);
+
 const FIELD_LABELS = new Map<string, string>(
   [
     ...SUMMARY_FIELD_LABELS,
@@ -208,6 +216,26 @@ export function resolveStudentPrivateProfileFieldLabel(fieldKey: string) {
 
 export function normalizeStudentPrivateProfileFieldKey(fieldKey: string) {
   return normalizeDisplayKey(fieldKey);
+}
+
+export function resolveStudentPrivateProfileCompareField(
+  fieldKey: string,
+): StudentPrivateProfileCompareField | null {
+  const normalizedFieldKey = normalizeDisplayKey(fieldKey);
+
+  return COMPARE_FIELD_KEYS.has(normalizedFieldKey)
+    ? (normalizedFieldKey as StudentPrivateProfileCompareField)
+    : null;
+}
+
+export function resolveStudentPrivateProfileManualPatchField(
+  fieldKey: string,
+): StudentPrivateProfileManualPatchField | null {
+  const normalizedFieldKey = normalizeDisplayKey(fieldKey);
+
+  return MANUAL_PATCH_FIELD_KEYS.has(normalizedFieldKey)
+    ? (normalizedFieldKey as StudentPrivateProfileManualPatchField)
+    : null;
 }
 
 export function resolveStudentPrivateProfileFieldOrder(fieldKey: string) {
