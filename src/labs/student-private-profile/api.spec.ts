@@ -30,6 +30,8 @@ import {
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
+  normalizeBatchRefreshInput,
+  normalizeBatchRefreshStudentIds,
   normalizeCompareStudentPrivateProfileFieldsInput,
   normalizeListClassStudentOptionsInput,
   normalizePatchStudentPrivateProfileFamilyMembersInput,
@@ -39,6 +41,7 @@ import {
   patchStudentPrivateProfileFields,
   readStudentPrivateProfilePhoto,
   refreshStudentPrivateProfileFromUpstream,
+  refreshStudentPrivateProfilesFromUpstream,
 } from './api';
 
 describe('student-private-profile lab api', () => {
@@ -133,6 +136,92 @@ describe('student-private-profile lab api', () => {
         },
       },
     );
+  });
+
+  it('normalizes batch refresh student ids with trim, empty filtering, dedupe, and limits', () => {
+    expect(normalizeBatchRefreshStudentIds([' S001 ', '', 'S002', 'S001', '  ', 'S003'])).toEqual([
+      'S001',
+      'S002',
+      'S003',
+    ]);
+    expect(
+      normalizeBatchRefreshInput({
+        studentIds: [' S001 '],
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).toEqual({
+      studentIds: ['S001'],
+      upstreamSessionToken: 'rolling-token-001',
+    });
+
+    expect(() => normalizeBatchRefreshStudentIds([])).toThrow('请选择或输入至少 1 个本地学生 ID。');
+
+    expect(() =>
+      normalizeBatchRefreshStudentIds(Array.from({ length: 21 }, (_, index) => `S${index}`)),
+    ).toThrow('一次最多刷新 20 个学生。');
+
+    expect(() => normalizeBatchRefreshStudentIds(['S'.repeat(33)])).toThrow(
+      '本地学生 ID 不能超过 32 个字符。',
+    );
+  });
+
+  it('batch refreshes through upstream-session GraphQL and requests ordered result fields', async () => {
+    const batchResult = {
+      expiresAt: null,
+      failureCount: 1,
+      requestedCount: 2,
+      results: [
+        {
+          changedSections: ['personal', 'family'],
+          errorCode: null,
+          errorMessage: null,
+          snapshotUpdated: true,
+          status: 'SUCCESS',
+          studentId: 'S001',
+          warningCodes: [],
+        },
+        {
+          changedSections: [],
+          errorCode: 'STUDENT_PRIVATE_PROFILE_UPSTREAM_ID_MISSING',
+          errorMessage: '目标学生缺少 upstream id',
+          snapshotUpdated: null,
+          status: 'FAILED',
+          studentId: 'S002',
+          warningCodes: [],
+        },
+      ],
+      success: false,
+      successCount: 1,
+      traceId: 'trace-batch-001',
+      upstreamSessionToken: 'rolling-token-002',
+    };
+
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      refreshStudentPrivateProfilesFromUpstream: batchResult,
+    });
+
+    await expect(
+      refreshStudentPrivateProfilesFromUpstream({
+        studentIds: [' S001 ', 'S002', 'S001'],
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).resolves.toEqual(batchResult);
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabBatchRefresh'),
+      {
+        input: {
+          studentIds: ['S001', 'S002'],
+          upstreamSessionToken: 'rolling-token-001',
+        },
+      },
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'refreshStudentPrivateProfilesFromUpstream',
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('results');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('errorCode');
+    expect(readUpstreamGraphQLErrorDetailMock).not.toHaveBeenCalled();
   });
 
   it('loads local active-membership class options through the profile contract', async () => {

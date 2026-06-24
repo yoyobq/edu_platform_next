@@ -173,6 +173,29 @@ export type StudentPrivateProfileRefreshResult = {
   warnings: StudentPrivateProfileRefreshWarning[];
 };
 
+export type StudentPrivateProfileBatchRefreshItemStatus = 'FAILED' | 'SUCCESS';
+
+export type StudentPrivateProfileBatchRefreshItem = {
+  changedSections: string[];
+  errorCode: string | null;
+  errorMessage: string | null;
+  snapshotUpdated: boolean | null;
+  status: StudentPrivateProfileBatchRefreshItemStatus;
+  studentId: string;
+  warningCodes: string[];
+};
+
+export type StudentPrivateProfileBatchRefreshResult = {
+  expiresAt: string | null;
+  failureCount: number;
+  requestedCount: number;
+  results: StudentPrivateProfileBatchRefreshItem[];
+  success: boolean;
+  successCount: number;
+  traceId: string;
+  upstreamSessionToken: string;
+};
+
 export type StudentPrivateProfileCompareResult = {
   results: {
     fieldKey: StudentPrivateProfileCompareField;
@@ -237,6 +260,10 @@ type StudentPrivateProfileClassStudentOptionsResponse = {
 
 type RefreshStudentPrivateProfileResponse = {
   refreshStudentPrivateProfileFromUpstream: StudentPrivateProfileRefreshResult;
+};
+
+type RefreshStudentPrivateProfilesResponse = {
+  refreshStudentPrivateProfilesFromUpstream: StudentPrivateProfileBatchRefreshResult;
 };
 
 type CompareStudentPrivateProfileResponse = {
@@ -394,6 +421,31 @@ const REFRESH_STUDENT_PRIVATE_PROFILE_MUTATION = `
   }
 `;
 
+const REFRESH_STUDENT_PRIVATE_PROFILES_MUTATION = `
+  mutation StudentPrivateProfileLabBatchRefresh(
+    $input: RefreshStudentPrivateProfilesFromUpstreamInput!
+  ) {
+    refreshStudentPrivateProfilesFromUpstream(input: $input) {
+      success
+      requestedCount
+      successCount
+      failureCount
+      upstreamSessionToken
+      expiresAt
+      traceId
+      results {
+        studentId
+        status
+        snapshotUpdated
+        changedSections
+        warningCodes
+        errorCode
+        errorMessage
+      }
+    }
+  }
+`;
+
 const COMPARE_STUDENT_PRIVATE_PROFILE_MUTATION = `
   mutation StudentPrivateProfileLabCompare($input: CompareStudentPrivateProfileFieldsInput!) {
     compareStudentPrivateProfileFields(input: $input) {
@@ -459,6 +511,61 @@ export function normalizeStudentPrivateProfileStudentId(studentId: string | null
   return normalizeRequiredTextValue(studentId, {
     label: '本地学生 ID',
   });
+}
+
+export function normalizeBatchRefreshStudentIds(
+  studentIdsInput: readonly (string | null | undefined)[],
+) {
+  const studentIds: string[] = [];
+  const observedStudentIds = new Set<string>();
+
+  studentIdsInput.forEach((studentId) => {
+    const normalizedStudentId = studentId?.trim() ?? '';
+
+    if (!normalizedStudentId) {
+      return;
+    }
+
+    if (normalizedStudentId.length > 32) {
+      throw new Error('本地学生 ID 不能超过 32 个字符。');
+    }
+
+    if (observedStudentIds.has(normalizedStudentId)) {
+      return;
+    }
+
+    observedStudentIds.add(normalizedStudentId);
+    studentIds.push(normalizedStudentId);
+  });
+
+  if (studentIds.length === 0) {
+    throw new Error('请选择或输入至少 1 个本地学生 ID。');
+  }
+
+  if (studentIds.length > 20) {
+    throw new Error('一次最多刷新 20 个学生。');
+  }
+
+  return studentIds;
+}
+
+export function normalizeBatchRefreshInput(input: {
+  studentIds: readonly (string | null | undefined)[];
+  upstreamSessionToken: string | null | undefined;
+}) {
+  const studentIds = normalizeBatchRefreshStudentIds(input.studentIds);
+  const upstreamSessionToken = normalizeRequiredTextValue(input.upstreamSessionToken, {
+    label: 'upstream session token',
+  });
+
+  if (upstreamSessionToken.length > 4096) {
+    throw new Error('upstream session token 不能超过 4096 个字符。');
+  }
+
+  return {
+    studentIds,
+    upstreamSessionToken,
+  };
 }
 
 export function isStudentPrivateProfileUpstreamSessionRequiredError(error: unknown) {
@@ -646,6 +753,22 @@ export async function refreshStudentPrivateProfileFromUpstream(input: {
   });
 
   return response.refreshStudentPrivateProfileFromUpstream;
+}
+
+export async function refreshStudentPrivateProfilesFromUpstream(input: {
+  studentIds: readonly (string | null | undefined)[];
+  upstreamSessionToken: string | null | undefined;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
+    RefreshStudentPrivateProfilesResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeBatchRefreshInput>;
+    }
+  >(REFRESH_STUDENT_PRIVATE_PROFILES_MUTATION, {
+    input: normalizeBatchRefreshInput(input),
+  });
+
+  return response.refreshStudentPrivateProfilesFromUpstream;
 }
 
 export async function compareStudentPrivateProfileFields(input: {
