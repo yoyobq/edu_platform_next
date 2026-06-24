@@ -123,8 +123,8 @@ const SOURCE_LABELS = new Map<string, string>([
 ]);
 
 const STATUS_LABELS = new Map<string, string>([
-  ['PRESENT', '本地已有'],
-  ['MISSING', '本地暂无'],
+  ['PRESENT', '有记录'],
+  ['MISSING', '暂无记录'],
   ['OBSERVED', '已同步'],
   ['PARTIAL', '部分同步'],
   ['UNOBSERVED', '待同步'],

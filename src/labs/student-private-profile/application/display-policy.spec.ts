@@ -44,7 +44,7 @@ describe('student private profile display policy', () => {
     expect(resolveStudentPrivateProfileSourceLabel('MANUAL')).toBe('人工修正');
     expect(resolveStudentPrivateProfileStatusLabel('OBSERVED')).toBe('已同步');
     expect(resolveStudentPrivateProfileStatusLabel('PARTIAL')).toBe('部分同步');
-    expect(resolveStudentPrivateProfileStatusLabel('MISSING')).toBe('本地暂无');
+    expect(resolveStudentPrivateProfileStatusLabel('MISSING')).toBe('暂无记录');
     expect(resolveStudentPrivateProfileStatusLabel('ENROLLED')).toBe('在读');
     expect(resolveStudentPrivateProfileStatusLabel('OFF_CAMPUS_INTERNSHIP')).toBe('下厂/校外实习');
     expect(resolveStudentPrivateProfileStatusLabel('SUSPENDED')).toBe('暂离（休学/兵役等）');

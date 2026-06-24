@@ -27,7 +27,6 @@ import {
   Table,
   Tabs,
   Tag,
-  Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLoaderData } from 'react-router';
@@ -40,6 +39,7 @@ import {
   useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
+import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
@@ -58,8 +58,6 @@ import {
   resolveStudentPrivateProfilePhotoStatusLabel,
   resolveStudentPrivateProfileRecordChangeTypeLabel,
   resolveStudentPrivateProfileSectionLabel,
-  resolveStudentPrivateProfileSourceColor,
-  resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
@@ -157,6 +155,8 @@ type FamilyPatchFormValues = {
   value?: string;
 };
 
+type SummaryFieldSectionKey = 'personal' | 'sensitiveIdentifiers';
+
 const SENSITIVE_IDENTIFIER_PATCH_FIELDS = new Set(['ID_CARD', 'BANK_CARD_NUMBER', 'CARD_NUMBER']);
 
 const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set([
@@ -165,6 +165,8 @@ const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set([
   'HOME_ADDRESS',
   'MAILING_ADDRESS',
 ]);
+
+const SUMMARY_FIELD_SECTION_ORDER: SummaryFieldSectionKey[] = ['personal', 'sensitiveIdentifiers'];
 
 function formatClassOption(option: StudentPrivateProfileClassOption) {
   return `${option.className} · ${option.studentCount}人`;
@@ -191,14 +193,14 @@ function parseBatchStudentIdText(value: string) {
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) {
-    return '未记录';
+    return '—';
   }
 
   return formatUpstreamSessionDateTime(value);
 }
 
 function displayText(value: string | null | undefined) {
-  return value?.trim() || '未记录';
+  return value?.trim() || '—';
 }
 
 function formatApproxByteSize(byteSize: number | null | undefined) {
@@ -261,6 +263,15 @@ function sortSummaryFields(fields: StudentPrivateProfileSummaryField[]) {
   });
 }
 
+function groupSummaryFieldsBySection(fields: StudentPrivateProfileSummaryField[]) {
+  return fields.reduce<Map<string, StudentPrivateProfileSummaryField[]>>((sections, field) => {
+    const sectionFields = sections.get(field.section) ?? [];
+    sectionFields.push(field);
+    sections.set(field.section, sectionFields);
+    return sections;
+  }, new Map());
+}
+
 function canPatchStudentPrivateProfileField(
   fieldKey: string,
   access: StudentPrivateProfileManualPatchAccess,
@@ -280,6 +291,71 @@ function canPatchStudentPrivateProfileField(
 
 function canPatchStudentPrivateProfileFamily(access: StudentPrivateProfileManualPatchAccess) {
   return access.family;
+}
+
+function renderSummaryFieldValue(
+  field: StudentPrivateProfileSummaryField,
+  manualPatchAccess: StudentPrivateProfileManualPatchAccess,
+) {
+  const tags = [
+    field.valueStatus === 'MISSING' ? (
+      <Tag key="missing">{resolveStudentPrivateProfileStatusLabel(field.valueStatus)}</Tag>
+    ) : null,
+    field.manualOverrideActive ? (
+      <Tag color="processing" key="manual">
+        人工修正
+      </Tag>
+    ) : null,
+    field.upstreamChangedSinceManualPatch ? (
+      <Tag color="warning" key="review">
+        需要复核
+      </Tag>
+    ) : null,
+    field.upstreamBaselineToken &&
+    canPatchStudentPrivateProfileField(field.fieldKey, manualPatchAccess) ? (
+      <Tag key="patchable">可修正</Tag>
+    ) : null,
+  ].filter(Boolean);
+
+  return (
+    <Space direction="vertical" size={4}>
+      <span>{displayText(field.maskedValue)}</span>
+      {tags.length > 0 ? (
+        <Space size="small" wrap>
+          {tags}
+        </Space>
+      ) : null}
+    </Space>
+  );
+}
+
+function renderSummaryFieldSection(
+  section: string,
+  fields: StudentPrivateProfileSummaryField[],
+  manualPatchAccess: StudentPrivateProfileManualPatchAccess,
+) {
+  if (fields.length === 0) {
+    return null;
+  }
+
+  return (
+    <Descriptions
+      bordered
+      column={1}
+      key={section}
+      size="small"
+      title={resolveStudentPrivateProfileSectionLabel(section)}
+    >
+      {fields.map((field) => (
+        <Descriptions.Item
+          key={field.fieldKey}
+          label={resolveStudentPrivateProfileFieldLabel(field.fieldKey)}
+        >
+          {renderSummaryFieldValue(field, manualPatchAccess)}
+        </Descriptions.Item>
+      ))}
+    </Descriptions>
+  );
 }
 
 export function StudentPrivateProfileLabPage() {
@@ -343,6 +419,10 @@ export function StudentPrivateProfileLabPage() {
   const photoDataUrl = useMemo(() => buildPhotoDataUrl(photoReadResult), [photoReadResult]);
 
   const summaryFields = useMemo(() => sortSummaryFields(summary?.fields ?? []), [summary]);
+  const summaryFieldsBySection = useMemo(
+    () => groupSummaryFieldsBySection(summaryFields),
+    [summaryFields],
+  );
   const summaryFieldByKey = useMemo(
     () =>
       new Map(
@@ -1093,99 +1173,44 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
-  const columns: ColumnsType<StudentPrivateProfileSummaryField> = [
-    {
-      dataIndex: 'fieldKey',
-      key: 'fieldKey',
-      title: '字段',
-      render: (value: string) => resolveStudentPrivateProfileFieldLabel(value),
-    },
-    {
-      dataIndex: 'section',
-      key: 'section',
-      title: '分区',
-      render: (value: string) => resolveStudentPrivateProfileSectionLabel(value),
-    },
-    {
-      dataIndex: 'maskedValue',
-      key: 'maskedValue',
-      title: '脱敏值',
-      render: (value: string | null) => displayText(value),
-    },
-    {
-      dataIndex: 'valueStatus',
-      key: 'valueStatus',
-      title: '状态',
-      render: (value: string) => (
-        <Tag color={resolveStudentPrivateProfileStatusColor(value)}>
-          {resolveStudentPrivateProfileStatusLabel(value)}
-        </Tag>
-      ),
-    },
-    {
-      dataIndex: 'source',
-      key: 'source',
-      title: '来源',
-      render: (value: string) => (
-        <Tag color={resolveStudentPrivateProfileSourceColor(value)}>
-          {resolveStudentPrivateProfileSourceLabel(value)}
-        </Tag>
-      ),
-    },
-    {
-      key: 'manual',
-      title: '复核',
-      render: (_, record) => (
-        <Space size="small" wrap>
-          {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
-          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">需复核</Tag> : null}
-          {record.upstreamBaselineToken &&
-          canPatchStudentPrivateProfileField(record.fieldKey, manualPatchAccess) ? (
-            <Tag>可修正</Tag>
-          ) : null}
-        </Space>
-      ),
-    },
-    {
-      dataIndex: 'sourceObservedAt',
-      key: 'sourceObservedAt',
-      title: '观察时间',
-      render: (value: string) => formatDateTime(value),
-    },
-  ];
-
   const familyColumns: ColumnsType<StudentPrivateProfileSummaryFamilyMember> = [
     {
       dataIndex: 'relationshipCode',
       key: 'relationshipCode',
       title: '关系',
+      width: 96,
       render: (value: string) => resolveStudentPrivateProfileFamilyRelationshipLabel(value),
     },
     {
       dataIndex: 'maskedName',
       key: 'maskedName',
       title: '姓名',
+      width: 120,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'maskedPhone',
       key: 'maskedPhone',
       title: '电话',
+      width: 140,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'maskedWorkplace',
+      ellipsis: true,
       key: 'maskedWorkplace',
       title: '工作单位',
+      width: 180,
       render: (value: string | null) => displayText(value),
     },
     {
       key: 'manual',
       title: '复核',
+      width: 180,
       render: (_, record) => (
         <Space size="small" wrap>
           {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
-          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">需复核</Tag> : null}
+          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">需要复核</Tag> : null}
           {record.manualPatchFieldKeys.map((fieldKey) => (
             <Tag key={fieldKey}>{resolveStudentPrivateProfileFamilyFieldLabel(fieldKey)}</Tag>
           ))}
@@ -1195,7 +1220,8 @@ export function StudentPrivateProfileLabPage() {
     {
       dataIndex: 'sourceObservedAt',
       key: 'sourceObservedAt',
-      title: '观察时间',
+      title: '同步时间',
+      width: 160,
       render: (value: string) => formatDateTime(value),
     },
   ];
@@ -1204,30 +1230,37 @@ export function StudentPrivateProfileLabPage() {
     {
       key: 'period',
       title: '起止年月',
+      width: 150,
       render: (_, record) => `${displayText(record.startMonth)} - ${displayText(record.endMonth)}`,
     },
     {
       dataIndex: 'maskedReference',
+      ellipsis: true,
       key: 'maskedReference',
       title: '经历',
+      width: 180,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'maskedOrganization',
+      ellipsis: true,
       key: 'maskedOrganization',
       title: '组织',
+      width: 180,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'sourceUpdatedAt',
       key: 'sourceUpdatedAt',
-      title: '上游更新',
+      title: '更新时间',
+      width: 160,
       render: (value: string | null) => formatDateTime(value),
     },
     {
       dataIndex: 'sourceObservedAt',
       key: 'sourceObservedAt',
-      title: '观察时间',
+      title: '同步时间',
+      width: 160,
       render: (value: string) => formatDateTime(value),
     },
   ];
@@ -1237,12 +1270,14 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'changeTime',
       key: 'changeTime',
       title: '变更时间',
-      render: (value: string | null) => displayText(value),
+      width: 160,
+      render: (value: string | null) => formatDateTime(value),
     },
     {
       dataIndex: 'studentNoTypeCode',
       key: 'studentNoTypeCode',
       title: '异动类型',
+      width: 120,
       render: (value: string | null) =>
         value ? resolveStudentPrivateProfileRecordChangeTypeLabel(value) : displayText(value),
     },
@@ -1250,24 +1285,29 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'maskedStudentNumber',
       key: 'maskedStudentNumber',
       title: '学号',
+      width: 120,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'grade',
       key: 'grade',
       title: '年级',
+      width: 80,
       render: (value: string | null) => displayText(value),
     },
     {
+      ellipsis: true,
       key: 'majorClass',
       title: '专业/班级',
+      width: 220,
       render: (_, record) =>
-        [record.maskedMajorName, record.maskedClassName].filter(Boolean).join(' / ') || '未记录',
+        [record.maskedMajorName, record.maskedClassName].filter(Boolean).join(' / ') || '—',
     },
     {
       dataIndex: 'sourceObservedAt',
       key: 'sourceObservedAt',
-      title: '观察时间',
+      title: '同步时间',
+      width: 160,
       render: (value: string) => formatDateTime(value),
     },
   ];
@@ -1277,10 +1317,12 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'studentId',
       key: 'studentId',
       title: '学生 ID',
+      width: 120,
     },
     {
       key: 'student',
       title: '本地学生',
+      width: 220,
       render: (_, record) => {
         const student = studentOptionById.get(record.studentId);
 
@@ -1300,6 +1342,7 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'status',
       key: 'status',
       title: '状态',
+      width: 90,
       render: (value: StudentPrivateProfileBatchRefreshItem['status']) => (
         <Tag color={resolveStudentPrivateProfileBatchStatusColor(value)}>
           {resolveStudentPrivateProfileBatchStatusLabel(value)}
@@ -1310,12 +1353,14 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'snapshotUpdated',
       key: 'snapshotUpdated',
       title: '本地快照更新',
+      width: 120,
       render: (value: boolean | null) => formatStudentPrivateProfileBoolean(value),
     },
     {
       dataIndex: 'changedSections',
       key: 'changedSections',
       title: '更新内容',
+      width: 180,
       render: (value: string[]) =>
         value.length > 0 ? (
           <Space size="small" wrap>
@@ -1330,7 +1375,8 @@ export function StudentPrivateProfileLabPage() {
     {
       dataIndex: 'warningCodes',
       key: 'warningCodes',
-      title: '提醒码',
+      title: '提醒',
+      width: 220,
       render: (value: string[]) =>
         value.length > 0 ? (
           <Space size="small" wrap>
@@ -1346,14 +1392,18 @@ export function StudentPrivateProfileLabPage() {
     },
     {
       dataIndex: 'errorCode',
+      ellipsis: true,
       key: 'errorCode',
-      title: '失败码',
+      title: '失败代码',
+      width: 200,
       render: (value: string | null) => displayText(value),
     },
     {
       dataIndex: 'errorMessage',
+      ellipsis: true,
       key: 'errorMessage',
       title: '失败原因',
+      width: 240,
       render: (value: string | null) => displayText(value),
     },
   ];
@@ -1368,21 +1418,18 @@ export function StudentPrivateProfileLabPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
-      <Card>
-        <div className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
-            <Typography.Title level={3} style={{ marginBottom: 0 }}>
-              学生资料复核
-            </Typography.Title>
-            <Typography.Paragraph style={{ marginBottom: 0 }}>
-              查看本地已同步的脱敏资料，按需从学工系统刷新，并处理需要人工复核的资料项。
-            </Typography.Paragraph>
-          </div>
+      <DecoratedPageHeader
+        description="查看本地已同步的脱敏摘要，按需从学工系统刷新，并处理需要人工复核的资料项。"
+        icon={<FileSearchOutlined />}
+        title="学生资料复核"
+      />
 
+      <Card title="学生选择与会话">
+        <div className="flex flex-col gap-4">
           <Alert
             showIcon
             type="info"
-            message="本页只展示本地脱敏资料；核验输入提交后会从表单清除，不在页面保留原文。"
+            message="本页只展示本地脱敏摘要；核验输入提交后会从表单清除，不在页面保留原文。"
           />
 
           <Form
@@ -1499,15 +1546,15 @@ export function StudentPrivateProfileLabPage() {
                   />
                 ) : null}
 
-                <Card title="本地资料快照（脱敏）">
+                <Card title="本地资料摘要">
                   {summary ? (
                     <div className="flex flex-col gap-4">
                       <Descriptions bordered column={3} size="small">
                         <Descriptions.Item label="学生 ID">{summary.studentId}</Descriptions.Item>
-                        <Descriptions.Item label="学工系统同步">
+                        <Descriptions.Item label="上游资料时间">
                           {formatDateTime(summary.sourceObservedAt)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="本地保存">
+                        <Descriptions.Item label="本地保存时间">
                           {formatDateTime(summary.lastSyncedAt)}
                         </Descriptions.Item>
                         <Descriptions.Item label="最近人工修正">
@@ -1516,7 +1563,7 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="照片同步">
                           {formatSnapshotPhotoStatus(summary.photo)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="资料分区">
+                        <Descriptions.Item label="同步范围">
                           <Space size="small" wrap>
                             {STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS.map((item) => {
                               const isObserved = summary.profileCompletenessFlags[item.key];
@@ -1532,20 +1579,23 @@ export function StudentPrivateProfileLabPage() {
                         </Descriptions.Item>
                       </Descriptions>
 
-                      <Table
-                        columns={columns}
-                        dataSource={summaryFields}
-                        pagination={false}
-                        rowKey="fieldKey"
-                        size="small"
-                      />
+                      <ResponsiveGrid className="gap-4" columns={{ compact: 1, large: 2 }}>
+                        {SUMMARY_FIELD_SECTION_ORDER.map((section) =>
+                          renderSummaryFieldSection(
+                            section,
+                            summaryFieldsBySection.get(section) ?? [],
+                            manualPatchAccess,
+                          ),
+                        )}
+                      </ResponsiveGrid>
 
                       <Table
                         columns={familyColumns}
                         dataSource={summary.familyMembers}
-                        locale={{ emptyText: '暂无家庭成员摘要' }}
+                        locale={{ emptyText: '暂无家庭信息摘要' }}
                         pagination={false}
                         rowKey="itemKey"
+                        scroll={{ x: 900 }}
                         size="small"
                         title={() => '家庭成员'}
                       />
@@ -1553,11 +1603,12 @@ export function StudentPrivateProfileLabPage() {
                       <Table
                         columns={educationColumns}
                         dataSource={summary.educationResumes}
-                        locale={{ emptyText: '暂无教育/简历经历摘要' }}
+                        locale={{ emptyText: '暂无教育经历摘要' }}
                         pagination={false}
                         rowKey="itemKey"
+                        scroll={{ x: 830 }}
                         size="small"
-                        title={() => '教育/简历经历'}
+                        title={() => '教育经历'}
                       />
 
                       <Table
@@ -1566,6 +1617,7 @@ export function StudentPrivateProfileLabPage() {
                         locale={{ emptyText: '暂无学籍异动摘要' }}
                         pagination={false}
                         rowKey="itemKey"
+                        scroll={{ x: 1020 }}
                         size="small"
                         title={() => '学籍异动'}
                       />
@@ -1751,7 +1803,7 @@ export function StudentPrivateProfileLabPage() {
                           <Descriptions.Item label="尺寸">
                             {photoReadResult.width && photoReadResult.height
                               ? `${photoReadResult.width} x ${photoReadResult.height}`
-                              : '未记录'}
+                              : '—'}
                           </Descriptions.Item>
                           <Descriptions.Item label="大小">
                             {formatApproxByteSize(photoReadResult.byteSize)}
@@ -2021,6 +2073,7 @@ export function StudentPrivateProfileLabPage() {
                         dataSource={batchRefreshResult.results}
                         pagination={false}
                         rowKey="studentId"
+                        scroll={{ x: 1390 }}
                         size="small"
                       />
                     </Space>
