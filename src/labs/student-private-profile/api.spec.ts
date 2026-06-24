@@ -2,14 +2,20 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
+const {
+  executeGraphQLMock,
+  executeUpstreamSessionGraphQLMock,
+  readUpstreamGraphQLErrorDetailMock,
+} = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
   executeUpstreamSessionGraphQLMock: vi.fn(),
+  readUpstreamGraphQLErrorDetailMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
   executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
   isExpiredUpstreamSessionError: vi.fn(() => false),
+  readUpstreamGraphQLErrorDetail: readUpstreamGraphQLErrorDetailMock,
   resolveUpstreamErrorMessage: (error: unknown, fallback: string) =>
     error instanceof Error ? error.message : fallback,
 }));
@@ -21,6 +27,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   compareStudentPrivateProfileFields,
   getStudentPrivateProfileSummary,
+  isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
   normalizeCompareStudentPrivateProfileFieldsInput,
@@ -38,6 +45,7 @@ describe('student-private-profile lab api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
+    readUpstreamGraphQLErrorDetailMock.mockReset();
   });
 
   it('loads summary with the documented query shape', async () => {
@@ -444,6 +452,48 @@ describe('student-private-profile lab api', () => {
         upstreamSessionToken: 'rolling-token-001',
       },
     });
+
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      readStudentPrivateProfilePhoto: {
+        ...photoResult,
+        photoStatus: 'PRESENT',
+        source: 'CACHE',
+        upstreamSessionToken: null,
+      },
+    });
+
+    await readStudentPrivateProfilePhoto({
+      forceRefresh: false,
+      studentId: ' S001 ',
+    });
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenLastCalledWith(expect.any(String), {
+      input: {
+        forceRefresh: false,
+        studentId: 'S001',
+      },
+    });
+  });
+
+  it('recognizes photo upstream session required errors from GraphQL details', () => {
+    const error = new Error('need upstream session');
+
+    readUpstreamGraphQLErrorDetailMock.mockReturnValueOnce({
+      code: 'BAD_USER_INPUT',
+      errorCode: 'STUDENT_PRIVATE_PROFILE_UPSTREAM_SESSION_REQUIRED',
+      message: '首次读取或强制刷新学生照片需要 upstream 会话 token',
+    });
+
+    expect(isStudentPrivateProfileUpstreamSessionRequiredError(error)).toBe(true);
+    expect(readUpstreamGraphQLErrorDetailMock).toHaveBeenCalledWith(error);
+
+    readUpstreamGraphQLErrorDetailMock.mockReturnValueOnce({
+      code: 'BAD_USER_INPUT',
+      errorCode: 'STUDENT_PRIVATE_PROFILE_UPSTREAM_ID_MISSING',
+      message: '目标学生缺少 upstream id',
+    });
+
+    expect(isStudentPrivateProfileUpstreamSessionRequiredError(error)).toBe(false);
   });
 
   it('patches family members with row baseline only for SET', async () => {

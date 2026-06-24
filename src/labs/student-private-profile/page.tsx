@@ -45,6 +45,7 @@ import {
   compareStudentPrivateProfileFields,
   getStudentPrivateProfileSummary,
   isExpiredUpstreamSessionError,
+  isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
   normalizeStudentPrivateProfileStudentId,
@@ -70,6 +71,10 @@ import {
   type StudentPrivateProfileSummaryRecordChange,
 } from './api';
 import { studentPrivateProfileLabMeta } from './meta';
+
+type LoadSummaryOptions = {
+  preserveRefreshResult?: boolean;
+};
 
 type StudentPrivateProfileLabLoaderData = {
   currentAccount: UpstreamAccountIdentity;
@@ -397,6 +402,16 @@ export function StudentPrivateProfileLabPage() {
   const currentStudentId = Form.useWatch('studentId', studentForm);
   const patchAction = Form.useWatch('action', patchForm);
   const familyPatchAction = Form.useWatch('action', familyPatchForm);
+  const currentStudentIdText = typeof currentStudentId === 'string' ? currentStudentId.trim() : '';
+  const activeSummaryStudentId = summary?.studentId ?? null;
+  const isSummaryStudentIdMismatched = Boolean(
+    activeSummaryStudentId && currentStudentIdText !== activeSummaryStudentId,
+  );
+  const summaryActionDisabledReason = !summary
+    ? '请先读取 summary。'
+    : isSummaryStudentIdMismatched
+      ? '当前输入学生 ID 已变化，请重新读取 summary。'
+      : null;
   const photoDataUrl = useMemo(() => buildPhotoDataUrl(photoReadResult), [photoReadResult]);
 
   const summaryFields = useMemo(() => sortSummaryFields(summary?.fields ?? []), [summary]);
@@ -510,13 +525,29 @@ export function StudentPrivateProfileLabPage() {
     familyPatchForm.setFieldValue('itemKey', familyMemberOptions[0]?.value);
   }, [familyMemberByItemKey, familyMemberOptions, familyPatchForm]);
 
+  const resolveSummaryActionStudentId = useCallback(() => {
+    if (!summary) {
+      message.error('请先读取 summary。');
+      return null;
+    }
+
+    if (currentStudentIdText !== summary.studentId) {
+      message.error('当前输入学生 ID 已变化，请重新读取 summary。');
+      return null;
+    }
+
+    return summary.studentId;
+  }, [currentStudentIdText, message, summary]);
+
   const loadSummary = useCallback(
-    async (studentIdValue: string | null | undefined) => {
+    async (studentIdValue: string | null | undefined, options: LoadSummaryOptions = {}) => {
       const studentId = normalizeStudentPrivateProfileStudentId(studentIdValue);
 
       setIsLoadingSummary(true);
       setCompareResult(null);
-      setRefreshResult(null);
+      if (!options.preserveRefreshResult) {
+        setRefreshResult(null);
+      }
       setPhotoReadResult(null);
 
       try {
@@ -568,8 +599,8 @@ export function StudentPrivateProfileLabPage() {
         });
 
         persistSessionFromResult(session, result);
+        await loadSummary(studentId, { preserveRefreshResult: true });
         setRefreshResult(result);
-        await loadSummary(studentId);
         message.success('已刷新 upstream 并重新读取本地摘要。');
       } catch (error) {
         if (!isExpiredUpstreamSessionError(error)) {
@@ -585,8 +616,8 @@ export function StudentPrivateProfileLabPage() {
           });
 
           persistSessionFromResult(refreshedSession, result);
+          await loadSummary(studentId, { preserveRefreshResult: true });
           setRefreshResult(result);
-          await loadSummary(studentId);
           message.success('upstream 会话已续期，资料刷新完成。');
         } catch (refreshError) {
           openLoginModalForExpiredSession({
@@ -668,6 +699,45 @@ export function StudentPrivateProfileLabPage() {
     [message, openLoginModalForExpiredSession, persistSessionFromResult, refreshSession],
   );
 
+  const runPhotoReadCacheFirst = useCallback(
+    async (studentId: string) => {
+      setIsReadingPhoto(true);
+
+      try {
+        const result = await readStudentPrivateProfilePhoto({
+          forceRefresh: false,
+          studentId,
+        });
+
+        setPhotoReadResult(result);
+        message.success(
+          result.photoStatus === 'PRESENT' ? '照片读取完成。' : '照片读取已返回状态。',
+        );
+      } catch (error) {
+        if (!isStudentPrivateProfileUpstreamSessionRequiredError(error)) {
+          message.error(resolveStudentPrivateProfileActionError(error, '暂时无法读取学生照片。'));
+          return;
+        }
+
+        if (upstreamSession) {
+          await runPhotoReadWithSession(upstreamSession, studentId, false);
+          return;
+        }
+
+        openLoginModal({
+          pendingAction: {
+            forceRefresh: false,
+            studentId,
+            type: 'photo',
+          },
+        });
+      } finally {
+        setIsReadingPhoto(false);
+      }
+    },
+    [message, openLoginModal, runPhotoReadWithSession, upstreamSession],
+  );
+
   useEffect(() => {
     if (!upstreamActionRequest) {
       return;
@@ -733,7 +803,16 @@ export function StudentPrivateProfileLabPage() {
 
   const handleReadPhoto = useCallback(
     async (forceRefresh: boolean) => {
-      const studentId = normalizeStudentPrivateProfileStudentId(currentStudentId);
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
+      if (!forceRefresh) {
+        await runPhotoReadCacheFirst(studentId);
+        return;
+      }
 
       if (!upstreamSession) {
         openLoginModal({
@@ -748,11 +827,23 @@ export function StudentPrivateProfileLabPage() {
 
       await runPhotoReadWithSession(upstreamSession, studentId, forceRefresh);
     },
-    [currentStudentId, openLoginModal, runPhotoReadWithSession, upstreamSession],
+    [
+      openLoginModal,
+      resolveSummaryActionStudentId,
+      runPhotoReadCacheFirst,
+      runPhotoReadWithSession,
+      upstreamSession,
+    ],
   );
 
   const handleCompare = useCallback(
     async (values: CompareFormValues) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
       setIsComparing(true);
 
       try {
@@ -763,7 +854,7 @@ export function StudentPrivateProfileLabPage() {
               fieldKey: values.fieldKey as StudentPrivateProfileCompareField,
             },
           ],
-          studentId: currentStudentId,
+          studentId,
         });
 
         setCompareResult(result);
@@ -775,11 +866,17 @@ export function StudentPrivateProfileLabPage() {
         setIsComparing(false);
       }
     },
-    [compareForm, currentStudentId, message],
+    [compareForm, message, resolveSummaryActionStudentId],
   );
 
   const handlePatch = useCallback(
     async (values: PatchFormValues) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
       const fieldKey = values.fieldKey as StudentPrivateProfileManualPatchField;
       const action = values.action as StudentPrivateProfileManualPatchAction;
       const summaryField = summaryFieldByKey.get(fieldKey);
@@ -807,7 +904,7 @@ export function StudentPrivateProfileLabPage() {
               value: action === 'SET' ? values.value : undefined,
             },
           ],
-          studentId: currentStudentId,
+          studentId,
         });
 
         setSummary(nextSummary);
@@ -825,11 +922,17 @@ export function StudentPrivateProfileLabPage() {
         setIsPatching(false);
       }
     },
-    [currentStudentId, manualPatchAccess, message, patchForm, summaryFieldByKey],
+    [manualPatchAccess, message, patchForm, resolveSummaryActionStudentId, summaryFieldByKey],
   );
 
   const handleFamilyPatch = useCallback(
     async (values: FamilyPatchFormValues) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
       const itemKey = values.itemKey ?? '';
       const fieldKey = values.fieldKey as StudentPrivateProfileFamilyMemberPatchField;
       const action = values.action as StudentPrivateProfileManualPatchAction;
@@ -868,7 +971,7 @@ export function StudentPrivateProfileLabPage() {
                 action === 'SET' ? familyMember.upstreamBaselineToken : undefined,
             },
           ],
-          studentId: currentStudentId,
+          studentId,
         });
 
         setSummary(nextSummary);
@@ -885,7 +988,13 @@ export function StudentPrivateProfileLabPage() {
         setIsPatchingFamily(false);
       }
     },
-    [currentStudentId, familyMemberByItemKey, familyPatchForm, manualPatchAccess, message],
+    [
+      familyMemberByItemKey,
+      familyPatchForm,
+      manualPatchAccess,
+      message,
+      resolveSummaryActionStudentId,
+    ],
   );
 
   const columns: ColumnsType<StudentPrivateProfileSummaryField> = [
@@ -1269,6 +1378,10 @@ export function StudentPrivateProfileLabPage() {
         )}
       </Card>
 
+      {isSummaryStudentIdMismatched && summaryActionDisabledReason ? (
+        <Alert showIcon type="warning" message={summaryActionDisabledReason} />
+      ) : null}
+
       <ResponsiveGrid className="gap-6" columns={{ compact: 1, large: 2 }}>
         <Card title="候选值核验">
           <Form
@@ -1288,6 +1401,7 @@ export function StudentPrivateProfileLabPage() {
               <Input.Password autoComplete="off" placeholder="仅用于本次 compare" />
             </Form.Item>
             <Button
+              disabled={isSummaryStudentIdMismatched}
               htmlType="submit"
               icon={<CheckCircleOutlined />}
               loading={isComparing}
@@ -1320,7 +1434,7 @@ export function StudentPrivateProfileLabPage() {
           >
             <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
               <Select
-                disabled={patchFieldOptions.length === 0}
+                disabled={isSummaryStudentIdMismatched || patchFieldOptions.length === 0}
                 options={patchFieldOptions}
                 placeholder="当前账号无可修正字段"
               />
@@ -1344,7 +1458,7 @@ export function StudentPrivateProfileLabPage() {
               </Form.Item>
             ) : null}
             <Button
-              disabled={patchFieldOptions.length === 0}
+              disabled={isSummaryStudentIdMismatched || patchFieldOptions.length === 0}
               htmlType="submit"
               icon={<EditOutlined />}
               loading={isPatching}
@@ -1359,6 +1473,7 @@ export function StudentPrivateProfileLabPage() {
           <Space direction="vertical" size="middle" style={{ width: '100%' }}>
             <Space wrap>
               <Button
+                disabled={isSummaryStudentIdMismatched}
                 icon={<PictureOutlined />}
                 loading={isReadingPhoto}
                 onClick={() => void handleReadPhoto(false)}
@@ -1367,6 +1482,7 @@ export function StudentPrivateProfileLabPage() {
                 读取照片
               </Button>
               <Button
+                disabled={isSummaryStudentIdMismatched}
                 icon={<ReloadOutlined />}
                 loading={isReadingPhoto}
                 onClick={() => void handleReadPhoto(true)}
@@ -1433,6 +1549,7 @@ export function StudentPrivateProfileLabPage() {
               <Select
                 disabled={
                   !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
+                  isSummaryStudentIdMismatched ||
                   familyMemberOptions.length === 0
                 }
                 options={familyMemberOptions}
@@ -1441,7 +1558,10 @@ export function StudentPrivateProfileLabPage() {
             </Form.Item>
             <Form.Item label="字段" name="fieldKey" rules={[{ required: true }]}>
               <Select
-                disabled={!canPatchStudentPrivateProfileFamily(manualPatchAccess)}
+                disabled={
+                  !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
+                  isSummaryStudentIdMismatched
+                }
                 options={FAMILY_PATCH_FIELD_OPTIONS}
               />
             </Form.Item>
@@ -1466,6 +1586,7 @@ export function StudentPrivateProfileLabPage() {
             <Button
               disabled={
                 !canPatchStudentPrivateProfileFamily(manualPatchAccess) ||
+                isSummaryStudentIdMismatched ||
                 familyMemberOptions.length === 0
               }
               htmlType="submit"

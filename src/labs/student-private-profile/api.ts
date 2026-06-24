@@ -21,6 +21,9 @@ export {
   resolveUpstreamErrorMessage,
 };
 
+const STUDENT_PRIVATE_PROFILE_UPSTREAM_SESSION_REQUIRED_ERROR =
+  'STUDENT_PRIVATE_PROFILE_UPSTREAM_SESSION_REQUIRED';
+
 export type StudentPrivateProfileCompareField =
   | 'ID_CARD'
   | 'BANK_CARD_NUMBER'
@@ -456,6 +459,15 @@ export function normalizeStudentPrivateProfileStudentId(studentId: string | null
   return normalizeRequiredTextValue(studentId, {
     label: '本地学生 ID',
   });
+}
+
+export function isStudentPrivateProfileUpstreamSessionRequiredError(error: unknown) {
+  const detail = readUpstreamGraphQLErrorDetail(error);
+
+  return (
+    detail?.code === STUDENT_PRIVATE_PROFILE_UPSTREAM_SESSION_REQUIRED_ERROR ||
+    detail?.errorCode === STUDENT_PRIVATE_PROFILE_UPSTREAM_SESSION_REQUIRED_ERROR
+  );
 }
 
 export function normalizeListClassStudentOptionsInput(input: {
