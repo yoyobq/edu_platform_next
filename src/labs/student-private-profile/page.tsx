@@ -2058,7 +2058,11 @@ export function StudentPrivateProfileLabPage() {
                     locale={{
                       emptyText: selectedClassId ? '暂无班级资料概览' : '先选择班级',
                     }}
-                    pagination={{ pageSize: 20, showSizeChanger: true }}
+                    pagination={{
+                      defaultPageSize: 30,
+                      pageSizeOptions: [30, 60],
+                      showSizeChanger: true,
+                    }}
                     rowKey="studentId"
                     scroll={{ x: 1540 }}
                     size="small"

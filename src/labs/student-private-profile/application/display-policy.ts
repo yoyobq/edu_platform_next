@@ -179,7 +179,7 @@ const WARNING_CODE_LABELS = new Map<string, string>([
   ['PHOTO_TARGET_SIZE_EXCEEDED', '照片超过处理尺寸上限'],
   ['PHOTO_UNSUPPORTED_MIME', '照片格式暂不支持'],
   ['UPSTREAM_INVALID_FIELD', '学工系统字段格式异常'],
-  ['UPSTREAM_EMPTY_FIELD', '学工系统字段为空'],
+  ['UPSTREAM_EMPTY_FIELD', '部分信息有缺失，可在班级概览详情中查看具体缺失项'],
 ]);
 
 const COMPARE_RESULT_LABELS: Record<

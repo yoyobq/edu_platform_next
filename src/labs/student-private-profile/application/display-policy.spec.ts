@@ -82,6 +82,9 @@ describe('student private profile display policy', () => {
     expect(resolveStudentPrivateProfileWarningCodeLabel('PHOTO_BODY_SKIPPED')).toBe(
       '照片本体未随本次资料刷新返回',
     );
+    expect(resolveStudentPrivateProfileWarningCodeLabel('UPSTREAM_EMPTY_FIELD')).toBe(
+      '部分信息有缺失，可在班级概览详情中查看具体缺失项',
+    );
     expect(resolveStudentPrivateProfileWarningCodeLabel('CLASS_PROJECTION_MISMATCH')).toBe(
       '当前班级信息与有效班级关系不一致，已按有效班级刷新',
     );
