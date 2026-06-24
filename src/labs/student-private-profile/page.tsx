@@ -45,23 +45,27 @@ import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 import {
   formatStudentPrivateProfileBoolean,
   formatStudentPrivateProfileCompletenessStatus,
+  normalizeStudentPrivateProfileFieldKey,
   resolveStudentPrivateProfileBatchStatusColor,
   resolveStudentPrivateProfileBatchStatusLabel,
   resolveStudentPrivateProfileCompareResultColor,
   resolveStudentPrivateProfileCompareResultLabel,
   resolveStudentPrivateProfileFamilyFieldLabel,
+  resolveStudentPrivateProfileFamilyRelationshipLabel,
   resolveStudentPrivateProfileFieldLabel,
+  resolveStudentPrivateProfileFieldOrder,
   resolveStudentPrivateProfilePhotoStatusColor,
   resolveStudentPrivateProfilePhotoStatusLabel,
+  resolveStudentPrivateProfileRecordChangeTypeLabel,
   resolveStudentPrivateProfileSectionLabel,
   resolveStudentPrivateProfileSourceColor,
   resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
+  resolveStudentPrivateProfileWarningCodeLabel,
   STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
-  STUDENT_PRIVATE_PROFILE_FIELD_ORDER,
   STUDENT_PRIVATE_PROFILE_PATCH_FIELD_OPTIONS,
 } from './application/display-policy';
 import {
@@ -153,13 +157,9 @@ type FamilyPatchFormValues = {
   value?: string;
 };
 
-const SENSITIVE_IDENTIFIER_PATCH_FIELDS = new Set<StudentPrivateProfileManualPatchField>([
-  'ID_CARD',
-  'BANK_CARD_NUMBER',
-  'CARD_NUMBER',
-]);
+const SENSITIVE_IDENTIFIER_PATCH_FIELDS = new Set(['ID_CARD', 'BANK_CARD_NUMBER', 'CARD_NUMBER']);
 
-const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set<StudentPrivateProfileManualPatchField>([
+const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set([
   'STUDENT_PHONE',
   'CONTACT_PERSON_PHONE',
   'HOME_ADDRESS',
@@ -219,7 +219,7 @@ function formatSnapshotPhotoStatus(photo: StudentPrivateProfileSummary['photo'])
 
 function formatFamilyMemberOption(member: StudentPrivateProfileSummaryFamilyMember) {
   return [
-    member.relationshipCode,
+    resolveStudentPrivateProfileFamilyRelationshipLabel(member.relationshipCode),
     member.maskedName ? `姓名 ${member.maskedName}` : null,
     member.maskedPhone ? `电话 ${member.maskedPhone}` : null,
   ]
@@ -254,14 +254,8 @@ function resolveStudentPrivateProfileActionError(error: unknown, fallback: strin
 
 function sortSummaryFields(fields: StudentPrivateProfileSummaryField[]) {
   return [...fields].sort((left, right) => {
-    const leftOrder =
-      STUDENT_PRIVATE_PROFILE_FIELD_ORDER.get(
-        left.fieldKey as StudentPrivateProfileManualPatchField,
-      ) ?? 999;
-    const rightOrder =
-      STUDENT_PRIVATE_PROFILE_FIELD_ORDER.get(
-        right.fieldKey as StudentPrivateProfileManualPatchField,
-      ) ?? 999;
+    const leftOrder = resolveStudentPrivateProfileFieldOrder(left.fieldKey);
+    const rightOrder = resolveStudentPrivateProfileFieldOrder(right.fieldKey);
 
     return leftOrder - rightOrder || left.fieldKey.localeCompare(right.fieldKey);
   });
@@ -271,7 +265,7 @@ function canPatchStudentPrivateProfileField(
   fieldKey: string,
   access: StudentPrivateProfileManualPatchAccess,
 ) {
-  const patchFieldKey = fieldKey as StudentPrivateProfileManualPatchField;
+  const patchFieldKey = normalizeStudentPrivateProfileFieldKey(fieldKey);
 
   if (SENSITIVE_IDENTIFIER_PATCH_FIELDS.has(patchFieldKey)) {
     return access.sensitiveIdentifiers;
@@ -350,7 +344,13 @@ export function StudentPrivateProfileLabPage() {
 
   const summaryFields = useMemo(() => sortSummaryFields(summary?.fields ?? []), [summary]);
   const summaryFieldByKey = useMemo(
-    () => new Map(summaryFields.map((field) => [field.fieldKey, field])),
+    () =>
+      new Map(
+        summaryFields.map((field) => [
+          normalizeStudentPrivateProfileFieldKey(field.fieldKey),
+          field,
+        ]),
+      ),
     [summaryFields],
   );
   const familyMemberByItemKey = useMemo(
@@ -975,7 +975,7 @@ export function StudentPrivateProfileLabPage() {
 
       const fieldKey = values.fieldKey as StudentPrivateProfileManualPatchField;
       const action = values.action as StudentPrivateProfileManualPatchAction;
-      const summaryField = summaryFieldByKey.get(fieldKey);
+      const summaryField = summaryFieldByKey.get(normalizeStudentPrivateProfileFieldKey(fieldKey));
 
       if (!canPatchStudentPrivateProfileField(fieldKey, manualPatchAccess)) {
         message.error('当前账号没有该字段的人工修正入口。');
@@ -1101,6 +1101,12 @@ export function StudentPrivateProfileLabPage() {
       render: (value: string) => resolveStudentPrivateProfileFieldLabel(value),
     },
     {
+      dataIndex: 'section',
+      key: 'section',
+      title: '分区',
+      render: (value: string) => resolveStudentPrivateProfileSectionLabel(value),
+    },
+    {
       dataIndex: 'maskedValue',
       key: 'maskedValue',
       title: '脱敏值',
@@ -1153,7 +1159,7 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'relationshipCode',
       key: 'relationshipCode',
       title: '关系',
-      render: (value: string) => displayText(value),
+      render: (value: string) => resolveStudentPrivateProfileFamilyRelationshipLabel(value),
     },
     {
       dataIndex: 'maskedName',
@@ -1237,7 +1243,8 @@ export function StudentPrivateProfileLabPage() {
       dataIndex: 'studentNoTypeCode',
       key: 'studentNoTypeCode',
       title: '异动类型',
-      render: (value: string | null) => displayText(value),
+      render: (value: string | null) =>
+        value ? resolveStudentPrivateProfileRecordChangeTypeLabel(value) : displayText(value),
     },
     {
       dataIndex: 'maskedStudentNumber',
@@ -1329,7 +1336,7 @@ export function StudentPrivateProfileLabPage() {
           <Space size="small" wrap>
             {value.map((code) => (
               <Tag color="warning" key={code}>
-                {code}
+                {resolveStudentPrivateProfileWarningCodeLabel(code)}
               </Tag>
             ))}
           </Space>
@@ -1585,7 +1592,7 @@ export function StudentPrivateProfileLabPage() {
                                   <Space size="small" wrap>
                                     {section.warningCodes.map((code) => (
                                       <Tag color="warning" key={code}>
-                                        {code}
+                                        {resolveStudentPrivateProfileWarningCodeLabel(code)}
                                       </Tag>
                                     ))}
                                   </Space>
@@ -1772,7 +1779,12 @@ export function StudentPrivateProfileLabPage() {
                           type="warning"
                           message="照片读取提醒"
                           description={photoReadResult.warnings
-                            .map((warning) => `${warning.code}: ${warning.message}`)
+                            .map(
+                              (warning) =>
+                                `${resolveStudentPrivateProfileWarningCodeLabel(warning.code)}：${
+                                  warning.message
+                                }`,
+                            )
                             .join('\n')}
                           style={{ whiteSpace: 'pre-line' }}
                         />
@@ -1876,7 +1888,12 @@ export function StudentPrivateProfileLabPage() {
                         type="warning"
                         message="刷新提醒"
                         description={refreshResult.warnings
-                          .map((warning) => `${warning.code}: ${warning.message}`)
+                          .map(
+                            (warning) =>
+                              `${resolveStudentPrivateProfileWarningCodeLabel(warning.code)}：${
+                                warning.message
+                              }`,
+                          )
                           .join('\n')}
                         style={{ marginTop: 16, whiteSpace: 'pre-line' }}
                       />
