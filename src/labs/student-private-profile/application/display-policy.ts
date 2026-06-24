@@ -2,6 +2,7 @@
 
 import type {
   StudentPrivateProfileBatchRefreshItem,
+  StudentPrivateProfileClassOverviewAttentionLevel,
   StudentPrivateProfileCompareField,
   StudentPrivateProfileCompareResult,
   StudentPrivateProfileFamilyMemberPatchField,
@@ -202,6 +203,25 @@ const BATCH_STATUS_LABELS: Record<StudentPrivateProfileBatchRefreshItem['status'
   SUCCESS: '成功',
 };
 
+const CLASS_OVERVIEW_ATTENTION_LABELS: Record<
+  StudentPrivateProfileClassOverviewAttentionLevel,
+  string
+> = {
+  INCOMPLETE: '资料不完整',
+  MANUAL_OVERRIDE: '已人工修正',
+  MISSING_SNAPSHOT: '未同步',
+  READY: '资料正常',
+  UPSTREAM_ID_MISSING: '未关联学工系统',
+  WARNING: '存在提醒',
+};
+
+export const STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS = Object.entries(
+  CLASS_OVERVIEW_ATTENTION_LABELS,
+).map(([value, text]) => ({
+  text,
+  value,
+}));
+
 function normalizeDisplayKey(value: string) {
   return value
     .trim()
@@ -274,6 +294,12 @@ export function resolveStudentPrivateProfileBatchStatusLabel(
   status: StudentPrivateProfileBatchRefreshItem['status'],
 ) {
   return BATCH_STATUS_LABELS[status];
+}
+
+export function resolveStudentPrivateProfileClassOverviewAttentionLabel(
+  attentionLevel: StudentPrivateProfileClassOverviewAttentionLevel,
+) {
+  return CLASS_OVERVIEW_ATTENTION_LABELS[attentionLevel];
 }
 
 export function resolveStudentPrivateProfileFamilyRelationshipLabel(relationshipCode: string) {
@@ -375,6 +401,24 @@ export function resolveStudentPrivateProfileBatchStatusColor(
   status: StudentPrivateProfileBatchRefreshItem['status'],
 ) {
   return status === 'SUCCESS' ? 'success' : 'error';
+}
+
+export function resolveStudentPrivateProfileClassOverviewAttentionColor(
+  attentionLevel: StudentPrivateProfileClassOverviewAttentionLevel,
+) {
+  if (attentionLevel === 'READY') {
+    return 'success';
+  }
+
+  if (attentionLevel === 'MANUAL_OVERRIDE') {
+    return 'processing';
+  }
+
+  if (attentionLevel === 'UPSTREAM_ID_MISSING') {
+    return 'error';
+  }
+
+  return 'warning';
 }
 
 export function formatStudentPrivateProfileCompletenessStatus(value: boolean) {

@@ -7,6 +7,8 @@ import {
   formatStudentPrivateProfileCompletenessStatus,
   normalizeStudentPrivateProfileFieldKey,
   resolveStudentPrivateProfileBatchStatusLabel,
+  resolveStudentPrivateProfileClassOverviewAttentionColor,
+  resolveStudentPrivateProfileClassOverviewAttentionLabel,
   resolveStudentPrivateProfileCompareField,
   resolveStudentPrivateProfileCompareResultLabel,
   resolveStudentPrivateProfileFamilyFieldLabel,
@@ -63,6 +65,16 @@ describe('student private profile display policy', () => {
     expect(resolveStudentPrivateProfileCompareResultLabel('MISSING')).toBe('本地暂无可核验值');
     expect(resolveStudentPrivateProfilePhotoStatusLabel('CACHE_RETAINED')).toBe('使用本地缓存');
     expect(resolveStudentPrivateProfileBatchStatusLabel('FAILED')).toBe('失败');
+    expect(resolveStudentPrivateProfileClassOverviewAttentionLabel('READY')).toBe('资料正常');
+    expect(resolveStudentPrivateProfileClassOverviewAttentionLabel('MISSING_SNAPSHOT')).toBe(
+      '未同步',
+    );
+    expect(resolveStudentPrivateProfileClassOverviewAttentionLabel('UPSTREAM_ID_MISSING')).toBe(
+      '未关联学工系统',
+    );
+    expect(resolveStudentPrivateProfileClassOverviewAttentionColor('MANUAL_OVERRIDE')).toBe(
+      'processing',
+    );
     expect(resolveStudentPrivateProfileFamilyRelationshipLabel('3')).toBe('祖父母');
     expect(resolveStudentPrivateProfileFamilyRelationshipLabel('5')).toBe('关系代码 5');
     expect(resolveStudentPrivateProfileRecordChangeTypeLabel('10')).toBe('退学');

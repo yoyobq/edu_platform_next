@@ -1,6 +1,6 @@
 // src/labs/student-private-profile/page.tsx
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CheckCircleOutlined,
   ClearOutlined,
@@ -16,12 +16,14 @@ import {
   App as AntApp,
   Button,
   Card,
+  Collapse,
   Descriptions,
   Empty,
   Form,
   Image,
   Input,
   Modal,
+  Progress,
   Radio,
   Select,
   Space,
@@ -48,6 +50,8 @@ import {
   formatStudentPrivateProfileCompletenessStatus,
   resolveStudentPrivateProfileBatchStatusColor,
   resolveStudentPrivateProfileBatchStatusLabel,
+  resolveStudentPrivateProfileClassOverviewAttentionColor,
+  resolveStudentPrivateProfileClassOverviewAttentionLabel,
   resolveStudentPrivateProfileCompareField,
   resolveStudentPrivateProfileCompareResultColor,
   resolveStudentPrivateProfileCompareResultLabel,
@@ -65,17 +69,18 @@ import {
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
+  STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
 } from './application/display-policy';
 import {
   compareStudentPrivateProfileFields,
+  getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileSummary,
   isExpiredUpstreamSessionError,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
-  normalizeBatchRefreshStudentIds,
   normalizeStudentPrivateProfileStudentId,
   patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
@@ -87,8 +92,12 @@ import {
   type StudentPrivateProfileBatchRefreshItem,
   type StudentPrivateProfileBatchRefreshResult,
   type StudentPrivateProfileClassOption,
+  type StudentPrivateProfileClassOverview,
+  type StudentPrivateProfileClassOverviewSectionStatus,
+  type StudentPrivateProfileClassOverviewStudent,
   type StudentPrivateProfileCompareField,
   type StudentPrivateProfileCompareResult,
+  type StudentPrivateProfileCompletenessFlags,
   type StudentPrivateProfileFamilyMemberPatchField,
   type StudentPrivateProfileManualPatchAction,
   type StudentPrivateProfileManualPatchField,
@@ -123,9 +132,18 @@ type UpstreamPendingAction =
       type: 'photo';
     }
   | {
+      classId: string | null;
       studentIds: string[];
       type: 'batch-refresh';
     };
+
+type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'sync';
+
+type ControlledBatchRefreshResult = StudentPrivateProfileBatchRefreshResult & {
+  completedChunks: number;
+  totalChunks: number;
+  traceIds: string[];
+};
 
 type StudentPrivateProfileManualPatchAccess = {
   contactAndAddress: boolean;
@@ -166,6 +184,8 @@ const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set([
 ]);
 
 const SUMMARY_FIELD_SECTION_ORDER: SummaryFieldSectionKey[] = ['personal', 'sensitiveIdentifiers'];
+const CLASS_BATCH_REFRESH_CHUNK_SIZE = 20;
+const CLASS_BATCH_REFRESH_INTERVAL_MS = 1000;
 
 function formatClassOption(option: StudentPrivateProfileClassOption) {
   return `${option.className} · ${option.studentCount}人`;
@@ -186,8 +206,32 @@ function formatStudentOption(option: StudentPrivateProfileStudentOption) {
     .join(' · ');
 }
 
-function parseBatchStudentIdText(value: string) {
-  return value.split(/[\s,，;；]+/).filter(Boolean);
+function normalizeControlledBatchStudentIds(
+  studentIdsInput: readonly (string | null | undefined)[],
+) {
+  const studentIds: string[] = [];
+  const observedStudentIds = new Set<string>();
+
+  studentIdsInput.forEach((studentId) => {
+    const normalizedStudentId = studentId?.trim() ?? '';
+
+    if (!normalizedStudentId || observedStudentIds.has(normalizedStudentId)) {
+      return;
+    }
+
+    if (normalizedStudentId.length > 32) {
+      throw new Error('本地学生 ID 不能超过 32 个字符。');
+    }
+
+    observedStudentIds.add(normalizedStudentId);
+    studentIds.push(normalizedStudentId);
+  });
+
+  if (studentIds.length === 0) {
+    throw new Error('当前班级没有可刷新的学生。');
+  }
+
+  return studentIds;
 }
 
 function formatDateTime(value: string | null | undefined) {
@@ -202,6 +246,32 @@ function displayText(value: string | null | undefined) {
   return value?.trim() || '—';
 }
 
+function resolveClassOverviewErrorMessage(error: unknown) {
+  const detail = readUpstreamGraphQLErrorDetail(error);
+
+  if (detail?.code === 'INTERNAL_SERVER_ERROR') {
+    return '本地资料快照读取失败，请稍后重试或联系管理员。';
+  }
+
+  return resolveUpstreamErrorMessage(error, '暂时无法读取班级资料概览。');
+}
+
+function DiagnosticCollapse({ children }: { children: ReactNode }) {
+  return (
+    <Collapse
+      ghost
+      items={[
+        {
+          children,
+          key: 'diagnostics',
+          label: '诊断信息',
+        },
+      ]}
+      size="small"
+    />
+  );
+}
+
 function formatApproxByteSize(byteSize: number | null | undefined) {
   if (!Number.isFinite(byteSize) || byteSize <= 0) {
     return '约 0 KB';
@@ -212,10 +282,42 @@ function formatApproxByteSize(byteSize: number | null | undefined) {
 
 function formatSnapshotPhotoStatus(photo: StudentPrivateProfileSummary['photo']) {
   if (!photo.present) {
-    return '待同步';
+    return '上游未观察到照片';
   }
 
-  return `已同步，${formatApproxByteSize(photo.byteSize)}`;
+  return `上游有照片，${formatApproxByteSize(photo.byteSize)}`;
+}
+
+function formatOverviewPhotoStatus(photo: StudentPrivateProfileClassOverviewStudent['photo']) {
+  if (!photo) {
+    return '未观察';
+  }
+
+  if (!photo.present) {
+    return '上游无照片';
+  }
+
+  return `上游有照片，${formatApproxByteSize(photo.byteSize)}`;
+}
+
+function countObservedCompleteness(flags: StudentPrivateProfileCompletenessFlags) {
+  return STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS.filter((item) => flags[item.key]).length;
+}
+
+function chunkStudentIds(studentIds: readonly string[]) {
+  const chunks: string[][] = [];
+
+  for (let index = 0; index < studentIds.length; index += CLASS_BATCH_REFRESH_CHUNK_SIZE) {
+    chunks.push(studentIds.slice(index, index + CLASS_BATCH_REFRESH_CHUNK_SIZE));
+  }
+
+  return chunks;
+}
+
+function waitForBatchInterval() {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, CLASS_BATCH_REFRESH_INTERVAL_MS);
+  });
 }
 
 function formatFamilyMemberSummary(member: StudentPrivateProfileSummaryFamilyMember) {
@@ -302,12 +404,15 @@ function renderSummaryFieldValue(
   field: StudentPrivateProfileSummaryField,
   manualPatchAccess: StudentPrivateProfileManualPatchAccess,
   actions: {
+    disabled: boolean;
     onCompare: (field: StudentPrivateProfileSummaryField) => void;
     onPatch: (field: StudentPrivateProfileSummaryField) => void;
   },
 ) {
-  const canCompare = Boolean(resolveStudentPrivateProfileCompareField(field.fieldKey));
+  const canCompare =
+    !actions.disabled && Boolean(resolveStudentPrivateProfileCompareField(field.fieldKey));
   const canPatch = Boolean(
+    !actions.disabled &&
     field.upstreamBaselineToken &&
     canPatchStudentPrivateProfileField(field.fieldKey, manualPatchAccess),
   );
@@ -354,6 +459,7 @@ function renderSummaryFieldSection(
   fields: StudentPrivateProfileSummaryField[],
   manualPatchAccess: StudentPrivateProfileManualPatchAccess,
   actions: {
+    disabled: boolean;
     onCompare: (field: StudentPrivateProfileSummaryField) => void;
     onPatch: (field: StudentPrivateProfileSummaryField) => void;
   },
@@ -399,13 +505,19 @@ export function StudentPrivateProfileLabPage() {
   const [refreshResult, setRefreshResult] = useState<StudentPrivateProfileRefreshResult | null>(
     null,
   );
-  const [batchRefreshResult, setBatchRefreshResult] =
-    useState<StudentPrivateProfileBatchRefreshResult | null>(null);
+  const [batchRefreshResult, setBatchRefreshResult] = useState<ControlledBatchRefreshResult | null>(
+    null,
+  );
+  const [classOverview, setClassOverview] = useState<StudentPrivateProfileClassOverview | null>(
+    null,
+  );
   const [photoReadResult, setPhotoReadResult] =
     useState<StudentPrivateProfilePhotoReadResult | null>(null);
+  const [activeTabKey, setActiveTabKey] = useState<StudentPrivateProfileLabTabKey>('overview');
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
+  const [isLoadingClassOverview, setIsLoadingClassOverview] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isBatchRefreshing, setIsBatchRefreshing] = useState(false);
   const [isReadingPhoto, setIsReadingPhoto] = useState(false);
@@ -421,13 +533,12 @@ export function StudentPrivateProfileLabPage() {
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
   const [students, setStudents] = useState<StudentPrivateProfileStudentOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
-  const [batchSelectedStudentIds, setBatchSelectedStudentIds] = useState<string[]>([]);
-  const [batchManualStudentIds, setBatchManualStudentIds] = useState('');
   const [batchUpdatedStudentIdsNeedingReload, setBatchUpdatedStudentIdsNeedingReload] = useState<
     string[]
   >([]);
   const [classOptionsError, setClassOptionsError] = useState<string | null>(null);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
+  const [classOverviewError, setClassOverviewError] = useState<string | null>(null);
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<{
     action: UpstreamPendingAction;
     session: StoredUpstreamSession;
@@ -493,30 +604,53 @@ export function StudentPrivateProfileLabPage() {
     () => new Map(students.map((student) => [student.studentId, student])),
     [students],
   );
-  const batchManualStudentIdCandidates = useMemo(
-    () => parseBatchStudentIdText(batchManualStudentIds),
-    [batchManualStudentIds],
+  const selectedClassOption = useMemo(
+    () => classes.find((option) => option.id === selectedClassId) ?? null,
+    [classes, selectedClassId],
   );
-  const batchStudentIdCandidates = useMemo(
-    () => [...batchSelectedStudentIds, ...batchManualStudentIdCandidates],
-    [batchManualStudentIdCandidates, batchSelectedStudentIds],
-  );
-  const batchStudentIdsPreview = useMemo(() => {
-    try {
-      return {
-        error: null,
-        studentIds: normalizeBatchRefreshStudentIds(batchStudentIdCandidates),
-      };
-    } catch (error) {
-      return {
-        error: error instanceof Error ? error.message : '批量刷新学生 ID 输入无效。',
-        studentIds: [] as string[],
-      };
+  const classRefreshSourceStudents = useMemo<
+    {
+      studentId: string;
+      upstreamIdPresent: boolean;
+    }[]
+  >(() => {
+    if (classOverview) {
+      return classOverview.students.map((student) => ({
+        studentId: student.studentId,
+        upstreamIdPresent: student.upstreamIdPresent,
+      }));
     }
-  }, [batchStudentIdCandidates]);
+
+    return students.map((student) => ({
+      studentId: student.studentId,
+      upstreamIdPresent: student.upstreamIdPresent,
+    }));
+  }, [classOverview, students]);
+  const classRefreshCandidateStudentIds = useMemo(
+    () =>
+      classRefreshSourceStudents
+        .filter((student) => student.upstreamIdPresent)
+        .map((student) => student.studentId),
+    [classRefreshSourceStudents],
+  );
+  const classRefreshSkippedCount =
+    classRefreshSourceStudents.length - classRefreshCandidateStudentIds.length;
+  const classOverviewAttentionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+
+    classOverview?.students.forEach((student) => {
+      counts.set(student.attentionLevel, (counts.get(student.attentionLevel) ?? 0) + 1);
+    });
+
+    return counts;
+  }, [classOverview]);
   const shouldOfferSummaryReload = Boolean(
     summary?.studentId && batchUpdatedStudentIdsNeedingReload.includes(summary.studentId),
   );
+  const batchRefreshPercent =
+    batchRefreshResult && batchRefreshResult.totalChunks > 0
+      ? Math.round((batchRefreshResult.completedChunks / batchRefreshResult.totalChunks) * 100)
+      : 0;
   const activeCompareFieldLabel = activeCompareField
     ? resolveStudentPrivateProfileFieldLabel(activeCompareField)
     : '资料项';
@@ -556,7 +690,7 @@ export function StudentPrivateProfileLabPage() {
       setStudents(nextStudents);
 
       if (nextStudents.length === 0) {
-        setStudentOptionsError('该班级暂未返回 active 学生归属，仍可直接输入本地学生 ID。');
+        setStudentOptionsError('该班级暂未返回当前有效学生归属，仍可直接输入本地学生 ID。');
       }
     } catch (error) {
       setStudentOptionsError(
@@ -566,6 +700,27 @@ export function StudentPrivateProfileLabPage() {
       setIsLoadingStudents(false);
     }
   }, []);
+
+  const loadClassOverview = useCallback(
+    async (classId: string) => {
+      setIsLoadingClassOverview(true);
+      setClassOverviewError(null);
+
+      try {
+        const nextOverview = await getStudentPrivateProfileClassOverview({ classId });
+
+        setClassOverview(nextOverview);
+      } catch (error) {
+        const errorMessage = resolveClassOverviewErrorMessage(error);
+
+        setClassOverviewError(errorMessage);
+        message.error(errorMessage);
+      } finally {
+        setIsLoadingClassOverview(false);
+      }
+    },
+    [message],
+  );
 
   useEffect(() => {
     if (!currentAccount) {
@@ -701,8 +856,13 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
-  const applyBatchRefreshResult = useCallback(
-    (result: StudentPrivateProfileBatchRefreshResult) => {
+  const commitBatchRefreshResult = useCallback(
+    (
+      result: ControlledBatchRefreshResult,
+      options: {
+        notify?: boolean;
+      } = {},
+    ) => {
       setBatchRefreshResult(result);
       setBatchUpdatedStudentIdsNeedingReload((studentIds) => {
         const nextStudentIds = new Set(studentIds);
@@ -716,68 +876,131 @@ export function StudentPrivateProfileLabPage() {
         return Array.from(nextStudentIds);
       });
 
+      if (!options.notify) {
+        return;
+      }
+
       if (result.success) {
-        message.success(`批量刷新完成，成功 ${result.successCount} 人。`);
+        message.success(`班级资料同步完成，成功 ${result.successCount} 人。`);
         return;
       }
 
       message.warning(
-        `批量刷新完成，成功 ${result.successCount} 人，失败 ${result.failureCount} 人。`,
+        `班级资料同步完成，成功 ${result.successCount} 人，失败 ${result.failureCount} 人。`,
       );
     },
     [message],
   );
 
   const runBatchRefreshWithSession = useCallback(
-    async (session: StoredUpstreamSession, studentIds: string[]) => {
+    async (
+      session: StoredUpstreamSession,
+      studentIds: string[],
+      options: {
+        classId?: string | null;
+      } = {},
+    ) => {
+      const normalizedStudentIds = normalizeControlledBatchStudentIds(studentIds);
+      const chunks = chunkStudentIds(normalizedStudentIds);
+      let activeSession = session;
+      let aggregate: ControlledBatchRefreshResult = {
+        completedChunks: 0,
+        expiresAt: null,
+        failureCount: 0,
+        requestedCount: 0,
+        results: [],
+        success: true,
+        successCount: 0,
+        totalChunks: chunks.length,
+        traceId: '',
+        traceIds: [],
+        upstreamSessionToken: session.upstreamSessionToken,
+      };
+
       setIsBatchRefreshing(true);
+      setBatchRefreshResult(aggregate);
 
       try {
-        const result = await refreshStudentPrivateProfilesFromUpstream({
-          studentIds,
-          upstreamSessionToken: session.upstreamSessionToken,
-        });
+        for (let index = 0; index < chunks.length; index += 1) {
+          const chunk = chunks[index] ?? [];
+          let result: StudentPrivateProfileBatchRefreshResult;
 
-        persistSessionFromResult(session, result);
-        applyBatchRefreshResult(result);
-      } catch (error) {
-        if (!isExpiredUpstreamSessionError(error)) {
-          message.error(resolveUpstreamErrorMessage(error, '暂时无法批量刷新学生个人资料。'));
-          return;
+          try {
+            result = await refreshStudentPrivateProfilesFromUpstream({
+              studentIds: chunk,
+              upstreamSessionToken: activeSession.upstreamSessionToken,
+            });
+          } catch (error) {
+            if (!isExpiredUpstreamSessionError(error)) {
+              commitBatchRefreshResult(aggregate);
+              message.error(resolveUpstreamErrorMessage(error, '暂时无法同步班级学生资料。'));
+              return;
+            }
+
+            try {
+              const refreshedSession = await refreshSession(activeSession);
+
+              result = await refreshStudentPrivateProfilesFromUpstream({
+                studentIds: chunk,
+                upstreamSessionToken: refreshedSession.upstreamSessionToken,
+              });
+              activeSession = refreshedSession;
+            } catch (refreshError) {
+              commitBatchRefreshResult(aggregate);
+              openLoginModalForExpiredSession({
+                loginError: resolveUpstreamErrorMessage(
+                  refreshError,
+                  '学工系统会话已失效，请重新登录后继续同步。',
+                ),
+                pendingAction: {
+                  classId: options.classId ?? null,
+                  studentIds: normalizedStudentIds.slice(index * CLASS_BATCH_REFRESH_CHUNK_SIZE),
+                  type: 'batch-refresh',
+                },
+                session: activeSession,
+              });
+              return;
+            }
+          }
+
+          activeSession = persistSessionFromResult(activeSession, result);
+          aggregate = {
+            completedChunks: index + 1,
+            expiresAt: result.expiresAt ?? aggregate.expiresAt,
+            failureCount: aggregate.failureCount + result.failureCount,
+            requestedCount: aggregate.requestedCount + result.requestedCount,
+            results: [...aggregate.results, ...result.results],
+            success: aggregate.success && result.success,
+            successCount: aggregate.successCount + result.successCount,
+            totalChunks: chunks.length,
+            traceId: result.traceId,
+            traceIds: [...aggregate.traceIds, result.traceId],
+            upstreamSessionToken: result.upstreamSessionToken,
+          };
+          commitBatchRefreshResult(aggregate);
+
+          if (index < chunks.length - 1) {
+            await waitForBatchInterval();
+          }
         }
 
-        try {
-          const refreshedSession = await refreshSession(session);
-          const result = await refreshStudentPrivateProfilesFromUpstream({
-            studentIds,
-            upstreamSessionToken: refreshedSession.upstreamSessionToken,
-          });
+        commitBatchRefreshResult(aggregate, { notify: true });
 
-          persistSessionFromResult(refreshedSession, result);
-          applyBatchRefreshResult(result);
-        } catch (refreshError) {
-          openLoginModalForExpiredSession({
-            loginError: resolveUpstreamErrorMessage(
-              refreshError,
-              '学工系统会话已失效，请重新登录后继续批量刷新。',
-            ),
-            pendingAction: {
-              studentIds,
-              type: 'batch-refresh',
-            },
-            session,
-          });
+        if (options.classId && options.classId === selectedClassId) {
+          await loadClassOverview(options.classId);
         }
       } finally {
         setIsBatchRefreshing(false);
       }
     },
     [
-      applyBatchRefreshResult,
+      commitBatchRefreshResult,
+      loadClassOverview,
       message,
       openLoginModalForExpiredSession,
       persistSessionFromResult,
       refreshSession,
+      selectedClassId,
     ],
   );
 
@@ -888,6 +1111,9 @@ export function StudentPrivateProfileLabPage() {
       void runBatchRefreshWithSession(
         upstreamActionRequest.session,
         upstreamActionRequest.action.studentIds,
+        {
+          classId: upstreamActionRequest.action.classId,
+        },
       );
       return;
     }
@@ -912,16 +1138,20 @@ export function StudentPrivateProfileLabPage() {
     (classId: string | null) => {
       setSelectedClassId(classId);
       setStudents([]);
-      setBatchSelectedStudentIds([]);
+      setBatchRefreshResult(null);
+      setClassOverview(null);
+      setClassOverviewError(null);
       setStudentOptionsError(null);
+      setActiveTabKey('overview');
 
       if (!classId) {
         return;
       }
 
       void loadStudentsForClass(classId);
+      void loadClassOverview(classId);
     },
-    [loadStudentsForClass],
+    [loadClassOverview, loadStudentsForClass],
   );
 
   const handleStudentOptionChange = useCallback(
@@ -931,9 +1161,14 @@ export function StudentPrivateProfileLabPage() {
     [studentForm],
   );
 
-  const handleBatchStudentSelectChange = useCallback((studentIds: string[]) => {
-    setBatchSelectedStudentIds(studentIds);
-  }, []);
+  const openStudentDetail = useCallback(
+    (studentId: string) => {
+      studentForm.setFieldValue('studentId', studentId);
+      setActiveTabKey('detail');
+      void loadSummary(studentId);
+    },
+    [loadSummary, studentForm],
+  );
 
   const handleRefresh = useCallback(async () => {
     const studentId = normalizeStudentPrivateProfileStudentId(currentStudentId);
@@ -952,18 +1187,24 @@ export function StudentPrivateProfileLabPage() {
   }, [currentStudentId, openLoginModal, runRefreshWithSession, upstreamSession]);
 
   const handleBatchRefresh = useCallback(async () => {
+    if (!selectedClassId) {
+      message.error('请先选择班级。');
+      return;
+    }
+
     let studentIds: string[];
 
     try {
-      studentIds = normalizeBatchRefreshStudentIds(batchStudentIdCandidates);
+      studentIds = normalizeControlledBatchStudentIds(classRefreshCandidateStudentIds);
     } catch (error) {
-      message.error(error instanceof Error ? error.message : '批量刷新学生 ID 输入无效。');
+      message.error(error instanceof Error ? error.message : '当前班级没有可同步的学生。');
       return;
     }
 
     if (!upstreamSession) {
       openLoginModal({
         pendingAction: {
+          classId: selectedClassId,
           studentIds,
           type: 'batch-refresh',
         },
@@ -971,12 +1212,13 @@ export function StudentPrivateProfileLabPage() {
       return;
     }
 
-    await runBatchRefreshWithSession(upstreamSession, studentIds);
+    await runBatchRefreshWithSession(upstreamSession, studentIds, { classId: selectedClassId });
   }, [
-    batchStudentIdCandidates,
+    classRefreshCandidateStudentIds,
     message,
     openLoginModal,
     runBatchRefreshWithSession,
+    selectedClassId,
     upstreamSession,
   ]);
 
@@ -987,6 +1229,15 @@ export function StudentPrivateProfileLabPage() {
 
     await loadSummary(summary.studentId);
   }, [loadSummary, summary]);
+
+  const handleReloadClassOverview = useCallback(async () => {
+    if (!selectedClassId) {
+      message.error('请先选择班级。');
+      return;
+    }
+
+    await loadClassOverview(selectedClassId);
+  }, [loadClassOverview, message, selectedClassId]);
 
   const handleReadPhoto = useCallback(
     async (forceRefresh: boolean) => {
@@ -1261,6 +1512,151 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
+  const classOverviewColumns: ColumnsType<StudentPrivateProfileClassOverviewStudent> = [
+    {
+      fixed: 'left',
+      key: 'student',
+      title: '学生',
+      width: 190,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Button size="small" type="link" onClick={() => openStudentDetail(record.studentId)}>
+            {record.studentName || '未记录姓名'}
+          </Button>
+          <span>{record.studentId}</span>
+        </Space>
+      ),
+      sorter: (left, right) => left.studentId.localeCompare(right.studentId),
+    },
+    {
+      dataIndex: 'attentionLevel',
+      filters: STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
+      key: 'attentionLevel',
+      onFilter: (value, record) => record.attentionLevel === value,
+      title: '资料状态',
+      width: 130,
+      render: (value: StudentPrivateProfileClassOverviewStudent['attentionLevel']) => (
+        <Tag color={resolveStudentPrivateProfileClassOverviewAttentionColor(value)}>
+          {resolveStudentPrivateProfileClassOverviewAttentionLabel(value)}
+        </Tag>
+      ),
+    },
+    {
+      key: 'snapshot',
+      title: '本地资料',
+      width: 180,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <span>{record.snapshotPresent ? '已同步' : '未同步'}</span>
+          <span>{formatDateTime(record.lastSyncedAt)}</span>
+        </Space>
+      ),
+      sorter: (left, right) => (left.lastSyncedAt ?? '').localeCompare(right.lastSyncedAt ?? ''),
+    },
+    {
+      key: 'manual',
+      title: '人工复核',
+      width: 150,
+      render: (_, record) => (
+        <Space size="small" wrap>
+          {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
+          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">上游已变化</Tag> : null}
+          {!record.manualOverrideActive && !record.upstreamChangedSinceManualPatch ? '无' : null}
+        </Space>
+      ),
+      filters: [
+        { text: '已人工修正', value: 'manual' },
+        { text: '上游已变化', value: 'changed' },
+      ],
+      onFilter: (value, record) =>
+        value === 'manual' ? record.manualOverrideActive : record.upstreamChangedSinceManualPatch,
+    },
+    {
+      key: 'photo',
+      title: '照片',
+      width: 130,
+      render: (_, record) => formatOverviewPhotoStatus(record.photo),
+    },
+    {
+      key: 'completeness',
+      title: '同步范围',
+      width: 260,
+      render: (_, record) => {
+        const observedCount = countObservedCompleteness(record.profileCompletenessFlags);
+
+        return (
+          <Space direction="vertical" size={4}>
+            <span>
+              {observedCount}/{STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS.length} 已同步
+            </span>
+            <Space size="small" wrap>
+              {STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS.map((item) => (
+                <Tag
+                  color={record.profileCompletenessFlags[item.key] ? 'success' : 'default'}
+                  key={item.key}
+                >
+                  {item.label}
+                </Tag>
+              ))}
+            </Space>
+          </Space>
+        );
+      },
+    },
+    {
+      key: 'sections',
+      title: '分区状态',
+      width: 280,
+      render: (_, record) =>
+        record.sectionStatuses.length > 0 ? (
+          <Space size="small" wrap>
+            {record.sectionStatuses.map(
+              (section: StudentPrivateProfileClassOverviewSectionStatus) => (
+                <Tag
+                  color={resolveStudentPrivateProfileStatusColor(section.sourceStatus)}
+                  key={section.section}
+                >
+                  {resolveStudentPrivateProfileSectionLabel(section.section)}
+                  {section.sourceTotal === null ? '' : ` ${section.sourceTotal}`}
+                </Tag>
+              ),
+            )}
+          </Space>
+        ) : (
+          '暂无'
+        ),
+    },
+    {
+      dataIndex: 'warningCodes',
+      key: 'warningCodes',
+      title: '提醒',
+      width: 220,
+      render: (value: string[]) =>
+        value.length > 0 ? (
+          <Space size="small" wrap>
+            {value.map((code) => (
+              <Tag color="warning" key={code}>
+                {resolveStudentPrivateProfileWarningCodeLabel(code)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+    {
+      fixed: 'right',
+      key: 'action',
+      title: '操作',
+      width: 110,
+      render: (_, record) => (
+        <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
+          查看详情
+        </Button>
+      ),
+    },
+  ];
+
   const familyColumns: ColumnsType<StudentPrivateProfileSummaryFamilyMember> = [
     {
       dataIndex: 'relationshipCode',
@@ -1319,7 +1715,12 @@ export function StudentPrivateProfileLabPage() {
       width: 90,
       render: (_, record) =>
         canPatchStudentPrivateProfileFamily(manualPatchAccess) && record.upstreamBaselineToken ? (
-          <Button size="small" type="link" onClick={() => openFamilyPatchModal(record)}>
+          <Button
+            disabled={isSummaryStudentIdMismatched}
+            size="small"
+            type="link"
+            onClick={() => openFamilyPatchModal(record)}
+          >
             修正
           </Button>
         ) : (
@@ -1454,7 +1855,7 @@ export function StudentPrivateProfileLabPage() {
     {
       dataIndex: 'snapshotUpdated',
       key: 'snapshotUpdated',
-      title: '本地快照更新',
+      title: '本地资料更新',
       width: 120,
       render: (value: boolean | null) => formatStudentPrivateProfileBoolean(value),
     },
@@ -1526,20 +1927,15 @@ export function StudentPrivateProfileLabPage() {
         title="学生资料复核"
       />
 
-      <Card title="学生选择与会话">
+      <Card title="班级与会话">
         <div className="flex flex-col gap-4">
           <Alert
             showIcon
             type="info"
-            message="本页只展示本地脱敏摘要；核验输入提交后会从表单清除，不在页面保留原文。"
+            message="先按班级查看本地资料概览；需要处理个案时，再进入学生详情核验或修正。"
           />
 
-          <Form
-            form={studentForm}
-            initialValues={{ studentId: '' }}
-            layout="inline"
-            onFinish={handleLoadSummary}
-          >
+          <Form layout="inline">
             <Form.Item label="班级">
               <Select
                 allowClear
@@ -1552,49 +1948,21 @@ export function StudentPrivateProfileLabPage() {
                 notFoundContent={isLoadingClasses ? '正在加载班级' : '没有匹配班级'}
                 onChange={handleClassChange}
                 options={classSelectOptions}
-                placeholder="选择有 active 学生归属的班级"
+                placeholder="选择有当前有效学生归属的班级"
                 showSearch
                 style={{ minWidth: 260 }}
                 value={selectedClassId}
               />
             </Form.Item>
-            <Form.Item label="学生">
-              <Select
-                allowClear
-                disabled={!selectedClassId}
-                filterOption={(input, option) =>
-                  String(option?.label ?? '')
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
-                loading={isLoadingStudents}
-                notFoundContent={isLoadingStudents ? '正在加载学生' : '没有匹配学生'}
-                onChange={handleStudentOptionChange}
-                options={studentSelectOptions}
-                placeholder={selectedClassId ? '选择学生' : '先选择班级'}
-                showSearch
-                style={{ minWidth: 240 }}
-              />
-            </Form.Item>
-            <Form.Item
-              label="本地学生 ID"
-              name="studentId"
-              rules={[{ required: true, message: '请输入本地学生 ID。', whitespace: true }]}
-            >
-              <Input allowClear placeholder="本地学生 ID" />
-            </Form.Item>
             <Form.Item>
               <Space wrap>
                 <Button
-                  htmlType="submit"
                   icon={<FileSearchOutlined />}
-                  loading={isLoadingSummary}
+                  loading={isLoadingClassOverview}
+                  onClick={() => void handleReloadClassOverview()}
                   type="primary"
                 >
-                  读取本地资料
-                </Button>
-                <Button icon={<CloudSyncOutlined />} loading={isRefreshing} onClick={handleRefresh}>
-                  从学工系统刷新
+                  读取班级概览
                 </Button>
                 <Button icon={<LoginOutlined />} onClick={() => openLoginModal()}>
                   登录学工系统
@@ -1607,12 +1975,17 @@ export function StudentPrivateProfileLabPage() {
           </Form>
 
           {classOptionsError ? <Alert showIcon type="warning" message={classOptionsError} /> : null}
-          {studentOptionsError ? (
-            <Alert showIcon type="warning" message={studentOptionsError} />
-          ) : null}
+          {classOverviewError ? <Alert showIcon type="error" message={classOverviewError} /> : null}
 
           <Descriptions bordered column={3} size="small">
             <Descriptions.Item label="当前账号">{currentAccount.displayName}</Descriptions.Item>
+            <Descriptions.Item label="当前班级">
+              {classOverview
+                ? `${classOverview.className} · ${classOverview.studentCount}人`
+                : selectedClassOption
+                  ? formatClassOption(selectedClassOption)
+                  : '未选择'}
+            </Descriptions.Item>
             <Descriptions.Item label="学工系统账号范围">
               {lockedUpstreamLoginUserId
                 ? `仅本人账号：${lockedUpstreamLoginUserId}`
@@ -1626,10 +1999,141 @@ export function StudentPrivateProfileLabPage() {
       </Card>
 
       <Tabs
+        activeKey={activeTabKey}
         items={[
           {
             children: (
+              <Card title={classOverview ? `${classOverview.className}资料概览` : '班级资料概览'}>
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  {selectedClassId ? (
+                    <Space size="small" wrap>
+                      <Button
+                        icon={<ReloadOutlined />}
+                        loading={isLoadingClassOverview}
+                        onClick={() => void handleReloadClassOverview()}
+                      >
+                        重新读取概览
+                      </Button>
+                      <Button icon={<CloudSyncOutlined />} onClick={() => setActiveTabKey('sync')}>
+                        同步当前班级
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Empty description="先选择班级查看本地资料概览" />
+                  )}
+
+                  {classOverview ? (
+                    <Descriptions bordered column={4} size="small">
+                      <Descriptions.Item label="班级">{classOverview.className}</Descriptions.Item>
+                      <Descriptions.Item label="班级代码">
+                        {classOverview.classCode}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="学生数">
+                        {classOverview.studentCount}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="需关注">
+                        {
+                          classOverview.students.filter(
+                            (student) => student.attentionLevel !== 'READY',
+                          ).length
+                        }
+                      </Descriptions.Item>
+                      <Descriptions.Item label="状态分布" span={4}>
+                        <Space size="small" wrap>
+                          {STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS.map((item) => (
+                            <Tag key={String(item.value)}>
+                              {item.text}：
+                              {classOverviewAttentionCounts.get(String(item.value)) ?? 0}
+                            </Tag>
+                          ))}
+                        </Space>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  ) : null}
+
+                  <Table
+                    columns={classOverviewColumns}
+                    dataSource={classOverview?.students ?? []}
+                    loading={isLoadingClassOverview}
+                    locale={{
+                      emptyText: selectedClassId ? '暂无班级资料概览' : '先选择班级',
+                    }}
+                    pagination={{ pageSize: 20, showSizeChanger: true }}
+                    rowKey="studentId"
+                    scroll={{ x: 1540 }}
+                    size="small"
+                  />
+                </Space>
+              </Card>
+            ),
+            key: 'overview',
+            label: '班级资料概览',
+          },
+          {
+            children: (
               <div className="flex flex-col gap-6">
+                <Card title="学生资料详情">
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Form
+                      form={studentForm}
+                      initialValues={{ studentId: '' }}
+                      layout="inline"
+                      onFinish={handleLoadSummary}
+                    >
+                      <Form.Item label="学生">
+                        <Select
+                          allowClear
+                          disabled={!selectedClassId}
+                          filterOption={(input, option) =>
+                            String(option?.label ?? '')
+                              .toLowerCase()
+                              .includes(input.toLowerCase())
+                          }
+                          loading={isLoadingStudents}
+                          notFoundContent={isLoadingStudents ? '正在加载学生' : '没有匹配学生'}
+                          onChange={handleStudentOptionChange}
+                          options={studentSelectOptions}
+                          placeholder={selectedClassId ? '选择学生' : '先选择班级'}
+                          showSearch
+                          style={{ minWidth: 240 }}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        label="本地学生 ID"
+                        name="studentId"
+                        rules={[
+                          { required: true, message: '请输入本地学生 ID。', whitespace: true },
+                        ]}
+                      >
+                        <Input allowClear placeholder="本地学生 ID" />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space wrap>
+                          <Button
+                            htmlType="submit"
+                            icon={<FileSearchOutlined />}
+                            loading={isLoadingSummary}
+                            type="primary"
+                          >
+                            读取本地资料
+                          </Button>
+                          <Button
+                            icon={<CloudSyncOutlined />}
+                            loading={isRefreshing}
+                            onClick={handleRefresh}
+                          >
+                            从学工系统刷新
+                          </Button>
+                        </Space>
+                      </Form.Item>
+                    </Form>
+
+                    {studentOptionsError ? (
+                      <Alert showIcon type="warning" message={studentOptionsError} />
+                    ) : null}
+                  </Space>
+                </Card>
+
                 {shouldOfferSummaryReload ? (
                   <Alert
                     showIcon
@@ -1662,7 +2166,7 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="最近人工修正">
                           {formatDateTime(summary.lastManualUpdatedAt)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="照片同步">
+                        <Descriptions.Item label="照片状态">
                           {formatSnapshotPhotoStatus(summary.photo)}
                         </Descriptions.Item>
                         <Descriptions.Item label="同步范围">
@@ -1688,6 +2192,7 @@ export function StudentPrivateProfileLabPage() {
                             summaryFieldsBySection.get(section) ?? [],
                             manualPatchAccess,
                             {
+                              disabled: isSummaryStudentIdMismatched,
                               onCompare: openCompareModal,
                               onPatch: openPatchModal,
                             },
@@ -1827,10 +2332,17 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="物化时间">
                           {formatDateTime(photoReadResult.materializedAt)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="追踪 ID">
-                          {photoReadResult.traceId}
-                        </Descriptions.Item>
                       </Descriptions>
+                    ) : null}
+
+                    {photoReadResult ? (
+                      <DiagnosticCollapse>
+                        <Descriptions bordered column={1} size="small">
+                          <Descriptions.Item label="追踪 ID">
+                            {photoReadResult.traceId}
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </DiagnosticCollapse>
                     ) : null}
 
                     {photoDataUrl ? (
@@ -1868,10 +2380,9 @@ export function StudentPrivateProfileLabPage() {
                           {refreshResult.success ? '成功' : '失败'}
                         </Tag>
                       </Descriptions.Item>
-                      <Descriptions.Item label="本地快照更新">
+                      <Descriptions.Item label="本地资料更新">
                         {formatStudentPrivateProfileBoolean(refreshResult.snapshotUpdated)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="追踪 ID">{refreshResult.traceId}</Descriptions.Item>
                       <Descriptions.Item label="更新内容">
                         {refreshResult.changedSections.length > 0
                           ? refreshResult.changedSections
@@ -1881,13 +2392,20 @@ export function StudentPrivateProfileLabPage() {
                       </Descriptions.Item>
                       <Descriptions.Item label="照片">
                         {refreshResult.photoPresent
-                          ? `本次已同步，${formatApproxByteSize(refreshResult.photoByteSize)}`
-                          : '本次未同步'}
-                      </Descriptions.Item>
-                      <Descriptions.Item label="学工系统会话">
-                        {refreshResult.upstreamSessionToken ? '已更新' : '未变化'}
+                          ? `本次观察到照片，${formatApproxByteSize(refreshResult.photoByteSize)}`
+                          : '本次未观察到照片'}
                       </Descriptions.Item>
                     </Descriptions>
+                    <DiagnosticCollapse>
+                      <Descriptions bordered column={2} size="small">
+                        <Descriptions.Item label="追踪 ID">
+                          {refreshResult.traceId}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="学工系统会话">
+                          {refreshResult.upstreamSessionToken ? '已更新' : '未变化'}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    </DiagnosticCollapse>
                     {refreshResult.warnings.length > 0 ? (
                       <Alert
                         showIcon
@@ -1908,81 +2426,63 @@ export function StudentPrivateProfileLabPage() {
                 ) : null}
               </div>
             ),
-            key: 'single',
-            label: '单学生工作台',
+            key: 'detail',
+            label: '学生资料详情',
           },
           {
             children: (
               <div className="flex flex-col gap-6">
-                <Card title="小批量刷新资料">
+                <Card title="班级资料同步">
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <Alert
                       showIcon
                       type="info"
-                      message="刷新完成后仅展示每名学生的处理结果；需要查看详情请回到单学生工作台重新读取。"
+                      message="同步当前班级中已关联学工系统的学生；未关联学生会保留在概览中提示。"
                     />
 
-                    <Form layout="vertical">
-                      <Form.Item label="从当前班级多选学生">
-                        <Select
-                          disabled={!selectedClassId}
-                          filterOption={(input, option) =>
-                            String(option?.label ?? '')
-                              .toLowerCase()
-                              .includes(input.toLowerCase())
-                          }
-                          loading={isLoadingStudents}
-                          mode="multiple"
-                          onChange={handleBatchStudentSelectChange}
-                          options={studentSelectOptions}
-                          placeholder={selectedClassId ? '选择 1-20 个学生' : '先选择班级'}
-                          showSearch
-                          value={batchSelectedStudentIds}
-                        />
-                      </Form.Item>
+                    <Descriptions bordered column={4} size="small">
+                      <Descriptions.Item label="当前班级">
+                        {classOverview?.className ?? selectedClassOption?.className ?? '未选择'}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="班级学生">
+                        {classRefreshSourceStudents.length}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="将同步">
+                        {classRefreshCandidateStudentIds.length}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="未关联学工系统">
+                        {classRefreshSkippedCount}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="分片策略" span={4}>
+                        每批最多 {CLASS_BATCH_REFRESH_CHUNK_SIZE} 人，串行同步，批次间隔{' '}
+                        {CLASS_BATCH_REFRESH_INTERVAL_MS / 1000} 秒。
+                      </Descriptions.Item>
+                    </Descriptions>
 
-                      <Form.Item label="手动输入本地学生 ID">
-                        <Input.TextArea
-                          autoSize={{ minRows: 3, maxRows: 6 }}
-                          onChange={(event) => setBatchManualStudentIds(event.target.value)}
-                          placeholder="可粘贴本地学生 ID，支持换行、逗号、空格分隔"
-                          value={batchManualStudentIds}
-                        />
-                      </Form.Item>
-                    </Form>
+                    {classRefreshSkippedCount > 0 ? (
+                      <Alert
+                        showIcon
+                        type="warning"
+                        message={`${classRefreshSkippedCount} 名学生未关联学工系统，本次不会提交刷新。`}
+                      />
+                    ) : null}
 
-                    {batchStudentIdsPreview.error ? (
-                      <Alert showIcon type="warning" message={batchStudentIdsPreview.error} />
-                    ) : (
-                      <Descriptions bordered column={3} size="small">
-                        <Descriptions.Item label="将提交学生数">
-                          {batchStudentIdsPreview.studentIds.length}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="选择来源">
-                          {batchSelectedStudentIds.length}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="粘贴来源">
-                          {batchManualStudentIdCandidates.length}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="本次提交学生" span={3}>
-                          <Space size="small" wrap>
-                            {batchStudentIdsPreview.studentIds.map((studentId) => (
-                              <Tag key={studentId}>{studentId}</Tag>
-                            ))}
-                          </Space>
-                        </Descriptions.Item>
-                      </Descriptions>
-                    )}
+                    {batchRefreshResult ? (
+                      <Progress
+                        percent={batchRefreshPercent}
+                        status={isBatchRefreshing ? 'active' : 'normal'}
+                      />
+                    ) : null}
 
                     <Space wrap>
                       <Button
-                        disabled={Boolean(batchStudentIdsPreview.error)}
+                        disabled={!selectedClassId || classRefreshCandidateStudentIds.length === 0}
                         icon={<CloudSyncOutlined />}
                         loading={isBatchRefreshing}
                         onClick={() => void handleBatchRefresh()}
                         type="primary"
                       >
-                        执行小批量刷新
+                        同步当前班级资料
                       </Button>
                       <Button icon={<LoginOutlined />} onClick={() => openLoginModal()}>
                         登录学工系统
@@ -1992,7 +2492,7 @@ export function StudentPrivateProfileLabPage() {
                 </Card>
 
                 {batchRefreshResult ? (
-                  <Card title="小批量刷新结果">
+                  <Card title="班级同步结果">
                     <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                       <Descriptions bordered column={4} size="small">
                         <Descriptions.Item label="总体结果">
@@ -2009,18 +2509,29 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="失败人数">
                           {batchRefreshResult.failureCount}
                         </Descriptions.Item>
-                        <Descriptions.Item label="追踪 ID" span={2}>
-                          {batchRefreshResult.traceId}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="学工系统会话" span={2}>
-                          {batchRefreshResult.upstreamSessionToken ? '已更新' : '未返回'}
-                        </Descriptions.Item>
-                        <Descriptions.Item label="会话有效期" span={4}>
-                          {batchRefreshResult.expiresAt
-                            ? formatDateTime(batchRefreshResult.expiresAt)
-                            : '本次未变化'}
+                        <Descriptions.Item label="完成批次">
+                          {batchRefreshResult.completedChunks}/{batchRefreshResult.totalChunks}
                         </Descriptions.Item>
                       </Descriptions>
+
+                      <DiagnosticCollapse>
+                        <Descriptions bordered column={3} size="small">
+                          <Descriptions.Item label="最近追踪 ID">
+                            {batchRefreshResult.traceId}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="追踪 ID 数">
+                            {batchRefreshResult.traceIds.length}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="学工系统会话">
+                            {batchRefreshResult.upstreamSessionToken ? '已更新' : '未返回'}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="会话有效期">
+                            {batchRefreshResult.expiresAt
+                              ? formatDateTime(batchRefreshResult.expiresAt)
+                              : '本次未变化'}
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </DiagnosticCollapse>
 
                       <Table
                         columns={batchRefreshColumns}
@@ -2035,10 +2546,11 @@ export function StudentPrivateProfileLabPage() {
                 ) : null}
               </div>
             ),
-            key: 'batch',
-            label: '小批量刷新资料',
+            key: 'sync',
+            label: '班级资料同步',
           },
         ]}
+        onChange={(key) => setActiveTabKey(key as StudentPrivateProfileLabTabKey)}
       />
 
       <Modal

@@ -46,6 +46,23 @@ export type StudentPrivateProfileFamilyMemberPatchField =
 
 export type StudentPrivateProfilePhotoStatus = 'CACHE_RETAINED' | 'INVALID' | 'MISSING' | 'PRESENT';
 
+export type StudentPrivateProfileCompletenessFlags = {
+  educationObserved: boolean;
+  familyObserved: boolean;
+  personalObserved: boolean;
+  photoObserved: boolean;
+  recordObserved: boolean;
+  sensitiveIdentifiersObserved: boolean;
+};
+
+export type StudentPrivateProfileClassOverviewAttentionLevel =
+  | 'INCOMPLETE'
+  | 'MANUAL_OVERRIDE'
+  | 'MISSING_SNAPSHOT'
+  | 'READY'
+  | 'UPSTREAM_ID_MISSING'
+  | 'WARNING';
+
 export type StudentPrivateProfileClassOption = {
   authorizationPath: string;
   classCode: string;
@@ -138,18 +155,61 @@ export type StudentPrivateProfileSummary = {
     present: boolean;
     sourceObservedAt: string;
   };
-  profileCompletenessFlags: {
-    educationObserved: boolean;
-    familyObserved: boolean;
-    personalObserved: boolean;
-    photoObserved: boolean;
-    recordObserved: boolean;
-    sensitiveIdentifiersObserved: boolean;
-  };
+  profileCompletenessFlags: StudentPrivateProfileCompletenessFlags;
   recordChanges: StudentPrivateProfileSummaryRecordChange[];
   sectionStatuses: StudentPrivateProfileSummarySectionStatus[];
   sourceObservedAt: string;
   studentId: string;
+};
+
+export type StudentPrivateProfileClassOverviewSectionStatus = {
+  lastManualUpdatedAt: string | null;
+  manualOverrideActive: boolean;
+  observedAt: string;
+  section: string;
+  snapshotPresent: boolean;
+  sourceEndpoint: string;
+  sourceStatus: string;
+  sourceTotal: number | null;
+  upstreamChangedSinceManualPatch: boolean;
+  warningCodes: string[];
+};
+
+export type StudentPrivateProfileClassOverviewPhoto = {
+  byteSize: number;
+  present: boolean;
+  sourceObservedAt: string;
+};
+
+export type StudentPrivateProfileClassOverviewStudent = {
+  activeMembershipClassCode: string;
+  activeMembershipClassName: string;
+  attentionLevel: StudentPrivateProfileClassOverviewAttentionLevel;
+  currentClassCode: string | null;
+  currentClassId: string | null;
+  lastManualUpdatedAt: string | null;
+  lastSyncedAt: string | null;
+  manualOverrideActive: boolean;
+  membershipLastObservedAt: string | null;
+  photo: StudentPrivateProfileClassOverviewPhoto | null;
+  profileCompletenessFlags: StudentPrivateProfileCompletenessFlags;
+  sectionStatuses: StudentPrivateProfileClassOverviewSectionStatus[];
+  snapshotPresent: boolean;
+  sourceObservedAt: string | null;
+  studentId: string;
+  studentName: string;
+  studentStatus: string;
+  upstreamChangedSinceManualPatch: boolean;
+  upstreamIdPresent: boolean;
+  warningCodes: string[];
+};
+
+export type StudentPrivateProfileClassOverview = {
+  classCode: string;
+  classId: string;
+  className: string;
+  studentCount: number;
+  students: StudentPrivateProfileClassOverviewStudent[];
 };
 
 export type StudentPrivateProfileRefreshWarning = {
@@ -256,6 +316,10 @@ type StudentPrivateProfileClassOptionsResponse = {
 
 type StudentPrivateProfileClassStudentOptionsResponse = {
   studentPrivateProfileClassStudentOptions: StudentPrivateProfileStudentOption[];
+};
+
+type StudentPrivateProfileClassOverviewResponse = {
+  studentPrivateProfileClassOverview: StudentPrivateProfileClassOverview;
 };
 
 type RefreshStudentPrivateProfileResponse = {
@@ -392,6 +456,61 @@ const STUDENT_PRIVATE_PROFILE_CLASS_STUDENT_OPTIONS_QUERY = `
       activeMembershipClassCode
       activeMembershipClassName
       lastObservedAt
+    }
+  }
+`;
+
+const STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_QUERY = `
+  query StudentPrivateProfileLabClassOverview($input: StudentPrivateProfileClassOverviewInput!) {
+    studentPrivateProfileClassOverview(input: $input) {
+      classId
+      classCode
+      className
+      studentCount
+      students {
+        studentId
+        studentName
+        studentStatus
+        upstreamIdPresent
+        currentClassId
+        currentClassCode
+        activeMembershipClassCode
+        activeMembershipClassName
+        membershipLastObservedAt
+        snapshotPresent
+        sourceObservedAt
+        lastSyncedAt
+        lastManualUpdatedAt
+        manualOverrideActive
+        upstreamChangedSinceManualPatch
+        photo {
+          present
+          byteSize
+          sourceObservedAt
+        }
+        profileCompletenessFlags {
+          personalObserved
+          sensitiveIdentifiersObserved
+          photoObserved
+          familyObserved
+          educationObserved
+          recordObserved
+        }
+        sectionStatuses {
+          section
+          sourceStatus
+          observedAt
+          sourceEndpoint
+          sourceTotal
+          snapshotPresent
+          lastManualUpdatedAt
+          manualOverrideActive
+          upstreamChangedSinceManualPatch
+          warningCodes
+        }
+        warningCodes
+        attentionLevel
+      }
     }
   }
 `;
@@ -585,6 +704,14 @@ export function normalizeListClassStudentOptionsInput(input: {
   };
 }
 
+export function normalizeStudentPrivateProfileClassOverviewInput(input: {
+  classId: string | null | undefined;
+}) {
+  return {
+    classId: normalizeRequiredTextValue(input.classId, { label: '班级 ID' }),
+  };
+}
+
 export function normalizeCompareStudentPrivateProfileFieldsInput(input: {
   fields: readonly {
     candidateValue: string | null | undefined;
@@ -729,6 +856,21 @@ export async function listStudentPrivateProfileClassStudentOptions(input: {
   return [...response.studentPrivateProfileClassStudentOptions].sort((left, right) =>
     left.studentId.localeCompare(right.studentId),
   );
+}
+
+export async function getStudentPrivateProfileClassOverview(input: {
+  classId: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentPrivateProfileClassOverviewResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentPrivateProfileClassOverviewInput>;
+    }
+  >(STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_QUERY, {
+    input: normalizeStudentPrivateProfileClassOverviewInput(input),
+  });
+
+  return response.studentPrivateProfileClassOverview;
 }
 
 export async function refreshStudentPrivateProfileFromUpstream(input: {

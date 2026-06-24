@@ -26,6 +26,7 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   compareStudentPrivateProfileFields,
+  getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileSummary,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
@@ -37,6 +38,7 @@ import {
   normalizePatchStudentPrivateProfileFamilyMembersInput,
   normalizePatchStudentPrivateProfileFieldsInput,
   normalizeReadStudentPrivateProfilePhotoInput,
+  normalizeStudentPrivateProfileClassOverviewInput,
   patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
   readStudentPrivateProfilePhoto,
@@ -324,6 +326,93 @@ describe('student-private-profile lab api', () => {
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('sessionToken');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('fetchClassStudentCourseResults');
+  });
+
+  it('loads class overview without upstream access and requests thin status fields', async () => {
+    expect(
+      normalizeStudentPrivateProfileClassOverviewInput({
+        classId: ' class-1032301 ',
+      }),
+    ).toEqual({
+      classId: 'class-1032301',
+    });
+
+    const overview = {
+      classCode: '1032301',
+      classId: 'class-1032301',
+      className: '23 计算机 1 班',
+      studentCount: 1,
+      students: [
+        {
+          activeMembershipClassCode: '1032301',
+          activeMembershipClassName: '23 计算机 1 班',
+          attentionLevel: 'MANUAL_OVERRIDE',
+          currentClassCode: '1032301',
+          currentClassId: 'class-1032301',
+          lastManualUpdatedAt: '2026-06-23T10:00:00.000Z',
+          lastSyncedAt: '2026-06-23T09:00:00.000Z',
+          manualOverrideActive: true,
+          membershipLastObservedAt: '2026-06-23T08:00:00.000Z',
+          photo: {
+            byteSize: 1024,
+            present: true,
+            sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          },
+          profileCompletenessFlags: {
+            educationObserved: true,
+            familyObserved: true,
+            personalObserved: true,
+            photoObserved: true,
+            recordObserved: true,
+            sensitiveIdentifiersObserved: true,
+          },
+          sectionStatuses: [
+            {
+              lastManualUpdatedAt: '2026-06-23T10:00:00.000Z',
+              manualOverrideActive: true,
+              observedAt: '2026-06-23T09:00:00.000Z',
+              section: 'FAMILY',
+              snapshotPresent: true,
+              sourceEndpoint: 'pagegrid',
+              sourceStatus: 'OBSERVED',
+              sourceTotal: 2,
+              upstreamChangedSinceManualPatch: false,
+              warningCodes: [],
+            },
+          ],
+          snapshotPresent: true,
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          studentId: '20230001',
+          studentName: '张三',
+          studentStatus: 'ACTIVE',
+          upstreamChangedSinceManualPatch: false,
+          upstreamIdPresent: true,
+          warningCodes: [],
+        },
+      ],
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentPrivateProfileClassOverview: overview,
+    });
+
+    await expect(
+      getStudentPrivateProfileClassOverview({ classId: ' class-1032301 ' }),
+    ).resolves.toEqual(overview);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabClassOverview'),
+      {
+        input: {
+          classId: 'class-1032301',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('attentionLevel');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('profileCompletenessFlags');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('sectionStatuses');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 
   it('normalizes compare fields without exposing candidate values beyond variables', async () => {
