@@ -1343,6 +1343,17 @@ function normalizeSupplementTemplateWorkbookRow(
   );
 }
 
+export function buildStudentPrivateProfileSupplementTemplateWorkbookColumns(
+  columns: readonly StudentPrivateProfileSupplementTemplateColumn[],
+) {
+  return columns.map((column) => ({
+    header: column.label,
+    hidden: STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key),
+    key: column.key,
+    width: Math.min(Math.max(column.label.length + 4, column.key.length + 4, 14), 36),
+  }));
+}
+
 function resolveSupplementSummarySectionBaselineToken(
   summary: StudentPrivateProfileSummary,
   templateCode: StudentPrivateProfileSupplementTemplateCode,
@@ -1436,10 +1447,6 @@ function applySupplementTemplateWorksheetPolicy(input: {
 
   headerRow.font = { bold: true };
   input.worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-  input.worksheet.autoFilter = {
-    from: 'A1',
-    to: `${getExcelColumnName(input.columns.length)}1`,
-  };
 
   input.columns.forEach((column, index) => {
     const columnNumber = index + 1;
@@ -1510,7 +1517,7 @@ function addSupplementTemplateInstructionWorksheet(input: {
   worksheet.columns = [{ key: 'text', width: 92 }];
   worksheet.addRows([
     { text: '只上传第一个 supplement 工作表；后端 dry-run 只读取第一个工作表。' },
-    { text: '表头必须保持 columns[].key，不要改名、删列或调整顺序。' },
+    { text: '表头必须保持当前模板列名，不要改名、删列或调整顺序。' },
     { text: '隐藏列是系统预填的 CAS token，用于防止基于旧快照补录，请不要手动修改。' },
     { text: 'studentName 是只读辅助列，用于人工核对姓名，后端 dry-run 不做业务校验。' },
     { text: 'action 等枚举列已设置下拉，请从下拉中选择。' },
@@ -1735,12 +1742,9 @@ export async function downloadStudentPrivateProfileSupplementTemplateWorkbook(in
   const isFamilyTemplate =
     input.template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT';
 
-  worksheet.columns = input.template.columns.map((column) => ({
-    header: column.key,
-    hidden: STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key),
-    key: column.key,
-    width: Math.min(Math.max(column.key.length + 4, 14), 36),
-  }));
+  worksheet.columns = buildStudentPrivateProfileSupplementTemplateWorkbookColumns(
+    input.template.columns,
+  );
   worksheet.addRows(rows);
   applySupplementTemplateWorksheetPolicy({
     columns: input.template.columns,
@@ -1764,12 +1768,7 @@ export async function downloadStudentPrivateProfileSupplementTemplateWorkbook(in
     const candidateWorksheet = workbook.addWorksheet('delete_candidates');
 
     candidateWorksheet.columns = [
-      ...input.template.columns.map((column) => ({
-        header: column.key,
-        hidden: STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key),
-        key: column.key,
-        width: Math.min(Math.max(column.key.length + 4, 14), 36),
-      })),
+      ...buildStudentPrivateProfileSupplementTemplateWorkbookColumns(input.template.columns),
       {
         header: '_reference',
         key: '_reference',
@@ -1890,7 +1889,7 @@ export function normalizeWriteStudentPrivateProfileEducationToUpstreamInput(inpu
         action,
         endDate,
         organization: normalizeRequiredTextValue(resume.organization, { label: '所在单位' }),
-        reference: normalizeRequiredTextValue(resume.reference, { label: '证明人/参考信息' }),
+        reference: normalizeRequiredTextValue(resume.reference, { label: '证明人' }),
         startDate,
       },
     ],

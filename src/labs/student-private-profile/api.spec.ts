@@ -39,6 +39,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  buildStudentPrivateProfileSupplementTemplateWorkbookColumns,
   buildStudentPrivateProfileSupplementTemplateWorkbookRows,
   compareStudentPrivateProfileFields,
   dryRunStudentPrivateProfileSupplement,
@@ -842,24 +843,24 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columnKey');
   });
 
-  it('prefills supplement workbook rows from current summary tokens', () => {
+  it('uses supplement schema labels for workbook headers and keys for row values', () => {
     const familyTemplate = {
       actions: ['CREATE', 'DELETE'],
       columns: [
-        { key: 'studentId' },
-        { key: 'studentName' },
-        { key: 'expectedSectionBaselineToken' },
-        { key: 'action' },
-        { key: 'itemKey' },
-        { key: 'upstreamBaselineToken' },
-        { key: 'relationshipCode' },
-        { key: 'name' },
+        { key: 'studentId', label: '学号' },
+        { key: 'studentName', label: '学生姓名' },
+        { key: 'expectedSectionBaselineToken', label: '资料版本校验码' },
+        { key: 'action', label: '写回动作' },
+        { key: 'itemKey', label: '行标识' },
+        { key: 'upstreamBaselineToken', label: '行版本校验码' },
+        { key: 'relationshipCode', label: '家庭关系' },
+        { key: 'name', label: '姓名' },
       ].map((column) => ({
         alwaysRequired: column.key === 'studentId',
         enumValues: [],
         fieldKey: null,
         key: column.key,
-        label: column.key,
+        label: column.label,
         requiredForActions: [],
         sensitive: false,
         valueType: 'STRING',
@@ -915,6 +916,24 @@ describe('student-private-profile lab api', () => {
       sourceObservedAt: '2026-06-23T09:00:00.000Z',
       studentId: 'S001',
     };
+
+    expect(
+      buildStudentPrivateProfileSupplementTemplateWorkbookColumns(familyTemplate.columns).map(
+        (column) => ({
+          header: column.header,
+          key: column.key,
+        }),
+      ),
+    ).toEqual([
+      { header: '学号', key: 'studentId' },
+      { header: '学生姓名', key: 'studentName' },
+      { header: '资料版本校验码', key: 'expectedSectionBaselineToken' },
+      { header: '写回动作', key: 'action' },
+      { header: '行标识', key: 'itemKey' },
+      { header: '行版本校验码', key: 'upstreamBaselineToken' },
+      { header: '家庭关系', key: 'relationshipCode' },
+      { header: '姓名', key: 'name' },
+    ]);
 
     expect(
       buildStudentPrivateProfileSupplementTemplateWorkbookRows({

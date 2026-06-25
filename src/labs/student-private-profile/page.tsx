@@ -363,10 +363,16 @@ function formatSupplementColumnRequirement(column: StudentPrivateProfileSuppleme
   return '可选';
 }
 
-function formatSupplementDryRunIssue(issue: StudentPrivateProfileSupplementDryRunRow['issues'][0]) {
-  const label = resolveStudentPrivateProfileSupplementDryRunIssueLabel(issue.code);
+function formatSupplementDryRunIssue(
+  issue: StudentPrivateProfileSupplementDryRunRow['issues'][0],
+  labelByColumnKey: ReadonlyMap<string, string>,
+) {
+  const issueLabel = resolveStudentPrivateProfileSupplementDryRunIssueLabel(issue.code);
+  const columnLabel = issue.columnKey
+    ? (labelByColumnKey.get(issue.columnKey) ?? issue.columnKey)
+    : null;
 
-  return issue.columnKey ? `${label}（${issue.columnKey}）` : label;
+  return columnLabel ? `${issueLabel}（${columnLabel}）` : issueLabel;
 }
 
 function resolveClassOverviewErrorMessage(error: unknown) {
@@ -799,6 +805,10 @@ export function StudentPrivateProfileLabPage() {
         templateCode: supplementTemplateCode,
       }),
     [educationSectionBaselineToken, familySectionBaselineToken, supplementTemplateCode],
+  );
+  const supplementColumnLabelByKey = useMemo(
+    () => new Map((supplementTemplate?.columns ?? []).map((column) => [column.key, column.label])),
+    [supplementTemplate],
   );
   const classSelectOptions = useMemo(
     () =>
@@ -3010,7 +3020,7 @@ export function StudentPrivateProfileLabPage() {
           <Space size="small" wrap>
             {record.issues.map((issue) => (
               <Tag color="error" key={`${record.rowNumber}-${issue.code}-${issue.columnKey}`}>
-                {formatSupplementDryRunIssue(issue)}
+                {formatSupplementDryRunIssue(issue, supplementColumnLabelByKey)}
               </Tag>
             ))}
           </Space>
@@ -4331,9 +4341,9 @@ export function StudentPrivateProfileLabPage() {
               <Input autoComplete="off" placeholder="2023-06-30" />
             </Form.Item>
             <Form.Item
-              label="证明人/参考信息"
+              label="证明人"
               name="reference"
-              rules={[{ required: true, message: '请输入证明人/参考信息。', whitespace: true }]}
+              rules={[{ required: true, message: '请输入证明人。', whitespace: true }]}
             >
               <Input autoComplete="off" />
             </Form.Item>
