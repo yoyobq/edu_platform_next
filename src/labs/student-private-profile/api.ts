@@ -212,6 +212,115 @@ export type StudentPrivateProfileClassOverview = {
   students: StudentPrivateProfileClassOverviewStudent[];
 };
 
+export type StudentPrivateProfileGovernanceReadinessStatus = 'BLOCKED' | 'READY' | 'WARNING';
+
+export type StudentPrivateProfileGovernanceReadinessIssueCode =
+  | 'COURSE_RESULT_SNAPSHOT_MISSING'
+  | 'EDUCATION_MISSING'
+  | 'FAMILY_MISSING'
+  | 'MANUAL_OVERRIDE_ACTIVE'
+  | 'PERSONAL_MISSING'
+  | 'PHOTO_MISSING'
+  | 'PRIVATE_PROFILE_SNAPSHOT_MISSING'
+  | 'PRIVATE_PROFILE_WARNING'
+  | 'RECORD_MISSING'
+  | 'SENSITIVE_IDENTIFIERS_MISSING'
+  | 'UPSTREAM_CHANGED_SINCE_MANUAL_PATCH'
+  | 'UPSTREAM_ID_MISSING';
+
+export type StudentPrivateProfileGovernanceMissingSection =
+  | 'courseResult'
+  | 'education'
+  | 'family'
+  | 'personal'
+  | 'photo'
+  | 'record'
+  | 'sensitiveIdentifiers';
+
+export type StudentPrivateProfileGovernanceReadinessStudent = {
+  courseResultSnapshotPresent: boolean;
+  issueCodes: StudentPrivateProfileGovernanceReadinessIssueCode[];
+  manualOverrideActive: boolean;
+  missingSections: StudentPrivateProfileGovernanceMissingSection[];
+  privateProfileSnapshotPresent: boolean;
+  status: StudentPrivateProfileGovernanceReadinessStatus;
+  studentId: string;
+  studentName: string;
+  studentStatus: string;
+  upstreamChangedSinceManualPatch: boolean;
+  upstreamIdPresent: boolean;
+  warningCodes: string[];
+};
+
+export type StudentPrivateProfileGovernanceReadinessPreflight = {
+  blockedCount: number;
+  classCode: string;
+  classId: string;
+  className: string;
+  readyCount: number;
+  studentCount: number;
+  students: StudentPrivateProfileGovernanceReadinessStudent[];
+  warningCount: number;
+};
+
+export type StudentPrivateProfilePreviewTemplateCode = 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW';
+
+export type StudentPrivateProfilePreviewField = {
+  confidence: string;
+  fieldKey: string;
+  label: string;
+  manualOverrideActive: boolean;
+  section: string;
+  source: string;
+  sourceObservedAt: string;
+  upstreamChangedSinceManualPatch: boolean;
+  value: string | null;
+  valueStatus: string;
+};
+
+export type StudentPrivateProfilePreviewPhoto = {
+  byteSize: number;
+  present: boolean;
+  sourceObservedAt: string;
+};
+
+export type StudentPrivateProfilePreviewFamilyMember = {
+  fields: StudentPrivateProfilePreviewField[];
+  itemKey: string;
+  manualOverrideActive: boolean;
+  manualPatchFieldKeys: string[];
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+  upstreamChangedSinceManualPatch: boolean;
+};
+
+export type StudentPrivateProfilePreviewEducationResume = {
+  fields: StudentPrivateProfilePreviewField[];
+  itemKey: string;
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+};
+
+export type StudentPrivateProfilePreviewRecordChange = {
+  fields: StudentPrivateProfilePreviewField[];
+  itemKey: string;
+  sourceObservedAt: string;
+};
+
+export type StudentPrivateProfilePreview = {
+  educationResumes: StudentPrivateProfilePreviewEducationResume[];
+  familyMembers: StudentPrivateProfilePreviewFamilyMember[];
+  fields: StudentPrivateProfilePreviewField[];
+  lastManualUpdatedAt: string | null;
+  lastSyncedAt: string;
+  photo: StudentPrivateProfilePreviewPhoto | null;
+  recordChanges: StudentPrivateProfilePreviewRecordChange[];
+  sourceObservedAt: string;
+  studentId: string;
+  templateCode: StudentPrivateProfilePreviewTemplateCode;
+  templateVersion: number;
+};
+
 export type StudentPrivateProfileRefreshWarning = {
   code: string;
   fieldPath: string | null;
@@ -320,6 +429,14 @@ type StudentPrivateProfileClassStudentOptionsResponse = {
 
 type StudentPrivateProfileClassOverviewResponse = {
   studentPrivateProfileClassOverview: StudentPrivateProfileClassOverview;
+};
+
+type StudentPrivateProfileGovernanceReadinessPreflightResponse = {
+  studentPrivateProfileGovernanceReadinessPreflight: StudentPrivateProfileGovernanceReadinessPreflight;
+};
+
+type StudentPrivateProfilePreviewResponse = {
+  studentPrivateProfilePreview: StudentPrivateProfilePreview;
 };
 
 type RefreshStudentPrivateProfileResponse = {
@@ -510,6 +627,96 @@ const STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_QUERY = `
         }
         warningCodes
         attentionLevel
+      }
+    }
+  }
+`;
+
+const STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_PREFLIGHT_QUERY = `
+  query StudentPrivateProfileLabGovernanceReadinessPreflight(
+    $input: StudentPrivateProfileGovernanceReadinessPreflightInput!
+  ) {
+    studentPrivateProfileGovernanceReadinessPreflight(input: $input) {
+      classId
+      classCode
+      className
+      studentCount
+      readyCount
+      warningCount
+      blockedCount
+      students {
+        studentId
+        studentName
+        studentStatus
+        upstreamIdPresent
+        privateProfileSnapshotPresent
+        courseResultSnapshotPresent
+        manualOverrideActive
+        upstreamChangedSinceManualPatch
+        warningCodes
+        missingSections
+        issueCodes
+        status
+      }
+    }
+  }
+`;
+
+const STUDENT_PRIVATE_PROFILE_PREVIEW_FIELDS = `
+  fieldKey
+  label
+  section
+  value
+  valueStatus
+  source
+  confidence
+  sourceObservedAt
+  manualOverrideActive
+  upstreamChangedSinceManualPatch
+`;
+
+const STUDENT_PRIVATE_PROFILE_PREVIEW_QUERY = `
+  query StudentPrivateProfileLabPreview($input: StudentPrivateProfilePreviewInput!) {
+    studentPrivateProfilePreview(input: $input) {
+      studentId
+      templateCode
+      templateVersion
+      sourceObservedAt
+      lastSyncedAt
+      lastManualUpdatedAt
+      fields {
+        ${STUDENT_PRIVATE_PROFILE_PREVIEW_FIELDS}
+      }
+      photo {
+        present
+        byteSize
+        sourceObservedAt
+      }
+      familyMembers {
+        itemKey
+        sourceObservedAt
+        sourceUpdatedAt
+        manualOverrideActive
+        upstreamChangedSinceManualPatch
+        manualPatchFieldKeys
+        fields {
+          ${STUDENT_PRIVATE_PROFILE_PREVIEW_FIELDS}
+        }
+      }
+      educationResumes {
+        itemKey
+        sourceObservedAt
+        sourceUpdatedAt
+        fields {
+          ${STUDENT_PRIVATE_PROFILE_PREVIEW_FIELDS}
+        }
+      }
+      recordChanges {
+        itemKey
+        sourceObservedAt
+        fields {
+          ${STUDENT_PRIVATE_PROFILE_PREVIEW_FIELDS}
+        }
       }
     }
   }
@@ -712,6 +919,26 @@ export function normalizeStudentPrivateProfileClassOverviewInput(input: {
   };
 }
 
+export function normalizeStudentPrivateProfileGovernanceReadinessPreflightInput(input: {
+  classId: string | null | undefined;
+}) {
+  return {
+    classId: normalizeRequiredTextValue(input.classId, { label: '班级 ID' }),
+  };
+}
+
+export function normalizeStudentPrivateProfilePreviewInput(input: {
+  studentId: string | null | undefined;
+  templateCode: StudentPrivateProfilePreviewTemplateCode;
+}) {
+  return {
+    studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+    templateCode: normalizeRequiredTextValue(input.templateCode, {
+      label: '预览模板',
+    }) as StudentPrivateProfilePreviewTemplateCode,
+  };
+}
+
 export function normalizeCompareStudentPrivateProfileFieldsInput(input: {
   fields: readonly {
     candidateValue: string | null | undefined;
@@ -871,6 +1098,40 @@ export async function getStudentPrivateProfileClassOverview(input: {
   });
 
   return response.studentPrivateProfileClassOverview;
+}
+
+export async function getStudentPrivateProfileGovernanceReadinessPreflight(input: {
+  classId: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentPrivateProfileGovernanceReadinessPreflightResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentPrivateProfileGovernanceReadinessPreflightInput>;
+    }
+  >(STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_PREFLIGHT_QUERY, {
+    input: normalizeStudentPrivateProfileGovernanceReadinessPreflightInput(input),
+  });
+
+  return response.studentPrivateProfileGovernanceReadinessPreflight;
+}
+
+export async function getStudentPrivateProfilePreview(input: {
+  studentId: string | null | undefined;
+  templateCode?: StudentPrivateProfilePreviewTemplateCode;
+}) {
+  const response = await executeGraphQL<
+    StudentPrivateProfilePreviewResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentPrivateProfilePreviewInput>;
+    }
+  >(STUDENT_PRIVATE_PROFILE_PREVIEW_QUERY, {
+    input: normalizeStudentPrivateProfilePreviewInput({
+      studentId: input.studentId,
+      templateCode: input.templateCode ?? 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW',
+    }),
+  });
+
+  return response.studentPrivateProfilePreview;
 }
 
 export async function refreshStudentPrivateProfileFromUpstream(input: {

@@ -27,6 +27,8 @@ vi.mock('@/shared/graphql', () => ({
 import {
   compareStudentPrivateProfileFields,
   getStudentPrivateProfileClassOverview,
+  getStudentPrivateProfileGovernanceReadinessPreflight,
+  getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
@@ -39,6 +41,8 @@ import {
   normalizePatchStudentPrivateProfileFieldsInput,
   normalizeReadStudentPrivateProfilePhotoInput,
   normalizeStudentPrivateProfileClassOverviewInput,
+  normalizeStudentPrivateProfileGovernanceReadinessPreflightInput,
+  normalizeStudentPrivateProfilePreviewInput,
   patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
   readStudentPrivateProfilePhoto,
@@ -412,6 +416,202 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('profileCompletenessFlags');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('sectionStatuses');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('loads governance readiness preflight without upstream access or field values', async () => {
+    expect(
+      normalizeStudentPrivateProfileGovernanceReadinessPreflightInput({
+        classId: ' class-1032301 ',
+      }),
+    ).toEqual({
+      classId: 'class-1032301',
+    });
+
+    const readiness = {
+      blockedCount: 1,
+      classCode: '1032301',
+      classId: 'class-1032301',
+      className: '23 计算机 1 班',
+      readyCount: 0,
+      studentCount: 1,
+      students: [
+        {
+          courseResultSnapshotPresent: false,
+          issueCodes: ['PRIVATE_PROFILE_SNAPSHOT_MISSING', 'COURSE_RESULT_SNAPSHOT_MISSING'],
+          manualOverrideActive: false,
+          missingSections: ['courseResult'],
+          privateProfileSnapshotPresent: false,
+          status: 'BLOCKED',
+          studentId: '20230001',
+          studentName: '张三',
+          studentStatus: 'ACTIVE',
+          upstreamChangedSinceManualPatch: false,
+          upstreamIdPresent: true,
+          warningCodes: [],
+        },
+      ],
+      warningCount: 0,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentPrivateProfileGovernanceReadinessPreflight: readiness,
+    });
+
+    await expect(
+      getStudentPrivateProfileGovernanceReadinessPreflight({
+        classId: ' class-1032301 ',
+      }),
+    ).resolves.toEqual(readiness);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabGovernanceReadinessPreflight'),
+      {
+        input: {
+          classId: 'class-1032301',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'studentPrivateProfileGovernanceReadinessPreflight',
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('issueCodes');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('missingSections');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('courseResultSnapshotPresent');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('maskedValue');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('loads partial preview with fixed template without upstream access or photo body', async () => {
+    expect(
+      normalizeStudentPrivateProfilePreviewInput({
+        studentId: ' S001 ',
+        templateCode: 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW',
+      }),
+    ).toEqual({
+      studentId: 'S001',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW',
+    });
+
+    const preview = {
+      educationResumes: [
+        {
+          fields: [
+            {
+              confidence: 'HIGH',
+              fieldKey: 'education.organization',
+              label: '学校',
+              manualOverrideActive: false,
+              section: 'EDUCATION',
+              source: 'UPSTREAM',
+              sourceObservedAt: '2026-06-23T09:00:00.000Z',
+              upstreamChangedSinceManualPatch: false,
+              value: '第一中学',
+              valueStatus: 'PRESENT',
+            },
+          ],
+          itemKey: 'education-001',
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          sourceUpdatedAt: null,
+        },
+      ],
+      familyMembers: [
+        {
+          fields: [
+            {
+              confidence: 'HIGH',
+              fieldKey: 'family.name',
+              label: '姓名',
+              manualOverrideActive: true,
+              section: 'FAMILY',
+              source: 'MANUAL',
+              sourceObservedAt: '2026-06-23T09:00:00.000Z',
+              upstreamChangedSinceManualPatch: false,
+              value: '张某',
+              valueStatus: 'PRESENT',
+            },
+          ],
+          itemKey: 'family-001',
+          manualOverrideActive: true,
+          manualPatchFieldKeys: ['NAME'],
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          sourceUpdatedAt: null,
+          upstreamChangedSinceManualPatch: false,
+        },
+      ],
+      fields: [
+        {
+          confidence: 'HIGH',
+          fieldKey: 'idCard',
+          label: '身份证号',
+          manualOverrideActive: false,
+          section: 'SENSITIVE_IDENTIFIERS',
+          source: 'UPSTREAM',
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          upstreamChangedSinceManualPatch: false,
+          value: '110101200001010010',
+          valueStatus: 'PRESENT',
+        },
+      ],
+      lastManualUpdatedAt: null,
+      lastSyncedAt: '2026-06-23T10:00:00.000Z',
+      photo: {
+        byteSize: 1024,
+        present: true,
+        sourceObservedAt: '2026-06-23T09:00:00.000Z',
+      },
+      recordChanges: [
+        {
+          fields: [
+            {
+              confidence: 'HIGH',
+              fieldKey: 'record.className',
+              label: '班级',
+              manualOverrideActive: false,
+              section: 'RECORD',
+              source: 'UPSTREAM',
+              sourceObservedAt: '2026-06-23T09:00:00.000Z',
+              upstreamChangedSinceManualPatch: false,
+              value: '23 计算机 1 班',
+              valueStatus: 'PRESENT',
+            },
+          ],
+          itemKey: 'record-001',
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+        },
+      ],
+      sourceObservedAt: '2026-06-23T09:00:00.000Z',
+      studentId: 'S001',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW',
+      templateVersion: 1,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentPrivateProfilePreview: preview,
+    });
+
+    await expect(getStudentPrivateProfilePreview({ studentId: ' S001 ' })).resolves.toEqual(
+      preview,
+    );
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabPreview'),
+      {
+        input: {
+          studentId: 'S001',
+          templateCode: 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('studentPrivateProfilePreview');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('value');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('familyMembers');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('educationResumes');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('recordChanges');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('photo');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('upstreamSessionToken');
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 

@@ -1,11 +1,12 @@
 // src/labs/student-private-profile/page.tsx
 
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircleOutlined,
   ClearOutlined,
   CloudSyncOutlined,
   EditOutlined,
+  EyeOutlined,
   FileSearchOutlined,
   LoginOutlined,
   PictureOutlined,
@@ -18,6 +19,7 @@ import {
   Card,
   Collapse,
   Descriptions,
+  Drawer,
   Empty,
   Form,
   Image,
@@ -59,6 +61,10 @@ import {
   resolveStudentPrivateProfileFamilyRelationshipLabel,
   resolveStudentPrivateProfileFieldLabel,
   resolveStudentPrivateProfileFieldOrder,
+  resolveStudentPrivateProfileGovernanceMissingSectionLabel,
+  resolveStudentPrivateProfileGovernanceReadinessIssueLabel,
+  resolveStudentPrivateProfileGovernanceReadinessStatusColor,
+  resolveStudentPrivateProfileGovernanceReadinessStatusLabel,
   resolveStudentPrivateProfileManualPatchField,
   resolveStudentPrivateProfilePhotoStatusColor,
   resolveStudentPrivateProfilePhotoStatusLabel,
@@ -72,10 +78,15 @@ import {
   STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
+  STUDENT_PRIVATE_PROFILE_GOVERNANCE_MISSING_SECTION_FILTERS,
+  STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_ISSUE_FILTERS,
+  STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS,
 } from './application/display-policy';
 import {
   compareStudentPrivateProfileFields,
   getStudentPrivateProfileClassOverview,
+  getStudentPrivateProfileGovernanceReadinessPreflight,
+  getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
   isExpiredUpstreamSessionError,
   isStudentPrivateProfileUpstreamSessionRequiredError,
@@ -99,9 +110,16 @@ import {
   type StudentPrivateProfileCompareResult,
   type StudentPrivateProfileCompletenessFlags,
   type StudentPrivateProfileFamilyMemberPatchField,
+  type StudentPrivateProfileGovernanceReadinessPreflight,
+  type StudentPrivateProfileGovernanceReadinessStudent,
   type StudentPrivateProfileManualPatchAction,
   type StudentPrivateProfileManualPatchField,
   type StudentPrivateProfilePhotoReadResult,
+  type StudentPrivateProfilePreview,
+  type StudentPrivateProfilePreviewEducationResume,
+  type StudentPrivateProfilePreviewFamilyMember,
+  type StudentPrivateProfilePreviewField,
+  type StudentPrivateProfilePreviewRecordChange,
   type StudentPrivateProfileRefreshResult,
   type StudentPrivateProfileStudentOption,
   type StudentPrivateProfileSummary,
@@ -137,7 +155,7 @@ type UpstreamPendingAction =
       type: 'batch-refresh';
     };
 
-type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'sync';
+type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'readiness' | 'sync';
 
 type ControlledBatchRefreshResult = StudentPrivateProfileBatchRefreshResult & {
   completedChunks: number;
@@ -357,6 +375,27 @@ function resolveStudentPrivateProfileActionError(error: unknown, fallback: strin
   return resolveUpstreamErrorMessage(error, fallback);
 }
 
+function resolveStudentPrivateProfilePreviewError(error: unknown) {
+  const detail = readUpstreamGraphQLErrorDetail(error);
+
+  if (detail?.code === 'FORBIDDEN') {
+    return '无权预览该学生。';
+  }
+
+  if (
+    detail?.code === 'NOT_FOUND' ||
+    detail?.errorCode === 'STUDENT_PRIVATE_PROFILE_SNAPSHOT_NOT_FOUND'
+  ) {
+    return '该学生暂无可预览 snapshot。';
+  }
+
+  if (detail?.code === 'INTERNAL_SERVER_ERROR') {
+    return '预览生成失败或审计失败，请稍后重试。';
+  }
+
+  return resolveUpstreamErrorMessage(error, '暂时无法生成学生资料临时预览。');
+}
+
 function sortSummaryFields(fields: StudentPrivateProfileSummaryField[]) {
   return [...fields].sort((left, right) => {
     const leftOrder = resolveStudentPrivateProfileFieldOrder(left.fieldKey);
@@ -368,6 +407,24 @@ function sortSummaryFields(fields: StudentPrivateProfileSummaryField[]) {
 
 function groupSummaryFieldsBySection(fields: StudentPrivateProfileSummaryField[]) {
   return fields.reduce<Map<string, StudentPrivateProfileSummaryField[]>>((sections, field) => {
+    const sectionFields = sections.get(field.section) ?? [];
+    sectionFields.push(field);
+    sections.set(field.section, sectionFields);
+    return sections;
+  }, new Map());
+}
+
+function sortPreviewFields(fields: StudentPrivateProfilePreviewField[]) {
+  return [...fields].sort((left, right) => {
+    const leftOrder = resolveStudentPrivateProfileFieldOrder(left.fieldKey);
+    const rightOrder = resolveStudentPrivateProfileFieldOrder(right.fieldKey);
+
+    return leftOrder - rightOrder || left.label.localeCompare(right.label, 'zh-CN');
+  });
+}
+
+function groupPreviewFieldsBySection(fields: StudentPrivateProfilePreviewField[]) {
+  return fields.reduce<Map<string, StudentPrivateProfilePreviewField[]>>((sections, field) => {
     const sectionFields = sections.get(field.section) ?? [];
     sectionFields.push(field);
     sections.set(field.section, sectionFields);
@@ -511,16 +568,23 @@ export function StudentPrivateProfileLabPage() {
   const [classOverview, setClassOverview] = useState<StudentPrivateProfileClassOverview | null>(
     null,
   );
+  const [governanceReadiness, setGovernanceReadiness] =
+    useState<StudentPrivateProfileGovernanceReadinessPreflight | null>(null);
   const [photoReadResult, setPhotoReadResult] =
     useState<StudentPrivateProfilePhotoReadResult | null>(null);
+  const [profilePreview, setProfilePreview] = useState<StudentPrivateProfilePreview | null>(null);
+  const [profilePreviewError, setProfilePreviewError] = useState<string | null>(null);
+  const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
   const [activeTabKey, setActiveTabKey] = useState<StudentPrivateProfileLabTabKey>('overview');
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingStudents, setIsLoadingStudents] = useState(false);
   const [isLoadingClassOverview, setIsLoadingClassOverview] = useState(false);
+  const [isLoadingGovernanceReadiness, setIsLoadingGovernanceReadiness] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isBatchRefreshing, setIsBatchRefreshing] = useState(false);
   const [isReadingPhoto, setIsReadingPhoto] = useState(false);
+  const [isLoadingProfilePreview, setIsLoadingProfilePreview] = useState(false);
   const [isComparing, setIsComparing] = useState(false);
   const [isPatching, setIsPatching] = useState(false);
   const [isPatchingFamily, setIsPatchingFamily] = useState(false);
@@ -539,10 +603,12 @@ export function StudentPrivateProfileLabPage() {
   const [classOptionsError, setClassOptionsError] = useState<string | null>(null);
   const [studentOptionsError, setStudentOptionsError] = useState<string | null>(null);
   const [classOverviewError, setClassOverviewError] = useState<string | null>(null);
+  const [governanceReadinessError, setGovernanceReadinessError] = useState<string | null>(null);
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<{
     action: UpstreamPendingAction;
     session: StoredUpstreamSession;
   } | null>(null);
+  const profilePreviewRequestIdRef = useRef(0);
 
   const currentStudentId = Form.useWatch('studentId', studentForm);
   const patchAction = Form.useWatch('action', patchForm);
@@ -563,6 +629,14 @@ export function StudentPrivateProfileLabPage() {
   const summaryFieldsBySection = useMemo(
     () => groupSummaryFieldsBySection(summaryFields),
     [summaryFields],
+  );
+  const previewFields = useMemo(
+    () => sortPreviewFields(profilePreview?.fields ?? []),
+    [profilePreview],
+  );
+  const previewFieldsBySection = useMemo(
+    () => groupPreviewFieldsBySection(previewFields),
+    [previewFields],
   );
   const summaryFieldByKey = useMemo(
     () =>
@@ -661,6 +735,14 @@ export function StudentPrivateProfileLabPage() {
     ? formatFamilyMemberSummary(activeFamilyPatchMember)
     : '家庭成员';
 
+  const clearProfilePreview = useCallback(() => {
+    profilePreviewRequestIdRef.current += 1;
+    setIsProfilePreviewOpen(false);
+    setProfilePreview(null);
+    setProfilePreviewError(null);
+    setIsLoadingProfilePreview(false);
+  }, []);
+
   const loadClasses = useCallback(async () => {
     setIsLoadingClasses(true);
     setClassOptionsError(null);
@@ -722,6 +804,29 @@ export function StudentPrivateProfileLabPage() {
     [message],
   );
 
+  const loadGovernanceReadiness = useCallback(
+    async (classId: string) => {
+      setIsLoadingGovernanceReadiness(true);
+      setGovernanceReadinessError(null);
+
+      try {
+        const nextReadiness = await getStudentPrivateProfileGovernanceReadinessPreflight({
+          classId,
+        });
+
+        setGovernanceReadiness(nextReadiness);
+      } catch (error) {
+        const errorMessage = resolveUpstreamErrorMessage(error, '暂时无法读取班级治理 readiness。');
+
+        setGovernanceReadinessError(errorMessage);
+        message.error(errorMessage);
+      } finally {
+        setIsLoadingGovernanceReadiness(false);
+      }
+    },
+    [message],
+  );
+
   useEffect(() => {
     if (!currentAccount) {
       return;
@@ -748,6 +853,7 @@ export function StudentPrivateProfileLabPage() {
     async (studentIdValue: string | null | undefined, options: LoadSummaryOptions = {}) => {
       const studentId = normalizeStudentPrivateProfileStudentId(studentIdValue);
 
+      clearProfilePreview();
       setIsLoadingSummary(true);
       setCompareResult(null);
       setActiveCompareField(null);
@@ -772,7 +878,7 @@ export function StudentPrivateProfileLabPage() {
         setIsLoadingSummary(false);
       }
     },
-    [message, studentForm],
+    [clearProfilePreview, message, studentForm],
   );
 
   const {
@@ -988,6 +1094,7 @@ export function StudentPrivateProfileLabPage() {
 
         if (options.classId && options.classId === selectedClassId) {
           await loadClassOverview(options.classId);
+          await loadGovernanceReadiness(options.classId);
         }
       } finally {
         setIsBatchRefreshing(false);
@@ -996,6 +1103,7 @@ export function StudentPrivateProfileLabPage() {
     [
       commitBatchRefreshResult,
       loadClassOverview,
+      loadGovernanceReadiness,
       message,
       openLoginModalForExpiredSession,
       persistSessionFromResult,
@@ -1136,11 +1244,14 @@ export function StudentPrivateProfileLabPage() {
 
   const handleClassChange = useCallback(
     (classId: string | null) => {
+      clearProfilePreview();
       setSelectedClassId(classId);
       setStudents([]);
       setBatchRefreshResult(null);
       setClassOverview(null);
+      setGovernanceReadiness(null);
       setClassOverviewError(null);
+      setGovernanceReadinessError(null);
       setStudentOptionsError(null);
       setActiveTabKey('overview');
 
@@ -1150,24 +1261,27 @@ export function StudentPrivateProfileLabPage() {
 
       void loadStudentsForClass(classId);
       void loadClassOverview(classId);
+      void loadGovernanceReadiness(classId);
     },
-    [loadClassOverview, loadStudentsForClass],
+    [clearProfilePreview, loadClassOverview, loadGovernanceReadiness, loadStudentsForClass],
   );
 
   const handleStudentOptionChange = useCallback(
     (studentId: string | null) => {
+      clearProfilePreview();
       studentForm.setFieldValue('studentId', studentId ?? '');
     },
-    [studentForm],
+    [clearProfilePreview, studentForm],
   );
 
   const openStudentDetail = useCallback(
     (studentId: string) => {
+      clearProfilePreview();
       studentForm.setFieldValue('studentId', studentId);
       setActiveTabKey('detail');
       void loadSummary(studentId);
     },
-    [loadSummary, studentForm],
+    [clearProfilePreview, loadSummary, studentForm],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -1238,6 +1352,60 @@ export function StudentPrivateProfileLabPage() {
 
     await loadClassOverview(selectedClassId);
   }, [loadClassOverview, message, selectedClassId]);
+
+  const handleReloadGovernanceReadiness = useCallback(async () => {
+    if (!selectedClassId) {
+      message.error('请先选择班级。');
+      return;
+    }
+
+    await loadGovernanceReadiness(selectedClassId);
+  }, [loadGovernanceReadiness, message, selectedClassId]);
+
+  const handleOpenProfilePreview = useCallback(async () => {
+    let studentId: string;
+
+    try {
+      studentId = normalizeStudentPrivateProfileStudentId(currentStudentId);
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '请输入本地学生 ID。');
+      return;
+    }
+
+    const previewRequestId = profilePreviewRequestIdRef.current + 1;
+
+    profilePreviewRequestIdRef.current = previewRequestId;
+    setIsProfilePreviewOpen(true);
+    setProfilePreview(null);
+    setProfilePreviewError(null);
+    setIsLoadingProfilePreview(true);
+
+    try {
+      const nextPreview = await getStudentPrivateProfilePreview({ studentId });
+
+      if (
+        profilePreviewRequestIdRef.current !== previewRequestId ||
+        studentForm.getFieldValue('studentId')?.trim() !== nextPreview.studentId
+      ) {
+        return;
+      }
+
+      setProfilePreview(nextPreview);
+    } catch (error) {
+      if (profilePreviewRequestIdRef.current !== previewRequestId) {
+        return;
+      }
+
+      const errorMessage = resolveStudentPrivateProfilePreviewError(error);
+
+      setProfilePreviewError(errorMessage);
+      message.error(errorMessage);
+    } finally {
+      if (profilePreviewRequestIdRef.current === previewRequestId) {
+        setIsLoadingProfilePreview(false);
+      }
+    }
+  }, [currentStudentId, message, studentForm]);
 
   const handleReadPhoto = useCallback(
     async (forceRefresh: boolean) => {
@@ -1512,6 +1680,17 @@ export function StudentPrivateProfileLabPage() {
     ],
   );
 
+  const handleTabChange = useCallback(
+    (key: string) => {
+      if (key !== 'detail') {
+        clearProfilePreview();
+      }
+
+      setActiveTabKey(key as StudentPrivateProfileLabTabKey);
+    },
+    [clearProfilePreview],
+  );
+
   const classOverviewColumns: ColumnsType<StudentPrivateProfileClassOverviewStudent> = [
     {
       fixed: 'left',
@@ -1654,6 +1833,200 @@ export function StudentPrivateProfileLabPage() {
           查看详情
         </Button>
       ),
+    },
+  ];
+
+  const governanceReadinessColumns: ColumnsType<StudentPrivateProfileGovernanceReadinessStudent> = [
+    {
+      fixed: 'left',
+      key: 'student',
+      title: '学生',
+      width: 190,
+      render: (_, record) => (
+        <Space direction="vertical" size={2}>
+          <Button size="small" type="link" onClick={() => openStudentDetail(record.studentId)}>
+            {record.studentName || '未记录姓名'}
+          </Button>
+          <span>{record.studentId}</span>
+        </Space>
+      ),
+      sorter: (left, right) => left.studentId.localeCompare(right.studentId),
+    },
+    {
+      dataIndex: 'status',
+      filters: STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS,
+      key: 'status',
+      onFilter: (value, record) => record.status === value,
+      title: '治理状态',
+      width: 110,
+      render: (value: StudentPrivateProfileGovernanceReadinessStudent['status']) => (
+        <Tag color={resolveStudentPrivateProfileGovernanceReadinessStatusColor(value)}>
+          {resolveStudentPrivateProfileGovernanceReadinessStatusLabel(value)}
+        </Tag>
+      ),
+    },
+    {
+      key: 'snapshots',
+      title: '本地依赖',
+      width: 260,
+      render: (_, record) => (
+        <Space size="small" wrap>
+          <Tag color={record.upstreamIdPresent ? 'success' : 'error'}>学工关联</Tag>
+          <Tag color={record.privateProfileSnapshotPresent ? 'success' : 'error'}>资料快照</Tag>
+          <Tag color={record.courseResultSnapshotPresent ? 'success' : 'warning'}>成绩快照</Tag>
+        </Space>
+      ),
+    },
+    {
+      dataIndex: 'issueCodes',
+      filters: STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_ISSUE_FILTERS,
+      key: 'issueCodes',
+      onFilter: (value, record) =>
+        record.issueCodes.includes(
+          value as StudentPrivateProfileGovernanceReadinessStudent['issueCodes'][number],
+        ),
+      title: '问题',
+      width: 320,
+      render: (value: StudentPrivateProfileGovernanceReadinessStudent['issueCodes']) =>
+        value.length > 0 ? (
+          <Space size="small" wrap>
+            {value.map((code) => (
+              <Tag key={code}>
+                {resolveStudentPrivateProfileGovernanceReadinessIssueLabel(code)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+    {
+      dataIndex: 'missingSections',
+      filters: STUDENT_PRIVATE_PROFILE_GOVERNANCE_MISSING_SECTION_FILTERS,
+      key: 'missingSections',
+      onFilter: (value, record) =>
+        record.missingSections.includes(
+          value as StudentPrivateProfileGovernanceReadinessStudent['missingSections'][number],
+        ),
+      title: '缺失分区',
+      width: 240,
+      render: (value: StudentPrivateProfileGovernanceReadinessStudent['missingSections']) =>
+        value.length > 0 ? (
+          <Space size="small" wrap>
+            {value.map((section) => (
+              <Tag color="warning" key={section}>
+                {resolveStudentPrivateProfileGovernanceMissingSectionLabel(section)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+    {
+      key: 'manual',
+      title: '人工复核',
+      width: 150,
+      render: (_, record) => (
+        <Space size="small" wrap>
+          {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
+          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">上游已变化</Tag> : null}
+          {!record.manualOverrideActive && !record.upstreamChangedSinceManualPatch ? '无' : null}
+        </Space>
+      ),
+      filters: [
+        { text: '已人工修正', value: 'manual' },
+        { text: '上游已变化', value: 'changed' },
+      ],
+      onFilter: (value, record) =>
+        value === 'manual' ? record.manualOverrideActive : record.upstreamChangedSinceManualPatch,
+    },
+    {
+      dataIndex: 'warningCodes',
+      key: 'warningCodes',
+      title: '资料提醒',
+      width: 220,
+      render: (value: string[]) =>
+        value.length > 0 ? (
+          <Space size="small" wrap>
+            {value.map((code) => (
+              <Tag color="warning" key={code}>
+                {resolveStudentPrivateProfileWarningCodeLabel(code)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+    {
+      fixed: 'right',
+      key: 'action',
+      title: '操作',
+      width: 110,
+      render: (_, record) => (
+        <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
+          查看详情
+        </Button>
+      ),
+    },
+  ];
+
+  const previewFieldColumns: ColumnsType<StudentPrivateProfilePreviewField> = [
+    {
+      dataIndex: 'label',
+      key: 'label',
+      title: '字段',
+      width: 140,
+      render: (value: string, record) =>
+        value || resolveStudentPrivateProfileFieldLabel(record.fieldKey),
+    },
+    {
+      dataIndex: 'value',
+      ellipsis: true,
+      key: 'value',
+      title: '真实值',
+      width: 220,
+      render: (value: string | null, record) => (
+        <Space direction="vertical" size={2}>
+          <span>{displayText(value)}</span>
+          {record.valueStatus === 'MISSING' ? (
+            <Tag>{resolveStudentPrivateProfileStatusLabel(record.valueStatus)}</Tag>
+          ) : null}
+        </Space>
+      ),
+    },
+    {
+      key: 'source',
+      title: '来源',
+      width: 150,
+      render: (_, record) => (
+        <Space size="small" wrap>
+          <Tag color={resolveStudentPrivateProfileSourceColor(record.source)}>
+            {resolveStudentPrivateProfileSourceLabel(record.source)}
+          </Tag>
+          <Tag>{record.confidence}</Tag>
+        </Space>
+      ),
+    },
+    {
+      key: 'manual',
+      title: '复核状态',
+      width: 160,
+      render: (_, record) => (
+        <Space size="small" wrap>
+          {record.manualOverrideActive ? <Tag color="processing">人工修正</Tag> : null}
+          {record.upstreamChangedSinceManualPatch ? <Tag color="warning">上游已变化</Tag> : null}
+          {!record.manualOverrideActive && !record.upstreamChangedSinceManualPatch ? '无' : null}
+        </Space>
+      ),
+    },
+    {
+      dataIndex: 'sourceObservedAt',
+      key: 'sourceObservedAt',
+      title: '观察时间',
+      width: 160,
+      render: (value: string) => formatDateTime(value),
     },
   ];
 
@@ -1976,6 +2349,9 @@ export function StudentPrivateProfileLabPage() {
 
           {classOptionsError ? <Alert showIcon type="warning" message={classOptionsError} /> : null}
           {classOverviewError ? <Alert showIcon type="error" message={classOverviewError} /> : null}
+          {governanceReadinessError ? (
+            <Alert showIcon type="error" message={governanceReadinessError} />
+          ) : null}
 
           <Descriptions bordered column={3} size="small">
             <Descriptions.Item label="当前账号">{currentAccount.displayName}</Descriptions.Item>
@@ -2016,6 +2392,12 @@ export function StudentPrivateProfileLabPage() {
                       </Button>
                       <Button icon={<CloudSyncOutlined />} onClick={() => setActiveTabKey('sync')}>
                         同步当前班级
+                      </Button>
+                      <Button
+                        icon={<FileSearchOutlined />}
+                        onClick={() => setActiveTabKey('readiness')}
+                      >
+                        查看治理 readiness
                       </Button>
                     </Space>
                   ) : (
@@ -2075,6 +2457,79 @@ export function StudentPrivateProfileLabPage() {
           },
           {
             children: (
+              <Card
+                title={
+                  governanceReadiness
+                    ? `${governanceReadiness.className}治理 readiness`
+                    : '治理 readiness'
+                }
+              >
+                <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                  {selectedClassId ? (
+                    <Space size="small" wrap>
+                      <Button
+                        icon={<ReloadOutlined />}
+                        loading={isLoadingGovernanceReadiness}
+                        onClick={() => void handleReloadGovernanceReadiness()}
+                      >
+                        重新读取 readiness
+                      </Button>
+                      <Button icon={<CloudSyncOutlined />} onClick={() => setActiveTabKey('sync')}>
+                        同步当前班级
+                      </Button>
+                    </Space>
+                  ) : (
+                    <Empty description="先选择班级查看治理 readiness" />
+                  )}
+
+                  {governanceReadiness ? (
+                    <Descriptions bordered column={4} size="small">
+                      <Descriptions.Item label="班级">
+                        {governanceReadiness.className}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="班级代码">
+                        {governanceReadiness.classCode}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="学生数">
+                        {governanceReadiness.studentCount}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="阻塞">
+                        {governanceReadiness.blockedCount}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="状态分布" span={4}>
+                        <Space size="small" wrap>
+                          <Tag color="success">可治理：{governanceReadiness.readyCount}</Tag>
+                          <Tag color="warning">需关注：{governanceReadiness.warningCount}</Tag>
+                          <Tag color="error">阻塞：{governanceReadiness.blockedCount}</Tag>
+                        </Space>
+                      </Descriptions.Item>
+                    </Descriptions>
+                  ) : null}
+
+                  <Table
+                    columns={governanceReadinessColumns}
+                    dataSource={governanceReadiness?.students ?? []}
+                    loading={isLoadingGovernanceReadiness}
+                    locale={{
+                      emptyText: selectedClassId ? '暂无治理 readiness' : '先选择班级',
+                    }}
+                    pagination={{
+                      defaultPageSize: 30,
+                      pageSizeOptions: [30, 60],
+                      showSizeChanger: true,
+                    }}
+                    rowKey="studentId"
+                    scroll={{ x: 1600 }}
+                    size="small"
+                  />
+                </Space>
+              </Card>
+            ),
+            key: 'readiness',
+            label: '治理 readiness',
+          },
+          {
+            children: (
               <div className="flex flex-col gap-6">
                 <Card title="学生资料详情">
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
@@ -2109,7 +2564,11 @@ export function StudentPrivateProfileLabPage() {
                           { required: true, message: '请输入本地学生 ID。', whitespace: true },
                         ]}
                       >
-                        <Input allowClear placeholder="本地学生 ID" />
+                        <Input
+                          allowClear
+                          placeholder="本地学生 ID"
+                          onChange={clearProfilePreview}
+                        />
                       </Form.Item>
                       <Form.Item>
                         <Space wrap>
@@ -2127,6 +2586,13 @@ export function StudentPrivateProfileLabPage() {
                             onClick={handleRefresh}
                           >
                             从学工系统刷新
+                          </Button>
+                          <Button
+                            icon={<EyeOutlined />}
+                            loading={isLoadingProfilePreview}
+                            onClick={() => void handleOpenProfilePreview()}
+                          >
+                            临时预览真实字段
                           </Button>
                         </Space>
                       </Form.Item>
@@ -2554,7 +3020,7 @@ export function StudentPrivateProfileLabPage() {
             label: '班级资料同步',
           },
         ]}
-        onChange={(key) => setActiveTabKey(key as StudentPrivateProfileLabTabKey)}
+        onChange={handleTabChange}
       />
 
       <Modal
@@ -2681,6 +3147,182 @@ export function StudentPrivateProfileLabPage() {
           </Space>
         </Form>
       </Modal>
+
+      <Drawer
+        destroyOnHidden
+        open={isProfilePreviewOpen}
+        title="临时预览真实字段"
+        width={960}
+        onClose={clearProfilePreview}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            showIcon
+            type="warning"
+            message="临时预览只显示当前学生模板白名单内真实字段；关闭或切换上下文后会清空。"
+          />
+
+          {profilePreviewError ? (
+            <Alert showIcon type="error" message={profilePreviewError} />
+          ) : null}
+
+          {profilePreview ? (
+            <>
+              <Descriptions bordered column={2} size="small">
+                <Descriptions.Item label="学生 ID">{profilePreview.studentId}</Descriptions.Item>
+                <Descriptions.Item label="模板">
+                  {profilePreview.templateCode} v{profilePreview.templateVersion}
+                </Descriptions.Item>
+                <Descriptions.Item label="上游资料时间">
+                  {formatDateTime(profilePreview.sourceObservedAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="本地保存时间">
+                  {formatDateTime(profilePreview.lastSyncedAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="最近人工修正">
+                  {formatDateTime(profilePreview.lastManualUpdatedAt)}
+                </Descriptions.Item>
+                <Descriptions.Item label="照片 metadata">
+                  {profilePreview.photo
+                    ? `${profilePreview.photo.present ? '有照片' : '无照片'}，${formatApproxByteSize(
+                        profilePreview.photo.byteSize,
+                      )}，${formatDateTime(profilePreview.photo.sourceObservedAt)}`
+                    : '模板未返回'}
+                </Descriptions.Item>
+              </Descriptions>
+
+              {Array.from(previewFieldsBySection.entries()).map(([section, fields]) => (
+                <Table
+                  columns={previewFieldColumns}
+                  dataSource={fields}
+                  key={section}
+                  pagination={false}
+                  rowKey="fieldKey"
+                  scroll={{ x: 830 }}
+                  size="small"
+                  title={() => resolveStudentPrivateProfileSectionLabel(section)}
+                />
+              ))}
+
+              <Collapse
+                items={profilePreview.familyMembers.map(
+                  (member: StudentPrivateProfilePreviewFamilyMember, index) => ({
+                    children: (
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Descriptions bordered column={3} size="small">
+                          <Descriptions.Item label="观察时间">
+                            {formatDateTime(member.sourceObservedAt)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="更新时间">
+                            {formatDateTime(member.sourceUpdatedAt)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="复核">
+                            <Space size="small" wrap>
+                              {member.manualOverrideActive ? (
+                                <Tag color="processing">人工修正</Tag>
+                              ) : null}
+                              {member.upstreamChangedSinceManualPatch ? (
+                                <Tag color="warning">上游已变化</Tag>
+                              ) : null}
+                              {member.manualPatchFieldKeys.map((fieldKey) => (
+                                <Tag key={fieldKey}>
+                                  {resolveStudentPrivateProfileFamilyFieldLabel(fieldKey)}
+                                </Tag>
+                              ))}
+                              {!member.manualOverrideActive &&
+                              !member.upstreamChangedSinceManualPatch &&
+                              member.manualPatchFieldKeys.length === 0
+                                ? '无'
+                                : null}
+                            </Space>
+                          </Descriptions.Item>
+                        </Descriptions>
+                        <Table
+                          columns={previewFieldColumns}
+                          dataSource={sortPreviewFields(member.fields)}
+                          pagination={false}
+                          rowKey="fieldKey"
+                          scroll={{ x: 830 }}
+                          size="small"
+                        />
+                      </Space>
+                    ),
+                    key: member.itemKey,
+                    label: `家庭成员 ${index + 1}`,
+                  }),
+                )}
+                size="small"
+              />
+
+              <Collapse
+                items={profilePreview.educationResumes.map(
+                  (resume: StudentPrivateProfilePreviewEducationResume, index) => ({
+                    children: (
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Descriptions bordered column={2} size="small">
+                          <Descriptions.Item label="观察时间">
+                            {formatDateTime(resume.sourceObservedAt)}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="更新时间">
+                            {formatDateTime(resume.sourceUpdatedAt)}
+                          </Descriptions.Item>
+                        </Descriptions>
+                        <Table
+                          columns={previewFieldColumns}
+                          dataSource={sortPreviewFields(resume.fields)}
+                          pagination={false}
+                          rowKey="fieldKey"
+                          scroll={{ x: 830 }}
+                          size="small"
+                        />
+                      </Space>
+                    ),
+                    key: resume.itemKey,
+                    label: `教育经历 ${index + 1}`,
+                  }),
+                )}
+                size="small"
+              />
+
+              <Collapse
+                items={profilePreview.recordChanges.map(
+                  (record: StudentPrivateProfilePreviewRecordChange, index) => ({
+                    children: (
+                      <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                        <Descriptions bordered column={1} size="small">
+                          <Descriptions.Item label="观察时间">
+                            {formatDateTime(record.sourceObservedAt)}
+                          </Descriptions.Item>
+                        </Descriptions>
+                        <Table
+                          columns={previewFieldColumns}
+                          dataSource={sortPreviewFields(record.fields)}
+                          pagination={false}
+                          rowKey="fieldKey"
+                          scroll={{ x: 830 }}
+                          size="small"
+                        />
+                      </Space>
+                    ),
+                    key: record.itemKey,
+                    label: `学籍异动 ${index + 1}`,
+                  }),
+                )}
+                size="small"
+              />
+            </>
+          ) : isLoadingProfilePreview ? (
+            <Table
+              columns={previewFieldColumns}
+              dataSource={[]}
+              loading
+              pagination={false}
+              rowKey="fieldKey"
+              size="small"
+            />
+          ) : null}
+        </Space>
+      </Drawer>
 
       <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>

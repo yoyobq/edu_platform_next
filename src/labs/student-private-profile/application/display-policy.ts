@@ -6,6 +6,9 @@ import type {
   StudentPrivateProfileCompareField,
   StudentPrivateProfileCompareResult,
   StudentPrivateProfileFamilyMemberPatchField,
+  StudentPrivateProfileGovernanceMissingSection,
+  StudentPrivateProfileGovernanceReadinessIssueCode,
+  StudentPrivateProfileGovernanceReadinessStatus,
   StudentPrivateProfileManualPatchField,
   StudentPrivateProfilePhotoReadResult,
   StudentPrivateProfileSummary,
@@ -222,6 +225,67 @@ export const STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS = Object.e
   value,
 }));
 
+const GOVERNANCE_READINESS_STATUS_LABELS: Record<
+  StudentPrivateProfileGovernanceReadinessStatus,
+  string
+> = {
+  BLOCKED: '阻塞',
+  READY: '可治理',
+  WARNING: '需关注',
+};
+
+const GOVERNANCE_READINESS_ISSUE_LABELS: Record<
+  StudentPrivateProfileGovernanceReadinessIssueCode,
+  string
+> = {
+  COURSE_RESULT_SNAPSHOT_MISSING: '缺成绩快照',
+  EDUCATION_MISSING: '缺教育经历',
+  FAMILY_MISSING: '缺家庭信息',
+  MANUAL_OVERRIDE_ACTIVE: '存在人工修正',
+  PERSONAL_MISSING: '缺个人基础资料',
+  PHOTO_MISSING: '缺照片',
+  PRIVATE_PROFILE_SNAPSHOT_MISSING: '缺本地资料快照',
+  PRIVATE_PROFILE_WARNING: '资料快照有提醒',
+  RECORD_MISSING: '缺学籍异动',
+  SENSITIVE_IDENTIFIERS_MISSING: '缺证件与卡号',
+  UPSTREAM_CHANGED_SINCE_MANUAL_PATCH: '上游变化待复核',
+  UPSTREAM_ID_MISSING: '未关联学工系统',
+};
+
+const GOVERNANCE_MISSING_SECTION_LABELS: Record<
+  StudentPrivateProfileGovernanceMissingSection,
+  string
+> = {
+  courseResult: '成绩快照',
+  education: '教育经历',
+  family: '家庭信息',
+  personal: '个人基础资料',
+  photo: '照片',
+  record: '学籍异动',
+  sensitiveIdentifiers: '证件与卡号',
+};
+
+export const STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS = Object.entries(
+  GOVERNANCE_READINESS_STATUS_LABELS,
+).map(([value, text]) => ({
+  text,
+  value,
+}));
+
+export const STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_ISSUE_FILTERS = Object.entries(
+  GOVERNANCE_READINESS_ISSUE_LABELS,
+).map(([value, text]) => ({
+  text,
+  value,
+}));
+
+export const STUDENT_PRIVATE_PROFILE_GOVERNANCE_MISSING_SECTION_FILTERS = Object.entries(
+  GOVERNANCE_MISSING_SECTION_LABELS,
+).map(([value, text]) => ({
+  text,
+  value,
+}));
+
 function normalizeDisplayKey(value: string) {
   return value
     .trim()
@@ -300,6 +364,24 @@ export function resolveStudentPrivateProfileClassOverviewAttentionLabel(
   attentionLevel: StudentPrivateProfileClassOverviewAttentionLevel,
 ) {
   return CLASS_OVERVIEW_ATTENTION_LABELS[attentionLevel];
+}
+
+export function resolveStudentPrivateProfileGovernanceReadinessStatusLabel(
+  status: StudentPrivateProfileGovernanceReadinessStatus,
+) {
+  return GOVERNANCE_READINESS_STATUS_LABELS[status];
+}
+
+export function resolveStudentPrivateProfileGovernanceReadinessIssueLabel(
+  issueCode: StudentPrivateProfileGovernanceReadinessIssueCode,
+) {
+  return GOVERNANCE_READINESS_ISSUE_LABELS[issueCode];
+}
+
+export function resolveStudentPrivateProfileGovernanceMissingSectionLabel(
+  section: StudentPrivateProfileGovernanceMissingSection,
+) {
+  return GOVERNANCE_MISSING_SECTION_LABELS[section];
 }
 
 export function resolveStudentPrivateProfileFamilyRelationshipLabel(relationshipCode: string) {
@@ -415,6 +497,20 @@ export function resolveStudentPrivateProfileClassOverviewAttentionColor(
   }
 
   if (attentionLevel === 'UPSTREAM_ID_MISSING') {
+    return 'error';
+  }
+
+  return 'warning';
+}
+
+export function resolveStudentPrivateProfileGovernanceReadinessStatusColor(
+  status: StudentPrivateProfileGovernanceReadinessStatus,
+) {
+  if (status === 'READY') {
+    return 'success';
+  }
+
+  if (status === 'BLOCKED') {
     return 'error';
   }
 
