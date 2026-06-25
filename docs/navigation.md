@@ -43,7 +43,7 @@
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
-  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/course-results-summary`
+  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/course-results-summary`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`

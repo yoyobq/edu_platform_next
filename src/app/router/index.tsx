@@ -53,6 +53,7 @@ import {
   hasAcademicWorkloadManagerAccess,
   hasAdminAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveUpstreamLoginLockedUserId,
 } from '@/entities/auth-access';
@@ -258,6 +259,10 @@ const loadIntegratedPlanCorrectionsRouteModule = loadPageRouteModule(
 const loadStudentRosterMembershipReconciliationRouteModule = loadPageRouteModule(
   () => import('@/pages/student-roster-membership-reconciliation'),
   'StudentRosterMembershipReconciliationPage',
+);
+const loadStudentProfileFilingRouteModule = loadPageRouteModule(
+  () => import('@/pages/student-profile-filing'),
+  'StudentProfileFilingPage',
 );
 const loadClassAffairsCourseResultsRouteModule = loadPageRouteModule(
   () => import('@/pages/class-affairs-course-results'),
@@ -893,6 +898,44 @@ async function classAffairsCourseResultsPageLoader({ request }: LoaderFunctionAr
   };
 }
 
+async function studentProfileFilingPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasStudentProfileFilingAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    },
+    isForbidden: false,
+  };
+}
+
 async function academicWorkloadPageLoader({ request }: LoaderFunctionArgs) {
   await restoreSession({ waitForPending: true });
 
@@ -1398,6 +1441,11 @@ const router = createBrowserRouter([
         path: '/academic-affairs/student-roster-membership-reconciliation',
         loader: studentRosterMembershipReconciliationPageLoader,
         lazy: loadStudentRosterMembershipReconciliationRouteModule,
+      },
+      {
+        path: '/class-affairs/student-profile-filing',
+        loader: studentProfileFilingPageLoader,
+        lazy: loadStudentProfileFilingRouteModule,
       },
       {
         path: '/class-affairs/course-results-summary',

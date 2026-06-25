@@ -20,6 +20,7 @@ import {
   hasAdminAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
   hasUpstreamDataSyncAccess,
   isAuthAccessGroup,
@@ -187,6 +188,42 @@ describe('auth access policy', () => {
       false,
     );
     expect(hasStudentRosterMembershipReconciliationAccess({ accessGroup: ['GUEST'] })).toBe(false);
+  });
+
+  it('allows student profile filing to admins and scoped staff slots', () => {
+    expect(hasStudentProfileFilingAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasStudentProfileFilingAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentProfileFilingAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentProfileFilingAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['CLASS_ADVISER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentProfileFilingAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['COUNSELOR'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentProfileFilingAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    ).toBe(false);
+    expect(hasStudentProfileFilingAccess({ accessGroup: ['STAFF'] })).toBe(false);
+    expect(hasStudentProfileFilingAccess({ accessGroup: ['STUDENT'] })).toBe(false);
   });
 
   it('limits upstream data sync to admins', () => {

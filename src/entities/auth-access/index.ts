@@ -19,6 +19,7 @@ import {
   type AuthAccessGroup,
   CLASS_ADVISER_SLOT_GROUP,
   COUNSELOR_SLOT_GROUP,
+  STUDENT_AFFAIRS_OFFICER_SLOT_GROUP,
   TEACHING_GROUP_LEADER_SLOT_GROUP,
   type UpstreamLoginIdentityContext,
 } from '@/shared/auth-access';
@@ -162,6 +163,26 @@ export function hasStudentRosterMembershipReconciliationAccess(input: {
   const accessGroup = input.accessGroup ?? [];
 
   return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
+export function hasStudentProfileFilingAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return (
+    accessGroup.includes('STAFF') &&
+    (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
+      slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP) ||
+      slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
+      slotGroup.includes(COUNSELOR_SLOT_GROUP))
+  );
 }
 
 export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {

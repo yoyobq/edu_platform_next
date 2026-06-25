@@ -35,6 +35,7 @@ describe('navigation catalog', () => {
       '/',
       'calendar-schedule',
       'academic-assistant',
+      'class-affairs',
       'academic-affairs',
       'upstream-data-sync',
       'labs',
@@ -62,6 +63,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
+    ]);
+    expect(findGroup(items, 'class-affairs')?.children.map((item) => item.key)).toEqual([
+      '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(items, 'upstream-data-sync')?.children.map((item) => item.key)).toEqual([
       '/upstream-data-sync/major-sync',
@@ -125,6 +129,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
+    ]);
+    expect(findGroup(prodAdminItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
+      '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
@@ -213,11 +220,13 @@ describe('navigation catalog', () => {
     expect(findGroup(classAdviserItems, 'class-affairs')?.children.map((item) => item.key)).toEqual(
       [
         '/academic-affairs/student-roster-membership-reconciliation',
+        '/class-affairs/student-profile-filing',
         '/class-affairs/course-results-summary',
       ],
     );
     expect(findGroup(counselorItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/student-roster-membership-reconciliation',
+      '/class-affairs/student-profile-filing',
       '/class-affairs/course-results-summary',
     ]);
     expect(canAccessNavigationPath('/class-affairs/course-results-summary', staffFilter)).toBe(
@@ -241,6 +250,10 @@ describe('navigation catalog', () => {
       'academic-assistant',
       'class-affairs',
       'labs',
+    ]);
+    expect(findGroup(staffItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/student-roster-membership-reconciliation',
+      '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
@@ -382,6 +395,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/student-roster-membership-reconciliation',
+      '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
@@ -654,6 +668,48 @@ describe('navigation catalog', () => {
         buildFilter(),
       ),
     ).toBe(false);
+    expect(canAccessNavigationPath('/class-affairs/student-profile-filing', buildFilter())).toBe(
+      true,
+    );
+    expect(
+      canAccessNavigationPath(
+        '/class-affairs/student-profile-filing',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/class-affairs/student-profile-filing',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['CLASS_ADVISER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/class-affairs/student-profile-filing',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/class-affairs/student-profile-filing',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+        }),
+      ),
+    ).toBe(false);
     expect(
       canAccessNavigationPath(
         '/academic-affairs/student-roster-membership-reconciliation',
@@ -713,6 +769,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
+      '/class-affairs/student-profile-filing',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',

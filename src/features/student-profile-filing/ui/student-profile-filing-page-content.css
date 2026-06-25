@@ -1,0 +1,102 @@
+/* src/features/student-profile-filing/ui/student-profile-filing-page-content.css */
+
+.student-profile-filing-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-profile-filing-toolbar {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.student-profile-filing-toolbar-main {
+  align-items: center;
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+
+.student-profile-filing-class-select {
+  flex: 1 1 320px;
+  min-width: 220px;
+}
+
+.student-profile-filing-class-select :where(.ant-select) {
+  width: 100%;
+}
+
+.student-profile-filing-workbench {
+  align-items: start;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(188px, 220px);
+}
+
+.student-profile-filing-workbench-compact {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.student-profile-filing-table-pane {
+  min-width: 0;
+}
+
+.student-profile-filing-summary-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.student-profile-filing-summary-title {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.student-profile-filing-stats {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.student-profile-filing-workbench-compact .student-profile-filing-stats {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+
+.student-profile-filing-stat-item {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.student-profile-filing-student-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.student-profile-filing-student-name {
+  color: var(--ant-color-text);
+  font-weight: 600;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-profile-filing-muted {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 1.35;
+}

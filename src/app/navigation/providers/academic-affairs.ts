@@ -9,6 +9,7 @@ import {
   hasAcademicWorkloadAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
 } from '@/entities/auth-access';
 
@@ -227,6 +228,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
+    ...(hasStudentProfileFilingAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'SolutionOutlined',
+            key: '/class-affairs/student-profile-filing',
+            label: '学生建档',
+            navMode: 'rail' as const,
+            path: '/class-affairs/student-profile-filing',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(hasClassAffairsCourseResultsAccess({
       accessGroup: filter.accessGroup,
       slotGroup: filter.slotGroup,
@@ -274,7 +292,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
     ...(classAffairsChildren.length > 0
       ? [
           {
-            allowedAccessGroups: ['STAFF'] as const,
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             children: classAffairsChildren,
             iconKey: 'TeamOutlined',
             key: 'class-affairs',
