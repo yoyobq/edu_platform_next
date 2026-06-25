@@ -27,6 +27,7 @@ import {
 import type { ItemType } from 'antd/es/menu/interface';
 import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-router';
 
+import { withCollaborationSearch } from '@/app/lib';
 import { getNavigationItems, resolveNavMode } from '@/app/navigation';
 import {
   AuthRefreshFeedbackBridge,
@@ -84,23 +85,9 @@ const SHOULD_SHOW_ENTRY_TRIGGER = false;
 const EntrySidecar = lazy(() =>
   import('./entry-sidecar').then((module) => ({ default: module.EntrySidecar })),
 );
-const ThirdWorkspaceDemoHost = lazy(() =>
-  import('./third-workspace-demo-host').then((module) => ({
-    default: module.ThirdWorkspaceDemoHost,
-  })),
-);
 
 function getBaseURL(pathname: string, search: string): string {
-  if (pathname === '/labs/demo') {
-    return `${pathname}${search}`;
-  }
-
-  const searchParams = new URLSearchParams(search);
-
-  searchParams.delete('workspaceDemo');
-
-  const nextSearch = searchParams.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
+  return withCollaborationSearch(pathname, search);
 }
 
 function isStudentWorkspaceSession(snapshot: AuthSessionSnapshot) {
@@ -136,7 +123,6 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const { isDark, setIsDark, fontScale, setFontScale } = useTheme();
 
   const isLabsRoute = location.pathname.startsWith('/labs/');
-  const shouldLoadThirdWorkspaceDemoHost = location.pathname === '/labs/demo';
   const isHydrating = authSession.status === 'hydrating';
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
   const hasExplicitChildren = typeof children !== 'undefined';
@@ -728,12 +714,6 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         >
           <div data-workspace-mount="artifacts-canvas" />
         </div>
-
-        {shouldLoadThirdWorkspaceDemoHost ? (
-          <Suspense fallback={null}>
-            <ThirdWorkspaceDemoHost />
-          </Suspense>
-        ) : null}
 
         {hasLoadedEntrySidecar ? (
           <Suspense fallback={null}>

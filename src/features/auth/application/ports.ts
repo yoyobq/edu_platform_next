@@ -22,7 +22,12 @@ export type AuthStoragePort = {
   writeSession: (session: AuthStoredSession) => void;
 };
 
+export type AuthFeedbackPort = {
+  queueRefreshFailureMessage: (content?: string) => void;
+};
+
 export type AuthPorts = {
   api: AuthApiPort;
+  feedback?: AuthFeedbackPort;
   storage: AuthStoragePort;
 };

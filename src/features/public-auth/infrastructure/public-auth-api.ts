@@ -1,5 +1,6 @@
 import type { OperationVariables } from '@apollo/client';
 
+import { normalizeDepartmentName } from '@/entities/department';
 import {
   executeUpstreamSessionGraphQL,
   requestUpstreamLoginSession,
@@ -7,7 +8,6 @@ import {
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import { normalizeDepartmentName } from '@/shared/department';
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import {
   executeGraphQL,

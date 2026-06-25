@@ -1,6 +1,7 @@
 import dayjs, { type Dayjs } from 'dayjs';
 
-import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/entities/department';
+
 import {
   normalizeOptionalTextValue as normalizeSharedOptionalTextValue,
   normalizeRequiredTextValue as normalizeSharedRequiredTextValue,

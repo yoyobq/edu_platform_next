@@ -1,3 +1,5 @@
+// src/entities/department/application/department-normalization.ts
+
 export const WHITE_HOUSE_DEPARTMENT_NAME = '白宫';
 export const WHITE_HOUSE_DEPARTMENT_OPTION_ID = '';
 

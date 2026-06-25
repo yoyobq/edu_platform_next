@@ -1,9 +1,8 @@
 // src/features/auth/infrastructure/auth-storage.ts
 
-import { AUTH_SESSION_STORAGE_KEY } from '@/shared/auth-session';
-
 import type { AuthStoragePort } from '../application/ports';
 
+import { AUTH_SESSION_STORAGE_KEY } from './auth-storage-key';
 import { deserializeStoredSession, serializeStoredSession } from './mapper';
 
 function canUseStorage() {

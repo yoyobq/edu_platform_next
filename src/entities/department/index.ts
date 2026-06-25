@@ -1,5 +1,10 @@
 // src/entities/department/index.ts
 
+export {
+  normalizeDepartmentName,
+  WHITE_HOUSE_DEPARTMENT_NAME,
+  WHITE_HOUSE_DEPARTMENT_OPTION_ID,
+} from './application/department-normalization';
 export type {
   DepartmentOptionLike,
   DepartmentSelectOption,

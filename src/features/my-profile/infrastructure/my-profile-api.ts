@@ -1,6 +1,7 @@
 import type { OperationVariables } from '@apollo/client';
 
-import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+import { normalizeDepartmentName, WHITE_HOUSE_DEPARTMENT_NAME } from '@/entities/department';
+
 import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,

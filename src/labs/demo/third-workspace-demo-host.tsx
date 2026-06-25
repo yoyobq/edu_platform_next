@@ -1,15 +1,15 @@
-// src/app/layout/third-workspace-demo-host.tsx
+// src/labs/demo/third-workspace-demo-host.tsx
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router';
 
+import { ThirdWorkspaceDemoCanvas } from './third-workspace-demo-canvas';
 import {
   getThirdWorkspaceDemoArtifactById,
   readThirdWorkspaceDemoArtifactId,
-  ThirdWorkspaceDemoCanvas,
   withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
+} from './third-workspace-demo-model';
 
 const THIRD_WORKSPACE_ROOT_SELECTOR = '[data-layout-layer="third-workspace-root"]';
 const THIRD_WORKSPACE_MOUNT_SELECTOR = '[data-workspace-mount="artifacts-canvas"]';
@@ -17,15 +17,19 @@ const THIRD_WORKSPACE_MOUNT_SELECTOR = '[data-workspace-mount="artifacts-canvas"
 export function ThirdWorkspaceDemoHost() {
   const location = useLocation();
   const navigate = useNavigate();
-  const isDemoRoute = location.pathname === '/labs/demo';
-  const mountNode =
-    typeof document !== 'undefined'
-      ? document.querySelector<HTMLElement>(THIRD_WORKSPACE_MOUNT_SELECTOR)
-      : null;
-  const artifact = isDemoRoute
-    ? getThirdWorkspaceDemoArtifactById(readThirdWorkspaceDemoArtifactId(location.search))
-    : null;
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const artifact = getThirdWorkspaceDemoArtifactById(
+    readThirdWorkspaceDemoArtifactId(location.search),
+  );
   const isOpen = Boolean(artifact);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') {
+      return;
+    }
+
+    setMountNode(document.querySelector<HTMLElement>(THIRD_WORKSPACE_MOUNT_SELECTOR));
+  }, []);
 
   useEffect(() => {
     if (typeof document === 'undefined') {

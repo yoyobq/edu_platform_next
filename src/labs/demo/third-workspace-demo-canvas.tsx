@@ -1,4 +1,4 @@
-// src/shared/third-workspace-demo/canvas.tsx
+// src/labs/demo/third-workspace-demo-canvas.tsx
 
 import { useRef } from 'react';
 import { CloseOutlined } from '@ant-design/icons';
@@ -6,7 +6,7 @@ import { Button, Card, Divider, Typography } from 'antd';
 
 import { ResponsiveGrid, useWidthBand } from '@/shared/ui/responsive-layout';
 
-import type { ThirdWorkspaceDemoArtifact } from './model';
+import type { ThirdWorkspaceDemoArtifact } from './third-workspace-demo-model';
 
 export function ThirdWorkspaceDemoCanvas({
   artifact,

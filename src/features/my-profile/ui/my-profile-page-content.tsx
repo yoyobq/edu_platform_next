@@ -19,7 +19,8 @@ import {
 } from 'antd';
 import dayjs, { type Dayjs } from 'dayjs';
 
-import { WHITE_HOUSE_DEPARTMENT_NAME } from '@/shared/department';
+import { WHITE_HOUSE_DEPARTMENT_NAME } from '@/entities/department';
+
 import { HexAvatar } from '@/shared/hex-avatar';
 import { ResponsiveGrid, ResponsiveGridItem } from '@/shared/ui/responsive-layout';
 

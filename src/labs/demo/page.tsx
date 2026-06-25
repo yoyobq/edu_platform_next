@@ -5,17 +5,17 @@ import { ArrowRightOutlined, ExpandOutlined } from '@ant-design/icons';
 import { Button, Card, Divider, Space, Tag, Typography } from 'antd';
 import { useLocation, useNavigate } from 'react-router';
 
-import {
-  getThirdWorkspaceDemoArtifactById,
-  readThirdWorkspaceDemoArtifactId,
-  THIRD_WORKSPACE_DEMO_ARTIFACTS,
-  THIRD_WORKSPACE_DEMO_TRIGGER,
-  withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import { demoLabAccess } from './access';
 import { demoLabMeta } from './meta';
+import { ThirdWorkspaceDemoHost } from './third-workspace-demo-host';
+import {
+  getThirdWorkspaceDemoArtifactById,
+  readThirdWorkspaceDemoArtifactId,
+  THIRD_WORKSPACE_DEMO_ARTIFACTS,
+  withThirdWorkspaceDemo,
+} from './third-workspace-demo-model';
 
 export function DemoLabPage() {
   const location = useLocation();
@@ -32,6 +32,8 @@ export function DemoLabPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      <ThirdWorkspaceDemoHost />
+
       <Card>
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-3">
@@ -52,9 +54,8 @@ export function DemoLabPage() {
 
           <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
             这不是正式的 Artifacts Canvas，只是验证当结果物超出 Sidecar 的舒适阅读范围时，
-            是否应该临时跳到更宽的第三工作区。在当前 labs demo 的 Sidecar 中输入 demo 验证触发词
-            <Typography.Text code>{THIRD_WORKSPACE_DEMO_TRIGGER}</Typography.Text>
-            也能直接打开同一个 demo。
+            是否应该临时跳到更宽的第三工作区。当前 demo 的触发与结果物只归属于本 lab， 不进入正式
+            Sidecar 合同。
           </Typography.Paragraph>
         </div>
       </Card>

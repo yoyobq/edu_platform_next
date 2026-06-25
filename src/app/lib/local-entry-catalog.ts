@@ -2,6 +2,7 @@
 
 import { getNavigationLeafItems, type NavigationFilter } from '@/app/navigation';
 
+import { withCollaborationSearch } from './collaboration-url';
 import type { EntryCard } from './entry-card';
 
 type LocalEntryCatalogItem = EntryCard & {
@@ -11,19 +12,6 @@ type LocalEntryCatalogItem = EntryCard & {
 type LocalEntryContext = NavigationFilter & {
   search: string;
 };
-
-function withSearch(pathname: string, search: string): string {
-  if (pathname === '/labs/demo') {
-    return `${pathname}${search}`;
-  }
-
-  const searchParams = new URLSearchParams(search);
-
-  searchParams.delete('workspaceDemo');
-
-  const nextSearch = searchParams.toString();
-  return nextSearch ? `${pathname}?${nextSearch}` : pathname;
-}
 
 function normalizeText(value: string): string {
   return value.trim().toLowerCase();
@@ -69,7 +57,7 @@ export function getAvailableLocalEntryCards(context: LocalEntryContext): LocalEn
       id: `route-${item.key.replaceAll('/', '-').replace(/^-+/, '')}`,
       title: item.label,
       description: item.localEntry?.description,
-      to: withSearch(item.path, context.search),
+      to: withCollaborationSearch(item.path, context.search),
       kind: 'route' as const,
       keywords: [...(item.localEntry?.keywords ?? [])],
     }));

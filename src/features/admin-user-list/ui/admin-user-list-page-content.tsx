@@ -32,7 +32,6 @@ import {
   type AdminUserSortField,
   type AdminUserSortOrder,
   DEFAULT_ADMIN_USER_LIST_QUERY,
-  normalizeAdminUserListQuery,
 } from '../application/get-admin-users';
 import type {
   UpdateAdminUserAccountStatusInput,
@@ -43,6 +42,12 @@ import type {
   UpdateAdminUserStaffEmploymentStatusResult,
 } from '../application/update-admin-user-staff-employment-status';
 import { type AdminUserListLoader, useAdminUserList } from '../application/use-admin-user-list';
+import {
+  type AdminUserHasStaffFilterValue,
+  buildAdminUserListSearchParams,
+  normalizeAdminUserHasStaffFilterValue,
+  parseAdminUserListSearchParams,
+} from '../infrastructure/admin-user-list-search-params';
 
 import { AccountStatusQuickSwitch } from './account-status-quick-switch';
 import {
@@ -51,7 +56,6 @@ import {
 } from './admin-user-labels';
 import { StaffEmploymentStatusQuickSwitch } from './staff-employment-status-quick-switch';
 
-type HasStaffFilterValue = 'true' | 'false';
 type AdminUserAccountStatusUpdater = (
   input: UpdateAdminUserAccountStatusInput,
 ) => Promise<UpdateAdminUserAccountStatusResult>;
@@ -88,10 +92,6 @@ function toSorterOrder(sortOrder: AdminUserSortOrder): 'ascend' | 'descend' {
 
 function fromSorterOrder(value: 'ascend' | 'descend' | null | undefined): AdminUserSortOrder {
   return value === 'ascend' ? 'ASC' : 'DESC';
-}
-
-function normalizeHasStaff(value: HasStaffFilterValue): boolean {
-  return value === 'true';
 }
 
 function resolveFilterSummary(criteria: AdminUserListQuery) {
@@ -145,69 +145,6 @@ function renderPillTags(values: readonly string[]) {
       ))}
     </Flex>
   );
-}
-
-function parseHasStaffSearchParam(value: string | null): boolean | undefined {
-  if (value === 'true') {
-    return true;
-  }
-
-  if (value === 'false') {
-    return false;
-  }
-
-  return undefined;
-}
-
-function parseAccessGroupsSearchParams(searchParams: URLSearchParams): readonly AuthAccessGroup[] {
-  return searchParams
-    .getAll('accessGroup')
-    .filter((value): value is AuthAccessGroup =>
-      AUTH_ACCESS_GROUPS.includes(value as AuthAccessGroup),
-    );
-}
-
-function buildAdminUserListSearchParams(criteria: AdminUserListQuery) {
-  const normalizedCriteria = normalizeAdminUserListQuery({
-    ...DEFAULT_QUERY,
-    ...criteria,
-  });
-  const nextSearchParams = new URLSearchParams();
-
-  if (normalizedCriteria.query) {
-    nextSearchParams.set('query', normalizedCriteria.query);
-  }
-
-  if (normalizedCriteria.status) {
-    nextSearchParams.set('status', normalizedCriteria.status);
-  }
-
-  for (const accessGroup of normalizedCriteria.accessGroups ?? []) {
-    nextSearchParams.append('accessGroup', accessGroup);
-  }
-
-  nextSearchParams.set('hasStaff', normalizedCriteria.hasStaff === false ? 'false' : 'true');
-  nextSearchParams.set('limit', String(normalizedCriteria.limit ?? DEFAULT_QUERY.limit));
-  nextSearchParams.set('page', String(normalizedCriteria.page ?? DEFAULT_QUERY.page));
-  nextSearchParams.set('sortBy', normalizedCriteria.sortBy ?? DEFAULT_QUERY.sortBy);
-  nextSearchParams.set('sortOrder', normalizedCriteria.sortOrder ?? DEFAULT_QUERY.sortOrder);
-
-  return nextSearchParams;
-}
-
-function parseAdminUserListQuery(searchParams: URLSearchParams): AdminUserListQuery {
-  return normalizeAdminUserListQuery({
-    ...DEFAULT_QUERY,
-    accessGroups: parseAccessGroupsSearchParams(searchParams),
-    hasStaff: parseHasStaffSearchParam(searchParams.get('hasStaff')) ?? DEFAULT_QUERY.hasStaff,
-    limit: searchParams.get('limit') ? Number(searchParams.get('limit')) : DEFAULT_QUERY.limit,
-    page: searchParams.get('page') ? Number(searchParams.get('page')) : DEFAULT_QUERY.page,
-    query: searchParams.get('query') ?? undefined,
-    sortBy: (searchParams.get('sortBy') as AdminUserSortField | null) ?? DEFAULT_QUERY.sortBy,
-    sortOrder:
-      (searchParams.get('sortOrder') as AdminUserSortOrder | null) ?? DEFAULT_QUERY.sortOrder,
-    status: searchParams.get('status') as AdminUserAccountStatus | undefined,
-  });
 }
 
 function AdminUserListTableSkeleton() {
@@ -391,12 +328,12 @@ export function AdminUserListPageContent({
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const criteria = useMemo(() => parseAdminUserListQuery(searchParams), [searchParams]);
+  const criteria = useMemo(() => parseAdminUserListSearchParams(searchParams), [searchParams]);
   const [messageApi, messageContextHolder] = message.useMessage();
   const [draftQuery, setDraftQuery] = useState('');
   const [draftStatus, setDraftStatus] = useState<AdminUserAccountStatus | undefined>(undefined);
   const [draftAccessGroups, setDraftAccessGroups] = useState<readonly AuthAccessGroup[]>([]);
-  const [draftHasStaff, setDraftHasStaff] = useState<HasStaffFilterValue>('true');
+  const [draftHasStaff, setDraftHasStaff] = useState<AdminUserHasStaffFilterValue>('true');
   const [accountStatusUpdateErrorMessage, setAccountStatusUpdateErrorMessage] = useState<
     string | null
   >(null);
@@ -695,7 +632,7 @@ export function AdminUserListPageContent({
       buildAdminUserListSearchParams({
         ...criteria,
         accessGroups: draftAccessGroups.length > 0 ? draftAccessGroups : undefined,
-        hasStaff: normalizeHasStaff(draftHasStaff),
+        hasStaff: normalizeAdminUserHasStaffFilterValue(draftHasStaff),
         page: 1,
         query: draftQuery,
         status: draftStatus,
@@ -807,7 +744,7 @@ export function AdminUserListPageContent({
                 style={{ width: '100%' }}
                 onChange={(value) => setDraftAccessGroups(value)}
               />
-              <Select<HasStaffFilterValue>
+              <Select<AdminUserHasStaffFilterValue>
                 options={[
                   { label: '全部用户类型', value: 'true' }, // Placeholder adjustment if logic allows
                   { label: '仅看 Staff', value: 'true' },

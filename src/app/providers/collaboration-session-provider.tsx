@@ -1,7 +1,7 @@
 // src/app/providers/collaboration-session-provider.tsx
 
 import { type ReactNode, useMemo, useReducer } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation } from 'react-router';
 
 import {
   buildLocalEntryReply,
@@ -13,12 +13,6 @@ import {
 import { useAuthSessionState } from '@/features/auth';
 
 import type { AuthAccessGroup } from '@/entities/auth-access';
-
-import {
-  resolveThirdWorkspaceDemoTrigger,
-  THIRD_WORKSPACE_DEMO_TRIGGER,
-  withThirdWorkspaceDemo,
-} from '@/shared/third-workspace-demo';
 
 import {
   type AppEnv,
@@ -143,7 +137,6 @@ export function CollaborationSessionProvider({
 }: CollaborationSessionProviderProps) {
   const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
   const location = useLocation();
-  const navigate = useNavigate();
   const authSession = useAuthSessionState();
   const currentAvailability = getCurrentAvailability(location.search);
 
@@ -162,32 +155,6 @@ export function CollaborationSessionProvider({
         }
 
         if (currentAvailability === 'readonly') {
-          return;
-        }
-
-        const matchedWorkspaceArtifact =
-          location.pathname === '/labs/demo'
-            ? resolveThirdWorkspaceDemoTrigger(trimmedMessage)
-            : null;
-
-        if (matchedWorkspaceArtifact) {
-          navigate(
-            {
-              pathname: location.pathname,
-              search: withThirdWorkspaceDemo(location.search, matchedWorkspaceArtifact.id),
-            },
-            { replace: false },
-          );
-
-          dispatch({
-            type: 'submit-query',
-            payload: {
-              message: trimmedMessage,
-              cards: [],
-              mode: 'local',
-              systemReply: `已按 demo 验证触发词“${THIRD_WORKSPACE_DEMO_TRIGGER}”打开 labs 受控第三工作区 demo。这条链路只用于跳层验证，不属于正式首页或正式 Sidecar 合同。`,
-            },
-          });
           return;
         }
 
@@ -222,15 +189,7 @@ export function CollaborationSessionProvider({
         });
       },
     }),
-    [
-      authSession.snapshot,
-      currentAppEnv,
-      currentAvailability,
-      location.pathname,
-      location.search,
-      navigate,
-      session,
-    ],
+    [authSession.snapshot, currentAppEnv, currentAvailability, location.search, session],
   );
 
   return (

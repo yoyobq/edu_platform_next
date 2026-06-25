@@ -1,6 +1,9 @@
 // src/features/auth/application/restore-session.ts
-/* eslint-disable simple-import-sort/imports */
 
+import { isGraphQLIngressError } from '@/shared/graphql';
+
+import type { AuthPorts } from './ports';
+import { refreshSessionWithLock } from './refresh-session';
 import {
   getAuthSessionState,
   getCurrentAuthSession,
@@ -9,29 +12,7 @@ import {
   setHydratingSession,
   setUnauthenticatedSession,
 } from './session-store';
-import { isAuthPendingSession, type AuthSessionSnapshot, type AuthStoredSession } from './types';
-import type { AuthPorts } from './ports';
-import { refreshSessionWithLock } from './refresh-session';
-import { isGraphQLIngressError } from '@/shared/graphql';
-
-const AUTH_REFRESH_FEEDBACK_FLASH_KEY = 'platform_next.auth_refresh_feedback_flash';
-
-function queueAuthFailureFlash(content: string) {
-  if (typeof window === 'undefined') {
-    return;
-  }
-
-  window.sessionStorage.setItem(
-    AUTH_REFRESH_FEEDBACK_FLASH_KEY,
-    JSON.stringify({
-      content,
-      type: 'error',
-    } satisfies {
-      content: string;
-      type: 'error';
-    }),
-  );
-}
+import { type AuthSessionSnapshot, type AuthStoredSession, isAuthPendingSession } from './types';
 
 const restorePromises = new Map<string, Promise<AuthSessionSnapshot | null>>();
 
@@ -79,7 +60,7 @@ function failRestoreSession(input: {
   const errorMessage = getSessionErrorMessage(input.error, '当前会话已失效，请重新登录。');
 
   if (input.isBackground || isAuthPendingSession(input.snapshot)) {
-    queueAuthFailureFlash(errorMessage);
+    input.ports.feedback?.queueRefreshFailureMessage(errorMessage);
   }
 
   input.ports.storage.clearSession();
@@ -95,7 +76,7 @@ function retainRestoreSession(input: {
   const errorMessage = getSessionErrorMessage(input.error, '当前会话暂时无法恢复，请稍后重试。');
 
   if (input.isBackground || isAuthPendingSession(input.snapshot)) {
-    queueAuthFailureFlash(errorMessage);
+    input.ports.feedback?.queueRefreshFailureMessage(errorMessage);
   }
 
   if (isAuthPendingSession(input.snapshot)) {

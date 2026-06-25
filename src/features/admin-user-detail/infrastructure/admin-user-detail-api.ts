@@ -1,10 +1,10 @@
 import { type AuthAccessGroup } from '@/entities/auth-access';
-
 import {
   normalizeDepartmentName,
   WHITE_HOUSE_DEPARTMENT_NAME,
   WHITE_HOUSE_DEPARTMENT_OPTION_ID,
-} from '@/shared/department';
+} from '@/entities/department';
+
 import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,

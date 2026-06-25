@@ -80,6 +80,9 @@ export {
 
 const authPorts: AuthPorts = {
   api: authApi,
+  feedback: {
+    queueRefreshFailureMessage: queueAuthRefreshFailureMessage,
+  },
   storage: authStorage,
 };
 

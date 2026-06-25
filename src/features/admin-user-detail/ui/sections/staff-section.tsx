@@ -3,7 +3,8 @@
 import { useMemo } from 'react';
 import { Form, Input, Radio, Select, Tag, Typography } from 'antd';
 
-import { WHITE_HOUSE_DEPARTMENT_OPTION_ID } from '@/shared/department';
+import { WHITE_HOUSE_DEPARTMENT_OPTION_ID } from '@/entities/department';
+
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import type { AdminDepartmentOption } from '../../application/get-admin-department-options';
