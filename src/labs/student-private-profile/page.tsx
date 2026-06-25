@@ -5,11 +5,13 @@ import {
   CheckCircleOutlined,
   ClearOutlined,
   CloudSyncOutlined,
+  DeleteOutlined,
   EditOutlined,
   EyeOutlined,
   FileSearchOutlined,
   LoginOutlined,
   PictureOutlined,
+  PlusOutlined,
   ReloadOutlined,
 } from '@ant-design/icons';
 import {
@@ -127,6 +129,11 @@ import {
   type StudentPrivateProfileSummaryFamilyMember,
   type StudentPrivateProfileSummaryField,
   type StudentPrivateProfileSummaryRecordChange,
+  type WriteStudentPrivateProfileEducationResumeToUpstreamInput,
+  writeStudentPrivateProfileEducationToUpstream,
+  type WriteStudentPrivateProfileFamilyMemberToUpstreamInput,
+  writeStudentPrivateProfileFamilyToUpstream,
+  type WriteStudentPrivateProfileSectionToUpstreamResult,
 } from './api';
 
 type LoadSummaryOptions = {
@@ -153,6 +160,18 @@ type UpstreamPendingAction =
       classId: string | null;
       studentIds: string[];
       type: 'batch-refresh';
+    }
+  | {
+      expectedSectionBaselineToken: string;
+      member: WriteStudentPrivateProfileFamilyMemberToUpstreamInput;
+      studentId: string;
+      type: 'family-write-through';
+    }
+  | {
+      expectedSectionBaselineToken: string;
+      resume: WriteStudentPrivateProfileEducationResumeToUpstreamInput;
+      studentId: string;
+      type: 'education-write-through';
     };
 
 type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'readiness' | 'sync';
@@ -190,6 +209,20 @@ type FamilyPatchFormValues = {
   value?: string;
 };
 
+type FamilyWriteThroughFormValues = {
+  name?: string;
+  phone?: string;
+  relationshipCode?: string;
+  workplace?: string;
+};
+
+type EducationWriteThroughFormValues = {
+  endDate?: string;
+  organization?: string;
+  reference?: string;
+  startDate?: string;
+};
+
 type SummaryFieldSectionKey = 'personal' | 'sensitiveIdentifiers';
 
 const SENSITIVE_IDENTIFIER_PATCH_FIELDS = new Set(['ID_CARD', 'BANK_CARD_NUMBER', 'CARD_NUMBER']);
@@ -204,6 +237,7 @@ const CONTACT_AND_ADDRESS_PATCH_FIELDS = new Set([
 const SUMMARY_FIELD_SECTION_ORDER: SummaryFieldSectionKey[] = ['personal', 'sensitiveIdentifiers'];
 const CLASS_BATCH_REFRESH_CHUNK_SIZE = 20;
 const CLASS_BATCH_REFRESH_INTERVAL_MS = 1000;
+const STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function formatClassOption(option: StudentPrivateProfileClassOption) {
   return `${option.className} · ${option.studentCount}人`;
@@ -262,6 +296,27 @@ function formatDateTime(value: string | null | undefined) {
 
 function displayText(value: string | null | undefined) {
   return value?.trim() || '—';
+}
+
+function resolveSummarySectionBaselineToken(
+  summary: StudentPrivateProfileSummary | null,
+  section: 'education' | 'family',
+) {
+  return (
+    summary?.sectionStatuses.find((sectionStatus) => sectionStatus.section === section)
+      ?.sectionBaselineToken ?? null
+  );
+}
+
+function isValidWriteThroughDate(value: string | null | undefined) {
+  const normalizedValue = value?.trim() ?? '';
+  const date = new Date(`${normalizedValue}T00:00:00.000Z`);
+
+  return (
+    STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_DATE_PATTERN.test(normalizedValue) &&
+    !Number.isNaN(date.getTime()) &&
+    date.toISOString().slice(0, 10) === normalizedValue
+  );
 }
 
 function resolveClassOverviewErrorMessage(error: unknown) {
@@ -346,7 +401,7 @@ function formatFamilyMemberSummary(member: StudentPrivateProfileSummaryFamilyMem
       member.maskedPhone ? `电话 ${member.maskedPhone}` : null,
     ]
       .filter(Boolean)
-      .join(' · ') || member.itemKey
+      .join(' · ') || '当前家庭成员'
   );
 }
 
@@ -550,11 +605,13 @@ export function StudentPrivateProfileLabPage() {
   const currentAccount = loaderData?.currentAccount ?? null;
   const lockedUpstreamLoginUserId = loaderData?.lockedUpstreamLoginUserId ?? null;
   const manualPatchAccess = loaderData?.manualPatchAccess ?? EMPTY_MANUAL_PATCH_ACCESS;
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
   const [studentForm] = Form.useForm<{ studentId: string }>();
   const [compareForm] = Form.useForm<CompareFormValues>();
   const [patchForm] = Form.useForm<PatchFormValues>();
   const [familyPatchForm] = Form.useForm<FamilyPatchFormValues>();
+  const [familyWriteThroughForm] = Form.useForm<FamilyWriteThroughFormValues>();
+  const [educationWriteThroughForm] = Form.useForm<EducationWriteThroughFormValues>();
   const [summary, setSummary] = useState<StudentPrivateProfileSummary | null>(null);
   const [compareResult, setCompareResult] = useState<StudentPrivateProfileCompareResult | null>(
     null,
@@ -588,6 +645,9 @@ export function StudentPrivateProfileLabPage() {
   const [isComparing, setIsComparing] = useState(false);
   const [isPatching, setIsPatching] = useState(false);
   const [isPatchingFamily, setIsPatchingFamily] = useState(false);
+  const [isWritingThrough, setIsWritingThrough] = useState(false);
+  const [isFamilyWriteThroughOpen, setIsFamilyWriteThroughOpen] = useState(false);
+  const [isEducationWriteThroughOpen, setIsEducationWriteThroughOpen] = useState(false);
   const [activeCompareField, setActiveCompareField] =
     useState<StudentPrivateProfileCompareField | null>(null);
   const [activePatchField, setActivePatchField] =
@@ -657,6 +717,14 @@ export function StudentPrivateProfileLabPage() {
           ),
       ),
     [summaryFields],
+  );
+  const familySectionBaselineToken = useMemo(
+    () => resolveSummarySectionBaselineToken(summary, 'family'),
+    [summary],
+  );
+  const educationSectionBaselineToken = useMemo(
+    () => resolveSummarySectionBaselineToken(summary, 'education'),
+    [summary],
   );
   const classSelectOptions = useMemo(
     () =>
@@ -1201,6 +1269,127 @@ export function StudentPrivateProfileLabPage() {
     [message, openLoginModal, runPhotoReadWithSession, upstreamSession],
   );
 
+  const applyWriteThroughResult = useCallback(
+    async (result: WriteStudentPrivateProfileSectionToUpstreamResult) => {
+      setIsFamilyWriteThroughOpen(false);
+      setIsEducationWriteThroughOpen(false);
+      familyWriteThroughForm.resetFields();
+      educationWriteThroughForm.resetFields();
+      clearProfilePreview();
+
+      if (result.summary) {
+        setSummary(result.summary);
+        studentForm.setFieldValue('studentId', result.summary.studentId);
+      } else if (result.summaryRefreshFailed) {
+        await loadSummary(result.studentId);
+      }
+
+      if (selectedClassId) {
+        void loadClassOverview(selectedClassId);
+        void loadGovernanceReadiness(selectedClassId);
+      }
+
+      if (result.summaryRefreshFailed && !result.summary) {
+        message.warning('写回已完成，本地摘要已重新读取。');
+        return;
+      }
+
+      if (result.warningCodes.length > 0) {
+        message.warning('写回已完成，请留意返回提醒。');
+        return;
+      }
+
+      message.success('已写回学工系统并刷新本地资料。');
+    },
+    [
+      clearProfilePreview,
+      educationWriteThroughForm,
+      familyWriteThroughForm,
+      loadClassOverview,
+      loadGovernanceReadiness,
+      loadSummary,
+      message,
+      selectedClassId,
+      studentForm,
+    ],
+  );
+
+  const runWriteThroughWithSession = useCallback(
+    async (
+      session: StoredUpstreamSession,
+      action: Extract<
+        UpstreamPendingAction,
+        {
+          type: 'education-write-through' | 'family-write-through';
+        }
+      >,
+    ) => {
+      setIsWritingThrough(true);
+
+      try {
+        let activeSession = session;
+
+        const executeWriteThrough = async (nextSession: StoredUpstreamSession) => {
+          if (action.type === 'family-write-through') {
+            return await writeStudentPrivateProfileFamilyToUpstream({
+              expectedSectionBaselineToken: action.expectedSectionBaselineToken,
+              members: [action.member],
+              studentId: action.studentId,
+              upstreamSessionToken: nextSession.upstreamSessionToken,
+            });
+          }
+
+          return await writeStudentPrivateProfileEducationToUpstream({
+            expectedSectionBaselineToken: action.expectedSectionBaselineToken,
+            resumes: [action.resume],
+            studentId: action.studentId,
+            upstreamSessionToken: nextSession.upstreamSessionToken,
+          });
+        };
+
+        try {
+          const result = await executeWriteThrough(activeSession);
+
+          activeSession = persistSessionFromResult(activeSession, result);
+          await applyWriteThroughResult(result);
+        } catch (error) {
+          if (!isExpiredUpstreamSessionError(error)) {
+            message.error(
+              resolveStudentPrivateProfileActionError(error, '暂时无法写回学工系统资料。'),
+            );
+            return;
+          }
+
+          try {
+            const refreshedSession = await refreshSession(activeSession);
+            const result = await executeWriteThrough(refreshedSession);
+
+            persistSessionFromResult(refreshedSession, result);
+            await applyWriteThroughResult(result);
+          } catch (refreshError) {
+            openLoginModalForExpiredSession({
+              loginError: resolveUpstreamErrorMessage(
+                refreshError,
+                '学工系统会话已失效，请重新登录后继续写回。',
+              ),
+              pendingAction: action,
+              session: activeSession,
+            });
+          }
+        }
+      } finally {
+        setIsWritingThrough(false);
+      }
+    },
+    [
+      applyWriteThroughResult,
+      message,
+      openLoginModalForExpiredSession,
+      persistSessionFromResult,
+      refreshSession,
+    ],
+  );
+
   useEffect(() => {
     if (!upstreamActionRequest) {
       return;
@@ -1226,6 +1415,14 @@ export function StudentPrivateProfileLabPage() {
       return;
     }
 
+    if (
+      upstreamActionRequest.action.type === 'family-write-through' ||
+      upstreamActionRequest.action.type === 'education-write-through'
+    ) {
+      void runWriteThroughWithSession(upstreamActionRequest.session, upstreamActionRequest.action);
+      return;
+    }
+
     void runPhotoReadWithSession(
       upstreamActionRequest.session,
       upstreamActionRequest.action.studentId,
@@ -1235,6 +1432,7 @@ export function StudentPrivateProfileLabPage() {
     runBatchRefreshWithSession,
     runPhotoReadWithSession,
     runRefreshWithSession,
+    runWriteThroughWithSession,
     upstreamActionRequest,
   ]);
 
@@ -1439,6 +1637,245 @@ export function StudentPrivateProfileLabPage() {
       runPhotoReadCacheFirst,
       runPhotoReadWithSession,
       upstreamSession,
+    ],
+  );
+
+  const runOrQueueWriteThroughAction = useCallback(
+    async (
+      action: Extract<
+        UpstreamPendingAction,
+        { type: 'education-write-through' | 'family-write-through' }
+      >,
+    ) => {
+      if (!upstreamSession) {
+        openLoginModal({ pendingAction: action });
+        return;
+      }
+
+      await runWriteThroughWithSession(upstreamSession, action);
+    },
+    [openLoginModal, runWriteThroughWithSession, upstreamSession],
+  );
+
+  const openFamilyWriteThroughModal = useCallback(() => {
+    const studentId = resolveSummaryActionStudentId();
+
+    if (!studentId) {
+      return;
+    }
+
+    if (!familySectionBaselineToken) {
+      message.error('家庭信息缺少 section baseline，请先刷新该学生资料。');
+      return;
+    }
+
+    familyWriteThroughForm.setFieldsValue({
+      name: undefined,
+      phone: undefined,
+      relationshipCode: '1',
+      workplace: undefined,
+    });
+    setIsFamilyWriteThroughOpen(true);
+  }, [familySectionBaselineToken, familyWriteThroughForm, message, resolveSummaryActionStudentId]);
+
+  const closeFamilyWriteThroughModal = useCallback(() => {
+    setIsFamilyWriteThroughOpen(false);
+    familyWriteThroughForm.resetFields();
+  }, [familyWriteThroughForm]);
+
+  const handleFamilyWriteThroughCreate = useCallback(
+    async (values: FamilyWriteThroughFormValues) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
+      if (!familySectionBaselineToken) {
+        message.error('家庭信息缺少 section baseline，请先刷新该学生资料。');
+        return;
+      }
+
+      await runOrQueueWriteThroughAction({
+        expectedSectionBaselineToken: familySectionBaselineToken,
+        member: {
+          action: 'CREATE',
+          name: values.name,
+          phone: values.phone,
+          relationshipCode: values.relationshipCode,
+          workplace: values.workplace,
+        },
+        studentId,
+        type: 'family-write-through',
+      });
+    },
+    [
+      familySectionBaselineToken,
+      message,
+      resolveSummaryActionStudentId,
+      runOrQueueWriteThroughAction,
+    ],
+  );
+
+  const confirmFamilyWriteThroughDelete = useCallback(
+    (member: StudentPrivateProfileSummaryFamilyMember) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
+      if (!familySectionBaselineToken) {
+        message.error('家庭信息缺少 section baseline，请先刷新该学生资料。');
+        return;
+      }
+
+      modal.confirm({
+        cancelText: '取消',
+        content: `将从学工系统删除家庭成员「${formatFamilyMemberSummary(member)}」。本操作不会乐观更新页面。`,
+        okButtonProps: {
+          danger: true,
+        },
+        okText: '删除并写回',
+        title: '确认删除家庭成员',
+        onOk: async () => {
+          await runOrQueueWriteThroughAction({
+            expectedSectionBaselineToken: familySectionBaselineToken,
+            member: {
+              action: 'DELETE',
+              itemKey: member.itemKey,
+              upstreamBaselineToken: member.upstreamBaselineToken,
+            },
+            studentId,
+            type: 'family-write-through',
+          });
+        },
+      });
+    },
+    [
+      familySectionBaselineToken,
+      message,
+      modal,
+      resolveSummaryActionStudentId,
+      runOrQueueWriteThroughAction,
+    ],
+  );
+
+  const openEducationWriteThroughModal = useCallback(() => {
+    const studentId = resolveSummaryActionStudentId();
+
+    if (!studentId) {
+      return;
+    }
+
+    if (!educationSectionBaselineToken) {
+      message.error('教育经历缺少 section baseline，请先刷新该学生资料。');
+      return;
+    }
+
+    educationWriteThroughForm.resetFields();
+    setIsEducationWriteThroughOpen(true);
+  }, [
+    educationSectionBaselineToken,
+    educationWriteThroughForm,
+    message,
+    resolveSummaryActionStudentId,
+  ]);
+
+  const closeEducationWriteThroughModal = useCallback(() => {
+    setIsEducationWriteThroughOpen(false);
+    educationWriteThroughForm.resetFields();
+  }, [educationWriteThroughForm]);
+
+  const handleEducationWriteThroughCreate = useCallback(
+    async (values: EducationWriteThroughFormValues) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
+      if (!educationSectionBaselineToken) {
+        message.error('教育经历缺少 section baseline，请先刷新该学生资料。');
+        return;
+      }
+
+      if (!isValidWriteThroughDate(values.startDate) || !isValidWriteThroughDate(values.endDate)) {
+        message.error('开始日期和结束日期必须是合法日期，格式为 YYYY-MM-DD。');
+        return;
+      }
+
+      if ((values.startDate ?? '') > (values.endDate ?? '')) {
+        message.error('开始日期不能晚于结束日期。');
+        return;
+      }
+
+      await runOrQueueWriteThroughAction({
+        expectedSectionBaselineToken: educationSectionBaselineToken,
+        resume: {
+          action: 'CREATE',
+          endDate: values.endDate,
+          organization: values.organization,
+          reference: values.reference,
+          startDate: values.startDate,
+        },
+        studentId,
+        type: 'education-write-through',
+      });
+    },
+    [
+      educationSectionBaselineToken,
+      message,
+      resolveSummaryActionStudentId,
+      runOrQueueWriteThroughAction,
+    ],
+  );
+
+  const confirmEducationWriteThroughDelete = useCallback(
+    (resume: StudentPrivateProfileSummaryEducationResume) => {
+      const studentId = resolveSummaryActionStudentId();
+
+      if (!studentId) {
+        return;
+      }
+
+      if (!educationSectionBaselineToken) {
+        message.error('教育经历缺少 section baseline，请先刷新该学生资料。');
+        return;
+      }
+
+      modal.confirm({
+        cancelText: '取消',
+        content: `将从学工系统删除教育经历「${
+          [resume.startMonth, resume.endMonth, resume.maskedOrganization]
+            .filter(Boolean)
+            .join(' · ') || '当前教育经历'
+        }」。本操作不会乐观更新页面。`,
+        okButtonProps: {
+          danger: true,
+        },
+        okText: '删除并写回',
+        title: '确认删除教育经历',
+        onOk: async () => {
+          await runOrQueueWriteThroughAction({
+            expectedSectionBaselineToken: educationSectionBaselineToken,
+            resume: {
+              action: 'DELETE',
+              itemKey: resume.itemKey,
+              upstreamBaselineToken: resume.upstreamBaselineToken,
+            },
+            studentId,
+            type: 'education-write-through',
+          });
+        },
+      });
+    },
+    [
+      educationSectionBaselineToken,
+      message,
+      modal,
+      resolveSummaryActionStudentId,
+      runOrQueueWriteThroughAction,
     ],
   );
 
@@ -2085,20 +2522,43 @@ export function StudentPrivateProfileLabPage() {
       fixed: 'right',
       key: 'action',
       title: '操作',
-      width: 90,
-      render: (_, record) =>
-        canPatchStudentPrivateProfileFamily(manualPatchAccess) && record.upstreamBaselineToken ? (
-          <Button
-            disabled={isSummaryStudentIdMismatched}
-            size="small"
-            type="link"
-            onClick={() => openFamilyPatchModal(record)}
-          >
-            修正
-          </Button>
+      width: 180,
+      render: (_, record) => {
+        const canPatch =
+          canPatchStudentPrivateProfileFamily(manualPatchAccess) && record.upstreamBaselineToken;
+        const canDeleteThrough = Boolean(
+          familySectionBaselineToken && record.itemKey && record.upstreamBaselineToken,
+        );
+
+        return canPatch || canDeleteThrough ? (
+          <Space size="small" wrap>
+            {canPatch ? (
+              <Button
+                disabled={isSummaryStudentIdMismatched}
+                size="small"
+                type="link"
+                onClick={() => openFamilyPatchModal(record)}
+              >
+                修正
+              </Button>
+            ) : null}
+            {canDeleteThrough ? (
+              <Button
+                danger
+                disabled={isSummaryStudentIdMismatched || isWritingThrough}
+                icon={<DeleteOutlined />}
+                size="small"
+                type="link"
+                onClick={() => confirmFamilyWriteThroughDelete(record)}
+              >
+                删除并写回
+              </Button>
+            ) : null}
+          </Space>
         ) : (
           '—'
-        ),
+        );
+      },
     },
   ];
 
@@ -2138,6 +2598,27 @@ export function StudentPrivateProfileLabPage() {
       title: '同步时间',
       width: 160,
       render: (value: string) => formatDateTime(value),
+    },
+    {
+      fixed: 'right',
+      key: 'action',
+      title: '操作',
+      width: 120,
+      render: (_, record) =>
+        educationSectionBaselineToken && record.itemKey && record.upstreamBaselineToken ? (
+          <Button
+            danger
+            disabled={isSummaryStudentIdMismatched || isWritingThrough}
+            icon={<DeleteOutlined />}
+            size="small"
+            type="link"
+            onClick={() => confirmEducationWriteThroughDelete(record)}
+          >
+            删除并写回
+          </Button>
+        ) : (
+          '—'
+        ),
     },
   ];
 
@@ -2670,26 +3151,74 @@ export function StudentPrivateProfileLabPage() {
                         )}
                       </ResponsiveGrid>
 
+                      {!familySectionBaselineToken ? (
+                        <Alert
+                          showIcon
+                          type="warning"
+                          message="家庭信息缺少 section baseline，请先刷新该学生资料后再写回学工系统。"
+                        />
+                      ) : null}
                       <Table
                         columns={familyColumns}
                         dataSource={summary.familyMembers}
                         locale={{ emptyText: '暂无家庭信息摘要' }}
                         pagination={false}
                         rowKey="itemKey"
-                        scroll={{ x: 900 }}
+                        scroll={{ x: 1000 }}
                         size="small"
-                        title={() => '家庭成员'}
+                        title={() => (
+                          <Space
+                            align="center"
+                            style={{ justifyContent: 'space-between', width: '100%' }}
+                          >
+                            <span>家庭成员</span>
+                            {familySectionBaselineToken ? (
+                              <Button
+                                disabled={isSummaryStudentIdMismatched || isWritingThrough}
+                                icon={<PlusOutlined />}
+                                size="small"
+                                onClick={openFamilyWriteThroughModal}
+                              >
+                                新增并写回学工系统
+                              </Button>
+                            ) : null}
+                          </Space>
+                        )}
                       />
 
+                      {!educationSectionBaselineToken ? (
+                        <Alert
+                          showIcon
+                          type="warning"
+                          message="教育经历缺少 section baseline，请先刷新该学生资料后再写回学工系统。"
+                        />
+                      ) : null}
                       <Table
                         columns={educationColumns}
                         dataSource={summary.educationResumes}
                         locale={{ emptyText: '暂无教育经历摘要' }}
                         pagination={false}
                         rowKey="itemKey"
-                        scroll={{ x: 830 }}
+                        scroll={{ x: 950 }}
                         size="small"
-                        title={() => '教育经历'}
+                        title={() => (
+                          <Space
+                            align="center"
+                            style={{ justifyContent: 'space-between', width: '100%' }}
+                          >
+                            <span>教育经历</span>
+                            {educationSectionBaselineToken ? (
+                              <Button
+                                disabled={isSummaryStudentIdMismatched || isWritingThrough}
+                                icon={<PlusOutlined />}
+                                size="small"
+                                onClick={openEducationWriteThroughModal}
+                              >
+                                新增并写回学工系统
+                              </Button>
+                            ) : null}
+                          </Space>
+                        )}
                       />
 
                       <Table
@@ -3146,6 +3675,141 @@ export function StudentPrivateProfileLabPage() {
             </Button>
           </Space>
         </Form>
+      </Modal>
+
+      <Modal
+        destroyOnHidden
+        footer={null}
+        open={isFamilyWriteThroughOpen}
+        title="新增家庭成员并写回学工系统"
+        onCancel={closeFamilyWriteThroughModal}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            showIcon
+            type="warning"
+            message="该操作会写回学工系统，并在成功后刷新本地家庭信息 section。"
+          />
+          <Form
+            form={familyWriteThroughForm}
+            layout="vertical"
+            onFinish={handleFamilyWriteThroughCreate}
+          >
+            <Form.Item
+              label="家庭关系"
+              name="relationshipCode"
+              rules={[{ required: true, message: '请选择家庭关系。' }]}
+            >
+              <Select
+                options={[
+                  { label: '父亲', value: '1' },
+                  { label: '母亲', value: '2' },
+                  { label: '祖父母', value: '3' },
+                  { label: '兄弟姐妹', value: '4' },
+                ]}
+              />
+            </Form.Item>
+            <Form.Item
+              label="姓名"
+              name="name"
+              rules={[{ required: true, message: '请输入家庭成员姓名。', whitespace: true }]}
+            >
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item label="电话" name="phone">
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item label="工作单位" name="workplace">
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Space wrap>
+              <Button onClick={closeFamilyWriteThroughModal}>取消</Button>
+              <Button
+                htmlType="submit"
+                icon={<CloudSyncOutlined />}
+                loading={isWritingThrough}
+                type="primary"
+              >
+                写回学工系统
+              </Button>
+            </Space>
+          </Form>
+        </Space>
+      </Modal>
+
+      <Modal
+        destroyOnHidden
+        footer={null}
+        open={isEducationWriteThroughOpen}
+        title="新增教育经历并写回学工系统"
+        onCancel={closeEducationWriteThroughModal}
+      >
+        <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+          <Alert
+            showIcon
+            type="warning"
+            message="该操作会写回学工系统，并在成功后刷新本地教育经历 section。"
+          />
+          <Form
+            form={educationWriteThroughForm}
+            layout="vertical"
+            onFinish={handleEducationWriteThroughCreate}
+          >
+            <Form.Item
+              label="开始日期"
+              name="startDate"
+              rules={[
+                { required: true, message: '请输入开始日期。', whitespace: true },
+                {
+                  message: '开始日期必须是合法日期，格式为 YYYY-MM-DD。',
+                  validator: (_, value: string | undefined) =>
+                    isValidWriteThroughDate(value) ? Promise.resolve() : Promise.reject(),
+                },
+              ]}
+            >
+              <Input autoComplete="off" placeholder="2020-09-01" />
+            </Form.Item>
+            <Form.Item
+              label="结束日期"
+              name="endDate"
+              rules={[
+                { required: true, message: '请输入结束日期。', whitespace: true },
+                {
+                  message: '结束日期必须是合法日期，格式为 YYYY-MM-DD。',
+                  validator: (_, value: string | undefined) =>
+                    isValidWriteThroughDate(value) ? Promise.resolve() : Promise.reject(),
+                },
+              ]}
+            >
+              <Input autoComplete="off" placeholder="2023-06-30" />
+            </Form.Item>
+            <Form.Item
+              label="证明人/参考信息"
+              name="reference"
+              rules={[{ required: true, message: '请输入证明人/参考信息。', whitespace: true }]}
+            >
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Form.Item
+              label="所在单位"
+              name="organization"
+              rules={[{ required: true, message: '请输入所在单位。', whitespace: true }]}
+            >
+              <Input autoComplete="off" />
+            </Form.Item>
+            <Space wrap>
+              <Button onClick={closeEducationWriteThroughModal}>取消</Button>
+              <Button
+                htmlType="submit"
+                icon={<CloudSyncOutlined />}
+                loading={isWritingThrough}
+                type="primary"
+              >
+                写回学工系统
+              </Button>
+            </Space>
+          </Form>
+        </Space>
       </Modal>
 
       <Drawer

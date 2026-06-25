@@ -102,6 +102,7 @@ export type StudentPrivateProfileSummaryField = {
 export type StudentPrivateProfileSummarySectionStatus = {
   observedAt: string;
   section: string;
+  sectionBaselineToken: string | null;
   sourceEndpoint: string;
   sourceStatus: string;
   warningCodes: string[];
@@ -396,6 +397,46 @@ export type StudentPrivateProfilePhotoReadResult = {
   width: number | null;
 };
 
+export type StudentPrivateProfileWriteThroughAction = 'CREATE' | 'DELETE';
+
+export type WriteStudentPrivateProfileFamilyMemberToUpstreamInput = {
+  action: StudentPrivateProfileWriteThroughAction;
+  itemKey?: string | null;
+  name?: string | null;
+  phone?: string | null;
+  relationshipCode?: string | null;
+  upstreamBaselineToken?: string | null;
+  workplace?: string | null;
+};
+
+export type WriteStudentPrivateProfileEducationResumeToUpstreamInput = {
+  action: StudentPrivateProfileWriteThroughAction;
+  endDate?: string | null;
+  itemKey?: string | null;
+  organization?: string | null;
+  reference?: string | null;
+  startDate?: string | null;
+  upstreamBaselineToken?: string | null;
+};
+
+export type WriteStudentPrivateProfileSectionToUpstreamResult = {
+  action: StudentPrivateProfileWriteThroughAction;
+  changedSections: string[];
+  expiresAt: string | null;
+  localSnapshotRefreshed: boolean;
+  sectionKey: 'EDUCATION_RESUME' | 'FAMILY';
+  snapshotUpdated: boolean;
+  sourceObservedAt: string;
+  studentId: string;
+  success: boolean;
+  summary: StudentPrivateProfileSummary | null;
+  summaryRefreshFailed: boolean;
+  traceId: string;
+  upstreamSaved: boolean;
+  upstreamSessionToken: string | null;
+  warningCodes: string[];
+};
+
 export type PatchStudentPrivateProfileFieldInput = {
   action: StudentPrivateProfileManualPatchAction;
   fieldKey: StudentPrivateProfileManualPatchField;
@@ -459,6 +500,14 @@ type ReadStudentPrivateProfilePhotoResponse = {
   readStudentPrivateProfilePhoto: StudentPrivateProfilePhotoReadResult;
 };
 
+type WriteStudentPrivateProfileFamilyToUpstreamResponse = {
+  writeStudentPrivateProfileFamilyToUpstream: WriteStudentPrivateProfileSectionToUpstreamResult;
+};
+
+type WriteStudentPrivateProfileEducationToUpstreamResponse = {
+  writeStudentPrivateProfileEducationToUpstream: WriteStudentPrivateProfileSectionToUpstreamResult;
+};
+
 type PatchStudentPrivateProfileFamilyMembersResponse = {
   patchStudentPrivateProfileFamilyMembers: StudentPrivateProfileSummary;
 };
@@ -516,6 +565,7 @@ const STUDENT_PRIVATE_PROFILE_SUMMARY_FIELDS = `
   }
   sectionStatuses {
     section
+    sectionBaselineToken
     sourceStatus
     observedAt
     sourceEndpoint
@@ -817,6 +867,46 @@ const READ_STUDENT_PRIVATE_PROFILE_PHOTO_MUTATION = `
   }
 `;
 
+const STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_RESULT_FIELDS = `
+  success
+  studentId
+  sectionKey
+  action
+  upstreamSaved
+  localSnapshotRefreshed
+  snapshotUpdated
+  sourceObservedAt
+  changedSections
+  warningCodes
+  upstreamSessionToken
+  expiresAt
+  traceId
+  summaryRefreshFailed
+  summary {
+    ${STUDENT_PRIVATE_PROFILE_SUMMARY_FIELDS}
+  }
+`;
+
+const WRITE_STUDENT_PRIVATE_PROFILE_FAMILY_TO_UPSTREAM_MUTATION = `
+  mutation StudentPrivateProfileLabWriteFamilyToUpstream(
+    $input: WriteStudentPrivateProfileFamilyToUpstreamInput!
+  ) {
+    writeStudentPrivateProfileFamilyToUpstream(input: $input) {
+      ${STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_RESULT_FIELDS}
+    }
+  }
+`;
+
+const WRITE_STUDENT_PRIVATE_PROFILE_EDUCATION_TO_UPSTREAM_MUTATION = `
+  mutation StudentPrivateProfileLabWriteEducationToUpstream(
+    $input: WriteStudentPrivateProfileEducationToUpstreamInput!
+  ) {
+    writeStudentPrivateProfileEducationToUpstream(input: $input) {
+      ${STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_RESULT_FIELDS}
+    }
+  }
+`;
+
 const PATCH_STUDENT_PRIVATE_PROFILE_FAMILY_MEMBERS_MUTATION = `
   mutation StudentPrivateProfileLabPatchFamily(
     $input: PatchStudentPrivateProfileFamilyMembersInput!
@@ -936,6 +1026,163 @@ export function normalizeStudentPrivateProfilePreviewInput(input: {
     templateCode: normalizeRequiredTextValue(input.templateCode, {
       label: '预览模板',
     }) as StudentPrivateProfilePreviewTemplateCode,
+  };
+}
+
+const STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODES = new Set(['1', '2', '3', '4']);
+const STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeUpstreamSessionToken(upstreamSessionToken: string | null | undefined) {
+  const normalizedToken = normalizeRequiredTextValue(upstreamSessionToken, {
+    label: 'upstream session token',
+  });
+
+  if (normalizedToken.length > 4096) {
+    throw new Error('upstream session token 不能超过 4096 个字符。');
+  }
+
+  return normalizedToken;
+}
+
+function normalizeSectionBaselineToken(expectedSectionBaselineToken: string | null | undefined) {
+  return normalizeRequiredTextValue(expectedSectionBaselineToken, {
+    label: 'section baseline token',
+  });
+}
+
+function normalizeWriteThroughAction(action: StudentPrivateProfileWriteThroughAction) {
+  if (action !== 'CREATE' && action !== 'DELETE') {
+    throw new Error('写回动作不支持。');
+  }
+
+  return action;
+}
+
+function normalizeFamilyRelationshipCode(relationshipCode: string | null | undefined) {
+  const normalizedCode = normalizeRequiredTextValue(relationshipCode, {
+    label: '家庭关系',
+  });
+
+  if (!STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODES.has(normalizedCode)) {
+    throw new Error('家庭关系当前只支持 1 / 2 / 3 / 4。');
+  }
+
+  return normalizedCode;
+}
+
+function normalizeWriteThroughDate(value: string | null | undefined, label: string) {
+  const normalizedDate = normalizeRequiredTextValue(value, { label });
+  const date = new Date(`${normalizedDate}T00:00:00.000Z`);
+
+  if (
+    !STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_DATE_PATTERN.test(normalizedDate) ||
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== normalizedDate
+  ) {
+    throw new Error(`${label}必须是合法日期，格式为 YYYY-MM-DD。`);
+  }
+
+  return normalizedDate;
+}
+
+function assertSingleWriteThroughItem<TItem>(
+  items: readonly TItem[],
+  label: string,
+): asserts items is readonly [TItem] {
+  if (items.length !== 1) {
+    throw new Error(`P4.1 每次只允许写回 1 ${label}。`);
+  }
+}
+
+export function normalizeWriteStudentPrivateProfileFamilyToUpstreamInput(input: {
+  expectedSectionBaselineToken: string | null | undefined;
+  members: readonly WriteStudentPrivateProfileFamilyMemberToUpstreamInput[];
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+}) {
+  assertSingleWriteThroughItem(input.members, '个家庭成员');
+
+  const [member] = input.members;
+  const action = normalizeWriteThroughAction(member.action);
+
+  return {
+    expectedSectionBaselineToken: normalizeSectionBaselineToken(input.expectedSectionBaselineToken),
+    members: [
+      action === 'CREATE'
+        ? compactInput({
+            action,
+            name: normalizeRequiredTextValue(member.name, { label: '家庭成员姓名' }),
+            phone: normalizeOptionalTextValue(member.phone, 'to_undefined'),
+            relationshipCode: normalizeFamilyRelationshipCode(member.relationshipCode),
+            workplace: normalizeOptionalTextValue(member.workplace, 'to_undefined'),
+          })
+        : {
+            action,
+            itemKey: normalizeRequiredTextValue(member.itemKey, {
+              label: '家庭成员行标识',
+            }),
+            upstreamBaselineToken: normalizeRequiredTextValue(member.upstreamBaselineToken, {
+              label: '家庭成员 baseline token',
+            }),
+          },
+    ],
+    studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+    upstreamSessionToken: normalizeUpstreamSessionToken(input.upstreamSessionToken),
+  };
+}
+
+export function normalizeWriteStudentPrivateProfileEducationToUpstreamInput(input: {
+  expectedSectionBaselineToken: string | null | undefined;
+  resumes: readonly WriteStudentPrivateProfileEducationResumeToUpstreamInput[];
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+}) {
+  assertSingleWriteThroughItem(input.resumes, '条教育经历');
+
+  const [resume] = input.resumes;
+  const action = normalizeWriteThroughAction(resume.action);
+
+  if (action === 'DELETE') {
+    return {
+      expectedSectionBaselineToken: normalizeSectionBaselineToken(
+        input.expectedSectionBaselineToken,
+      ),
+      resumes: [
+        {
+          action,
+          itemKey: normalizeRequiredTextValue(resume.itemKey, {
+            label: '教育经历行标识',
+          }),
+          upstreamBaselineToken: normalizeRequiredTextValue(resume.upstreamBaselineToken, {
+            label: '教育经历 baseline token',
+          }),
+        },
+      ],
+      studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+      upstreamSessionToken: normalizeUpstreamSessionToken(input.upstreamSessionToken),
+    };
+  }
+
+  const startDate = normalizeWriteThroughDate(resume.startDate, '开始日期');
+  const endDate = normalizeWriteThroughDate(resume.endDate, '结束日期');
+
+  if (startDate > endDate) {
+    throw new Error('开始日期不能晚于结束日期。');
+  }
+
+  return {
+    expectedSectionBaselineToken: normalizeSectionBaselineToken(input.expectedSectionBaselineToken),
+    resumes: [
+      {
+        action,
+        endDate,
+        organization: normalizeRequiredTextValue(resume.organization, { label: '所在单位' }),
+        reference: normalizeRequiredTextValue(resume.reference, { label: '证明人/参考信息' }),
+        startDate,
+      },
+    ],
+    studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+    upstreamSessionToken: normalizeUpstreamSessionToken(input.upstreamSessionToken),
   };
 }
 
@@ -1132,6 +1379,42 @@ export async function getStudentPrivateProfilePreview(input: {
   });
 
   return response.studentPrivateProfilePreview;
+}
+
+export async function writeStudentPrivateProfileFamilyToUpstream(input: {
+  expectedSectionBaselineToken: string | null | undefined;
+  members: readonly WriteStudentPrivateProfileFamilyMemberToUpstreamInput[];
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
+    WriteStudentPrivateProfileFamilyToUpstreamResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeWriteStudentPrivateProfileFamilyToUpstreamInput>;
+    }
+  >(WRITE_STUDENT_PRIVATE_PROFILE_FAMILY_TO_UPSTREAM_MUTATION, {
+    input: normalizeWriteStudentPrivateProfileFamilyToUpstreamInput(input),
+  });
+
+  return response.writeStudentPrivateProfileFamilyToUpstream;
+}
+
+export async function writeStudentPrivateProfileEducationToUpstream(input: {
+  expectedSectionBaselineToken: string | null | undefined;
+  resumes: readonly WriteStudentPrivateProfileEducationResumeToUpstreamInput[];
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
+    WriteStudentPrivateProfileEducationToUpstreamResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeWriteStudentPrivateProfileEducationToUpstreamInput>;
+    }
+  >(WRITE_STUDENT_PRIVATE_PROFILE_EDUCATION_TO_UPSTREAM_MUTATION, {
+    input: normalizeWriteStudentPrivateProfileEducationToUpstreamInput(input),
+  });
+
+  return response.writeStudentPrivateProfileEducationToUpstream;
 }
 
 export async function refreshStudentPrivateProfileFromUpstream(input: {

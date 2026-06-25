@@ -43,11 +43,15 @@ import {
   normalizeStudentPrivateProfileClassOverviewInput,
   normalizeStudentPrivateProfileGovernanceReadinessPreflightInput,
   normalizeStudentPrivateProfilePreviewInput,
+  normalizeWriteStudentPrivateProfileEducationToUpstreamInput,
+  normalizeWriteStudentPrivateProfileFamilyToUpstreamInput,
   patchStudentPrivateProfileFamilyMembers,
   patchStudentPrivateProfileFields,
   readStudentPrivateProfilePhoto,
   refreshStudentPrivateProfileFromUpstream,
   refreshStudentPrivateProfilesFromUpstream,
+  writeStudentPrivateProfileEducationToUpstream,
+  writeStudentPrivateProfileFamilyToUpstream,
 } from './api';
 
 describe('student-private-profile lab api', () => {
@@ -104,6 +108,7 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('familyMembers');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('educationResumes');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('recordChanges');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('sectionBaselineToken');
   });
 
   it('refreshes through upstream-session GraphQL and sends local student id', async () => {
@@ -613,6 +618,250 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('upstreamSessionToken');
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('writes one family member to upstream with section baseline token', async () => {
+    expect(
+      normalizeWriteStudentPrivateProfileFamilyToUpstreamInput({
+        expectedSectionBaselineToken: ' section-token-family ',
+        members: [
+          {
+            action: 'CREATE',
+            name: ' 张三 ',
+            phone: ' 13800000000 ',
+            relationshipCode: '1',
+            workplace: ' 某单位 ',
+          },
+        ],
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).toEqual({
+      expectedSectionBaselineToken: 'section-token-family',
+      members: [
+        {
+          action: 'CREATE',
+          name: '张三',
+          phone: '13800000000',
+          relationshipCode: '1',
+          workplace: '某单位',
+        },
+      ],
+      studentId: 'S001',
+      upstreamSessionToken: 'rolling-token-001',
+    });
+
+    expect(
+      normalizeWriteStudentPrivateProfileFamilyToUpstreamInput({
+        expectedSectionBaselineToken: ' section-token-family ',
+        members: [
+          {
+            action: 'DELETE',
+            itemKey: ' row-family-001 ',
+            upstreamBaselineToken: ' row-token-family-001 ',
+          },
+        ],
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).toEqual({
+      expectedSectionBaselineToken: 'section-token-family',
+      members: [
+        {
+          action: 'DELETE',
+          itemKey: 'row-family-001',
+          upstreamBaselineToken: 'row-token-family-001',
+        },
+      ],
+      studentId: 'S001',
+      upstreamSessionToken: 'rolling-token-001',
+    });
+
+    expect(() =>
+      normalizeWriteStudentPrivateProfileFamilyToUpstreamInput({
+        expectedSectionBaselineToken: 'section-token-family',
+        members: [
+          {
+            action: 'CREATE',
+            name: '张三',
+            relationshipCode: '9',
+          },
+        ],
+        studentId: 'S001',
+        upstreamSessionToken: 'rolling-token-001',
+      }),
+    ).toThrow('家庭关系当前只支持 1 / 2 / 3 / 4。');
+
+    const result = {
+      action: 'CREATE',
+      changedSections: ['FAMILY'],
+      expiresAt: '2026-06-23T11:00:00.000Z',
+      localSnapshotRefreshed: true,
+      sectionKey: 'FAMILY',
+      snapshotUpdated: true,
+      sourceObservedAt: '2026-06-23T10:00:00.000Z',
+      studentId: 'S001',
+      success: true,
+      summary: null,
+      summaryRefreshFailed: true,
+      traceId: 'trace-family-001',
+      upstreamSaved: true,
+      upstreamSessionToken: 'rolling-token-002',
+      warningCodes: [],
+    };
+
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      writeStudentPrivateProfileFamilyToUpstream: result,
+    });
+
+    await expect(
+      writeStudentPrivateProfileFamilyToUpstream({
+        expectedSectionBaselineToken: ' section-token-family ',
+        members: [
+          {
+            action: 'CREATE',
+            name: ' 张三 ',
+            relationshipCode: '1',
+          },
+        ],
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).resolves.toEqual(result);
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabWriteFamilyToUpstream'),
+      {
+        input: {
+          expectedSectionBaselineToken: 'section-token-family',
+          members: [
+            {
+              action: 'CREATE',
+              name: '张三',
+              relationshipCode: '1',
+            },
+          ],
+          studentId: 'S001',
+          upstreamSessionToken: 'rolling-token-001',
+        },
+      },
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'writeStudentPrivateProfileFamilyToUpstream',
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('summaryRefreshFailed');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('sectionBaselineToken');
+    expect(executeGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('writes one education resume to upstream with date validation', async () => {
+    expect(
+      normalizeWriteStudentPrivateProfileEducationToUpstreamInput({
+        expectedSectionBaselineToken: ' section-token-education ',
+        resumes: [
+          {
+            action: 'CREATE',
+            endDate: ' 2023-06-30 ',
+            organization: ' 所在单位 ',
+            reference: ' 证明人 ',
+            startDate: ' 2020-09-01 ',
+          },
+        ],
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).toEqual({
+      expectedSectionBaselineToken: 'section-token-education',
+      resumes: [
+        {
+          action: 'CREATE',
+          endDate: '2023-06-30',
+          organization: '所在单位',
+          reference: '证明人',
+          startDate: '2020-09-01',
+        },
+      ],
+      studentId: 'S001',
+      upstreamSessionToken: 'rolling-token-001',
+    });
+
+    expect(() =>
+      normalizeWriteStudentPrivateProfileEducationToUpstreamInput({
+        expectedSectionBaselineToken: 'section-token-education',
+        resumes: [
+          {
+            action: 'CREATE',
+            endDate: '2023-06-30',
+            organization: '所在单位',
+            reference: '证明人',
+            startDate: '2023-07-01',
+          },
+        ],
+        studentId: 'S001',
+        upstreamSessionToken: 'rolling-token-001',
+      }),
+    ).toThrow('开始日期不能晚于结束日期。');
+
+    const result = {
+      action: 'DELETE',
+      changedSections: ['EDUCATION_RESUME'],
+      expiresAt: '2026-06-23T11:00:00.000Z',
+      localSnapshotRefreshed: true,
+      sectionKey: 'EDUCATION_RESUME',
+      snapshotUpdated: true,
+      sourceObservedAt: '2026-06-23T10:00:00.000Z',
+      studentId: 'S001',
+      success: true,
+      summary: null,
+      summaryRefreshFailed: true,
+      traceId: 'trace-education-001',
+      upstreamSaved: true,
+      upstreamSessionToken: 'rolling-token-002',
+      warningCodes: [],
+    };
+
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      writeStudentPrivateProfileEducationToUpstream: result,
+    });
+
+    await expect(
+      writeStudentPrivateProfileEducationToUpstream({
+        expectedSectionBaselineToken: ' section-token-education ',
+        resumes: [
+          {
+            action: 'DELETE',
+            itemKey: ' row-education-001 ',
+            upstreamBaselineToken: ' row-token-education-001 ',
+          },
+        ],
+        studentId: ' S001 ',
+        upstreamSessionToken: ' rolling-token-001 ',
+      }),
+    ).resolves.toEqual(result);
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabWriteEducationToUpstream'),
+      {
+        input: {
+          expectedSectionBaselineToken: 'section-token-education',
+          resumes: [
+            {
+              action: 'DELETE',
+              itemKey: 'row-education-001',
+              upstreamBaselineToken: 'row-token-education-001',
+            },
+          ],
+          studentId: 'S001',
+          upstreamSessionToken: 'rolling-token-001',
+        },
+      },
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'writeStudentPrivateProfileEducationToUpstream',
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('summaryRefreshFailed');
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain('sectionBaselineToken');
+    expect(executeGraphQLMock).not.toHaveBeenCalled();
   });
 
   it('normalizes compare fields without exposing candidate values beyond variables', async () => {
