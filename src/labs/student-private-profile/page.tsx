@@ -11,6 +11,7 @@ import {
   EyeOutlined,
   FileExcelOutlined,
   FileSearchOutlined,
+  FileWordOutlined,
   LoginOutlined,
   PictureOutlined,
   PlusOutlined,
@@ -94,6 +95,10 @@ import {
   resolveStudentPrivateProfileSupplementModeLabel,
   resolveStudentPrivateProfileSupplementTemplateLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
+  resolveStudentRegistrationCardGenerationCodeLabel,
+  resolveStudentRegistrationCardGenerationMissingSectionLabel,
+  resolveStudentRegistrationCardGenerationStatusColor,
+  resolveStudentRegistrationCardGenerationStatusLabel,
   STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
@@ -106,12 +111,16 @@ import {
 import {
   compareStudentPrivateProfileFields,
   downloadStudentPrivateProfileSupplementTemplateWorkbook,
+  downloadStudentRegistrationCardDocument,
   dryRunStudentPrivateProfileSupplement,
+  generateStudentRegistrationCardDocument,
+  type GenerateStudentRegistrationCardDocumentResult,
   getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileGovernanceReadinessPreflight,
   getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
   getStudentPrivateProfileSupplementTemplate,
+  getStudentRegistrationCardGenerationPreflight,
   isExpiredUpstreamSessionError,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
@@ -160,6 +169,7 @@ import {
   type StudentPrivateProfileSupplementTemplateCode,
   type StudentPrivateProfileSupplementTemplateColumn,
   type StudentPrivateProfileSupplementUploadResult,
+  type StudentRegistrationCardGenerationPreflight,
   uploadStudentPrivateProfileSupplementFile,
   type WriteStudentPrivateProfileEducationResumeToUpstreamInput,
   writeStudentPrivateProfileEducationToUpstream,
@@ -206,7 +216,13 @@ type UpstreamPendingAction =
       type: 'education-write-through';
     };
 
-type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'readiness' | 'supplement' | 'sync';
+type StudentPrivateProfileLabTabKey =
+  | 'detail'
+  | 'overview'
+  | 'readiness'
+  | 'registration-card'
+  | 'supplement'
+  | 'sync';
 
 type ControlledBatchRefreshResult = StudentPrivateProfileBatchRefreshResult & {
   completedChunks: number;
@@ -253,6 +269,10 @@ type EducationWriteThroughFormValues = {
   organization?: string;
   reference?: string;
   startDate?: string;
+};
+
+type RegistrationCardExportFormValues = {
+  studentId?: string;
 };
 
 type SummaryFieldSectionKey = 'personal' | 'sensitiveIdentifiers';
@@ -328,6 +348,38 @@ function formatDateTime(value: string | null | undefined) {
 
 function displayText(value: string | null | undefined) {
   return value?.trim() || '—';
+}
+
+function renderRegistrationCardCodeTags(codes: readonly string[], color: 'error' | 'warning') {
+  if (codes.length === 0) {
+    return '无';
+  }
+
+  return (
+    <Space size="small" wrap>
+      {codes.map((code) => (
+        <Tag color={color} key={code}>
+          {resolveStudentRegistrationCardGenerationCodeLabel(code)}
+        </Tag>
+      ))}
+    </Space>
+  );
+}
+
+function renderRegistrationCardMissingSectionTags(sections: readonly string[]) {
+  if (sections.length === 0) {
+    return '无';
+  }
+
+  return (
+    <Space size="small" wrap>
+      {sections.map((section) => (
+        <Tag color="warning" key={section}>
+          {resolveStudentRegistrationCardGenerationMissingSectionLabel(section)}
+        </Tag>
+      ))}
+    </Space>
+  );
 }
 
 function resolveSummarySectionBaselineToken(
@@ -698,6 +750,7 @@ export function StudentPrivateProfileLabPage() {
   const manualPatchAccess = loaderData?.manualPatchAccess ?? EMPTY_MANUAL_PATCH_ACCESS;
   const { message, modal } = AntApp.useApp();
   const [studentForm] = Form.useForm<{ studentId: string }>();
+  const [registrationCardForm] = Form.useForm<RegistrationCardExportFormValues>();
   const [compareForm] = Form.useForm<CompareFormValues>();
   const [patchForm] = Form.useForm<PatchFormValues>();
   const [familyPatchForm] = Form.useForm<FamilyPatchFormValues>();
@@ -736,6 +789,10 @@ export function StudentPrivateProfileLabPage() {
     useState<StudentPrivateProfileSupplementUploadResult | null>(null);
   const [supplementDryRunResult, setSupplementDryRunResult] =
     useState<StudentPrivateProfileSupplementDryRunResult | null>(null);
+  const [registrationCardPreflight, setRegistrationCardPreflight] =
+    useState<StudentRegistrationCardGenerationPreflight | null>(null);
+  const [registrationCardDocument, setRegistrationCardDocument] =
+    useState<GenerateStudentRegistrationCardDocumentResult | null>(null);
   const [activeTabKey, setActiveTabKey] = useState<StudentPrivateProfileLabTabKey>('overview');
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
@@ -754,6 +811,9 @@ export function StudentPrivateProfileLabPage() {
   const [isDownloadingSupplementTemplate, setIsDownloadingSupplementTemplate] = useState(false);
   const [isUploadingSupplementFile, setIsUploadingSupplementFile] = useState(false);
   const [isRunningSupplementDryRun, setIsRunningSupplementDryRun] = useState(false);
+  const [isCheckingRegistrationCard, setIsCheckingRegistrationCard] = useState(false);
+  const [isGeneratingRegistrationCard, setIsGeneratingRegistrationCard] = useState(false);
+  const [isDownloadingRegistrationCard, setIsDownloadingRegistrationCard] = useState(false);
   const [isFamilyWriteThroughOpen, setIsFamilyWriteThroughOpen] = useState(false);
   const [isEducationWriteThroughOpen, setIsEducationWriteThroughOpen] = useState(false);
   const [activeCompareField, setActiveCompareField] =
@@ -779,9 +839,14 @@ export function StudentPrivateProfileLabPage() {
   const profilePreviewRequestIdRef = useRef(0);
 
   const currentStudentId = Form.useWatch('studentId', studentForm);
+  const currentRegistrationCardStudentId = Form.useWatch('studentId', registrationCardForm);
   const patchAction = Form.useWatch('action', patchForm);
   const familyPatchAction = Form.useWatch('action', familyPatchForm);
   const currentStudentIdText = typeof currentStudentId === 'string' ? currentStudentId.trim() : '';
+  const currentRegistrationCardStudentIdText =
+    typeof currentRegistrationCardStudentId === 'string'
+      ? currentRegistrationCardStudentId.trim()
+      : '';
   const activeSummaryStudentId = summary?.studentId ?? null;
   const isSummaryStudentIdMismatched = Boolean(
     activeSummaryStudentId && currentStudentIdText !== activeSummaryStudentId,
@@ -879,6 +944,13 @@ export function StudentPrivateProfileLabPage() {
       null
     );
   }, [classOverview, studentOptionById, summary]);
+  const currentRegistrationCardStudentOption = useMemo(
+    () =>
+      currentRegistrationCardStudentIdText
+        ? (studentOptionById.get(currentRegistrationCardStudentIdText) ?? null)
+        : null,
+    [currentRegistrationCardStudentIdText, studentOptionById],
+  );
   const selectedClassOption = useMemo(
     () => classes.find((option) => option.id === selectedClassId) ?? null,
     [classes, selectedClassId],
@@ -1067,6 +1139,7 @@ export function StudentPrivateProfileLabPage() {
 
       clearProfilePreview();
       clearSupplementRuntimeState();
+      clearRegistrationCardRuntimeState();
       setIsLoadingSummary(true);
       setCompareResult(null);
       setActiveCompareField(null);
@@ -1085,13 +1158,21 @@ export function StudentPrivateProfileLabPage() {
           studentIds.filter((item) => item !== nextSummary.studentId),
         );
         studentForm.setFieldValue('studentId', nextSummary.studentId);
+        registrationCardForm.setFieldValue('studentId', nextSummary.studentId);
       } catch (error) {
         message.error(resolveUpstreamErrorMessage(error, '暂时无法读取本地资料快照。'));
       } finally {
         setIsLoadingSummary(false);
       }
     },
-    [clearProfilePreview, clearSupplementRuntimeState, message, studentForm],
+    [
+      clearProfilePreview,
+      clearRegistrationCardRuntimeState,
+      clearSupplementRuntimeState,
+      message,
+      registrationCardForm,
+      studentForm,
+    ],
   );
 
   const {
@@ -1589,6 +1670,7 @@ export function StudentPrivateProfileLabPage() {
     (classId: string | null) => {
       clearProfilePreview();
       clearSupplementRuntimeState();
+      clearRegistrationCardRuntimeState();
       setSelectedClassId(classId);
       setStudents([]);
       setBatchRefreshResult(null);
@@ -1598,6 +1680,7 @@ export function StudentPrivateProfileLabPage() {
       setGovernanceReadinessError(null);
       setStudentOptionsError(null);
       setActiveTabKey('overview');
+      registrationCardForm.setFieldValue('studentId', '');
 
       if (!classId) {
         return;
@@ -1609,10 +1692,12 @@ export function StudentPrivateProfileLabPage() {
     },
     [
       clearProfilePreview,
+      clearRegistrationCardRuntimeState,
       clearSupplementRuntimeState,
       loadClassOverview,
       loadGovernanceReadiness,
       loadStudentsForClass,
+      registrationCardForm,
     ],
   );
 
@@ -1620,20 +1705,37 @@ export function StudentPrivateProfileLabPage() {
     (studentId: string | null) => {
       clearProfilePreview();
       clearSupplementRuntimeState();
+      clearRegistrationCardRuntimeState();
       studentForm.setFieldValue('studentId', studentId ?? '');
+      registrationCardForm.setFieldValue('studentId', studentId ?? '');
     },
-    [clearProfilePreview, clearSupplementRuntimeState, studentForm],
+    [
+      clearProfilePreview,
+      clearRegistrationCardRuntimeState,
+      clearSupplementRuntimeState,
+      registrationCardForm,
+      studentForm,
+    ],
   );
 
   const openStudentDetail = useCallback(
     (studentId: string) => {
       clearProfilePreview();
       clearSupplementRuntimeState();
+      clearRegistrationCardRuntimeState();
       studentForm.setFieldValue('studentId', studentId);
+      registrationCardForm.setFieldValue('studentId', studentId);
       setActiveTabKey('detail');
       void loadSummary(studentId);
     },
-    [clearProfilePreview, clearSupplementRuntimeState, loadSummary, studentForm],
+    [
+      clearProfilePreview,
+      clearRegistrationCardRuntimeState,
+      clearSupplementRuntimeState,
+      loadSummary,
+      registrationCardForm,
+      studentForm,
+    ],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -1972,6 +2074,114 @@ export function StudentPrivateProfileLabPage() {
       setIsRunningSupplementDryRun(false);
     }
   }, [message, supplementTemplate, supplementUploadResult]);
+
+  const handleRegistrationCardStudentOptionChange = useCallback(
+    (studentId: string | null) => {
+      clearRegistrationCardRuntimeState();
+      registrationCardForm.setFieldValue('studentId', studentId ?? '');
+    },
+    [clearRegistrationCardRuntimeState, registrationCardForm],
+  );
+
+  const resolveRegistrationCardStudentId = useCallback(() => {
+    try {
+      return normalizeStudentPrivateProfileStudentId(
+        registrationCardForm.getFieldValue('studentId'),
+      );
+    } catch (error) {
+      message.error(error instanceof Error ? error.message : '请输入学号。');
+      return null;
+    }
+  }, [message, registrationCardForm]);
+
+  const openRegistrationCardExport = useCallback(
+    (studentId: string) => {
+      clearRegistrationCardRuntimeState();
+      registrationCardForm.setFieldValue('studentId', studentId);
+      setActiveTabKey('registration-card');
+    },
+    [clearRegistrationCardRuntimeState, registrationCardForm],
+  );
+
+  const handleCheckRegistrationCardPreflight = useCallback(async () => {
+    const studentId = resolveRegistrationCardStudentId();
+
+    if (!studentId) {
+      return;
+    }
+
+    setIsCheckingRegistrationCard(true);
+    setRegistrationCardPreflight(null);
+    setRegistrationCardDocument(null);
+
+    try {
+      const result = await getStudentRegistrationCardGenerationPreflight({ studentId });
+
+      setRegistrationCardPreflight(result);
+
+      if (result.status === 'READY') {
+        message.success('学籍卡生成前检查通过。');
+      } else if (result.status === 'WARNING') {
+        message.warning('学籍卡可生成，但存在提醒。');
+      } else {
+        message.warning('学籍卡生成前检查阻塞。');
+      }
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法执行学籍卡生成前检查。'));
+    } finally {
+      setIsCheckingRegistrationCard(false);
+    }
+  }, [message, resolveRegistrationCardStudentId]);
+
+  const handleGenerateRegistrationCardDocument = useCallback(async () => {
+    const studentId = resolveRegistrationCardStudentId();
+
+    if (!studentId) {
+      return;
+    }
+
+    setIsGeneratingRegistrationCard(true);
+    setRegistrationCardDocument(null);
+
+    try {
+      const result = await generateStudentRegistrationCardDocument({ studentId });
+
+      setRegistrationCardPreflight(result);
+      setRegistrationCardDocument(result);
+
+      if (result.status === 'BLOCKED') {
+        message.warning('学籍卡生成被阻塞，未生成 DOCX。');
+      } else {
+        message.success('学籍卡 DOCX 已生成。');
+      }
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法生成学籍卡 DOCX。'));
+    } finally {
+      setIsGeneratingRegistrationCard(false);
+    }
+  }, [message, resolveRegistrationCardStudentId]);
+
+  const handleDownloadRegistrationCardDocument = useCallback(async () => {
+    if (!registrationCardDocument?.downloadToken && !registrationCardDocument?.downloadUrl) {
+      message.error('当前没有可下载的学籍卡 DOCX。');
+      return;
+    }
+
+    setIsDownloadingRegistrationCard(true);
+
+    try {
+      await downloadStudentRegistrationCardDocument({
+        downloadToken: registrationCardDocument.downloadToken,
+        downloadUrl: registrationCardDocument.downloadUrl,
+        fileName: registrationCardDocument.fileName,
+      });
+      message.success('已开始下载学籍卡 DOCX。');
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法下载学籍卡 DOCX。'));
+    } finally {
+      setIsDownloadingRegistrationCard(false);
+    }
+  }, [message, registrationCardDocument]);
 
   const openFamilyWriteThroughModal = useCallback(() => {
     const studentId = resolveSummaryActionStudentId();
@@ -2580,11 +2790,20 @@ export function StudentPrivateProfileLabPage() {
       fixed: 'right',
       key: 'action',
       title: '操作',
-      width: 110,
+      width: 170,
       render: (_, record) => (
-        <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
-          查看详情
-        </Button>
+        <Space size="small" wrap>
+          <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
+            查看详情
+          </Button>
+          <Button
+            icon={<FileWordOutlined />}
+            size="small"
+            onClick={() => openRegistrationCardExport(record.studentId)}
+          >
+            学籍卡
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -2716,11 +2935,20 @@ export function StudentPrivateProfileLabPage() {
       fixed: 'right',
       key: 'action',
       title: '操作',
-      width: 110,
+      width: 170,
       render: (_, record) => (
-        <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
-          查看详情
-        </Button>
+        <Space size="small" wrap>
+          <Button size="small" onClick={() => openStudentDetail(record.studentId)}>
+            查看详情
+          </Button>
+          <Button
+            icon={<FileWordOutlined />}
+            size="small"
+            onClick={() => openRegistrationCardExport(record.studentId)}
+          >
+            学籍卡
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -3433,6 +3661,12 @@ export function StudentPrivateProfileLabPage() {
                       >
                         查看治理 readiness
                       </Button>
+                      <Button
+                        icon={<FileWordOutlined />}
+                        onClick={() => setActiveTabKey('registration-card')}
+                      >
+                        学籍卡导出
+                      </Button>
                     </Space>
                   ) : (
                     <Empty description="先选择班级查看本地资料概览" />
@@ -3480,7 +3714,7 @@ export function StudentPrivateProfileLabPage() {
                       showSizeChanger: true,
                     }}
                     rowKey="studentId"
-                    scroll={{ x: 1540 }}
+                    scroll={{ x: 1600 }}
                     size="small"
                   />
                 </Space>
@@ -3553,7 +3787,7 @@ export function StudentPrivateProfileLabPage() {
                       showSizeChanger: true,
                     }}
                     rowKey="studentId"
-                    scroll={{ x: 1600 }}
+                    scroll={{ x: 1660 }}
                     size="small"
                   />
                 </Space>
@@ -3561,6 +3795,203 @@ export function StudentPrivateProfileLabPage() {
             ),
             key: 'readiness',
             label: '治理 readiness',
+          },
+          {
+            children: (
+              <div className="flex flex-col gap-6">
+                <Card title="学籍卡导出">
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Alert
+                      showIcon
+                      type="info"
+                      message="当前 admin lab 只生成单学生 DOCX；数据来自本地资料快照，不访问学工系统。"
+                    />
+
+                    <Form
+                      form={registrationCardForm}
+                      initialValues={{ studentId: '' }}
+                      layout="inline"
+                      onFinish={() => void handleCheckRegistrationCardPreflight()}
+                    >
+                      <Form.Item label="学生">
+                        <Select
+                          allowClear
+                          disabled={!selectedClassId}
+                          filterOption={(input, option) =>
+                            String(option?.label ?? '')
+                              .toLowerCase()
+                              .includes(input.toLowerCase())
+                          }
+                          loading={isLoadingStudents}
+                          notFoundContent={isLoadingStudents ? '正在加载学生' : '没有匹配学生'}
+                          onChange={handleRegistrationCardStudentOptionChange}
+                          options={studentSelectOptions}
+                          placeholder={selectedClassId ? '选择学生' : '先选择班级'}
+                          showSearch
+                          style={{ minWidth: 240 }}
+                          value={currentRegistrationCardStudentIdText || undefined}
+                        />
+                      </Form.Item>
+                      <Form.Item
+                        label="学号"
+                        name="studentId"
+                        rules={[{ required: true, message: '请输入学号。', whitespace: true }]}
+                      >
+                        <Input
+                          allowClear
+                          placeholder="学号"
+                          onChange={clearRegistrationCardRuntimeState}
+                        />
+                      </Form.Item>
+                      <Form.Item>
+                        <Space wrap>
+                          <Button
+                            disabled={!currentRegistrationCardStudentIdText}
+                            htmlType="submit"
+                            icon={<FileSearchOutlined />}
+                            loading={isCheckingRegistrationCard}
+                          >
+                            生成前检查
+                          </Button>
+                          <Button
+                            disabled={!currentRegistrationCardStudentIdText}
+                            icon={<FileWordOutlined />}
+                            loading={isGeneratingRegistrationCard}
+                            type="primary"
+                            onClick={() => void handleGenerateRegistrationCardDocument()}
+                          >
+                            生成 DOCX
+                          </Button>
+                          <Button
+                            disabled={
+                              !registrationCardDocument?.downloadToken &&
+                              !registrationCardDocument?.downloadUrl
+                            }
+                            icon={<DownloadOutlined />}
+                            loading={isDownloadingRegistrationCard}
+                            onClick={() => void handleDownloadRegistrationCardDocument()}
+                          >
+                            下载
+                          </Button>
+                        </Space>
+                      </Form.Item>
+                    </Form>
+
+                    {currentRegistrationCardStudentOption ? (
+                      <Descriptions bordered column={4} size="small">
+                        <Descriptions.Item label="姓名">
+                          {displayText(currentRegistrationCardStudentOption.studentName)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="班级">
+                          {displayText(
+                            currentRegistrationCardStudentOption.activeMembershipClassName ??
+                              currentRegistrationCardStudentOption.currentClassCode,
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="状态">
+                          {resolveStudentPrivateProfileStatusLabel(
+                            currentRegistrationCardStudentOption.studentStatus,
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="学工关联">
+                          {formatStudentPrivateProfileBoolean(
+                            currentRegistrationCardStudentOption.upstreamIdPresent,
+                          )}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+
+                    {registrationCardPreflight ? (
+                      <Descriptions bordered column={3} size="small">
+                        <Descriptions.Item label="检查结果">
+                          <Tag
+                            color={resolveStudentRegistrationCardGenerationStatusColor(
+                              registrationCardPreflight.status,
+                            )}
+                          >
+                            {resolveStudentRegistrationCardGenerationStatusLabel(
+                              registrationCardPreflight.status,
+                            )}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="模板">
+                          {registrationCardPreflight.templateCode}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="版本">
+                          v{registrationCardPreflight.templateVersion}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="阻塞问题" span={3}>
+                          {renderRegistrationCardCodeTags(
+                            registrationCardPreflight.issueCodes,
+                            'error',
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="缺失分区" span={3}>
+                          {renderRegistrationCardMissingSectionTags(
+                            registrationCardPreflight.missingSections,
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="提醒" span={3}>
+                          {renderRegistrationCardCodeTags(
+                            registrationCardPreflight.warningCodes,
+                            'warning',
+                          )}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : (
+                      <Empty description="先执行生成前检查或生成 DOCX" />
+                    )}
+                  </Space>
+                </Card>
+
+                {registrationCardDocument ? (
+                  <Card title="DOCX 生成结果">
+                    <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                      <Descriptions bordered column={3} size="small">
+                        <Descriptions.Item label="结果">
+                          <Tag
+                            color={resolveStudentRegistrationCardGenerationStatusColor(
+                              registrationCardDocument.status,
+                            )}
+                          >
+                            {resolveStudentRegistrationCardGenerationStatusLabel(
+                              registrationCardDocument.status,
+                            )}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="文件名">
+                          {displayText(registrationCardDocument.fileName)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="大小">
+                          {registrationCardDocument.byteSize
+                            ? formatApproxByteSize(registrationCardDocument.byteSize)
+                            : '—'}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="有效期">
+                          {formatDateTime(registrationCardDocument.expiresAt)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="sha256" span={2}>
+                          {displayText(registrationCardDocument.sha256)}
+                        </Descriptions.Item>
+                      </Descriptions>
+
+                      <DiagnosticCollapse>
+                        <Descriptions bordered column={2} size="small">
+                          <Descriptions.Item label="追踪 ID">
+                            {registrationCardDocument.traceId}
+                          </Descriptions.Item>
+                          <Descriptions.Item label="下载 token">
+                            {registrationCardDocument.downloadToken ? '已返回' : '无'}
+                          </Descriptions.Item>
+                        </Descriptions>
+                      </DiagnosticCollapse>
+                    </Space>
+                  </Card>
+                ) : null}
+              </div>
+            ),
+            key: 'registration-card',
+            label: '学籍卡导出',
           },
           {
             children: (
@@ -3601,7 +4032,10 @@ export function StudentPrivateProfileLabPage() {
                         <Input
                           allowClear
                           placeholder="本地学生 ID"
-                          onChange={clearProfilePreview}
+                          onChange={() => {
+                            clearProfilePreview();
+                            clearRegistrationCardRuntimeState();
+                          }}
                         />
                       </Form.Item>
                       <Form.Item>

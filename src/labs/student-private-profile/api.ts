@@ -267,6 +267,35 @@ export type StudentPrivateProfileGovernanceReadinessPreflight = {
 
 export type StudentPrivateProfilePreviewTemplateCode = 'STUDENT_PRIVATE_PROFILE_PARTIAL_PREVIEW';
 
+export const STUDENT_REGISTRATION_CARD_DOCUMENT_TEMPLATE_CODE =
+  'STUDENT_REGISTRATION_CARD_FULL_EXPORT' as const;
+
+export type StudentRegistrationCardDocumentTemplateCode =
+  typeof STUDENT_REGISTRATION_CARD_DOCUMENT_TEMPLATE_CODE;
+
+export type StudentRegistrationCardGenerationStatus = 'BLOCKED' | 'READY' | 'WARNING';
+
+export type StudentRegistrationCardGenerationPreflight = {
+  issueCodes: string[];
+  missingSections: string[];
+  status: StudentRegistrationCardGenerationStatus;
+  studentId: string;
+  templateCode: StudentRegistrationCardDocumentTemplateCode | string;
+  templateVersion: number;
+  warningCodes: string[];
+};
+
+export type GenerateStudentRegistrationCardDocumentResult =
+  StudentRegistrationCardGenerationPreflight & {
+    byteSize: number | null;
+    downloadToken: string | null;
+    downloadUrl: string | null;
+    expiresAt: string | null;
+    fileName: string | null;
+    sha256: string | null;
+    traceId: string;
+  };
+
 export type StudentPrivateProfilePreviewField = {
   confidence: string;
   fieldKey: string;
@@ -404,8 +433,13 @@ export type StudentPrivateProfileSupplementTemplateCode =
   | 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT'
   | 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT';
 
+export type StudentPrivateProfileSupplementMode = 'FLEXIBLE' | 'STRICT';
+
 export type StudentPrivateProfileSupplementTemplateColumn = {
+  aliases: string[];
   alwaysRequired: boolean;
+  auditPolicy: 'NEVER_LOG_VALUE' | string;
+  destination: 'UPSTREAM_WRITE_THROUGH' | string | null;
   enumValues: string[];
   fieldKey: string | null;
   key: string;
@@ -418,6 +452,7 @@ export type StudentPrivateProfileSupplementTemplateColumn = {
 export type StudentPrivateProfileSupplementTemplate = {
   actions: StudentPrivateProfileWriteThroughAction[];
   columns: StudentPrivateProfileSupplementTemplateColumn[];
+  mode: StudentPrivateProfileSupplementMode;
   sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string;
   templateCode: StudentPrivateProfileSupplementTemplateCode;
   templateVersion: number;
@@ -442,6 +477,30 @@ export type StudentPrivateProfileSupplementDryRunRowIssue = {
   columnKey: string | null;
 };
 
+export type StudentPrivateProfileSupplementDryRunFileIssue = {
+  code: string;
+  columnIndex: number | null;
+  columnKey: string | null;
+  header: string | null;
+};
+
+export type StudentPrivateProfileSupplementColumnMappingStatus =
+  | 'DUPLICATE'
+  | 'MAPPED'
+  | 'UNKNOWN'
+  | string;
+
+export type StudentPrivateProfileSupplementDryRunColumnMapping = {
+  columnIndex: number;
+  columnKey: string | null;
+  destination: 'UPSTREAM_WRITE_THROUGH' | string | null;
+  fieldKey: string | null;
+  header: string;
+  issueCode: string | null;
+  sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string | null;
+  status: StudentPrivateProfileSupplementColumnMappingStatus;
+};
+
 export type StudentPrivateProfileSupplementDryRunRow = {
   action: StudentPrivateProfileWriteThroughAction | null;
   errorCodes: string[];
@@ -454,8 +513,11 @@ export type StudentPrivateProfileSupplementDryRunRow = {
 
 export type StudentPrivateProfileSupplementDryRunResult = {
   affectedStudents: number;
+  columnMappings: StudentPrivateProfileSupplementDryRunColumnMapping[];
   dryRun: boolean;
+  fileIssues: StudentPrivateProfileSupplementDryRunFileIssue[];
   invalidRows: number;
+  mode: StudentPrivateProfileSupplementMode;
   rowResults: StudentPrivateProfileSupplementDryRunRow[];
   sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string;
   status: StudentPrivateProfileSupplementDryRunStatus;
@@ -546,6 +608,14 @@ type StudentPrivateProfileGovernanceReadinessPreflightResponse = {
 
 type StudentPrivateProfilePreviewResponse = {
   studentPrivateProfilePreview: StudentPrivateProfilePreview;
+};
+
+type StudentRegistrationCardGenerationPreflightResponse = {
+  studentRegistrationCardGenerationPreflight: StudentRegistrationCardGenerationPreflight;
+};
+
+type GenerateStudentRegistrationCardDocumentResponse = {
+  generateStudentRegistrationCardDocument: GenerateStudentRegistrationCardDocumentResult;
 };
 
 type StudentPrivateProfileSupplementTemplateResponse = {
@@ -848,6 +918,43 @@ const STUDENT_PRIVATE_PROFILE_PREVIEW_QUERY = `
   }
 `;
 
+const STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_FIELDS = `
+  studentId
+  templateCode
+  templateVersion
+  status
+  issueCodes
+  warningCodes
+  missingSections
+`;
+
+const STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_QUERY = `
+  query StudentPrivateProfileLabRegistrationCardPreflight(
+    $input: StudentRegistrationCardGenerationInput!
+  ) {
+    studentRegistrationCardGenerationPreflight(input: $input) {
+      ${STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_FIELDS}
+    }
+  }
+`;
+
+const GENERATE_STUDENT_REGISTRATION_CARD_DOCUMENT_MUTATION = `
+  mutation StudentPrivateProfileLabGenerateRegistrationCardDocument(
+    $input: StudentRegistrationCardGenerationInput!
+  ) {
+    generateStudentRegistrationCardDocument(input: $input) {
+      ${STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_FIELDS}
+      downloadToken
+      downloadUrl
+      fileName
+      byteSize
+      sha256
+      expiresAt
+      traceId
+    }
+  }
+`;
+
 const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_QUERY = `
   query StudentPrivateProfileLabSupplementTemplate(
     $input: StudentPrivateProfileSupplementTemplateInput!
@@ -855,16 +962,20 @@ const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_QUERY = `
     studentPrivateProfileSupplementTemplate(input: $input) {
       templateCode
       templateVersion
+      mode
       sectionKey
       actions
       columns {
         key
         label
+        aliases
         alwaysRequired
         requiredForActions
         valueType
         sensitive
         fieldKey
+        destination
+        auditPolicy
         enumValues
       }
     }
@@ -878,6 +989,7 @@ const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_DRY_RUN_MUTATION = `
     studentPrivateProfileSupplementDryRun(input: $input) {
       templateCode
       templateVersion
+      mode
       sectionKey
       dryRun
       status
@@ -885,6 +997,22 @@ const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_DRY_RUN_MUTATION = `
       validRows
       invalidRows
       affectedStudents
+      fileIssues {
+        code
+        columnIndex
+        header
+        columnKey
+      }
+      columnMappings {
+        columnIndex
+        header
+        columnKey
+        fieldKey
+        sectionKey
+        destination
+        status
+        issueCode
+      }
       rowResults {
         rowNumber
         studentId
@@ -1158,18 +1286,50 @@ export function normalizeStudentPrivateProfilePreviewInput(input: {
   };
 }
 
+export function normalizeStudentRegistrationCardGenerationInput(input: {
+  studentId: string | null | undefined;
+  templateCode?: string | null | undefined;
+}) {
+  const templateCode = normalizeRequiredTextValue(
+    input.templateCode ?? STUDENT_REGISTRATION_CARD_DOCUMENT_TEMPLATE_CODE,
+    {
+      label: '学籍卡模板',
+    },
+  );
+
+  if (templateCode !== STUDENT_REGISTRATION_CARD_DOCUMENT_TEMPLATE_CODE) {
+    throw new Error('学籍卡模板当前只支持 STUDENT_REGISTRATION_CARD_FULL_EXPORT。');
+  }
+
+  return {
+    studentId: normalizeStudentPrivateProfileStudentId(input.studentId),
+    templateCode: templateCode as StudentRegistrationCardDocumentTemplateCode,
+  };
+}
+
 export function normalizeStudentPrivateProfileSupplementTemplateInput(input: {
+  mode?: StudentPrivateProfileSupplementMode | null | undefined;
   templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
 }) {
-  return {
+  const normalizedInput: {
+    mode?: StudentPrivateProfileSupplementMode;
+    templateCode: StudentPrivateProfileSupplementTemplateCode;
+  } = {
     templateCode: normalizeRequiredTextValue(input.templateCode, {
       label: '补录模板',
     }) as StudentPrivateProfileSupplementTemplateCode,
   };
+
+  if (input.mode) {
+    normalizedInput.mode = normalizeStudentPrivateProfileSupplementMode(input.mode);
+  }
+
+  return normalizedInput;
 }
 
 export function normalizeStudentPrivateProfileSupplementDryRunInput(input: {
   fileToken: string | null | undefined;
+  mode?: StudentPrivateProfileSupplementMode | null | undefined;
   templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
   templateVersion: number | null | undefined;
 }) {
@@ -1179,13 +1339,36 @@ export function normalizeStudentPrivateProfileSupplementDryRunInput(input: {
     throw new Error('补录模板版本必须是大于 0 的整数。');
   }
 
-  return {
+  const normalizedInput: {
+    fileToken: string;
+    mode?: StudentPrivateProfileSupplementMode;
+    templateCode: StudentPrivateProfileSupplementTemplateCode;
+    templateVersion: number;
+  } = {
     fileToken: normalizeRequiredTextValue(input.fileToken, { label: '补录文件 token' }),
     templateCode: normalizeRequiredTextValue(input.templateCode, {
       label: '补录模板',
     }) as StudentPrivateProfileSupplementTemplateCode,
     templateVersion,
   };
+
+  if (input.mode) {
+    normalizedInput.mode = normalizeStudentPrivateProfileSupplementMode(input.mode);
+  }
+
+  return normalizedInput;
+}
+
+function normalizeStudentPrivateProfileSupplementMode(
+  mode: StudentPrivateProfileSupplementMode | string,
+) {
+  const normalizedMode = mode.trim().toUpperCase();
+
+  if (normalizedMode !== 'STRICT' && normalizedMode !== 'FLEXIBLE') {
+    throw new Error('补录解析模式必须是 STRICT 或 FLEXIBLE。');
+  }
+
+  return normalizedMode as StudentPrivateProfileSupplementMode;
 }
 
 const STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODES = new Set(['1', '2', '3', '4']);
@@ -1199,6 +1382,8 @@ const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS = new Set([
 ]);
 const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_FILL_ROW_COUNT = 100;
 const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_UPLOAD_PATH = '/student-private-profile/supplement-files';
+const STUDENT_REGISTRATION_CARD_DOCUMENT_DOWNLOAD_PATH =
+  '/student-private-profile/registration-card-documents';
 const STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODE_LABELS: Record<string, string> = {
   '1': '父亲',
   '2': '母亲',
@@ -1279,6 +1464,26 @@ function readRestEnvelopeMessage(payload: unknown) {
   }
 
   return null;
+}
+
+async function readRestFailureMessage(response: Response) {
+  const contentType = response.headers.get('Content-Type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return readRestEnvelopeMessage(await response.json());
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const text = await response.text();
+
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
 }
 
 function assertSupplementUploadResult(value: unknown): StudentPrivateProfileSupplementUploadResult {
@@ -1519,9 +1724,9 @@ function addSupplementTemplateInstructionWorksheet(input: {
     { text: '只上传第一个 supplement 工作表；后端 dry-run 只读取第一个工作表。' },
     { text: '表头必须保持当前模板列名，不要改名、删列或调整顺序。' },
     { text: '隐藏列是系统预填的 CAS token，用于防止基于旧快照补录，请不要手动修改。' },
-    { text: 'studentName 是只读辅助列，用于人工核对姓名，后端 dry-run 不做业务校验。' },
+    { text: 'studentName 是基础必填辅助列，用于人工核对姓名；请保留并填写。' },
     { text: 'action 等枚举列已设置下拉，请从下拉中选择。' },
-    { text: 'P5 只做 dry-run 校验，不会写回学工系统，也不会写本地业务数据。' },
+    { text: '当前只做 dry-run 校验，不会写回学工系统，也不会写本地业务数据。' },
   ]);
   worksheet.getRow(1).font = { bold: true };
 
@@ -1656,6 +1861,29 @@ export function resolveStudentPrivateProfileSupplementUploadUrl(
   graphQLEndpoint = getGraphQLEndpoint(),
 ) {
   return new URL(STUDENT_PRIVATE_PROFILE_SUPPLEMENT_UPLOAD_PATH, graphQLEndpoint).toString();
+}
+
+export function resolveStudentRegistrationCardDocumentDownloadUrl(
+  input: {
+    downloadToken?: string | null | undefined;
+    downloadUrl?: string | null | undefined;
+  },
+  graphQLEndpoint = getGraphQLEndpoint(),
+) {
+  const downloadUrl = normalizeOptionalTextValue(input.downloadUrl, 'to_null');
+
+  if (downloadUrl) {
+    return new URL(downloadUrl, graphQLEndpoint).toString();
+  }
+
+  const downloadToken = normalizeRequiredTextValue(input.downloadToken, {
+    label: '学籍卡下载 token',
+  });
+
+  return new URL(
+    `${STUDENT_REGISTRATION_CARD_DOCUMENT_DOWNLOAD_PATH}/${encodeURIComponent(downloadToken)}`,
+    graphQLEndpoint,
+  ).toString();
 }
 
 export function normalizeStudentPrivateProfileSupplementFile(file: File | null | undefined) {
@@ -1888,7 +2116,7 @@ export function normalizeWriteStudentPrivateProfileEducationToUpstreamInput(inpu
       {
         action,
         endDate,
-        organization: normalizeRequiredTextValue(resume.organization, { label: '所在单位' }),
+        organization: normalizeRequiredTextValue(resume.organization, { label: '学校' }),
         reference: normalizeRequiredTextValue(resume.reference, { label: '证明人' }),
         startDate,
       },
@@ -2093,7 +2321,40 @@ export async function getStudentPrivateProfilePreview(input: {
   return response.studentPrivateProfilePreview;
 }
 
+export async function getStudentRegistrationCardGenerationPreflight(input: {
+  studentId: string | null | undefined;
+  templateCode?: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentRegistrationCardGenerationPreflightResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentRegistrationCardGenerationInput>;
+    }
+  >(STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_QUERY, {
+    input: normalizeStudentRegistrationCardGenerationInput(input),
+  });
+
+  return response.studentRegistrationCardGenerationPreflight;
+}
+
+export async function generateStudentRegistrationCardDocument(input: {
+  studentId: string | null | undefined;
+  templateCode?: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    GenerateStudentRegistrationCardDocumentResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentRegistrationCardGenerationInput>;
+    }
+  >(GENERATE_STUDENT_REGISTRATION_CARD_DOCUMENT_MUTATION, {
+    input: normalizeStudentRegistrationCardGenerationInput(input),
+  });
+
+  return response.generateStudentRegistrationCardDocument;
+}
+
 export async function getStudentPrivateProfileSupplementTemplate(input: {
+  mode?: StudentPrivateProfileSupplementMode | null | undefined;
   templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
 }) {
   const response = await executeGraphQL<
@@ -2139,8 +2400,53 @@ export async function uploadStudentPrivateProfileSupplementFile(input: {
   return await parseSupplementUploadResponse(response);
 }
 
+export async function downloadStudentRegistrationCardDocument(input: {
+  downloadToken?: string | null | undefined;
+  downloadUrl?: string | null | undefined;
+  fileName?: string | null | undefined;
+}) {
+  const runtimeConfig = getGraphQLRuntimeConfig();
+  const fileName =
+    normalizeOptionalTextValue(input.fileName, 'to_null') ?? 'student-registration-card.docx';
+  const dispatchDownload = () =>
+    fetch(resolveStudentRegistrationCardDocumentDownloadUrl(input), {
+      headers: buildSupplementUploadAuthorizationHeaders(),
+      method: 'GET',
+    });
+
+  let response = await dispatchDownload();
+
+  if (response.status === 401 && runtimeConfig.refreshSession) {
+    try {
+      await runtimeConfig.refreshSession();
+      response = await dispatchDownload();
+    } catch {
+      runtimeConfig.onAuthFailure?.();
+      throw new Error('登录状态已失效，请重新登录后再下载学籍卡。');
+    }
+
+    if (response.status === 401) {
+      runtimeConfig.onAuthFailure?.();
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error((await readRestFailureMessage(response)) ?? '学籍卡 DOCX 下载失败。');
+  }
+
+  const blob = await response.blob();
+
+  downloadBlob(blob, fileName);
+
+  return {
+    byteSize: blob.size,
+    fileName,
+  };
+}
+
 export async function dryRunStudentPrivateProfileSupplement(input: {
   fileToken: string | null | undefined;
+  mode?: StudentPrivateProfileSupplementMode | null | undefined;
   templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
   templateVersion: number | null | undefined;
 }) {

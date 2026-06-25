@@ -14,6 +14,7 @@ import type {
   StudentPrivateProfileSummary,
   StudentPrivateProfileSupplementMode,
   StudentPrivateProfileSupplementTemplateCode,
+  StudentRegistrationCardGenerationStatus,
 } from '../api';
 
 export const STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS: {
@@ -332,6 +333,29 @@ const SUPPLEMENT_DESTINATION_LABELS = new Map<string, string>([
 
 const SUPPLEMENT_AUDIT_POLICY_LABELS = new Map<string, string>([['NEVER_LOG_VALUE', '不记录原值']]);
 
+const REGISTRATION_CARD_GENERATION_STATUS_LABELS: Record<
+  StudentRegistrationCardGenerationStatus,
+  string
+> = {
+  BLOCKED: '阻塞',
+  READY: '可生成',
+  WARNING: '可生成，有提醒',
+};
+
+const REGISTRATION_CARD_GENERATION_CODE_LABELS = new Map<string, string>([
+  ['UPSTREAM_ID_MISSING', '未关联学工系统'],
+  ['PRIVATE_PROFILE_SNAPSHOT_MISSING', '缺本地资料快照'],
+  ['COURSE_RESULT_SNAPSHOT_MISSING', '缺成绩快照'],
+  ['FAMILY_MISSING', '缺家庭信息'],
+  ['EDUCATION_CALCULATED_FALLBACK_USED', '教育经历使用入学信息兜底'],
+  ['RECORD_MISSING', '缺学籍异动'],
+  ['COURSE_NAME_MISSING', '成绩课程名缺失'],
+  ['SCORE_FALLBACK_TO_PASSING', '成绩按及格值兜底'],
+  ['SCORE_BELOW_PASSING_RAISED_TO_60', '低于 60 的成绩按 60 展示'],
+  ['DROPPED_STUDENT_SCORE_INVALID_LEFT_BLANK', '退学学生无效成绩留空'],
+  ['ENROLLMENT_TIME_MISSING_FOR_EDUCATION_FALLBACK', '教育经历兜底缺少入学时间'],
+]);
+
 export const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS = Object.entries(
   SUPPLEMENT_TEMPLATE_LABELS,
 ).map(([value, label]) => ({
@@ -502,6 +526,26 @@ export function resolveStudentPrivateProfileSupplementAuditPolicyLabel(policy: s
   return SUPPLEMENT_AUDIT_POLICY_LABELS.get(normalizeDisplayKey(policy)) ?? policy;
 }
 
+export function resolveStudentRegistrationCardGenerationStatusLabel(status: string) {
+  return (
+    REGISTRATION_CARD_GENERATION_STATUS_LABELS[
+      normalizeDisplayKey(status) as StudentRegistrationCardGenerationStatus
+    ] ?? status
+  );
+}
+
+export function resolveStudentRegistrationCardGenerationCodeLabel(code: string) {
+  return REGISTRATION_CARD_GENERATION_CODE_LABELS.get(normalizeDisplayKey(code)) ?? code;
+}
+
+export function resolveStudentRegistrationCardGenerationMissingSectionLabel(section: string) {
+  return (
+    GOVERNANCE_MISSING_SECTION_LABELS[
+      normalizeDisplayKey(section) as StudentPrivateProfileGovernanceMissingSection
+    ] ?? section
+  );
+}
+
 export function resolveStudentPrivateProfileFamilyRelationshipLabel(relationshipCode: string) {
   const trimmedCode = relationshipCode.trim();
 
@@ -633,6 +677,24 @@ export function resolveStudentPrivateProfileGovernanceReadinessStatusColor(
   }
 
   return 'warning';
+}
+
+export function resolveStudentRegistrationCardGenerationStatusColor(status: string) {
+  const normalizedStatus = normalizeDisplayKey(status);
+
+  if (normalizedStatus === 'READY') {
+    return 'success';
+  }
+
+  if (normalizedStatus === 'BLOCKED') {
+    return 'error';
+  }
+
+  if (normalizedStatus === 'WARNING') {
+    return 'warning';
+  }
+
+  return 'default';
 }
 
 export function resolveStudentPrivateProfileSupplementDryRunStatusColor(status: string) {

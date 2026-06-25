@@ -42,12 +42,15 @@ import {
   buildStudentPrivateProfileSupplementTemplateWorkbookColumns,
   buildStudentPrivateProfileSupplementTemplateWorkbookRows,
   compareStudentPrivateProfileFields,
+  downloadStudentRegistrationCardDocument,
   dryRunStudentPrivateProfileSupplement,
+  generateStudentRegistrationCardDocument,
   getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileGovernanceReadinessPreflight,
   getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
   getStudentPrivateProfileSupplementTemplate,
+  getStudentRegistrationCardGenerationPreflight,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
@@ -64,6 +67,7 @@ import {
   normalizeStudentPrivateProfileSupplementDryRunInput,
   normalizeStudentPrivateProfileSupplementFile,
   normalizeStudentPrivateProfileSupplementTemplateInput,
+  normalizeStudentRegistrationCardGenerationInput,
   normalizeWriteStudentPrivateProfileEducationToUpstreamInput,
   normalizeWriteStudentPrivateProfileFamilyToUpstreamInput,
   patchStudentPrivateProfileFamilyMembers,
@@ -72,6 +76,7 @@ import {
   refreshStudentPrivateProfileFromUpstream,
   refreshStudentPrivateProfilesFromUpstream,
   resolveStudentPrivateProfileSupplementUploadUrl,
+  resolveStudentRegistrationCardDocumentDownloadUrl,
   uploadStudentPrivateProfileSupplementFile,
   writeStudentPrivateProfileEducationToUpstream,
   writeStudentPrivateProfileFamilyToUpstream,
@@ -649,6 +654,152 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('upstreamSessionToken');
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('checks and generates one student registration card document with fixed template', async () => {
+    expect(
+      normalizeStudentRegistrationCardGenerationInput({
+        studentId: ' S001 ',
+      }),
+    ).toEqual({
+      studentId: 'S001',
+      templateCode: 'STUDENT_REGISTRATION_CARD_FULL_EXPORT',
+    });
+
+    expect(() =>
+      normalizeStudentRegistrationCardGenerationInput({
+        studentId: 'S001',
+        templateCode: 'OTHER_TEMPLATE',
+      }),
+    ).toThrow('学籍卡模板当前只支持 STUDENT_REGISTRATION_CARD_FULL_EXPORT。');
+
+    const preflight = {
+      issueCodes: [],
+      missingSections: ['family'],
+      status: 'WARNING',
+      studentId: 'S001',
+      templateCode: 'STUDENT_REGISTRATION_CARD_FULL_EXPORT',
+      templateVersion: 1,
+      warningCodes: ['FAMILY_MISSING'],
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentRegistrationCardGenerationPreflight: preflight,
+    });
+
+    await expect(
+      getStudentRegistrationCardGenerationPreflight({ studentId: ' S001 ' }),
+    ).resolves.toEqual(preflight);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabRegistrationCardPreflight'),
+      {
+        input: {
+          studentId: 'S001',
+          templateCode: 'STUDENT_REGISTRATION_CARD_FULL_EXPORT',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'studentRegistrationCardGenerationPreflight',
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('issueCodes');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
+
+    const generation = {
+      ...preflight,
+      byteSize: 32768,
+      downloadToken: 'sprcd1_001',
+      downloadUrl: '/student-private-profile/registration-card-documents/sprcd1_001',
+      expiresAt: '2026-06-25T11:00:00.000Z',
+      fileName: '张三-学籍卡.docx',
+      sha256: 'sha256-001',
+      status: 'WARNING',
+      traceId: 'trace-registration-card-001',
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      generateStudentRegistrationCardDocument: generation,
+    });
+
+    await expect(generateStudentRegistrationCardDocument({ studentId: ' S001 ' })).resolves.toEqual(
+      generation,
+    );
+
+    expect(executeGraphQLMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabGenerateRegistrationCardDocument'),
+      {
+        input: {
+          studentId: 'S001',
+          templateCode: 'STUDENT_REGISTRATION_CARD_FULL_EXPORT',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[1]?.[0]).toContain(
+      'generateStudentRegistrationCardDocument',
+    );
+    expect(executeGraphQLMock.mock.calls[1]?.[0]).toContain('downloadToken');
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('downloads registration card docx through REST with auth header', async () => {
+    expect(
+      resolveStudentRegistrationCardDocumentDownloadUrl({
+        downloadToken: ' sprcd1_001 ',
+      }),
+    ).toBe('http://127.0.0.1:3000/student-private-profile/registration-card-documents/sprcd1_001');
+    expect(
+      resolveStudentRegistrationCardDocumentDownloadUrl({
+        downloadUrl: '/student-private-profile/registration-card-documents/sprcd1_002',
+      }),
+    ).toBe('http://127.0.0.1:3000/student-private-profile/registration-card-documents/sprcd1_002');
+
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:registration-card'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', {
+      configurable: true,
+      value: vi.fn(),
+    });
+
+    const anchor = {
+      click: vi.fn(),
+      download: '',
+      href: '',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(new Blob(['docx']), {
+        status: 200,
+      }),
+    );
+
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => anchor),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(
+      downloadStudentRegistrationCardDocument({
+        downloadToken: 'sprcd1_001',
+        fileName: '张三-学籍卡.docx',
+      }),
+    ).resolves.toEqual({
+      byteSize: 4,
+      fileName: '张三-学籍卡.docx',
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3000/student-private-profile/registration-card-documents/sprcd1_001',
+      {
+        headers: {
+          Authorization: 'Bearer access-token-001',
+        },
+        method: 'GET',
+      },
+    );
+    expect(anchor.download).toBe('张三-学籍卡.docx');
+    expect(anchor.click).toHaveBeenCalled();
   });
 
   it('loads supplement template schema and keeps column keys in order', async () => {
