@@ -6,14 +6,18 @@ import {
   ClearOutlined,
   CloudSyncOutlined,
   DeleteOutlined,
+  DownloadOutlined,
   EditOutlined,
   EyeOutlined,
+  FileExcelOutlined,
   FileSearchOutlined,
   LoginOutlined,
   PictureOutlined,
   PlusOutlined,
   ReloadOutlined,
+  UploadOutlined,
 } from '@ant-design/icons';
+import type { UploadProps } from 'antd';
 import {
   Alert,
   App as AntApp,
@@ -34,6 +38,7 @@ import {
   Table,
   Tabs,
   Tag,
+  Upload,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useLoaderData } from 'react-router';
@@ -76,6 +81,12 @@ import {
   resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
+  resolveStudentPrivateProfileSupplementDryRunIssueLabel,
+  resolveStudentPrivateProfileSupplementDryRunRowStatusColor,
+  resolveStudentPrivateProfileSupplementDryRunRowStatusLabel,
+  resolveStudentPrivateProfileSupplementDryRunStatusColor,
+  resolveStudentPrivateProfileSupplementDryRunStatusLabel,
+  resolveStudentPrivateProfileSupplementTemplateLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
   STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
@@ -83,13 +94,17 @@ import {
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_MISSING_SECTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_ISSUE_FILTERS,
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS,
+  STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS,
 } from './application/display-policy';
 import {
   compareStudentPrivateProfileFields,
+  downloadStudentPrivateProfileSupplementTemplateWorkbook,
+  dryRunStudentPrivateProfileSupplement,
   getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileGovernanceReadinessPreflight,
   getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
+  getStudentPrivateProfileSupplementTemplate,
   isExpiredUpstreamSessionError,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
@@ -129,6 +144,13 @@ import {
   type StudentPrivateProfileSummaryFamilyMember,
   type StudentPrivateProfileSummaryField,
   type StudentPrivateProfileSummaryRecordChange,
+  type StudentPrivateProfileSupplementDryRunResult,
+  type StudentPrivateProfileSupplementDryRunRow,
+  type StudentPrivateProfileSupplementTemplate,
+  type StudentPrivateProfileSupplementTemplateCode,
+  type StudentPrivateProfileSupplementTemplateColumn,
+  type StudentPrivateProfileSupplementUploadResult,
+  uploadStudentPrivateProfileSupplementFile,
   type WriteStudentPrivateProfileEducationResumeToUpstreamInput,
   writeStudentPrivateProfileEducationToUpstream,
   type WriteStudentPrivateProfileFamilyMemberToUpstreamInput,
@@ -174,7 +196,7 @@ type UpstreamPendingAction =
       type: 'education-write-through';
     };
 
-type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'readiness' | 'sync';
+type StudentPrivateProfileLabTabKey = 'detail' | 'overview' | 'readiness' | 'supplement' | 'sync';
 
 type ControlledBatchRefreshResult = StudentPrivateProfileBatchRefreshResult & {
   completedChunks: number;
@@ -317,6 +339,34 @@ function isValidWriteThroughDate(value: string | null | undefined) {
     !Number.isNaN(date.getTime()) &&
     date.toISOString().slice(0, 10) === normalizedValue
   );
+}
+
+function resolveSupplementSectionBaselineToken(input: {
+  educationSectionBaselineToken: string | null;
+  familySectionBaselineToken: string | null;
+  templateCode: StudentPrivateProfileSupplementTemplateCode;
+}) {
+  return input.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT'
+    ? input.familySectionBaselineToken
+    : input.educationSectionBaselineToken;
+}
+
+function formatSupplementColumnRequirement(column: StudentPrivateProfileSupplementTemplateColumn) {
+  if (column.alwaysRequired) {
+    return '始终必填';
+  }
+
+  if (column.requiredForActions.length > 0) {
+    return column.requiredForActions.join(' / ');
+  }
+
+  return '可选';
+}
+
+function formatSupplementDryRunIssue(issue: StudentPrivateProfileSupplementDryRunRow['issues'][0]) {
+  const label = resolveStudentPrivateProfileSupplementDryRunIssueLabel(issue.code);
+
+  return issue.columnKey ? `${label}（${issue.columnKey}）` : label;
 }
 
 function resolveClassOverviewErrorMessage(error: unknown) {
@@ -632,6 +682,17 @@ export function StudentPrivateProfileLabPage() {
   const [profilePreview, setProfilePreview] = useState<StudentPrivateProfilePreview | null>(null);
   const [profilePreviewError, setProfilePreviewError] = useState<string | null>(null);
   const [isProfilePreviewOpen, setIsProfilePreviewOpen] = useState(false);
+  const [supplementTemplateCode, setSupplementTemplateCode] =
+    useState<StudentPrivateProfileSupplementTemplateCode>(
+      'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
+    );
+  const [supplementTemplate, setSupplementTemplate] =
+    useState<StudentPrivateProfileSupplementTemplate | null>(null);
+  const [supplementUploadFile, setSupplementUploadFile] = useState<File | null>(null);
+  const [supplementUploadResult, setSupplementUploadResult] =
+    useState<StudentPrivateProfileSupplementUploadResult | null>(null);
+  const [supplementDryRunResult, setSupplementDryRunResult] =
+    useState<StudentPrivateProfileSupplementDryRunResult | null>(null);
   const [activeTabKey, setActiveTabKey] = useState<StudentPrivateProfileLabTabKey>('overview');
   const [isLoadingSummary, setIsLoadingSummary] = useState(false);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
@@ -646,6 +707,10 @@ export function StudentPrivateProfileLabPage() {
   const [isPatching, setIsPatching] = useState(false);
   const [isPatchingFamily, setIsPatchingFamily] = useState(false);
   const [isWritingThrough, setIsWritingThrough] = useState(false);
+  const [isLoadingSupplementTemplate, setIsLoadingSupplementTemplate] = useState(false);
+  const [isDownloadingSupplementTemplate, setIsDownloadingSupplementTemplate] = useState(false);
+  const [isUploadingSupplementFile, setIsUploadingSupplementFile] = useState(false);
+  const [isRunningSupplementDryRun, setIsRunningSupplementDryRun] = useState(false);
   const [isFamilyWriteThroughOpen, setIsFamilyWriteThroughOpen] = useState(false);
   const [isEducationWriteThroughOpen, setIsEducationWriteThroughOpen] = useState(false);
   const [activeCompareField, setActiveCompareField] =
@@ -726,6 +791,15 @@ export function StudentPrivateProfileLabPage() {
     () => resolveSummarySectionBaselineToken(summary, 'education'),
     [summary],
   );
+  const supplementSectionBaselineToken = useMemo(
+    () =>
+      resolveSupplementSectionBaselineToken({
+        educationSectionBaselineToken,
+        familySectionBaselineToken,
+        templateCode: supplementTemplateCode,
+      }),
+    [educationSectionBaselineToken, familySectionBaselineToken, supplementTemplateCode],
+  );
   const classSelectOptions = useMemo(
     () =>
       classes.map((option) => ({
@@ -746,6 +820,18 @@ export function StudentPrivateProfileLabPage() {
     () => new Map(students.map((student) => [student.studentId, student])),
     [students],
   );
+  const currentSummaryStudentName = useMemo(() => {
+    if (!summary) {
+      return null;
+    }
+
+    return (
+      studentOptionById.get(summary.studentId)?.studentName ??
+      classOverview?.students.find((student) => student.studentId === summary.studentId)
+        ?.studentName ??
+      null
+    );
+  }, [classOverview, studentOptionById, summary]);
   const selectedClassOption = useMemo(
     () => classes.find((option) => option.id === selectedClassId) ?? null,
     [classes, selectedClassId],
@@ -809,6 +895,12 @@ export function StudentPrivateProfileLabPage() {
     setProfilePreview(null);
     setProfilePreviewError(null);
     setIsLoadingProfilePreview(false);
+  }, []);
+
+  const clearSupplementRuntimeState = useCallback(() => {
+    setSupplementUploadFile(null);
+    setSupplementUploadResult(null);
+    setSupplementDryRunResult(null);
   }, []);
 
   const loadClasses = useCallback(async () => {
@@ -922,6 +1014,7 @@ export function StudentPrivateProfileLabPage() {
       const studentId = normalizeStudentPrivateProfileStudentId(studentIdValue);
 
       clearProfilePreview();
+      clearSupplementRuntimeState();
       setIsLoadingSummary(true);
       setCompareResult(null);
       setActiveCompareField(null);
@@ -946,7 +1039,7 @@ export function StudentPrivateProfileLabPage() {
         setIsLoadingSummary(false);
       }
     },
-    [clearProfilePreview, message, studentForm],
+    [clearProfilePreview, clearSupplementRuntimeState, message, studentForm],
   );
 
   const {
@@ -1443,6 +1536,7 @@ export function StudentPrivateProfileLabPage() {
   const handleClassChange = useCallback(
     (classId: string | null) => {
       clearProfilePreview();
+      clearSupplementRuntimeState();
       setSelectedClassId(classId);
       setStudents([]);
       setBatchRefreshResult(null);
@@ -1461,25 +1555,33 @@ export function StudentPrivateProfileLabPage() {
       void loadClassOverview(classId);
       void loadGovernanceReadiness(classId);
     },
-    [clearProfilePreview, loadClassOverview, loadGovernanceReadiness, loadStudentsForClass],
+    [
+      clearProfilePreview,
+      clearSupplementRuntimeState,
+      loadClassOverview,
+      loadGovernanceReadiness,
+      loadStudentsForClass,
+    ],
   );
 
   const handleStudentOptionChange = useCallback(
     (studentId: string | null) => {
       clearProfilePreview();
+      clearSupplementRuntimeState();
       studentForm.setFieldValue('studentId', studentId ?? '');
     },
-    [clearProfilePreview, studentForm],
+    [clearProfilePreview, clearSupplementRuntimeState, studentForm],
   );
 
   const openStudentDetail = useCallback(
     (studentId: string) => {
       clearProfilePreview();
+      clearSupplementRuntimeState();
       studentForm.setFieldValue('studentId', studentId);
       setActiveTabKey('detail');
       void loadSummary(studentId);
     },
-    [clearProfilePreview, loadSummary, studentForm],
+    [clearProfilePreview, clearSupplementRuntimeState, loadSummary, studentForm],
   );
 
   const handleRefresh = useCallback(async () => {
@@ -1656,6 +1758,155 @@ export function StudentPrivateProfileLabPage() {
     },
     [openLoginModal, runWriteThroughWithSession, upstreamSession],
   );
+
+  const handleSupplementTemplateCodeChange = useCallback(
+    (templateCode: StudentPrivateProfileSupplementTemplateCode) => {
+      setSupplementTemplateCode(templateCode);
+      setSupplementTemplate(null);
+      clearSupplementRuntimeState();
+    },
+    [clearSupplementRuntimeState],
+  );
+
+  const loadSupplementTemplate = useCallback(async () => {
+    setIsLoadingSupplementTemplate(true);
+
+    try {
+      const template = await getStudentPrivateProfileSupplementTemplate({
+        templateCode: supplementTemplateCode,
+      });
+
+      setSupplementTemplate(template);
+      return template;
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法读取补录模板。'));
+      return null;
+    } finally {
+      setIsLoadingSupplementTemplate(false);
+    }
+  }, [message, supplementTemplateCode]);
+
+  const handleDownloadSupplementTemplate = useCallback(async () => {
+    const studentId = resolveSummaryActionStudentId();
+
+    if (!studentId) {
+      return;
+    }
+
+    if (!supplementSectionBaselineToken) {
+      message.error('当前补录分区缺少 section baseline，请先刷新该学生资料。');
+      return;
+    }
+
+    setIsDownloadingSupplementTemplate(true);
+
+    try {
+      const template =
+        supplementTemplate?.templateCode === supplementTemplateCode
+          ? supplementTemplate
+          : await loadSupplementTemplate();
+
+      if (!template) {
+        return;
+      }
+
+      await downloadStudentPrivateProfileSupplementTemplateWorkbook({
+        studentName: currentSummaryStudentName,
+        summary,
+        template,
+      });
+      message.success('已生成补录 Excel。');
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法生成补录 Excel。'));
+    } finally {
+      setIsDownloadingSupplementTemplate(false);
+    }
+  }, [
+    loadSupplementTemplate,
+    message,
+    currentSummaryStudentName,
+    resolveSummaryActionStudentId,
+    supplementSectionBaselineToken,
+    supplementTemplate,
+    supplementTemplateCode,
+    summary,
+  ]);
+
+  const handleSupplementFileBeforeUpload: UploadProps['beforeUpload'] = useCallback((file) => {
+    setSupplementUploadFile(file);
+    setSupplementUploadResult(null);
+    setSupplementDryRunResult(null);
+    return false;
+  }, []);
+
+  const handleSupplementFileRemove = useCallback(() => {
+    clearSupplementRuntimeState();
+    return true;
+  }, [clearSupplementRuntimeState]);
+
+  const handleUploadSupplementFile = useCallback(async () => {
+    if (!supplementTemplate) {
+      message.error('请先读取补录模板。');
+      return;
+    }
+
+    if (!supplementUploadFile) {
+      message.error('请选择要上传的 .xlsx 文件。');
+      return;
+    }
+
+    setIsUploadingSupplementFile(true);
+    setSupplementUploadResult(null);
+    setSupplementDryRunResult(null);
+
+    try {
+      const result = await uploadStudentPrivateProfileSupplementFile({
+        file: supplementUploadFile,
+      });
+
+      setSupplementUploadResult(result);
+      message.success('补录文件已上传。');
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法上传补录文件。'));
+    } finally {
+      setIsUploadingSupplementFile(false);
+    }
+  }, [message, supplementTemplate, supplementUploadFile]);
+
+  const handleRunSupplementDryRun = useCallback(async () => {
+    if (!supplementTemplate) {
+      message.error('请先读取补录模板。');
+      return;
+    }
+
+    if (!supplementUploadResult) {
+      message.error('请先上传补录文件。');
+      return;
+    }
+
+    setIsRunningSupplementDryRun(true);
+    setSupplementDryRunResult(null);
+
+    try {
+      const result = await dryRunStudentPrivateProfileSupplement({
+        fileToken: supplementUploadResult.fileToken,
+        templateCode: supplementTemplate.templateCode,
+        templateVersion: supplementTemplate.templateVersion,
+      });
+
+      setSupplementDryRunResult(result);
+
+      if (result.status === 'READY') {
+        message.success('补录文件 dry-run 校验通过。');
+      } else {
+        message.warning('补录文件 dry-run 存在阻塞行。');
+      }
+    } catch (error) {
+      message.error(resolveUpstreamErrorMessage(error, '暂时无法执行补录 dry-run。'));
+    } finally {
+      setIsRunningSupplementDryRun(false);
+    }
+  }, [message, supplementTemplate, supplementUploadResult]);
 
   const openFamilyWriteThroughModal = useCallback(() => {
     const studentId = resolveSummaryActionStudentId();
@@ -2669,6 +2920,123 @@ export function StudentPrivateProfileLabPage() {
     },
   ];
 
+  const supplementTemplateColumns: ColumnsType<StudentPrivateProfileSupplementTemplateColumn> = [
+    {
+      dataIndex: 'key',
+      key: 'key',
+      title: '列 key',
+      width: 180,
+    },
+    {
+      dataIndex: 'label',
+      key: 'label',
+      title: '列名',
+      width: 180,
+    },
+    {
+      key: 'required',
+      title: '必填',
+      width: 120,
+      render: (_, record) => formatSupplementColumnRequirement(record),
+    },
+    {
+      dataIndex: 'valueType',
+      key: 'valueType',
+      title: '类型',
+      width: 100,
+    },
+    {
+      key: 'enumValues',
+      title: '枚举值',
+      width: 180,
+      render: (_, record) =>
+        record.enumValues.length > 0 ? (
+          <Space size="small" wrap>
+            {record.enumValues.map((value) => (
+              <Tag key={value}>{value}</Tag>
+            ))}
+          </Space>
+        ) : (
+          '—'
+        ),
+    },
+    {
+      dataIndex: 'sensitive',
+      key: 'sensitive',
+      title: '敏感',
+      width: 80,
+      render: (value: boolean) => formatStudentPrivateProfileBoolean(value),
+    },
+  ];
+
+  const supplementDryRunColumns: ColumnsType<StudentPrivateProfileSupplementDryRunRow> = [
+    {
+      dataIndex: 'rowNumber',
+      key: 'rowNumber',
+      title: '行号',
+      width: 80,
+    },
+    {
+      dataIndex: 'studentId',
+      key: 'studentId',
+      title: '学生 ID',
+      width: 140,
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'action',
+      key: 'action',
+      title: '动作',
+      width: 100,
+      render: (value: string | null) => displayText(value),
+    },
+    {
+      dataIndex: 'status',
+      key: 'status',
+      title: '状态',
+      width: 100,
+      render: (value: string) => (
+        <Tag color={resolveStudentPrivateProfileSupplementDryRunRowStatusColor(value)}>
+          {resolveStudentPrivateProfileSupplementDryRunRowStatusLabel(value)}
+        </Tag>
+      ),
+    },
+    {
+      key: 'issues',
+      title: '问题',
+      width: 360,
+      render: (_, record) =>
+        record.issues.length > 0 ? (
+          <Space size="small" wrap>
+            {record.issues.map((issue) => (
+              <Tag color="error" key={`${record.rowNumber}-${issue.code}-${issue.columnKey}`}>
+                {formatSupplementDryRunIssue(issue)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+    {
+      key: 'warnings',
+      title: '提醒',
+      width: 260,
+      render: (_, record) =>
+        record.warningCodes.length > 0 ? (
+          <Space size="small" wrap>
+            {record.warningCodes.map((code) => (
+              <Tag color="warning" key={code}>
+                {resolveStudentPrivateProfileSupplementDryRunIssueLabel(code)}
+              </Tag>
+            ))}
+          </Space>
+        ) : (
+          '无'
+        ),
+    },
+  ];
+
   const batchRefreshColumns: ColumnsType<StudentPrivateProfileBatchRefreshItem> = [
     {
       dataIndex: 'studentId',
@@ -3427,6 +3795,185 @@ export function StudentPrivateProfileLabPage() {
             ),
             key: 'detail',
             label: '学生资料详情',
+          },
+          {
+            children: (
+              <div className="flex flex-col gap-6">
+                <Card title="Excel 补录 dry-run">
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Space wrap>
+                      <Select
+                        options={STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS}
+                        value={supplementTemplateCode}
+                        style={{ minWidth: 220 }}
+                        onChange={handleSupplementTemplateCodeChange}
+                      />
+                      <Button
+                        icon={<FileSearchOutlined />}
+                        loading={isLoadingSupplementTemplate}
+                        onClick={() => void loadSupplementTemplate()}
+                      >
+                        读取 schema
+                      </Button>
+                      <Button
+                        disabled={
+                          !summary ||
+                          isSummaryStudentIdMismatched ||
+                          !supplementSectionBaselineToken
+                        }
+                        icon={<DownloadOutlined />}
+                        loading={isDownloadingSupplementTemplate}
+                        onClick={() => void handleDownloadSupplementTemplate()}
+                      >
+                        生成当前学生 Excel
+                      </Button>
+                    </Space>
+
+                    {!summary ? (
+                      <Alert showIcon type="info" message="请先在学生资料详情中读取本地资料。" />
+                    ) : null}
+                    {summary && !supplementSectionBaselineToken ? (
+                      <Alert
+                        showIcon
+                        type="warning"
+                        message="当前补录分区缺少 section baseline，请先刷新该学生资料。"
+                      />
+                    ) : null}
+
+                    {supplementTemplate ? (
+                      <Descriptions bordered column={4} size="small">
+                        <Descriptions.Item label="模板">
+                          {resolveStudentPrivateProfileSupplementTemplateLabel(
+                            supplementTemplate.templateCode,
+                          )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="版本">
+                          v{supplementTemplate.templateVersion}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="分区">
+                          {resolveStudentPrivateProfileSectionLabel(supplementTemplate.sectionKey)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="动作">
+                          {supplementTemplate.actions.join(' / ')}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+
+                    <Table
+                      columns={supplementTemplateColumns}
+                      dataSource={supplementTemplate?.columns ?? []}
+                      locale={{ emptyText: '暂无补录模板 schema' }}
+                      pagination={false}
+                      rowKey="key"
+                      scroll={{ x: 840 }}
+                      size="small"
+                    />
+                  </Space>
+                </Card>
+
+                <Card title="上传与校验">
+                  <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    <Space wrap>
+                      <Upload
+                        accept=".xlsx"
+                        beforeUpload={handleSupplementFileBeforeUpload}
+                        fileList={
+                          supplementUploadFile
+                            ? [
+                                {
+                                  name: supplementUploadFile.name,
+                                  size: supplementUploadFile.size,
+                                  status: 'done' as const,
+                                  uid: 'supplement-file',
+                                },
+                              ]
+                            : []
+                        }
+                        maxCount={1}
+                        onRemove={handleSupplementFileRemove}
+                      >
+                        <Button icon={<UploadOutlined />}>选择 Excel</Button>
+                      </Upload>
+                      <Button
+                        disabled={!supplementTemplate || !supplementUploadFile}
+                        icon={<UploadOutlined />}
+                        loading={isUploadingSupplementFile}
+                        onClick={() => void handleUploadSupplementFile()}
+                      >
+                        上传文件
+                      </Button>
+                      <Button
+                        disabled={!supplementTemplate || !supplementUploadResult}
+                        icon={<FileExcelOutlined />}
+                        loading={isRunningSupplementDryRun}
+                        type="primary"
+                        onClick={() => void handleRunSupplementDryRun()}
+                      >
+                        dry-run 校验
+                      </Button>
+                    </Space>
+
+                    {supplementUploadResult ? (
+                      <Descriptions bordered column={3} size="small">
+                        <Descriptions.Item label="文件">
+                          {supplementUploadResult.originalFilename}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="大小">
+                          {formatApproxByteSize(supplementUploadResult.byteSize)}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="有效期">
+                          {formatDateTime(supplementUploadResult.expiresAt)}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+
+                    {supplementDryRunResult ? (
+                      <Descriptions bordered column={5} size="small">
+                        <Descriptions.Item label="结果">
+                          <Tag
+                            color={resolveStudentPrivateProfileSupplementDryRunStatusColor(
+                              supplementDryRunResult.status,
+                            )}
+                          >
+                            {resolveStudentPrivateProfileSupplementDryRunStatusLabel(
+                              supplementDryRunResult.status,
+                            )}
+                          </Tag>
+                        </Descriptions.Item>
+                        <Descriptions.Item label="总行数">
+                          {supplementDryRunResult.totalRows}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="有效行">
+                          {supplementDryRunResult.validRows}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="无效行">
+                          {supplementDryRunResult.invalidRows}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="影响学生">
+                          {supplementDryRunResult.affectedStudents}
+                        </Descriptions.Item>
+                      </Descriptions>
+                    ) : null}
+
+                    <Table
+                      columns={supplementDryRunColumns}
+                      dataSource={supplementDryRunResult?.rowResults ?? []}
+                      locale={{ emptyText: '暂无 dry-run 行结果' }}
+                      pagination={{
+                        defaultPageSize: 20,
+                        pageSizeOptions: [20, 50],
+                        showSizeChanger: true,
+                      }}
+                      rowKey="rowNumber"
+                      scroll={{ x: 1040 }}
+                      size="small"
+                    />
+                  </Space>
+                </Card>
+              </div>
+            ),
+            key: 'supplement',
+            label: 'Excel 补录 dry-run',
           },
           {
             children: (

@@ -1,4 +1,9 @@
-export { configureGraphQLRuntime, getGraphQLClient, getGraphQLEndpoint } from './client';
+export {
+  configureGraphQLRuntime,
+  getGraphQLClient,
+  getGraphQLEndpoint,
+  getGraphQLRuntimeConfig,
+} from './client';
 export type { GraphQLIngressErrorType } from './errors';
 export {
   GraphQLIngressError,

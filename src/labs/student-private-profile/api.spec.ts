@@ -5,11 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   executeGraphQLMock,
   executeUpstreamSessionGraphQLMock,
+  getAccessTokenMock,
+  getGraphQLEndpointMock,
+  onAuthFailureMock,
   readUpstreamGraphQLErrorDetailMock,
+  refreshSessionMock,
 } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
   executeUpstreamSessionGraphQLMock: vi.fn(),
+  getAccessTokenMock: vi.fn(),
+  getGraphQLEndpointMock: vi.fn(),
+  onAuthFailureMock: vi.fn(),
   readUpstreamGraphQLErrorDetailMock: vi.fn(),
+  refreshSessionMock: vi.fn(),
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
@@ -22,14 +30,23 @@ vi.mock('@/entities/upstream-session', () => ({
 
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
+  getGraphQLEndpoint: getGraphQLEndpointMock,
+  getGraphQLRuntimeConfig: () => ({
+    getAccessToken: getAccessTokenMock,
+    onAuthFailure: onAuthFailureMock,
+    refreshSession: refreshSessionMock,
+  }),
 }));
 
 import {
+  buildStudentPrivateProfileSupplementTemplateWorkbookRows,
   compareStudentPrivateProfileFields,
+  dryRunStudentPrivateProfileSupplement,
   getStudentPrivateProfileClassOverview,
   getStudentPrivateProfileGovernanceReadinessPreflight,
   getStudentPrivateProfilePreview,
   getStudentPrivateProfileSummary,
+  getStudentPrivateProfileSupplementTemplate,
   isStudentPrivateProfileUpstreamSessionRequiredError,
   listStudentPrivateProfileClassOptions,
   listStudentPrivateProfileClassStudentOptions,
@@ -43,6 +60,9 @@ import {
   normalizeStudentPrivateProfileClassOverviewInput,
   normalizeStudentPrivateProfileGovernanceReadinessPreflightInput,
   normalizeStudentPrivateProfilePreviewInput,
+  normalizeStudentPrivateProfileSupplementDryRunInput,
+  normalizeStudentPrivateProfileSupplementFile,
+  normalizeStudentPrivateProfileSupplementTemplateInput,
   normalizeWriteStudentPrivateProfileEducationToUpstreamInput,
   normalizeWriteStudentPrivateProfileFamilyToUpstreamInput,
   patchStudentPrivateProfileFamilyMembers,
@@ -50,6 +70,8 @@ import {
   readStudentPrivateProfilePhoto,
   refreshStudentPrivateProfileFromUpstream,
   refreshStudentPrivateProfilesFromUpstream,
+  resolveStudentPrivateProfileSupplementUploadUrl,
+  uploadStudentPrivateProfileSupplementFile,
   writeStudentPrivateProfileEducationToUpstream,
   writeStudentPrivateProfileFamilyToUpstream,
 } from './api';
@@ -58,7 +80,15 @@ describe('student-private-profile lab api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
+    getAccessTokenMock.mockReset();
+    getGraphQLEndpointMock.mockReset();
+    onAuthFailureMock.mockReset();
     readUpstreamGraphQLErrorDetailMock.mockReset();
+    refreshSessionMock.mockReset();
+    vi.unstubAllGlobals();
+
+    getAccessTokenMock.mockReturnValue('access-token-001');
+    getGraphQLEndpointMock.mockReturnValue('http://127.0.0.1:3000/graphql');
   });
 
   it('loads summary with the documented query shape', async () => {
@@ -618,6 +648,302 @@ describe('student-private-profile lab api', () => {
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('upstreamSessionToken');
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('loads supplement template schema and keeps column keys in order', async () => {
+    expect(
+      normalizeStudentPrivateProfileSupplementTemplateInput({
+        templateCode: ' STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT ',
+      }),
+    ).toEqual({
+      templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
+    });
+
+    const template = {
+      actions: ['CREATE', 'DELETE'],
+      columns: [
+        {
+          alwaysRequired: true,
+          enumValues: [],
+          fieldKey: null,
+          key: 'studentId',
+          label: '本地学生业务编号',
+          requiredForActions: [],
+          sensitive: false,
+          valueType: 'STRING',
+        },
+        {
+          alwaysRequired: false,
+          enumValues: [],
+          fieldKey: null,
+          key: 'studentName',
+          label: '学生姓名',
+          requiredForActions: [],
+          sensitive: true,
+          valueType: 'STRING',
+        },
+        {
+          alwaysRequired: true,
+          enumValues: [],
+          fieldKey: null,
+          key: 'expectedSectionBaselineToken',
+          label: 'section baseline token',
+          requiredForActions: [],
+          sensitive: false,
+          valueType: 'STRING',
+        },
+      ],
+      sectionKey: 'FAMILY',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
+      templateVersion: 1,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentPrivateProfileSupplementTemplate: template,
+    });
+
+    await expect(
+      getStudentPrivateProfileSupplementTemplate({
+        templateCode: ' STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT ',
+      }),
+    ).resolves.toEqual(template);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabSupplementTemplate'),
+      {
+        input: {
+          templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columns');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('requiredForActions');
+    expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
+  });
+
+  it('uploads supplement xlsx through REST envelope with auth header', async () => {
+    const file = new Blob(['excel']) as File;
+
+    Object.defineProperty(file, 'name', { value: 'family.xlsx' });
+
+    expect(normalizeStudentPrivateProfileSupplementFile(file)).toBe(file);
+    expect(resolveStudentPrivateProfileSupplementUploadUrl()).toBe(
+      'http://127.0.0.1:3000/student-private-profile/supplement-files',
+    );
+
+    const uploadResult = {
+      byteSize: 12345,
+      expiresAt: '2026-06-25T10:00:00.000Z',
+      fileToken: 'sppsf_001',
+      originalFilename: 'family.xlsx',
+    };
+    const fetchMock = vi.fn().mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: uploadResult,
+          success: true,
+        }),
+        {
+          status: 200,
+        },
+      ),
+    );
+
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(uploadStudentPrivateProfileSupplementFile({ file })).resolves.toEqual(
+      uploadResult,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3000/student-private-profile/supplement-files',
+      expect.objectContaining({
+        headers: {
+          Authorization: 'Bearer access-token-001',
+        },
+        method: 'POST',
+      }),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.body).toBeInstanceOf(FormData);
+  });
+
+  it('runs supplement dry-run with uploaded file token', async () => {
+    expect(
+      normalizeStudentPrivateProfileSupplementDryRunInput({
+        fileToken: ' sppsf_001 ',
+        templateCode: ' STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT ',
+        templateVersion: 1,
+      }),
+    ).toEqual({
+      fileToken: 'sppsf_001',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
+      templateVersion: 1,
+    });
+
+    expect(() =>
+      normalizeStudentPrivateProfileSupplementDryRunInput({
+        fileToken: 'sppsf_001',
+        templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
+        templateVersion: 0,
+      }),
+    ).toThrow('补录模板版本必须是大于 0 的整数。');
+
+    const dryRun = {
+      affectedStudents: 1,
+      dryRun: true,
+      invalidRows: 1,
+      rowResults: [
+        {
+          action: 'CREATE',
+          errorCodes: ['DATE_INVALID'],
+          issues: [
+            {
+              code: 'DATE_INVALID',
+              columnKey: 'startDate',
+            },
+          ],
+          rowNumber: 2,
+          status: 'INVALID',
+          studentId: 'S001',
+          warningCodes: [],
+        },
+      ],
+      sectionKey: 'EDUCATION_RESUME',
+      status: 'BLOCKED',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
+      templateVersion: 1,
+      totalRows: 1,
+      validRows: 0,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentPrivateProfileSupplementDryRun: dryRun,
+    });
+
+    await expect(
+      dryRunStudentPrivateProfileSupplement({
+        fileToken: ' sppsf_001 ',
+        templateCode: ' STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT ',
+        templateVersion: 1,
+      }),
+    ).resolves.toEqual(dryRun);
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentPrivateProfileLabSupplementDryRun'),
+      {
+        input: {
+          fileToken: 'sppsf_001',
+          templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
+          templateVersion: 1,
+        },
+      },
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('rowResults');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columnKey');
+  });
+
+  it('prefills supplement workbook rows from current summary tokens', () => {
+    const familyTemplate = {
+      actions: ['CREATE', 'DELETE'],
+      columns: [
+        { key: 'studentId' },
+        { key: 'studentName' },
+        { key: 'expectedSectionBaselineToken' },
+        { key: 'action' },
+        { key: 'itemKey' },
+        { key: 'upstreamBaselineToken' },
+        { key: 'relationshipCode' },
+        { key: 'name' },
+      ].map((column) => ({
+        alwaysRequired: column.key === 'studentId',
+        enumValues: [],
+        fieldKey: null,
+        key: column.key,
+        label: column.key,
+        requiredForActions: [],
+        sensitive: false,
+        valueType: 'STRING',
+      })),
+      sectionKey: 'FAMILY',
+      templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
+      templateVersion: 1,
+    } as const;
+    const summary = {
+      educationResumes: [],
+      familyMembers: [
+        {
+          itemKey: 'family-row-001',
+          manualOverrideActive: false,
+          manualPatchFieldKeys: [],
+          maskedName: '张*',
+          maskedPhone: null,
+          maskedWorkplace: null,
+          relationshipCode: '1',
+          sourceObservedAt: '2026-06-23T09:00:00.000Z',
+          sourceUpdatedAt: null,
+          upstreamBaselineToken: 'family-row-token-001',
+          upstreamChangedSinceManualPatch: false,
+        },
+      ],
+      fields: [],
+      lastManualUpdatedAt: null,
+      lastSyncedAt: '2026-06-23T10:00:00.000Z',
+      photo: {
+        byteSize: 0,
+        present: false,
+        sourceObservedAt: '2026-06-23T10:00:00.000Z',
+      },
+      profileCompletenessFlags: {
+        educationObserved: false,
+        familyObserved: true,
+        personalObserved: true,
+        photoObserved: false,
+        recordObserved: false,
+        sensitiveIdentifiersObserved: true,
+      },
+      recordChanges: [],
+      sectionStatuses: [
+        {
+          observedAt: '2026-06-23T09:00:00.000Z',
+          section: 'family',
+          sectionBaselineToken: 'family-section-token-001',
+          sourceEndpoint: 'pagegrid',
+          sourceStatus: 'OBSERVED',
+          warningCodes: [],
+        },
+      ],
+      sourceObservedAt: '2026-06-23T09:00:00.000Z',
+      studentId: 'S001',
+    };
+
+    expect(
+      buildStudentPrivateProfileSupplementTemplateWorkbookRows({
+        summary,
+        studentName: '张三',
+        template: familyTemplate,
+      }),
+    ).toEqual([
+      {
+        action: 'CREATE',
+        expectedSectionBaselineToken: 'family-section-token-001',
+        itemKey: '',
+        name: '',
+        relationshipCode: '1',
+        studentId: 'S001',
+        studentName: '张三',
+        upstreamBaselineToken: '',
+      },
+      {
+        action: 'CREATE',
+        expectedSectionBaselineToken: 'family-section-token-001',
+        itemKey: '',
+        name: '',
+        relationshipCode: '2',
+        studentId: 'S001',
+        studentName: '张三',
+        upstreamBaselineToken: '',
+      },
+    ]);
   });
 
   it('writes one family member to upstream with section baseline token', async () => {

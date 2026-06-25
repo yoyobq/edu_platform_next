@@ -12,6 +12,7 @@ import type {
   StudentPrivateProfileManualPatchField,
   StudentPrivateProfilePhotoReadResult,
   StudentPrivateProfileSummary,
+  StudentPrivateProfileSupplementTemplateCode,
 } from '../api';
 
 export const STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS: {
@@ -265,6 +266,49 @@ const GOVERNANCE_MISSING_SECTION_LABELS: Record<
   sensitiveIdentifiers: '证件与卡号',
 };
 
+const SUPPLEMENT_TEMPLATE_LABELS: Record<StudentPrivateProfileSupplementTemplateCode, string> = {
+  STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT: '教育经历补录',
+  STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT: '家庭成员补录',
+};
+
+const SUPPLEMENT_DRY_RUN_STATUS_LABELS = new Map<string, string>([
+  ['READY', '校验通过'],
+  ['BLOCKED', '存在阻塞'],
+]);
+
+const SUPPLEMENT_DRY_RUN_ROW_STATUS_LABELS = new Map<string, string>([
+  ['VALID', '有效'],
+  ['INVALID', '无效'],
+  ['SKIPPED', '已跳过'],
+]);
+
+const SUPPLEMENT_DRY_RUN_ISSUE_LABELS = new Map<string, string>([
+  ['REQUIRED_CELL_EMPTY', '必填单元格为空'],
+  ['ACTION_NOT_SUPPORTED', '动作不支持'],
+  ['STUDENT_NOT_FOUND', '学生不存在'],
+  ['ACTIVE_MEMBERSHIP_NOT_FOUND', '缺少有效班级关系'],
+  ['CLASS_NOT_FOUND', '班级不存在'],
+  ['UPSTREAM_ID_MISSING', '未关联学工系统'],
+  ['ACCESS_DENIED', '无权处理该学生'],
+  ['SNAPSHOT_NOT_FOUND', '缺少本地资料快照'],
+  ['SECTION_BASELINE_CONFLICT', 'section baseline 已过期'],
+  ['ITEM_KEY_REQUIRED', '缺少行标识'],
+  ['ITEM_NOT_FOUND', '补录行不存在'],
+  ['ROW_BASELINE_REQUIRED', '缺少行级 baseline'],
+  ['ROW_BASELINE_CONFLICT', '行级 baseline 已过期'],
+  ['RELATIONSHIP_CODE_UNSUPPORTED', '家庭关系 code 不支持'],
+  ['DATE_INVALID', '日期格式非法'],
+  ['DATE_RANGE_INVALID', '日期范围非法'],
+  ['DUPLICATE_ROW', '重复补录行'],
+]);
+
+export const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS = Object.entries(
+  SUPPLEMENT_TEMPLATE_LABELS,
+).map(([value, label]) => ({
+  label,
+  value,
+}));
+
 export const STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS = Object.entries(
   GOVERNANCE_READINESS_STATUS_LABELS,
 ).map(([value, text]) => ({
@@ -382,6 +426,24 @@ export function resolveStudentPrivateProfileGovernanceMissingSectionLabel(
   section: StudentPrivateProfileGovernanceMissingSection,
 ) {
   return GOVERNANCE_MISSING_SECTION_LABELS[section];
+}
+
+export function resolveStudentPrivateProfileSupplementTemplateLabel(
+  templateCode: StudentPrivateProfileSupplementTemplateCode,
+) {
+  return SUPPLEMENT_TEMPLATE_LABELS[templateCode];
+}
+
+export function resolveStudentPrivateProfileSupplementDryRunStatusLabel(status: string) {
+  return SUPPLEMENT_DRY_RUN_STATUS_LABELS.get(normalizeDisplayKey(status)) ?? status;
+}
+
+export function resolveStudentPrivateProfileSupplementDryRunRowStatusLabel(status: string) {
+  return SUPPLEMENT_DRY_RUN_ROW_STATUS_LABELS.get(normalizeDisplayKey(status)) ?? status;
+}
+
+export function resolveStudentPrivateProfileSupplementDryRunIssueLabel(code: string) {
+  return SUPPLEMENT_DRY_RUN_ISSUE_LABELS.get(normalizeDisplayKey(code)) ?? code;
 }
 
 export function resolveStudentPrivateProfileFamilyRelationshipLabel(relationshipCode: string) {
@@ -515,6 +577,24 @@ export function resolveStudentPrivateProfileGovernanceReadinessStatusColor(
   }
 
   return 'warning';
+}
+
+export function resolveStudentPrivateProfileSupplementDryRunStatusColor(status: string) {
+  return normalizeDisplayKey(status) === 'READY' ? 'success' : 'error';
+}
+
+export function resolveStudentPrivateProfileSupplementDryRunRowStatusColor(status: string) {
+  const normalizedStatus = normalizeDisplayKey(status);
+
+  if (normalizedStatus === 'VALID') {
+    return 'success';
+  }
+
+  if (normalizedStatus === 'SKIPPED') {
+    return 'warning';
+  }
+
+  return 'error';
 }
 
 export function formatStudentPrivateProfileCompletenessStatus(value: boolean) {

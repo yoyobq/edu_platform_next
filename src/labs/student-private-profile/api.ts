@@ -1,6 +1,7 @@
 // src/labs/student-private-profile/api.ts
 
 import type { OperationVariables } from '@apollo/client';
+import type { Workbook, Worksheet } from 'exceljs';
 
 import {
   executeUpstreamSessionGraphQL,
@@ -13,7 +14,7 @@ import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, getGraphQLEndpoint, getGraphQLRuntimeConfig } from '@/shared/graphql';
 
 export {
   isExpiredUpstreamSessionError,
@@ -399,6 +400,73 @@ export type StudentPrivateProfilePhotoReadResult = {
 
 export type StudentPrivateProfileWriteThroughAction = 'CREATE' | 'DELETE';
 
+export type StudentPrivateProfileSupplementTemplateCode =
+  | 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT'
+  | 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT';
+
+export type StudentPrivateProfileSupplementTemplateColumn = {
+  alwaysRequired: boolean;
+  enumValues: string[];
+  fieldKey: string | null;
+  key: string;
+  label: string;
+  requiredForActions: StudentPrivateProfileWriteThroughAction[];
+  sensitive: boolean;
+  valueType: 'DATE' | 'ENUM' | 'STRING' | string;
+};
+
+export type StudentPrivateProfileSupplementTemplate = {
+  actions: StudentPrivateProfileWriteThroughAction[];
+  columns: StudentPrivateProfileSupplementTemplateColumn[];
+  sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string;
+  templateCode: StudentPrivateProfileSupplementTemplateCode;
+  templateVersion: number;
+};
+
+export type StudentPrivateProfileSupplementUploadResult = {
+  byteSize: number;
+  expiresAt: string;
+  fileToken: string;
+  originalFilename: string;
+};
+
+export type StudentPrivateProfileSupplementDryRunStatus = 'BLOCKED' | 'READY' | string;
+export type StudentPrivateProfileSupplementDryRunRowStatus =
+  | 'INVALID'
+  | 'SKIPPED'
+  | 'VALID'
+  | string;
+
+export type StudentPrivateProfileSupplementDryRunRowIssue = {
+  code: string;
+  columnKey: string | null;
+};
+
+export type StudentPrivateProfileSupplementDryRunRow = {
+  action: StudentPrivateProfileWriteThroughAction | null;
+  errorCodes: string[];
+  issues: StudentPrivateProfileSupplementDryRunRowIssue[];
+  rowNumber: number;
+  status: StudentPrivateProfileSupplementDryRunRowStatus;
+  studentId: string | null;
+  warningCodes: string[];
+};
+
+export type StudentPrivateProfileSupplementDryRunResult = {
+  affectedStudents: number;
+  dryRun: boolean;
+  invalidRows: number;
+  rowResults: StudentPrivateProfileSupplementDryRunRow[];
+  sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string;
+  status: StudentPrivateProfileSupplementDryRunStatus;
+  templateCode: StudentPrivateProfileSupplementTemplateCode;
+  templateVersion: number;
+  totalRows: number;
+  validRows: number;
+};
+
+export type StudentPrivateProfileSupplementTemplateWorkbookRow = Record<string, string>;
+
 export type WriteStudentPrivateProfileFamilyMemberToUpstreamInput = {
   action: StudentPrivateProfileWriteThroughAction;
   itemKey?: string | null;
@@ -478,6 +546,14 @@ type StudentPrivateProfileGovernanceReadinessPreflightResponse = {
 
 type StudentPrivateProfilePreviewResponse = {
   studentPrivateProfilePreview: StudentPrivateProfilePreview;
+};
+
+type StudentPrivateProfileSupplementTemplateResponse = {
+  studentPrivateProfileSupplementTemplate: StudentPrivateProfileSupplementTemplate;
+};
+
+type StudentPrivateProfileSupplementDryRunResponse = {
+  studentPrivateProfileSupplementDryRun: StudentPrivateProfileSupplementDryRunResult;
 };
 
 type RefreshStudentPrivateProfileResponse = {
@@ -772,6 +848,59 @@ const STUDENT_PRIVATE_PROFILE_PREVIEW_QUERY = `
   }
 `;
 
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_QUERY = `
+  query StudentPrivateProfileLabSupplementTemplate(
+    $input: StudentPrivateProfileSupplementTemplateInput!
+  ) {
+    studentPrivateProfileSupplementTemplate(input: $input) {
+      templateCode
+      templateVersion
+      sectionKey
+      actions
+      columns {
+        key
+        label
+        alwaysRequired
+        requiredForActions
+        valueType
+        sensitive
+        fieldKey
+        enumValues
+      }
+    }
+  }
+`;
+
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_DRY_RUN_MUTATION = `
+  mutation StudentPrivateProfileLabSupplementDryRun(
+    $input: StudentPrivateProfileSupplementDryRunInput!
+  ) {
+    studentPrivateProfileSupplementDryRun(input: $input) {
+      templateCode
+      templateVersion
+      sectionKey
+      dryRun
+      status
+      totalRows
+      validRows
+      invalidRows
+      affectedStudents
+      rowResults {
+        rowNumber
+        studentId
+        action
+        status
+        errorCodes
+        warningCodes
+        issues {
+          code
+          columnKey
+        }
+      }
+    }
+  }
+`;
+
 const REFRESH_STUDENT_PRIVATE_PROFILE_MUTATION = `
   mutation StudentPrivateProfileLabRefresh(
     $input: RefreshStudentPrivateProfileFromUpstreamInput!
@@ -1029,8 +1158,53 @@ export function normalizeStudentPrivateProfilePreviewInput(input: {
   };
 }
 
+export function normalizeStudentPrivateProfileSupplementTemplateInput(input: {
+  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+}) {
+  return {
+    templateCode: normalizeRequiredTextValue(input.templateCode, {
+      label: '补录模板',
+    }) as StudentPrivateProfileSupplementTemplateCode,
+  };
+}
+
+export function normalizeStudentPrivateProfileSupplementDryRunInput(input: {
+  fileToken: string | null | undefined;
+  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateVersion: number | null | undefined;
+}) {
+  const templateVersion = input.templateVersion;
+
+  if (!Number.isInteger(templateVersion) || !templateVersion || templateVersion < 1) {
+    throw new Error('补录模板版本必须是大于 0 的整数。');
+  }
+
+  return {
+    fileToken: normalizeRequiredTextValue(input.fileToken, { label: '补录文件 token' }),
+    templateCode: normalizeRequiredTextValue(input.templateCode, {
+      label: '补录模板',
+    }) as StudentPrivateProfileSupplementTemplateCode,
+    templateVersion,
+  };
+}
+
 const STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODES = new Set(['1', '2', '3', '4']);
 const STUDENT_PRIVATE_PROFILE_WRITE_THROUGH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_FILE_MAX_BYTES = 5 * 1024 * 1024;
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS = new Set([
+  'action',
+  'expectedSectionBaselineToken',
+  'itemKey',
+  'upstreamBaselineToken',
+]);
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_FILL_ROW_COUNT = 100;
+const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_UPLOAD_PATH = '/student-private-profile/supplement-files';
+const STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODE_LABELS: Record<string, string> = {
+  '1': '父亲',
+  '2': '母亲',
+  '3': '祖父母',
+  '4': '兄弟姐妹',
+};
 
 function normalizeUpstreamSessionToken(upstreamSessionToken: string | null | undefined) {
   const normalizedToken = normalizeRequiredTextValue(upstreamSessionToken, {
@@ -1085,6 +1259,383 @@ function normalizeWriteThroughDate(value: string | null | undefined, label: stri
   return normalizedDate;
 }
 
+function isRecordValue(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object';
+}
+
+function readRestEnvelopeMessage(payload: unknown) {
+  if (!isRecordValue(payload)) {
+    return null;
+  }
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message;
+  }
+
+  const error = payload.error;
+
+  if (isRecordValue(error) && typeof error.message === 'string' && error.message.trim()) {
+    return error.message;
+  }
+
+  return null;
+}
+
+function assertSupplementUploadResult(value: unknown): StudentPrivateProfileSupplementUploadResult {
+  if (
+    !isRecordValue(value) ||
+    typeof value.fileToken !== 'string' ||
+    typeof value.expiresAt !== 'string' ||
+    typeof value.originalFilename !== 'string' ||
+    typeof value.byteSize !== 'number'
+  ) {
+    throw new Error('补录文件上传返回结果异常。');
+  }
+
+  return {
+    byteSize: value.byteSize,
+    expiresAt: value.expiresAt,
+    fileToken: value.fileToken,
+    originalFilename: value.originalFilename,
+  };
+}
+
+async function parseSupplementUploadResponse(response: Response) {
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('补录文件上传返回结果异常。');
+  }
+
+  if (!response.ok) {
+    throw new Error(readRestEnvelopeMessage(payload) ?? '补录文件上传失败。');
+  }
+
+  if (!isRecordValue(payload) || payload.success !== true) {
+    throw new Error(readRestEnvelopeMessage(payload) ?? '补录文件上传失败。');
+  }
+
+  return assertSupplementUploadResult(payload.data);
+}
+
+function createSupplementUploadFormData(file: File) {
+  const formData = new FormData();
+
+  formData.append('file', file);
+
+  return formData;
+}
+
+function buildSupplementUploadAuthorizationHeaders() {
+  const accessToken = getGraphQLRuntimeConfig().getAccessToken?.() ?? null;
+
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+}
+
+function normalizeSupplementTemplateWorkbookRow(
+  template: StudentPrivateProfileSupplementTemplate,
+  values: Record<string, string | null | undefined>,
+): StudentPrivateProfileSupplementTemplateWorkbookRow {
+  return Object.fromEntries(
+    template.columns.map((column) => [column.key, values[column.key]?.trim() ?? '']),
+  );
+}
+
+function resolveSupplementSummarySectionBaselineToken(
+  summary: StudentPrivateProfileSummary,
+  templateCode: StudentPrivateProfileSupplementTemplateCode,
+) {
+  const section =
+    templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT' ? 'family' : 'education';
+
+  return (
+    summary.sectionStatuses.find((sectionStatus) => sectionStatus.section === section)
+      ?.sectionBaselineToken ?? null
+  );
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+
+  anchor.href = url;
+  anchor.download = fileName;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function getExcelColumnName(columnNumber: number) {
+  let value = columnNumber;
+  let columnName = '';
+
+  while (value > 0) {
+    const remainder = (value - 1) % 26;
+
+    columnName = String.fromCharCode(65 + remainder) + columnName;
+    value = Math.floor((value - remainder - 1) / 26);
+  }
+
+  return columnName;
+}
+
+function sanitizeSupplementWorksheetName(value: string | null | undefined) {
+  const normalizedValue = value?.trim().replace(/[\][*?:/\\]/g, '_') ?? '';
+
+  return normalizedValue.slice(0, 20);
+}
+
+function buildSupplementWorksheetName(studentName: string | null | undefined) {
+  const normalizedStudentName = sanitizeSupplementWorksheetName(studentName);
+
+  return normalizedStudentName ? `${normalizedStudentName}_supplement`.slice(0, 31) : 'supplement';
+}
+
+function getSupplementTemplateColumnNote(column: StudentPrivateProfileSupplementTemplateColumn) {
+  if (column.key === 'action') {
+    return '从下拉中选择：CREATE 表示新增，DELETE 表示删除。';
+  }
+
+  if (column.key === 'relationshipCode') {
+    return '家庭关系 code：1=父亲，2=母亲，3=祖父母，4=兄弟姐妹。';
+  }
+
+  if (column.valueType === 'DATE') {
+    return '日期格式必须为 YYYY-MM-DD。';
+  }
+
+  if (STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key)) {
+    return '系统预填的校验 token，请不要修改。';
+  }
+
+  return column.label;
+}
+
+function getSupplementTemplateColumnEnumValues(
+  column: StudentPrivateProfileSupplementTemplateColumn,
+) {
+  if (column.enumValues.length > 0) {
+    return column.enumValues;
+  }
+
+  if (column.key === 'action') {
+    return ['CREATE', 'DELETE'];
+  }
+
+  return [];
+}
+
+function applySupplementTemplateWorksheetPolicy(input: {
+  columns: readonly StudentPrivateProfileSupplementTemplateColumn[];
+  isFamilyTemplate: boolean;
+  rowCount: number;
+  worksheet: Worksheet;
+}) {
+  const headerRow = input.worksheet.getRow(1);
+
+  headerRow.font = { bold: true };
+  input.worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+  input.worksheet.autoFilter = {
+    from: 'A1',
+    to: `${getExcelColumnName(input.columns.length)}1`,
+  };
+
+  input.columns.forEach((column, index) => {
+    const columnNumber = index + 1;
+    const headerCell = headerRow.getCell(columnNumber);
+    const enumValues =
+      input.isFamilyTemplate && column.key === 'relationshipCode'
+        ? []
+        : getSupplementTemplateColumnEnumValues(column);
+
+    headerCell.note = getSupplementTemplateColumnNote(column);
+    input.worksheet.getColumn(columnNumber).hidden =
+      STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key);
+
+    if (enumValues.length === 0) {
+      return;
+    }
+
+    const columnName = getExcelColumnName(columnNumber);
+
+    for (let rowNumber = 2; rowNumber <= input.rowCount + 1; rowNumber += 1) {
+      input.worksheet.getCell(`${columnName}${rowNumber}`).dataValidation = {
+        allowBlank: !column.alwaysRequired,
+        error: '请从下拉列表中选择允许的值。',
+        errorStyle: 'error',
+        errorTitle: '非法选项',
+        formulae: [`"${enumValues.join(',')}"`],
+        showErrorMessage: true,
+        type: 'list',
+      };
+    }
+  });
+}
+
+function applyFamilyRelationshipDisplay(input: {
+  columns: readonly StudentPrivateProfileSupplementTemplateColumn[];
+  rowCount: number;
+  worksheet: Worksheet;
+}) {
+  const relationshipColumnIndex = input.columns.findIndex(
+    (column) => column.key === 'relationshipCode',
+  );
+
+  if (relationshipColumnIndex < 0) {
+    return;
+  }
+
+  const columnName = getExcelColumnName(relationshipColumnIndex + 1);
+
+  input.worksheet.getColumn(relationshipColumnIndex + 1).numFmt = '[=1]"父亲";[=2]"母亲";General';
+
+  for (let rowNumber = 2; rowNumber <= input.rowCount + 1; rowNumber += 1) {
+    const cell = input.worksheet.getCell(`${columnName}${rowNumber}`);
+
+    if (cell.value === '1') {
+      cell.value = 1;
+    } else if (cell.value === '2') {
+      cell.value = 2;
+    }
+  }
+}
+
+function addSupplementTemplateInstructionWorksheet(input: {
+  template: StudentPrivateProfileSupplementTemplate;
+  workbook: Workbook;
+}) {
+  const worksheet = input.workbook.addWorksheet('说明');
+
+  worksheet.columns = [{ key: 'text', width: 92 }];
+  worksheet.addRows([
+    { text: '只上传第一个 supplement 工作表；后端 dry-run 只读取第一个工作表。' },
+    { text: '表头必须保持 columns[].key，不要改名、删列或调整顺序。' },
+    { text: '隐藏列是系统预填的 CAS token，用于防止基于旧快照补录，请不要手动修改。' },
+    { text: 'studentName 是只读辅助列，用于人工核对姓名，后端 dry-run 不做业务校验。' },
+    { text: 'action 等枚举列已设置下拉，请从下拉中选择。' },
+    { text: 'P5 只做 dry-run 校验，不会写回学工系统，也不会写本地业务数据。' },
+  ]);
+  worksheet.getRow(1).font = { bold: true };
+
+  if (input.template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT') {
+    worksheet.addRow({
+      text: 'relationshipCode：1=父亲，2=母亲，3=祖父母，4=兄弟姐妹。',
+    });
+  }
+}
+
+function addSupplementStudentReferenceWorksheet(input: {
+  studentId: string | null;
+  studentName: string | null | undefined;
+  workbook: Workbook;
+}) {
+  if (!input.studentId || !input.studentName?.trim()) {
+    return;
+  }
+
+  const worksheet = input.workbook.addWorksheet('student_reference');
+
+  worksheet.columns = [
+    { header: 'studentId', key: 'studentId', width: 18 },
+    { header: 'studentName', key: 'studentName', width: 20 },
+  ];
+  worksheet.addRow({
+    studentId: input.studentId,
+    studentName: input.studentName.trim(),
+  });
+  worksheet.getRow(1).font = { bold: true };
+}
+
+function applySupplementStudentNameNotes(input: {
+  studentName: string | null | undefined;
+  worksheet: Worksheet;
+}) {
+  const normalizedStudentName = input.studentName?.trim();
+
+  if (!normalizedStudentName) {
+    return;
+  }
+
+  const studentIdColumnNumber = input.worksheet.columns.findIndex(
+    (column) => column.key === 'studentId',
+  );
+
+  if (studentIdColumnNumber < 0) {
+    return;
+  }
+
+  input.worksheet.getCell(`${getExcelColumnName(studentIdColumnNumber + 1)}2`).note =
+    `学生姓名：${normalizedStudentName}`;
+  input.worksheet.getCell(`${getExcelColumnName(studentIdColumnNumber + 1)}2`).dataValidation = {
+    prompt: `学生姓名：${normalizedStudentName}`,
+    promptTitle: '当前学生',
+    showInputMessage: true,
+    type: 'textLength',
+  };
+}
+
+function buildSupplementDeleteCandidateRows(input: {
+  summary: StudentPrivateProfileSummary | null;
+  studentName?: string | null;
+  template: StudentPrivateProfileSupplementTemplate;
+}) {
+  if (!input.summary) {
+    return [];
+  }
+
+  const sectionBaselineToken = resolveSupplementSummarySectionBaselineToken(
+    input.summary,
+    input.template.templateCode,
+  );
+
+  if (!sectionBaselineToken) {
+    return [];
+  }
+
+  const baseValues = {
+    expectedSectionBaselineToken: sectionBaselineToken,
+    studentId: input.summary.studentId,
+    studentName: input.studentName,
+  };
+
+  if (input.template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT') {
+    return input.summary.familyMembers.map((member) => ({
+      ...normalizeSupplementTemplateWorkbookRow(input.template, {
+        ...baseValues,
+        action: 'DELETE',
+        itemKey: member.itemKey,
+        relationshipCode: member.relationshipCode,
+        upstreamBaselineToken: member.upstreamBaselineToken,
+      }),
+      _reference: [
+        STUDENT_PRIVATE_PROFILE_FAMILY_RELATIONSHIP_CODE_LABELS[member.relationshipCode] ??
+          member.relationshipCode,
+        member.maskedName,
+        member.maskedPhone,
+        member.maskedWorkplace,
+      ]
+        .filter(Boolean)
+        .join(' / '),
+    }));
+  }
+
+  return input.summary.educationResumes.map((resume) => ({
+    ...normalizeSupplementTemplateWorkbookRow(input.template, {
+      ...baseValues,
+      action: 'DELETE',
+      endDate: resume.endMonth ? `${resume.endMonth}-01` : null,
+      itemKey: resume.itemKey,
+      startDate: resume.startMonth ? `${resume.startMonth}-01` : null,
+      upstreamBaselineToken: resume.upstreamBaselineToken,
+    }),
+    _reference:
+      [resume.startMonth, resume.endMonth, resume.maskedReference, resume.maskedOrganization]
+        .filter(Boolean)
+        .join(' / ') || '当前教育经历',
+  }));
+}
+
 function assertSingleWriteThroughItem<TItem>(
   items: readonly TItem[],
   label: string,
@@ -1092,6 +1643,168 @@ function assertSingleWriteThroughItem<TItem>(
   if (items.length !== 1) {
     throw new Error(`P4.1 每次只允许写回 1 ${label}。`);
   }
+}
+
+export function resolveStudentPrivateProfileSupplementUploadUrl(
+  graphQLEndpoint = getGraphQLEndpoint(),
+) {
+  return new URL(STUDENT_PRIVATE_PROFILE_SUPPLEMENT_UPLOAD_PATH, graphQLEndpoint).toString();
+}
+
+export function normalizeStudentPrivateProfileSupplementFile(file: File | null | undefined) {
+  if (!file) {
+    throw new Error('请选择要上传的 .xlsx 文件。');
+  }
+
+  if (!file.name.toLowerCase().endsWith('.xlsx')) {
+    throw new Error('补录文件只支持 .xlsx 格式。');
+  }
+
+  if (file.size > STUDENT_PRIVATE_PROFILE_SUPPLEMENT_FILE_MAX_BYTES) {
+    throw new Error('补录文件不能超过 5MB。');
+  }
+
+  return file;
+}
+
+export function buildStudentPrivateProfileSupplementTemplateWorkbookRows(input: {
+  summary: StudentPrivateProfileSummary | null;
+  studentName?: string | null;
+  template: StudentPrivateProfileSupplementTemplate;
+}): StudentPrivateProfileSupplementTemplateWorkbookRow[] {
+  if (!input.summary) {
+    return [];
+  }
+
+  const sectionBaselineToken = resolveSupplementSummarySectionBaselineToken(
+    input.summary,
+    input.template.templateCode,
+  );
+
+  if (!sectionBaselineToken) {
+    return [];
+  }
+
+  const baseValues = {
+    expectedSectionBaselineToken: sectionBaselineToken,
+    studentId: input.summary.studentId,
+    studentName: input.studentName,
+  };
+
+  if (input.template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT') {
+    return [
+      normalizeSupplementTemplateWorkbookRow(input.template, {
+        ...baseValues,
+        action: 'CREATE',
+        relationshipCode: '1',
+      }),
+      normalizeSupplementTemplateWorkbookRow(input.template, {
+        ...baseValues,
+        action: 'CREATE',
+        relationshipCode: '2',
+      }),
+    ];
+  }
+
+  return [
+    normalizeSupplementTemplateWorkbookRow(input.template, {
+      ...baseValues,
+      action: 'CREATE',
+    }),
+  ];
+}
+
+export function buildStudentPrivateProfileSupplementTemplateFileName(
+  template: StudentPrivateProfileSupplementTemplate,
+) {
+  return template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT'
+    ? `student-private-profile-family-supplement-v${template.templateVersion}.xlsx`
+    : `student-private-profile-education-supplement-v${template.templateVersion}.xlsx`;
+}
+
+export async function downloadStudentPrivateProfileSupplementTemplateWorkbook(input: {
+  summary: StudentPrivateProfileSummary | null;
+  studentName?: string | null;
+  template: StudentPrivateProfileSupplementTemplate;
+}) {
+  const ExcelJS = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet(buildSupplementWorksheetName(input.studentName));
+  const rows = buildStudentPrivateProfileSupplementTemplateWorkbookRows(input);
+  const deleteCandidateRows = buildSupplementDeleteCandidateRows(input);
+  const isFamilyTemplate =
+    input.template.templateCode === 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT';
+
+  worksheet.columns = input.template.columns.map((column) => ({
+    header: column.key,
+    hidden: STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key),
+    key: column.key,
+    width: Math.min(Math.max(column.key.length + 4, 14), 36),
+  }));
+  worksheet.addRows(rows);
+  applySupplementTemplateWorksheetPolicy({
+    columns: input.template.columns,
+    isFamilyTemplate,
+    rowCount: Math.max(rows.length, STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_FILL_ROW_COUNT),
+    worksheet,
+  });
+  if (isFamilyTemplate) {
+    applyFamilyRelationshipDisplay({
+      columns: input.template.columns,
+      rowCount: rows.length,
+      worksheet,
+    });
+  }
+  applySupplementStudentNameNotes({
+    studentName: input.studentName,
+    worksheet,
+  });
+
+  if (deleteCandidateRows.length > 0) {
+    const candidateWorksheet = workbook.addWorksheet('delete_candidates');
+
+    candidateWorksheet.columns = [
+      ...input.template.columns.map((column) => ({
+        header: column.key,
+        hidden: STUDENT_PRIVATE_PROFILE_SUPPLEMENT_OPAQUE_COLUMN_KEYS.has(column.key),
+        key: column.key,
+        width: Math.min(Math.max(column.key.length + 4, 14), 36),
+      })),
+      {
+        header: '_reference',
+        key: '_reference',
+        width: 42,
+      },
+    ];
+    candidateWorksheet.addRows(deleteCandidateRows);
+    applySupplementTemplateWorksheetPolicy({
+      columns: input.template.columns,
+      isFamilyTemplate,
+      rowCount: deleteCandidateRows.length,
+      worksheet: candidateWorksheet,
+    });
+    if (isFamilyTemplate) {
+      applyFamilyRelationshipDisplay({
+        columns: input.template.columns,
+        rowCount: deleteCandidateRows.length,
+        worksheet: candidateWorksheet,
+      });
+    }
+  }
+
+  addSupplementStudentReferenceWorksheet({
+    studentId: input.summary?.studentId ?? null,
+    studentName: input.studentName,
+    workbook,
+  });
+  addSupplementTemplateInstructionWorksheet({ template: input.template, workbook });
+
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  });
+
+  downloadBlob(blob, buildStudentPrivateProfileSupplementTemplateFileName(input.template));
 }
 
 export function normalizeWriteStudentPrivateProfileFamilyToUpstreamInput(input: {
@@ -1379,6 +2092,69 @@ export async function getStudentPrivateProfilePreview(input: {
   });
 
   return response.studentPrivateProfilePreview;
+}
+
+export async function getStudentPrivateProfileSupplementTemplate(input: {
+  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentPrivateProfileSupplementTemplateResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentPrivateProfileSupplementTemplateInput>;
+    }
+  >(STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_QUERY, {
+    input: normalizeStudentPrivateProfileSupplementTemplateInput(input),
+  });
+
+  return response.studentPrivateProfileSupplementTemplate;
+}
+
+export async function uploadStudentPrivateProfileSupplementFile(input: {
+  file: File | null | undefined;
+}) {
+  const file = normalizeStudentPrivateProfileSupplementFile(input.file);
+  const runtimeConfig = getGraphQLRuntimeConfig();
+  const dispatchUpload = () =>
+    fetch(resolveStudentPrivateProfileSupplementUploadUrl(), {
+      body: createSupplementUploadFormData(file),
+      headers: buildSupplementUploadAuthorizationHeaders(),
+      method: 'POST',
+    });
+
+  let response = await dispatchUpload();
+
+  if (response.status === 401 && runtimeConfig.refreshSession) {
+    try {
+      await runtimeConfig.refreshSession();
+      response = await dispatchUpload();
+    } catch {
+      runtimeConfig.onAuthFailure?.();
+      throw new Error('登录状态已失效，请重新登录后再上传补录文件。');
+    }
+
+    if (response.status === 401) {
+      runtimeConfig.onAuthFailure?.();
+    }
+  }
+
+  return await parseSupplementUploadResponse(response);
+}
+
+export async function dryRunStudentPrivateProfileSupplement(input: {
+  fileToken: string | null | undefined;
+  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateVersion: number | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentPrivateProfileSupplementDryRunResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentPrivateProfileSupplementDryRunInput>;
+    }
+  >(STUDENT_PRIVATE_PROFILE_SUPPLEMENT_DRY_RUN_MUTATION, {
+    input: normalizeStudentPrivateProfileSupplementDryRunInput(input),
+  });
+
+  return response.studentPrivateProfileSupplementDryRun;
 }
 
 export async function writeStudentPrivateProfileFamilyToUpstream(input: {
