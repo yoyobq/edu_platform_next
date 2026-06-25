@@ -654,9 +654,11 @@ describe('student-private-profile lab api', () => {
   it('loads supplement template schema and keeps column keys in order', async () => {
     expect(
       normalizeStudentPrivateProfileSupplementTemplateInput({
+        mode: 'FLEXIBLE',
         templateCode: ' STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT ',
       }),
     ).toEqual({
+      mode: 'FLEXIBLE',
       templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
     });
 
@@ -664,17 +666,23 @@ describe('student-private-profile lab api', () => {
       actions: ['CREATE', 'DELETE'],
       columns: [
         {
+          aliases: ['学生编号'],
           alwaysRequired: true,
+          auditPolicy: 'NEVER_LOG_VALUE',
+          destination: 'UPSTREAM_WRITE_THROUGH',
           enumValues: [],
           fieldKey: null,
           key: 'studentId',
-          label: '本地学生业务编号',
+          label: '学号',
           requiredForActions: [],
           sensitive: false,
           valueType: 'STRING',
         },
         {
-          alwaysRequired: false,
+          aliases: [],
+          alwaysRequired: true,
+          auditPolicy: 'NEVER_LOG_VALUE',
+          destination: null,
           enumValues: [],
           fieldKey: null,
           key: 'studentName',
@@ -684,7 +692,10 @@ describe('student-private-profile lab api', () => {
           valueType: 'STRING',
         },
         {
+          aliases: [],
           alwaysRequired: true,
+          auditPolicy: 'NEVER_LOG_VALUE',
+          destination: 'UPSTREAM_WRITE_THROUGH',
           enumValues: [],
           fieldKey: null,
           key: 'expectedSectionBaselineToken',
@@ -694,6 +705,7 @@ describe('student-private-profile lab api', () => {
           valueType: 'STRING',
         },
       ],
+      mode: 'FLEXIBLE',
       sectionKey: 'FAMILY',
       templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
       templateVersion: 1,
@@ -705,6 +717,7 @@ describe('student-private-profile lab api', () => {
 
     await expect(
       getStudentPrivateProfileSupplementTemplate({
+        mode: 'FLEXIBLE',
         templateCode: ' STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT ',
       }),
     ).resolves.toEqual(template);
@@ -713,11 +726,16 @@ describe('student-private-profile lab api', () => {
       expect.stringContaining('StudentPrivateProfileLabSupplementTemplate'),
       {
         input: {
+          mode: 'FLEXIBLE',
           templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
         },
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columns');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('mode');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('aliases');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('destination');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('auditPolicy');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('requiredForActions');
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
@@ -772,11 +790,13 @@ describe('student-private-profile lab api', () => {
     expect(
       normalizeStudentPrivateProfileSupplementDryRunInput({
         fileToken: ' sppsf_001 ',
+        mode: 'FLEXIBLE',
         templateCode: ' STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT ',
         templateVersion: 1,
       }),
     ).toEqual({
       fileToken: 'sppsf_001',
+      mode: 'FLEXIBLE',
       templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
       templateVersion: 1,
     });
@@ -791,8 +811,29 @@ describe('student-private-profile lab api', () => {
 
     const dryRun = {
       affectedStudents: 1,
+      columnMappings: [
+        {
+          columnIndex: 1,
+          columnKey: 'studentId',
+          destination: 'UPSTREAM_WRITE_THROUGH',
+          fieldKey: null,
+          header: '学号',
+          issueCode: null,
+          sectionKey: 'EDUCATION_RESUME',
+          status: 'MAPPED',
+        },
+      ],
       dryRun: true,
+      fileIssues: [
+        {
+          code: 'UNKNOWN_COLUMN',
+          columnIndex: 8,
+          columnKey: null,
+          header: '备注',
+        },
+      ],
       invalidRows: 1,
+      mode: 'FLEXIBLE',
       rowResults: [
         {
           action: 'CREATE',
@@ -824,6 +865,7 @@ describe('student-private-profile lab api', () => {
     await expect(
       dryRunStudentPrivateProfileSupplement({
         fileToken: ' sppsf_001 ',
+        mode: 'FLEXIBLE',
         templateCode: ' STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT ',
         templateVersion: 1,
       }),
@@ -834,11 +876,14 @@ describe('student-private-profile lab api', () => {
       {
         input: {
           fileToken: 'sppsf_001',
+          mode: 'FLEXIBLE',
           templateCode: 'STUDENT_PRIVATE_PROFILE_EDUCATION_SUPPLEMENT',
           templateVersion: 1,
         },
       },
     );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('fileIssues');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columnMappings');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('rowResults');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('columnKey');
   });
@@ -856,7 +901,10 @@ describe('student-private-profile lab api', () => {
         { key: 'relationshipCode', label: '家庭关系' },
         { key: 'name', label: '姓名' },
       ].map((column) => ({
-        alwaysRequired: column.key === 'studentId',
+        aliases: [],
+        alwaysRequired: column.key === 'studentId' || column.key === 'studentName',
+        auditPolicy: 'NEVER_LOG_VALUE',
+        destination: 'UPSTREAM_WRITE_THROUGH',
         enumValues: [],
         fieldKey: null,
         key: column.key,
@@ -865,6 +913,7 @@ describe('student-private-profile lab api', () => {
         sensitive: false,
         valueType: 'STRING',
       })),
+      mode: 'STRICT',
       sectionKey: 'FAMILY',
       templateCode: 'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
       templateVersion: 1,
@@ -933,6 +982,33 @@ describe('student-private-profile lab api', () => {
       { header: '行版本校验码', key: 'upstreamBaselineToken' },
       { header: '家庭关系', key: 'relationshipCode' },
       { header: '姓名', key: 'name' },
+    ]);
+    expect(
+      familyTemplate.columns.filter((column) => column.alwaysRequired).map((column) => column.key),
+    ).toEqual(['studentId', 'studentName']);
+    expect(
+      buildStudentPrivateProfileSupplementTemplateWorkbookColumns([
+        {
+          aliases: ['所在单位', '教育经历所在单位', '就读学校'],
+          alwaysRequired: false,
+          auditPolicy: 'NEVER_LOG_VALUE',
+          destination: 'UPSTREAM_WRITE_THROUGH',
+          enumValues: [],
+          fieldKey: 'education.organization',
+          key: 'organization',
+          label: '学校',
+          requiredForActions: ['CREATE'],
+          sensitive: true,
+          valueType: 'STRING',
+        },
+      ]),
+    ).toEqual([
+      {
+        header: '学校',
+        hidden: false,
+        key: 'organization',
+        width: 16,
+      },
     ]);
 
     expect(
@@ -1107,7 +1183,7 @@ describe('student-private-profile lab api', () => {
           {
             action: 'CREATE',
             endDate: ' 2023-06-30 ',
-            organization: ' 所在单位 ',
+            organization: ' 学校 ',
             reference: ' 证明人 ',
             startDate: ' 2020-09-01 ',
           },
@@ -1121,7 +1197,7 @@ describe('student-private-profile lab api', () => {
         {
           action: 'CREATE',
           endDate: '2023-06-30',
-          organization: '所在单位',
+          organization: '学校',
           reference: '证明人',
           startDate: '2020-09-01',
         },
@@ -1137,7 +1213,7 @@ describe('student-private-profile lab api', () => {
           {
             action: 'CREATE',
             endDate: '2023-06-30',
-            organization: '所在单位',
+            organization: '学校',
             reference: '证明人',
             startDate: '2023-07-01',
           },

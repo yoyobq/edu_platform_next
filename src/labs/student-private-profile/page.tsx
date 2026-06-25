@@ -33,6 +33,7 @@ import {
   Modal,
   Progress,
   Radio,
+  Segmented,
   Select,
   Space,
   Table,
@@ -81,11 +82,16 @@ import {
   resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusColor,
   resolveStudentPrivateProfileStatusLabel,
+  resolveStudentPrivateProfileSupplementAuditPolicyLabel,
+  resolveStudentPrivateProfileSupplementColumnMappingStatusColor,
+  resolveStudentPrivateProfileSupplementColumnMappingStatusLabel,
+  resolveStudentPrivateProfileSupplementDestinationLabel,
   resolveStudentPrivateProfileSupplementDryRunIssueLabel,
   resolveStudentPrivateProfileSupplementDryRunRowStatusColor,
   resolveStudentPrivateProfileSupplementDryRunRowStatusLabel,
   resolveStudentPrivateProfileSupplementDryRunStatusColor,
   resolveStudentPrivateProfileSupplementDryRunStatusLabel,
+  resolveStudentPrivateProfileSupplementModeLabel,
   resolveStudentPrivateProfileSupplementTemplateLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
   STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
@@ -94,6 +100,7 @@ import {
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_MISSING_SECTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_ISSUE_FILTERS,
   STUDENT_PRIVATE_PROFILE_GOVERNANCE_READINESS_STATUS_FILTERS,
+  STUDENT_PRIVATE_PROFILE_SUPPLEMENT_MODE_OPTIONS,
   STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS,
 } from './application/display-policy';
 import {
@@ -144,8 +151,11 @@ import {
   type StudentPrivateProfileSummaryFamilyMember,
   type StudentPrivateProfileSummaryField,
   type StudentPrivateProfileSummaryRecordChange,
+  type StudentPrivateProfileSupplementDryRunColumnMapping,
+  type StudentPrivateProfileSupplementDryRunFileIssue,
   type StudentPrivateProfileSupplementDryRunResult,
   type StudentPrivateProfileSupplementDryRunRow,
+  type StudentPrivateProfileSupplementMode,
   type StudentPrivateProfileSupplementTemplate,
   type StudentPrivateProfileSupplementTemplateCode,
   type StudentPrivateProfileSupplementTemplateColumn,
@@ -373,6 +383,31 @@ function formatSupplementDryRunIssue(
     : null;
 
   return columnLabel ? `${issueLabel}（${columnLabel}）` : issueLabel;
+}
+
+function formatSupplementDryRunFileIssue(
+  issue: StudentPrivateProfileSupplementDryRunFileIssue,
+  labelByColumnKey: ReadonlyMap<string, string>,
+) {
+  const issueLabel = resolveStudentPrivateProfileSupplementDryRunIssueLabel(issue.code);
+  const parts = [
+    issue.columnIndex ? `第 ${issue.columnIndex} 列` : null,
+    issue.header ? `表头：${issue.header}` : null,
+    issue.columnKey ? `字段：${labelByColumnKey.get(issue.columnKey) ?? issue.columnKey}` : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? `${issueLabel}（${parts.join(' / ')}）` : issueLabel;
+}
+
+function resolveSupplementMappingFieldLabel(
+  mapping: StudentPrivateProfileSupplementDryRunColumnMapping,
+  labelByColumnKey: ReadonlyMap<string, string>,
+) {
+  if (mapping.columnKey) {
+    return labelByColumnKey.get(mapping.columnKey) ?? mapping.columnKey;
+  }
+
+  return displayText(mapping.fieldKey);
 }
 
 function resolveClassOverviewErrorMessage(error: unknown) {
@@ -692,6 +727,8 @@ export function StudentPrivateProfileLabPage() {
     useState<StudentPrivateProfileSupplementTemplateCode>(
       'STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT',
     );
+  const [supplementMode, setSupplementMode] =
+    useState<StudentPrivateProfileSupplementMode>('STRICT');
   const [supplementTemplate, setSupplementTemplate] =
     useState<StudentPrivateProfileSupplementTemplate | null>(null);
   const [supplementUploadFile, setSupplementUploadFile] = useState<File | null>(null);
@@ -911,6 +948,11 @@ export function StudentPrivateProfileLabPage() {
     setSupplementUploadFile(null);
     setSupplementUploadResult(null);
     setSupplementDryRunResult(null);
+  }, []);
+
+  const clearRegistrationCardRuntimeState = useCallback(() => {
+    setRegistrationCardPreflight(null);
+    setRegistrationCardDocument(null);
   }, []);
 
   const loadClasses = useCallback(async () => {
@@ -1778,11 +1820,21 @@ export function StudentPrivateProfileLabPage() {
     [clearSupplementRuntimeState],
   );
 
+  const handleSupplementModeChange = useCallback(
+    (mode: StudentPrivateProfileSupplementMode) => {
+      setSupplementMode(mode);
+      setSupplementTemplate(null);
+      clearSupplementRuntimeState();
+    },
+    [clearSupplementRuntimeState],
+  );
+
   const loadSupplementTemplate = useCallback(async () => {
     setIsLoadingSupplementTemplate(true);
 
     try {
       const template = await getStudentPrivateProfileSupplementTemplate({
+        mode: supplementMode,
         templateCode: supplementTemplateCode,
       });
 
@@ -1794,7 +1846,7 @@ export function StudentPrivateProfileLabPage() {
     } finally {
       setIsLoadingSupplementTemplate(false);
     }
-  }, [message, supplementTemplateCode]);
+  }, [message, supplementMode, supplementTemplateCode]);
 
   const handleDownloadSupplementTemplate = useCallback(async () => {
     const studentId = resolveSummaryActionStudentId();
@@ -1812,7 +1864,8 @@ export function StudentPrivateProfileLabPage() {
 
     try {
       const template =
-        supplementTemplate?.templateCode === supplementTemplateCode
+        supplementTemplate?.mode === supplementMode &&
+        supplementTemplate.templateCode === supplementTemplateCode
           ? supplementTemplate
           : await loadSupplementTemplate();
 
@@ -1839,6 +1892,7 @@ export function StudentPrivateProfileLabPage() {
     supplementSectionBaselineToken,
     supplementTemplate,
     supplementTemplateCode,
+    supplementMode,
     summary,
   ]);
 
@@ -1900,6 +1954,7 @@ export function StudentPrivateProfileLabPage() {
     try {
       const result = await dryRunStudentPrivateProfileSupplement({
         fileToken: supplementUploadResult.fileToken,
+        mode: supplementTemplate.mode,
         templateCode: supplementTemplate.templateCode,
         templateVersion: supplementTemplate.templateVersion,
       });
@@ -2944,6 +2999,21 @@ export function StudentPrivateProfileLabPage() {
       width: 180,
     },
     {
+      key: 'aliases',
+      title: '别名',
+      width: 220,
+      render: (_, record) =>
+        record.aliases.length > 0 ? (
+          <Space size="small" wrap>
+            {record.aliases.map((alias) => (
+              <Tag key={alias}>{alias}</Tag>
+            ))}
+          </Space>
+        ) : (
+          '—'
+        ),
+    },
+    {
       key: 'required',
       title: '必填',
       width: 120,
@@ -2971,6 +3041,21 @@ export function StudentPrivateProfileLabPage() {
         ),
     },
     {
+      dataIndex: 'destination',
+      key: 'destination',
+      title: '归属',
+      width: 150,
+      render: (value: string | null) =>
+        resolveStudentPrivateProfileSupplementDestinationLabel(value),
+    },
+    {
+      dataIndex: 'auditPolicy',
+      key: 'auditPolicy',
+      title: '审计策略',
+      width: 140,
+      render: (value: string) => resolveStudentPrivateProfileSupplementAuditPolicyLabel(value),
+    },
+    {
       dataIndex: 'sensitive',
       key: 'sensitive',
       title: '敏感',
@@ -2978,6 +3063,96 @@ export function StudentPrivateProfileLabPage() {
       render: (value: boolean) => formatStudentPrivateProfileBoolean(value),
     },
   ];
+
+  const supplementDryRunFileIssueColumns: ColumnsType<StudentPrivateProfileSupplementDryRunFileIssue> =
+    [
+      {
+        dataIndex: 'columnIndex',
+        key: 'columnIndex',
+        title: '列号',
+        width: 80,
+        render: (value: number | null) => value ?? '—',
+      },
+      {
+        dataIndex: 'header',
+        key: 'header',
+        title: '上传表头',
+        width: 180,
+        render: (value: string | null) => displayText(value),
+      },
+      {
+        dataIndex: 'columnKey',
+        key: 'columnKey',
+        title: '识别字段',
+        width: 180,
+        render: (value: string | null) =>
+          value ? (supplementColumnLabelByKey.get(value) ?? value) : '—',
+      },
+      {
+        key: 'code',
+        title: '问题',
+        width: 320,
+        render: (_, record) => formatSupplementDryRunFileIssue(record, supplementColumnLabelByKey),
+      },
+    ];
+
+  const supplementColumnMappingColumns: ColumnsType<StudentPrivateProfileSupplementDryRunColumnMapping> =
+    [
+      {
+        dataIndex: 'columnIndex',
+        key: 'columnIndex',
+        title: '列号',
+        width: 80,
+      },
+      {
+        dataIndex: 'header',
+        key: 'header',
+        title: '上传表头',
+        width: 180,
+      },
+      {
+        key: 'mappedField',
+        title: '识别字段',
+        width: 180,
+        render: (_, record) =>
+          resolveSupplementMappingFieldLabel(record, supplementColumnLabelByKey),
+      },
+      {
+        dataIndex: 'sectionKey',
+        key: 'sectionKey',
+        title: '分区',
+        width: 140,
+        render: (value: string | null) =>
+          value ? resolveStudentPrivateProfileSectionLabel(value) : '—',
+      },
+      {
+        dataIndex: 'destination',
+        key: 'destination',
+        title: '归属',
+        width: 150,
+        render: (value: string | null) =>
+          resolveStudentPrivateProfileSupplementDestinationLabel(value),
+      },
+      {
+        dataIndex: 'status',
+        key: 'status',
+        title: '状态',
+        width: 110,
+        render: (value: string) => (
+          <Tag color={resolveStudentPrivateProfileSupplementColumnMappingStatusColor(value)}>
+            {resolveStudentPrivateProfileSupplementColumnMappingStatusLabel(value)}
+          </Tag>
+        ),
+      },
+      {
+        dataIndex: 'issueCode',
+        key: 'issueCode',
+        title: '映射问题',
+        width: 180,
+        render: (value: string | null) =>
+          value ? resolveStudentPrivateProfileSupplementDryRunIssueLabel(value) : '—',
+      },
+    ];
 
   const supplementDryRunColumns: ColumnsType<StudentPrivateProfileSupplementDryRunRow> = [
     {
@@ -3818,6 +3993,13 @@ export function StudentPrivateProfileLabPage() {
                         style={{ minWidth: 220 }}
                         onChange={handleSupplementTemplateCodeChange}
                       />
+                      <Segmented
+                        options={STUDENT_PRIVATE_PROFILE_SUPPLEMENT_MODE_OPTIONS}
+                        value={supplementMode}
+                        onChange={(value) =>
+                          handleSupplementModeChange(value as StudentPrivateProfileSupplementMode)
+                        }
+                      />
                       <Button
                         icon={<FileSearchOutlined />}
                         loading={isLoadingSupplementTemplate}
@@ -3860,10 +4042,13 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="版本">
                           v{supplementTemplate.templateVersion}
                         </Descriptions.Item>
+                        <Descriptions.Item label="模式">
+                          {resolveStudentPrivateProfileSupplementModeLabel(supplementTemplate.mode)}
+                        </Descriptions.Item>
                         <Descriptions.Item label="分区">
                           {resolveStudentPrivateProfileSectionLabel(supplementTemplate.sectionKey)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="动作">
+                        <Descriptions.Item label="动作" span={4}>
                           {supplementTemplate.actions.join(' / ')}
                         </Descriptions.Item>
                       </Descriptions>
@@ -3875,7 +4060,7 @@ export function StudentPrivateProfileLabPage() {
                       locale={{ emptyText: '暂无补录模板 schema' }}
                       pagination={false}
                       rowKey="key"
-                      scroll={{ x: 840 }}
+                      scroll={{ x: 1290 }}
                       size="small"
                     />
                   </Space>
@@ -3883,6 +4068,14 @@ export function StudentPrivateProfileLabPage() {
 
                 <Card title="上传与校验">
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+                    {supplementMode === 'FLEXIBLE' ? (
+                      <Alert
+                        showIcon
+                        type="info"
+                        message="活表格模式仅执行 dry-run；未知列不会进入业务数据，也不会保存单元格明文。"
+                      />
+                    ) : null}
+
                     <Space wrap>
                       <Upload
                         accept=".xlsx"
@@ -3950,6 +4143,11 @@ export function StudentPrivateProfileLabPage() {
                             )}
                           </Tag>
                         </Descriptions.Item>
+                        <Descriptions.Item label="模式">
+                          {resolveStudentPrivateProfileSupplementModeLabel(
+                            supplementDryRunResult.mode,
+                          )}
+                        </Descriptions.Item>
                         <Descriptions.Item label="总行数">
                           {supplementDryRunResult.totalRows}
                         </Descriptions.Item>
@@ -3962,7 +4160,40 @@ export function StudentPrivateProfileLabPage() {
                         <Descriptions.Item label="影响学生">
                           {supplementDryRunResult.affectedStudents}
                         </Descriptions.Item>
+                        <Descriptions.Item label="表头问题">
+                          {supplementDryRunResult.fileIssues.length}
+                        </Descriptions.Item>
                       </Descriptions>
+                    ) : null}
+
+                    {supplementDryRunResult ? (
+                      <Table
+                        columns={supplementDryRunFileIssueColumns}
+                        dataSource={supplementDryRunResult.fileIssues}
+                        locale={{ emptyText: '暂无文件级问题' }}
+                        pagination={false}
+                        rowKey={(record) =>
+                          `${record.columnIndex ?? 'file'}-${record.header ?? ''}-${record.code}-${
+                            record.columnKey ?? ''
+                          }`
+                        }
+                        scroll={{ x: 760 }}
+                        size="small"
+                        title={() => '文件级问题'}
+                      />
+                    ) : null}
+
+                    {supplementDryRunResult ? (
+                      <Table
+                        columns={supplementColumnMappingColumns}
+                        dataSource={supplementDryRunResult.columnMappings}
+                        locale={{ emptyText: '暂无列映射结果' }}
+                        pagination={false}
+                        rowKey={(record) => `${record.columnIndex}-${record.header}`}
+                        scroll={{ x: 1020 }}
+                        size="small"
+                        title={() => '列映射结果'}
+                      />
                     ) : null}
 
                     <Table
@@ -4348,9 +4579,9 @@ export function StudentPrivateProfileLabPage() {
               <Input autoComplete="off" />
             </Form.Item>
             <Form.Item
-              label="所在单位"
+              label="学校"
               name="organization"
-              rules={[{ required: true, message: '请输入所在单位。', whitespace: true }]}
+              rules={[{ required: true, message: '请输入学校。', whitespace: true }]}
             >
               <Input autoComplete="off" />
             </Form.Item>

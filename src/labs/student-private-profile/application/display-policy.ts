@@ -12,6 +12,7 @@ import type {
   StudentPrivateProfileManualPatchField,
   StudentPrivateProfilePhotoReadResult,
   StudentPrivateProfileSummary,
+  StudentPrivateProfileSupplementMode,
   StudentPrivateProfileSupplementTemplateCode,
 } from '../api';
 
@@ -271,6 +272,19 @@ const SUPPLEMENT_TEMPLATE_LABELS: Record<StudentPrivateProfileSupplementTemplate
   STUDENT_PRIVATE_PROFILE_FAMILY_SUPPLEMENT: '家庭成员补录',
 };
 
+export const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_MODE_OPTIONS: {
+  label: string;
+  value: StudentPrivateProfileSupplementMode;
+}[] = [
+  { label: '严格表头', value: 'STRICT' },
+  { label: '活表格', value: 'FLEXIBLE' },
+];
+
+const SUPPLEMENT_MODE_LABELS: Record<StudentPrivateProfileSupplementMode, string> = {
+  FLEXIBLE: '活表格',
+  STRICT: '严格表头',
+};
+
 const SUPPLEMENT_DRY_RUN_STATUS_LABELS = new Map<string, string>([
   ['READY', '校验通过'],
   ['BLOCKED', '存在阻塞'],
@@ -300,7 +314,23 @@ const SUPPLEMENT_DRY_RUN_ISSUE_LABELS = new Map<string, string>([
   ['DATE_INVALID', '日期格式非法'],
   ['DATE_RANGE_INVALID', '日期范围非法'],
   ['DUPLICATE_ROW', '重复补录行'],
+  ['DUPLICATE_COLUMN', '重复列'],
+  ['REQUIRED_COLUMN_MISSING', '缺少必填列'],
+  ['UNKNOWN_COLUMN', '未知列'],
+  ['UNMAPPED_FIELD', '未映射字段'],
 ]);
+
+const SUPPLEMENT_COLUMN_MAPPING_STATUS_LABELS = new Map<string, string>([
+  ['MAPPED', '已识别'],
+  ['UNKNOWN', '未知列'],
+  ['DUPLICATE', '重复列'],
+]);
+
+const SUPPLEMENT_DESTINATION_LABELS = new Map<string, string>([
+  ['UPSTREAM_WRITE_THROUGH', '学工系统写回'],
+]);
+
+const SUPPLEMENT_AUDIT_POLICY_LABELS = new Map<string, string>([['NEVER_LOG_VALUE', '不记录原值']]);
 
 export const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS = Object.entries(
   SUPPLEMENT_TEMPLATE_LABELS,
@@ -434,6 +464,14 @@ export function resolveStudentPrivateProfileSupplementTemplateLabel(
   return SUPPLEMENT_TEMPLATE_LABELS[templateCode];
 }
 
+export function resolveStudentPrivateProfileSupplementModeLabel(
+  mode: StudentPrivateProfileSupplementMode | string,
+) {
+  const normalizedMode = normalizeDisplayKey(mode);
+
+  return SUPPLEMENT_MODE_LABELS[normalizedMode as StudentPrivateProfileSupplementMode] ?? mode;
+}
+
 export function resolveStudentPrivateProfileSupplementDryRunStatusLabel(status: string) {
   return SUPPLEMENT_DRY_RUN_STATUS_LABELS.get(normalizeDisplayKey(status)) ?? status;
 }
@@ -444,6 +482,24 @@ export function resolveStudentPrivateProfileSupplementDryRunRowStatusLabel(statu
 
 export function resolveStudentPrivateProfileSupplementDryRunIssueLabel(code: string) {
   return SUPPLEMENT_DRY_RUN_ISSUE_LABELS.get(normalizeDisplayKey(code)) ?? code;
+}
+
+export function resolveStudentPrivateProfileSupplementColumnMappingStatusLabel(status: string) {
+  return SUPPLEMENT_COLUMN_MAPPING_STATUS_LABELS.get(normalizeDisplayKey(status)) ?? status;
+}
+
+export function resolveStudentPrivateProfileSupplementDestinationLabel(
+  destination: string | null | undefined,
+) {
+  if (!destination) {
+    return '未映射';
+  }
+
+  return SUPPLEMENT_DESTINATION_LABELS.get(normalizeDisplayKey(destination)) ?? destination;
+}
+
+export function resolveStudentPrivateProfileSupplementAuditPolicyLabel(policy: string) {
+  return SUPPLEMENT_AUDIT_POLICY_LABELS.get(normalizeDisplayKey(policy)) ?? policy;
 }
 
 export function resolveStudentPrivateProfileFamilyRelationshipLabel(relationshipCode: string) {
@@ -591,6 +647,20 @@ export function resolveStudentPrivateProfileSupplementDryRunRowStatusColor(statu
   }
 
   if (normalizedStatus === 'SKIPPED') {
+    return 'warning';
+  }
+
+  return 'error';
+}
+
+export function resolveStudentPrivateProfileSupplementColumnMappingStatusColor(status: string) {
+  const normalizedStatus = normalizeDisplayKey(status);
+
+  if (normalizedStatus === 'MAPPED') {
+    return 'success';
+  }
+
+  if (normalizedStatus === 'DUPLICATE') {
     return 'warning';
   }
 
