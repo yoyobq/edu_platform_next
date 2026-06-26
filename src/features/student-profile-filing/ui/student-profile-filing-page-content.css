@@ -24,13 +24,52 @@
   min-width: 0;
 }
 
-.student-profile-filing-class-select {
-  flex: 1 1 320px;
+.student-profile-filing-class-picker {
+  display: flex;
+  flex: 1 1 360px;
+  flex-direction: column;
+  gap: 6px;
   min-width: 220px;
+}
+
+.student-profile-filing-class-select {
+  min-width: 0;
 }
 
 .student-profile-filing-class-select :where(.ant-select) {
   width: 100%;
+}
+
+.student-profile-filing-class-context {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 12px;
+  gap: 6px 10px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.student-profile-filing-class-context-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.student-profile-filing-class-context-label {
+  color: var(--ant-color-text-tertiary);
+  flex: 0 0 auto;
+}
+
+.student-profile-filing-class-context-value {
+  color: var(--ant-color-text-secondary);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .student-profile-filing-workbench-section {
@@ -112,6 +151,175 @@
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.student-profile-filing-missing-tag-text {
+  color: var(--ant-color-warning-text);
+}
+
+.student-profile-filing-missing-tag-text-personal {
+  color: var(--ant-color-primary-text);
+}
+
+.student-profile-filing-missing-tag-text-sensitive {
+  color: var(--ant-color-error-text);
+}
+
+.student-profile-filing-missing-tag-text-photo {
+  color: var(--ant-color-warning-text);
+}
+
+.student-profile-filing-missing-tag-text-family {
+  color: var(--ant-color-success-text);
+}
+
+.student-profile-filing-missing-tag-text-education {
+  color: var(--ant-color-info-text);
+}
+
+.student-profile-filing-missing-tag-text-record {
+  color: var(--ant-color-link);
+}
+
+.student-profile-filing-supplement-drawer-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-profile-filing-supplement-drawer-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.student-profile-filing-education-supplement {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-profile-filing-family-supplement {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.student-profile-filing-supplement-section-title {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.student-profile-filing-family-member-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.student-profile-filing-family-member-item {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.student-profile-filing-family-member-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.student-profile-filing-family-member-name {
+  color: var(--ant-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-profile-filing-family-member-detail {
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 4px 10px;
+  line-height: 1.35;
+  min-width: 0;
+}
+
+.student-profile-filing-education-resume-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.student-profile-filing-education-resume-item {
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 10px 12px;
+  position: relative;
+}
+
+.student-profile-filing-education-resume-item-inferred {
+  background: var(--ant-color-fill-quaternary);
+  border-style: dashed;
+}
+
+.student-profile-filing-education-resume-item-inferred
+  .student-profile-filing-education-resume-period,
+.student-profile-filing-education-resume-item-inferred
+  .student-profile-filing-education-resume-detail {
+  color: var(--ant-color-text-tertiary);
+}
+
+.student-profile-filing-education-resume-source-tag {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+}
+
+.student-profile-filing-education-resume-source-tag :where(.ant-tag) {
+  font-size: 11px;
+  line-height: 1.25;
+  margin-inline-end: 0;
+}
+
+.student-profile-filing-education-resume-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.student-profile-filing-education-resume-period {
+  color: var(--ant-color-text);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  min-width: 0;
+  overflow: hidden;
+  padding-right: 72px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-profile-filing-education-resume-detail {
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 4px 10px;
+  line-height: 1.35;
+  min-width: 0;
 }
 
 .student-profile-filing-date-cell {

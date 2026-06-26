@@ -8,7 +8,10 @@ import {
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import { normalizeRequiredTextValue } from '@/shared/form-normalization';
+import {
+  normalizeOptionalTextValue,
+  normalizeRequiredTextValue,
+} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
@@ -30,16 +33,50 @@ export type StudentProfileFilingClassOverviewAttentionLevel =
   | 'UPSTREAM_ID_MISSING'
   | 'WARNING';
 
+export type StudentProfileFilingRosterScopeSource = 'ACTIVE_MEMBERSHIP' | 'DROPPED_DECISION';
+
+export type StudentProfileFilingClassAdviser = {
+  isTemporary: boolean;
+  staffId: string;
+  staffName: string;
+};
+
 export type StudentProfileFilingClassOption = {
   authorizationPath: string;
+  classAdvisers: StudentProfileFilingClassAdviser[];
   classCode: string;
+  classEnrollmentYear: number | null;
+  classExpectedGraduationYear: number | null;
+  classInSchool: boolean | null;
   className: string;
+  classSchoolYearRangeLabel: string | null;
   departmentId: string;
   gradeYear: number | null;
   id: string;
+  majorId: string | null;
+  majorName: string | null;
   resolvedAuthorityCode: string;
   studentCount: number;
+  trainingYears: number | null;
 };
+
+type StudentProfileFilingClassOptionContextFields = Pick<
+  StudentProfileFilingClassOption,
+  | 'classAdvisers'
+  | 'classEnrollmentYear'
+  | 'classExpectedGraduationYear'
+  | 'classInSchool'
+  | 'classSchoolYearRangeLabel'
+  | 'majorId'
+  | 'majorName'
+  | 'trainingYears'
+>;
+
+type StudentProfileFilingRawClassOption = Omit<
+  StudentProfileFilingClassOption,
+  keyof StudentProfileFilingClassOptionContextFields
+> &
+  Partial<StudentProfileFilingClassOptionContextFields>;
 
 export type StudentProfileFilingSectionStatus = {
   lastManualUpdatedAt: string | null;
@@ -60,11 +97,15 @@ export type StudentProfileFilingStudent = {
   attentionLevel: StudentProfileFilingClassOverviewAttentionLevel;
   currentClassCode: string | null;
   currentClassId: string | null;
+  droppedDecisionReasonCode: string | null;
+  droppedEffectiveSemesterId: number | null;
+  droppedEffectiveSemesterLabel: string | null;
   lastManualUpdatedAt: string | null;
   lastSyncedAt: string | null;
   manualOverrideActive: boolean;
   membershipLastObservedAt: string | null;
   profileCompletenessFlags: StudentProfileFilingCompletenessFlags;
+  rosterScopeSource: StudentProfileFilingRosterScopeSource;
   sectionStatuses: StudentProfileFilingSectionStatus[];
   snapshotPresent: boolean;
   sourceObservedAt: string | null;
@@ -134,8 +175,90 @@ export type StudentProfileFilingClassRefreshResult = StudentProfileFilingBatchRe
   className: string;
 };
 
+export type StudentProfileFilingSupplementSectionKey = 'EDUCATION_RESUME' | 'FAMILY';
+
+export type StudentProfileFilingSupplementSummarySectionStatus = {
+  section: string;
+  sectionBaselineToken: string | null;
+  sourceStatus: string;
+};
+
+export type StudentProfileFilingSupplementFamilyMember = {
+  itemKey: string;
+  manualOverrideActive: boolean;
+  manualPatchFieldKeys: string[];
+  maskedName: string | null;
+  maskedPhone: string | null;
+  maskedWorkplace: string | null;
+  relationshipCode: string;
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+  upstreamBaselineToken: string;
+  upstreamChangedSinceManualPatch: boolean;
+};
+
+export type StudentProfileFilingSupplementEducationResume = {
+  endMonth: string | null;
+  itemKey: string;
+  maskedOrganization: string | null;
+  maskedReference: string | null;
+  sourceObservedAt: string;
+  sourceUpdatedAt: string | null;
+  startMonth: string | null;
+  upstreamBaselineToken: string;
+};
+
+export type StudentProfileFilingSupplementSummary = {
+  educationResumes: StudentProfileFilingSupplementEducationResume[];
+  familyMembers: StudentProfileFilingSupplementFamilyMember[];
+  profileCompletenessFlags: StudentProfileFilingCompletenessFlags;
+  sectionStatuses: StudentProfileFilingSupplementSummarySectionStatus[];
+  studentId: string;
+};
+
+export type StudentProfileFilingFamilySupplementInput = {
+  expectedSectionBaselineToken: string | null | undefined;
+  member: {
+    name: string | null | undefined;
+    phone?: string | null | undefined;
+    relationshipCode: string | null | undefined;
+    workplace?: string | null | undefined;
+  };
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+};
+
+export type StudentProfileFilingEducationSupplementInput = {
+  expectedSectionBaselineToken: string | null | undefined;
+  resume: {
+    endDate: string | null | undefined;
+    organization: string | null | undefined;
+    reference: string | null | undefined;
+    startDate: string | null | undefined;
+  };
+  studentId: string | null | undefined;
+  upstreamSessionToken: string | null | undefined;
+};
+
+export type StudentProfileFilingSupplementWriteResult = {
+  action: 'CREATE' | string;
+  changedSections: string[];
+  expiresAt: string | null;
+  localSnapshotRefreshed: boolean;
+  sectionKey: StudentProfileFilingSupplementSectionKey;
+  snapshotUpdated: boolean;
+  sourceObservedAt: string;
+  studentId: string;
+  success: boolean;
+  summaryRefreshFailed: boolean;
+  traceId: string;
+  upstreamSaved: boolean;
+  upstreamSessionToken: string | null;
+  warningCodes: string[];
+};
+
 type StudentProfileFilingClassOptionsResponse = {
-  studentPrivateProfileClassOptions: StudentProfileFilingClassOption[];
+  studentPrivateProfileClassOptions: StudentProfileFilingRawClassOption[];
 };
 
 type StudentProfileFilingClassOverviewResponse = {
@@ -154,7 +277,46 @@ type StudentProfileFilingClassRefreshResponse = {
   refreshStudentPrivateProfileClassFromUpstream: StudentProfileFilingClassRefreshResult;
 };
 
+type StudentProfileFilingSupplementSummaryResponse = {
+  studentPrivateProfileSummary: StudentProfileFilingSupplementSummary;
+};
+
+type StudentProfileFilingFamilySupplementResponse = {
+  writeStudentPrivateProfileFamilyToUpstream: StudentProfileFilingSupplementWriteResult;
+};
+
+type StudentProfileFilingEducationSupplementResponse = {
+  writeStudentPrivateProfileEducationToUpstream: StudentProfileFilingSupplementWriteResult;
+};
+
 const STUDENT_PROFILE_FILING_CLASS_OPTIONS_QUERY = `
+  query StudentProfileFilingClassOptions($input: StudentPrivateProfileClassOptionsInput) {
+    studentPrivateProfileClassOptions(input: $input) {
+      id
+      departmentId
+      classCode
+      className
+      classAdvisers {
+        staffId
+        staffName
+        isTemporary
+      }
+      majorId
+      majorName
+      trainingYears
+      classEnrollmentYear
+      classExpectedGraduationYear
+      classInSchool
+      classSchoolYearRangeLabel
+      gradeYear
+      studentCount
+      resolvedAuthorityCode
+      authorizationPath
+    }
+  }
+`;
+
+const STUDENT_PROFILE_FILING_LEGACY_CLASS_OPTIONS_QUERY = `
   query StudentProfileFilingClassOptions($input: StudentPrivateProfileClassOptionsInput) {
     studentPrivateProfileClassOptions(input: $input) {
       id
@@ -185,6 +347,10 @@ const STUDENT_PROFILE_FILING_CLASS_OVERVIEW_QUERY = `
         currentClassCode
         activeMembershipClassCode
         activeMembershipClassName
+        rosterScopeSource
+        droppedDecisionReasonCode
+        droppedEffectiveSemesterId
+        droppedEffectiveSemesterLabel
         membershipLastObservedAt
         snapshotPresent
         sourceObservedAt
@@ -214,6 +380,50 @@ const STUDENT_PROFILE_FILING_CLASS_OVERVIEW_QUERY = `
         }
         warningCodes
         attentionLevel
+      }
+    }
+  }
+`;
+
+const STUDENT_PROFILE_FILING_SUPPLEMENT_SUMMARY_QUERY = `
+  query StudentProfileFilingSupplementSummary($input: StudentPrivateProfileSummaryInput!) {
+    studentPrivateProfileSummary(input: $input) {
+      studentId
+      familyMembers {
+        itemKey
+        upstreamBaselineToken
+        relationshipCode
+        maskedName
+        maskedPhone
+        maskedWorkplace
+        manualOverrideActive
+        upstreamChangedSinceManualPatch
+        manualPatchFieldKeys
+        sourceUpdatedAt
+        sourceObservedAt
+      }
+      educationResumes {
+        itemKey
+        upstreamBaselineToken
+        startMonth
+        endMonth
+        maskedReference
+        maskedOrganization
+        sourceUpdatedAt
+        sourceObservedAt
+      }
+      sectionStatuses {
+        section
+        sectionBaselineToken
+        sourceStatus
+      }
+      profileCompletenessFlags {
+        personalObserved
+        sensitiveIdentifiersObserved
+        photoObserved
+        familyObserved
+        educationObserved
+        recordObserved
       }
     }
   }
@@ -297,6 +507,43 @@ const REFRESH_STUDENT_PROFILE_CLASS_MUTATION = `
   }
 `;
 
+const STUDENT_PROFILE_FILING_SUPPLEMENT_WRITE_RESULT_FIELDS = `
+  success
+  studentId
+  sectionKey
+  action
+  upstreamSaved
+  localSnapshotRefreshed
+  snapshotUpdated
+  sourceObservedAt
+  changedSections
+  warningCodes
+  upstreamSessionToken
+  expiresAt
+  traceId
+  summaryRefreshFailed
+`;
+
+const WRITE_STUDENT_PROFILE_FILING_FAMILY_SUPPLEMENT_MUTATION = `
+  mutation StudentProfileFilingWriteFamilySupplement(
+    $input: WriteStudentPrivateProfileFamilyToUpstreamInput!
+  ) {
+    writeStudentPrivateProfileFamilyToUpstream(input: $input) {
+      ${STUDENT_PROFILE_FILING_SUPPLEMENT_WRITE_RESULT_FIELDS}
+    }
+  }
+`;
+
+const WRITE_STUDENT_PROFILE_FILING_EDUCATION_SUPPLEMENT_MUTATION = `
+  mutation StudentProfileFilingWriteEducationSupplement(
+    $input: WriteStudentPrivateProfileEducationToUpstreamInput!
+  ) {
+    writeStudentPrivateProfileEducationToUpstream(input: $input) {
+      ${STUDENT_PROFILE_FILING_SUPPLEMENT_WRITE_RESULT_FIELDS}
+    }
+  }
+`;
+
 function normalizeStudentId(studentId: string | null | undefined) {
   return normalizeRequiredTextValue(studentId, { label: '学生' });
 }
@@ -342,6 +589,120 @@ export function normalizeStudentProfileFilingClassRefreshInput(input: {
   return {
     classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
     upstreamSessionToken,
+  };
+}
+
+function normalizeStudentProfileFilingSectionBaselineToken(
+  expectedSectionBaselineToken: string | null | undefined,
+) {
+  return normalizeRequiredTextValue(expectedSectionBaselineToken, {
+    label: '资料版本校验码',
+  });
+}
+
+function normalizeStudentProfileFilingUpstreamSessionToken(
+  upstreamSessionTokenInput: string | null | undefined,
+) {
+  const upstreamSessionToken = normalizeRequiredTextValue(upstreamSessionTokenInput, {
+    label: 'upstream session token',
+  });
+
+  if (upstreamSessionToken.length > 4096) {
+    throw new Error('upstream session token 不能超过 4096 个字符。');
+  }
+
+  return upstreamSessionToken;
+}
+
+function normalizeStudentProfileFilingRelationshipCode(
+  relationshipCode: string | null | undefined,
+) {
+  const normalizedRelationshipCode = normalizeRequiredTextValue(relationshipCode, {
+    label: '家庭关系',
+  });
+
+  if (!new Set(['1', '2']).has(normalizedRelationshipCode)) {
+    throw new Error('家庭关系暂只支持父亲、母亲。');
+  }
+
+  return normalizedRelationshipCode;
+}
+
+const STUDENT_PROFILE_FILING_WRITE_THROUGH_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
+function normalizeStudentProfileFilingWriteThroughDate(
+  value: string | null | undefined,
+  label: string,
+) {
+  const normalizedValue = normalizeRequiredTextValue(value, { label });
+  const date = new Date(`${normalizedValue}T00:00:00.000Z`);
+
+  if (
+    !STUDENT_PROFILE_FILING_WRITE_THROUGH_DATE_PATTERN.test(normalizedValue) ||
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== normalizedValue
+  ) {
+    throw new Error(`${label}必须是合法日期，格式为 YYYY-MM-DD。`);
+  }
+
+  return normalizedValue;
+}
+
+export function normalizeStudentProfileFilingFamilySupplementInput(
+  input: StudentProfileFilingFamilySupplementInput,
+) {
+  return {
+    expectedSectionBaselineToken: normalizeStudentProfileFilingSectionBaselineToken(
+      input.expectedSectionBaselineToken,
+    ),
+    members: [
+      {
+        action: 'CREATE' as const,
+        name: normalizeRequiredTextValue(input.member.name, { label: '家庭成员姓名' }),
+        phone: normalizeOptionalTextValue(input.member.phone, 'to_undefined'),
+        relationshipCode: normalizeStudentProfileFilingRelationshipCode(
+          input.member.relationshipCode,
+        ),
+        workplace: normalizeOptionalTextValue(input.member.workplace, 'to_undefined'),
+      },
+    ],
+    studentId: normalizeStudentId(input.studentId),
+    upstreamSessionToken: normalizeStudentProfileFilingUpstreamSessionToken(
+      input.upstreamSessionToken,
+    ),
+  };
+}
+
+export function normalizeStudentProfileFilingEducationSupplementInput(
+  input: StudentProfileFilingEducationSupplementInput,
+) {
+  const startDate = normalizeStudentProfileFilingWriteThroughDate(
+    input.resume.startDate,
+    '开始日期',
+  );
+  const endDate = normalizeStudentProfileFilingWriteThroughDate(input.resume.endDate, '结束日期');
+
+  if (startDate > endDate) {
+    throw new Error('开始日期不能晚于结束日期。');
+  }
+
+  return {
+    expectedSectionBaselineToken: normalizeStudentProfileFilingSectionBaselineToken(
+      input.expectedSectionBaselineToken,
+    ),
+    resumes: [
+      {
+        action: 'CREATE' as const,
+        endDate,
+        organization: normalizeRequiredTextValue(input.resume.organization, { label: '学校' }),
+        reference: normalizeRequiredTextValue(input.resume.reference, { label: '证明人' }),
+        startDate,
+      },
+    ],
+    studentId: normalizeStudentId(input.studentId),
+    upstreamSessionToken: normalizeStudentProfileFilingUpstreamSessionToken(
+      input.upstreamSessionToken,
+    ),
   };
 }
 
@@ -399,17 +760,69 @@ export function normalizeStudentProfileFilingBatchRefreshInput(input: {
   };
 }
 
+function normalizeStudentProfileFilingClassOption(
+  option: StudentProfileFilingRawClassOption,
+): StudentProfileFilingClassOption {
+  return {
+    ...option,
+    classAdvisers: option.classAdvisers ?? [],
+    classEnrollmentYear: option.classEnrollmentYear ?? null,
+    classExpectedGraduationYear: option.classExpectedGraduationYear ?? null,
+    classInSchool: option.classInSchool ?? null,
+    classSchoolYearRangeLabel: option.classSchoolYearRangeLabel ?? null,
+    majorId: option.majorId ?? null,
+    majorName: option.majorName ?? null,
+    trainingYears: option.trainingYears ?? null,
+  };
+}
+
+function isStudentProfileFilingClassOptionSchemaMismatch(error: unknown) {
+  const graphqlErrors =
+    typeof error === 'object' &&
+    error !== null &&
+    'graphqlErrors' in error &&
+    Array.isArray((error as { graphqlErrors?: unknown }).graphqlErrors)
+      ? ((error as { graphqlErrors: { message?: unknown }[] }).graphqlErrors ?? [])
+      : [];
+  const messages = [
+    error instanceof Error ? error.message : '',
+    ...graphqlErrors.map((graphqlError) =>
+      typeof graphqlError.message === 'string' ? graphqlError.message : '',
+    ),
+  ];
+
+  return messages.some((message) =>
+    /Cannot query field "(classAdvisers|majorId|majorName|trainingYears|classEnrollmentYear|classExpectedGraduationYear|classInSchool|classSchoolYearRangeLabel)" on type "StudentPrivateProfileClassOptionDTO"/.test(
+      message,
+    ),
+  );
+}
+
+async function executeStudentProfileFilingClassOptionsQuery(query: string) {
+  const response = await executeGraphQL<
+    StudentProfileFilingClassOptionsResponse,
+    OperationVariables & {
+      input: Record<string, never>;
+    }
+  >(query, { input: {} });
+
+  return response.studentPrivateProfileClassOptions.map((option) =>
+    normalizeStudentProfileFilingClassOption(option),
+  );
+}
+
 export async function listStudentProfileFilingClassOptions() {
   try {
-    const response = await executeGraphQL<
-      StudentProfileFilingClassOptionsResponse,
-      OperationVariables & {
-        input: Record<string, never>;
-      }
-    >(STUDENT_PROFILE_FILING_CLASS_OPTIONS_QUERY, { input: {} });
-
-    return response.studentPrivateProfileClassOptions;
+    return await executeStudentProfileFilingClassOptionsQuery(
+      STUDENT_PROFILE_FILING_CLASS_OPTIONS_QUERY,
+    );
   } catch (error) {
+    if (isStudentProfileFilingClassOptionSchemaMismatch(error)) {
+      return executeStudentProfileFilingClassOptionsQuery(
+        STUDENT_PROFILE_FILING_LEGACY_CLASS_OPTIONS_QUERY,
+      );
+    }
+
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载可建档班级。'));
   }
 }
@@ -431,6 +844,25 @@ export async function getStudentProfileFilingClassOverview(input: {
   } catch (error) {
     throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载班级建档概览。'));
   }
+}
+
+export async function getStudentProfileFilingSupplementSummary(input: {
+  studentId: string | null | undefined;
+}) {
+  const response = await executeGraphQL<
+    StudentProfileFilingSupplementSummaryResponse,
+    OperationVariables & {
+      input: {
+        studentId: string;
+      };
+    }
+  >(STUDENT_PROFILE_FILING_SUPPLEMENT_SUMMARY_QUERY, {
+    input: {
+      studentId: normalizeStudentId(input.studentId),
+    },
+  });
+
+  return response.studentPrivateProfileSummary;
 }
 
 export async function refreshStudentProfileFilingStudent(input: {
@@ -479,4 +911,34 @@ export async function refreshStudentProfileFilingClass(input: {
   });
 
   return response.refreshStudentPrivateProfileClassFromUpstream;
+}
+
+export async function writeStudentProfileFilingFamilySupplement(
+  input: StudentProfileFilingFamilySupplementInput,
+) {
+  const response = await executeUpstreamSessionGraphQL<
+    StudentProfileFilingFamilySupplementResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentProfileFilingFamilySupplementInput>;
+    }
+  >(WRITE_STUDENT_PROFILE_FILING_FAMILY_SUPPLEMENT_MUTATION, {
+    input: normalizeStudentProfileFilingFamilySupplementInput(input),
+  });
+
+  return response.writeStudentPrivateProfileFamilyToUpstream;
+}
+
+export async function writeStudentProfileFilingEducationSupplement(
+  input: StudentProfileFilingEducationSupplementInput,
+) {
+  const response = await executeUpstreamSessionGraphQL<
+    StudentProfileFilingEducationSupplementResponse,
+    OperationVariables & {
+      input: ReturnType<typeof normalizeStudentProfileFilingEducationSupplementInput>;
+    }
+  >(WRITE_STUDENT_PROFILE_FILING_EDUCATION_SUPPLEMENT_MUTATION, {
+    input: normalizeStudentProfileFilingEducationSupplementInput(input),
+  });
+
+  return response.writeStudentPrivateProfileEducationToUpstream;
 }

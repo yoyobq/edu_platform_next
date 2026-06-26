@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CloudSyncOutlined,
   FileDoneOutlined,
+  PlusOutlined,
   ReloadOutlined,
   SolutionOutlined,
 } from '@ant-design/icons';
@@ -12,8 +13,13 @@ import {
   App as AntApp,
   Button,
   Card,
+  Drawer,
   Empty,
+  Form,
+  Input,
   Progress,
+  Radio,
+  Segmented,
   Select,
   Space,
   Spin,
@@ -41,12 +47,14 @@ import {
   listMissingStudentProfileFilingCompletenessLabels,
   listStudentProfileFilingRefreshableStudentIds,
   resolveStudentProfileFilingActionIntent,
+  resolveStudentProfileFilingDroppedSemesterNotice,
   STUDENT_PROFILE_FILING_ACTION_LABELS,
   STUDENT_PROFILE_FILING_COMPLETENESS_ITEMS,
   summarizeStudentProfileFilingStudents,
 } from '../application/student-profile-filing-view-model';
 import {
   getStudentProfileFilingClassOverview,
+  getStudentProfileFilingSupplementSummary,
   listStudentProfileFilingClassOptions,
   refreshStudentProfileFilingClass,
   refreshStudentProfileFilingStudent,
@@ -55,6 +63,13 @@ import {
   type StudentProfileFilingClassOption,
   type StudentProfileFilingClassOverview,
   type StudentProfileFilingStudent,
+  type StudentProfileFilingSupplementEducationResume,
+  type StudentProfileFilingSupplementFamilyMember,
+  type StudentProfileFilingSupplementSectionKey,
+  type StudentProfileFilingSupplementSummary,
+  type StudentProfileFilingSupplementWriteResult,
+  writeStudentProfileFilingEducationSupplement,
+  writeStudentProfileFilingFamilySupplement,
 } from '../infrastructure/student-profile-filing-api';
 
 import './student-profile-filing-page-content.css';
@@ -70,6 +85,22 @@ export type StudentProfileFilingPageContentProps = {
   currentAccount: CurrentAccount;
 };
 
+type StudentProfileFilingSupplementSection = 'education' | 'family';
+
+type FamilySupplementFormValues = {
+  name?: string;
+  phone?: string;
+  relationshipCode?: string;
+  workplace?: string;
+};
+
+type EducationSupplementFormValues = {
+  endDate?: string;
+  organization?: string;
+  reference?: string;
+  startDate?: string;
+};
+
 type PendingFilingAction =
   | {
       classId: string;
@@ -79,11 +110,48 @@ type PendingFilingAction =
   | {
       classId: string;
       type: 'class';
+    }
+  | {
+      classId: string;
+      expectedSectionBaselineToken: string;
+      member: FamilySupplementFormValues;
+      studentId: string;
+      type: 'family-supplement';
+    }
+  | {
+      classId: string;
+      expectedSectionBaselineToken: string;
+      resume: EducationSupplementFormValues;
+      studentId: string;
+      type: 'education-supplement';
     };
 
 type UpstreamActionRequest = {
   action: PendingFilingAction;
   session: StoredUpstreamSession;
+};
+
+type SupplementDrawerState = {
+  activeSection: StudentProfileFilingSupplementSection;
+  availableSections: StudentProfileFilingSupplementSection[];
+  student: StudentProfileFilingStudent;
+  summary: StudentProfileFilingSupplementSummary | null;
+};
+
+type EducationResumeDisplayItem = {
+  key: string;
+  organization: string;
+  period: string;
+  reference: string;
+  source: 'inferred' | 'upstream';
+};
+
+type FamilyMemberDisplayItem = {
+  key: string;
+  name: string;
+  phone: string;
+  relationship: string;
+  workplace: string;
 };
 
 type RefreshDigest = {
@@ -94,6 +162,42 @@ type RefreshDigest = {
   scopeLabel: string;
   successCount: number;
   traceId: string | null;
+};
+
+type StudentProfileFilingNoticeTag = {
+  color: string;
+  key: string;
+  label: string;
+  textClassName?: string;
+};
+
+const MISSING_PROFILE_TAG_TEXT_CLASS_NAMES: Record<string, string> = {
+  基本信息: 'student-profile-filing-missing-tag-text-personal',
+  '证件/银行卡': 'student-profile-filing-missing-tag-text-sensitive',
+  照片: 'student-profile-filing-missing-tag-text-photo',
+  家庭: 'student-profile-filing-missing-tag-text-family',
+  教育简历: 'student-profile-filing-missing-tag-text-education',
+  学籍异动: 'student-profile-filing-missing-tag-text-record',
+};
+
+const SUPPLEMENT_SECTION_LABELS: Record<StudentProfileFilingSupplementSection, string> = {
+  education: '教育简历',
+  family: '家庭',
+};
+
+const SUPPLEMENT_SECTION_KEYS: Record<
+  StudentProfileFilingSupplementSection,
+  StudentProfileFilingSupplementSectionKey
+> = {
+  education: 'EDUCATION_RESUME',
+  family: 'FAMILY',
+};
+const CURRENT_SCHOOL_NAME = '江苏省苏州技师学院';
+const FAMILY_RELATIONSHIP_LABELS: Record<string, string> = {
+  '1': '父亲',
+  '2': '母亲',
+  '3': '祖父母',
+  '4': '兄弟姐妹',
 };
 
 const COMPACT_WORKBENCH_QUERY = '(max-width: 1120px)';
@@ -187,6 +291,267 @@ function formatMissingProfileTagLabel(label: string) {
   return `缺${label}信息`;
 }
 
+function resolveMissingProfileTagTextClassName(label: string) {
+  return [
+    'student-profile-filing-missing-tag-text',
+    MISSING_PROFILE_TAG_TEXT_CLASS_NAMES[label] ?? '',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function listStudentProfileFilingSupplementSections(student: StudentProfileFilingStudent) {
+  if (!student.snapshotPresent || !student.upstreamIdPresent) {
+    return [];
+  }
+
+  const sections: StudentProfileFilingSupplementSection[] = [];
+
+  if (!student.profileCompletenessFlags.familyObserved) {
+    sections.push('family');
+  }
+
+  sections.push('education');
+
+  return sections;
+}
+
+function formatStudentProfileFilingSupplementActionLabel(
+  sections: readonly StudentProfileFilingSupplementSection[],
+) {
+  if (sections.length === 1) {
+    return `补${SUPPLEMENT_SECTION_LABELS[sections[0]]}`;
+  }
+
+  return '补家庭/教育简历';
+}
+
+function resolveStudentProfileFilingSupplementSectionBaseline(input: {
+  section: StudentProfileFilingSupplementSection;
+  summary: StudentProfileFilingSupplementSummary | null;
+}) {
+  const sectionKey = SUPPLEMENT_SECTION_KEYS[input.section];
+
+  return (
+    input.summary?.sectionStatuses.find((sectionStatus) => sectionStatus.section === sectionKey)
+      ?.sectionBaselineToken ?? null
+  );
+}
+
+function displaySupplementText(value: string | null | undefined) {
+  return value?.trim() || '—';
+}
+
+function formatFamilyRelationshipLabel(relationshipCode: string) {
+  return FAMILY_RELATIONSHIP_LABELS[relationshipCode] ?? `关系 ${relationshipCode}`;
+}
+
+function toFamilyMemberDisplayItem(
+  member: StudentProfileFilingSupplementFamilyMember,
+): FamilyMemberDisplayItem {
+  return {
+    key: member.itemKey,
+    name: displaySupplementText(member.maskedName),
+    phone: displaySupplementText(member.maskedPhone),
+    relationship: formatFamilyRelationshipLabel(member.relationshipCode),
+    workplace: displaySupplementText(member.maskedWorkplace),
+  };
+}
+
+function listFamilyMemberDisplayItems(summary: StudentProfileFilingSupplementSummary | null) {
+  return summary?.familyMembers.map((member) => toFamilyMemberDisplayItem(member)) ?? [];
+}
+
+function resolveDefaultFamilyRelationshipCode(
+  summary: StudentProfileFilingSupplementSummary | null,
+) {
+  const existingRelationshipCodes = new Set(
+    summary?.familyMembers.map((member) => member.relationshipCode) ?? [],
+  );
+
+  if (!existingRelationshipCodes.has('1')) {
+    return '1';
+  }
+
+  if (!existingRelationshipCodes.has('2')) {
+    return '2';
+  }
+
+  return '1';
+}
+
+function formatEducationResumeMonth(value: string | null | undefined) {
+  const normalizedValue = value?.trim() ?? '';
+  const match = /^(\d{4})-(\d{2})$/.exec(normalizedValue);
+
+  if (!match) {
+    return normalizedValue || '—';
+  }
+
+  return `${match[1]} 年 ${Number(match[2])} 月`;
+}
+
+function formatEducationResumePeriod(input: {
+  endMonth: string | null | undefined;
+  startMonth: string | null | undefined;
+}) {
+  return `${formatEducationResumeMonth(input.startMonth)} - ${
+    input.endMonth ? formatEducationResumeMonth(input.endMonth) : '至今'
+  }`;
+}
+
+function toEducationResumeDisplayItem(
+  resume: StudentProfileFilingSupplementEducationResume,
+): EducationResumeDisplayItem {
+  return {
+    key: resume.itemKey,
+    organization: displaySupplementText(resume.maskedOrganization),
+    period: formatEducationResumePeriod({
+      endMonth: resume.endMonth,
+      startMonth: resume.startMonth,
+    }),
+    reference: displaySupplementText(resume.maskedReference),
+    source: 'upstream',
+  };
+}
+
+function resolveStudentProfileFilingEnrollmentYear(studentId: string) {
+  const admissionYearText = studentId.trim().slice(1, 3);
+
+  if (!/^\d{2}$/.test(admissionYearText)) {
+    return null;
+  }
+
+  return 2000 + Number(admissionYearText);
+}
+
+function formatStudentProfileFilingClassAdviserNames(option: StudentProfileFilingClassOption) {
+  return option.classAdvisers
+    .map((adviser) => {
+      const name = adviser.staffName.trim() || adviser.staffId.trim();
+
+      if (!name) {
+        return null;
+      }
+
+      return adviser.isTemporary ? `${name}（临时）` : name;
+    })
+    .filter((name): name is string => Boolean(name));
+}
+
+function resolveInferredCurrentSchoolEndText(option: StudentProfileFilingClassOption | null) {
+  const expectedGraduationYear = option?.classExpectedGraduationYear;
+
+  if (typeof expectedGraduationYear !== 'number') {
+    return '至今';
+  }
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1;
+  const hasReachedGraduationMonth =
+    currentYear > expectedGraduationYear ||
+    (currentYear === expectedGraduationYear && currentMonth >= 6);
+
+  if (option.classInSchool === false || hasReachedGraduationMonth) {
+    return `${expectedGraduationYear} 年 6 月`;
+  }
+
+  return '至今';
+}
+
+function buildInferredCurrentSchoolEducationResume(
+  student: StudentProfileFilingStudent,
+  classOption: StudentProfileFilingClassOption | null,
+): EducationResumeDisplayItem | null {
+  const enrollmentYear = resolveStudentProfileFilingEnrollmentYear(student.studentId);
+
+  if (!enrollmentYear) {
+    return null;
+  }
+
+  return {
+    key: 'inferred-current-school',
+    organization: CURRENT_SCHOOL_NAME,
+    period: `${enrollmentYear} 年 9 月 - ${resolveInferredCurrentSchoolEndText(classOption)}`,
+    reference: classOption
+      ? formatStudentProfileFilingClassAdviserNames(classOption).join('、')
+      : '',
+    source: 'inferred',
+  };
+}
+
+function listEducationResumeDisplayItems(input: {
+  classOption: StudentProfileFilingClassOption | null;
+  student: StudentProfileFilingStudent;
+  summary: StudentProfileFilingSupplementSummary | null;
+}) {
+  const upstreamItems =
+    input.summary?.educationResumes.map((resume) => toEducationResumeDisplayItem(resume)) ?? [];
+  const inferredCurrentSchoolItem = buildInferredCurrentSchoolEducationResume(
+    input.student,
+    input.classOption,
+  );
+
+  return inferredCurrentSchoolItem ? [...upstreamItems, inferredCurrentSchoolItem] : upstreamItems;
+}
+
+function hasStudentProfileFilingClassContext(option: StudentProfileFilingClassOption) {
+  return (
+    option.classAdvisers.length > 0 ||
+    typeof option.classEnrollmentYear === 'number' ||
+    typeof option.classExpectedGraduationYear === 'number' ||
+    option.classInSchool !== null ||
+    Boolean(option.classSchoolYearRangeLabel?.trim()) ||
+    Boolean(option.majorName?.trim()) ||
+    typeof option.trainingYears === 'number'
+  );
+}
+
+function formatStudentProfileFilingClassAdviserText(option: StudentProfileFilingClassOption) {
+  const advisers = formatStudentProfileFilingClassAdviserNames(option);
+
+  return advisers.length > 0 ? advisers.join('、') : '未配置';
+}
+
+function formatStudentProfileFilingClassSchoolYearText(option: StudentProfileFilingClassOption) {
+  const rangeLabel = option.classSchoolYearRangeLabel?.trim();
+
+  if (rangeLabel) {
+    return rangeLabel;
+  }
+
+  if (
+    typeof option.classEnrollmentYear === 'number' &&
+    typeof option.classExpectedGraduationYear === 'number'
+  ) {
+    return `${option.classEnrollmentYear}-${option.classExpectedGraduationYear}`;
+  }
+
+  return '未配置';
+}
+
+function formatStudentProfileFilingClassMajorText(option: StudentProfileFilingClassOption) {
+  const majorName = option.majorName?.trim();
+  const trainingYears =
+    typeof option.trainingYears === 'number' ? `${option.trainingYears} 年制` : null;
+  const parts = [majorName, trainingYears].filter((part): part is string => Boolean(part));
+
+  return parts.length > 0 ? parts.join(' · ') : '未配置';
+}
+
+function renderStudentProfileFilingClassInSchoolTag(option: StudentProfileFilingClassOption) {
+  if (option.classInSchool === null) {
+    return null;
+  }
+
+  return (
+    <Tag color={option.classInSchool ? 'processing' : 'default'}>
+      {option.classInSchool ? '在校' : '已离校'}
+    </Tag>
+  );
+}
+
 function formatFilingDateTimeParts(value: string | null | undefined) {
   if (!value) {
     return {
@@ -222,14 +587,25 @@ export function StudentProfileFilingPageContent({
   currentAccount,
 }: StudentProfileFilingPageContentProps) {
   const { message } = AntApp.useApp();
+  const [familySupplementForm] = Form.useForm<FamilySupplementFormValues>();
+  const [educationSupplementForm] = Form.useForm<EducationSupplementFormValues>();
   const [classOptions, setClassOptions] = useState<StudentProfileFilingClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [overview, setOverview] = useState<StudentProfileFilingClassOverview | null>(null);
   const [isLoadingClasses, setIsLoadingClasses] = useState(false);
   const [isLoadingOverview, setIsLoadingOverview] = useState(false);
   const [isClassFiling, setIsClassFiling] = useState(false);
+  const [isLoadingSupplementSummary, setIsLoadingSupplementSummary] = useState(false);
+  const [isSubmittingSupplement, setIsSubmittingSupplement] = useState(false);
   const [filingStudentId, setFilingStudentId] = useState<string | null>(null);
+  const [supplementStudentId, setSupplementStudentId] = useState<string | null>(null);
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<UpstreamActionRequest | null>(
+    null,
+  );
+  const [pendingUpstreamActionKind, setPendingUpstreamActionKind] = useState<
+    'filing' | 'supplement' | null
+  >(null);
+  const [supplementDrawerState, setSupplementDrawerState] = useState<SupplementDrawerState | null>(
     null,
   );
   const [refreshDigest, setRefreshDigest] = useState<RefreshDigest | null>(null);
@@ -302,6 +678,7 @@ export function StudentProfileFilingPageContent({
     async (classId: string) => {
       setSelectedClassId(classId);
       setRefreshDigest(null);
+      setSupplementDrawerState(null);
       await loadOverview(classId);
     },
     [loadOverview],
@@ -321,6 +698,8 @@ export function StudentProfileFilingPageContent({
     resolveLoginErrorMessage: (error) =>
       resolveUpstreamErrorMessage(error, '学工系统登录失败，请检查账号或密码。'),
     onLoginSuccess: ({ pendingAction, session }) => {
+      setPendingUpstreamActionKind(null);
+
       if (pendingAction) {
         setUpstreamActionRequest({
           action: pendingAction,
@@ -407,11 +786,100 @@ export function StudentProfileFilingPageContent({
     [loadOverview, message, persistSessionFromResult],
   );
 
+  const runSupplementWithSession = useCallback(
+    async (
+      session: StoredUpstreamSession,
+      action: Extract<PendingFilingAction, { type: 'education-supplement' | 'family-supplement' }>,
+    ) => {
+      setIsSubmittingSupplement(true);
+      setSupplementStudentId(action.studentId);
+
+      try {
+        const result: StudentProfileFilingSupplementWriteResult =
+          action.type === 'family-supplement'
+            ? await writeStudentProfileFilingFamilySupplement({
+                expectedSectionBaselineToken: action.expectedSectionBaselineToken,
+                member: action.member,
+                studentId: action.studentId,
+                upstreamSessionToken: session.upstreamSessionToken,
+              })
+            : await writeStudentProfileFilingEducationSupplement({
+                expectedSectionBaselineToken: action.expectedSectionBaselineToken,
+                resume: action.resume,
+                studentId: action.studentId,
+                upstreamSessionToken: session.upstreamSessionToken,
+              });
+        const sectionLabel =
+          action.type === 'family-supplement'
+            ? SUPPLEMENT_SECTION_LABELS.family
+            : SUPPLEMENT_SECTION_LABELS.education;
+
+        persistSessionFromResult(session, result);
+        await loadOverview(action.classId);
+
+        if (result.success && result.upstreamSaved) {
+          message.success(`${sectionLabel}信息已写回学工系统。`);
+
+          if (action.type === 'education-supplement') {
+            educationSupplementForm.resetFields();
+            const nextSummary = await getStudentProfileFilingSupplementSummary({
+              studentId: action.studentId,
+            });
+
+            setSupplementDrawerState((current) =>
+              current?.student.studentId === action.studentId
+                ? {
+                    ...current,
+                    summary: nextSummary,
+                  }
+                : current,
+            );
+          } else {
+            familySupplementForm.resetFields();
+            const nextSummary = await getStudentProfileFilingSupplementSummary({
+              studentId: action.studentId,
+            });
+
+            familySupplementForm.setFieldValue(
+              'relationshipCode',
+              resolveDefaultFamilyRelationshipCode(nextSummary),
+            );
+            setSupplementDrawerState((current) =>
+              current?.student.studentId === action.studentId
+                ? {
+                    ...current,
+                    summary: nextSummary,
+                  }
+                : current,
+            );
+          }
+        } else {
+          message.warning(`${sectionLabel}信息写回请求已返回，请检查结果。`);
+        }
+      } finally {
+        setIsSubmittingSupplement(false);
+        setSupplementStudentId(null);
+      }
+    },
+    [
+      educationSupplementForm,
+      familySupplementForm,
+      loadOverview,
+      message,
+      persistSessionFromResult,
+    ],
+  );
+
   const executeFilingAction = useCallback(
     async (session: StoredUpstreamSession, action: PendingFilingAction) => {
       const runAction = async (nextSession: StoredUpstreamSession) => {
         if (action.type === 'class') {
           await runClassFilingWithSession(nextSession, action);
+          return;
+        }
+
+        if (action.type === 'family-supplement' || action.type === 'education-supplement') {
+          await runSupplementWithSession(nextSession, action);
           return;
         }
 
@@ -422,7 +890,14 @@ export function StudentProfileFilingPageContent({
         await runAction(session);
       } catch (error) {
         if (!isExpiredUpstreamSessionError(error)) {
-          message.error(resolveUpstreamErrorMessage(error, '暂时无法完成学生建档。'));
+          message.error(
+            resolveUpstreamErrorMessage(
+              error,
+              action.type === 'family-supplement' || action.type === 'education-supplement'
+                ? '暂时无法补资料。'
+                : '暂时无法完成学生建档。',
+            ),
+          );
           return;
         }
 
@@ -431,10 +906,17 @@ export function StudentProfileFilingPageContent({
 
           await runAction(refreshedSession);
         } catch (refreshError) {
+          setPendingUpstreamActionKind(
+            action.type === 'family-supplement' || action.type === 'education-supplement'
+              ? 'supplement'
+              : 'filing',
+          );
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
               refreshError,
-              '学工系统会话已失效，请重新登录后继续建档。',
+              action.type === 'family-supplement' || action.type === 'education-supplement'
+                ? '学工系统会话已失效，请重新登录后继续补资料。'
+                : '学工系统会话已失效，请重新登录后继续建档。',
             ),
             pendingAction: action,
             session,
@@ -448,6 +930,7 @@ export function StudentProfileFilingPageContent({
       refreshSession,
       runClassFilingWithSession,
       runStudentFilingWithSession,
+      runSupplementWithSession,
     ],
   );
 
@@ -458,6 +941,11 @@ export function StudentProfileFilingPageContent({
         return;
       }
 
+      setPendingUpstreamActionKind(
+        action.type === 'family-supplement' || action.type === 'education-supplement'
+          ? 'supplement'
+          : 'filing',
+      );
       openLoginModal({
         fallbackUserId: lockedUpstreamLoginUserId ?? currentAccount.staffId,
         pendingAction: action,
@@ -491,6 +979,12 @@ export function StudentProfileFilingPageContent({
     () => listStudentProfileFilingRefreshableStudentIds(students),
     [students],
   );
+  const selectedClassOption = useMemo(
+    () => classOptions.find((item) => item.id === selectedClassId) ?? null,
+    [classOptions, selectedClassId],
+  );
+  const shouldShowSelectedClassContext =
+    selectedClassOption !== null && hasStudentProfileFilingClassContext(selectedClassOption);
   const selectOptions = useMemo(
     () =>
       classOptions.map((item) => ({
@@ -516,6 +1010,138 @@ export function StudentProfileFilingPageContent({
       type: 'class',
     });
   }, [message, refreshableStudentIds, requestFilingAction, selectedClassId]);
+
+  const openSupplementDrawer = useCallback(
+    async (student: StudentProfileFilingStudent) => {
+      const availableSections = listStudentProfileFilingSupplementSections(student);
+
+      if (availableSections.length === 0) {
+        message.warning('当前学生没有可补的家庭或教育简历信息。');
+        return;
+      }
+
+      familySupplementForm.setFieldsValue({
+        name: undefined,
+        phone: undefined,
+        relationshipCode: '1',
+        workplace: undefined,
+      });
+      educationSupplementForm.resetFields();
+      setSupplementDrawerState({
+        activeSection: availableSections[0],
+        availableSections,
+        student,
+        summary: null,
+      });
+      setSupplementStudentId(student.studentId);
+      setIsLoadingSupplementSummary(true);
+
+      try {
+        const nextSummary = await getStudentProfileFilingSupplementSummary({
+          studentId: student.studentId,
+        });
+
+        familySupplementForm.setFieldValue(
+          'relationshipCode',
+          resolveDefaultFamilyRelationshipCode(nextSummary),
+        );
+        setSupplementDrawerState((current) =>
+          current?.student.studentId === student.studentId
+            ? {
+                ...current,
+                summary: nextSummary,
+              }
+            : current,
+        );
+      } catch (error) {
+        setSupplementDrawerState(null);
+        message.error(resolveUpstreamErrorMessage(error, '暂时无法读取学生资料版本。'));
+      } finally {
+        setIsLoadingSupplementSummary(false);
+        setSupplementStudentId(null);
+      }
+    },
+    [educationSupplementForm, familySupplementForm, message],
+  );
+
+  const closeSupplementDrawer = useCallback(() => {
+    setSupplementDrawerState(null);
+    familySupplementForm.resetFields();
+    educationSupplementForm.resetFields();
+  }, [educationSupplementForm, familySupplementForm]);
+
+  const handleSupplementSectionChange = useCallback(
+    (section: StudentProfileFilingSupplementSection) => {
+      setSupplementDrawerState((current) =>
+        current
+          ? {
+              ...current,
+              activeSection: section,
+            }
+          : current,
+      );
+    },
+    [],
+  );
+
+  const submitSupplementSection = useCallback(
+    async (section: StudentProfileFilingSupplementSection) => {
+      if (!supplementDrawerState) {
+        return;
+      }
+
+      const classId = overview?.classId ?? selectedClassId;
+
+      if (!classId) {
+        message.warning('请先选择班级。');
+        return;
+      }
+
+      const expectedSectionBaselineToken = resolveStudentProfileFilingSupplementSectionBaseline({
+        section,
+        summary: supplementDrawerState.summary,
+      });
+
+      if (!expectedSectionBaselineToken) {
+        message.error(
+          `${SUPPLEMENT_SECTION_LABELS[section]}信息缺少资料版本校验码，请先更新资料。`,
+        );
+        return;
+      }
+
+      if (section === 'family') {
+        const values = await familySupplementForm.validateFields();
+
+        requestFilingAction({
+          classId,
+          expectedSectionBaselineToken,
+          member: values,
+          studentId: supplementDrawerState.student.studentId,
+          type: 'family-supplement',
+        });
+        return;
+      }
+
+      const values = await educationSupplementForm.validateFields();
+
+      requestFilingAction({
+        classId,
+        expectedSectionBaselineToken,
+        resume: values,
+        studentId: supplementDrawerState.student.studentId,
+        type: 'education-supplement',
+      });
+    },
+    [
+      educationSupplementForm,
+      familySupplementForm,
+      message,
+      overview?.classId,
+      requestFilingAction,
+      selectedClassId,
+      supplementDrawerState,
+    ],
+  );
 
   const classFilingActionLabel = useMemo(() => {
     const updatableCount = summary.filedCount + summary.warningCount;
@@ -549,7 +1175,7 @@ export function StudentProfileFilingPageContent({
           </div>
         ),
         title: '学生',
-        width: 120,
+        width: 100,
       },
       {
         key: 'completeness',
@@ -579,7 +1205,8 @@ export function StudentProfileFilingPageContent({
       {
         key: 'warnings',
         render: (_, record) => {
-          const tags = [
+          const droppedSemesterNotice = resolveStudentProfileFilingDroppedSemesterNotice(record);
+          const tags: StudentProfileFilingNoticeTag[] = [
             ...(!record.upstreamIdPresent
               ? [
                   {
@@ -595,6 +1222,7 @@ export function StudentProfileFilingPageContent({
               color: 'default',
               key: `missing:${label}`,
               label: formatMissingProfileTagLabel(label),
+              textClassName: resolveMissingProfileTagTextClassName(label),
             })),
             ...(record.manualOverrideActive
               ? [
@@ -619,6 +1247,15 @@ export function StudentProfileFilingPageContent({
               key: `warning:${code}`,
               label: code,
             })),
+            ...(droppedSemesterNotice
+              ? [
+                  {
+                    color: 'volcano',
+                    key: 'dropped-effective-semester',
+                    label: droppedSemesterNotice,
+                  },
+                ]
+              : []),
           ];
 
           if (tags.length === 0) {
@@ -629,14 +1266,18 @@ export function StudentProfileFilingPageContent({
             <Space size={[4, 4]} wrap>
               {tags.map((tag) => (
                 <Tag color={tag.color} key={tag.key}>
-                  {tag.label}
+                  {tag.textClassName ? (
+                    <span className={tag.textClassName}>{tag.label}</span>
+                  ) : (
+                    tag.label
+                  )}
                 </Tag>
               ))}
             </Space>
           );
         },
         title: '提醒',
-        width: 300,
+        width: 340,
       },
       {
         dataIndex: 'lastSyncedAt',
@@ -653,45 +1294,95 @@ export function StudentProfileFilingPageContent({
             </span>
           );
         },
-        title: '最近建档',
-        width: 108,
+        title: '最近同步',
+        width: 88,
       },
       {
         fixed: 'right',
         key: 'actions',
         render: (_, record) => {
           const actionIntent = resolveStudentProfileFilingActionIntent(record);
+          const supplementSections = listStudentProfileFilingSupplementSections(record);
 
           return (
-            <Tooltip title={buildRefreshableTooltip(record)}>
-              <Button
-                disabled={
-                  actionIntent === 'UNAVAILABLE' ||
-                  isClassFiling ||
-                  (filingStudentId !== null && filingStudentId !== record.studentId)
-                }
-                icon={<CloudSyncOutlined />}
-                loading={filingStudentId === record.studentId}
-                size="small"
-                onClick={() =>
-                  requestFilingAction({
-                    classId: overview?.classId ?? selectedClassId ?? '',
-                    studentId: record.studentId,
-                    type: 'student',
-                  })
-                }
-              >
-                {STUDENT_PROFILE_FILING_ACTION_LABELS[actionIntent]}
-              </Button>
-            </Tooltip>
+            <Space direction="vertical" size={4}>
+              <Tooltip title={buildRefreshableTooltip(record)}>
+                <Button
+                  disabled={
+                    actionIntent === 'UNAVAILABLE' ||
+                    isClassFiling ||
+                    (filingStudentId !== null && filingStudentId !== record.studentId)
+                  }
+                  icon={<CloudSyncOutlined />}
+                  loading={filingStudentId === record.studentId}
+                  size="small"
+                  onClick={() =>
+                    requestFilingAction({
+                      classId: overview?.classId ?? selectedClassId ?? '',
+                      studentId: record.studentId,
+                      type: 'student',
+                    })
+                  }
+                >
+                  {STUDENT_PROFILE_FILING_ACTION_LABELS[actionIntent]}
+                </Button>
+              </Tooltip>
+              {supplementSections.length > 0 ? (
+                <Button
+                  disabled={isClassFiling || isSubmittingSupplement || isLoadingSupplementSummary}
+                  icon={<PlusOutlined />}
+                  loading={supplementStudentId === record.studentId}
+                  size="small"
+                  onClick={() => {
+                    void openSupplementDrawer(record);
+                  }}
+                >
+                  {formatStudentProfileFilingSupplementActionLabel(supplementSections)}
+                </Button>
+              ) : null}
+            </Space>
           );
         },
         title: '操作',
-        width: 122,
+        width: 148,
       },
     ],
-    [filingStudentId, isClassFiling, overview?.classId, requestFilingAction, selectedClassId],
+    [
+      filingStudentId,
+      isClassFiling,
+      isLoadingSupplementSummary,
+      isSubmittingSupplement,
+      openSupplementDrawer,
+      overview?.classId,
+      requestFilingAction,
+      selectedClassId,
+      supplementStudentId,
+    ],
   );
+
+  const supplementSectionOptions =
+    supplementDrawerState?.availableSections.map((section) => ({
+      label: SUPPLEMENT_SECTION_LABELS[section],
+      value: section,
+    })) ?? [];
+  const activeSupplementSection = supplementDrawerState?.activeSection ?? 'family';
+  const activeSupplementStudent = supplementDrawerState?.student ?? null;
+  const activeEducationResumeItems = activeSupplementStudent
+    ? listEducationResumeDisplayItems({
+        classOption: selectedClassOption,
+        student: activeSupplementStudent,
+        summary: supplementDrawerState?.summary ?? null,
+      })
+    : [];
+  const activeFamilyMemberItems = listFamilyMemberDisplayItems(
+    supplementDrawerState?.summary ?? null,
+  );
+  const upstreamLoginDescription =
+    pendingUpstreamActionKind === 'supplement'
+      ? '补资料需要写回学工系统，授权后会刷新本地资料快照。'
+      : '学生建档需要读取学工系统资料，授权后会写入本地基础资料快照。';
+  const upstreamLoginOkText =
+    pendingUpstreamActionKind === 'supplement' ? '授权并补资料' : '授权并建档';
 
   return (
     <div className="student-profile-filing-page">
@@ -704,19 +1395,44 @@ export function StudentProfileFilingPageContent({
       <Card>
         <div className="student-profile-filing-toolbar">
           <div className="student-profile-filing-toolbar-main">
-            <div className="student-profile-filing-class-select">
-              <Select
-                disabled={isLoadingClasses || isClassFiling}
-                loading={isLoadingClasses}
-                options={selectOptions}
-                placeholder="选择班级"
-                showSearch
-                value={selectedClassId}
-                optionFilterProp="label"
-                onChange={(value) => {
-                  void handleClassChange(value);
-                }}
-              />
+            <div className="student-profile-filing-class-picker">
+              <div className="student-profile-filing-class-select">
+                <Select
+                  disabled={isLoadingClasses || isClassFiling}
+                  loading={isLoadingClasses}
+                  options={selectOptions}
+                  placeholder="选择班级"
+                  showSearch
+                  value={selectedClassId}
+                  optionFilterProp="label"
+                  onChange={(value) => {
+                    void handleClassChange(value);
+                  }}
+                />
+              </div>
+              {selectedClassOption && shouldShowSelectedClassContext ? (
+                <div className="student-profile-filing-class-context">
+                  <span className="student-profile-filing-class-context-item">
+                    <span className="student-profile-filing-class-context-label">班主任</span>
+                    <span className="student-profile-filing-class-context-value">
+                      {formatStudentProfileFilingClassAdviserText(selectedClassOption)}
+                    </span>
+                  </span>
+                  <span className="student-profile-filing-class-context-item">
+                    <span className="student-profile-filing-class-context-label">班级年份</span>
+                    <span className="student-profile-filing-class-context-value">
+                      {formatStudentProfileFilingClassSchoolYearText(selectedClassOption)}
+                    </span>
+                  </span>
+                  <span className="student-profile-filing-class-context-item">
+                    <span className="student-profile-filing-class-context-label">专业</span>
+                    <span className="student-profile-filing-class-context-value">
+                      {formatStudentProfileFilingClassMajorText(selectedClassOption)}
+                    </span>
+                  </span>
+                  {renderStudentProfileFilingClassInSchoolTag(selectedClassOption)}
+                </div>
+              ) : null}
             </div>
             <Button
               disabled={!selectedClassId || isClassFiling}
@@ -773,7 +1489,7 @@ export function StudentProfileFilingPageContent({
                 showSizeChanger: true,
               }}
               rowKey="studentId"
-              scroll={{ x: 820 }}
+              scroll={{ x: 900 }}
               size="middle"
               summary={() =>
                 refreshDigest && refreshDigest.failureCount > 0 ? (
@@ -830,9 +1546,198 @@ export function StudentProfileFilingPageContent({
         </div>
       </section>
 
+      <Drawer
+        destroyOnHidden
+        open={Boolean(supplementDrawerState)}
+        title={
+          activeSupplementStudent ? `补资料 - ${activeSupplementStudent.studentName}` : '补资料'
+        }
+        width={480}
+        onClose={closeSupplementDrawer}
+      >
+        {supplementDrawerState ? (
+          <Spin spinning={isLoadingSupplementSummary}>
+            <div className="student-profile-filing-supplement-drawer-content">
+              {supplementSectionOptions.length > 1 ? (
+                <Segmented
+                  block
+                  options={supplementSectionOptions}
+                  value={activeSupplementSection}
+                  onChange={(value) =>
+                    handleSupplementSectionChange(value as StudentProfileFilingSupplementSection)
+                  }
+                />
+              ) : null}
+
+              {activeSupplementSection === 'family' ? (
+                <div className="student-profile-filing-family-supplement">
+                  <div className="student-profile-filing-supplement-section-title">
+                    当前家庭信息
+                  </div>
+                  {activeFamilyMemberItems.length > 0 ? (
+                    <div className="student-profile-filing-family-member-list">
+                      {activeFamilyMemberItems.map((item) => (
+                        <div className="student-profile-filing-family-member-item" key={item.key}>
+                          <div className="student-profile-filing-family-member-main">
+                            <span className="student-profile-filing-family-member-name">
+                              {item.relationship} · {item.name}
+                            </span>
+                            <span className="student-profile-filing-family-member-detail">
+                              <span>电话：{item.phone}</span>
+                              <span>单位：{item.workplace}</span>
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Empty description="暂无家庭信息" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                  )}
+
+                  <Form<FamilySupplementFormValues>
+                    form={familySupplementForm}
+                    layout="vertical"
+                    requiredMark={false}
+                    onFinish={() => {
+                      void submitSupplementSection('family');
+                    }}
+                  >
+                    <div className="student-profile-filing-supplement-section-title">
+                      新增家庭信息
+                    </div>
+                    <Form.Item
+                      label="家庭关系"
+                      name="relationshipCode"
+                      rules={[{ required: true, message: '请选择家庭关系。' }]}
+                    >
+                      <Radio.Group
+                        optionType="button"
+                        options={[
+                          { label: '父亲', value: '1' },
+                          { label: '母亲', value: '2' },
+                        ]}
+                      />
+                    </Form.Item>
+                    <Form.Item
+                      label="姓名"
+                      name="name"
+                      rules={[
+                        { required: true, message: '请输入家庭成员姓名。', whitespace: true },
+                      ]}
+                    >
+                      <Input autoComplete="off" />
+                    </Form.Item>
+                    <Form.Item label="电话" name="phone">
+                      <Input autoComplete="off" />
+                    </Form.Item>
+                    <Form.Item label="工作单位" name="workplace">
+                      <Input autoComplete="off" />
+                    </Form.Item>
+                    <div className="student-profile-filing-supplement-drawer-actions">
+                      <Button onClick={closeSupplementDrawer}>取消</Button>
+                      <Button
+                        htmlType="submit"
+                        loading={isSubmittingSupplement && activeSupplementSection === 'family'}
+                        type="primary"
+                      >
+                        提交家庭信息
+                      </Button>
+                    </div>
+                  </Form>
+                </div>
+              ) : (
+                <div className="student-profile-filing-education-supplement">
+                  <div className="student-profile-filing-supplement-section-title">
+                    当前教育简历
+                  </div>
+                  <div className="student-profile-filing-education-resume-list">
+                    {activeEducationResumeItems.map((item) => (
+                      <div
+                        className={
+                          item.source === 'inferred'
+                            ? 'student-profile-filing-education-resume-item student-profile-filing-education-resume-item-inferred'
+                            : 'student-profile-filing-education-resume-item'
+                        }
+                        key={item.key}
+                      >
+                        {item.source === 'inferred' ? (
+                          <span className="student-profile-filing-education-resume-source-tag">
+                            <Tag color="default">本校推算</Tag>
+                          </span>
+                        ) : null}
+                        <div className="student-profile-filing-education-resume-main">
+                          <span className="student-profile-filing-education-resume-period">
+                            {item.period}
+                          </span>
+                          <span className="student-profile-filing-education-resume-detail">
+                            <span>{item.organization}</span>
+                            {item.reference ? <span>证明人：{item.reference}</span> : null}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Form<EducationSupplementFormValues>
+                    form={educationSupplementForm}
+                    layout="vertical"
+                    requiredMark={false}
+                    onFinish={() => {
+                      void submitSupplementSection('education');
+                    }}
+                  >
+                    <div className="student-profile-filing-supplement-section-title">
+                      新增教育简历
+                    </div>
+                    <Form.Item
+                      label="开始日期"
+                      name="startDate"
+                      rules={[{ required: true, message: '请输入开始日期。', whitespace: true }]}
+                    >
+                      <Input autoComplete="off" placeholder="YYYY-MM-DD" />
+                    </Form.Item>
+                    <Form.Item
+                      label="结束日期"
+                      name="endDate"
+                      rules={[{ required: true, message: '请输入结束日期。', whitespace: true }]}
+                    >
+                      <Input autoComplete="off" placeholder="YYYY-MM-DD" />
+                    </Form.Item>
+                    <Form.Item
+                      label="学校"
+                      name="organization"
+                      rules={[{ required: true, message: '请输入学校。', whitespace: true }]}
+                    >
+                      <Input autoComplete="off" />
+                    </Form.Item>
+                    <Form.Item
+                      label="证明人"
+                      name="reference"
+                      rules={[{ required: true, message: '请输入证明人。', whitespace: true }]}
+                    >
+                      <Input autoComplete="off" />
+                    </Form.Item>
+                    <div className="student-profile-filing-supplement-drawer-actions">
+                      <Button onClick={closeSupplementDrawer}>取消</Button>
+                      <Button
+                        htmlType="submit"
+                        loading={isSubmittingSupplement && activeSupplementSection === 'education'}
+                        type="primary"
+                      >
+                        提交教育简历
+                      </Button>
+                    </div>
+                  </Form>
+                </div>
+              )}
+            </div>
+          </Spin>
+        ) : null}
+      </Drawer>
+
       <UpstreamLoginModal
-        description="学生建档需要读取学工系统资料，授权后会写入本地基础资料快照。"
-        okText="授权并建档"
+        description={upstreamLoginDescription}
+        okText={upstreamLoginOkText}
         title="登录学工系统"
         {...upstreamLoginModalProps}
       />

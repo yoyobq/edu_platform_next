@@ -44,7 +44,7 @@ export const STUDENT_PROFILE_FILING_COMPLETENESS_ITEMS: readonly StudentProfileF
     },
     {
       key: 'educationObserved',
-      label: '教育经历',
+      label: '教育简历',
     },
     {
       key: 'recordObserved',
@@ -80,8 +80,20 @@ export function isStudentProfileFilingDroppedStudent(input: { studentStatus?: st
   return input.studentStatus?.trim() === 'DROPPED';
 }
 
+export function resolveStudentProfileFilingDroppedSemesterNotice(
+  input: Pick<StudentProfileFilingStudent, 'droppedEffectiveSemesterLabel' | 'rosterScopeSource'>,
+) {
+  if (input.rosterScopeSource !== 'DROPPED_DECISION') {
+    return null;
+  }
+
+  const semesterLabel = input.droppedEffectiveSemesterLabel?.trim();
+
+  return semesterLabel ? `自${semesterLabel}起退学` : null;
+}
+
 export const STUDENT_PROFILE_FILING_SECTION_LABELS: Record<string, string> = {
-  EDUCATION_RESUME: '教育经历',
+  EDUCATION_RESUME: '教育简历',
   FAMILY: '家庭',
   PERSONAL: '基本信息',
   PHOTO: '照片',

@@ -9,6 +9,7 @@ import {
   isStudentProfileFilingDroppedStudent,
   listStudentProfileFilingRefreshableStudentIds,
   resolveStudentProfileFilingActionIntent,
+  resolveStudentProfileFilingDroppedSemesterNotice,
   resolveStudentProfileFilingStatus,
   summarizeStudentProfileFilingStudents,
 } from './student-profile-filing-view-model';
@@ -31,11 +32,15 @@ function buildStudent(
     attentionLevel: 'READY',
     currentClassCode: '2501',
     currentClassId: 'class-1',
+    droppedDecisionReasonCode: null,
+    droppedEffectiveSemesterId: null,
+    droppedEffectiveSemesterLabel: null,
     lastManualUpdatedAt: null,
     lastSyncedAt: '2026-06-25T01:00:00.000Z',
     manualOverrideActive: false,
     membershipLastObservedAt: '2026-06-24T01:00:00.000Z',
     profileCompletenessFlags: completeFlags,
+    rosterScopeSource: 'ACTIVE_MEMBERSHIP',
     sectionStatuses: [],
     snapshotPresent: true,
     sourceObservedAt: '2026-06-25T01:00:00.000Z',
@@ -112,6 +117,26 @@ describe('student profile filing view model', () => {
     expect(resolveStudentProfileFilingStatus(buildStudent({ studentStatus: 'DROPPED' }))).toBe(
       'FILED',
     );
+  });
+
+  it('formats dropped semester notice only from backend roster scope fields', () => {
+    expect(
+      resolveStudentProfileFilingDroppedSemesterNotice(
+        buildStudent({
+          droppedEffectiveSemesterLabel: '2024-2025 学年第二学期',
+          rosterScopeSource: 'DROPPED_DECISION',
+          studentStatus: 'DROPPED',
+        }),
+      ),
+    ).toBe('自2024-2025 学年第二学期起退学');
+    expect(
+      resolveStudentProfileFilingDroppedSemesterNotice(
+        buildStudent({
+          droppedEffectiveSemesterLabel: '2024-2025 学年第二学期',
+          studentStatus: 'DROPPED',
+        }),
+      ),
+    ).toBeNull();
   });
 
   it('counts completeness flags and summarizes a class', () => {
