@@ -43,7 +43,7 @@ GraphQL 字段结构保持兼容。`activeMembershipClassCode` /
 
 ## 前端展示约束
 
-- 不展示无业务价值的 `studentStatus` 列
+- 不展示无业务价值的 `studentStatus` 列；`studentStatus` 只允许作为退学行内标记来源
 - 不因为 `studentStatus === DROPPED` 隐藏学生
 - `UPSTREAM_ID_MISSING` 仍按原逻辑展示为阻断状态，行级操作不可用
 - 行级操作文案按建档状态拆分：

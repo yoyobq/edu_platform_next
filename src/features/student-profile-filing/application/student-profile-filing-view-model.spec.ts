@@ -6,6 +6,7 @@ import type { StudentProfileFilingStudent } from '../infrastructure/student-prof
 
 import {
   countStudentProfileFilingCompleteness,
+  isStudentProfileFilingDroppedStudent,
   listStudentProfileFilingRefreshableStudentIds,
   resolveStudentProfileFilingActionIntent,
   resolveStudentProfileFilingStatus,
@@ -40,6 +41,7 @@ function buildStudent(
     sourceObservedAt: '2026-06-25T01:00:00.000Z',
     studentId: 'S001',
     studentName: '张三',
+    studentStatus: 'ENROLLED',
     upstreamChangedSinceManualPatch: false,
     upstreamIdPresent: true,
     warningCodes: [],
@@ -100,6 +102,16 @@ describe('student profile filing view model', () => {
         }),
       ),
     ).toBe('UNAVAILABLE');
+  });
+
+  it('marks dropped students without using status for filing decisions', () => {
+    expect(isStudentProfileFilingDroppedStudent(buildStudent({}))).toBe(false);
+    expect(isStudentProfileFilingDroppedStudent(buildStudent({ studentStatus: 'DROPPED' }))).toBe(
+      true,
+    );
+    expect(resolveStudentProfileFilingStatus(buildStudent({ studentStatus: 'DROPPED' }))).toBe(
+      'FILED',
+    );
   });
 
   it('counts completeness flags and summarizes a class', () => {

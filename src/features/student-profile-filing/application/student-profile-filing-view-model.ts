@@ -76,6 +76,10 @@ export const STUDENT_PROFILE_FILING_ACTION_LABELS: Record<
   UPDATE: '更新资料',
 };
 
+export function isStudentProfileFilingDroppedStudent(input: { studentStatus?: string | null }) {
+  return input.studentStatus?.trim() === 'DROPPED';
+}
+
 export const STUDENT_PROFILE_FILING_SECTION_LABELS: Record<string, string> = {
   EDUCATION_RESUME: '教育经历',
   FAMILY: '家庭',

@@ -70,6 +70,7 @@ export type StudentProfileFilingStudent = {
   sourceObservedAt: string | null;
   studentId: string;
   studentName: string;
+  studentStatus: string;
   upstreamChangedSinceManualPatch: boolean;
   upstreamIdPresent: boolean;
   warningCodes: string[];
@@ -178,6 +179,7 @@ const STUDENT_PROFILE_FILING_CLASS_OVERVIEW_QUERY = `
       students {
         studentId
         studentName
+        studentStatus
         upstreamIdPresent
         currentClassId
         currentClassCode

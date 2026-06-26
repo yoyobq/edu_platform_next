@@ -33,6 +33,12 @@
   width: 100%;
 }
 
+.student-profile-filing-workbench-section {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
 .student-profile-filing-workbench {
   align-items: start;
   display: grid;
@@ -86,6 +92,13 @@
   min-width: 0;
 }
 
+.student-profile-filing-student-name-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
 .student-profile-filing-student-name {
   color: var(--ant-color-text);
   font-weight: 600;
@@ -99,4 +112,25 @@
   color: var(--ant-color-text-tertiary);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.student-profile-filing-date-cell {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.25;
+}
+
+.student-profile-filing-date {
+  color: var(--ant-color-text-secondary);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.student-profile-filing-time {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+  white-space: nowrap;
 }

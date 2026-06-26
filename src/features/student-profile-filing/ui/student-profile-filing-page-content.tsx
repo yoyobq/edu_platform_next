@@ -37,15 +37,12 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import {
   countStudentProfileFilingCompleteness,
   formatStudentProfileFilingClassLabel,
-  formatStudentProfileFilingDateTime,
+  isStudentProfileFilingDroppedStudent,
   listMissingStudentProfileFilingCompletenessLabels,
   listStudentProfileFilingRefreshableStudentIds,
   resolveStudentProfileFilingActionIntent,
-  resolveStudentProfileFilingStatus,
   STUDENT_PROFILE_FILING_ACTION_LABELS,
   STUDENT_PROFILE_FILING_COMPLETENESS_ITEMS,
-  STUDENT_PROFILE_FILING_STATUS_LABELS,
-  STUDENT_PROFILE_FILING_STATUS_TAG_COLORS,
   summarizeStudentProfileFilingStudents,
 } from '../application/student-profile-filing-view-model';
 import {
@@ -184,6 +181,41 @@ function renderRefreshIssue(result: StudentProfileFilingBatchRefreshItem) {
   }
 
   return '无';
+}
+
+function formatMissingProfileTagLabel(label: string) {
+  return `缺${label}信息`;
+}
+
+function formatFilingDateTimeParts(value: string | null | undefined) {
+  if (!value) {
+    return {
+      date: '未建档',
+      time: null,
+    };
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: value,
+      time: null,
+    };
+  }
+
+  return {
+    date: date.toLocaleDateString('zh-CN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+    time: date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      hour12: false,
+      minute: '2-digit',
+    }),
+  };
 }
 
 export function StudentProfileFilingPageContent({
@@ -453,10 +485,6 @@ export function StudentProfileFilingPageContent({
     void executeFilingAction(upstreamActionRequest.session, upstreamActionRequest.action);
   }, [executeFilingAction, upstreamActionRequest]);
 
-  const selectedClass = useMemo(
-    () => classOptions.find((item) => item.id === selectedClassId) ?? null,
-    [classOptions, selectedClassId],
-  );
   const students = useMemo(() => overview?.students ?? [], [overview?.students]);
   const summary = useMemo(() => summarizeStudentProfileFilingStudents(students), [students]);
   const refreshableStudentIds = useMemo(
@@ -511,26 +539,17 @@ export function StudentProfileFilingPageContent({
         key: 'student',
         render: (_, record) => (
           <div className="student-profile-filing-student-cell">
-            <span className="student-profile-filing-student-name">{record.studentName}</span>
+            <span className="student-profile-filing-student-name-row">
+              <span className="student-profile-filing-student-name">{record.studentName}</span>
+              {isStudentProfileFilingDroppedStudent(record) ? (
+                <Tag color="volcano">退学</Tag>
+              ) : null}
+            </span>
             <span className="student-profile-filing-muted">{record.studentId}</span>
           </div>
         ),
         title: '学生',
-        width: 168,
-      },
-      {
-        key: 'filingStatus',
-        render: (_, record) => {
-          const status = resolveStudentProfileFilingStatus(record);
-
-          return (
-            <Tag color={STUDENT_PROFILE_FILING_STATUS_TAG_COLORS[status]}>
-              {STUDENT_PROFILE_FILING_STATUS_LABELS[status]}
-            </Tag>
-          );
-        },
-        title: '建档状态',
-        width: 112,
+        width: 120,
       },
       {
         key: 'completeness',
@@ -555,22 +574,51 @@ export function StudentProfileFilingPageContent({
           );
         },
         title: '资料进度',
-        width: 150,
-      },
-      {
-        dataIndex: 'lastSyncedAt',
-        key: 'lastSyncedAt',
-        render: (value: string | null) => <span>{formatStudentProfileFilingDateTime(value)}</span>,
-        title: '最近建档',
-        width: 156,
+        width: 190,
       },
       {
         key: 'warnings',
         render: (_, record) => {
           const tags = [
-            ...(record.manualOverrideActive ? ['人工修正'] : []),
-            ...(record.upstreamChangedSinceManualPatch ? ['上游已变化'] : []),
-            ...record.warningCodes,
+            ...(!record.upstreamIdPresent
+              ? [
+                  {
+                    color: 'error',
+                    key: 'upstream-id-missing',
+                    label: '缺学工关联',
+                  },
+                ]
+              : []),
+            ...listMissingStudentProfileFilingCompletenessLabels(
+              record.profileCompletenessFlags,
+            ).map((label) => ({
+              color: 'default',
+              key: `missing:${label}`,
+              label: formatMissingProfileTagLabel(label),
+            })),
+            ...(record.manualOverrideActive
+              ? [
+                  {
+                    color: 'warning',
+                    key: 'manual-override',
+                    label: '人工修正',
+                  },
+                ]
+              : []),
+            ...(record.upstreamChangedSinceManualPatch
+              ? [
+                  {
+                    color: 'warning',
+                    key: 'upstream-changed',
+                    label: '上游已变化',
+                  },
+                ]
+              : []),
+            ...record.warningCodes.map((code) => ({
+              color: 'warning',
+              key: `warning:${code}`,
+              label: code,
+            })),
           ];
 
           if (tags.length === 0) {
@@ -580,15 +628,33 @@ export function StudentProfileFilingPageContent({
           return (
             <Space size={[4, 4]} wrap>
               {tags.map((tag) => (
-                <Tag color="warning" key={tag}>
-                  {tag}
+                <Tag color={tag.color} key={tag.key}>
+                  {tag.label}
                 </Tag>
               ))}
             </Space>
           );
         },
         title: '提醒',
-        width: 180,
+        width: 300,
+      },
+      {
+        dataIndex: 'lastSyncedAt',
+        key: 'lastSyncedAt',
+        render: (value: string | null) => {
+          const display = formatFilingDateTimeParts(value);
+
+          return (
+            <span className="student-profile-filing-date-cell">
+              <span className="student-profile-filing-date">{display.date}</span>
+              {display.time ? (
+                <span className="student-profile-filing-time">{display.time}</span>
+              ) : null}
+            </span>
+          );
+        },
+        title: '最近建档',
+        width: 108,
       },
       {
         fixed: 'right',
@@ -621,7 +687,7 @@ export function StudentProfileFilingPageContent({
           );
         },
         title: '操作',
-        width: 128,
+        width: 122,
       },
     ],
     [filingStudentId, isClassFiling, overview?.classId, requestFilingAction, selectedClassId],
@@ -688,9 +754,7 @@ export function StudentProfileFilingPageContent({
         />
       ) : null}
 
-      <Card
-        title={selectedClass ? formatStudentProfileFilingClassLabel(selectedClass) : '学生列表'}
-      >
+      <section className="student-profile-filing-workbench-section">
         <div
           className={
             isCompactWorkbenchLayout
@@ -704,17 +768,18 @@ export function StudentProfileFilingPageContent({
               dataSource={students}
               loading={isLoadingOverview}
               pagination={{
-                defaultPageSize: 20,
+                defaultPageSize: 30,
+                pageSizeOptions: [30, 60],
                 showSizeChanger: true,
               }}
               rowKey="studentId"
-              scroll={{ x: 920 }}
+              scroll={{ x: 820 }}
               size="middle"
               summary={() =>
                 refreshDigest && refreshDigest.failureCount > 0 ? (
                   <Table.Summary fixed>
                     <Table.Summary.Row>
-                      <Table.Summary.Cell colSpan={6} index={0}>
+                      <Table.Summary.Cell colSpan={5} index={0}>
                         <Space size={[8, 8]} wrap>
                           {refreshDigest.results
                             .filter((result) => result.status !== 'SUCCESS')
@@ -763,7 +828,7 @@ export function StudentProfileFilingPageContent({
             </Spin>
           </aside>
         </div>
-      </Card>
+      </section>
 
       <UpstreamLoginModal
         description="学生建档需要读取学工系统资料，授权后会写入本地基础资料快照。"

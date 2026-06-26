@@ -140,6 +140,7 @@ describe('student profile filing api', () => {
     expect(query).toContain('snapshotPresent');
     expect(query).toContain('profileCompletenessFlags');
     expect(query).toContain('attentionLevel');
+    expect(query).toContain('studentStatus');
     expect(variables).toEqual({
       input: {
         classId: 'class-1',
