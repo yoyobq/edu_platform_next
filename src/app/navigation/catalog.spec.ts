@@ -78,6 +78,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
@@ -139,6 +140,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
@@ -464,6 +466,9 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/upstream-session-reference', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-view', buildFilter())).toBe(true);
+    expect(canAccessNavigationPath('/labs/admin-class-adviser-governance', buildFilter())).toBe(
+      true,
+    );
     expect(canAccessNavigationPath('/labs/student-private-profile', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath(
@@ -487,6 +492,16 @@ describe('navigation catalog', () => {
     expect(
       canAccessNavigationPath(
         '/labs/student-course-results-view',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['CLASS_ADVISER'],
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/labs/admin-class-adviser-governance',
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
@@ -783,6 +798,7 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
+      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',

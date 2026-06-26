@@ -60,6 +60,10 @@ import {
 
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
+import {
+  adminClassAdviserGovernanceLabAccess,
+  loadAdminClassAdviserGovernanceLabRouteModule,
+} from '@/labs/admin-class-adviser-governance';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -715,6 +719,19 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
 async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentCourseResultsViewLabAccess,
+    request,
+  });
+}
+
+async function adminClassAdviserGovernanceLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: adminClassAdviserGovernanceLabAccess,
+    getData: (snapshot) => ({
+      currentAccount: {
+        accountId: snapshot.accountId,
+        displayName: snapshot.displayName,
+      },
+    }),
     request,
   });
 }
@@ -1506,6 +1523,11 @@ const router = createBrowserRouter([
             path: 'student-course-results-view',
             loader: studentCourseResultsViewLabLoader,
             lazy: loadStudentCourseResultsViewLabRouteModule,
+          },
+          {
+            path: 'admin-class-adviser-governance',
+            loader: adminClassAdviserGovernanceLabLoader,
+            lazy: loadAdminClassAdviserGovernanceLabRouteModule,
           },
           {
             path: 'student-private-profile',

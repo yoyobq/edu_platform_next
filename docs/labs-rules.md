@@ -157,6 +157,12 @@ export const demoLabMeta = {
   - 用于验证默认 `CACHE_FIRST`、不带 upstream token 的班级学生课程成绩快照展示
   - 当前只对 `ADMIN` 暴露，不进入 staff labs
   - 仅作为成绩快照展示流程的实验入口；若后续成为正式成绩查看入口，应迁入正式区拥有者切片
+- `/labs/admin-class-adviser-governance`
+  - 用于验证 admin 补齐本地已同步学生归属班级的班主任任职事实链路
+  - 当前只对 `ADMIN` 暴露，不进入 staff labs
+  - 指派时可使用 `fetchTeacherDirectory` 读取 upstream 教师目录，并在本地
+    `member_staff` 尚未建立时向后端提交班主任姓名快照
+  - 仅作为班主任治理流程的实验入口；若后续成为正式管理能力，应迁入正式区拥有者切片
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程
   - 当前对 `ADMIN / STAFF` 暴露，不要求教务 slot

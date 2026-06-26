@@ -105,6 +105,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
           {
             allowedAccessGroups: ['ADMIN'] as const,
+            iconKey: 'TeamOutlined',
+            key: '/labs/admin-class-adviser-governance',
+            label: '班主任治理',
+            navMode: 'rail' as const,
+            path: '/labs/admin-class-adviser-governance',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+          {
+            allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'FileSearchOutlined',
             key: '/labs/student-private-profile',
             label: '学生敏感资料',
