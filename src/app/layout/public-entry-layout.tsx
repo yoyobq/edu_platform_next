@@ -1,4 +1,5 @@
-import { ConfigProvider } from 'antd';
+import { App as AntApp, ConfigProvider } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import type { ReactNode } from 'react';
 import { Outlet } from 'react-router';
 
@@ -14,13 +15,16 @@ export function PublicEntryLayout({ children }: PublicEntryLayoutProps) {
 
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={createAppThemeConfig({
         fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
         isDark,
       })}
     >
-      <AuthRefreshFeedbackBridge />
-      {children ?? <Outlet />}
+      <AntApp component={false}>
+        <AuthRefreshFeedbackBridge />
+        {children ?? <Outlet />}
+      </AntApp>
     </ConfigProvider>
   );
 }

@@ -1,7 +1,8 @@
 // src/app/layout/exam-standalone-layout.tsx
 
 import { type ReactNode, useMemo } from 'react';
-import { ConfigProvider, Layout } from 'antd';
+import { App as AntApp, ConfigProvider, Layout } from 'antd';
+import zhCN from 'antd/locale/zh_CN';
 import { Outlet } from 'react-router';
 
 import { AuthRefreshFeedbackBridge, FONT_SCALE_CONFIG, useTheme } from '@/app/providers';
@@ -29,22 +30,25 @@ export function ExamStandaloneLayout({ children }: ExamStandaloneLayoutProps) {
 
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={createAppThemeConfig({
         fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
         isDark,
       })}
     >
-      <AuthRefreshFeedbackBridge />
-      <Layout
-        style={{
-          background: 'var(--ant-color-bg-layout)',
-          color: 'var(--ant-color-text)',
-          height: '100vh',
-          overflow: 'hidden',
-        }}
-      >
-        {children ?? <Outlet context={outletContext} />}
-      </Layout>
+      <AntApp component={false}>
+        <AuthRefreshFeedbackBridge />
+        <Layout
+          style={{
+            background: 'var(--ant-color-bg-layout)',
+            color: 'var(--ant-color-text)',
+            height: '100vh',
+            overflow: 'hidden',
+          }}
+        >
+          {children ?? <Outlet context={outletContext} />}
+        </Layout>
+      </AntApp>
     </ConfigProvider>
   );
 }

@@ -1,6 +1,6 @@
 // src/features/student-profile-filing/ui/student-profile-filing-page-content.tsx
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CloudSyncOutlined,
   FileDoneOutlined,
@@ -13,6 +13,7 @@ import {
   App as AntApp,
   Button,
   Card,
+  DatePicker,
   Drawer,
   Empty,
   Form,
@@ -29,6 +30,7 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import dayjs, { type Dayjs } from 'dayjs';
 
 import {
   formatUpstreamSessionDateTime,
@@ -62,10 +64,10 @@ import {
   type StudentProfileFilingBatchRefreshItem,
   type StudentProfileFilingClassOption,
   type StudentProfileFilingClassOverview,
+  type StudentProfileFilingEducationSupplementInput,
   type StudentProfileFilingStudent,
   type StudentProfileFilingSupplementEducationResume,
   type StudentProfileFilingSupplementFamilyMember,
-  type StudentProfileFilingSupplementSectionKey,
   type StudentProfileFilingSupplementSummary,
   type StudentProfileFilingSupplementWriteResult,
   writeStudentProfileFilingEducationSupplement,
@@ -87,6 +89,8 @@ export type StudentProfileFilingPageContentProps = {
 
 type StudentProfileFilingSupplementSection = 'education' | 'family';
 
+type StudentProfileFilingSupplementSummarySection = 'education' | 'family';
+
 type FamilySupplementFormValues = {
   name?: string;
   phone?: string;
@@ -95,10 +99,21 @@ type FamilySupplementFormValues = {
 };
 
 type EducationSupplementFormValues = {
-  endDate?: string;
+  endDate?: Dayjs | null;
   organization?: string;
   reference?: string;
-  startDate?: string;
+  startDate?: Dayjs | null;
+};
+
+type EducationSupplementDefaultValues = Pick<
+  EducationSupplementFormValues,
+  'endDate' | 'startDate'
+>;
+
+type AppliedEducationSupplementDefaults = {
+  endMonth: string | null;
+  startMonth: string | null;
+  studentId: string;
 };
 
 type PendingFilingAction =
@@ -121,7 +136,7 @@ type PendingFilingAction =
   | {
       classId: string;
       expectedSectionBaselineToken: string;
-      resume: EducationSupplementFormValues;
+      resume: StudentProfileFilingEducationSupplementInput['resume'];
       studentId: string;
       type: 'education-supplement';
     };
@@ -136,6 +151,12 @@ type SupplementDrawerState = {
   availableSections: StudentProfileFilingSupplementSection[];
   student: StudentProfileFilingStudent;
   summary: StudentProfileFilingSupplementSummary | null;
+};
+
+type SupplementFeedback = {
+  description?: string;
+  message: string;
+  type: 'error' | 'info' | 'success' | 'warning';
 };
 
 type EducationResumeDisplayItem = {
@@ -187,10 +208,10 @@ const SUPPLEMENT_SECTION_LABELS: Record<StudentProfileFilingSupplementSection, s
 
 const SUPPLEMENT_SECTION_KEYS: Record<
   StudentProfileFilingSupplementSection,
-  StudentProfileFilingSupplementSectionKey
+  StudentProfileFilingSupplementSummarySection
 > = {
-  education: 'EDUCATION_RESUME',
-  family: 'FAMILY',
+  education: 'education',
+  family: 'family',
 };
 const CURRENT_SCHOOL_NAME = '江苏省苏州技师学院';
 const FAMILY_RELATIONSHIP_LABELS: Record<string, string> = {
@@ -288,6 +309,10 @@ function renderRefreshIssue(result: StudentProfileFilingBatchRefreshItem) {
 }
 
 function formatMissingProfileTagLabel(label: string) {
+  if (label === '照片') {
+    return '缺照片，请去校园网上传';
+  }
+
   return `缺${label}信息`;
 }
 
@@ -305,25 +330,17 @@ function listStudentProfileFilingSupplementSections(student: StudentProfileFilin
     return [];
   }
 
-  const sections: StudentProfileFilingSupplementSection[] = [];
-
-  if (!student.profileCompletenessFlags.familyObserved) {
-    sections.push('family');
-  }
-
-  sections.push('education');
-
-  return sections;
+  return ['family', 'education'];
 }
 
 function formatStudentProfileFilingSupplementActionLabel(
   sections: readonly StudentProfileFilingSupplementSection[],
 ) {
   if (sections.length === 1) {
-    return `补${SUPPLEMENT_SECTION_LABELS[sections[0]]}`;
+    return `补充${SUPPLEMENT_SECTION_LABELS[sections[0]]}`;
   }
 
-  return '补家庭/教育简历';
+  return '补充家庭/教育简历';
 }
 
 function resolveStudentProfileFilingSupplementSectionBaseline(input: {
@@ -423,6 +440,83 @@ function resolveStudentProfileFilingEnrollmentYear(studentId: string) {
   }
 
   return 2000 + Number(admissionYearText);
+}
+
+function buildDefaultEducationSupplementFormValues(
+  student: StudentProfileFilingStudent,
+  summary?: StudentProfileFilingSupplementSummary | null,
+): EducationSupplementDefaultValues {
+  const enrollmentYear = resolveStudentProfileFilingEnrollmentYear(student.studentId);
+
+  if (!enrollmentYear) {
+    return {
+      endDate: null,
+      startDate: null,
+    };
+  }
+
+  const defaultMiddleSchoolStartMonth = `${enrollmentYear - 3}-09`;
+  const defaultMiddleSchoolEndMonth = `${enrollmentYear}-06`;
+  const hasDefaultMiddleSchoolResume = Boolean(
+    summary?.educationResumes.some(
+      (resume) =>
+        resume.startMonth === defaultMiddleSchoolStartMonth &&
+        resume.endMonth === defaultMiddleSchoolEndMonth,
+    ),
+  );
+
+  if (hasDefaultMiddleSchoolResume) {
+    return {
+      endDate: dayjs(`${enrollmentYear - 3}-06-01`),
+      startDate: dayjs(`${enrollmentYear - 9}-09-01`),
+    };
+  }
+
+  return {
+    endDate: dayjs(`${enrollmentYear}-06-01`),
+    startDate: dayjs(`${enrollmentYear - 3}-09-01`),
+  };
+}
+
+function formatEducationSupplementFormMonth(value: Dayjs | null | undefined) {
+  return value ? value.startOf('month').format('YYYY-MM') : null;
+}
+
+function shouldApplyEducationSupplementDefaults(input: {
+  appliedDefaults: AppliedEducationSupplementDefaults | null;
+  currentValues: Pick<EducationSupplementFormValues, 'endDate' | 'startDate'>;
+  studentId: string;
+}) {
+  const currentStartMonth = formatEducationSupplementFormMonth(input.currentValues.startDate);
+  const currentEndMonth = formatEducationSupplementFormMonth(input.currentValues.endDate);
+
+  if (!currentStartMonth && !currentEndMonth) {
+    return true;
+  }
+
+  if (input.appliedDefaults?.studentId !== input.studentId) {
+    return false;
+  }
+
+  return (
+    currentStartMonth === input.appliedDefaults.startMonth &&
+    currentEndMonth === input.appliedDefaults.endMonth
+  );
+}
+
+function formatEducationSupplementFormDate(value: Dayjs | null | undefined) {
+  return value ? value.startOf('month').format('YYYY-MM-DD') : undefined;
+}
+
+function buildEducationSupplementWriteResume(
+  values: EducationSupplementFormValues,
+): StudentProfileFilingEducationSupplementInput['resume'] {
+  return {
+    endDate: formatEducationSupplementFormDate(values.endDate),
+    organization: values.organization,
+    reference: values.reference,
+    startDate: formatEducationSupplementFormDate(values.startDate),
+  };
 }
 
 function formatStudentProfileFilingClassAdviserNames(option: StudentProfileFilingClassOption) {
@@ -608,7 +702,9 @@ export function StudentProfileFilingPageContent({
   const [supplementDrawerState, setSupplementDrawerState] = useState<SupplementDrawerState | null>(
     null,
   );
+  const [supplementFeedback, setSupplementFeedback] = useState<SupplementFeedback | null>(null);
   const [refreshDigest, setRefreshDigest] = useState<RefreshDigest | null>(null);
+  const educationDefaultsAppliedRef = useRef<AppliedEducationSupplementDefaults | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
   const isCompactWorkbenchLayout = useCompactWorkbenchLayout();
 
@@ -679,6 +775,7 @@ export function StudentProfileFilingPageContent({
       setSelectedClassId(classId);
       setRefreshDigest(null);
       setSupplementDrawerState(null);
+      setSupplementFeedback(null);
       await loadOverview(classId);
     },
     [loadOverview],
@@ -793,6 +890,7 @@ export function StudentProfileFilingPageContent({
     ) => {
       setIsSubmittingSupplement(true);
       setSupplementStudentId(action.studentId);
+      setSupplementFeedback(null);
 
       try {
         const result: StudentProfileFilingSupplementWriteResult =
@@ -813,48 +911,92 @@ export function StudentProfileFilingPageContent({
           action.type === 'family-supplement'
             ? SUPPLEMENT_SECTION_LABELS.family
             : SUPPLEMENT_SECTION_LABELS.education;
+        const resultWarnings =
+          result.warningCodes.length > 0 ? `警告码：${result.warningCodes.join('、')}` : undefined;
 
-        persistSessionFromResult(session, result);
+        let nextSession = persistSessionFromResult(session, result);
+        let profileRefreshFailed = false;
+
+        if (result.success && result.upstreamSaved && !result.localSnapshotRefreshed) {
+          try {
+            const refreshResult = await refreshStudentProfileFilingStudent({
+              studentId: action.studentId,
+              upstreamSessionToken: nextSession.upstreamSessionToken,
+            });
+
+            nextSession = persistSessionFromResult(nextSession, refreshResult);
+          } catch {
+            profileRefreshFailed = true;
+          }
+        }
+
         await loadOverview(action.classId);
 
         if (result.success && result.upstreamSaved) {
           message.success(`${sectionLabel}信息已写回学工系统。`);
+          let nextSummary: StudentProfileFilingSupplementSummary | null = null;
+
+          try {
+            nextSummary = await getStudentProfileFilingSupplementSummary({
+              studentId: action.studentId,
+            });
+          } catch {
+            nextSummary = null;
+          }
+
+          setSupplementFeedback({
+            description: profileRefreshFailed
+              ? '写回已完成，但该学生资料刷新失败。请手动更新该学生资料后确认提醒状态。'
+              : result.summaryRefreshFailed || !nextSummary
+                ? '写回已完成，但资料摘要刷新失败。请刷新当前学生资料后确认最新列表。'
+                : result.localSnapshotRefreshed
+                  ? '该学生资料已更新，当前列表和班级概览已刷新。'
+                  : '已主动更新该学生资料，当前列表和班级概览已刷新。',
+            message: `${sectionLabel}信息已写回学工系统`,
+            type:
+              profileRefreshFailed || result.summaryRefreshFailed || !nextSummary
+                ? 'warning'
+                : 'success',
+          });
 
           if (action.type === 'education-supplement') {
             educationSupplementForm.resetFields();
-            const nextSummary = await getStudentProfileFilingSupplementSummary({
-              studentId: action.studentId,
-            });
 
-            setSupplementDrawerState((current) =>
-              current?.student.studentId === action.studentId
-                ? {
-                    ...current,
-                    summary: nextSummary,
-                  }
-                : current,
-            );
+            if (nextSummary) {
+              setSupplementDrawerState((current) =>
+                current?.student.studentId === action.studentId
+                  ? {
+                      ...current,
+                      summary: nextSummary,
+                    }
+                  : current,
+              );
+            }
           } else {
             familySupplementForm.resetFields();
-            const nextSummary = await getStudentProfileFilingSupplementSummary({
-              studentId: action.studentId,
-            });
 
             familySupplementForm.setFieldValue(
               'relationshipCode',
-              resolveDefaultFamilyRelationshipCode(nextSummary),
+              nextSummary ? resolveDefaultFamilyRelationshipCode(nextSummary) : '1',
             );
-            setSupplementDrawerState((current) =>
-              current?.student.studentId === action.studentId
-                ? {
-                    ...current,
-                    summary: nextSummary,
-                  }
-                : current,
-            );
+            if (nextSummary) {
+              setSupplementDrawerState((current) =>
+                current?.student.studentId === action.studentId
+                  ? {
+                      ...current,
+                      summary: nextSummary,
+                    }
+                  : current,
+              );
+            }
           }
         } else {
           message.warning(`${sectionLabel}信息写回请求已返回，请检查结果。`);
+          setSupplementFeedback({
+            description: resultWarnings ?? '学工系统未确认保存成功，请稍后重试或刷新后检查。',
+            message: `${sectionLabel}信息写回请求已返回`,
+            type: 'warning',
+          });
         }
       } finally {
         setIsSubmittingSupplement(false);
@@ -890,14 +1032,22 @@ export function StudentProfileFilingPageContent({
         await runAction(session);
       } catch (error) {
         if (!isExpiredUpstreamSessionError(error)) {
-          message.error(
-            resolveUpstreamErrorMessage(
-              error,
-              action.type === 'family-supplement' || action.type === 'education-supplement'
-                ? '暂时无法补资料。'
-                : '暂时无法完成学生建档。',
-            ),
+          const isSupplementAction =
+            action.type === 'family-supplement' || action.type === 'education-supplement';
+          const errorMessage = resolveUpstreamErrorMessage(
+            error,
+            isSupplementAction ? '暂时无法补充资料。' : '暂时无法完成学生建档。',
           );
+
+          if (isSupplementAction) {
+            setSupplementFeedback({
+              description: errorMessage,
+              message: '补充资料失败',
+              type: 'error',
+            });
+          }
+
+          message.error(errorMessage);
           return;
         }
 
@@ -906,16 +1056,23 @@ export function StudentProfileFilingPageContent({
 
           await runAction(refreshedSession);
         } catch (refreshError) {
-          setPendingUpstreamActionKind(
-            action.type === 'family-supplement' || action.type === 'education-supplement'
-              ? 'supplement'
-              : 'filing',
-          );
+          const isSupplementAction =
+            action.type === 'family-supplement' || action.type === 'education-supplement';
+
+          if (isSupplementAction) {
+            setSupplementFeedback({
+              description: '请重新登录学工系统，登录成功后会继续提交当前资料。',
+              message: '学工系统登录已失效',
+              type: 'warning',
+            });
+          }
+
+          setPendingUpstreamActionKind(isSupplementAction ? 'supplement' : 'filing');
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
               refreshError,
-              action.type === 'family-supplement' || action.type === 'education-supplement'
-                ? '学工系统会话已失效，请重新登录后继续补资料。'
+              isSupplementAction
+                ? '学工系统会话已失效，请重新登录后继续补充资料。'
                 : '学工系统会话已失效，请重新登录后继续建档。',
             ),
             pendingAction: action,
@@ -941,11 +1098,18 @@ export function StudentProfileFilingPageContent({
         return;
       }
 
-      setPendingUpstreamActionKind(
-        action.type === 'family-supplement' || action.type === 'education-supplement'
-          ? 'supplement'
-          : 'filing',
-      );
+      const isSupplementAction =
+        action.type === 'family-supplement' || action.type === 'education-supplement';
+
+      if (isSupplementAction) {
+        setSupplementFeedback({
+          description: '登录完成后会继续提交当前补充资料。',
+          message: '需要先登录学工系统',
+          type: 'info',
+        });
+      }
+
+      setPendingUpstreamActionKind(isSupplementAction ? 'supplement' : 'filing');
       openLoginModal({
         fallbackUserId: lockedUpstreamLoginUserId ?? currentAccount.staffId,
         pendingAction: action,
@@ -1016,7 +1180,7 @@ export function StudentProfileFilingPageContent({
       const availableSections = listStudentProfileFilingSupplementSections(student);
 
       if (availableSections.length === 0) {
-        message.warning('当前学生没有可补的家庭或教育简历信息。');
+        message.warning('当前学生没有可补充的家庭或教育简历信息。');
         return;
       }
 
@@ -1027,6 +1191,8 @@ export function StudentProfileFilingPageContent({
         workplace: undefined,
       });
       educationSupplementForm.resetFields();
+      educationDefaultsAppliedRef.current = null;
+      setSupplementFeedback(null);
       setSupplementDrawerState({
         activeSection: availableSections[0],
         availableSections,
@@ -1066,6 +1232,8 @@ export function StudentProfileFilingPageContent({
 
   const closeSupplementDrawer = useCallback(() => {
     setSupplementDrawerState(null);
+    setSupplementFeedback(null);
+    educationDefaultsAppliedRef.current = null;
     familySupplementForm.resetFields();
     educationSupplementForm.resetFields();
   }, [educationSupplementForm, familySupplementForm]);
@@ -1084,6 +1252,40 @@ export function StudentProfileFilingPageContent({
     [],
   );
 
+  useEffect(() => {
+    if (supplementDrawerState?.activeSection !== 'education' || !supplementDrawerState.student) {
+      return;
+    }
+
+    const currentValues = educationSupplementForm.getFieldsValue(['startDate', 'endDate']);
+
+    if (
+      !shouldApplyEducationSupplementDefaults({
+        appliedDefaults: educationDefaultsAppliedRef.current,
+        currentValues,
+        studentId: supplementDrawerState.student.studentId,
+      })
+    ) {
+      return;
+    }
+
+    const defaultValues = buildDefaultEducationSupplementFormValues(
+      supplementDrawerState.student,
+      supplementDrawerState.summary,
+    );
+    educationSupplementForm.setFieldsValue(defaultValues);
+    educationDefaultsAppliedRef.current = {
+      endMonth: formatEducationSupplementFormMonth(defaultValues.endDate),
+      startMonth: formatEducationSupplementFormMonth(defaultValues.startDate),
+      studentId: supplementDrawerState.student.studentId,
+    };
+  }, [
+    educationSupplementForm,
+    supplementDrawerState?.activeSection,
+    supplementDrawerState?.summary,
+    supplementDrawerState?.student,
+  ]);
+
   const submitSupplementSection = useCallback(
     async (section: StudentProfileFilingSupplementSection) => {
       if (!supplementDrawerState) {
@@ -1093,6 +1295,11 @@ export function StudentProfileFilingPageContent({
       const classId = overview?.classId ?? selectedClassId;
 
       if (!classId) {
+        setSupplementFeedback({
+          description: '请选择班级后再提交补充资料。',
+          message: '暂时无法提交',
+          type: 'warning',
+        });
         message.warning('请先选择班级。');
         return;
       }
@@ -1103,11 +1310,18 @@ export function StudentProfileFilingPageContent({
       });
 
       if (!expectedSectionBaselineToken) {
-        message.error(
-          `${SUPPLEMENT_SECTION_LABELS[section]}信息缺少资料版本校验码，请先更新资料。`,
-        );
+        const errorMessage = `${SUPPLEMENT_SECTION_LABELS[section]}信息缺少资料版本校验码，请先更新资料。`;
+
+        setSupplementFeedback({
+          description: errorMessage,
+          message: '暂时无法提交',
+          type: 'error',
+        });
+        message.error(errorMessage);
         return;
       }
+
+      setSupplementFeedback(null);
 
       if (section === 'family') {
         const values = await familySupplementForm.validateFields();
@@ -1127,7 +1341,7 @@ export function StudentProfileFilingPageContent({
       requestFilingAction({
         classId,
         expectedSectionBaselineToken,
-        resume: values,
+        resume: buildEducationSupplementWriteResume(values),
         studentId: supplementDrawerState.student.studentId,
         type: 'education-supplement',
       });
@@ -1379,10 +1593,10 @@ export function StudentProfileFilingPageContent({
   );
   const upstreamLoginDescription =
     pendingUpstreamActionKind === 'supplement'
-      ? '补资料需要写回学工系统，授权后会刷新本地资料快照。'
+      ? '补充资料需要写回学工系统，授权后会刷新本地资料快照。'
       : '学生建档需要读取学工系统资料，授权后会写入本地基础资料快照。';
   const upstreamLoginOkText =
-    pendingUpstreamActionKind === 'supplement' ? '授权并补资料' : '授权并建档';
+    pendingUpstreamActionKind === 'supplement' ? '授权并补充资料' : '授权并建档';
 
   return (
     <div className="student-profile-filing-page">
@@ -1550,7 +1764,21 @@ export function StudentProfileFilingPageContent({
         destroyOnHidden
         open={Boolean(supplementDrawerState)}
         title={
-          activeSupplementStudent ? `补资料 - ${activeSupplementStudent.studentName}` : '补资料'
+          activeSupplementStudent ? (
+            <span className="student-profile-filing-supplement-drawer-title">
+              <span className="student-profile-filing-supplement-drawer-title-context">
+                补充资料
+              </span>
+              <span className="student-profile-filing-supplement-drawer-title-student">
+                {activeSupplementStudent.studentName}
+              </span>
+              <span className="student-profile-filing-supplement-drawer-title-id">
+                {activeSupplementStudent.studentId}
+              </span>
+            </span>
+          ) : (
+            '补充资料'
+          )
         }
         width={480}
         onClose={closeSupplementDrawer}
@@ -1566,6 +1794,17 @@ export function StudentProfileFilingPageContent({
                   onChange={(value) =>
                     handleSupplementSectionChange(value as StudentProfileFilingSupplementSection)
                   }
+                />
+              ) : null}
+
+              {supplementFeedback ? (
+                <Alert
+                  closable
+                  description={supplementFeedback.description}
+                  message={supplementFeedback.message}
+                  showIcon
+                  type={supplementFeedback.type}
+                  onClose={() => setSupplementFeedback(null)}
                 />
               ) : null}
 
@@ -1615,6 +1854,8 @@ export function StudentProfileFilingPageContent({
                         options={[
                           { label: '父亲', value: '1' },
                           { label: '母亲', value: '2' },
+                          { label: '祖父母', value: '3' },
+                          { label: '兄弟姐妹', value: '4' },
                         ]}
                       />
                     </Form.Item>
@@ -1680,6 +1921,15 @@ export function StudentProfileFilingPageContent({
 
                   <Form<EducationSupplementFormValues>
                     form={educationSupplementForm}
+                    initialValues={
+                      activeSupplementStudent
+                        ? buildDefaultEducationSupplementFormValues(
+                            activeSupplementStudent,
+                            supplementDrawerState?.summary,
+                          )
+                        : undefined
+                    }
+                    key={`education-supplement-${activeSupplementStudent?.studentId ?? 'none'}`}
                     layout="vertical"
                     requiredMark={false}
                     onFinish={() => {
@@ -1690,18 +1940,30 @@ export function StudentProfileFilingPageContent({
                       新增教育简历
                     </div>
                     <Form.Item
-                      label="开始日期"
+                      label="开始月份"
                       name="startDate"
-                      rules={[{ required: true, message: '请输入开始日期。', whitespace: true }]}
+                      rules={[{ required: true, message: '请选择开始月份。' }]}
                     >
-                      <Input autoComplete="off" placeholder="YYYY-MM-DD" />
+                      <DatePicker
+                        allowClear
+                        format="YYYY-MM"
+                        picker="month"
+                        placeholder="请选择开始月份"
+                        style={{ width: '100%' }}
+                      />
                     </Form.Item>
                     <Form.Item
-                      label="结束日期"
+                      label="结束月份"
                       name="endDate"
-                      rules={[{ required: true, message: '请输入结束日期。', whitespace: true }]}
+                      rules={[{ required: true, message: '请选择结束月份。' }]}
                     >
-                      <Input autoComplete="off" placeholder="YYYY-MM-DD" />
+                      <DatePicker
+                        allowClear
+                        format="YYYY-MM"
+                        picker="month"
+                        placeholder="请选择结束月份"
+                        style={{ width: '100%' }}
+                      />
                     </Form.Item>
                     <Form.Item
                       label="学校"

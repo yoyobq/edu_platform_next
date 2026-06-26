@@ -621,8 +621,8 @@ function normalizeStudentProfileFilingRelationshipCode(
     label: '家庭关系',
   });
 
-  if (!new Set(['1', '2']).has(normalizedRelationshipCode)) {
-    throw new Error('家庭关系暂只支持父亲、母亲。');
+  if (!new Set(['1', '2', '3', '4']).has(normalizedRelationshipCode)) {
+    throw new Error('家庭关系暂只支持父亲、母亲、祖父母、兄弟姐妹。');
   }
 
   return normalizedRelationshipCode;

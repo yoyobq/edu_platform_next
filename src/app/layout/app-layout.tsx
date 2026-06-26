@@ -13,6 +13,7 @@ import {
 } from 'react';
 import { LayoutOutlined, MoonOutlined, SearchOutlined, SunOutlined } from '@ant-design/icons';
 import {
+  App as AntApp,
   Button,
   Card,
   ConfigProvider,
@@ -25,6 +26,7 @@ import {
   Typography,
 } from 'antd';
 import type { ItemType } from 'antd/es/menu/interface';
+import zhCN from 'antd/locale/zh_CN';
 import { Link, Outlet, useLocation, useNavigate, useRevalidator } from 'react-router';
 
 import { withCollaborationSearch } from '@/app/lib';
@@ -496,38 +498,187 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 
   return (
     <ConfigProvider
+      locale={zhCN}
       theme={createAppThemeConfig({
         fontSize: FONT_SCALE_CONFIG[fontScale].antdFontSize,
         isDark,
       })}
     >
-      <AuthRefreshFeedbackBridge />
-      <div className="h-screen overflow-hidden bg-bg-layout text-text">
-        {hasSidebar ? (
-          <Layout style={{ height: '100%', background: 'transparent' }}>
-            <Layout style={{ background: 'transparent', minHeight: 0, overflow: 'hidden' }}>
-              <Layout.Sider
-                width={sidebarWidth}
+      <AntApp component={false}>
+        <AuthRefreshFeedbackBridge />
+        <div className="h-screen overflow-hidden bg-bg-layout text-text">
+          {hasSidebar ? (
+            <Layout style={{ height: '100%', background: 'transparent' }}>
+              <Layout style={{ background: 'transparent', minHeight: 0, overflow: 'hidden' }}>
+                <Layout.Sider
+                  width={sidebarWidth}
+                  style={{
+                    background: 'var(--color-bg-container)',
+                    borderRight: '1px solid var(--ant-color-border-secondary)',
+                    overflow: 'visible',
+                    position: 'relative',
+                  }}
+                >
+                  {sidebarOverride ? (
+                    <div className="h-full" style={{ width: sidebarWidth }}>
+                      {sidebarOverride.content}
+                    </div>
+                  ) : (
+                    <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
+                  )}
+                </Layout.Sider>
+                <Layout style={{ background: 'transparent', minWidth: 0 }}>
+                  {mainToolbar}
+                  <Layout.Content
+                    data-layout-scroll-container="main"
+                    style={{ padding: '0 24px 32px', overflowY: 'auto' }}
+                  >
+                    <div
+                      ref={setMainRef}
+                      data-main-width-band={mainWidthBand}
+                      style={mainFrameStyle}
+                    >
+                      <Flex
+                        vertical
+                        gap={mainWidthBand === 'compact' ? 16 : 24}
+                        data-layout-slot="main-content-column"
+                        className="mx-auto max-w-7xl transition-[gap]"
+                      >
+                        {isLabsRoute ? (
+                          <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
+                            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                              `labs` 路由需要通过当前登录会话的访问控制规则。
+                            </Typography.Paragraph>
+                          </div>
+                        ) : null}
+                        {isHydrating && !hasExplicitChildren ? (
+                          <Card>
+                            <Flex vertical gap={20}>
+                              <div className="flex flex-col gap-2">
+                                <Typography.Title level={4} style={{ marginBottom: 0 }}>
+                                  正在同步账户信息
+                                </Typography.Title>
+                                <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                                  已建立登录会话，正在补齐当前账号的身份与权限信息。
+                                </Typography.Paragraph>
+                              </div>
+                              <Skeleton active paragraph={{ rows: 6 }} />
+                            </Flex>
+                          </Card>
+                        ) : (
+                          (children ?? <Outlet context={layoutOutletContext} />)
+                        )}
+                      </Flex>
+                    </div>
+                  </Layout.Content>
+                </Layout>
+              </Layout>
+            </Layout>
+          ) : (
+            <Layout style={{ height: '100%', background: 'transparent' }}>
+              <Layout.Header
                 style={{
                   background: 'var(--color-bg-container)',
-                  borderRight: '1px solid var(--ant-color-border-secondary)',
-                  overflow: 'visible',
-                  position: 'relative',
+                  borderBottom: '1px solid var(--ant-color-border-secondary)',
+                  paddingInline: 0,
+                  height: 'auto',
+                  lineHeight: 'normal',
+                  flexShrink: 0,
                 }}
               >
-                {sidebarOverride ? (
-                  <div className="h-full" style={{ width: sidebarWidth }}>
-                    {sidebarOverride.content}
+                <div
+                  className="flex items-center justify-between gap-4 py-3"
+                  style={frameShiftStyle}
+                >
+                  <div
+                    className="flex min-w-0 shrink-0 items-center"
+                    style={{
+                      paddingLeft: 24,
+                    }}
+                  >
+                    <BrandLockup variant="header" />
                   </div>
-                ) : (
-                  <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
-                )}
-              </Layout.Sider>
-              <Layout style={{ background: 'transparent', minWidth: 0 }}>
-                {mainToolbar}
+
+                  {menuItems.length > 0 && mainWidthBand !== 'compact' && (
+                    <div className="min-w-0 flex-1">
+                      <Menu
+                        mode="horizontal"
+                        selectedKeys={[getBaseURL(location.pathname, search)]}
+                        items={menuItems}
+                        style={{
+                          justifyContent: 'center',
+                          borderBottom: 'none',
+                          background: 'transparent',
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
+                    {mainToolbar}
+                    <Segmented
+                      size="small"
+                      value={fontScale}
+                      options={FONT_SCALE_OPTIONS}
+                      onChange={(v) => setFontScale(v as FontScale)}
+                    />
+                    <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
+                      <Button
+                        type="text"
+                        shape="circle"
+                        icon={isDark ? <SunOutlined /> : <MoonOutlined />}
+                        aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
+                        onClick={() => setIsDark((v) => !v)}
+                      />
+                    </Tooltip>
+
+                    {authSession.status === 'authenticated' && activeSnapshot ? (
+                      <AccountMenuComponent
+                        activeSnapshot={activeSnapshot}
+                        controlSize={NAV_RAIL_CONTROL_SIZE}
+                        fontScale={fontScale}
+                        isDark={isDark}
+                        isSessionResolving={isSessionResolving}
+                        placement="bottomRight"
+                        setFontScale={setFontScale}
+                        setIsDark={setIsDark}
+                        trigger="top"
+                      />
+                    ) : null}
+
+                    {isSessionResolving ? (
+                      <>
+                        <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
+                          正在同步账户信息
+                        </div>
+                        <Button
+                          type="text"
+                          size="small"
+                          onClick={() => {
+                            clearLocalAuthSession();
+                            navigate('/login', { replace: true });
+                          }}
+                        >
+                          取消登录
+                        </Button>
+                      </>
+                    ) : null}
+
+                    {authSession.status !== 'authenticated' && !isSessionResolving ? (
+                      <Button type="primary" size="small" onClick={() => navigate('/login')}>
+                        登录
+                      </Button>
+                    ) : null}
+                  </div>
+                </div>
+              </Layout.Header>
+
+              <Layout
+                style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}
+              >
                 <Layout.Content
                   data-layout-scroll-container="main"
-                  style={{ padding: '0 24px 32px', overflowY: 'auto' }}
+                  style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
                 >
                   <div ref={setMainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
                     <Flex
@@ -565,199 +716,60 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                 </Layout.Content>
               </Layout>
             </Layout>
-          </Layout>
-        ) : (
-          <Layout style={{ height: '100%', background: 'transparent' }}>
-            <Layout.Header
-              style={{
-                background: 'var(--color-bg-container)',
-                borderBottom: '1px solid var(--ant-color-border-secondary)',
-                paddingInline: 0,
-                height: 'auto',
-                lineHeight: 'normal',
-                flexShrink: 0,
-              }}
-            >
-              <div className="flex items-center justify-between gap-4 py-3" style={frameShiftStyle}>
-                <div
-                  className="flex min-w-0 shrink-0 items-center"
-                  style={{
-                    paddingLeft: 24,
-                  }}
-                >
-                  <BrandLockup variant="header" />
-                </div>
+          )}
 
-                {menuItems.length > 0 && mainWidthBand !== 'compact' && (
-                  <div className="min-w-0 flex-1">
-                    <Menu
-                      mode="horizontal"
-                      selectedKeys={[getBaseURL(location.pathname, search)]}
-                      items={menuItems}
-                      style={{
-                        justifyContent: 'center',
-                        borderBottom: 'none',
-                        background: 'transparent',
-                      }}
-                    />
-                  </div>
-                )}
-
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-3 pr-6">
-                  {mainToolbar}
-                  <Segmented
-                    size="small"
-                    value={fontScale}
-                    options={FONT_SCALE_OPTIONS}
-                    onChange={(v) => setFontScale(v as FontScale)}
-                  />
-                  <Tooltip title={isDark ? '切换浅色模式' : '切换深色模式'}>
-                    <Button
-                      type="text"
-                      shape="circle"
-                      icon={isDark ? <SunOutlined /> : <MoonOutlined />}
-                      aria-label={isDark ? '切换浅色模式' : '切换深色模式'}
-                      onClick={() => setIsDark((v) => !v)}
-                    />
-                  </Tooltip>
-
-                  {authSession.status === 'authenticated' && activeSnapshot ? (
-                    <AccountMenuComponent
-                      activeSnapshot={activeSnapshot}
-                      controlSize={NAV_RAIL_CONTROL_SIZE}
-                      fontScale={fontScale}
-                      isDark={isDark}
-                      isSessionResolving={isSessionResolving}
-                      placement="bottomRight"
-                      setFontScale={setFontScale}
-                      setIsDark={setIsDark}
-                      trigger="top"
-                    />
-                  ) : null}
-
-                  {isSessionResolving ? (
-                    <>
-                      <div className="rounded-full bg-bg-layout px-3 py-1 text-xs text-text-secondary">
-                        正在同步账户信息
-                      </div>
-                      <Button
-                        type="text"
-                        size="small"
-                        onClick={() => {
-                          clearLocalAuthSession();
-                          navigate('/login', { replace: true });
-                        }}
-                      >
-                        取消登录
-                      </Button>
-                    </>
-                  ) : null}
-
-                  {authSession.status !== 'authenticated' && !isSessionResolving ? (
-                    <Button type="primary" size="small" onClick={() => navigate('/login')}>
-                      登录
-                    </Button>
-                  ) : null}
-                </div>
-              </div>
-            </Layout.Header>
-
-            <Layout
-              style={{ background: 'transparent', flex: 1, minHeight: 0, overflow: 'hidden' }}
-            >
-              <Layout.Content
-                data-layout-scroll-container="main"
-                style={{ padding: '16px 24px 32px', overflowY: 'auto' }}
-              >
-                <div ref={setMainRef} data-main-width-band={mainWidthBand} style={mainFrameStyle}>
-                  <Flex
-                    vertical
-                    gap={mainWidthBand === 'compact' ? 16 : 24}
-                    data-layout-slot="main-content-column"
-                    className="mx-auto max-w-7xl transition-[gap]"
-                  >
-                    {isLabsRoute ? (
-                      <div className="rounded-badge border border-warning-border bg-warning-bg px-4 py-2">
-                        <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                          `labs` 路由需要通过当前登录会话的访问控制规则。
-                        </Typography.Paragraph>
-                      </div>
-                    ) : null}
-                    {isHydrating && !hasExplicitChildren ? (
-                      <Card>
-                        <Flex vertical gap={20}>
-                          <div className="flex flex-col gap-2">
-                            <Typography.Title level={4} style={{ marginBottom: 0 }}>
-                              正在同步账户信息
-                            </Typography.Title>
-                            <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-                              已建立登录会话，正在补齐当前账号的身份与权限信息。
-                            </Typography.Paragraph>
-                          </div>
-                          <Skeleton active paragraph={{ rows: 6 }} />
-                        </Flex>
-                      </Card>
-                    ) : (
-                      (children ?? <Outlet context={layoutOutletContext} />)
-                    )}
-                  </Flex>
-                </div>
-              </Layout.Content>
-            </Layout>
-          </Layout>
-        )}
-
-        <div
-          data-layout-layer="third-workspace-root"
-          data-workspace-state="closed"
-          aria-hidden="true"
-        >
-          <div data-workspace-mount="artifacts-canvas" />
-        </div>
-
-        {hasLoadedEntrySidecar ? (
-          <Suspense fallback={null}>
-            <EntrySidecar />
-          </Suspense>
-        ) : null}
-
-        <div data-layout-layer="global-overlay-root" aria-hidden="true">
-          <div data-overlay-mount="cross-region-visual" />
-        </div>
-
-        {SHOULD_SHOW_ENTRY_TRIGGER ? (
           <div
-            className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
-            data-entry-open={isOpen ? 'true' : 'false'}
+            data-layout-layer="third-workspace-root"
+            data-workspace-state="closed"
+            aria-hidden="true"
           >
-            <Button
-              ref={triggerRef}
-              type={isOpen ? 'default' : 'primary'}
-              size="large"
-              shape="round"
-              aria-keyshortcuts="Alt+K"
-              onClick={() => {
-                if (isOpen) {
-                  close();
-                  return;
-                }
-                setHasLoadedEntrySidecar(true);
-                open();
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <EntryAccentGlyph inverse={!isOpen} />
-                <span>开始</span>
-                {showShortcutHint ? (
-                  <span className="entry-trigger-shortcut rounded-full px-2 py-0.5 text-xs">
-                    Alt+K
-                  </span>
-                ) : null}
-              </div>
-            </Button>
+            <div data-workspace-mount="artifacts-canvas" />
           </div>
-        ) : null}
-      </div>
+
+          {hasLoadedEntrySidecar ? (
+            <Suspense fallback={null}>
+              <EntrySidecar />
+            </Suspense>
+          ) : null}
+
+          <div data-layout-layer="global-overlay-root" aria-hidden="true">
+            <div data-overlay-mount="cross-region-visual" />
+          </div>
+
+          {SHOULD_SHOW_ENTRY_TRIGGER ? (
+            <div
+              className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
+              data-entry-open={isOpen ? 'true' : 'false'}
+            >
+              <Button
+                ref={triggerRef}
+                type={isOpen ? 'default' : 'primary'}
+                size="large"
+                shape="round"
+                aria-keyshortcuts="Alt+K"
+                onClick={() => {
+                  if (isOpen) {
+                    close();
+                    return;
+                  }
+                  setHasLoadedEntrySidecar(true);
+                  open();
+                }}
+              >
+                <div className="flex items-center gap-2">
+                  <EntryAccentGlyph inverse={!isOpen} />
+                  <span>开始</span>
+                  {showShortcutHint ? (
+                    <span className="entry-trigger-shortcut rounded-full px-2 py-0.5 text-xs">
+                      Alt+K
+                    </span>
+                  ) : null}
+                </div>
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      </AntApp>
     </ConfigProvider>
   );
 }

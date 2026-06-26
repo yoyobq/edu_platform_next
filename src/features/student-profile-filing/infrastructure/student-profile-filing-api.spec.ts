@@ -258,12 +258,12 @@ describe('student profile filing api', () => {
       },
       sectionStatuses: [
         {
-          section: 'FAMILY',
+          section: 'family',
           sectionBaselineToken: 'family-baseline-1',
           sourceStatus: 'PRESENT',
         },
         {
-          section: 'EDUCATION_RESUME',
+          section: 'education',
           sectionBaselineToken: 'education-baseline-1',
           sourceStatus: 'MISSING',
         },
@@ -325,6 +325,17 @@ describe('student profile filing api', () => {
       studentId: 'S001',
       upstreamSessionToken: 'token-1',
     });
+    expect(
+      normalizeStudentProfileFilingFamilySupplementInput({
+        expectedSectionBaselineToken: ' family-baseline-1 ',
+        member: {
+          name: ' 张三姐姐 ',
+          relationshipCode: ' 4 ',
+        },
+        studentId: ' S001 ',
+        upstreamSessionToken: ' token-1 ',
+      }).members[0]?.relationshipCode,
+    ).toBe('4');
     expect(
       normalizeStudentProfileFilingEducationSupplementInput({
         expectedSectionBaselineToken: ' education-baseline-1 ',

@@ -50,16 +50,28 @@ GraphQL 字段结构保持兼容。`activeMembershipClassCode` /
 - 不因为 `studentStatus === DROPPED` 隐藏学生
 - 学生列只展示“退学”标记；退学起始学期放在提醒列，文案为
   `自<droppedEffectiveSemesterLabel>起退学`
-- 已建档且缺家庭或教育简历时，可在操作列提供轻量补资料入口；补资料只支持新增单条
-  家庭成员或教育简历，不搬运 lab 的详情页、Excel、编辑、删除交互。家庭成员补录只提供
-  父亲/母亲关系，并展示已有上游家庭成员列表
-- 教育简历按列表展示；补资料抽屉展示已有上游教育简历，并在最后展示一个虚影本校项。
+- 提醒列缺失项默认展示为 `缺<资料项>信息`；照片缺失例外，展示为
+  `缺照片，请去校园网上传`
+- 已建档且有关联上游学生时，可在操作列提供轻量补充资料入口；补充资料只支持新增单条
+  家庭成员或教育简历，不搬运 lab 的详情页、Excel、编辑、删除交互。家庭/教育简历补录入口
+  不按缺失状态过滤；家庭成员补录可维护父亲、母亲、祖父母、兄弟姐妹，并展示已有上游家庭
+  成员列表
+- “缺家庭信息”只消费后端 `profileCompletenessFlags.familyObserved`；该字段要求 effective
+  家庭关系中同时存在父亲和母亲。其他关系可展示和维护，但不参与缺失判定，前端不得根据
+  `familyMembers[]` 自行重算
+- 教育简历按列表展示；补充资料抽屉展示已有上游教育简历，并在最后展示一个虚影本校项。
   本校项只展示、不提交；入学年份从学号 `studentId` 的第 2、3 位数字推断，展示为
   `<入学年份> 年 9 月 - <至今或毕业年份 6 月> 江苏省苏州技师学院`；证明人优先使用
   已选班级的 active 班主任
+- 新增教育简历表单使用月份选择器；默认按本校入学年份向前推 3 年，预填
+  `<入学年份 - 3>-09` 到 `<入学年份>-06`；如果已有这条中学段经历，则默认预填
+  `<入学年份 - 9>-09` 到 `<入学年份 - 3>-06`，用于补小学段。提交时按所选月份 1 日转为
+  后端日期入参
 - 教育简历写回受后端限制，每次只提交 1 条新增经历；写回成功后保留抽屉并刷新列表，
   方便继续添加第三、第四条
 - 家庭信息写回成功后保留抽屉并刷新已有家庭成员列表，方便继续补另一位家长
+- 家庭/教育简历写回成功后必须更新对应学生资料：优先使用后端写回结果中的本地快照刷新；
+  如果 `localSnapshotRefreshed` 为 false，前端使用同一上游会话主动刷新该学生，再更新班级概览
 - 选中班级后的班级上下文直接消费 `studentPrivateProfileClassOptions` 返回值，包括 active
   班主任、专业/学制、班级年份区间和班级在校状态；前端不再额外发起班级上下文查询
 - `UPSTREAM_ID_MISSING` 仍按原逻辑展示为阻断状态，行级操作不可用
@@ -76,7 +88,7 @@ GraphQL 字段结构保持兼容。`activeMembershipClassCode` /
 - `studentPrivateProfileClassOverview`
 - `refreshStudentPrivateProfileClassFromUpstream`
 - `refreshStudentPrivateProfileFromUpstream`
-- `studentPrivateProfileSummary`：仅用于读取补资料所需 section baseline
+- `studentPrivateProfileSummary`：仅用于读取补充资料所需 section baseline
 - `writeStudentPrivateProfileFamilyToUpstream`
 - `writeStudentPrivateProfileEducationToUpstream`
 

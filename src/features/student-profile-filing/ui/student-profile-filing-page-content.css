@@ -187,6 +187,32 @@
   gap: 16px;
 }
 
+.student-profile-filing-supplement-drawer-title {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  line-height: 1.2;
+}
+
+.student-profile-filing-supplement-drawer-title-context {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.student-profile-filing-supplement-drawer-title-student {
+  color: var(--ant-color-primary);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.student-profile-filing-supplement-drawer-title-id {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 .student-profile-filing-supplement-drawer-actions {
   display: flex;
   gap: 8px;
