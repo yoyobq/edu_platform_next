@@ -17,6 +17,17 @@ export {
   sortAcademicSemestersForDisplay,
   VISIBLE_ACADEMIC_SEMESTERS_QUERY_INPUT,
 } from './application/academic-semester-period-options';
+export type { AcademicTermLike } from './application/academic-term';
+export {
+  buildAcademicTermKey,
+  buildAcademicTermOrdinalByKey,
+  formatAcademicSchoolYear,
+  formatAcademicSemester,
+  formatAcademicTermLabel,
+  parsePositiveIntegerText,
+  resolveAcademicTermTimelineOrder,
+  sortAcademicTermsByTimelineDesc,
+} from './application/academic-term';
 export type { AcademicSemesterRecord } from './application/types';
 export { AcademicSemesterFormItem } from './ui/academic-semester-form-item';
 export { AcademicSemesterPeriodFormItems } from './ui/academic-semester-period-form-items';

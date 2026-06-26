@@ -200,7 +200,13 @@ describe('student-conduct-grade-governance api', () => {
 
     expect(query).toContain('snapshotPresent');
     expect(query).toContain('upstreamIdPresent');
-    expect(query).toContain('attentionLevel');
+    expect(query).toContain('studentName');
+    expect(query).toContain('studentStatus');
+    expect(query).not.toContain('profileCompletenessFlags');
+    expect(query).not.toContain('sectionStatuses');
+    expect(query).not.toContain('warningCodes');
+    expect(query).not.toContain('sourceObservedAt');
+    expect(query).not.toContain('lastSyncedAt');
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('StudentConductGradeGovernanceClassOverview'),
       {
@@ -221,13 +227,6 @@ describe('student-conduct-grade-governance api', () => {
       semester: '1',
       studentCount: 0,
       students: [],
-      summary: {
-        correctionCleanupPendingCount: 0,
-        localCorrectionCount: 0,
-        missingCount: 0,
-        upstreamChangedSinceCorrectionCount: 0,
-        upstreamConfirmedCount: 0,
-      },
     };
 
     executeGraphQLMock.mockResolvedValueOnce({
@@ -250,7 +249,8 @@ describe('student-conduct-grade-governance api', () => {
     expect(query).toContain('confirmedGrade');
     expect(query).toContain('displayValue');
     expect(query).toMatch(/score\s*\{\s*value\s+source\s+conflict\s*\}/);
-    expect(query).toContain('correctionCleanupPendingCount');
+    expect(query).not.toContain('summary');
+    expect(query).not.toContain('correctionCleanupPendingCount');
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('StudentConductGradeGovernanceEffectiveView'),
       {

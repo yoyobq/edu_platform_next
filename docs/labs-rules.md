@@ -160,7 +160,9 @@ export const demoLabMeta = {
 - `/labs/student-conduct-grade-governance`
   - 用于验证班级学期操行等级有效视图、本地补正冲突观察与失效补正清理链路
   - 当前对 `ADMIN / STAFF` 在 dev 环境暴露
-  - v1 不承担操行 refresh 或 Excel import；本地快照初始化仍以前置学生敏感资料治理链路为准
+  - 当前承担 canonical 学期选择、操行 upstream 同步、有效视图展示和 stale correction 清理；本地快照初始化仍以前置学生敏感资料治理链路为准
+  - 前端只使用 `studentConductGradeClassTermOptions(classCode)` 生成学期，不依赖全局 visible semester，也不自行推当前学期
+  - 操行 Excel `dry-run / import` 暂未接入公开前端入口
 - `/labs/admin-class-adviser-governance`
   - 用于验证 admin 补齐本地已同步学生归属班级的班主任任职事实链路
   - 当前只对 `ADMIN` 暴露，不进入 staff labs

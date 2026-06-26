@@ -1,7 +1,6 @@
 // src/features/class-affairs-course-results/ui/class-affairs-course-results-page-content.tsx
 
 import {
-  type CSSProperties,
   type Dispatch,
   type SetStateAction,
   useCallback,
@@ -16,9 +15,14 @@ import {
   SearchOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, Empty, Form, Input, Select, Spin, Table, Tabs, Tag, theme } from 'antd';
-import type { ColumnsType, ColumnType } from 'antd/es/table';
+import type { ColumnsType } from 'antd/es/table';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+import {
+  type AcademicSemesterRecord,
+  buildAcademicTermKey as buildTermKey,
+  formatAcademicSchoolYear as formatSchoolYear,
+  formatAcademicSemester as formatSemester,
+} from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -31,6 +35,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { buildStableColumnSizing } from '@/shared/ui/stable-table';
 
 import {
   fetchManagedClassCourseResults,
@@ -142,10 +147,6 @@ function useCompactViewport() {
   return isCompactViewport;
 }
 
-function buildTermKey(term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | 'semester'>) {
-  return `${term.schoolYear}::${term.semester}`;
-}
-
 function toDisplayTerm(term: ManagedClassCourseResultsTerm | null) {
   if (!term) {
     return null;
@@ -221,31 +222,6 @@ function buildCourseKey(row: DisplayRow) {
 
 function resolveCourseName(row: DisplayRow) {
   return row.courseName?.trim() || row.courseId?.trim() || '未返回课程';
-}
-
-function buildStableColumnStyle(width: number): CSSProperties {
-  return {
-    maxWidth: width,
-    minWidth: width,
-    width,
-  };
-}
-
-function buildStableColumnSizing<TRecord>(
-  width: number,
-): Pick<ColumnType<TRecord>, 'onCell' | 'onHeaderCell' | 'width'> {
-  return {
-    onCell: () => ({
-      style: buildStableColumnStyle(width),
-    }),
-    onHeaderCell: () => ({
-      style: {
-        ...buildStableColumnStyle(width),
-        textAlign: 'center',
-      },
-    }),
-    width,
-  };
 }
 
 function renderStableTextCell(value: string | null | undefined) {
@@ -386,29 +362,6 @@ function filterItemsByTerm(
       ),
     }))
     .filter((item) => item.results.length > 0);
-}
-
-function formatSchoolYear(value: string) {
-  if (/^\d{4}$/.test(value)) {
-    const startYear = Number(value);
-    const endYearSuffix = String((startYear + 1) % 100).padStart(2, '0');
-
-    return `${value.slice(-2)}-${endYearSuffix}学年`;
-  }
-
-  return `${value} 学年`;
-}
-
-function formatSemester(value: string) {
-  if (value === '1') {
-    return '第一学期';
-  }
-
-  if (value === '2') {
-    return '第二学期';
-  }
-
-  return `第 ${value} 学期`;
 }
 
 function buildTermLabel(schoolYear: string, semester: string) {

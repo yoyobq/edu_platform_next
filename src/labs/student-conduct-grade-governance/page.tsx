@@ -1,6 +1,6 @@
 // src/labs/student-conduct-grade-governance/page.tsx
 
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AuditOutlined,
   ClearOutlined,
@@ -28,9 +28,17 @@ import {
   theme,
   Tooltip,
 } from 'antd';
-import type { ColumnsType, ColumnType } from 'antd/es/table';
+import type { ColumnsType } from 'antd/es/table';
 import { useLoaderData } from 'react-router';
 
+import {
+  buildAcademicTermKey as buildTermKey,
+  buildAcademicTermOrdinalByKey,
+  formatAcademicSchoolYear as formatSchoolYear,
+  formatAcademicSemester as formatSemester,
+  formatAcademicTermLabel,
+  sortAcademicTermsByTimelineDesc,
+} from '@/entities/academic-semester';
 import {
   type StoredUpstreamSession,
   UpstreamLoginModal,
@@ -38,6 +46,7 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
+import { buildStableColumnSizing } from '@/shared/ui/stable-table';
 
 import { studentConductGradeGovernanceLabAccess } from './access';
 import {
@@ -125,117 +134,6 @@ function compareTextValue(a: string | null | undefined, b: string | null | undef
   });
 }
 
-function buildStableColumnStyle(width: number): CSSProperties {
-  return {
-    maxWidth: width,
-    minWidth: width,
-    width,
-  };
-}
-
-function buildStableColumnSizing<TRecord>(
-  width: number,
-): Pick<ColumnType<TRecord>, 'onCell' | 'onHeaderCell' | 'width'> {
-  return {
-    onCell: () => ({
-      style: buildStableColumnStyle(width),
-    }),
-    onHeaderCell: () => ({
-      style: {
-        ...buildStableColumnStyle(width),
-        textAlign: 'center',
-      },
-    }),
-    width,
-  };
-}
-
-function formatSchoolYear(value: string | number) {
-  const text = String(value);
-
-  if (/^\d{4}$/.test(text)) {
-    const startYear = Number(text);
-    const endYearSuffix = String((startYear + 1) % 100).padStart(2, '0');
-
-    return `${text.slice(-2)}-${endYearSuffix}学年`;
-  }
-
-  return `${text} 学年`;
-}
-
-function formatSemester(value: string | number) {
-  const text = String(value);
-
-  if (text === '1') {
-    return '第一学期';
-  }
-
-  if (text === '2') {
-    return '第二学期';
-  }
-
-  return `第 ${text} 学期`;
-}
-
-function buildTermKey(term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>) {
-  return `${term.schoolYear}::${term.semester}`;
-}
-
-function parsePositiveInteger(value: string) {
-  const normalizedValue = value.trim();
-
-  if (!/^\d+$/.test(normalizedValue)) {
-    return null;
-  }
-
-  const parsedValue = Number(normalizedValue);
-
-  return Number.isSafeInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
-}
-
-function resolveTermTimelineOrder(
-  term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>,
-) {
-  const schoolYear = parsePositiveInteger(term.schoolYear);
-  const semester = parsePositiveInteger(term.semester);
-
-  if (schoolYear === null || semester === null) {
-    return null;
-  }
-
-  return schoolYear * 10 + semester;
-}
-
-function sortConductTermsDesc(terms: readonly StudentConductGradeClassTermOption[]) {
-  return [...terms].sort((first, second) => {
-    const firstOrder = resolveTermTimelineOrder(first);
-    const secondOrder = resolveTermTimelineOrder(second);
-
-    if (firstOrder !== null && secondOrder !== null && firstOrder !== secondOrder) {
-      return secondOrder - firstOrder;
-    }
-
-    return compareTextValue(second.label, first.label);
-  });
-}
-
-function buildConductTermOrdinalByKey(terms: readonly StudentConductGradeClassTermOption[]) {
-  const orderedTerms = [...terms].sort((first, second) => {
-    const firstOrder = resolveTermTimelineOrder(first);
-    const secondOrder = resolveTermTimelineOrder(second);
-
-    if (firstOrder !== null && secondOrder !== null && firstOrder !== secondOrder) {
-      return firstOrder - secondOrder;
-    }
-
-    return compareTextValue(first.label, second.label);
-  });
-
-  return new Map<string, number>(
-    orderedTerms.map((term, index) => [buildTermKey(term), index + 1]),
-  );
-}
-
 function resolveDefaultTermKey(
   terms: readonly StudentConductGradeClassTermOption[],
   preferredTermKey?: string | null,
@@ -250,7 +148,7 @@ function resolveDefaultTermKey(
 }
 
 function formatTermLabel(term: StudentConductGradeClassTermOption) {
-  return term.label || `${formatSchoolYear(term.schoolYear)} ${formatSemester(term.semester)}`;
+  return formatAcademicTermLabel(term);
 }
 
 function isTermGenerationBlocked(options: StudentConductGradeClassTermOptions | null) {
@@ -533,6 +431,19 @@ export function StudentConductGradeGovernanceLabPage() {
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<UpstreamActionRequest | null>(
     null,
   );
+  const loadRequestSeqRef = useRef(0);
+  const cleanupRequestSeqRef = useRef(0);
+  const activeSelectionRef = useRef<{
+    classOption: StudentPrivateProfileClassOption | null;
+    classId: string | null;
+    term: StudentConductGradeClassTermOption | null;
+    termKey: string | null;
+  }>({
+    classOption: null,
+    classId: null,
+    term: null,
+    termKey: null,
+  });
   const lockedUpstreamLoginUserId = currentAccount?.lockedUpstreamLoginUserId ?? null;
   const {
     modalProps: upstreamLoginModalProps,
@@ -574,7 +485,7 @@ export function StudentConductGradeGovernanceLabPage() {
   const termGenerationBlocked = isTermGenerationBlocked(termOptions);
   const termBlockingMessage =
     termOptions?.blockingReasonMessage || '当前班级缺少生成操行学期所需配置。';
-  const termOrdinalByKey = useMemo(() => buildConductTermOrdinalByKey(terms), [terms]);
+  const termOrdinalByKey = useMemo(() => buildAcademicTermOrdinalByKey(terms), [terms]);
   const filteredStudents = useMemo(
     () =>
       filterConductStudents(conductView?.students ?? [], {
@@ -610,11 +521,30 @@ export function StudentConductGradeGovernanceLabPage() {
     terms.length === 0 ||
     termGenerationBlocked;
 
+  useEffect(() => {
+    activeSelectionRef.current = {
+      classOption: selectedClass,
+      classId: selectedClassId,
+      term: selectedTerm,
+      termKey: selectedTermKey,
+    };
+  }, [selectedClass, selectedClassId, selectedTerm, selectedTermKey]);
+
   const loadSelectionData = useCallback(
     async (
       classOption: StudentPrivateProfileClassOption,
       term: StudentConductGradeClassTermOption,
     ) => {
+      const requestSeq = loadRequestSeqRef.current + 1;
+      const termKey = buildTermKey(term);
+
+      loadRequestSeqRef.current = requestSeq;
+      activeSelectionRef.current = {
+        classOption,
+        classId: classOption.id,
+        term,
+        termKey,
+      };
       setIsLoadingData(true);
       setErrorMessage(null);
       setSelectedStudentId(null);
@@ -624,7 +554,17 @@ export function StudentConductGradeGovernanceLabPage() {
           classId: classOption.id,
         });
 
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setOverview(nextOverview);
+
+        if (resolveOverviewReadiness(nextOverview).missingSnapshotCount > 0) {
+          setConductView(null);
+          setStatusFilter('ALL');
+          return;
+        }
 
         const nextView = await fetchStudentConductGradeEffectiveView({
           classCode: classOption.classCode,
@@ -632,13 +572,23 @@ export function StudentConductGradeGovernanceLabPage() {
           semester: term.semester,
         });
 
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setConductView(nextView);
         setStatusFilter('ALL');
       } catch (error) {
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setConductView(null);
         setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行数据。');
       } finally {
-        setIsLoadingData(false);
+        if (loadRequestSeqRef.current === requestSeq) {
+          setIsLoadingData(false);
+        }
       }
     },
     [],
@@ -651,9 +601,13 @@ export function StudentConductGradeGovernanceLabPage() {
         preferredTermKey?: string | null;
       } = {},
     ) => {
+      const requestSeq = loadRequestSeqRef.current + 1;
+
+      loadRequestSeqRef.current = requestSeq;
       setIsLoadingData(true);
       setErrorMessage(null);
       setSelectedStudentId(null);
+      setSyncResult(null);
       setOverview(null);
       setConductView(null);
       setTerms([]);
@@ -665,7 +619,12 @@ export function StudentConductGradeGovernanceLabPage() {
         const nextTermOptions = await fetchStudentConductGradeClassTermOptions({
           classCode: classOption.classCode,
         });
-        const nextTerms = sortConductTermsDesc(nextTermOptions.terms);
+
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
+        const nextTerms = sortAcademicTermsByTimelineDesc(nextTermOptions.terms);
         const nextTermKey = isTermGenerationBlocked(nextTermOptions)
           ? null
           : resolveDefaultTermKey(nextTerms, input.preferredTermKey);
@@ -674,6 +633,12 @@ export function StudentConductGradeGovernanceLabPage() {
         setTermOptions(nextTermOptions);
         setTerms(nextTerms);
         setSelectedTermKey(nextTermKey);
+        activeSelectionRef.current = {
+          classOption,
+          classId: classOption.id,
+          term: nextTerm,
+          termKey: nextTermKey,
+        };
 
         if (isTermGenerationBlocked(nextTermOptions) || !nextTerm) {
           return;
@@ -683,7 +648,16 @@ export function StudentConductGradeGovernanceLabPage() {
           classId: classOption.id,
         });
 
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setOverview(nextOverview);
+
+        if (resolveOverviewReadiness(nextOverview).missingSnapshotCount > 0) {
+          setConductView(null);
+          return;
+        }
 
         const nextView = await fetchStudentConductGradeEffectiveView({
           classCode: classOption.classCode,
@@ -691,8 +665,16 @@ export function StudentConductGradeGovernanceLabPage() {
           semester: nextTerm.semester,
         });
 
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setConductView(nextView);
       } catch (error) {
+        if (loadRequestSeqRef.current !== requestSeq) {
+          return;
+        }
+
         setTermOptions(null);
         setTerms([]);
         setSelectedTermKey(null);
@@ -700,7 +682,9 @@ export function StudentConductGradeGovernanceLabPage() {
         setConductView(null);
         setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行治理入口。');
       } finally {
-        setIsLoadingData(false);
+        if (loadRequestSeqRef.current === requestSeq) {
+          setIsLoadingData(false);
+        }
       }
     },
     [],
@@ -708,6 +692,16 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const runSyncWithSession = useCallback(
     async (session: StoredUpstreamSession, action: PendingConductSyncRequest) => {
+      const canApplySyncResult = () => {
+        const currentSelection = activeSelectionRef.current;
+        const actionTermKey = action.term ? buildTermKey(action.term) : null;
+
+        return (
+          currentSelection.classId === action.classOption.id &&
+          (action.scope !== 'TERM' || currentSelection.termKey === actionTermKey)
+        );
+      };
+
       setSyncingScope(action.scope);
       setErrorMessage(null);
 
@@ -720,17 +714,32 @@ export function StudentConductGradeGovernanceLabPage() {
         });
 
         persistSessionFromResult(session, result);
+
+        if (!canApplySyncResult()) {
+          return;
+        }
+
         setSyncResult(result);
         message[result.failureCount > 0 ? 'warning' : 'success'](
           `操行同步完成：${formatSyncScope(action)}`,
         );
 
-        if (selectedClass && selectedTerm) {
-          await loadSelectionData(selectedClass, selectedTerm);
+        const currentSelection = activeSelectionRef.current;
+
+        if (currentSelection.classOption && currentSelection.term) {
+          await loadSelectionData(currentSelection.classOption, currentSelection.term);
         }
       } catch (error) {
         if (!isExpiredUpstreamSessionError(error)) {
+          if (!canApplySyncResult()) {
+            return;
+          }
+
           setErrorMessage(resolveUpstreamErrorMessage(error, '暂时无法同步操行数据。'));
+          return;
+        }
+
+        if (!canApplySyncResult()) {
           return;
         }
 
@@ -744,15 +753,26 @@ export function StudentConductGradeGovernanceLabPage() {
           });
 
           persistSessionFromResult(refreshedSession, result);
+
+          if (!canApplySyncResult()) {
+            return;
+          }
+
           setSyncResult(result);
           message[result.failureCount > 0 ? 'warning' : 'success'](
             `学工系统会话已续期，操行同步完成：${formatSyncScope(action)}`,
           );
 
-          if (selectedClass && selectedTerm) {
-            await loadSelectionData(selectedClass, selectedTerm);
+          const currentSelection = activeSelectionRef.current;
+
+          if (currentSelection.classOption && currentSelection.term) {
+            await loadSelectionData(currentSelection.classOption, currentSelection.term);
           }
         } catch (refreshError) {
+          if (!canApplySyncResult()) {
+            return;
+          }
+
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
               refreshError,
@@ -772,8 +792,6 @@ export function StudentConductGradeGovernanceLabPage() {
       openLoginModalForExpiredSession,
       persistSessionFromResult,
       refreshSession,
-      selectedClass,
-      selectedTerm,
     ],
   );
 
@@ -836,6 +854,7 @@ export function StudentConductGradeGovernanceLabPage() {
   const loadCatalog = useCallback(async () => {
     setIsLoadingCatalog(true);
     setErrorMessage(null);
+    setSyncResult(null);
 
     try {
       const nextClasses = await listStudentPrivateProfileClassOptions();
@@ -895,11 +914,17 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const handleClassChange = useCallback(
     async (classId: string) => {
+      const nextClass = classes.find((item) => item.id === classId) ?? null;
+
+      activeSelectionRef.current = {
+        classOption: nextClass,
+        classId: nextClass?.id ?? null,
+        term: null,
+        termKey: null,
+      };
       setSelectedClassId(classId || null);
       setStudentSearch('');
       setStatusFilter('ALL');
-
-      const nextClass = classes.find((item) => item.id === classId) ?? null;
 
       if (nextClass) {
         await loadClassTermsAndSelection(nextClass);
@@ -912,6 +937,12 @@ export function StudentConductGradeGovernanceLabPage() {
     async (termKey: string) => {
       const nextTerm = terms.find((term) => buildTermKey(term) === termKey) ?? null;
 
+      activeSelectionRef.current = {
+        classOption: selectedClass,
+        classId: selectedClass?.id ?? null,
+        term: nextTerm,
+        termKey: termKey || null,
+      };
       setSelectedTermKey(termKey || null);
       setStudentSearch('');
       setStatusFilter('ALL');
@@ -934,6 +965,18 @@ export function StudentConductGradeGovernanceLabPage() {
         return;
       }
 
+      const cleanupSelection = activeSelectionRef.current;
+      const cleanupRequestSeq = cleanupRequestSeqRef.current + 1;
+      const canApplyCleanupResult = () => {
+        const currentSelection = activeSelectionRef.current;
+
+        return (
+          currentSelection.classId === cleanupSelection.classId &&
+          currentSelection.termKey === cleanupSelection.termKey
+        );
+      };
+
+      cleanupRequestSeqRef.current = cleanupRequestSeq;
       setCleanupStudentId(student.studentId);
       setErrorMessage(null);
 
@@ -945,26 +988,28 @@ export function StudentConductGradeGovernanceLabPage() {
           studentId: student.studentId,
         });
 
+        if (!canApplyCleanupResult()) {
+          return;
+        }
+
         message.success(`已清理 ${result.clearedFieldKeys.length} 个失效补正字段`);
 
-        if (selectedClass && selectedTerm) {
-          await loadSelectionData(selectedClass, selectedTerm);
+        if (cleanupSelection.classOption && cleanupSelection.term) {
+          await loadSelectionData(cleanupSelection.classOption, cleanupSelection.term);
         }
       } catch (error) {
+        if (!canApplyCleanupResult()) {
+          return;
+        }
+
         setErrorMessage(error instanceof Error ? error.message : '暂时无法清理操行补正。');
       } finally {
-        setCleanupStudentId(null);
+        if (cleanupRequestSeqRef.current === cleanupRequestSeq) {
+          setCleanupStudentId(null);
+        }
       }
     },
-    [
-      conductView,
-      loadSelectionData,
-      message,
-      selectedClass,
-      selectedTerm,
-      termBlockingMessage,
-      termGenerationBlocked,
-    ],
+    [conductView, loadSelectionData, message, termBlockingMessage, termGenerationBlocked],
   );
 
   const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(

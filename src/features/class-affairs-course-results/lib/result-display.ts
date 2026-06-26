@@ -1,5 +1,7 @@
 // src/features/class-affairs-course-results/lib/result-display.ts
 
+import { parsePositiveIntegerText } from '@/entities/academic-semester';
+
 import type {
   ManagedClassCourseResultsTerm,
   ManagedCourseResultsDisplayReasonCode,
@@ -64,18 +66,6 @@ const EXCLUDE_REASON_CODES = new Set<ManagedCourseResultsDisplayReasonCode>([
   'UPSTREAM_ROSTER_ERROR_CONFIRMED',
 ]);
 
-function parsePositiveInteger(value: string) {
-  const normalizedValue = value.trim();
-
-  if (!/^\d+$/.test(normalizedValue)) {
-    return null;
-  }
-
-  const parsedValue = Number(normalizedValue);
-
-  return Number.isSafeInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
-}
-
 function isValidGradeYear(gradeYear: number | null | undefined): gradeYear is number {
   return Number.isSafeInteger(gradeYear) && Number(gradeYear) > 0;
 }
@@ -83,8 +73,8 @@ function isValidGradeYear(gradeYear: number | null | undefined): gradeYear is nu
 function parseCourseResultsTerm(
   term: Pick<ManagedClassCourseResultsTerm, 'schoolYear' | 'semester'>,
 ) {
-  const schoolYear = parsePositiveInteger(term.schoolYear);
-  const termNumber = parsePositiveInteger(term.semester);
+  const schoolYear = parsePositiveIntegerText(term.schoolYear);
+  const termNumber = parsePositiveIntegerText(term.semester);
 
   if (schoolYear === null || termNumber === null) {
     return null;

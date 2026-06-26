@@ -104,6 +104,7 @@ This directory contains project documentation.
 - [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/staff-directory-cache.md](./project-convention/staff-directory-cache.md)
+- [project-convention/student-conduct-grade-governance.md](./project-convention/student-conduct-grade-governance.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
 - [project-convention/welcome-profile-completion.md](./project-convention/welcome-profile-completion.md)

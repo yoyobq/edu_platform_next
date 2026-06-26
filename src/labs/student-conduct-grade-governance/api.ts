@@ -25,39 +25,12 @@ export type StudentPrivateProfileClassOption = {
   studentCount: number;
 };
 
-export type StudentPrivateProfileCompletenessFlags = {
-  educationObserved: boolean;
-  familyObserved: boolean;
-  personalObserved: boolean;
-  photoObserved: boolean;
-  recordObserved: boolean;
-  sensitiveIdentifiersObserved: boolean;
-};
-
-export type StudentPrivateProfileClassOverviewSectionStatus = {
-  lastManualUpdatedAt: string | null;
-  manualOverrideActive: boolean;
-  section: string;
-  snapshotPresent: boolean;
-  sourceStatus: string;
-  upstreamChangedSinceManualPatch: boolean;
-  warningCodes: string[];
-};
-
 export type StudentPrivateProfileClassOverviewStudent = {
-  attentionLevel: string;
-  lastSyncedAt: string | null;
-  manualOverrideActive: boolean;
-  profileCompletenessFlags: StudentPrivateProfileCompletenessFlags;
-  sectionStatuses: StudentPrivateProfileClassOverviewSectionStatus[];
   snapshotPresent: boolean;
-  sourceObservedAt: string | null;
   studentId: string;
   studentName: string | null;
   studentStatus: string | null;
-  upstreamChangedSinceManualPatch: boolean;
   upstreamIdPresent: boolean;
-  warningCodes: string[];
 };
 
 export type StudentPrivateProfileClassOverview = {
@@ -104,13 +77,6 @@ export type StudentConductGradeEffectiveView = {
   semester: string;
   studentCount: number;
   students: StudentConductGradeStudent[];
-  summary: {
-    correctionCleanupPendingCount: number;
-    localCorrectionCount: number;
-    missingCount: number;
-    upstreamChangedSinceCorrectionCount: number;
-    upstreamConfirmedCount: number;
-  };
 };
 
 export type StudentConductGradeCorrectionCleanupResult = {
@@ -266,29 +232,6 @@ const CLASS_OVERVIEW_QUERY = `
         studentStatus
         upstreamIdPresent
         snapshotPresent
-        sourceObservedAt
-        lastSyncedAt
-        manualOverrideActive
-        upstreamChangedSinceManualPatch
-        attentionLevel
-        warningCodes
-        profileCompletenessFlags {
-          personalObserved
-          sensitiveIdentifiersObserved
-          photoObserved
-          familyObserved
-          educationObserved
-          recordObserved
-        }
-        sectionStatuses {
-          section
-          sourceStatus
-          snapshotPresent
-          lastManualUpdatedAt
-          manualOverrideActive
-          upstreamChangedSinceManualPatch
-          warningCodes
-        }
       }
     }
   }
@@ -306,13 +249,6 @@ const CONDUCT_VIEW_QUERY = `
       schoolYear
       semester
       studentCount
-      summary {
-        upstreamConfirmedCount
-        localCorrectionCount
-        missingCount
-        correctionCleanupPendingCount
-        upstreamChangedSinceCorrectionCount
-      }
       students {
         studentId
         studentName
