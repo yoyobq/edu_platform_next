@@ -1,0 +1,87 @@
+/* src/labs/student-conduct-grade-governance/student-conduct-grade-governance-page.css */
+
+.student-conduct-grade-governance-term-tab-label {
+  display: block;
+  max-width: 200px;
+}
+
+.student-conduct-grade-governance-term-tab-primary {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-conduct-grade-governance-term-tab-primary-active {
+  font-weight: var(--ant-font-weight-strong, 600);
+}
+
+.student-conduct-grade-governance-term-tab-secondary {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  font-size: var(--ant-font-size-sm);
+  gap: var(--ant-margin-xxs, 4px);
+  max-width: 100%;
+}
+
+.student-conduct-grade-governance-term-tab-secondary-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-conduct-grade-governance-term-tab-badge {
+  align-items: center;
+  background: var(--ant-color-fill-tertiary);
+  border-radius: 999px;
+  color: var(--ant-color-text-secondary);
+  display: inline-flex;
+  flex: none;
+  font-size: var(--ant-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  height: 18px;
+  justify-content: center;
+  line-height: 1;
+  min-width: 18px;
+  padding-inline: 0;
+}
+
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-even
+  > td,
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-even:hover
+  > td {
+  background: var(--ant-color-fill-quaternary);
+}
+
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-odd:hover
+  > td {
+  background: var(--ant-color-fill-tertiary);
+}
+
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-selected
+  > td,
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-selected:hover
+  > td {
+  background: var(--ant-color-primary-bg);
+}
+
+.student-conduct-grade-governance-table-shell
+  .ant-table-tbody
+  > tr.student-conduct-grade-governance-row-clickable {
+  cursor: pointer;
+}
+
+.student-conduct-grade-governance-table-shell .ant-table-tbody > tr > td {
+  transition: background-color 0.2s ease;
+}

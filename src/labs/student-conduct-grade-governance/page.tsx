@@ -1,6 +1,6 @@
 // src/labs/student-conduct-grade-governance/page.tsx
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AuditOutlined,
   ClearOutlined,
@@ -8,12 +8,14 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
+import type { MenuProps } from 'antd';
 import {
   Alert,
   App,
   Button,
   Descriptions,
   Drawer,
+  Dropdown,
   Empty,
   Input,
   Popconfirm,
@@ -23,11 +25,12 @@ import {
   Table,
   Tabs,
   Tag,
+  theme,
+  Tooltip,
 } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import type { ColumnsType, ColumnType } from 'antd/es/table';
 import { useLoaderData } from 'react-router';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   type StoredUpstreamSession,
   UpstreamLoginModal,
@@ -39,14 +42,16 @@ import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { studentConductGradeGovernanceLabAccess } from './access';
 import {
   cleanupStudentConductGradeCorrection,
+  fetchStudentConductGradeClassTermOptions,
   fetchStudentConductGradeEffectiveView,
   fetchStudentPrivateProfileClassOverview,
   isExpiredUpstreamSessionError,
   listStudentPrivateProfileClassOptions,
   refreshStudentConductGradeClassFromUpstream,
   type RefreshStudentConductGradeClassResult,
-  requestAcademicSemesters,
   resolveUpstreamErrorMessage,
+  type StudentConductGradeClassTermOption,
+  type StudentConductGradeClassTermOptions,
   type StudentConductGradeEffectiveView,
   type StudentConductGradeFieldCell,
   type StudentConductGradeStudent,
@@ -54,6 +59,8 @@ import {
   type StudentPrivateProfileClassOverview,
 } from './api';
 import { studentConductGradeGovernanceLabMeta } from './meta';
+
+import './student-conduct-grade-governance-page.css';
 
 type StudentConductGradeGovernanceLabLoaderData = {
   currentAccount: {
@@ -71,13 +78,29 @@ type OverviewReadiness = {
 type PendingConductSyncRequest = {
   classOption: StudentPrivateProfileClassOption;
   scope: 'ALL_TERMS' | 'TERM';
-  semester?: AcademicSemesterRecord;
+  term?: StudentConductGradeClassTermOption;
 };
 
 type UpstreamActionRequest = {
   action: PendingConductSyncRequest;
   session: StoredUpstreamSession;
 };
+
+const STUDENT_NUMBER_COLUMN_WIDTH = 98;
+const STUDENT_NAME_COLUMN_WIDTH = 82;
+const CONDUCT_SCORE_COLUMN_WIDTH = 72;
+const CONDUCT_GRADE_COLUMN_WIDTH = 84;
+const CONDUCT_STATUS_COLUMN_WIDTH = 112;
+const CONDUCT_CONFLICT_COLUMN_WIDTH = 150;
+const CONDUCT_ACTION_COLUMN_WIDTH = 82;
+const CONDUCT_TABLE_SCROLL_X =
+  STUDENT_NUMBER_COLUMN_WIDTH +
+  STUDENT_NAME_COLUMN_WIDTH +
+  CONDUCT_SCORE_COLUMN_WIDTH +
+  CONDUCT_GRADE_COLUMN_WIDTH +
+  CONDUCT_STATUS_COLUMN_WIDTH +
+  CONDUCT_CONFLICT_COLUMN_WIDTH +
+  CONDUCT_ACTION_COLUMN_WIDTH;
 
 const STATUS_LABELS: Record<string, string> = {
   CORRECTION_CLEANUP_PENDING: '补正待清理',
@@ -100,6 +123,31 @@ function compareTextValue(a: string | null | undefined, b: string | null | undef
     numeric: true,
     sensitivity: 'base',
   });
+}
+
+function buildStableColumnStyle(width: number): CSSProperties {
+  return {
+    maxWidth: width,
+    minWidth: width,
+    width,
+  };
+}
+
+function buildStableColumnSizing<TRecord>(
+  width: number,
+): Pick<ColumnType<TRecord>, 'onCell' | 'onHeaderCell' | 'width'> {
+  return {
+    onCell: () => ({
+      style: buildStableColumnStyle(width),
+    }),
+    onHeaderCell: () => ({
+      style: {
+        ...buildStableColumnStyle(width),
+        textAlign: 'center',
+      },
+    }),
+    width,
+  };
 }
 
 function formatSchoolYear(value: string | number) {
@@ -129,23 +177,84 @@ function formatSemester(value: string | number) {
   return `第 ${text} 学期`;
 }
 
-function buildTermKey(semester: Pick<AcademicSemesterRecord, 'schoolYear' | 'termNumber'>) {
-  return `${semester.schoolYear}::${semester.termNumber}`;
+function buildTermKey(term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>) {
+  return `${term.schoolYear}::${term.semester}`;
 }
 
-function sortAcademicSemesters(semesters: readonly AcademicSemesterRecord[]) {
-  return [...semesters].sort(
-    (first, second) =>
-      second.schoolYear - first.schoolYear ||
-      second.termNumber - first.termNumber ||
-      second.sortOrder - first.sortOrder,
+function parsePositiveInteger(value: string) {
+  const normalizedValue = value.trim();
+
+  if (!/^\d+$/.test(normalizedValue)) {
+    return null;
+  }
+
+  const parsedValue = Number(normalizedValue);
+
+  return Number.isSafeInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function resolveTermTimelineOrder(
+  term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>,
+) {
+  const schoolYear = parsePositiveInteger(term.schoolYear);
+  const semester = parsePositiveInteger(term.semester);
+
+  if (schoolYear === null || semester === null) {
+    return null;
+  }
+
+  return schoolYear * 10 + semester;
+}
+
+function sortConductTermsDesc(terms: readonly StudentConductGradeClassTermOption[]) {
+  return [...terms].sort((first, second) => {
+    const firstOrder = resolveTermTimelineOrder(first);
+    const secondOrder = resolveTermTimelineOrder(second);
+
+    if (firstOrder !== null && secondOrder !== null && firstOrder !== secondOrder) {
+      return secondOrder - firstOrder;
+    }
+
+    return compareTextValue(second.label, first.label);
+  });
+}
+
+function buildConductTermOrdinalByKey(terms: readonly StudentConductGradeClassTermOption[]) {
+  const orderedTerms = [...terms].sort((first, second) => {
+    const firstOrder = resolveTermTimelineOrder(first);
+    const secondOrder = resolveTermTimelineOrder(second);
+
+    if (firstOrder !== null && secondOrder !== null && firstOrder !== secondOrder) {
+      return firstOrder - secondOrder;
+    }
+
+    return compareTextValue(first.label, second.label);
+  });
+
+  return new Map<string, number>(
+    orderedTerms.map((term, index) => [buildTermKey(term), index + 1]),
   );
 }
 
-function resolveDefaultTermKey(semesters: readonly AcademicSemesterRecord[]) {
-  const defaultSemester = semesters.find((semester) => semester.isCurrent) ?? semesters[0] ?? null;
+function resolveDefaultTermKey(
+  terms: readonly StudentConductGradeClassTermOption[],
+  preferredTermKey?: string | null,
+) {
+  if (preferredTermKey && terms.some((term) => buildTermKey(term) === preferredTermKey)) {
+    return preferredTermKey;
+  }
 
-  return defaultSemester ? buildTermKey(defaultSemester) : null;
+  const defaultTerm = terms[0] ?? null;
+
+  return defaultTerm ? buildTermKey(defaultTerm) : null;
+}
+
+function formatTermLabel(term: StudentConductGradeClassTermOption) {
+  return term.label || `${formatSchoolYear(term.schoolYear)} ${formatSemester(term.semester)}`;
+}
+
+function isTermGenerationBlocked(options: StudentConductGradeClassTermOptions | null) {
+  return options?.generationStatus === 'CLASS_CONFIG_MISSING';
 }
 
 function formatClassLabel(option: StudentPrivateProfileClassOption) {
@@ -249,6 +358,63 @@ function renderFieldCell(cell: StudentConductGradeFieldCell) {
   return <span>{formatFieldValue(cell)}</span>;
 }
 
+function renderSnapshotInitializationAlert(missingSnapshotCount: number) {
+  return (
+    <Alert
+      showIcon
+      type="warning"
+      title="本地快照尚未完整初始化"
+      description={
+        <span>
+          当前班级有 {missingSnapshotCount} 名学生缺少本地快照。请先到{' '}
+          <a href="/labs/student-private-profile">学生敏感资料 lab</a> 初始化快照后再治理操行。
+        </span>
+      }
+    />
+  );
+}
+
+function renderConfirmedGradeCell(
+  confirmedGrade: StudentConductGradeFieldCell,
+  estimatedGrade: StudentConductGradeFieldCell,
+) {
+  const estimatedGradeText = formatFieldValue(estimatedGrade);
+
+  return (
+    <Tooltip title={`推定等级：${estimatedGradeText}`}>{renderFieldCell(confirmedGrade)}</Tooltip>
+  );
+}
+
+function buildConductRowClassName(
+  record: Pick<StudentConductGradeStudent, 'studentId'>,
+  index: number | undefined,
+  selectedStudentId: string | null,
+) {
+  return [
+    index !== undefined && index % 2 === 0
+      ? 'student-conduct-grade-governance-row-even'
+      : 'student-conduct-grade-governance-row-odd',
+    record.studentId === selectedStudentId ? 'student-conduct-grade-governance-row-selected' : null,
+    'student-conduct-grade-governance-row-clickable',
+  ]
+    .filter(Boolean)
+    .join(' ');
+}
+
+function buildConductTableRowProps(
+  record: Pick<StudentConductGradeStudent, 'studentId'>,
+  index: number | undefined,
+  selectedStudentId: string | null,
+  setSelectedStudentId: (studentId: string | null) => void,
+) {
+  return {
+    className: buildConductRowClassName(record, index, selectedStudentId),
+    onClick: () => {
+      setSelectedStudentId(selectedStudentId === record.studentId ? null : record.studentId);
+    },
+  };
+}
+
 function filterConductStudents(
   students: readonly StudentConductGradeStudent[],
   input: {
@@ -281,7 +447,13 @@ function filterConductStudents(
 }
 
 function buildStatusOptions(students: readonly StudentConductGradeStudent[]) {
-  const statuses = Array.from(new Set(students.map((student) => student.status))).sort(
+  const countByStatus = new Map<string, number>();
+
+  for (const student of students) {
+    countByStatus.set(student.status, (countByStatus.get(student.status) ?? 0) + 1);
+  }
+
+  const statuses = Array.from(countByStatus.keys()).sort(
     (first, second) =>
       (STATUS_PRIORITY[first] ?? 90) - (STATUS_PRIORITY[second] ?? 90) ||
       compareTextValue(first, second),
@@ -289,40 +461,13 @@ function buildStatusOptions(students: readonly StudentConductGradeStudent[]) {
 
   return [
     {
-      label: '全部状态',
+      label: `全部状态（${students.length}）`,
       value: 'ALL',
     },
     ...statuses.map((status) => ({
-      label: resolveStatusLabel(status),
+      label: `${resolveStatusLabel(status)}（${countByStatus.get(status) ?? 0}）`,
       value: status,
     })),
-  ];
-}
-
-function buildSummaryItems(view: StudentConductGradeEffectiveView | null) {
-  const summary = view?.summary;
-
-  return [
-    {
-      label: '校园网',
-      value: summary?.upstreamConfirmedCount ?? 0,
-    },
-    {
-      label: '本地补正',
-      value: summary?.localCorrectionCount ?? 0,
-    },
-    {
-      label: '缺失',
-      value: summary?.missingCount ?? 0,
-    },
-    {
-      label: '待清理补正',
-      value: summary?.correctionCleanupPendingCount ?? 0,
-    },
-    {
-      label: '基线变化待复核',
-      value: summary?.upstreamChangedSinceCorrectionCount ?? 0,
-    },
   ];
 }
 
@@ -331,17 +476,27 @@ function formatSyncScope(action: PendingConductSyncRequest) {
     return '该班所有已确认操行批次';
   }
 
-  return action.semester
-    ? `${formatSchoolYear(action.semester.schoolYear)} ${formatSemester(action.semester.termNumber)}`
-    : '当前学期';
+  return action.term ? formatTermLabel(action.term) : '所选学期';
 }
 
-function formatSyncResultTitle(result: RefreshStudentConductGradeClassResult) {
+function resolveTermResultLabel(
+  term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>,
+  knownTerms: readonly StudentConductGradeClassTermOption[],
+) {
+  return (
+    knownTerms.find(
+      (knownTerm) =>
+        knownTerm.schoolYear === term.schoolYear && knownTerm.semester === term.semester,
+    )?.label ?? `${term.schoolYear}/${term.semester}`
+  );
+}
+
+function formatSyncResultTitle(
+  result: RefreshStudentConductGradeClassResult,
+  knownTerms: readonly StudentConductGradeClassTermOption[],
+) {
   const termSummary = result.termResults
-    .map(
-      (term) =>
-        `${formatSchoolYear(term.schoolYear)} ${formatSemester(term.semester)} ${term.status}`,
-    )
+    .map((term) => `${resolveTermResultLabel(term, knownTerms)} ${term.status}`)
     .join('；');
 
   return [
@@ -355,11 +510,13 @@ function formatSyncResultTitle(result: RefreshStudentConductGradeClassResult) {
 }
 
 export function StudentConductGradeGovernanceLabPage() {
+  const { token } = theme.useToken();
   const loaderData = useLoaderData() as StudentConductGradeGovernanceLabLoaderData | null;
   const currentAccount = loaderData?.currentAccount ?? null;
   const { message } = App.useApp();
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
-  const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
+  const [terms, setTerms] = useState<StudentConductGradeClassTermOption[]>([]);
+  const [termOptions, setTermOptions] = useState<StudentConductGradeClassTermOptions | null>(null);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedTermKey, setSelectedTermKey] = useState<string | null>(null);
   const [overview, setOverview] = useState<StudentPrivateProfileClassOverview | null>(null);
@@ -404,16 +561,20 @@ export function StudentConductGradeGovernanceLabPage() {
     () => classes.find((item) => item.id === selectedClassId) ?? null,
     [classes, selectedClassId],
   );
-  const selectedSemester = useMemo(
-    () => semesters.find((semester) => buildTermKey(semester) === selectedTermKey) ?? null,
-    [selectedTermKey, semesters],
+  const selectedTerm = useMemo(
+    () => terms.find((term) => buildTermKey(term) === selectedTermKey) ?? null,
+    [selectedTermKey, terms],
   );
   const selectedStudent = useMemo(
     () => conductView?.students.find((student) => student.studentId === selectedStudentId) ?? null,
     [conductView?.students, selectedStudentId],
   );
   const overviewReadiness = useMemo(() => resolveOverviewReadiness(overview), [overview]);
-  const summaryItems = useMemo(() => buildSummaryItems(conductView), [conductView]);
+  const snapshotInitializationBlocked = overviewReadiness.missingSnapshotCount > 0;
+  const termGenerationBlocked = isTermGenerationBlocked(termOptions);
+  const termBlockingMessage =
+    termOptions?.blockingReasonMessage || '当前班级缺少生成操行学期所需配置。';
+  const termOrdinalByKey = useMemo(() => buildConductTermOrdinalByKey(terms), [terms]);
   const filteredStudents = useMemo(
     () =>
       filterConductStudents(conductView?.students ?? [], {
@@ -426,9 +587,34 @@ export function StudentConductGradeGovernanceLabPage() {
     () => buildStatusOptions(conductView?.students ?? []),
     [conductView?.students],
   );
+  const conductSyncMenuItems = useMemo<MenuProps['items']>(
+    () => [
+      {
+        disabled: !selectedTerm || termGenerationBlocked,
+        key: 'TERM',
+        label: selectedTerm ? `同步所选学期（${formatTermLabel(selectedTerm)}）` : '同步所选学期',
+      },
+      {
+        disabled: termGenerationBlocked,
+        key: 'ALL_TERMS',
+        label: '同步该班全部学期',
+      },
+    ],
+    [selectedTerm, termGenerationBlocked],
+  );
+  const conductSyncDisabled =
+    isLoadingCatalog ||
+    isLoadingData ||
+    !selectedClass ||
+    !selectedTerm ||
+    terms.length === 0 ||
+    termGenerationBlocked;
 
   const loadSelectionData = useCallback(
-    async (classOption: StudentPrivateProfileClassOption, semester: AcademicSemesterRecord) => {
+    async (
+      classOption: StudentPrivateProfileClassOption,
+      term: StudentConductGradeClassTermOption,
+    ) => {
       setIsLoadingData(true);
       setErrorMessage(null);
       setSelectedStudentId(null);
@@ -442,8 +628,8 @@ export function StudentConductGradeGovernanceLabPage() {
 
         const nextView = await fetchStudentConductGradeEffectiveView({
           classCode: classOption.classCode,
-          schoolYear: String(semester.schoolYear),
-          semester: String(semester.termNumber),
+          schoolYear: term.schoolYear,
+          semester: term.semester,
         });
 
         setConductView(nextView);
@@ -451,6 +637,68 @@ export function StudentConductGradeGovernanceLabPage() {
       } catch (error) {
         setConductView(null);
         setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行数据。');
+      } finally {
+        setIsLoadingData(false);
+      }
+    },
+    [],
+  );
+
+  const loadClassTermsAndSelection = useCallback(
+    async (
+      classOption: StudentPrivateProfileClassOption,
+      input: {
+        preferredTermKey?: string | null;
+      } = {},
+    ) => {
+      setIsLoadingData(true);
+      setErrorMessage(null);
+      setSelectedStudentId(null);
+      setOverview(null);
+      setConductView(null);
+      setTerms([]);
+      setTermOptions(null);
+      setStudentSearch('');
+      setStatusFilter('ALL');
+
+      try {
+        const nextTermOptions = await fetchStudentConductGradeClassTermOptions({
+          classCode: classOption.classCode,
+        });
+        const nextTerms = sortConductTermsDesc(nextTermOptions.terms);
+        const nextTermKey = isTermGenerationBlocked(nextTermOptions)
+          ? null
+          : resolveDefaultTermKey(nextTerms, input.preferredTermKey);
+        const nextTerm = nextTerms.find((term) => buildTermKey(term) === nextTermKey) ?? null;
+
+        setTermOptions(nextTermOptions);
+        setTerms(nextTerms);
+        setSelectedTermKey(nextTermKey);
+
+        if (isTermGenerationBlocked(nextTermOptions) || !nextTerm) {
+          return;
+        }
+
+        const nextOverview = await fetchStudentPrivateProfileClassOverview({
+          classId: classOption.id,
+        });
+
+        setOverview(nextOverview);
+
+        const nextView = await fetchStudentConductGradeEffectiveView({
+          classCode: classOption.classCode,
+          schoolYear: nextTerm.schoolYear,
+          semester: nextTerm.semester,
+        });
+
+        setConductView(nextView);
+      } catch (error) {
+        setTermOptions(null);
+        setTerms([]);
+        setSelectedTermKey(null);
+        setOverview(null);
+        setConductView(null);
+        setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行治理入口。');
       } finally {
         setIsLoadingData(false);
       }
@@ -466,8 +714,8 @@ export function StudentConductGradeGovernanceLabPage() {
       try {
         const result = await refreshStudentConductGradeClassFromUpstream({
           classCode: action.classOption.classCode,
-          schoolYear: action.semester ? String(action.semester.schoolYear) : undefined,
-          semester: action.semester ? String(action.semester.termNumber) : undefined,
+          schoolYear: action.term?.schoolYear,
+          semester: action.term?.semester,
           upstreamSessionToken: session.upstreamSessionToken,
         });
 
@@ -477,8 +725,8 @@ export function StudentConductGradeGovernanceLabPage() {
           `操行同步完成：${formatSyncScope(action)}`,
         );
 
-        if (selectedClass && selectedSemester) {
-          await loadSelectionData(selectedClass, selectedSemester);
+        if (selectedClass && selectedTerm) {
+          await loadSelectionData(selectedClass, selectedTerm);
         }
       } catch (error) {
         if (!isExpiredUpstreamSessionError(error)) {
@@ -490,8 +738,8 @@ export function StudentConductGradeGovernanceLabPage() {
           const refreshedSession = await refreshSession(session);
           const result = await refreshStudentConductGradeClassFromUpstream({
             classCode: action.classOption.classCode,
-            schoolYear: action.semester ? String(action.semester.schoolYear) : undefined,
-            semester: action.semester ? String(action.semester.termNumber) : undefined,
+            schoolYear: action.term?.schoolYear,
+            semester: action.term?.semester,
             upstreamSessionToken: refreshedSession.upstreamSessionToken,
           });
 
@@ -501,8 +749,8 @@ export function StudentConductGradeGovernanceLabPage() {
             `学工系统会话已续期，操行同步完成：${formatSyncScope(action)}`,
           );
 
-          if (selectedClass && selectedSemester) {
-            await loadSelectionData(selectedClass, selectedSemester);
+          if (selectedClass && selectedTerm) {
+            await loadSelectionData(selectedClass, selectedTerm);
           }
         } catch (refreshError) {
           openLoginModalForExpiredSession({
@@ -525,13 +773,18 @@ export function StudentConductGradeGovernanceLabPage() {
       persistSessionFromResult,
       refreshSession,
       selectedClass,
-      selectedSemester,
+      selectedTerm,
     ],
   );
 
   const requestConductSync = useCallback(
     async (action: PendingConductSyncRequest) => {
       setSyncResult(null);
+
+      if (termGenerationBlocked) {
+        setErrorMessage(termBlockingMessage);
+        return;
+      }
 
       if (!upstreamSession) {
         openLoginModal({
@@ -542,7 +795,42 @@ export function StudentConductGradeGovernanceLabPage() {
 
       await runSyncWithSession(upstreamSession, action);
     },
-    [openLoginModal, runSyncWithSession, upstreamSession],
+    [
+      openLoginModal,
+      runSyncWithSession,
+      termBlockingMessage,
+      termGenerationBlocked,
+      upstreamSession,
+    ],
+  );
+
+  const handleConductSyncMenuClick = useCallback<NonNullable<MenuProps['onClick']>>(
+    ({ key }) => {
+      if (!selectedClass) {
+        return;
+      }
+
+      if (key === 'TERM') {
+        if (!selectedTerm) {
+          return;
+        }
+
+        void requestConductSync({
+          classOption: selectedClass,
+          scope: 'TERM',
+          term: selectedTerm,
+        });
+        return;
+      }
+
+      if (key === 'ALL_TERMS') {
+        void requestConductSync({
+          classOption: selectedClass,
+          scope: 'ALL_TERMS',
+        });
+      }
+    },
+    [requestConductSync, selectedClass, selectedTerm],
   );
 
   const loadCatalog = useCallback(async () => {
@@ -550,33 +838,27 @@ export function StudentConductGradeGovernanceLabPage() {
     setErrorMessage(null);
 
     try {
-      const [nextClasses, nextSemesters] = await Promise.all([
-        listStudentPrivateProfileClassOptions(),
-        requestAcademicSemesters({ isVisible: true, limit: 500 }),
-      ]);
+      const nextClasses = await listStudentPrivateProfileClassOptions();
       const sortedClasses = sortClassOptions(nextClasses);
-      const sortedSemesters = sortAcademicSemesters(nextSemesters);
       const nextClass = sortedClasses[0] ?? null;
-      const nextTermKey =
-        sortedSemesters.length > 0 ? resolveDefaultTermKey(sortedSemesters) : null;
-      const nextSemester =
-        sortedSemesters.find((semester) => buildTermKey(semester) === nextTermKey) ?? null;
 
       setClasses(sortedClasses);
-      setSemesters(sortedSemesters);
       setSelectedClassId(nextClass?.id ?? null);
-      setSelectedTermKey(nextTermKey);
+      setTerms([]);
+      setTermOptions(null);
+      setSelectedTermKey(null);
       setOverview(null);
       setConductView(null);
       setStudentSearch('');
       setStatusFilter('ALL');
 
-      if (nextClass && nextSemester) {
-        await loadSelectionData(nextClass, nextSemester);
+      if (nextClass) {
+        await loadClassTermsAndSelection(nextClass);
       }
     } catch (error) {
       setClasses([]);
-      setSemesters([]);
+      setTerms([]);
+      setTermOptions(null);
       setSelectedClassId(null);
       setSelectedTermKey(null);
       setOverview(null);
@@ -585,16 +867,31 @@ export function StudentConductGradeGovernanceLabPage() {
     } finally {
       setIsLoadingCatalog(false);
     }
-  }, [loadSelectionData]);
+  }, [loadClassTermsAndSelection]);
 
   const reloadCurrentSelection = useCallback(async () => {
-    if (!selectedClass || !selectedSemester) {
+    if (!selectedClass) {
       await loadCatalog();
       return;
     }
 
-    await loadSelectionData(selectedClass, selectedSemester);
-  }, [loadCatalog, loadSelectionData, selectedClass, selectedSemester]);
+    if (!selectedTerm || termGenerationBlocked) {
+      await loadClassTermsAndSelection(selectedClass, {
+        preferredTermKey: selectedTermKey,
+      });
+      return;
+    }
+
+    await loadSelectionData(selectedClass, selectedTerm);
+  }, [
+    loadCatalog,
+    loadClassTermsAndSelection,
+    loadSelectionData,
+    selectedClass,
+    selectedTerm,
+    selectedTermKey,
+    termGenerationBlocked,
+  ]);
 
   const handleClassChange = useCallback(
     async (classId: string) => {
@@ -604,31 +901,36 @@ export function StudentConductGradeGovernanceLabPage() {
 
       const nextClass = classes.find((item) => item.id === classId) ?? null;
 
-      if (nextClass && selectedSemester) {
-        await loadSelectionData(nextClass, selectedSemester);
+      if (nextClass) {
+        await loadClassTermsAndSelection(nextClass);
       }
     },
-    [classes, loadSelectionData, selectedSemester],
+    [classes, loadClassTermsAndSelection],
   );
 
   const handleTermChange = useCallback(
     async (termKey: string) => {
-      const nextSemester = semesters.find((semester) => buildTermKey(semester) === termKey) ?? null;
+      const nextTerm = terms.find((term) => buildTermKey(term) === termKey) ?? null;
 
       setSelectedTermKey(termKey || null);
       setStudentSearch('');
       setStatusFilter('ALL');
 
-      if (selectedClass && nextSemester) {
-        await loadSelectionData(selectedClass, nextSemester);
+      if (selectedClass && nextTerm) {
+        await loadSelectionData(selectedClass, nextTerm);
       }
     },
-    [loadSelectionData, selectedClass, semesters],
+    [loadSelectionData, selectedClass, terms],
   );
 
   const handleCleanup = useCallback(
     async (student: StudentConductGradeStudent) => {
       if (!conductView || student.status !== 'CORRECTION_CLEANUP_PENDING') {
+        return;
+      }
+
+      if (termGenerationBlocked) {
+        setErrorMessage(termBlockingMessage);
         return;
       }
 
@@ -645,8 +947,8 @@ export function StudentConductGradeGovernanceLabPage() {
 
         message.success(`已清理 ${result.clearedFieldKeys.length} 个失效补正字段`);
 
-        if (selectedClass && selectedSemester) {
-          await loadSelectionData(selectedClass, selectedSemester);
+        if (selectedClass && selectedTerm) {
+          await loadSelectionData(selectedClass, selectedTerm);
         }
       } catch (error) {
         setErrorMessage(error instanceof Error ? error.message : '暂时无法清理操行补正。');
@@ -654,58 +956,61 @@ export function StudentConductGradeGovernanceLabPage() {
         setCleanupStudentId(null);
       }
     },
-    [conductView, loadSelectionData, message, selectedClass, selectedSemester],
+    [
+      conductView,
+      loadSelectionData,
+      message,
+      selectedClass,
+      selectedTerm,
+      termBlockingMessage,
+      termGenerationBlocked,
+    ],
   );
 
   const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(
     () => [
       {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(STUDENT_NUMBER_COLUMN_WIDTH),
         align: 'center',
         dataIndex: 'studentId',
+        fixed: 'left',
         key: 'studentId',
         render: (value: string) => renderStableTextCell(value),
         title: '学号',
-        width: 98,
       },
       {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(STUDENT_NAME_COLUMN_WIDTH),
         dataIndex: 'studentName',
+        fixed: 'left',
         key: 'studentName',
         render: (value: string | null) => renderStableTextCell(value),
         title: '姓名',
-        width: 82,
       },
       {
-        key: 'studentStatus',
-        render: (_, record) => renderStudentStatusTag(record.studentStatus),
-        title: '学生状态',
-        width: 104,
-      },
-      {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_SCORE_COLUMN_WIDTH),
+        align: 'center',
         key: 'score',
         render: (_, record) => renderFieldCell(record.fields.score),
         title: '分数',
-        width: 128,
       },
       {
-        key: 'estimatedGrade',
-        render: (_, record) => renderFieldCell(record.fields.estimatedGrade),
-        title: '推定等级',
-        width: 132,
-      },
-      {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_GRADE_COLUMN_WIDTH),
+        align: 'center',
         key: 'confirmedGrade',
-        render: (_, record) => renderFieldCell(record.fields.confirmedGrade),
+        render: (_, record) =>
+          renderConfirmedGradeCell(record.fields.confirmedGrade, record.fields.estimatedGrade),
         title: '确认等级',
-        width: 132,
       },
       {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_STATUS_COLUMN_WIDTH),
+        align: 'center',
         dataIndex: 'status',
         key: 'status',
         render: (status: string) => renderStatusTag(status),
-        title: '治理状态',
-        width: 156,
+        title: '本地存储',
       },
       {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_CONFLICT_COLUMN_WIDTH),
         key: 'conflictCodes',
         render: (_, record) =>
           record.conflictCodes.length > 0 ? (
@@ -720,12 +1025,13 @@ export function StudentConductGradeGovernanceLabPage() {
             <span className="text-text-secondary">-</span>
           ),
         title: '冲突',
-        width: 180,
       },
       {
+        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_ACTION_COLUMN_WIDTH),
+        align: 'center',
         key: 'actions',
         render: (_, record) => (
-          <Space>
+          <Space onClick={(event) => event.stopPropagation()}>
             <Button size="small" type="link" onClick={() => setSelectedStudentId(record.studentId)}>
               明细
             </Button>
@@ -751,7 +1057,6 @@ export function StudentConductGradeGovernanceLabPage() {
           </Space>
         ),
         title: '操作',
-        width: 132,
       },
     ],
     [cleanupStudentId, handleCleanup],
@@ -787,47 +1092,10 @@ export function StudentConductGradeGovernanceLabPage() {
         title="操行数据治理"
       />
 
-      <section className="rounded-card bg-bg-container p-5 shadow-card">
-        <div className="flex flex-col gap-4">
-          {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
-          {overviewReadiness.missingSnapshotCount > 0 ? (
-            <Alert
-              showIcon
-              type="warning"
-              title="本地快照尚未完整初始化"
-              description={
-                <span>
-                  当前班级有 {overviewReadiness.missingSnapshotCount} 名学生缺少本地快照。请先到{' '}
-                  <a href="/labs/student-private-profile">学生敏感资料 lab</a>{' '}
-                  初始化快照后再治理操行。
-                </span>
-              }
-            />
-          ) : null}
-          {overviewReadiness.upstreamIdMissingCount > 0 ? (
-            <Alert
-              showIcon
-              type="info"
-              title="存在无法从 upstream 拉取的学生"
-              description={`当前班级有 ${overviewReadiness.upstreamIdMissingCount} 名学生缺少 upstreamId，前端不自行重算名单，班级范围以后端 overview 为准。`}
-            />
-          ) : null}
-          {syncResult ? (
-            <Alert
-              showIcon
-              type={syncResult.failureCount > 0 ? 'warning' : 'success'}
-              title="操行 upstream 同步完成"
-              description={formatSyncResultTitle(syncResult)}
-            />
-          ) : null}
-
-          <div
-            className="grid gap-4"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            }}
-          >
-            <label className="flex flex-col gap-2">
+      {snapshotInitializationBlocked ? (
+        <section className="rounded-card bg-bg-container p-5 shadow-card">
+          <div className="flex flex-col gap-4">
+            <label className="flex max-w-sm flex-col gap-2">
               <span className="text-sm text-text-secondary">班级</span>
               <Select
                 disabled={isLoadingCatalog || isLoadingData}
@@ -843,161 +1111,215 @@ export function StudentConductGradeGovernanceLabPage() {
                 onChange={(value) => void handleClassChange(value)}
               />
             </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm text-text-secondary">学生</span>
-              <Input
-                allowClear
-                prefix={<SearchOutlined />}
-                placeholder="输入学生 ID 或姓名"
-                value={studentSearch}
-                onChange={(event) => setStudentSearch(event.target.value)}
-              />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm text-text-secondary">治理状态</span>
-              <Select
-                options={statusOptions}
-                value={statusFilter}
-                onChange={(value) => setStatusFilter(value)}
-              />
-            </label>
-            <div className="flex items-end">
-              <Button
-                disabled={isLoadingCatalog || isLoadingData}
-                icon={<ReloadOutlined />}
-                onClick={() => void reloadCurrentSelection()}
+            {renderSnapshotInitializationAlert(overviewReadiness.missingSnapshotCount)}
+          </div>
+        </section>
+      ) : (
+        <>
+          <section className="rounded-card bg-bg-container p-5 shadow-card">
+            <div className="flex flex-col gap-4">
+              {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
+              {termGenerationBlocked ? (
+                <Alert
+                  showIcon
+                  type="warning"
+                  title="班级操行学期配置缺失"
+                  description={termBlockingMessage}
+                />
+              ) : null}
+              {overviewReadiness.upstreamIdMissingCount > 0 ? (
+                <Alert
+                  showIcon
+                  type="info"
+                  title="存在无法从 upstream 拉取的学生"
+                  description={`当前班级有 ${overviewReadiness.upstreamIdMissingCount} 名学生缺少 upstreamId，前端不自行重算名单，班级范围以后端 overview 为准。`}
+                />
+              ) : null}
+              {syncResult ? (
+                <Alert
+                  showIcon
+                  type={syncResult.failureCount > 0 ? 'warning' : 'success'}
+                  title="操行 upstream 同步完成"
+                  description={formatSyncResultTitle(syncResult, terms)}
+                />
+              ) : null}
+
+              <div
+                className="grid gap-4"
+                style={{
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+                }}
               >
-                重新加载
-              </Button>
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm text-text-secondary">班级</span>
+                  <Select
+                    disabled={isLoadingCatalog || isLoadingData}
+                    loading={isLoadingCatalog}
+                    optionFilterProp="label"
+                    options={classes.map((option) => ({
+                      label: formatClassLabel(option),
+                      value: option.id,
+                    }))}
+                    placeholder="暂无可见班级"
+                    showSearch
+                    value={selectedClassId ?? undefined}
+                    onChange={(value) => void handleClassChange(value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm text-text-secondary">学生</span>
+                  <Input
+                    allowClear
+                    prefix={<SearchOutlined />}
+                    placeholder="输入学号或姓名"
+                    value={studentSearch}
+                    onChange={(event) => setStudentSearch(event.target.value)}
+                  />
+                </label>
+                <label className="flex flex-col gap-2">
+                  <span className="text-sm text-text-secondary">治理状态</span>
+                  <Select
+                    options={statusOptions}
+                    value={statusFilter}
+                    onChange={(value) => setStatusFilter(value)}
+                  />
+                </label>
+                <div className="flex items-end gap-2">
+                  <Button
+                    disabled={isLoadingCatalog || isLoadingData}
+                    icon={<ReloadOutlined />}
+                    onClick={() => void reloadCurrentSelection()}
+                  >
+                    重新加载
+                  </Button>
+                  <Dropdown
+                    disabled={conductSyncDisabled}
+                    menu={{
+                      items: conductSyncMenuItems,
+                      onClick: handleConductSyncMenuClick,
+                    }}
+                    trigger={['click']}
+                  >
+                    <Button
+                      disabled={conductSyncDisabled}
+                      icon={<CloudSyncOutlined />}
+                      loading={syncingScope !== null}
+                    >
+                      同步操行
+                    </Button>
+                  </Dropdown>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </section>
+          </section>
 
-      <section
-        className="grid gap-3"
-        style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}
-      >
-        {summaryItems.map((item) => (
-          <div className="rounded-card bg-bg-container p-4 shadow-card" key={item.label}>
-            <div className="flex flex-col gap-1">
-              <span className="text-sm text-text-secondary">{item.label}</span>
-              <span className="text-2xl font-semibold text-text">{item.value}</span>
-            </div>
-          </div>
-        ))}
-      </section>
+          <section className="student-conduct-grade-governance-table-shell">
+            {isLoadingCatalog ? (
+              <div className="flex min-h-80 items-center justify-center">
+                <Spin size="large" />
+              </div>
+            ) : selectedClass && terms.length > 0 && !termGenerationBlocked ? (
+              <Tabs
+                activeKey={selectedTermKey ?? undefined}
+                items={terms.map((term) => {
+                  const termKey = buildTermKey(term);
+                  const isActive = termKey === selectedTermKey;
+                  const termOrdinal = termOrdinalByKey.get(termKey) ?? null;
 
-      <section className="rounded-card bg-bg-container p-5 shadow-card">
-        {isLoadingCatalog ? (
-          <div className="flex min-h-80 items-center justify-center">
-            <Spin size="large" />
-          </div>
-        ) : selectedClass && semesters.length > 0 ? (
-          <Tabs
-            activeKey={selectedTermKey ?? undefined}
-            items={semesters.map((semester) => {
-              const termKey = buildTermKey(semester);
-              const isActive = termKey === selectedTermKey;
-
-              return {
-                children: isActive ? (
-                  isLoadingData ? (
-                    <div className="flex min-h-80 items-center justify-center">
-                      <Spin size="large" />
-                    </div>
-                  ) : conductView ? (
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <Space size="small" wrap>
-                          <Tag>{conductView.className}</Tag>
-                          <Tag>{formatSchoolYear(conductView.schoolYear)}</Tag>
-                          <Tag>{formatSemester(conductView.semester)}</Tag>
-                          <Tag>{conductView.studentCount} 名学生</Tag>
-                        </Space>
-                        <span className="text-sm text-text-secondary">
-                          当前列表 {filteredStudents.length} / {conductView.students.length}
+                  return {
+                    children: isActive ? (
+                      isLoadingData ? (
+                        <div className="flex min-h-80 items-center justify-center">
+                          <Spin size="large" />
+                        </div>
+                      ) : conductView ? (
+                        <div className="flex flex-col gap-4">
+                          <Table<StudentConductGradeStudent>
+                            columns={columns}
+                            dataSource={filteredStudents}
+                            locale={{
+                              emptyText: (
+                                <Empty
+                                  description="暂无操行数据"
+                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                                />
+                              ),
+                            }}
+                            onRow={(record, index) =>
+                              buildConductTableRowProps(
+                                record,
+                                index,
+                                selectedStudentId,
+                                setSelectedStudentId,
+                              )
+                            }
+                            pagination={{
+                              defaultPageSize: 50,
+                              pageSizeOptions: [30, 50, 100],
+                              showSizeChanger: true,
+                            }}
+                            rowKey={(record) => record.studentId}
+                            scroll={{ x: CONDUCT_TABLE_SCROLL_X }}
+                            size="small"
+                            tableLayout="fixed"
+                          />
+                        </div>
+                      ) : (
+                        <div className="flex min-h-80 items-center justify-center">
+                          <Empty description="暂无操行有效视图" />
+                        </div>
+                      )
+                    ) : null,
+                    key: termKey,
+                    label: (
+                      <span className="student-conduct-grade-governance-term-tab-label">
+                        <span
+                          className={[
+                            'student-conduct-grade-governance-term-tab-primary',
+                            isActive
+                              ? 'student-conduct-grade-governance-term-tab-primary-active'
+                              : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' ')}
+                        >
+                          {formatSchoolYear(term.schoolYear)}
                         </span>
-                      </div>
-                      <div className="flex flex-wrap justify-end gap-2">
-                        <Button
-                          icon={<CloudSyncOutlined />}
-                          loading={syncingScope === 'TERM'}
-                          onClick={() =>
-                            void requestConductSync({
-                              classOption: selectedClass,
-                              scope: 'TERM',
-                              semester,
-                            })
-                          }
-                        >
-                          同步当前学期
-                        </Button>
-                        <Button
-                          icon={<CloudSyncOutlined />}
-                          loading={syncingScope === 'ALL_TERMS'}
-                          onClick={() =>
-                            void requestConductSync({
-                              classOption: selectedClass,
-                              scope: 'ALL_TERMS',
-                            })
-                          }
-                        >
-                          同步该班操行
-                        </Button>
-                      </div>
-                      <Table<StudentConductGradeStudent>
-                        columns={columns}
-                        dataSource={filteredStudents}
-                        locale={{
-                          emptyText: (
-                            <Empty
-                              description="暂无操行数据"
-                              image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            />
-                          ),
-                        }}
-                        pagination={{
-                          defaultPageSize: 50,
-                          pageSizeOptions: [30, 50, 100],
-                          showSizeChanger: true,
-                        }}
-                        rowKey={(record) => record.studentId}
-                        scroll={{ x: 1220 }}
-                        size="small"
-                        tableLayout="fixed"
-                      />
-                    </div>
-                  ) : (
-                    <div className="flex min-h-80 items-center justify-center">
-                      <Empty description="暂无操行有效视图" />
-                    </div>
-                  )
-                ) : null,
-                key: termKey,
-                label: (
-                  <span className="flex flex-col gap-1">
-                    <span className={isActive ? 'font-medium text-text' : 'text-text'}>
-                      {formatSchoolYear(semester.schoolYear)}
-                    </span>
-                    <span className="flex items-center gap-2 text-xs text-text-secondary">
-                      {formatSemester(semester.termNumber)}
-                      {semester.isCurrent ? <Tag color="blue">当前</Tag> : null}
-                    </span>
-                  </span>
-                ),
-              };
-            })}
-            size="small"
-            tabPlacement="start"
-            onChange={(key) => void handleTermChange(key)}
-          />
-        ) : (
-          <div className="flex min-h-80 items-center justify-center">
-            <Empty description={selectedClass ? '暂无可见学期' : '请选择班级'} />
-          </div>
-        )}
-      </section>
+                        <span className="student-conduct-grade-governance-term-tab-secondary">
+                          <span className="student-conduct-grade-governance-term-tab-secondary-text">
+                            {formatSemester(term.semester)}
+                          </span>
+                          {termOrdinal !== null ? (
+                            <span className="student-conduct-grade-governance-term-tab-badge">
+                              {termOrdinal}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    ),
+                  };
+                })}
+                size="small"
+                tabBarGutter={token.marginXS}
+                tabPlacement="start"
+                onChange={(key) => void handleTermChange(key)}
+              />
+            ) : (
+              <div className="flex min-h-80 items-center justify-center">
+                <Empty
+                  description={
+                    selectedClass
+                      ? termGenerationBlocked
+                        ? termBlockingMessage
+                        : '暂无可治理学期'
+                      : '请选择班级'
+                  }
+                />
+              </div>
+            )}
+          </section>
+        </>
+      )}
 
       <Drawer
         destroyOnHidden

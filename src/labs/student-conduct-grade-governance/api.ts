@@ -2,7 +2,6 @@
 
 import type { OperationVariables } from '@apollo/client';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   isExpiredUpstreamSessionError,
@@ -138,6 +137,26 @@ export type StudentConductGradeCorrectionCleanupInput = {
   studentId: string;
 };
 
+export type StudentConductGradeClassTermOption = {
+  isCurrent: boolean;
+  label: string;
+  schoolYear: string;
+  semester: string;
+};
+
+export type StudentConductGradeClassTermOptions = {
+  blockingReasonCode: string | null;
+  blockingReasonMessage: string | null;
+  currentSchoolYear: string | null;
+  currentSemester: string | null;
+  generationStatus: string;
+  terms: StudentConductGradeClassTermOption[];
+};
+
+export type StudentConductGradeClassTermOptionsInput = {
+  classCode: string;
+};
+
 export type StudentConductGradeSyncTermStatus = 'FAILED' | 'PARTIAL' | 'SKIPPED' | 'SYNCED';
 
 export type RefreshStudentConductGradeTermResult = {
@@ -173,16 +192,12 @@ export type RefreshStudentConductGradeClassInput = {
   upstreamSessionToken: string;
 };
 
-export type ListAcademicSemestersInput = {
-  isCurrent?: boolean;
-  isVisible?: boolean;
-  limit?: number;
-  schoolYear?: number;
-  termNumber?: number;
-};
-
 type ClassOptionsResponse = {
   studentPrivateProfileClassOptions: StudentPrivateProfileClassOption[];
+};
+
+type ClassTermOptionsResponse = {
+  studentConductGradeClassTermOptions: StudentConductGradeClassTermOptions;
 };
 
 type ClassOverviewResponse = {
@@ -201,10 +216,6 @@ type RefreshConductClassResponse = {
   refreshStudentConductGradeClassFromUpstream: RefreshStudentConductGradeClassResult;
 };
 
-type AcademicSemestersResponse = {
-  academicSemesters: AcademicSemesterRecord[];
-};
-
 const CLASS_OPTIONS_QUERY = `
   query StudentConductGradeGovernanceClassOptions(
     $input: StudentPrivateProfileClassOptionsInput
@@ -216,6 +227,26 @@ const CLASS_OPTIONS_QUERY = `
       studentCount
       resolvedAuthorityCode
       authorizationPath
+    }
+  }
+`;
+
+const CLASS_TERM_OPTIONS_QUERY = `
+  query StudentConductGradeGovernanceClassTermOptions(
+    $input: StudentConductGradeClassTermOptionsInput!
+  ) {
+    studentConductGradeClassTermOptions(input: $input) {
+      generationStatus
+      blockingReasonCode
+      blockingReasonMessage
+      currentSchoolYear
+      currentSemester
+      terms {
+        schoolYear
+        semester
+        label
+        isCurrent
+      }
     }
   }
 `;
@@ -259,38 +290,6 @@ const CLASS_OVERVIEW_QUERY = `
           warningCodes
         }
       }
-    }
-  }
-`;
-
-const ACADEMIC_SEMESTERS_QUERY = `
-  query StudentConductGradeGovernanceAcademicSemesters(
-    $isCurrent: Boolean
-    $isVisible: Boolean
-    $limit: Int
-    $schoolYear: Int
-    $termNumber: Int
-  ) {
-    academicSemesters(
-      isCurrent: $isCurrent
-      isVisible: $isVisible
-      limit: $limit
-      schoolYear: $schoolYear
-      termNumber: $termNumber
-    ) {
-      createdAt
-      endDate
-      examStartDate
-      firstTeachingDate
-      id
-      isCurrent
-      isVisible
-      name
-      schoolYear
-      sortOrder
-      startDate
-      termNumber
-      updatedAt
     }
   }
 `;
@@ -422,6 +421,14 @@ export function normalizeConductCleanupInput(input: StudentConductGradeCorrectio
   };
 }
 
+export function normalizeConductClassTermOptionsInput(
+  input: StudentConductGradeClassTermOptionsInput,
+) {
+  return {
+    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
+  };
+}
+
 export function normalizeRefreshConductClassInput(input: RefreshStudentConductGradeClassInput) {
   const schoolYear = normalizeOptionalTextValue(input.schoolYear, 'to_undefined');
   const semester = normalizeOptionalTextValue(input.semester, 'to_undefined');
@@ -472,13 +479,19 @@ export async function fetchStudentPrivateProfileClassOverview(input: { classId: 
   return response.studentPrivateProfileClassOverview;
 }
 
-export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
+export async function fetchStudentConductGradeClassTermOptions(
+  input: StudentConductGradeClassTermOptionsInput,
+) {
   const response = await requestGraphQL<
-    AcademicSemestersResponse,
-    OperationVariables & ListAcademicSemestersInput
-  >(ACADEMIC_SEMESTERS_QUERY, input);
+    ClassTermOptionsResponse,
+    {
+      input: ReturnType<typeof normalizeConductClassTermOptionsInput>;
+    }
+  >(CLASS_TERM_OPTIONS_QUERY, {
+    input: normalizeConductClassTermOptionsInput(input),
+  });
 
-  return response.academicSemesters;
+  return response.studentConductGradeClassTermOptions;
 }
 
 export async function fetchStudentConductGradeEffectiveView(

@@ -20,9 +20,11 @@ vi.mock('@/entities/upstream-session', () => ({
 
 import {
   cleanupStudentConductGradeCorrection,
+  fetchStudentConductGradeClassTermOptions,
   fetchStudentConductGradeEffectiveView,
   fetchStudentPrivateProfileClassOverview,
   listStudentPrivateProfileClassOptions,
+  normalizeConductClassTermOptionsInput,
   normalizeConductCleanupInput,
   normalizeConductViewInput,
   normalizeRefreshConductClassInput,
@@ -36,6 +38,14 @@ describe('student-conduct-grade-governance api', () => {
   });
 
   it('normalizes conduct view and cleanup inputs', () => {
+    expect(
+      normalizeConductClassTermOptionsInput({
+        classCode: ' 2501 ',
+      }),
+    ).toEqual({
+      classCode: '2501',
+    });
+
     expect(
       normalizeConductViewInput({
         classCode: ' 2501 ',
@@ -119,6 +129,50 @@ describe('student-conduct-grade-governance api', () => {
       expect.stringContaining('StudentConductGradeGovernanceClassOptions'),
       {
         input: {},
+      },
+    );
+  });
+
+  it('loads canonical conduct grade term options by class code', async () => {
+    const payload = {
+      blockingReasonCode: null,
+      blockingReasonMessage: null,
+      currentSchoolYear: '2025',
+      currentSemester: '2',
+      generationStatus: 'READY',
+      terms: [
+        {
+          isCurrent: true,
+          label: '25-26学年 第二学期',
+          schoolYear: '2025',
+          semester: '2',
+        },
+      ],
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentConductGradeClassTermOptions: payload,
+    });
+
+    await expect(
+      fetchStudentConductGradeClassTermOptions({
+        classCode: ' 2501 ',
+      }),
+    ).resolves.toBe(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('studentConductGradeClassTermOptions');
+    expect(query).toContain('generationStatus');
+    expect(query).toContain('blockingReasonMessage');
+    expect(query).toContain('currentSchoolYear');
+    expect(query).toContain('terms');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentConductGradeGovernanceClassTermOptions'),
+      {
+        input: {
+          classCode: '2501',
+        },
       },
     );
   });
