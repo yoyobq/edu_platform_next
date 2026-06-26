@@ -67,6 +67,10 @@ import {
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
+  loadStudentConductGradeGovernanceLabRouteModule,
+  studentConductGradeGovernanceLabAccess,
+} from '@/labs/student-conduct-grade-governance';
+import {
   loadStudentCourseResultsPullLabRouteModule,
   studentCourseResultsPullLabAccess,
 } from '@/labs/student-course-results-pull';
@@ -730,6 +734,11 @@ async function adminClassAdviserGovernanceLabLoader({ request }: LoaderFunctionA
       currentAccount: {
         accountId: snapshot.accountId,
         displayName: snapshot.displayName,
+        lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+          accessGroup: snapshot.userInfo.accessGroup,
+          slotGroup: snapshot.slotGroup,
+          staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+        }),
       },
     }),
     request,
@@ -779,6 +788,19 @@ async function studentPrivateProfileLabLoader({ request }: LoaderFunctionArgs) {
       },
       lockedUpstreamLoginUserId: resolveStudentPrivateProfileLockedUpstreamLoginUserId(snapshot),
       manualPatchAccess: resolveStudentPrivateProfileManualPatchAccess(snapshot),
+    }),
+    request,
+  });
+}
+
+async function studentConductGradeGovernanceLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: studentConductGradeGovernanceLabAccess,
+    getData: (snapshot) => ({
+      currentAccount: {
+        accountId: snapshot.accountId,
+        displayName: snapshot.displayName,
+      },
     }),
     request,
   });
@@ -1533,6 +1555,11 @@ const router = createBrowserRouter([
             path: 'student-private-profile',
             loader: studentPrivateProfileLabLoader,
             lazy: loadStudentPrivateProfileLabRouteModule,
+          },
+          {
+            path: 'student-conduct-grade-governance',
+            loader: studentConductGradeGovernanceLabLoader,
+            lazy: loadStudentConductGradeGovernanceLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',

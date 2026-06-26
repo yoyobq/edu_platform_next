@@ -21,7 +21,7 @@ export function PublicEntryLayout({ children }: PublicEntryLayoutProps) {
         isDark,
       })}
     >
-      <AntApp component={false}>
+      <AntApp component="div">
         <AuthRefreshFeedbackBridge />
         {children ?? <Outlet />}
       </AntApp>

@@ -157,6 +157,10 @@ export const demoLabMeta = {
   - 用于验证默认 `CACHE_FIRST`、不带 upstream token 的班级学生课程成绩快照展示
   - 当前只对 `ADMIN` 暴露，不进入 staff labs
   - 仅作为成绩快照展示流程的实验入口；若后续成为正式成绩查看入口，应迁入正式区拥有者切片
+- `/labs/student-conduct-grade-governance`
+  - 用于验证班级学期操行等级有效视图、本地补正冲突观察与失效补正清理链路
+  - 当前对 `ADMIN / STAFF` 在 dev 环境暴露
+  - v1 不承担操行 refresh 或 Excel import；本地快照初始化仍以前置学生敏感资料治理链路为准
 - `/labs/admin-class-adviser-governance`
   - 用于验证 admin 补齐本地已同步学生归属班级的班主任任职事实链路
   - 当前只对 `ADMIN` 暴露，不进入 staff labs

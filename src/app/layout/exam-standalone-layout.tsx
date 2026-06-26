@@ -36,7 +36,7 @@ export function ExamStandaloneLayout({ children }: ExamStandaloneLayoutProps) {
         isDark,
       })}
     >
-      <AntApp component={false}>
+      <AntApp component="div">
         <AuthRefreshFeedbackBridge />
         <Layout
           style={{

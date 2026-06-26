@@ -129,6 +129,16 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'CarryOutOutlined',
+            key: '/labs/student-conduct-grade-governance',
+            label: '操行治理',
+            navMode: 'rail' as const,
+            path: '/labs/student-conduct-grade-governance',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'FormOutlined',
             key: '/labs/zquiz-activity-builder',
             label: 'Zquiz 组卷',

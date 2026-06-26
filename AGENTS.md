@@ -57,6 +57,7 @@ Rules:
 ## UI
 
 - antd owns business UI. Ant Design X owns AI UI. Tailwind owns layout wrappers.
+- antd 6 runtime warnings are defects; use current APIs and valid Provider/App composition.
 - No Tailwind `className` on antd/antdX component bodies.
 - Do not Tailwind-style `Typography`; use native `span` for compact metadata.
 - Colors/radius/shadow/layers use antd tokens or CSS vars; no hex/rgb/hsl magic values.

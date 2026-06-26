@@ -504,7 +504,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
         isDark,
       })}
     >
-      <AntApp component={false}>
+      <AntApp component="div">
         <AuthRefreshFeedbackBridge />
         <div className="h-screen overflow-hidden bg-bg-layout text-text">
           {hasSidebar ? (

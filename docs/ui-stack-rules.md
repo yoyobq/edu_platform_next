@@ -99,6 +99,25 @@
 - 充当 AI 对话系统的主要组件来源
 - 被 Tailwind 深度改造成另一套视觉系统
 
+#### antd 6 API 与运行时 warning
+
+当前项目使用 `antd` 6。新增或修改 UI 时，控制台里的 antd runtime warning 视为需要处理的兼容性问题，不应当作为“只是不影响功能”的噪音留下。
+
+默认要求：
+
+- 使用当前 antd 6 API，不沿用旧版本 deprecated prop
+- 如果改动触达的页面已经因为本地组件用法产生 antd warning，应在同一改动里顺手修掉
+- 如果 warning 来自全局 Provider、Layout 或其它跨页面结构，不能在局部页面绕开；应回到对应 owner 处理，或在交付说明里明确标出
+
+已知迁移点：
+
+- `Alert`: 用 `title` 承载主提示，不再用 deprecated `message`
+- `Drawer`: 用 `size`，不再用 deprecated `width`
+- `Space`: 用 `orientation`，不再用 deprecated `direction`
+- `ConfigProvider theme.cssVar` 启用时，`App` 的 `component` 必须是有效 React 组件字符串；不要用 `<App component={false}>`
+
+这些规则不改变组件职责边界：视觉与交互仍优先走 antd 组件 API 和主题 token，不用 Tailwind 或局部 hack 压 warning。
+
 ### `@ant-design/x` 负责什么
 
 `@ant-design/x` 只负责 AI 协作相关的交互部件。
