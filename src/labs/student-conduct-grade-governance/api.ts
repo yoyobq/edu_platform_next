@@ -227,18 +227,42 @@ export type StudentConductGradeMaterialImportStatus =
 
 export type StudentConductGradeMaterialImportIssue = {
   code: string;
+  confirmed: boolean | null;
+  fieldKey: string | null;
   message: string | null;
+  schoolYear: string | null;
+  semester: string | null;
+  sourceFileDigest: string | null;
+  sourceFileIndex: number | null;
   sourceFilename: string | null;
   sourceRow: number | null;
   sourceSheetOrTable: string | null;
+  studentId: string | null;
   warningKey: string | null;
 };
 
 export type StudentConductGradeMaterialImportResult = {
+  affectedStudents: number | null;
   blockingErrors: StudentConductGradeMaterialImportIssue[];
+  classCode: string | null;
+  className: string | null;
+  clearedUpstreamFieldCount: number | null;
+  createdSectionCount: number | null;
+  emptyFieldCount: number | null;
+  schoolYear: string | null;
+  sectionKey: string | null;
+  semester: string | null;
   status: StudentConductGradeMaterialImportStatus;
   summary: Record<string, unknown>;
+  totalFiles: number | null;
+  totalParsedRows: number | null;
+  totalResolvedRows: number | null;
+  totalSkippedTables: number | null;
+  unchangedFieldCount: number | null;
+  unchangedStudentCount: number | null;
   warnings: StudentConductGradeMaterialImportIssue[];
+  writtenFieldCount: number | null;
+  writtenStudentCount: number | null;
 };
 
 export type ImportStudentConductGradeMaterialsInput = {
@@ -281,8 +305,25 @@ const CONDUCT_PATCH_FIELD_KEYS = ['score', 'confirmedGrade'] as const;
 const CONDUCT_PATCH_FIELD_KEY_SET = new Set<string>(CONDUCT_PATCH_FIELD_KEYS);
 const CONDUCT_GRADE_MATERIAL_IMPORT_PATH =
   '/student-private-profile/conduct-grade-material-imports';
+export const CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES = 5;
+export const CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILE_BYTES = 100 * 1024;
 const MAX_PATCH_STUDENT_ROWS = 500;
 const SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS = new Set(['docx', 'xlsx']);
+const CONDUCT_GRADE_MATERIAL_IMPORT_SUMMARY_KEYS = [
+  'totalFiles',
+  'totalParsedRows',
+  'totalSkippedTables',
+  'totalResolvedRows',
+  'affectedStudents',
+  'writtenStudentCount',
+  'unchangedStudentCount',
+  'createdSectionCount',
+  'writtenFieldCount',
+  'clearedUpstreamFieldCount',
+  'skippedUpstreamFieldCount',
+  'emptyFieldCount',
+  'unchangedFieldCount',
+] as const;
 
 const CLASS_OPTIONS_QUERY = `
   query StudentConductGradeGovernanceClassOptions(
@@ -554,6 +595,22 @@ function normalizeOptionalNumberValue(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function normalizeOptionalBooleanValue(value: unknown) {
+  return typeof value === 'boolean' ? value : null;
+}
+
+function buildMaterialImportSummary(value: Record<string, unknown>) {
+  if (isRecord(value.summary)) {
+    return value.summary;
+  }
+
+  return Object.fromEntries(
+    CONDUCT_GRADE_MATERIAL_IMPORT_SUMMARY_KEYS.map((key) => [key, value[key]]).filter(
+      ([, item]) => item !== undefined && item !== null,
+    ),
+  );
+}
+
 function normalizeMaterialImportIssue(value: unknown): StudentConductGradeMaterialImportIssue {
   if (!isRecord(value) || typeof value.code !== 'string' || !value.code.trim()) {
     throw new Error('操行材料导入问题返回结果异常。');
@@ -561,10 +618,17 @@ function normalizeMaterialImportIssue(value: unknown): StudentConductGradeMateri
 
   return {
     code: value.code.trim(),
+    confirmed: normalizeOptionalBooleanValue(value.confirmed),
+    fieldKey: normalizeOptionalStringValue(value.fieldKey),
     message: normalizeOptionalStringValue(value.message),
+    schoolYear: normalizeOptionalStringValue(value.schoolYear),
+    semester: normalizeOptionalStringValue(value.semester),
+    sourceFileDigest: normalizeOptionalStringValue(value.sourceFileDigest),
+    sourceFileIndex: normalizeOptionalNumberValue(value.sourceFileIndex),
     sourceFilename: normalizeOptionalStringValue(value.sourceFilename),
     sourceRow: normalizeOptionalNumberValue(value.sourceRow),
     sourceSheetOrTable: normalizeOptionalStringValue(value.sourceSheetOrTable),
+    studentId: normalizeOptionalStringValue(value.studentId),
     warningKey: normalizeOptionalStringValue(value.warningKey),
   };
 }
@@ -582,13 +646,28 @@ function assertMaterialImportResult(value: unknown): StudentConductGradeMaterial
     throw new Error('操行材料导入返回结果异常。');
   }
 
-  const summary = isRecord(value.summary) ? value.summary : {};
-
   return {
+    affectedStudents: normalizeOptionalNumberValue(value.affectedStudents),
     blockingErrors: normalizeMaterialImportIssues(value.blockingErrors),
+    classCode: normalizeOptionalStringValue(value.classCode),
+    className: normalizeOptionalStringValue(value.className),
+    clearedUpstreamFieldCount: normalizeOptionalNumberValue(value.clearedUpstreamFieldCount),
+    createdSectionCount: normalizeOptionalNumberValue(value.createdSectionCount),
+    emptyFieldCount: normalizeOptionalNumberValue(value.emptyFieldCount),
+    schoolYear: normalizeOptionalStringValue(value.schoolYear),
+    sectionKey: normalizeOptionalStringValue(value.sectionKey),
+    semester: normalizeOptionalStringValue(value.semester),
     status: normalizeMaterialImportStatus(value.status),
-    summary,
+    summary: buildMaterialImportSummary(value),
+    totalFiles: normalizeOptionalNumberValue(value.totalFiles),
+    totalParsedRows: normalizeOptionalNumberValue(value.totalParsedRows),
+    totalResolvedRows: normalizeOptionalNumberValue(value.totalResolvedRows),
+    totalSkippedTables: normalizeOptionalNumberValue(value.totalSkippedTables),
+    unchangedFieldCount: normalizeOptionalNumberValue(value.unchangedFieldCount),
+    unchangedStudentCount: normalizeOptionalNumberValue(value.unchangedStudentCount),
     warnings: normalizeMaterialImportIssues(value.warnings),
+    writtenFieldCount: normalizeOptionalNumberValue(value.writtenFieldCount),
+    writtenStudentCount: normalizeOptionalNumberValue(value.writtenStudentCount),
   };
 }
 
@@ -621,11 +700,19 @@ function normalizeConductGradeMaterialFiles(files: readonly File[]) {
     throw new Error('请选择需要导入的操行材料。');
   }
 
+  if (files.length > CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES) {
+    throw new Error(`单次最多导入 ${CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES} 个操行材料文件。`);
+  }
+
   return files.map((file) => {
     const extension = getFileExtension(file.name);
 
     if (!SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS.has(extension)) {
       throw new Error('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
+    }
+
+    if (file.size > CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILE_BYTES) {
+      throw new Error('操行材料单文件大小不能超过 100KB。');
     }
 
     return file;
@@ -961,6 +1048,13 @@ export async function importStudentConductGradeMaterials(
     });
 
   let response = await dispatchImport();
+
+  if (response.status === 401 && !runtimeConfig.refreshSession) {
+    runtimeConfig.onAuthFailure?.();
+    throw new Error(
+      (await readRestFailureMessage(response)) ?? '登录状态已失效，请重新登录后再导入操行材料。',
+    );
+  }
 
   if (response.status === 401 && runtimeConfig.refreshSession) {
     try {

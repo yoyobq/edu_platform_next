@@ -1339,6 +1339,13 @@ export function StudentConductGradeGovernanceLabPage() {
     [message],
   );
 
+  const handleRejectTooManyMaterialImportFiles = useCallback(
+    (limit: number) => {
+      message.error(`单次最多选择 ${limit} 个操行材料文件。`);
+    },
+    [message],
+  );
+
   const runMaterialImport = useCallback(
     async (confirmedWarningKeys: readonly string[] = []) => {
       if (!selectedClass || !selectedTerm) {
@@ -1841,6 +1848,7 @@ export function StudentConductGradeGovernanceLabPage() {
                               onFilesChange={handleMaterialImportFilesChange}
                               onImport={() => void runMaterialImport()}
                               onRejectFile={handleRejectMaterialImportFile}
+                              onRejectTooManyFiles={handleRejectTooManyMaterialImportFiles}
                             />
                           ) : null}
                           <Table<StudentConductGradeStudent>

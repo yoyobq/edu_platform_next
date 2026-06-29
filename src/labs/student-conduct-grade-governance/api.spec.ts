@@ -211,6 +211,24 @@ describe('student-conduct-grade-governance api', () => {
         semester: '1',
       }),
     ).toThrow('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
+
+    expect(() =>
+      normalizeImportStudentConductGradeMaterialsInput({
+        classCode: '2501',
+        files: Array.from({ length: 6 }, (_, index) => new File(['docx'], `conduct-${index}.docx`)),
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).toThrow('单次最多导入 5 个操行材料文件。');
+
+    expect(() =>
+      normalizeImportStudentConductGradeMaterialsInput({
+        classCode: '2501',
+        files: [new File(['x'.repeat(102401)], 'conduct.docx')],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).toThrow('操行材料单文件大小不能超过 100KB。');
   });
 
   it('rejects invalid conduct correction patch inputs before graphql', () => {
@@ -568,21 +586,38 @@ describe('student-conduct-grade-governance api', () => {
   it('imports conduct grade materials through one-shot multipart rest', async () => {
     const docxFile = new File(['docx'], 'conduct.docx');
     const payload = {
+      affectedStudents: 0,
       blockingErrors: [],
+      classCode: '2501',
+      className: '测试班',
+      clearedUpstreamFieldCount: 0,
+      createdSectionCount: 0,
+      emptyFieldCount: 0,
+      schoolYear: '2025',
+      sectionKey: 'CONDUCT_GRADE',
+      semester: '1',
       status: 'WARNING_CONFIRMATION_REQUIRED',
-      summary: {
-        totalFiles: 1,
-      },
+      totalFiles: 1,
+      totalParsedRows: 1,
+      totalResolvedRows: 0,
+      totalSkippedTables: 0,
+      unchangedFieldCount: 0,
+      unchangedStudentCount: 0,
       warnings: [
         {
           code: 'DOCUMENT_TERM_MISMATCH',
-          message: '材料学期与当前选择不一致',
+          confirmed: false,
+          schoolYear: '2024',
+          semester: '2',
+          sourceFileDigest: 'digest-1',
+          sourceFileIndex: 0,
           sourceFilename: 'conduct.docx',
-          sourceRow: null,
           sourceSheetOrTable: '表1',
           warningKey: 'warning-key-1',
         },
       ],
+      writtenFieldCount: 0,
+      writtenStudentCount: 0,
     };
 
     fetchMock.mockResolvedValueOnce(
@@ -602,7 +637,23 @@ describe('student-conduct-grade-governance api', () => {
         schoolYear: ' 2025 ',
         semester: ' 1 ',
       }),
-    ).resolves.toEqual(payload);
+    ).resolves.toMatchObject({
+      ...payload,
+      summary: {
+        totalFiles: 1,
+        totalParsedRows: 1,
+        totalResolvedRows: 0,
+      },
+      warnings: [
+        expect.objectContaining({
+          code: 'DOCUMENT_TERM_MISMATCH',
+          message: null,
+          sourceFileIndex: 0,
+          sourceRow: null,
+          warningKey: 'warning-key-1',
+        }),
+      ],
+    });
 
     expect(resolveStudentConductGradeMaterialImportUrl()).toBe(
       'http://127.0.0.1:3000/student-private-profile/conduct-grade-material-imports',
@@ -686,6 +737,45 @@ describe('student-conduct-grade-governance api', () => {
         },
       }),
     );
+  });
+
+  it('handles material import unauthorized response by http status without error code branching', async () => {
+    const onAuthFailureMock = vi.fn();
+    const docxFile = new File(['docx'], 'conduct.docx');
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      getAccessToken: () => 'token-1',
+      onAuthFailure: onAuthFailureMock,
+    });
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'ANY_DETAIL_CODE',
+            message: '登录状态已失效',
+          },
+          requestId: 'req-1',
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          status: 401,
+        },
+      ),
+    );
+
+    await expect(
+      importStudentConductGradeMaterials({
+        classCode: '2501',
+        files: [docxFile],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).rejects.toThrow('登录状态已失效');
+
+    expect(onAuthFailureMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('reads conduct correction row issues from graphql details', () => {

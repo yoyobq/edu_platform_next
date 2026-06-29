@@ -4,9 +4,10 @@ import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 import { Alert, Button, Descriptions, Space, Tag, Upload } from 'antd';
 
-import type {
-  StudentConductGradeMaterialImportIssue,
-  StudentConductGradeMaterialImportResult,
+import {
+  CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES,
+  type StudentConductGradeMaterialImportIssue,
+  type StudentConductGradeMaterialImportResult,
 } from './api';
 
 type MaterialImportContext = {
@@ -26,9 +27,32 @@ type StudentConductGradeMaterialImportPanelProps = {
   onFilesChange: (files: File[]) => void;
   onImport: () => void;
   onRejectFile: (fileName: string) => void;
+  onRejectTooManyFiles: (limit: number) => void;
+};
+
+const MATERIAL_IMPORT_SUMMARY_LABELS: Record<string, string> = {
+  affectedStudents: '影响学生',
+  clearedUpstreamFieldCount: '清理旧补正字段',
+  createdSectionCount: '新建操行区块',
+  emptyFieldCount: '空字段',
+  skippedUpstreamFieldCount: '校园网非空跳过字段',
+  totalFiles: '文件数',
+  totalParsedRows: '解析行',
+  totalResolvedRows: '匹配行',
+  totalSkippedTables: '跳过表格',
+  unchangedFieldCount: '未变化字段',
+  unchangedStudentCount: '未变化学生',
+  writtenFieldCount: '写入字段',
+  writtenStudentCount: '写入学生',
 };
 
 function formatSummaryLabel(key: string) {
+  const label = MATERIAL_IMPORT_SUMMARY_LABELS[key];
+
+  if (label) {
+    return label;
+  }
+
   return key
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/_/g, ' ')
@@ -112,6 +136,28 @@ function buildUploadFileList(files: readonly File[]): UploadFile[] {
   }));
 }
 
+function buildMaterialFileKey(file: File) {
+  return `${file.name}-${file.lastModified}-${file.size}`;
+}
+
+function mergeMaterialFiles(currentFiles: readonly File[], nextFiles: readonly File[]) {
+  const mergedFiles = [...currentFiles];
+  const fileKeys = new Set(mergedFiles.map((file) => buildMaterialFileKey(file)));
+
+  nextFiles.forEach((file) => {
+    const fileKey = buildMaterialFileKey(file);
+
+    if (fileKeys.has(fileKey) || mergedFiles.length >= CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES) {
+      return;
+    }
+
+    fileKeys.add(fileKey);
+    mergedFiles.push(file);
+  });
+
+  return mergedFiles;
+}
+
 function isSupportedMaterialFile(fileName: string) {
   const extension = fileName.split('.').pop()?.trim().toLowerCase();
 
@@ -130,16 +176,28 @@ export function StudentConductGradeMaterialImportPanel({
   onFilesChange,
   onImport,
   onRejectFile,
+  onRejectTooManyFiles,
 }: StudentConductGradeMaterialImportPanelProps) {
   const uploadFileList = buildUploadFileList(files);
-  const beforeUpload: UploadProps['beforeUpload'] = (file) => {
+  const beforeUpload: UploadProps['beforeUpload'] = (file, selectedFiles) => {
     if (!isSupportedMaterialFile(file.name)) {
       onRejectFile(file.name);
 
       return Upload.LIST_IGNORE;
     }
 
-    onFilesChange([file]);
+    const supportedSelectedFiles = selectedFiles.filter((selectedFile) =>
+      isSupportedMaterialFile(selectedFile.name),
+    );
+
+    if (
+      supportedSelectedFiles[0] === file &&
+      files.length + supportedSelectedFiles.length > CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES
+    ) {
+      onRejectTooManyFiles(CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES);
+    }
+
+    onFilesChange(mergeMaterialFiles(files, supportedSelectedFiles));
 
     return false;
   };
@@ -177,7 +235,8 @@ export function StudentConductGradeMaterialImportPanel({
         beforeUpload={beforeUpload}
         disabled={disabled || isImporting}
         fileList={uploadFileList}
-        maxCount={1}
+        maxCount={CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES}
+        multiple
         onRemove={handleRemove}
       >
         <p className="ant-upload-drag-icon">
@@ -188,7 +247,11 @@ export function StudentConductGradeMaterialImportPanel({
       </Upload.Dragger>
 
       <div className="student-conduct-grade-governance-import-actions">
-        <span>{files.length > 0 ? `已选择 ${files[0]?.name ?? '1 个文件'}` : '未选择文件'}</span>
+        <span>
+          {files.length > 0
+            ? `已选择 ${files.length} 个文件`
+            : `未选择文件，最多 ${CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES} 个`}
+        </span>
         <Space size="small" wrap>
           <Button
             disabled={disabled || isImporting || files.length === 0}
