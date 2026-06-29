@@ -5,7 +5,9 @@ import {
   AuditOutlined,
   ClearOutlined,
   CloudSyncOutlined,
+  EditOutlined,
   ReloadOutlined,
+  SaveOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
 import type { MenuProps } from 'antd';
@@ -56,13 +58,20 @@ import {
   fetchStudentPrivateProfileClassOverview,
   isExpiredUpstreamSessionError,
   listStudentPrivateProfileClassOptions,
+  patchStudentConductGradeCorrections,
+  type PatchStudentConductGradeCorrectionsResult,
+  type PatchStudentConductGradeCorrectionStudentInput,
+  readStudentConductGradePatchRowIssues,
   refreshStudentConductGradeClassFromUpstream,
   type RefreshStudentConductGradeClassResult,
+  resolveStudentConductGradePatchErrorMessage,
   resolveUpstreamErrorMessage,
   type StudentConductGradeClassTermOption,
   type StudentConductGradeClassTermOptions,
   type StudentConductGradeEffectiveView,
   type StudentConductGradeFieldCell,
+  type StudentConductGradePatchFieldKey,
+  type StudentConductGradePatchRowIssue,
   type StudentConductGradeStudent,
   type StudentPrivateProfileClassOption,
   type StudentPrivateProfileClassOverview,
@@ -95,10 +104,23 @@ type UpstreamActionRequest = {
   session: StoredUpstreamSession;
 };
 
+type ConductPatchDraft = {
+  clearFieldKeys: StudentConductGradePatchFieldKey[];
+  confirmedGrade?: string;
+  score?: string;
+};
+
+type ConductPatchRowIssueView = StudentConductGradePatchRowIssue & {
+  studentId: string | null;
+};
+
 const STUDENT_NUMBER_COLUMN_WIDTH = 98;
 const STUDENT_NAME_COLUMN_WIDTH = 82;
 const CONDUCT_SCORE_COLUMN_WIDTH = 72;
 const CONDUCT_GRADE_COLUMN_WIDTH = 84;
+const CONDUCT_PATCH_SCORE_COLUMN_WIDTH = 116;
+const CONDUCT_PATCH_GRADE_COLUMN_WIDTH = 116;
+const CONDUCT_PATCH_CLEAR_COLUMN_WIDTH = 150;
 const CONDUCT_STATUS_COLUMN_WIDTH = 112;
 const CONDUCT_CONFLICT_COLUMN_WIDTH = 150;
 const CONDUCT_ACTION_COLUMN_WIDTH = 82;
@@ -110,6 +132,21 @@ const CONDUCT_TABLE_SCROLL_X =
   CONDUCT_STATUS_COLUMN_WIDTH +
   CONDUCT_CONFLICT_COLUMN_WIDTH +
   CONDUCT_ACTION_COLUMN_WIDTH;
+const CONDUCT_PATCH_TABLE_SCROLL_X =
+  CONDUCT_TABLE_SCROLL_X +
+  CONDUCT_PATCH_SCORE_COLUMN_WIDTH +
+  CONDUCT_PATCH_GRADE_COLUMN_WIDTH +
+  CONDUCT_PATCH_CLEAR_COLUMN_WIDTH;
+
+const CONDUCT_CONFIRMED_GRADE_OPTIONS = ['优', '良', '中', '差'].map((grade) => ({
+  label: grade,
+  value: grade,
+}));
+
+const CONDUCT_PATCH_FIELD_LABELS: Record<StudentConductGradePatchFieldKey, string> = {
+  confirmedGrade: '确认等级',
+  score: '分数',
+};
 
 const STATUS_LABELS: Record<string, string> = {
   CORRECTION_CLEANUP_PENDING: '补正待清理',
@@ -250,6 +287,66 @@ function formatFieldValue(cell: StudentConductGradeFieldCell) {
   const text = String(value).trim();
 
   return text || '-';
+}
+
+function normalizeConductPatchDraft(draft: ConductPatchDraft) {
+  const score = draft.score?.trim();
+  const confirmedGrade = draft.confirmedGrade?.trim();
+  const clearFieldKeys = Array.from(new Set(draft.clearFieldKeys));
+  const nextDraft: ConductPatchDraft = {
+    clearFieldKeys,
+    ...(score ? { score } : {}),
+    ...(confirmedGrade ? { confirmedGrade } : {}),
+  };
+
+  if (!nextDraft.score && !nextDraft.confirmedGrade && clearFieldKeys.length === 0) {
+    return null;
+  }
+
+  return nextDraft;
+}
+
+function isConductPatchClearSelected(
+  draft: ConductPatchDraft | undefined,
+  fieldKey: StudentConductGradePatchFieldKey,
+) {
+  return draft?.clearFieldKeys.includes(fieldKey) ?? false;
+}
+
+function canClearConductPatchField(
+  student: StudentConductGradeStudent,
+  fieldKey: StudentConductGradePatchFieldKey,
+) {
+  return student.manualPatchFieldKeys.includes(fieldKey);
+}
+
+function buildConductPatchStudentInputs(
+  students: readonly StudentConductGradeStudent[],
+  drafts: Record<string, ConductPatchDraft>,
+) {
+  return students
+    .map((student): PatchStudentConductGradeCorrectionStudentInput | null => {
+      const draft = drafts[student.studentId];
+      const normalizedDraft = draft ? normalizeConductPatchDraft(draft) : null;
+
+      if (!normalizedDraft) {
+        return null;
+      }
+
+      return {
+        studentId: student.studentId,
+        ...(normalizedDraft.score ? { score: normalizedDraft.score } : {}),
+        ...(normalizedDraft.confirmedGrade
+          ? { confirmedGrade: normalizedDraft.confirmedGrade }
+          : {}),
+        ...(normalizedDraft.clearFieldKeys.length > 0
+          ? { clearFieldKeys: normalizedDraft.clearFieldKeys }
+          : {}),
+      };
+    })
+    .filter((student): student is PatchStudentConductGradeCorrectionStudentInput =>
+      Boolean(student),
+    );
 }
 
 function renderFieldCell(cell: StudentConductGradeFieldCell) {
@@ -407,6 +504,15 @@ function formatSyncResultTitle(
     .join('。');
 }
 
+function formatPatchResultTitle(result: PatchStudentConductGradeCorrectionsResult) {
+  return [
+    `提交 ${result.totalRows} 行，影响学生 ${result.affectedStudents} 名`,
+    `写入字段 ${result.writtenFieldCount} 个，清除补正字段 ${result.clearedFieldCount} 个`,
+    `upstream 非空跳过 ${result.skippedUpstreamFieldCount} 个，自动清除旧补正 ${result.clearedUpstreamFieldCount} 个`,
+    `未变化字段 ${result.unchangedFieldCount} 个`,
+  ].join('。');
+}
+
 export function StudentConductGradeGovernanceLabPage() {
   const { token } = theme.useToken();
   const loaderData = useLoaderData() as StudentConductGradeGovernanceLabLoaderData | null;
@@ -427,12 +533,20 @@ export function StudentConductGradeGovernanceLabPage() {
   const [cleanupStudentId, setCleanupStudentId] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [syncResult, setSyncResult] = useState<RefreshStudentConductGradeClassResult | null>(null);
+  const [patchResult, setPatchResult] = useState<PatchStudentConductGradeCorrectionsResult | null>(
+    null,
+  );
+  const [patchDrafts, setPatchDrafts] = useState<Record<string, ConductPatchDraft>>({});
+  const [patchRowIssues, setPatchRowIssues] = useState<ConductPatchRowIssueView[]>([]);
+  const [isPatchMode, setIsPatchMode] = useState(false);
+  const [isPatchingCorrections, setIsPatchingCorrections] = useState(false);
   const [syncingScope, setSyncingScope] = useState<'ALL_TERMS' | 'TERM' | null>(null);
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<UpstreamActionRequest | null>(
     null,
   );
   const loadRequestSeqRef = useRef(0);
   const cleanupRequestSeqRef = useRef(0);
+  const patchRequestSeqRef = useRef(0);
   const activeSelectionRef = useRef<{
     classOption: StudentPrivateProfileClassOption | null;
     classId: string | null;
@@ -498,6 +612,7 @@ export function StudentConductGradeGovernanceLabPage() {
     () => buildStatusOptions(conductView?.students ?? []),
     [conductView?.students],
   );
+  const patchDraftCount = useMemo(() => Object.keys(patchDrafts).length, [patchDrafts]);
   const conductSyncMenuItems = useMemo<MenuProps['items']>(
     () => [
       {
@@ -516,9 +631,19 @@ export function StudentConductGradeGovernanceLabPage() {
   const conductSyncDisabled =
     isLoadingCatalog ||
     isLoadingData ||
+    isPatchMode ||
+    isPatchingCorrections ||
     !selectedClass ||
     !selectedTerm ||
     terms.length === 0 ||
+    termGenerationBlocked;
+  const conductPatchDisabled =
+    isLoadingCatalog ||
+    isLoadingData ||
+    isPatchingCorrections ||
+    !selectedClass ||
+    !selectedTerm ||
+    !conductView ||
     termGenerationBlocked;
 
   useEffect(() => {
@@ -530,10 +655,87 @@ export function StudentConductGradeGovernanceLabPage() {
     };
   }, [selectedClass, selectedClassId, selectedTerm, selectedTermKey]);
 
+  const resetPatchWorkspace = useCallback((options: { preserveResult?: boolean } = {}) => {
+    setIsPatchMode(false);
+    setPatchDrafts({});
+    setPatchRowIssues([]);
+
+    if (!options.preserveResult) {
+      setPatchResult(null);
+    }
+  }, []);
+
+  const updatePatchDraft = useCallback(
+    (studentId: string, updater: (draft: ConductPatchDraft) => ConductPatchDraft) => {
+      setPatchDrafts((currentDrafts) => {
+        const currentDraft = currentDrafts[studentId] ?? {
+          clearFieldKeys: [],
+        };
+        const nextDraft = normalizeConductPatchDraft(
+          updater({
+            ...currentDraft,
+            clearFieldKeys: [...currentDraft.clearFieldKeys],
+          }),
+        );
+        const nextDrafts = { ...currentDrafts };
+
+        if (nextDraft) {
+          nextDrafts[studentId] = nextDraft;
+        } else {
+          delete nextDrafts[studentId];
+        }
+
+        return nextDrafts;
+      });
+      setPatchRowIssues([]);
+    },
+    [],
+  );
+
+  const handlePatchFieldChange = useCallback(
+    (studentId: string, fieldKey: StudentConductGradePatchFieldKey, value: string | undefined) => {
+      updatePatchDraft(studentId, (draft) => {
+        const nextValue = value?.trim();
+
+        return {
+          ...draft,
+          [fieldKey]: nextValue || undefined,
+          clearFieldKeys: draft.clearFieldKeys.filter((item) => item !== fieldKey),
+        };
+      });
+    },
+    [updatePatchDraft],
+  );
+
+  const handlePatchClearToggle = useCallback(
+    (student: StudentConductGradeStudent, fieldKey: StudentConductGradePatchFieldKey) => {
+      if (!canClearConductPatchField(student, fieldKey)) {
+        return;
+      }
+
+      updatePatchDraft(student.studentId, (draft) => {
+        const clearSelected = isConductPatchClearSelected(draft, fieldKey);
+        const clearFieldKeys = clearSelected
+          ? draft.clearFieldKeys.filter((item) => item !== fieldKey)
+          : [...draft.clearFieldKeys, fieldKey];
+
+        return {
+          ...draft,
+          [fieldKey]: undefined,
+          clearFieldKeys,
+        };
+      });
+    },
+    [updatePatchDraft],
+  );
+
   const loadSelectionData = useCallback(
     async (
       classOption: StudentPrivateProfileClassOption,
       term: StudentConductGradeClassTermOption,
+      options: {
+        preservePatchResult?: boolean;
+      } = {},
     ) => {
       const requestSeq = loadRequestSeqRef.current + 1;
       const termKey = buildTermKey(term);
@@ -548,6 +750,9 @@ export function StudentConductGradeGovernanceLabPage() {
       setIsLoadingData(true);
       setErrorMessage(null);
       setSelectedStudentId(null);
+      resetPatchWorkspace({
+        preserveResult: options.preservePatchResult,
+      });
 
       try {
         const nextOverview = await fetchStudentPrivateProfileClassOverview({
@@ -591,7 +796,7 @@ export function StudentConductGradeGovernanceLabPage() {
         }
       }
     },
-    [],
+    [resetPatchWorkspace],
   );
 
   const loadClassTermsAndSelection = useCallback(
@@ -608,6 +813,7 @@ export function StudentConductGradeGovernanceLabPage() {
       setErrorMessage(null);
       setSelectedStudentId(null);
       setSyncResult(null);
+      resetPatchWorkspace();
       setOverview(null);
       setConductView(null);
       setTerms([]);
@@ -687,7 +893,7 @@ export function StudentConductGradeGovernanceLabPage() {
         }
       }
     },
-    [],
+    [resetPatchWorkspace],
   );
 
   const runSyncWithSession = useCallback(
@@ -855,6 +1061,7 @@ export function StudentConductGradeGovernanceLabPage() {
     setIsLoadingCatalog(true);
     setErrorMessage(null);
     setSyncResult(null);
+    resetPatchWorkspace();
 
     try {
       const nextClasses = await listStudentPrivateProfileClassOptions();
@@ -886,7 +1093,7 @@ export function StudentConductGradeGovernanceLabPage() {
     } finally {
       setIsLoadingCatalog(false);
     }
-  }, [loadClassTermsAndSelection]);
+  }, [loadClassTermsAndSelection, resetPatchWorkspace]);
 
   const reloadCurrentSelection = useCallback(async () => {
     if (!selectedClass) {
@@ -1012,8 +1219,106 @@ export function StudentConductGradeGovernanceLabPage() {
     [conductView, loadSelectionData, message, termBlockingMessage, termGenerationBlocked],
   );
 
-  const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(
-    () => [
+  const handleStartPatchMode = useCallback(() => {
+    setErrorMessage(null);
+    setPatchResult(null);
+    setPatchRowIssues([]);
+    setIsPatchMode(true);
+  }, []);
+
+  const handleCancelPatchMode = useCallback(() => {
+    resetPatchWorkspace();
+  }, [resetPatchWorkspace]);
+
+  const handleSubmitPatch = useCallback(async () => {
+    if (!conductView) {
+      return;
+    }
+
+    if (termGenerationBlocked) {
+      setErrorMessage(termBlockingMessage);
+      return;
+    }
+
+    const students = buildConductPatchStudentInputs(conductView.students, patchDrafts);
+
+    if (students.length === 0) {
+      message.warning('请先录入至少一名学生的操行补正。');
+      return;
+    }
+
+    const patchSelection = activeSelectionRef.current;
+    const patchRequestSeq = patchRequestSeqRef.current + 1;
+    const canApplyPatchResult = () => {
+      const currentSelection = activeSelectionRef.current;
+
+      return (
+        currentSelection.classId === patchSelection.classId &&
+        currentSelection.termKey === patchSelection.termKey
+      );
+    };
+
+    patchRequestSeqRef.current = patchRequestSeq;
+    setIsPatchingCorrections(true);
+    setErrorMessage(null);
+    setPatchRowIssues([]);
+    setPatchResult(null);
+
+    try {
+      const result = await patchStudentConductGradeCorrections({
+        classCode: conductView.classCode,
+        schoolYear: conductView.schoolYear,
+        semester: conductView.semester,
+        students,
+      });
+
+      if (!canApplyPatchResult()) {
+        return;
+      }
+
+      setPatchResult(result);
+      message[result.skippedUpstreamFieldCount > 0 ? 'warning' : 'success'](
+        `操行补录完成：写入 ${result.writtenFieldCount} 个字段，清除 ${result.clearedFieldCount} 个字段`,
+      );
+
+      if (patchSelection.classOption && patchSelection.term) {
+        await loadSelectionData(patchSelection.classOption, patchSelection.term, {
+          preservePatchResult: true,
+        });
+      }
+    } catch (error) {
+      if (!canApplyPatchResult()) {
+        return;
+      }
+
+      const rowIssues = readStudentConductGradePatchRowIssues(error).map((issue) => ({
+        ...issue,
+        studentId: issue.studentId ?? students[issue.rowIndex]?.studentId ?? null,
+      }));
+
+      setPatchRowIssues(rowIssues);
+      setErrorMessage(
+        resolveStudentConductGradePatchErrorMessage(
+          error,
+          '暂时无法保存操行补录，请检查输入后再试。',
+        ),
+      );
+    } finally {
+      if (patchRequestSeqRef.current === patchRequestSeq) {
+        setIsPatchingCorrections(false);
+      }
+    }
+  }, [
+    conductView,
+    loadSelectionData,
+    message,
+    patchDrafts,
+    termBlockingMessage,
+    termGenerationBlocked,
+  ]);
+
+  const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(() => {
+    const baseColumns: ColumnsType<StudentConductGradeStudent> = [
       {
         ...buildStableColumnSizing<StudentConductGradeStudent>(STUDENT_NUMBER_COLUMN_WIDTH),
         align: 'center',
@@ -1046,6 +1351,107 @@ export function StudentConductGradeGovernanceLabPage() {
           renderConfirmedGradeCell(record.fields.confirmedGrade, record.fields.estimatedGrade),
         title: '确认等级',
       },
+      ...(isPatchMode
+        ? [
+            {
+              ...buildStableColumnSizing<StudentConductGradeStudent>(
+                CONDUCT_PATCH_SCORE_COLUMN_WIDTH,
+              ),
+              align: 'center' as const,
+              key: 'scorePatch',
+              render: (_: unknown, record: StudentConductGradeStudent) => {
+                const draft = patchDrafts[record.studentId];
+                const clearSelected = isConductPatchClearSelected(draft, 'score');
+
+                return (
+                  <div onClick={(event) => event.stopPropagation()}>
+                    <Input
+                      allowClear
+                      disabled={clearSelected || isPatchingCorrections}
+                      placeholder={formatFieldValue(record.fields.score)}
+                      size="small"
+                      value={draft?.score ?? ''}
+                      onChange={(event) =>
+                        handlePatchFieldChange(record.studentId, 'score', event.target.value)
+                      }
+                    />
+                  </div>
+                );
+              },
+              title: '分数补录',
+            },
+            {
+              ...buildStableColumnSizing<StudentConductGradeStudent>(
+                CONDUCT_PATCH_GRADE_COLUMN_WIDTH,
+              ),
+              align: 'center' as const,
+              key: 'confirmedGradePatch',
+              render: (_: unknown, record: StudentConductGradeStudent) => {
+                const draft = patchDrafts[record.studentId];
+                const clearSelected = isConductPatchClearSelected(draft, 'confirmedGrade');
+
+                return (
+                  <div onClick={(event) => event.stopPropagation()}>
+                    <Select
+                      allowClear
+                      disabled={clearSelected || isPatchingCorrections}
+                      options={CONDUCT_CONFIRMED_GRADE_OPTIONS}
+                      placeholder={formatFieldValue(record.fields.confirmedGrade)}
+                      size="small"
+                      style={{ width: '100%' }}
+                      value={draft?.confirmedGrade}
+                      onChange={(value) =>
+                        handlePatchFieldChange(record.studentId, 'confirmedGrade', value)
+                      }
+                    />
+                  </div>
+                );
+              },
+              title: '等级补录',
+            },
+            {
+              ...buildStableColumnSizing<StudentConductGradeStudent>(
+                CONDUCT_PATCH_CLEAR_COLUMN_WIDTH,
+              ),
+              align: 'center' as const,
+              key: 'clearPatch',
+              render: (_: unknown, record: StudentConductGradeStudent) => {
+                const draft = patchDrafts[record.studentId];
+                const clearableFields = (
+                  ['score', 'confirmedGrade'] satisfies StudentConductGradePatchFieldKey[]
+                ).filter((fieldKey) => canClearConductPatchField(record, fieldKey));
+
+                if (clearableFields.length === 0) {
+                  return <span className="text-text-secondary">-</span>;
+                }
+
+                return (
+                  <Space size={4} wrap onClick={(event) => event.stopPropagation()}>
+                    {clearableFields.map((fieldKey) => {
+                      const clearSelected = isConductPatchClearSelected(draft, fieldKey);
+
+                      return (
+                        <Button
+                          danger={clearSelected}
+                          disabled={isPatchingCorrections}
+                          key={fieldKey}
+                          size="small"
+                          type={clearSelected ? 'primary' : 'default'}
+                          onClick={() => handlePatchClearToggle(record, fieldKey)}
+                        >
+                          {clearSelected
+                            ? `取消${CONDUCT_PATCH_FIELD_LABELS[fieldKey]}`
+                            : `清除${CONDUCT_PATCH_FIELD_LABELS[fieldKey]}`}
+                        </Button>
+                      );
+                    })}
+                  </Space>
+                );
+              },
+              title: '清除补正',
+            },
+          ]
+        : []),
       {
         ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_STATUS_COLUMN_WIDTH),
         align: 'center',
@@ -1080,7 +1486,7 @@ export function StudentConductGradeGovernanceLabPage() {
             <Button size="small" type="link" onClick={() => setSelectedStudentId(record.studentId)}>
               明细
             </Button>
-            {record.status === 'CORRECTION_CLEANUP_PENDING' ? (
+            {!isPatchMode && record.status === 'CORRECTION_CLEANUP_PENDING' ? (
               <Popconfirm
                 title="清理已失效本地补正？"
                 description="清理只会移除 stale correction，不会覆盖 upstream。"
@@ -1103,9 +1509,18 @@ export function StudentConductGradeGovernanceLabPage() {
         ),
         title: '操作',
       },
-    ],
-    [cleanupStudentId, handleCleanup],
-  );
+    ];
+
+    return baseColumns;
+  }, [
+    cleanupStudentId,
+    handleCleanup,
+    handlePatchClearToggle,
+    handlePatchFieldChange,
+    isPatchMode,
+    isPatchingCorrections,
+    patchDrafts,
+  ]);
 
   useEffect(() => {
     void loadCatalog();
@@ -1188,6 +1603,35 @@ export function StudentConductGradeGovernanceLabPage() {
                   description={formatSyncResultTitle(syncResult, terms)}
                 />
               ) : null}
+              {patchResult ? (
+                <Alert
+                  showIcon
+                  type={patchResult.skippedUpstreamFieldCount > 0 ? 'warning' : 'success'}
+                  title="操行补录完成"
+                  description={formatPatchResultTitle(patchResult)}
+                />
+              ) : null}
+              {patchRowIssues.length > 0 ? (
+                <Alert
+                  showIcon
+                  type="error"
+                  title="操行补录校验失败"
+                  description={
+                    <Space direction="vertical" size={2}>
+                      {patchRowIssues.slice(0, 8).map((issue) => (
+                        <span key={`${issue.rowIndex}-${issue.code}`}>
+                          第 {issue.rowIndex + 1} 行
+                          {issue.studentId ? `（${issue.studentId}）` : ''}：{issue.code}
+                          {issue.message ? `，${issue.message}` : ''}
+                        </span>
+                      ))}
+                      {patchRowIssues.length > 8 ? (
+                        <span>另有 {patchRowIssues.length - 8} 条行级错误未展开。</span>
+                      ) : null}
+                    </Space>
+                  }
+                />
+              ) : null}
 
               <div
                 className="grid gap-4"
@@ -1253,6 +1697,13 @@ export function StudentConductGradeGovernanceLabPage() {
                       同步操行
                     </Button>
                   </Dropdown>
+                  <Button
+                    disabled={conductPatchDisabled || isPatchMode}
+                    icon={<EditOutlined />}
+                    onClick={handleStartPatchMode}
+                  >
+                    补录
+                  </Button>
                 </div>
               </div>
             </div>
@@ -1282,6 +1733,34 @@ export function StudentConductGradeGovernanceLabPage() {
                           <Table<StudentConductGradeStudent>
                             columns={columns}
                             dataSource={filteredStudents}
+                            footer={
+                              isPatchMode
+                                ? () => (
+                                    <div className="student-conduct-grade-governance-patch-footer">
+                                      <span>
+                                        已选择 {patchDraftCount} 名学生补录；空白输入不会提交。
+                                      </span>
+                                      <Space size="small" wrap>
+                                        <Button
+                                          disabled={isPatchingCorrections}
+                                          onClick={handleCancelPatchMode}
+                                        >
+                                          取消
+                                        </Button>
+                                        <Button
+                                          disabled={patchDraftCount === 0}
+                                          icon={<SaveOutlined />}
+                                          loading={isPatchingCorrections}
+                                          type="primary"
+                                          onClick={() => void handleSubmitPatch()}
+                                        >
+                                          保存补录
+                                        </Button>
+                                      </Space>
+                                    </div>
+                                  )
+                                : undefined
+                            }
                             locale={{
                               emptyText: (
                                 <Empty
@@ -1304,7 +1783,11 @@ export function StudentConductGradeGovernanceLabPage() {
                               showSizeChanger: true,
                             }}
                             rowKey={(record) => record.studentId}
-                            scroll={{ x: CONDUCT_TABLE_SCROLL_X }}
+                            scroll={{
+                              x: isPatchMode
+                                ? CONDUCT_PATCH_TABLE_SCROLL_X
+                                : CONDUCT_TABLE_SCROLL_X,
+                            }}
                             size="small"
                             tableLayout="fixed"
                           />

@@ -2,13 +2,16 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-  executeUpstreamSessionGraphQLMock: vi.fn(),
-}));
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, isGraphQLIngressErrorMock } =
+  vi.hoisted(() => ({
+    executeGraphQLMock: vi.fn(),
+    executeUpstreamSessionGraphQLMock: vi.fn(),
+    isGraphQLIngressErrorMock: vi.fn(),
+  }));
 
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
+  isGraphQLIngressError: isGraphQLIngressErrorMock,
 }));
 
 vi.mock('@/entities/upstream-session', () => ({
@@ -27,7 +30,10 @@ import {
   normalizeConductClassTermOptionsInput,
   normalizeConductCleanupInput,
   normalizeConductViewInput,
+  normalizePatchStudentConductGradeCorrectionsInput,
   normalizeRefreshConductClassInput,
+  patchStudentConductGradeCorrections,
+  readStudentConductGradePatchRowIssues,
   refreshStudentConductGradeClassFromUpstream,
 } from './api';
 
@@ -35,6 +41,8 @@ describe('student-conduct-grade-governance api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
+    isGraphQLIngressErrorMock.mockReset();
+    isGraphQLIngressErrorMock.mockReturnValue(false);
   });
 
   it('normalizes conduct view and cleanup inputs', () => {
@@ -106,6 +114,111 @@ describe('student-conduct-grade-governance api', () => {
         upstreamSessionToken: ' token-1 ',
       }),
     ).toThrow('同步指定学期时必须同时提供学年。');
+  });
+
+  it('normalizes conduct correction patch input and omits empty fields', () => {
+    expect(
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: ' 2501 ',
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
+        students: [
+          {
+            confirmedGrade: ' 优 ',
+            score: ' 88.0 ',
+            studentId: ' stu-1 ',
+          },
+          {
+            clearFieldKeys: ['score', 'score', 'confirmedGrade'],
+            confirmedGrade: '   ',
+            score: null,
+            studentId: ' stu-2 ',
+          },
+        ],
+      }),
+    ).toEqual({
+      classCode: '2501',
+      schoolYear: '2025',
+      semester: '1',
+      students: [
+        {
+          confirmedGrade: '优',
+          score: '88.0',
+          studentId: 'stu-1',
+        },
+        {
+          clearFieldKeys: ['score', 'confirmedGrade'],
+          studentId: 'stu-2',
+        },
+      ],
+    });
+  });
+
+  it('rejects invalid conduct correction patch inputs before graphql', () => {
+    expect(() =>
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: '2501',
+        schoolYear: '2025',
+        semester: '1',
+        students: [],
+      }),
+    ).toThrow('请至少选择一名需要补录操行的学生。');
+
+    expect(() =>
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: '2501',
+        schoolYear: '2025',
+        semester: '1',
+        students: [
+          {
+            confirmedGrade: ' ',
+            score: null,
+            studentId: 'stu-1',
+          },
+        ],
+      }),
+    ).toThrow('每个学生至少需要一个操行补录或清除操作。');
+
+    expect(() =>
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: '2501',
+        schoolYear: '2025',
+        semester: '1',
+        students: [
+          {
+            clearFieldKeys: ['score'],
+            score: '90',
+            studentId: 'stu-1',
+          },
+        ],
+      }),
+    ).toThrow('同一个操行字段不能同时补录和清除。');
+
+    expect(() =>
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: '2501',
+        schoolYear: '2025',
+        semester: '1',
+        students: [
+          {
+            clearFieldKeys: ['estimatedGrade' as 'score'],
+            studentId: 'stu-1',
+          },
+        ],
+      }),
+    ).toThrow('操行补录清除字段只支持 score、confirmedGrade。');
+
+    expect(() =>
+      normalizePatchStudentConductGradeCorrectionsInput({
+        classCode: '2501',
+        schoolYear: '2025',
+        semester: '1',
+        students: Array.from({ length: 501 }, (_, index) => ({
+          score: String(index),
+          studentId: `stu-${index}`,
+        })),
+      }),
+    ).toThrow('单次操行补录最多提交 500 名学生。');
   });
 
   it('loads class options through the private profile class option contract', async () => {
@@ -303,6 +416,142 @@ describe('student-conduct-grade-governance api', () => {
         },
       },
     );
+  });
+
+  it('patches conduct corrections without estimated grade or upstream session data', async () => {
+    const payload = {
+      affectedStudents: 2,
+      classCode: '2501',
+      className: '25计算机1班',
+      clearedFieldCount: 1,
+      clearedUpstreamFieldCount: 0,
+      createdSectionCount: 0,
+      rowResults: [
+        {
+          clearedFieldKeys: [],
+          clearedUpstreamFieldKeys: [],
+          conductSectionStatus: 'LOCAL_CORRECTION',
+          createdSection: false,
+          rowIndex: 0,
+          skippedUpstreamFieldKeys: [],
+          status: 'WRITTEN',
+          studentId: 'stu-1',
+          unchangedFieldKeys: [],
+          writtenFieldKeys: ['score', 'confirmedGrade'],
+        },
+      ],
+      schoolYear: '2025',
+      sectionKey: 'CONDUCT_GRADE',
+      semester: '1',
+      skippedUpstreamFieldCount: 0,
+      status: 'WRITTEN',
+      totalRows: 2,
+      unchangedFieldCount: 0,
+      unchangedStudentCount: 0,
+      writtenFieldCount: 2,
+      writtenStudentCount: 1,
+    };
+
+    executeGraphQLMock.mockResolvedValueOnce({
+      patchStudentConductGradeCorrections: payload,
+    });
+
+    await expect(
+      patchStudentConductGradeCorrections({
+        classCode: ' 2501 ',
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
+        students: [
+          {
+            confirmedGrade: ' 优 ',
+            score: ' 90 ',
+            studentId: ' stu-1 ',
+          },
+          {
+            clearFieldKeys: ['confirmedGrade'],
+            studentId: ' stu-2 ',
+          },
+        ],
+      }),
+    ).resolves.toBe(payload);
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('patchStudentConductGradeCorrections');
+    expect(query).toContain('writtenFieldCount');
+    expect(query).toContain('clearedUpstreamFieldKeys');
+    expect(query).toContain('skippedUpstreamFieldKeys');
+    expect(query).not.toContain('estimatedGrade');
+    expect(query).not.toContain('upstreamSessionToken');
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('StudentConductGradeGovernancePatchCorrections'),
+      {
+        input: {
+          classCode: '2501',
+          schoolYear: '2025',
+          semester: '1',
+          students: [
+            {
+              confirmedGrade: '优',
+              score: '90',
+              studentId: 'stu-1',
+            },
+            {
+              clearFieldKeys: ['confirmedGrade'],
+              studentId: 'stu-2',
+            },
+          ],
+        },
+      },
+    );
+  });
+
+  it('reads conduct correction row issues from graphql details', () => {
+    const error = {
+      graphqlErrors: [
+        {
+          extensions: {
+            details: {
+              rowIssues: [
+                {
+                  code: 'CONFIRMED_GRADE_INVALID',
+                  message: '确认等级无效',
+                  rowIndex: 0,
+                  studentId: 'stu-1',
+                },
+                {
+                  code: 'FIELD_SET_CLEAR_CONFLICT',
+                  rowIndex: 1,
+                },
+                {
+                  code: '',
+                  rowIndex: 2,
+                },
+              ],
+            },
+          },
+          message: 'STUDENT_PRIVATE_PROFILE_SUPPLEMENT_DRY_RUN_INVALID',
+        },
+      ],
+      userMessage: '请求处理失败，请稍后重试。',
+    };
+
+    isGraphQLIngressErrorMock.mockReturnValueOnce(true);
+
+    expect(readStudentConductGradePatchRowIssues(error)).toEqual([
+      {
+        code: 'CONFIRMED_GRADE_INVALID',
+        message: '确认等级无效',
+        rowIndex: 0,
+        studentId: 'stu-1',
+      },
+      {
+        code: 'FIELD_SET_CLEAR_CONFLICT',
+        message: null,
+        rowIndex: 1,
+        studentId: null,
+      },
+    ]);
   });
 
   it('refreshes conduct grade snapshots through upstream session graphql', async () => {

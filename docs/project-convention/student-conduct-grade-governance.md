@@ -21,6 +21,7 @@
 - `studentConductGradeEffectiveView`
 - `refreshStudentConductGradeClassFromUpstream`
 - `cleanupStudentConductGradeCorrection`
+- `patchStudentConductGradeCorrections`
 - 后续操行 Excel `dry-run / import`
   都必须使用 `terms[]` 返回的 `schoolYear + semester`
 
@@ -64,7 +65,7 @@
 - “重新加载”是本地重读当前选择，不等价于 upstream 同步
 - upstream 同步通过单独的“同步操行”入口触发
 
-## 同步与清理
+## 同步、补录与清理
 
 - 操行 upstream 同步已接入公开前端入口
 - 前端通过 upstream 会话登录后，可执行两种动作：
@@ -72,6 +73,17 @@
   `同步该班全部学期`
 - 同步完成后前端重新读取当前仍选中的班级和学期
 - 若用户在同步进行中切换班级或学期，旧请求结果不会覆盖当前选择
+
+- 操行 inputbox 小范围本地补录已接入公开前端入口
+- 前端只开放 `score` 和 `confirmedGrade`，不开放 `estimatedGrade`
+- `confirmedGrade` 固定提交中文枚举：`优 / 良 / 中 / 差`
+- 前端只提交有 set 或 clear 操作的学生，不提交全班
+- 补录调用：
+  `patchStudentConductGradeCorrections(classCode, schoolYear, semester, students[])`
+- `clearFieldKeys` 只支持 `score / confirmedGrade`，且只对已有本地补正字段开放清除入口
+- 补录成功后前端重新读取当前仍选中的班级和学期
+- 若用户在补录进行中切换班级或学期，旧请求结果不会覆盖当前选择
+- 该入口不是 Excel 批量导入入口；Excel `dry-run / import` 仍未接入公开前端入口
 
 - 清理动作仅对 `CORRECTION_CLEANUP_PENDING` 状态学生开放
 - 清理调用：

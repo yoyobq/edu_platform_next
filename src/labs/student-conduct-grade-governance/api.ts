@@ -12,7 +12,7 @@ import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
-import { executeGraphQL } from '@/shared/graphql';
+import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
@@ -158,6 +158,62 @@ export type RefreshStudentConductGradeClassInput = {
   upstreamSessionToken: string;
 };
 
+export type StudentConductGradePatchFieldKey = 'confirmedGrade' | 'score';
+
+export type PatchStudentConductGradeCorrectionStudentInput = {
+  clearFieldKeys?: readonly StudentConductGradePatchFieldKey[] | null;
+  confirmedGrade?: string | null;
+  score?: string | null;
+  studentId: string;
+};
+
+export type PatchStudentConductGradeCorrectionsInput = {
+  classCode: string;
+  schoolYear: string;
+  semester: string;
+  students: readonly PatchStudentConductGradeCorrectionStudentInput[];
+};
+
+export type PatchStudentConductGradeCorrectionRowResult = {
+  clearedFieldKeys: string[];
+  clearedUpstreamFieldKeys: string[];
+  conductSectionStatus: string;
+  createdSection: boolean;
+  rowIndex: number;
+  skippedUpstreamFieldKeys: string[];
+  status: string;
+  studentId: string;
+  unchangedFieldKeys: string[];
+  writtenFieldKeys: string[];
+};
+
+export type PatchStudentConductGradeCorrectionsResult = {
+  affectedStudents: number;
+  classCode: string;
+  className: string;
+  clearedFieldCount: number;
+  clearedUpstreamFieldCount: number;
+  createdSectionCount: number;
+  rowResults: PatchStudentConductGradeCorrectionRowResult[];
+  schoolYear: string;
+  sectionKey: string;
+  semester: string;
+  skippedUpstreamFieldCount: number;
+  status: string;
+  totalRows: number;
+  unchangedFieldCount: number;
+  unchangedStudentCount: number;
+  writtenFieldCount: number;
+  writtenStudentCount: number;
+};
+
+export type StudentConductGradePatchRowIssue = {
+  code: string;
+  message?: string | null;
+  rowIndex: number;
+  studentId?: string | null;
+};
+
 type ClassOptionsResponse = {
   studentPrivateProfileClassOptions: StudentPrivateProfileClassOption[];
 };
@@ -178,9 +234,17 @@ type ConductCleanupResponse = {
   cleanupStudentConductGradeCorrection: StudentConductGradeCorrectionCleanupResult;
 };
 
+type ConductPatchResponse = {
+  patchStudentConductGradeCorrections: PatchStudentConductGradeCorrectionsResult;
+};
+
 type RefreshConductClassResponse = {
   refreshStudentConductGradeClassFromUpstream: RefreshStudentConductGradeClassResult;
 };
+
+const CONDUCT_PATCH_FIELD_KEYS = ['score', 'confirmedGrade'] as const;
+const CONDUCT_PATCH_FIELD_KEY_SET = new Set<string>(CONDUCT_PATCH_FIELD_KEYS);
+const MAX_PATCH_STUDENT_ROWS = 500;
 
 const CLASS_OPTIONS_QUERY = `
   query StudentConductGradeGovernanceClassOptions(
@@ -303,6 +367,43 @@ const CLEANUP_CONDUCT_MUTATION = `
   }
 `;
 
+const PATCH_CONDUCT_CORRECTIONS_MUTATION = `
+  mutation StudentConductGradeGovernancePatchCorrections(
+    $input: PatchStudentConductGradeCorrectionsInput!
+  ) {
+    patchStudentConductGradeCorrections(input: $input) {
+      sectionKey
+      classCode
+      className
+      schoolYear
+      semester
+      status
+      totalRows
+      affectedStudents
+      writtenStudentCount
+      unchangedStudentCount
+      createdSectionCount
+      writtenFieldCount
+      clearedFieldCount
+      clearedUpstreamFieldCount
+      skippedUpstreamFieldCount
+      unchangedFieldCount
+      rowResults {
+        rowIndex
+        studentId
+        conductSectionStatus
+        status
+        createdSection
+        writtenFieldKeys
+        clearedFieldKeys
+        clearedUpstreamFieldKeys
+        skippedUpstreamFieldKeys
+        unchangedFieldKeys
+      }
+    }
+  }
+`;
+
 const REFRESH_CONDUCT_CLASS_MUTATION = `
   mutation StudentConductGradeGovernanceRefreshClass(
     $input: RefreshStudentConductGradeClassFromUpstreamInput!
@@ -340,6 +441,64 @@ async function requestGraphQL<TData, TVariables extends OperationVariables>(
   return executeGraphQL(query, variables);
 }
 
+function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
+  return Object.fromEntries(
+    Object.entries(input).filter(([, value]) => value !== undefined),
+  ) as Partial<TValue>;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function normalizeConductPatchFieldKey(fieldKey: unknown): StudentConductGradePatchFieldKey {
+  if (typeof fieldKey !== 'string' || !CONDUCT_PATCH_FIELD_KEY_SET.has(fieldKey)) {
+    throw new Error('操行补录清除字段只支持 score、confirmedGrade。');
+  }
+
+  return fieldKey as StudentConductGradePatchFieldKey;
+}
+
+function normalizeConductPatchFieldKeys(
+  fieldKeys: readonly StudentConductGradePatchFieldKey[] | null | undefined,
+) {
+  if (!fieldKeys?.length) {
+    return undefined;
+  }
+
+  return Array.from(new Set(fieldKeys.map((fieldKey) => normalizeConductPatchFieldKey(fieldKey))));
+}
+
+function normalizeConductPatchStudent(student: PatchStudentConductGradeCorrectionStudentInput) {
+  const studentId = normalizeRequiredTextValue(student.studentId, { label: '学生' });
+  const score = normalizeOptionalTextValue(student.score, 'to_undefined');
+  const confirmedGrade = normalizeOptionalTextValue(student.confirmedGrade, 'to_undefined');
+  const clearFieldKeys = normalizeConductPatchFieldKeys(student.clearFieldKeys);
+
+  for (const fieldKey of clearFieldKeys ?? []) {
+    if (fieldKey === 'score' && score !== undefined) {
+      throw new Error('同一个操行字段不能同时补录和清除。');
+    }
+
+    if (fieldKey === 'confirmedGrade' && confirmedGrade !== undefined) {
+      throw new Error('同一个操行字段不能同时补录和清除。');
+    }
+  }
+
+  const normalizedStudent = compactInput({
+    clearFieldKeys,
+    confirmedGrade,
+    score,
+    studentId,
+  });
+
+  if (!score && !confirmedGrade && !clearFieldKeys?.length) {
+    throw new Error('每个学生至少需要一个操行补录或清除操作。');
+  }
+
+  return normalizedStudent;
+}
+
 export function normalizeConductViewInput(input: StudentConductGradeEffectiveViewInput) {
   return {
     classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
@@ -354,6 +513,25 @@ export function normalizeConductCleanupInput(input: StudentConductGradeCorrectio
     schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
     semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
     studentId: normalizeRequiredTextValue(input.studentId, { label: '学生' }),
+  };
+}
+
+export function normalizePatchStudentConductGradeCorrectionsInput(
+  input: PatchStudentConductGradeCorrectionsInput,
+) {
+  if (input.students.length === 0) {
+    throw new Error('请至少选择一名需要补录操行的学生。');
+  }
+
+  if (input.students.length > MAX_PATCH_STUDENT_ROWS) {
+    throw new Error(`单次操行补录最多提交 ${MAX_PATCH_STUDENT_ROWS} 名学生。`);
+  }
+
+  return {
+    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
+    schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
+    semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
+    students: input.students.map((student) => normalizeConductPatchStudent(student)),
   };
 }
 
@@ -387,6 +565,76 @@ export function normalizeClassOverviewInput(input: { classId: string }) {
   return {
     classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
   };
+}
+
+export function readStudentConductGradePatchRowIssues(
+  error: unknown,
+): StudentConductGradePatchRowIssue[] {
+  if (!isGraphQLIngressError(error)) {
+    return [];
+  }
+
+  return (
+    error.graphqlErrors?.flatMap((graphqlError) => {
+      const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
+      const details = extensions?.details;
+      const rowIssues = isRecord(details) ? details.rowIssues : undefined;
+
+      if (!Array.isArray(rowIssues)) {
+        return [];
+      }
+
+      return rowIssues
+        .map((rowIssue) => {
+          if (!isRecord(rowIssue)) {
+            return null;
+          }
+
+          const rowIndex = rowIssue.rowIndex;
+          const code = rowIssue.code;
+
+          if (typeof rowIndex !== 'number' || !Number.isInteger(rowIndex)) {
+            return null;
+          }
+
+          if (typeof code !== 'string' || !code.trim()) {
+            return null;
+          }
+
+          return {
+            code: code.trim(),
+            message: typeof rowIssue.message === 'string' ? rowIssue.message : null,
+            rowIndex,
+            studentId: typeof rowIssue.studentId === 'string' ? rowIssue.studentId : null,
+          };
+        })
+        .filter((rowIssue): rowIssue is StudentConductGradePatchRowIssue => Boolean(rowIssue));
+    }) ?? []
+  );
+}
+
+export function resolveStudentConductGradePatchErrorMessage(error: unknown, fallback: string) {
+  if (isGraphQLIngressError(error)) {
+    const firstError = error.graphqlErrors?.[0];
+    const extensions = (firstError?.extensions as Record<string, unknown> | undefined) || {};
+
+    if (typeof extensions.errorMessage === 'string' && extensions.errorMessage.trim()) {
+      return extensions.errorMessage;
+    }
+
+    if (
+      typeof firstError?.message === 'string' &&
+      firstError.message.trim() &&
+      firstError.message !== extensions.code &&
+      firstError.message !== extensions.errorCode
+    ) {
+      return firstError.message;
+    }
+
+    return error.userMessage;
+  }
+
+  return error instanceof Error ? error.message : fallback;
 }
 
 export async function listStudentPrivateProfileClassOptions() {
@@ -458,6 +706,21 @@ export async function cleanupStudentConductGradeCorrection(
   });
 
   return response.cleanupStudentConductGradeCorrection;
+}
+
+export async function patchStudentConductGradeCorrections(
+  input: PatchStudentConductGradeCorrectionsInput,
+) {
+  const response = await requestGraphQL<
+    ConductPatchResponse,
+    {
+      input: ReturnType<typeof normalizePatchStudentConductGradeCorrectionsInput>;
+    }
+  >(PATCH_CONDUCT_CORRECTIONS_MUTATION, {
+    input: normalizePatchStudentConductGradeCorrectionsInput(input),
+  });
+
+  return response.patchStudentConductGradeCorrections;
 }
 
 export async function refreshStudentConductGradeClassFromUpstream(

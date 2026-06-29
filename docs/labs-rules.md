@@ -160,9 +160,9 @@ export const demoLabMeta = {
 - `/labs/student-conduct-grade-governance`
   - 用于验证班级学期操行等级有效视图、本地补正冲突观察与失效补正清理链路
   - 当前对 `ADMIN / STAFF` 在 dev 环境暴露
-  - 当前承担 canonical 学期选择、操行 upstream 同步、有效视图展示和 stale correction 清理；本地快照初始化仍以前置学生敏感资料治理链路为准
+  - 当前承担 canonical 学期选择、操行 upstream 同步、有效视图展示、inputbox 小范围本地补录和 stale correction 清理；本地快照初始化仍以前置学生敏感资料治理链路为准
   - 前端只使用 `studentConductGradeClassTermOptions(classCode)` 生成学期，不依赖全局 visible semester，也不自行推当前学期
-  - 操行 Excel `dry-run / import` 暂未接入公开前端入口
+  - inputbox 补录只开放 `score / confirmedGrade`，不是操行 Excel `dry-run / import` 入口；操行 Excel `dry-run / import` 暂未接入公开前端入口
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程
   - 当前对 `ADMIN / STAFF` 暴露，不要求教务 slot

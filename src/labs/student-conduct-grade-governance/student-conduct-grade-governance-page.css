@@ -85,3 +85,15 @@
 .student-conduct-grade-governance-table-shell .ant-table-tbody > tr > td {
   transition: background-color 0.2s ease;
 }
+
+.student-conduct-grade-governance-patch-footer {
+  align-items: center;
+  display: flex;
+  gap: var(--ant-margin-sm);
+  justify-content: space-between;
+}
+
+.student-conduct-grade-governance-patch-footer > span {
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+}
