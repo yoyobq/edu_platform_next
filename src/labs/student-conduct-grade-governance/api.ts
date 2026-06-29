@@ -606,10 +606,6 @@ async function parseMaterialImportResponse(response: Response) {
   }
 
   if (isRecord(payload) && 'data' in payload) {
-    if (payload.success === false) {
-      throw new Error(readRestEnvelopeMessage(payload) ?? '操行材料导入失败。');
-    }
-
     return assertMaterialImportResult(payload.data);
   }
 

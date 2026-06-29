@@ -1518,7 +1518,7 @@ async function parseSupplementUploadResponse(response: Response) {
     throw new Error(readRestEnvelopeMessage(payload) ?? '补录文件上传失败。');
   }
 
-  if (!isRecordValue(payload) || payload.success !== true) {
+  if (!isRecordValue(payload) || !('data' in payload)) {
     throw new Error(readRestEnvelopeMessage(payload) ?? '补录文件上传失败。');
   }
 

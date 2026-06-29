@@ -586,7 +586,7 @@ describe('student-conduct-grade-governance api', () => {
     };
 
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ data: payload, success: true }), {
+      new Response(JSON.stringify({ data: payload }), {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -653,7 +653,6 @@ describe('student-conduct-grade-governance api', () => {
               },
               warnings: [],
             },
-            success: true,
           }),
           {
             headers: {

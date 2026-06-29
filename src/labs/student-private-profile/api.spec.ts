@@ -891,7 +891,7 @@ describe('student-private-profile lab api', () => {
     expect(executeUpstreamSessionGraphQLMock).not.toHaveBeenCalled();
   });
 
-  it('uploads supplement xlsx through REST envelope with auth header', async () => {
+  it('uploads supplement xlsx through REST body with auth header', async () => {
     const file = new Blob(['excel']) as File;
 
     Object.defineProperty(file, 'name', { value: 'family.xlsx' });
@@ -911,7 +911,6 @@ describe('student-private-profile lab api', () => {
       new Response(
         JSON.stringify({
           data: uploadResult,
-          success: true,
         }),
         {
           status: 200,
