@@ -134,7 +134,9 @@ const CONDUCT_TABLE_SCROLL_X =
   CONDUCT_STATUS_COLUMN_WIDTH +
   CONDUCT_ACTION_COLUMN_WIDTH;
 const CONDUCT_PATCH_TABLE_SCROLL_X =
-  CONDUCT_TABLE_SCROLL_X +
+  CONDUCT_TABLE_SCROLL_X -
+  CONDUCT_SCORE_COLUMN_WIDTH -
+  CONDUCT_GRADE_COLUMN_WIDTH +
   CONDUCT_PATCH_SCORE_COLUMN_WIDTH +
   CONDUCT_PATCH_GRADE_COLUMN_WIDTH +
   CONDUCT_PATCH_CLEAR_COLUMN_WIDTH;
@@ -1442,6 +1444,33 @@ export function StudentConductGradeGovernanceLabPage() {
     void runMaterialImport(materialWarningConfirmationKeys);
   }, [materialWarningConfirmationKeys, runMaterialImport]);
 
+  const renderPatchActionButtons = () => (
+    <Space size="small" wrap>
+      <Button
+        disabled={isImportingMaterial || isPatchingCorrections}
+        onClick={handleCancelPatchMode}
+      >
+        取消
+      </Button>
+      <Button
+        disabled={isImportingMaterial || patchDraftCount === 0}
+        icon={<SaveOutlined />}
+        loading={isPatchingCorrections}
+        type="primary"
+        onClick={() => void handleSubmitPatch()}
+      >
+        保存补录
+      </Button>
+    </Space>
+  );
+
+  const renderPatchActionBar = () => (
+    <div className="student-conduct-grade-governance-patch-action-bar">
+      <span>已选择 {patchDraftCount} 名学生补录；只提交已修改或清除字段。</span>
+      {renderPatchActionButtons()}
+    </div>
+  );
+
   const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(() => {
     const baseColumns: ColumnsType<StudentConductGradeStudent> = [
       {
@@ -1462,78 +1491,74 @@ export function StudentConductGradeGovernanceLabPage() {
         title: '姓名',
       },
       {
-        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_SCORE_COLUMN_WIDTH),
+        ...buildStableColumnSizing<StudentConductGradeStudent>(
+          isPatchMode ? CONDUCT_PATCH_SCORE_COLUMN_WIDTH : CONDUCT_SCORE_COLUMN_WIDTH,
+        ),
         align: 'center',
         key: 'score',
-        render: (_, record) => renderFieldCell(record.fields.score),
+        render: (_, record) => {
+          if (!isPatchMode) {
+            return renderFieldCell(record.fields.score);
+          }
+
+          const draft = patchDrafts[record.studentId];
+          const clearSelected = isConductPatchClearSelected(draft, 'score');
+
+          return (
+            <div onClick={(event) => event.stopPropagation()}>
+              <Input
+                allowClear
+                disabled={clearSelected || isPatchingCorrections}
+                placeholder={formatFieldValue(record.fields.score)}
+                size="small"
+                value={draft?.score ?? ''}
+                onChange={(event) =>
+                  handlePatchFieldChange(record.studentId, 'score', event.target.value)
+                }
+              />
+            </div>
+          );
+        },
         title: '分数',
       },
       {
-        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_GRADE_COLUMN_WIDTH),
+        ...buildStableColumnSizing<StudentConductGradeStudent>(
+          isPatchMode ? CONDUCT_PATCH_GRADE_COLUMN_WIDTH : CONDUCT_GRADE_COLUMN_WIDTH,
+        ),
         align: 'center',
         key: 'confirmedGrade',
-        render: (_, record) =>
-          renderConfirmedGradeCell(record.fields.confirmedGrade, record.fields.estimatedGrade),
+        render: (_, record) => {
+          if (!isPatchMode) {
+            return renderConfirmedGradeCell(
+              record.fields.confirmedGrade,
+              record.fields.estimatedGrade,
+            );
+          }
+
+          const draft = patchDrafts[record.studentId];
+          const clearSelected = isConductPatchClearSelected(draft, 'confirmedGrade');
+
+          return (
+            <div onClick={(event) => event.stopPropagation()}>
+              <Select
+                allowClear
+                disabled={clearSelected || isPatchingCorrections}
+                options={CONDUCT_CONFIRMED_GRADE_OPTIONS}
+                placeholder={formatFieldValue(record.fields.confirmedGrade)}
+                size="small"
+                style={{ width: '100%' }}
+                value={draft?.confirmedGrade}
+                onChange={(value) =>
+                  handlePatchFieldChange(record.studentId, 'confirmedGrade', value)
+                }
+              />
+            </div>
+          );
+        },
         title: '确认等级',
       },
       ...(isPatchMode
         ? [
-            {
-              ...buildStableColumnSizing<StudentConductGradeStudent>(
-                CONDUCT_PATCH_SCORE_COLUMN_WIDTH,
-              ),
-              align: 'center' as const,
-              key: 'scorePatch',
-              render: (_: unknown, record: StudentConductGradeStudent) => {
-                const draft = patchDrafts[record.studentId];
-                const clearSelected = isConductPatchClearSelected(draft, 'score');
-
-                return (
-                  <div onClick={(event) => event.stopPropagation()}>
-                    <Input
-                      allowClear
-                      disabled={clearSelected || isPatchingCorrections}
-                      placeholder={formatFieldValue(record.fields.score)}
-                      size="small"
-                      value={draft?.score ?? ''}
-                      onChange={(event) =>
-                        handlePatchFieldChange(record.studentId, 'score', event.target.value)
-                      }
-                    />
-                  </div>
-                );
-              },
-              title: '分数补录',
-            },
-            {
-              ...buildStableColumnSizing<StudentConductGradeStudent>(
-                CONDUCT_PATCH_GRADE_COLUMN_WIDTH,
-              ),
-              align: 'center' as const,
-              key: 'confirmedGradePatch',
-              render: (_: unknown, record: StudentConductGradeStudent) => {
-                const draft = patchDrafts[record.studentId];
-                const clearSelected = isConductPatchClearSelected(draft, 'confirmedGrade');
-
-                return (
-                  <div onClick={(event) => event.stopPropagation()}>
-                    <Select
-                      allowClear
-                      disabled={clearSelected || isPatchingCorrections}
-                      options={CONDUCT_CONFIRMED_GRADE_OPTIONS}
-                      placeholder={formatFieldValue(record.fields.confirmedGrade)}
-                      size="small"
-                      style={{ width: '100%' }}
-                      value={draft?.confirmedGrade}
-                      onChange={(value) =>
-                        handlePatchFieldChange(record.studentId, 'confirmedGrade', value)
-                      }
-                    />
-                  </div>
-                );
-              },
-              title: '等级补录',
-            },
             {
               ...buildStableColumnSizing<StudentConductGradeStudent>(
                 CONDUCT_PATCH_CLEAR_COLUMN_WIDTH,
@@ -1851,37 +1876,11 @@ export function StudentConductGradeGovernanceLabPage() {
                               onRejectTooManyFiles={handleRejectTooManyMaterialImportFiles}
                             />
                           ) : null}
+                          {isPatchMode ? renderPatchActionBar() : null}
                           <Table<StudentConductGradeStudent>
                             columns={columns}
                             dataSource={filteredStudents}
-                            footer={
-                              isPatchMode
-                                ? () => (
-                                    <div className="student-conduct-grade-governance-patch-footer">
-                                      <span>
-                                        已选择 {patchDraftCount} 名学生补录；空白输入不会提交。
-                                      </span>
-                                      <Space size="small" wrap>
-                                        <Button
-                                          disabled={isImportingMaterial || isPatchingCorrections}
-                                          onClick={handleCancelPatchMode}
-                                        >
-                                          取消
-                                        </Button>
-                                        <Button
-                                          disabled={isImportingMaterial || patchDraftCount === 0}
-                                          icon={<SaveOutlined />}
-                                          loading={isPatchingCorrections}
-                                          type="primary"
-                                          onClick={() => void handleSubmitPatch()}
-                                        >
-                                          保存补录
-                                        </Button>
-                                      </Space>
-                                    </div>
-                                  )
-                                : undefined
-                            }
+                            footer={isPatchMode ? () => renderPatchActionBar() : undefined}
                             locale={{
                               emptyText: (
                                 <Empty

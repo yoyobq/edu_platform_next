@@ -122,14 +122,19 @@
   justify-content: space-between;
 }
 
-.student-conduct-grade-governance-patch-footer {
+.student-conduct-grade-governance-patch-action-bar {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--ant-margin-sm);
   justify-content: space-between;
 }
 
-.student-conduct-grade-governance-patch-footer > span {
+.student-conduct-grade-governance-patch-action-bar > span {
   color: var(--ant-color-text-secondary);
   font-size: var(--ant-font-size-sm);
+}
+
+.student-conduct-grade-governance-patch-action-bar > .ant-space {
+  margin-left: auto;
 }

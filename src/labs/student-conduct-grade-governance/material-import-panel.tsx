@@ -1,14 +1,20 @@
 // src/labs/student-conduct-grade-governance/material-import-panel.tsx
 
+import { useRef } from 'react';
 import { InboxOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
-import { Alert, Button, Descriptions, Space, Tag, Upload } from 'antd';
+import { Alert, Button, Space, Tag, Upload } from 'antd';
 
 import {
   CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES,
   type StudentConductGradeMaterialImportIssue,
   type StudentConductGradeMaterialImportResult,
 } from './api';
+import {
+  buildMaterialImportIssueGroups,
+  type MaterialImportIssueDisplayType,
+  type MaterialImportIssueGroup,
+} from './material-import-issue-display';
 
 type MaterialImportContext = {
   classLabel: string;
@@ -30,43 +36,6 @@ type StudentConductGradeMaterialImportPanelProps = {
   onRejectTooManyFiles: (limit: number) => void;
 };
 
-const MATERIAL_IMPORT_SUMMARY_LABELS: Record<string, string> = {
-  affectedStudents: '影响学生',
-  clearedUpstreamFieldCount: '清理旧补正字段',
-  createdSectionCount: '新建操行区块',
-  emptyFieldCount: '空字段',
-  skippedUpstreamFieldCount: '校园网非空跳过字段',
-  totalFiles: '文件数',
-  totalParsedRows: '解析行',
-  totalResolvedRows: '匹配行',
-  totalSkippedTables: '跳过表格',
-  unchangedFieldCount: '未变化字段',
-  unchangedStudentCount: '未变化学生',
-  writtenFieldCount: '写入字段',
-  writtenStudentCount: '写入学生',
-};
-
-function formatSummaryLabel(key: string) {
-  const label = MATERIAL_IMPORT_SUMMARY_LABELS[key];
-
-  if (label) {
-    return label;
-  }
-
-  return key
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/_/g, ' ')
-    .trim();
-}
-
-function formatSummaryValue(value: unknown) {
-  if (value === null || value === undefined || value === '') {
-    return '-';
-  }
-
-  return String(value);
-}
-
 function resolveStatusTag(result: StudentConductGradeMaterialImportResult | null) {
   if (!result) {
     return null;
@@ -87,30 +56,37 @@ function resolveStatusTag(result: StudentConductGradeMaterialImportResult | null
   return <Tag color="green">已导入</Tag>;
 }
 
-function renderIssue(issue: StudentConductGradeMaterialImportIssue, index: number) {
-  const sourceParts = [
-    issue.sourceFilename,
-    issue.sourceSheetOrTable,
-    issue.sourceRow !== null ? `第 ${issue.sourceRow} 行` : null,
-  ].filter(Boolean);
+function renderIssueGroup(group: MaterialImportIssueGroup, index: number) {
+  const positionText =
+    group.positions.length > 0 ? `（出现位置：${group.positions.join('、')}）` : null;
 
   return (
-    <span key={`${issue.code}-${index}`}>
-      {sourceParts.length > 0 ? `${sourceParts.join(' / ')}：` : null}
-      {issue.code}
-      {issue.message ? `，${issue.message}` : null}
+    <span key={`${group.key}-${index}`}>
+      {group.sourceFilename ? `${group.sourceFilename}：` : null}
+      {group.message}
+      {positionText}
     </span>
   );
 }
 
 function renderIssues(
   title: string,
-  type: 'error' | 'warning',
+  type: MaterialImportIssueDisplayType,
   issues: readonly StudentConductGradeMaterialImportIssue[],
+  result: StudentConductGradeMaterialImportResult,
+  context: MaterialImportContext,
 ) {
   if (issues.length === 0) {
     return null;
   }
+
+  const issueGroups = buildMaterialImportIssueGroups(issues, type, {
+    targetTerm: {
+      label: context.termLabel,
+      schoolYear: result.schoolYear,
+      semester: result.semester,
+    },
+  });
 
   return (
     <Alert
@@ -119,8 +95,10 @@ function renderIssues(
       title={title}
       description={
         <Space direction="vertical" size={2}>
-          {issues.slice(0, 8).map((issue, index) => renderIssue(issue, index))}
-          {issues.length > 8 ? <span>另有 {issues.length - 8} 条未展开。</span> : null}
+          {issueGroups.slice(0, 8).map((issueGroup, index) => renderIssueGroup(issueGroup, index))}
+          {issueGroups.length > 8 ? (
+            <span>另有 {issueGroups.length - 8} 类问题未展开。</span>
+          ) : null}
         </Space>
       }
     />
@@ -178,10 +156,24 @@ export function StudentConductGradeMaterialImportPanel({
   onRejectFile,
   onRejectTooManyFiles,
 }: StudentConductGradeMaterialImportPanelProps) {
+  const rejectedFileKeysRef = useRef(new Set<string>());
   const uploadFileList = buildUploadFileList(files);
+  const notifyRejectedFile = (file: File) => {
+    const fileKey = buildMaterialFileKey(file);
+
+    if (rejectedFileKeysRef.current.has(fileKey)) {
+      return;
+    }
+
+    rejectedFileKeysRef.current.add(fileKey);
+    onRejectFile(file.name);
+    window.setTimeout(() => {
+      rejectedFileKeysRef.current.delete(fileKey);
+    }, 500);
+  };
   const beforeUpload: UploadProps['beforeUpload'] = (file, selectedFiles) => {
     if (!isSupportedMaterialFile(file.name)) {
-      onRejectFile(file.name);
+      notifyRejectedFile(file);
 
       return Upload.LIST_IGNORE;
     }
@@ -201,6 +193,17 @@ export function StudentConductGradeMaterialImportPanel({
 
     return false;
   };
+  const handleDrop: UploadProps['onDrop'] = (event) => {
+    if (disabled || isImporting) {
+      return;
+    }
+
+    Array.from(event.dataTransfer.files)
+      .filter((file) => !isSupportedMaterialFile(file.name))
+      .forEach((file) => {
+        notifyRejectedFile(file);
+      });
+  };
   const handleRemove: UploadProps['onRemove'] = (file) => {
     const nextFiles = files.filter((currentFile, index) => {
       const uid = `${currentFile.name}-${currentFile.lastModified}-${index}`;
@@ -212,10 +215,6 @@ export function StudentConductGradeMaterialImportPanel({
 
     return true;
   };
-  const summaryEntries = result
-    ? Object.entries(result.summary).filter(([, value]) => value !== undefined)
-    : [];
-
   return (
     <div className="student-conduct-grade-governance-import-panel">
       <div className="student-conduct-grade-governance-import-head">
@@ -237,6 +236,7 @@ export function StudentConductGradeMaterialImportPanel({
         fileList={uploadFileList}
         maxCount={CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES}
         multiple
+        onDrop={handleDrop}
         onRemove={handleRemove}
       >
         <p className="ant-upload-drag-icon">
@@ -273,18 +273,12 @@ export function StudentConductGradeMaterialImportPanel({
         </Space>
       </div>
 
-      {result && summaryEntries.length > 0 ? (
-        <Descriptions bordered column={2} size="small" title="导入摘要">
-          {summaryEntries.map(([key, value]) => (
-            <Descriptions.Item key={key} label={formatSummaryLabel(key)}>
-              {formatSummaryValue(value)}
-            </Descriptions.Item>
-          ))}
-        </Descriptions>
-      ) : null}
-
-      {result ? renderIssues('需要确认的材料信号', 'warning', result.warnings) : null}
-      {result ? renderIssues('阻断导入的问题', 'error', result.blockingErrors) : null}
+      {result
+        ? renderIssues('需要确认的材料信号', 'warning', result.warnings, result, context)
+        : null}
+      {result
+        ? renderIssues('阻断导入的问题', 'error', result.blockingErrors, result, context)
+        : null}
     </div>
   );
 }
