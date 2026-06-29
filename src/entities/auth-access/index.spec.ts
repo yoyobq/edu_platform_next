@@ -22,6 +22,7 @@ import {
   hasClassAdviserGovernanceAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentConductAlignmentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
   hasUpstreamDataSyncAccess,
@@ -285,6 +286,36 @@ describe('auth access policy', () => {
     ).toBe(false);
     expect(hasStudentProfileFilingAccess({ accessGroup: ['STAFF'] })).toBe(false);
     expect(hasStudentProfileFilingAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+  });
+
+  it('allows student conduct alignment to the same scoped staff as student filing', () => {
+    expect(hasStudentConductAlignmentAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasStudentConductAlignmentAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentConductAlignmentAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentConductAlignmentAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['CLASS_ADVISER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasStudentConductAlignmentAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['COUNSELOR'],
+      }),
+    ).toBe(true);
+    expect(hasStudentConductAlignmentAccess({ accessGroup: ['STAFF'] })).toBe(false);
+    expect(hasStudentConductAlignmentAccess({ accessGroup: ['STUDENT'] })).toBe(false);
   });
 
   it('limits upstream data sync to admins', () => {

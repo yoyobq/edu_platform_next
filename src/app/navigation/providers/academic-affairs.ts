@@ -10,6 +10,7 @@ import {
   hasClassAdviserGovernanceAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentConductAlignmentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
 } from '@/entities/auth-access';
@@ -241,6 +242,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '学生建档',
             navMode: 'rail' as const,
             path: '/class-affairs/student-profile-filing',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStudentConductAlignmentAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/class-affairs/student-conduct-alignment',
+            label: '操行对齐',
+            navMode: 'rail' as const,
+            path: '/class-affairs/student-conduct-alignment',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

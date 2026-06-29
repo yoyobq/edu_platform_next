@@ -1,4 +1,4 @@
-// src/labs/student-conduct-grade-governance/api.ts
+// src/features/student-conduct-alignment/infrastructure/api.ts
 
 import type { OperationVariables } from '@apollo/client';
 
@@ -221,8 +221,8 @@ export type StudentConductGradePatchRowIssue = {
 
 export type StudentConductGradeMaterialImportStatus =
   | 'BLOCKED'
-  | 'IMPORTED'
   | 'NO_CHANGES'
+  | 'READY_TO_SAVE'
   | 'WARNING_CONFIRMATION_REQUIRED';
 
 export type StudentConductGradeMaterialImportIssue = {
@@ -316,9 +316,13 @@ const CONDUCT_PATCH_FIELD_KEY_SET = new Set<string>(CONDUCT_PATCH_FIELD_KEYS);
 const CONDUCT_GRADE_MATERIAL_IMPORT_PATH =
   '/student-private-profile/conduct-grade-material-imports';
 export const CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES = 5;
-export const CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILE_BYTES = 100 * 1024;
+export const CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILE_BYTES = 200 * 1024;
 const MAX_PATCH_STUDENT_ROWS = 500;
-const SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS = new Set(['docx', 'xlsx']);
+const SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS = new Set(['doc', 'docx', 'xls', 'xlsx']);
+const LEGACY_OFFICE_MATERIAL_CONVERSION_FAILED_CODE =
+  'STUDENT_PRIVATE_PROFILE_SUPPLEMENT_FILE_INVALID';
+const LEGACY_OFFICE_MATERIAL_CONVERSION_FAILED_MESSAGE =
+  '旧版 Office 文件无法自动转换，请手工另存为 .docx / .xlsx 后重试。';
 const CONDUCT_GRADE_MATERIAL_IMPORT_SUMMARY_KEYS = [
   'totalFiles',
   'totalParsedRows',
@@ -558,12 +562,36 @@ function readRestEnvelopeMessage(payload: unknown) {
   return null;
 }
 
+function readRestEnvelopeErrorCode(payload: unknown) {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  const error = payload.error;
+
+  if (isRecord(error) && typeof error.code === 'string' && error.code.trim()) {
+    return error.code.trim();
+  }
+
+  return null;
+}
+
+function resolveRestEnvelopeErrorMessage(payload: unknown, fallback: string): string;
+function resolveRestEnvelopeErrorMessage(payload: unknown, fallback?: string): string | null;
+function resolveRestEnvelopeErrorMessage(payload: unknown, fallback?: string) {
+  if (readRestEnvelopeErrorCode(payload) === LEGACY_OFFICE_MATERIAL_CONVERSION_FAILED_CODE) {
+    return LEGACY_OFFICE_MATERIAL_CONVERSION_FAILED_MESSAGE;
+  }
+
+  return readRestEnvelopeMessage(payload) ?? fallback ?? null;
+}
+
 async function readRestFailureMessage(response: Response) {
   const contentType = response.headers.get('Content-Type') ?? '';
 
   if (contentType.includes('application/json')) {
     try {
-      return readRestEnvelopeMessage(await response.json());
+      return resolveRestEnvelopeErrorMessage(await response.json());
     } catch {
       return null;
     }
@@ -587,8 +615,8 @@ function buildAuthorizationHeaders() {
 function normalizeMaterialImportStatus(status: unknown): StudentConductGradeMaterialImportStatus {
   if (
     status === 'BLOCKED' ||
-    status === 'IMPORTED' ||
     status === 'NO_CHANGES' ||
+    status === 'READY_TO_SAVE' ||
     status === 'WARNING_CONFIRMATION_REQUIRED'
   ) {
     return status;
@@ -728,7 +756,7 @@ async function parseMaterialImportResponse(response: Response) {
   }
 
   if (!response.ok) {
-    throw new Error(readRestEnvelopeMessage(payload) ?? '操行材料导入失败。');
+    throw new Error(resolveRestEnvelopeErrorMessage(payload, '操行材料导入失败。'));
   }
 
   if (isRecord(payload) && 'data' in payload) {
@@ -755,11 +783,11 @@ function normalizeConductGradeMaterialFiles(files: readonly File[]) {
     const extension = getFileExtension(file.name);
 
     if (!SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS.has(extension)) {
-      throw new Error('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
+      throw new Error('操行材料仅支持 .doc、.docx、.xls、.xlsx。');
     }
 
     if (file.size > CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILE_BYTES) {
-      throw new Error('操行材料单文件大小不能超过 100KB。');
+      throw new Error('操行材料单文件大小不能超过 200KB。');
     }
 
     return file;
@@ -934,7 +962,7 @@ export function readStudentConductGradePatchRowIssues(
   }
 
   return (
-    error.graphqlErrors?.flatMap((graphqlError) => {
+    error.graphqlErrors?.flatMap((graphqlError): StudentConductGradePatchRowIssue[] => {
       const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
       const details = extensions?.details;
       const rowIssues = isRecord(details) ? details.rowIssues : undefined;
@@ -943,31 +971,33 @@ export function readStudentConductGradePatchRowIssues(
         return [];
       }
 
-      return rowIssues
-        .map((rowIssue) => {
-          if (!isRecord(rowIssue)) {
-            return null;
-          }
+      const parsedRowIssues: StudentConductGradePatchRowIssue[] = [];
 
-          const rowIndex = rowIssue.rowIndex;
-          const code = rowIssue.code;
+      rowIssues.forEach((rowIssue) => {
+        if (!isRecord(rowIssue)) {
+          return;
+        }
 
-          if (typeof rowIndex !== 'number' || !Number.isInteger(rowIndex)) {
-            return null;
-          }
+        const rowIndex = rowIssue.rowIndex;
+        const code = rowIssue.code;
 
-          if (typeof code !== 'string' || !code.trim()) {
-            return null;
-          }
+        if (typeof rowIndex !== 'number' || !Number.isInteger(rowIndex)) {
+          return;
+        }
 
-          return {
-            code: code.trim(),
-            message: typeof rowIssue.message === 'string' ? rowIssue.message : null,
-            rowIndex,
-            studentId: typeof rowIssue.studentId === 'string' ? rowIssue.studentId : null,
-          };
-        })
-        .filter((rowIssue): rowIssue is StudentConductGradePatchRowIssue => Boolean(rowIssue));
+        if (typeof code !== 'string' || !code.trim()) {
+          return;
+        }
+
+        parsedRowIssues.push({
+          code: code.trim(),
+          message: typeof rowIssue.message === 'string' ? rowIssue.message : null,
+          rowIndex,
+          studentId: typeof rowIssue.studentId === 'string' ? rowIssue.studentId : null,
+        });
+      });
+
+      return parsedRowIssues;
     }) ?? []
   );
 }

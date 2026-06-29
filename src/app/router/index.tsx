@@ -54,6 +54,7 @@ import {
   hasAdminAccess,
   hasClassAdviserGovernanceAccess,
   hasStaffSemesterProfilesAccess,
+  hasStudentConductAlignmentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveClassAdviserGovernanceDepartmentScope,
@@ -64,10 +65,6 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  loadStudentConductGradeGovernanceLabRouteModule,
-  studentConductGradeGovernanceLabAccess,
-} from '@/labs/student-conduct-grade-governance';
 import {
   loadStudentCourseResultsPullLabRouteModule,
   studentCourseResultsPullLabAccess,
@@ -273,6 +270,10 @@ const loadStudentRosterMembershipReconciliationRouteModule = loadPageRouteModule
 const loadStudentProfileFilingRouteModule = loadPageRouteModule(
   () => import('@/pages/student-profile-filing'),
   'StudentProfileFilingPage',
+);
+const loadStudentConductAlignmentRouteModule = loadPageRouteModule(
+  () => import('@/pages/student-conduct-alignment'),
+  'StudentConductAlignmentPage',
 );
 const loadClassAffairsCourseResultsRouteModule = loadPageRouteModule(
   () => import('@/pages/class-affairs-course-results'),
@@ -777,19 +778,6 @@ async function studentPrivateProfileLabLoader({ request }: LoaderFunctionArgs) {
   });
 }
 
-async function studentConductGradeGovernanceLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: studentConductGradeGovernanceLabAccess,
-    getData: (snapshot) => ({
-      currentAccount: {
-        accountId: snapshot.accountId,
-        displayName: snapshot.displayName,
-      },
-    }),
-    request,
-  });
-}
-
 async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: zquizPracticeActivitiesLabAccess,
@@ -1002,6 +990,43 @@ async function studentProfileFilingPageLoader({ request }: LoaderFunctionArgs) {
         staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
       }),
       staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    },
+    isForbidden: false,
+  };
+}
+
+async function studentConductAlignmentPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasStudentConductAlignmentAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
     },
     isForbidden: false,
   };
@@ -1524,6 +1549,11 @@ const router = createBrowserRouter([
         lazy: loadStudentProfileFilingRouteModule,
       },
       {
+        path: '/class-affairs/student-conduct-alignment',
+        loader: studentConductAlignmentPageLoader,
+        lazy: loadStudentConductAlignmentRouteModule,
+      },
+      {
         path: '/class-affairs/course-results-summary',
         loader: classAffairsCourseResultsPageLoader,
         lazy: loadClassAffairsCourseResultsRouteModule,
@@ -1587,11 +1617,6 @@ const router = createBrowserRouter([
             path: 'student-private-profile',
             loader: studentPrivateProfileLabLoader,
             lazy: loadStudentPrivateProfileLabRouteModule,
-          },
-          {
-            path: 'student-conduct-grade-governance',
-            loader: studentConductGradeGovernanceLabLoader,
-            lazy: loadStudentConductGradeGovernanceLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',

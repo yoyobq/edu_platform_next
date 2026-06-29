@@ -1,4 +1,4 @@
-// src/labs/student-conduct-grade-governance/page.tsx
+// src/features/student-conduct-alignment/ui/student-conduct-alignment-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -31,7 +31,6 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   buildAcademicTermKey as buildTermKey,
@@ -50,7 +49,6 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { buildStableColumnSizing } from '@/shared/ui/stable-table';
 
-import { studentConductGradeGovernanceLabAccess } from './access';
 import {
   cleanupStudentConductGradeCorrection,
   fetchStudentConductGradeClassTermOptions,
@@ -78,18 +76,16 @@ import {
   type StudentConductGradeStudent,
   type StudentPrivateProfileClassOption,
   type StudentPrivateProfileClassOverview,
-} from './api';
+} from '../infrastructure/api';
+
 import { StudentConductGradeMaterialImportPanel } from './material-import-panel';
-import { studentConductGradeGovernanceLabMeta } from './meta';
 
-import './student-conduct-grade-governance-page.css';
+import './student-conduct-alignment-page-content.css';
 
-type StudentConductGradeGovernanceLabLoaderData = {
-  currentAccount: {
-    accountId: number;
-    displayName: string;
-    lockedUpstreamLoginUserId: string | null;
-  };
+export type StudentConductAlignmentCurrentAccount = {
+  accountId: number;
+  displayName: string;
+  lockedUpstreamLoginUserId: string | null;
 };
 
 type OverviewReadiness = {
@@ -469,7 +465,8 @@ function renderSnapshotInitializationAlert(missingSnapshotCount: number) {
       description={
         <span>
           当前班级有 {missingSnapshotCount} 名学生缺少本地快照。请先到{' '}
-          <a href="/labs/student-private-profile">学生敏感资料 lab</a> 初始化快照后再治理操行。
+          <a href="/class-affairs/student-profile-filing">学生建档</a>
+          初始化快照后再对齐操行。
         </span>
       }
     />
@@ -494,9 +491,9 @@ function buildConductRowClassName(
 ) {
   return [
     index !== undefined && index % 2 === 0
-      ? 'student-conduct-grade-governance-row-even'
-      : 'student-conduct-grade-governance-row-odd',
-    record.studentId === selectedStudentId ? 'student-conduct-grade-governance-row-selected' : null,
+      ? 'student-conduct-alignment-row-even'
+      : 'student-conduct-alignment-row-odd',
+    record.studentId === selectedStudentId ? 'student-conduct-alignment-row-selected' : null,
   ]
     .filter(Boolean)
     .join(' ');
@@ -570,15 +567,19 @@ function formatPatchResultTitle(result: PatchStudentConductGradeCorrectionsResul
   return [
     `提交 ${result.totalRows} 行，影响学生 ${result.affectedStudents} 名`,
     `写入字段 ${result.writtenFieldCount} 个，清除补正字段 ${result.clearedFieldCount} 个`,
-    `upstream 非空跳过 ${result.skippedUpstreamFieldCount} 个，自动清除旧补正 ${result.clearedUpstreamFieldCount} 个`,
+    `校园网已有值跳过 ${result.skippedUpstreamFieldCount} 个，自动清除旧补正 ${result.clearedUpstreamFieldCount} 个`,
     `未变化字段 ${result.unchangedFieldCount} 个`,
   ].join('。');
 }
 
-export function StudentConductGradeGovernanceLabPage() {
+type StudentConductAlignmentPageContentProps = {
+  currentAccount: StudentConductAlignmentCurrentAccount;
+};
+
+export function StudentConductAlignmentPageContent({
+  currentAccount,
+}: StudentConductAlignmentPageContentProps) {
   const { token } = theme.useToken();
-  const loaderData = useLoaderData() as StudentConductGradeGovernanceLabLoaderData | null;
-  const currentAccount = loaderData?.currentAccount ?? null;
   const { message, modal } = App.useApp();
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
   const [terms, setTerms] = useState<StudentConductGradeClassTermOption[]>([]);
@@ -629,7 +630,7 @@ export function StudentConductGradeGovernanceLabPage() {
     term: null,
     termKey: null,
   });
-  const lockedUpstreamLoginUserId = currentAccount?.lockedUpstreamLoginUserId ?? null;
+  const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
   const {
     modalProps: upstreamLoginModalProps,
     openLoginModal,
@@ -1018,7 +1019,7 @@ export function StudentConductGradeGovernanceLabPage() {
         setSelectedTermKey(null);
         setOverview(null);
         setConductView(null);
-        setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行治理入口。');
+        setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行对齐入口。');
       } finally {
         if (loadRequestSeqRef.current === requestSeq) {
           setIsLoadingData(false);
@@ -1073,7 +1074,7 @@ export function StudentConductGradeGovernanceLabPage() {
             return;
           }
 
-          setErrorMessage(resolveUpstreamErrorMessage(error, '暂时无法同步操行数据。'));
+          setErrorMessage(resolveUpstreamErrorMessage(error, '暂时无法从校园网同步操行数据。'));
           return;
         }
 
@@ -1114,7 +1115,7 @@ export function StudentConductGradeGovernanceLabPage() {
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
               refreshError,
-              '学工系统会话已失效，请重新登录后继续同步操行。',
+              '学工系统会话已失效，请重新登录后继续校园网同步。',
             ),
             pendingAction: action,
             session,
@@ -1220,7 +1221,7 @@ export function StudentConductGradeGovernanceLabPage() {
       setSelectedTermKey(null);
       setOverview(null);
       setConductView(null);
-      setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行治理入口。');
+      setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行对齐入口。');
     } finally {
       setIsLoadingCatalog(false);
     }
@@ -1475,7 +1476,7 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const handleRejectMaterialImportFile = useCallback(
     (fileName: string) => {
-      message.error(`${fileName} 不是支持的材料格式，请另存为 .docx / .xlsx 后上传。`);
+      message.error(`${fileName} 不是支持的材料格式，请上传 .doc / .docx / .xls / .xlsx 文件。`);
     },
     [message],
   );
@@ -1538,7 +1539,7 @@ export function StudentConductGradeGovernanceLabPage() {
 
         if (result.status === 'WARNING_CONFIRMATION_REQUIRED') {
           setMaterialImportPreviewDrafts(buildMaterialImportPreviewDrafts(result.previewRows));
-          message.warning('操行材料需要确认后才能导入。');
+          message.warning('请先确认材料提示，再继续解析。');
           return;
         }
 
@@ -1549,17 +1550,19 @@ export function StudentConductGradeGovernanceLabPage() {
           return;
         }
 
-        setMaterialImportFiles([]);
-        message[result.status === 'NO_CHANGES' ? 'info' : 'success'](
-          result.status === 'NO_CHANGES' ? '操行材料解析完成，没有新的补正。' : '操行材料已导入。',
-        );
-
-        if (importSelection.classOption && importSelection.term) {
-          await loadSelectionData(importSelection.classOption, importSelection.term, {
-            keepPatchMode: true,
-            preserveMaterialImportResult: true,
-          });
+        if (result.status === 'NO_CHANGES') {
+          setMaterialImportFiles([]);
+          message.info('操行材料解析完成，没有新的补正。');
+          return;
         }
+
+        setPatchDrafts((currentDrafts) =>
+          mergeMaterialImportPreviewDrafts(currentDrafts, result.previewRows),
+        );
+        setPatchRowIssues([]);
+        setHasMaterialImportPatchDrafts(result.previewRows.length > 0);
+        setMaterialImportFiles([]);
+        message.success('已从材料预填补录草稿，请检查后保存补录。');
       } catch (error) {
         if (!canApplyImportResult()) {
           return;
@@ -1575,7 +1578,6 @@ export function StudentConductGradeGovernanceLabPage() {
       }
     },
     [
-      loadSelectionData,
       materialImportFiles,
       message,
       selectedClass,
@@ -1598,15 +1600,13 @@ export function StudentConductGradeGovernanceLabPage() {
       return;
     }
 
-    setPatchDrafts((currentDrafts) =>
-      mergeMaterialImportPreviewDrafts(currentDrafts, materialImportResult.previewRows),
-    );
-    setPatchRowIssues([]);
-    setMaterialImportPreviewDrafts({});
-    setHasMaterialImportPatchDrafts(materialImportResult.previewRows.length > 0);
-    setMaterialImportResult(null);
-    message.success('已确认材料信号，请检查预填内容后保存补录。');
-  }, [materialImportResult, message]);
+    void runMaterialImport(materialWarningConfirmationKeys, materialImportFiles);
+  }, [
+    materialImportFiles,
+    materialImportResult?.status,
+    materialWarningConfirmationKeys,
+    runMaterialImport,
+  ]);
 
   const renderPatchActionButtons = () => (
     <Space size="small" wrap>
@@ -1631,7 +1631,7 @@ export function StudentConductGradeGovernanceLabPage() {
   );
 
   const renderPatchActionBar = () => (
-    <div className="student-conduct-grade-governance-patch-action-bar">
+    <div className="student-conduct-alignment-patch-action-bar">
       <span>
         {hasPendingMaterialImportConfirmation
           ? '材料导入等待确认；请在提示框内确认，或离开补录操作。'
@@ -1783,7 +1783,7 @@ export function StudentConductGradeGovernanceLabPage() {
               {!isPatchMode && record.status === 'CORRECTION_CLEANUP_PENDING' ? (
                 <Popconfirm
                   title="清理已失效本地补正？"
-                  description="清理只会移除 stale correction，不会覆盖 upstream。"
+                  description="清理只会移除已失效的本地补正，不会覆盖校园网数据。"
                   okText="清理"
                   cancelText="取消"
                   onConfirm={() => void handleCleanup(record)}
@@ -1832,21 +1832,12 @@ export function StudentConductGradeGovernanceLabPage() {
     void runSyncWithSession(upstreamActionRequest.session, upstreamActionRequest.action);
   }, [runSyncWithSession, upstreamActionRequest]);
 
-  if (!currentAccount) {
-    return (
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
-        <Alert showIcon type="warning" title="当前登录会话尚未恢复，请稍后重试。" />
-      </div>
-    );
-  }
-
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
       <DecoratedPageHeader
-        badge={<Tag color="blue">{studentConductGradeGovernanceLabMeta.name}</Tag>}
-        description={studentConductGradeGovernanceLabMeta.purpose}
+        description="对齐校园网操行数据，补齐历史材料，处理本地补正与冲突。"
         icon={<AuditOutlined />}
-        title="操行数据治理"
+        title="操行对齐"
       />
 
       {snapshotInitializationBlocked ? (
@@ -1888,15 +1879,15 @@ export function StudentConductGradeGovernanceLabPage() {
                 <Alert
                   showIcon
                   type="info"
-                  title="存在无法从 upstream 拉取的学生"
-                  description={`当前班级有 ${overviewReadiness.upstreamIdMissingCount} 名学生缺少 upstreamId，前端不自行重算名单，班级范围以后端 overview 为准。`}
+                  title="存在缺少校园网标识的学生"
+                  description={`当前班级有 ${overviewReadiness.upstreamIdMissingCount} 名学生缺少校园网标识，班级范围以后端名单为准。`}
                 />
               ) : null}
               {syncResult ? (
                 <Alert
                   showIcon
                   type={syncResult.failureCount > 0 ? 'warning' : 'success'}
-                  title="操行 upstream 同步完成"
+                  title="校园网操行同步完成"
                   description={formatSyncResultTitle(syncResult, terms)}
                 />
               ) : null}
@@ -2002,7 +1993,7 @@ export function StudentConductGradeGovernanceLabPage() {
             </div>
           </section>
 
-          <section className="student-conduct-grade-governance-table-shell">
+          <section className="student-conduct-alignment-table-shell">
             {isLoadingCatalog ? (
               <div className="flex min-h-80 items-center justify-center">
                 <Spin size="large" />
@@ -2080,25 +2071,23 @@ export function StudentConductGradeGovernanceLabPage() {
                     ) : null,
                     key: termKey,
                     label: (
-                      <span className="student-conduct-grade-governance-term-tab-label">
+                      <span className="student-conduct-alignment-term-tab-label">
                         <span
                           className={[
-                            'student-conduct-grade-governance-term-tab-primary',
-                            isActive
-                              ? 'student-conduct-grade-governance-term-tab-primary-active'
-                              : null,
+                            'student-conduct-alignment-term-tab-primary',
+                            isActive ? 'student-conduct-alignment-term-tab-primary-active' : null,
                           ]
                             .filter(Boolean)
                             .join(' ')}
                         >
                           {formatSchoolYear(term.schoolYear)}
                         </span>
-                        <span className="student-conduct-grade-governance-term-tab-secondary">
-                          <span className="student-conduct-grade-governance-term-tab-secondary-text">
+                        <span className="student-conduct-alignment-term-tab-secondary">
+                          <span className="student-conduct-alignment-term-tab-secondary-text">
                             {formatSemester(term.semester)}
                           </span>
                           {termOrdinal !== null ? (
-                            <span className="student-conduct-grade-governance-term-tab-badge">
+                            <span className="student-conduct-alignment-term-tab-badge">
                               {termOrdinal}
                             </span>
                           ) : null}
@@ -2119,7 +2108,7 @@ export function StudentConductGradeGovernanceLabPage() {
                     selectedClass
                       ? termGenerationBlocked
                         ? termBlockingMessage
-                        : '暂无可治理学期'
+                        : '暂无可对齐学期'
                       : '请选择班级'
                   }
                 />
@@ -2146,10 +2135,10 @@ export function StudentConductGradeGovernanceLabPage() {
               <Descriptions.Item label="学生状态">
                 {renderStudentStatusTag(selectedStudent.studentStatus)}
               </Descriptions.Item>
-              <Descriptions.Item label="治理状态">
+              <Descriptions.Item label="数据状态">
                 {renderStatusTag(selectedStudent.status)}
               </Descriptions.Item>
-              <Descriptions.Item label="操行 section">
+              <Descriptions.Item label="操行记录">
                 <Space size={4} wrap>
                   <Tag>{selectedStudent.conductSection.sourceStatus}</Tag>
                   <Tag>
@@ -2174,7 +2163,7 @@ export function StudentConductGradeGovernanceLabPage() {
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions bordered column={1} size="small" title="治理信号">
+            <Descriptions bordered column={1} size="small" title="数据提示">
               <Descriptions.Item label="本地补正字段">
                 {selectedStudent.manualPatchFieldKeys.length > 0 ? (
                   <Space size={4} wrap>
@@ -2201,7 +2190,7 @@ export function StudentConductGradeGovernanceLabPage() {
                   '-'
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="section warning">
+              <Descriptions.Item label="记录提示">
                 {selectedStudent.conductSection.warningCodes.length > 0 ? (
                   <Space size={4} wrap>
                     {selectedStudent.conductSection.warningCodes.map((code) => (
@@ -2220,11 +2209,6 @@ export function StudentConductGradeGovernanceLabPage() {
       </Drawer>
 
       <UpstreamLoginModal {...upstreamLoginModalProps} />
-
-      <div className="text-xs text-text-tertiary">
-        当前 lab 暴露环境：{studentConductGradeGovernanceLabAccess.env.join(', ')}；访问级别：
-        {studentConductGradeGovernanceLabAccess.allowedAccessLevels.join(', ')}。
-      </div>
     </div>
   );
 }

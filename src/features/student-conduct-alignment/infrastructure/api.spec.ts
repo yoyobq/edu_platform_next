@@ -1,4 +1,4 @@
-// src/labs/student-conduct-grade-governance/api.spec.ts
+// src/features/student-conduct-alignment/infrastructure/api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -51,7 +51,7 @@ import {
   resolveStudentConductGradeMaterialImportUrl,
 } from './api';
 
-describe('student-conduct-grade-governance api', () => {
+describe('student-conduct-alignment api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
@@ -174,22 +174,24 @@ describe('student-conduct-grade-governance api', () => {
     });
   });
 
-  it('normalizes material import input and rejects legacy file formats', () => {
+  it('normalizes material import input and accepts supported Office formats', () => {
+    const docFile = new File(['doc'], 'conduct.doc');
     const docxFile = new File(['docx'], 'conduct.docx');
+    const xlsFile = new File(['xls'], 'conduct.xls');
     const xlsxFile = new File(['xlsx'], 'conduct.xlsx');
 
     expect(
       normalizeImportStudentConductGradeMaterialsInput({
         classCode: ' 2501 ',
         confirmedWarningKeys: [' key-1 ', 'key-1', ''],
-        files: [docxFile, xlsxFile],
+        files: [docFile, docxFile, xlsFile, xlsxFile],
         schoolYear: ' 2025 ',
         semester: ' 1 ',
       }),
     ).toEqual({
       classCode: '2501',
       confirmedWarningKeys: ['key-1'],
-      files: [docxFile, xlsxFile],
+      files: [docFile, docxFile, xlsFile, xlsxFile],
       schoolYear: '2025',
       semester: '1',
     });
@@ -206,11 +208,11 @@ describe('student-conduct-grade-governance api', () => {
     expect(() =>
       normalizeImportStudentConductGradeMaterialsInput({
         classCode: '2501',
-        files: [new File(['xls'], 'conduct.xls')],
+        files: [new File(['pdf'], 'conduct.pdf')],
         schoolYear: '2025',
         semester: '1',
       }),
-    ).toThrow('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
+    ).toThrow('操行材料仅支持 .doc、.docx、.xls、.xlsx。');
 
     expect(() =>
       normalizeImportStudentConductGradeMaterialsInput({
@@ -224,11 +226,11 @@ describe('student-conduct-grade-governance api', () => {
     expect(() =>
       normalizeImportStudentConductGradeMaterialsInput({
         classCode: '2501',
-        files: [new File(['x'.repeat(102401)], 'conduct.docx')],
+        files: [new File(['x'.repeat(204801)], 'conduct.docx')],
         schoolYear: '2025',
         semester: '1',
       }),
-    ).toThrow('操行材料单文件大小不能超过 100KB。');
+    ).toThrow('操行材料单文件大小不能超过 200KB。');
   });
 
   it('rejects invalid conduct correction patch inputs before graphql', () => {
@@ -697,6 +699,37 @@ describe('student-conduct-grade-governance api', () => {
     expect(formData.getAll('files')).toEqual([docxFile, xlsFile]);
   });
 
+  it('maps legacy Office conversion failure to actionable material import message', async () => {
+    const docFile = new File(['doc'], 'conduct.doc');
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: {
+            code: 'STUDENT_PRIVATE_PROFILE_SUPPLEMENT_FILE_INVALID',
+            message: '转换失败',
+          },
+          requestId: 'req-1',
+        }),
+        {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          status: 400,
+        },
+      ),
+    );
+
+    await expect(
+      importStudentConductGradeMaterials({
+        classCode: '2501',
+        files: [docFile],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).rejects.toThrow('旧版 Office 文件无法自动转换，请手工另存为 .docx / .xlsx 后重试。');
+  });
+
   it('refreshes local session before retrying material import after unauthorized response', async () => {
     const refreshSessionMock = vi.fn();
     const docxFile = new File(['docx'], 'conduct.docx');
@@ -719,7 +752,7 @@ describe('student-conduct-grade-governance api', () => {
           JSON.stringify({
             data: {
               blockingErrors: [],
-              status: 'IMPORTED',
+              status: 'READY_TO_SAVE',
               summary: {
                 writtenFieldCount: 1,
               },
@@ -743,7 +776,7 @@ describe('student-conduct-grade-governance api', () => {
         semester: '1',
       }),
     ).resolves.toMatchObject({
-      status: 'IMPORTED',
+      status: 'READY_TO_SAVE',
       summary: {
         writtenFieldCount: 1,
       },

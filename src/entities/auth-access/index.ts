@@ -228,6 +228,13 @@ export function hasStudentProfileFilingAccess(input: {
   );
 }
 
+export function hasStudentConductAlignmentAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasStudentProfileFilingAccess(input);
+}
+
 export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
   const accessGroup = input.accessGroup ?? [];
 

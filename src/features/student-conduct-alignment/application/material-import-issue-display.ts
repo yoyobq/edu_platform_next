@@ -1,8 +1,18 @@
-// src/labs/student-conduct-grade-governance/material-import-issue-display.ts
-
-import type { StudentConductGradeMaterialImportIssue } from './api';
+// src/features/student-conduct-alignment/application/material-import-issue-display.ts
 
 export type MaterialImportIssueDisplayType = 'error' | 'warning';
+
+export type MaterialImportIssueDisplayInput = {
+  code: string;
+  fieldKey: string | null;
+  message: string | null;
+  sourceFileDigest: string | null;
+  sourceFileIndex: number | null;
+  sourceFilename: string | null;
+  sourceRow: number | null;
+  sourceSheetOrTable: string | null;
+  studentId: string | null;
+};
 
 export type MaterialImportIssueGroup = {
   key: string;
@@ -21,7 +31,7 @@ type MaterialImportIssuePosition = {
 };
 
 function resolveMaterialImportIssueMessage(
-  issue: StudentConductGradeMaterialImportIssue,
+  issue: MaterialImportIssueDisplayInput,
   type: MaterialImportIssueDisplayType,
 ) {
   const message = issue.message?.trim();
@@ -38,7 +48,7 @@ function resolveMaterialImportIssueMessage(
 }
 
 function resolveMaterialImportIssuePosition(
-  issue: StudentConductGradeMaterialImportIssue,
+  issue: MaterialImportIssueDisplayInput,
   occurrenceNumber: number,
 ): MaterialImportIssuePosition | null {
   const sourceSheetOrTable = issue.sourceSheetOrTable?.trim() || null;
@@ -153,7 +163,7 @@ function formatChinesePositiveInteger(value: number) {
 }
 
 export function buildMaterialImportIssueGroups(
-  issues: readonly StudentConductGradeMaterialImportIssue[],
+  issues: readonly MaterialImportIssueDisplayInput[],
   type: MaterialImportIssueDisplayType,
 ): MaterialImportIssueGroup[] {
   const groupByKey = new Map<string, MutableMaterialImportIssueGroup>();

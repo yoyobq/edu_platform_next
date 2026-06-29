@@ -1,20 +1,20 @@
-// src/labs/student-conduct-grade-governance/material-import-panel.tsx
+// src/features/student-conduct-alignment/ui/material-import-panel.tsx
 
 import { type ReactNode, useRef } from 'react';
-import { InboxOutlined } from '@ant-design/icons';
+import { InboxOutlined, LoadingOutlined } from '@ant-design/icons';
 import type { UploadFile, UploadProps } from 'antd';
 import { Alert, Button, Space, Tag, Upload } from 'antd';
 
 import {
-  CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES,
-  type StudentConductGradeMaterialImportIssue,
-  type StudentConductGradeMaterialImportResult,
-} from './api';
-import {
   buildMaterialImportIssueGroups,
   type MaterialImportIssueDisplayType,
   type MaterialImportIssueGroup,
-} from './material-import-issue-display';
+} from '../application/material-import-issue-display';
+import {
+  CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES,
+  type StudentConductGradeMaterialImportIssue,
+  type StudentConductGradeMaterialImportResult,
+} from '../infrastructure/api';
 
 type MaterialImportContext = {
   classLabel: string;
@@ -56,7 +56,11 @@ function resolveStatusTag(result: StudentConductGradeMaterialImportResult | null
     return <Tag>无变化</Tag>;
   }
 
-  return <Tag color="green">已导入</Tag>;
+  if (result.status === 'READY_TO_SAVE') {
+    return <Tag color="blue">待保存</Tag>;
+  }
+
+  return null;
 }
 
 function formatMaterialImportSourceFilename(filename: string) {
@@ -81,13 +85,13 @@ function renderIssueGroup(group: MaterialImportIssueGroup, index: number) {
   const sourceFilename = group.sourceFilename?.trim() || null;
 
   return (
-    <span className="student-conduct-grade-governance-import-issue" key={`${group.key}-${index}`}>
+    <span className="student-conduct-alignment-import-issue" key={`${group.key}-${index}`}>
       {group.message}
       {positionText}
       {sourceFilename ? (
         <>
           {' '}
-          <span className="student-conduct-grade-governance-import-issue-source">
+          <span className="student-conduct-alignment-import-issue-source">
             <Tag title={sourceFilename}>{formatMaterialImportSourceFilename(sourceFilename)}</Tag>
           </span>
         </>
@@ -109,7 +113,7 @@ function renderIssues(
   const issueGroups = buildMaterialImportIssueGroups(issues, type);
 
   return (
-    <div className="student-conduct-grade-governance-import-issue-alert">
+    <div className="student-conduct-alignment-import-issue-alert">
       <Alert
         showIcon
         action={action}
@@ -130,11 +134,11 @@ function renderIssues(
   );
 }
 
-function buildUploadFileList(files: readonly File[]): UploadFile[] {
+function buildUploadFileList(files: readonly File[], isImporting: boolean): UploadFile[] {
   return files.map((file, index) => ({
     name: file.name,
     size: file.size,
-    status: 'done' as const,
+    status: isImporting ? ('uploading' as const) : ('done' as const),
     uid: `${file.name}-${file.lastModified}-${index}`,
   }));
 }
@@ -164,7 +168,7 @@ function mergeMaterialFiles(currentFiles: readonly File[], nextFiles: readonly F
 function isSupportedMaterialFile(fileName: string) {
   const extension = fileName.split('.').pop()?.trim().toLowerCase();
 
-  return extension === 'docx' || extension === 'xlsx';
+  return extension === 'doc' || extension === 'docx' || extension === 'xls' || extension === 'xlsx';
 }
 
 export function StudentConductGradeMaterialImportPanel({
@@ -183,7 +187,7 @@ export function StudentConductGradeMaterialImportPanel({
   onRejectTooManyFiles,
 }: StudentConductGradeMaterialImportPanelProps) {
   const rejectedFileKeysRef = useRef(new Set<string>());
-  const uploadFileList = buildUploadFileList(files);
+  const uploadFileList = buildUploadFileList(files, isImporting);
   const notifyRejectedFile = (file: File) => {
     const fileKey = buildMaterialFileKey(file);
 
@@ -258,8 +262,8 @@ export function StudentConductGradeMaterialImportPanel({
   const hasBlockingIssues = (result?.blockingErrors.length ?? 0) > 0;
 
   return (
-    <div className="student-conduct-grade-governance-import-panel">
-      <div className="student-conduct-grade-governance-import-head">
+    <div className="student-conduct-alignment-import-panel">
+      <div className="student-conduct-alignment-import-head">
         <div>
           <span>补录材料导入</span>
           <small>
@@ -272,7 +276,7 @@ export function StudentConductGradeMaterialImportPanel({
       {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
 
       <Upload.Dragger
-        accept=".docx,.xlsx"
+        accept=".doc,.docx,.xls,.xlsx"
         beforeUpload={beforeUpload}
         disabled={disabled || isImporting}
         fileList={uploadFileList}
@@ -282,16 +286,24 @@ export function StudentConductGradeMaterialImportPanel({
         onRemove={handleRemove}
       >
         <p className="ant-upload-drag-icon">
-          <InboxOutlined />
+          {isImporting ? <LoadingOutlined spin /> : <InboxOutlined />}
         </p>
-        <p className="ant-upload-text">拖入 Word 或 Excel 操行材料</p>
-        <p className="ant-upload-hint">支持 .docx / .xlsx</p>
+        <p className="ant-upload-text">
+          {isImporting
+            ? '正在解析并转换历史文档，请稍候'
+            : '拖入学期末上交的操行 Word 或 Excel 历史文档，快速导入'}
+        </p>
+        <p className="ant-upload-hint">
+          {isImporting
+            ? '旧版 .doc / .xls 需要先转换，耗时会稍长'
+            : '支持 .doc / .docx / .xls / .xlsx'}
+        </p>
       </Upload.Dragger>
 
-      <div className="student-conduct-grade-governance-import-actions">
+      <div className="student-conduct-alignment-import-actions">
         <span>
           {isImporting
-            ? `正在比对 ${files.length} 个文件`
+            ? `正在读取 ${files.length} 个文件，完成后会预填补录草稿`
             : files.length > 0
               ? `已选择 ${files.length} 个文件`
               : `未选择文件，最多 ${CONDUCT_GRADE_MATERIAL_IMPORT_MAX_FILES} 个`}

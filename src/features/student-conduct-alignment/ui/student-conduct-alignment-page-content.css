@@ -1,22 +1,22 @@
-/* src/labs/student-conduct-grade-governance/student-conduct-grade-governance-page.css */
+/* src/features/student-conduct-alignment/ui/student-conduct-alignment-page-content.css */
 
-.student-conduct-grade-governance-term-tab-label {
+.student-conduct-alignment-term-tab-label {
   display: block;
   max-width: 200px;
 }
 
-.student-conduct-grade-governance-term-tab-primary {
+.student-conduct-alignment-term-tab-primary {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.student-conduct-grade-governance-term-tab-primary-active {
+.student-conduct-alignment-term-tab-primary-active {
   font-weight: var(--ant-font-weight-strong, 600);
 }
 
-.student-conduct-grade-governance-term-tab-secondary {
+.student-conduct-alignment-term-tab-secondary {
   align-items: center;
   color: var(--ant-color-text-secondary);
   display: inline-flex;
@@ -25,13 +25,13 @@
   max-width: 100%;
 }
 
-.student-conduct-grade-governance-term-tab-secondary-text {
+.student-conduct-alignment-term-tab-secondary-text {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.student-conduct-grade-governance-term-tab-badge {
+.student-conduct-alignment-term-tab-badge {
   align-items: center;
   background: var(--ant-color-fill-tertiary);
   border-radius: 999px;
@@ -47,40 +47,40 @@
   padding-inline: 0;
 }
 
-.student-conduct-grade-governance-table-shell
+.student-conduct-alignment-table-shell
   .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-even
+  > tr.student-conduct-alignment-row-even
   > td,
-.student-conduct-grade-governance-table-shell
+.student-conduct-alignment-table-shell
   .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-even:hover
+  > tr.student-conduct-alignment-row-even:hover
   > td {
   background: var(--ant-color-fill-quaternary);
 }
 
-.student-conduct-grade-governance-table-shell
+.student-conduct-alignment-table-shell
   .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-odd:hover
+  > tr.student-conduct-alignment-row-odd:hover
   > td {
   background: var(--ant-color-fill-tertiary);
 }
 
-.student-conduct-grade-governance-table-shell
+.student-conduct-alignment-table-shell
   .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-selected
+  > tr.student-conduct-alignment-row-selected
   > td,
-.student-conduct-grade-governance-table-shell
+.student-conduct-alignment-table-shell
   .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-selected:hover
+  > tr.student-conduct-alignment-row-selected:hover
   > td {
   background: var(--ant-color-primary-bg);
 }
 
-.student-conduct-grade-governance-table-shell .ant-table-tbody > tr > td {
+.student-conduct-alignment-table-shell .ant-table-tbody > tr > td {
   transition: background-color 0.2s ease;
 }
 
-.student-conduct-grade-governance-import-panel {
+.student-conduct-alignment-import-panel {
   background: var(--ant-color-bg-container);
   border: 1px solid var(--ant-color-border-secondary);
   border-radius: var(--ant-border-radius-lg);
@@ -90,60 +90,60 @@
   padding: var(--ant-padding);
 }
 
-.student-conduct-grade-governance-import-head {
+.student-conduct-alignment-import-head {
   align-items: center;
   display: flex;
   gap: var(--ant-margin-sm);
   justify-content: space-between;
 }
 
-.student-conduct-grade-governance-import-head > div {
+.student-conduct-alignment-import-head > div {
   display: flex;
   flex-direction: column;
   gap: var(--ant-margin-xxs);
   min-width: 0;
 }
 
-.student-conduct-grade-governance-import-head span {
+.student-conduct-alignment-import-head span {
   color: var(--ant-color-text);
   font-weight: var(--ant-font-weight-strong, 600);
 }
 
-.student-conduct-grade-governance-import-head small,
-.student-conduct-grade-governance-import-actions > span {
+.student-conduct-alignment-import-head small,
+.student-conduct-alignment-import-actions > span {
   color: var(--ant-color-text-secondary);
   font-size: var(--ant-font-size-sm);
 }
 
-.student-conduct-grade-governance-import-actions {
+.student-conduct-alignment-import-actions {
   align-items: center;
   display: flex;
   gap: var(--ant-margin-sm);
   justify-content: space-between;
 }
 
-.student-conduct-grade-governance-import-issue {
+.student-conduct-alignment-import-issue {
   font-size: var(--ant-font-size-sm);
   line-height: var(--ant-line-height-sm);
 }
 
-.student-conduct-grade-governance-import-issue-alert .ant-alert-message {
+.student-conduct-alignment-import-issue-alert .ant-alert-message {
   font-size: var(--ant-font-size-sm);
   line-height: var(--ant-line-height-sm);
 }
 
-.student-conduct-grade-governance-import-issue-source {
+.student-conduct-alignment-import-issue-source {
   display: inline-flex;
   font-size: var(--ant-font-size-sm);
   line-height: var(--ant-line-height-sm);
 }
 
-.student-conduct-grade-governance-import-issue-source .ant-tag {
+.student-conduct-alignment-import-issue-source .ant-tag {
   font-size: var(--ant-font-size-sm);
   line-height: var(--ant-line-height-sm);
 }
 
-.student-conduct-grade-governance-patch-action-bar {
+.student-conduct-alignment-patch-action-bar {
   align-items: center;
   display: flex;
   flex-wrap: wrap;
@@ -151,11 +151,11 @@
   justify-content: space-between;
 }
 
-.student-conduct-grade-governance-patch-action-bar > span {
+.student-conduct-alignment-patch-action-bar > span {
   color: var(--ant-color-text-secondary);
   font-size: var(--ant-font-size-sm);
 }
 
-.student-conduct-grade-governance-patch-action-bar > .ant-space {
+.student-conduct-alignment-patch-action-bar > .ant-space {
   margin-left: auto;
 }
