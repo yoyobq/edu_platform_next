@@ -19,6 +19,7 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Switch,
   Table,
   Tag,
@@ -31,6 +32,7 @@ import {
   buildDepartmentSelectOptions,
   DepartmentFormItem,
   type DepartmentSelectOption,
+  ensureDepartmentSelectOption,
 } from '@/entities/department';
 import {
   isExpiredUpstreamSessionError,
@@ -65,12 +67,15 @@ import {
 } from '../infrastructure/api';
 
 export type ClassAdviserGovernancePageContentProps = {
+  canSelectDepartment?: boolean;
   currentAccount: UpstreamAccountIdentity | null;
+  defaultDepartmentId?: string | null;
   lockedUpstreamLoginUserId?: string | null;
 };
 
 type FilterFormValues = {
   departmentId?: string;
+  gradeYear?: number;
   keyword?: string;
   onlyMissing?: boolean;
 };
@@ -107,6 +112,37 @@ function formatDateTime(value: string | null | undefined) {
     month: '2-digit',
     year: 'numeric',
   });
+}
+
+function formatDateTimeParts(value: string | null | undefined) {
+  if (!value) {
+    return {
+      date: '—',
+      time: null,
+    };
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: value,
+      time: null,
+    };
+  }
+
+  return {
+    date: date.toLocaleDateString('zh-CN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }),
+    time: date.toLocaleTimeString('zh-CN', {
+      hour: '2-digit',
+      hour12: false,
+      minute: '2-digit',
+    }),
+  };
 }
 
 function buildAdviserDisplayName(adviser: ClassAdviserGovernanceActiveAdviser) {
@@ -175,20 +211,22 @@ function buildColumns(input: {
     {
       dataIndex: 'departmentId',
       key: 'departmentId',
-      render: (departmentId: string, record) => {
+      render: (departmentId: string) => {
         const departmentLabel = input.departmentLabelById.get(departmentId);
 
-        return (
-          <div className="flex flex-col gap-1">
-            <span>{departmentLabel ?? departmentId}</span>
-            <span className="text-xs text-text-secondary">
-              年级：{formatOptionalValue(record.gradeYear)}
-            </span>
-          </div>
-        );
+        return departmentLabel ?? departmentId;
       },
       title: '系部',
       width: 160,
+    },
+    {
+      dataIndex: 'gradeYear',
+      defaultSortOrder: 'descend',
+      key: 'gradeYear',
+      render: (gradeYear: number | null) => formatOptionalValue(gradeYear),
+      sorter: (left, right) => (left.gradeYear ?? -Infinity) - (right.gradeYear ?? -Infinity),
+      title: '年级',
+      width: 90,
     },
     {
       dataIndex: 'studentCount',
@@ -207,9 +245,24 @@ function buildColumns(input: {
     {
       dataIndex: 'lastObservedAt',
       key: 'lastObservedAt',
-      render: (lastObservedAt: string | null) => formatDateTime(lastObservedAt),
-      title: '最近观测',
-      width: 180,
+      render: (lastObservedAt: string | null) => {
+        const display = formatDateTimeParts(lastObservedAt);
+
+        return (
+          <span className="inline-flex flex-col gap-px leading-tight">
+            <span className="whitespace-nowrap text-xs font-normal text-text-secondary">
+              {display.date}
+            </span>
+            {display.time ? (
+              <span className="whitespace-nowrap text-xs font-normal text-text-tertiary">
+                {display.time}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
+      title: '最近操作',
+      width: 96,
     },
     {
       dataIndex: 'canAssign',
@@ -246,12 +299,47 @@ function buildColumns(input: {
   ];
 }
 
+function compareClassesByGradeDesc(
+  left: ClassAdviserGovernanceClass,
+  right: ClassAdviserGovernanceClass,
+) {
+  const gradeOrder = (right.gradeYear ?? -Infinity) - (left.gradeYear ?? -Infinity);
+
+  if (gradeOrder !== 0) {
+    return gradeOrder;
+  }
+
+  return left.classCode.localeCompare(right.classCode, 'zh-CN');
+}
+
+function buildGradeYearFilterOptions(classes: ClassAdviserGovernanceClass[]) {
+  return Array.from(
+    new Set(
+      classes
+        .map((item) => item.gradeYear)
+        .filter((gradeYear): gradeYear is number => typeof gradeYear === 'number'),
+    ),
+  )
+    .sort((left, right) => right - left)
+    .map((gradeYear) => ({
+      label: String(gradeYear),
+      value: gradeYear,
+    }));
+}
+
 export function ClassAdviserGovernancePageContent({
+  canSelectDepartment: rawCanSelectDepartment = false,
   currentAccount,
+  defaultDepartmentId = null,
   lockedUpstreamLoginUserId = null,
 }: ClassAdviserGovernancePageContentProps) {
   const { message } = AntApp.useApp();
+  const canSelectDepartment = Boolean(rawCanSelectDepartment);
+  const scopedDepartmentId = defaultDepartmentId?.trim() || '';
+  const initialDepartmentId = scopedDepartmentId || undefined;
+  const fallbackDepartmentLabel = canSelectDepartment ? '默认系部' : '当前账号归口系';
   const [filterForm] = Form.useForm<FilterFormValues>();
+  const selectedGradeYear = Form.useWatch('gradeYear', filterForm);
   const [assignForm] = Form.useForm<AssignFormValues>();
   const [classes, setClasses] = useState<ClassAdviserGovernanceClass[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
@@ -293,45 +381,89 @@ export function ClassAdviserGovernancePageContent({
     ? `${upstreamSession.accountId}:${upstreamSession.upstreamSessionToken}`
     : 'none';
 
-  const loadClasses = useCallback(async (values: FilterFormValues) => {
-    setIsLoading(true);
-    setListError(null);
+  const loadClasses = useCallback(
+    async (values: FilterFormValues) => {
+      const departmentId = canSelectDepartment ? values.departmentId : scopedDepartmentId;
 
-    try {
-      const nextClasses = await listClassAdviserGovernanceClasses({
-        departmentId: values.departmentId,
-        keyword: values.keyword,
-        onlyMissing: values.onlyMissing,
-      });
+      if (!canSelectDepartment && !departmentId) {
+        setClasses([]);
+        setListError('当前账号缺少归口系，暂时无法加载班主任任职列表');
+        return;
+      }
 
-      setClasses(nextClasses);
-    } catch (error) {
-      setClasses([]);
-      setListError(
-        resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载班主任治理列表。'),
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+      setIsLoading(true);
+      setListError(null);
+
+      try {
+        const nextClasses = await listClassAdviserGovernanceClasses({
+          departmentId,
+          keyword: values.keyword,
+          onlyMissing: values.onlyMissing,
+        });
+
+        setClasses(nextClasses);
+      } catch (error) {
+        setClasses([]);
+        setListError(
+          resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载班主任任职列表。'),
+        );
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [canSelectDepartment, scopedDepartmentId],
+  );
 
   const loadDepartments = useCallback(async () => {
     setIsLoadingDepartments(true);
     setDepartmentOptionsError(null);
 
+    const resolveNextDepartmentId = () => {
+      if (!canSelectDepartment) {
+        return initialDepartmentId;
+      }
+
+      const currentDepartmentId = filterForm.getFieldValue('departmentId') as string | undefined;
+
+      if (filterForm.isFieldTouched('departmentId')) {
+        return currentDepartmentId;
+      }
+
+      return currentDepartmentId ?? initialDepartmentId;
+    };
+
     try {
       const departments = await listLocalDepartmentOptions();
+      const nextOptions = initialDepartmentId
+        ? ensureDepartmentSelectOption(buildDepartmentSelectOptions(departments), {
+            id: initialDepartmentId,
+            label: fallbackDepartmentLabel,
+          })
+        : buildDepartmentSelectOptions(departments);
 
-      setDepartmentOptions(buildDepartmentSelectOptions(departments));
+      setDepartmentOptions(nextOptions);
+      filterForm.setFieldsValue({
+        departmentId: resolveNextDepartmentId(),
+      });
     } catch (error) {
-      setDepartmentOptions([]);
+      setDepartmentOptions(
+        initialDepartmentId
+          ? ensureDepartmentSelectOption([], {
+              id: initialDepartmentId,
+              label: fallbackDepartmentLabel,
+            })
+          : [],
+      );
       setDepartmentOptionsError(
         resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载系部列表。'),
       );
+      filterForm.setFieldsValue({
+        departmentId: resolveNextDepartmentId(),
+      });
     } finally {
       setIsLoadingDepartments(false);
     }
-  }, []);
+  }, [canSelectDepartment, fallbackDepartmentLabel, filterForm, initialDepartmentId]);
 
   const loadStaffDirectory = useCallback(
     async (input: { forceRefresh?: boolean; session?: StoredUpstreamSession | null } = {}) => {
@@ -466,19 +598,30 @@ export function ClassAdviserGovernancePageContent({
 
   useEffect(() => {
     void loadClasses({
+      departmentId: initialDepartmentId,
       onlyMissing: false,
     });
-  }, [loadClasses]);
+  }, [initialDepartmentId, loadClasses]);
 
-  const missingCount = classes.filter((item) => item.canAssign).length;
-  const configuredCount = classes.length - missingCount;
+  const gradeYearOptions = useMemo(() => buildGradeYearFilterOptions(classes), [classes]);
+  const visibleClasses = useMemo(
+    () =>
+      classes
+        .filter((item) =>
+          typeof selectedGradeYear === 'number' ? item.gradeYear === selectedGradeYear : true,
+        )
+        .sort(compareClassesByGradeDesc),
+    [classes, selectedGradeYear],
+  );
+  const missingCount = visibleClasses.filter((item) => item.canAssign).length;
+  const configuredCount = visibleClasses.length - missingCount;
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
+    <div className="flex flex-col gap-6">
       <DecoratedPageHeader
-        description="补齐本地已同步学生归属班级的班主任任职事实。"
+        description="补齐本地已从校园网同步学生归属班级的班主任任职事实"
         icon={<TeamOutlined />}
-        title="班主任治理"
+        title="班主任任职"
       />
 
       <Card title="筛选条件">
@@ -491,6 +634,7 @@ export function ClassAdviserGovernancePageContent({
           <Form<FilterFormValues>
             form={filterForm}
             initialValues={{
+              departmentId: initialDepartmentId,
               onlyMissing: false,
             }}
             layout="vertical"
@@ -499,29 +643,43 @@ export function ClassAdviserGovernancePageContent({
               void loadClasses(values);
             }}
           >
-            <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2, wide: 3 }}>
+            <ResponsiveGrid
+              className="gap-4"
+              columns={{ compact: 1, regular: 2, large: 4, wide: 4 }}
+            >
               <DepartmentFormItem
-                disabled={isLoadingDepartments || isLoading}
+                disabled={isLoadingDepartments || isLoading || !canSelectDepartment}
                 emptyText="当前没有可选系部"
-                help="不选择时查询全部系部。"
                 label="系部"
                 loading={isLoadingDepartments}
                 name="departmentId"
                 options={departmentOptions}
-                placeholder="选择系部"
+                placeholder={canSelectDepartment ? '选择系部，清空可查全院' : '当前账号归口系'}
                 selectProps={{
-                  allowClear: true,
+                  allowClear: canSelectDepartment,
                 }}
                 validateStatus={departmentOptionsError ? 'warning' : undefined}
               />
 
               <Form.Item
-                extra="匹配班级、班主任 staffId 或本地 staff 姓名。"
                 label="关键词"
                 name="keyword"
                 rules={[{ max: 100, message: '关键词不能超过 100 个字符' }]}
               >
-                <Input allowClear placeholder="输入班级或教职工信息" prefix={<SearchOutlined />} />
+                <Input
+                  allowClear
+                  placeholder="匹配班级、班主任工号或班主任姓名"
+                  prefix={<SearchOutlined />}
+                />
+              </Form.Item>
+
+              <Form.Item label="年级" name="gradeYear">
+                <Select
+                  allowClear
+                  disabled={classes.length === 0}
+                  options={gradeYearOptions}
+                  placeholder="按年级筛选"
+                />
               </Form.Item>
 
               <Form.Item label="只看缺失" name="onlyMissing" valuePropName="checked">
@@ -550,6 +708,7 @@ export function ClassAdviserGovernancePageContent({
                 onClick={() => {
                   filterForm.resetFields();
                   void loadClasses({
+                    departmentId: initialDepartmentId,
                     onlyMissing: false,
                   });
                 }}
@@ -564,24 +723,25 @@ export function ClassAdviserGovernancePageContent({
       <Card title="班级列表">
         <div className="flex flex-col gap-4">
           <Descriptions bordered column={{ md: 3, sm: 1, xs: 1 }} size="small">
-            <Descriptions.Item label="班级数">{classes.length}</Descriptions.Item>
+            <Descriptions.Item label="班级数">{visibleClasses.length}</Descriptions.Item>
             <Descriptions.Item label="缺失班主任">{missingCount}</Descriptions.Item>
             <Descriptions.Item label="已配置">{configuredCount}</Descriptions.Item>
           </Descriptions>
 
           <Table<ClassAdviserGovernanceClass>
             columns={columns}
-            dataSource={classes}
+            dataSource={visibleClasses}
             loading={isLoading}
             locale={{
-              emptyText: <Empty description="暂无可治理班级" />,
+              emptyText: <Empty description="暂无班主任任职班级" />,
             }}
             pagination={{
-              pageSize: 20,
+              defaultPageSize: 30,
+              pageSizeOptions: [30, 60],
               showSizeChanger: true,
             }}
             rowKey="classId"
-            scroll={{ x: 1250 }}
+            scroll={{ x: 1260 }}
             size="middle"
           />
         </div>

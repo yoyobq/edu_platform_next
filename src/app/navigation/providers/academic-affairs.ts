@@ -275,7 +275,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'TeamOutlined',
             key: '/student-affairs/class-adviser-governance',
-            label: '班主任治理',
+            label: '班主任任职',
             navMode: 'rail' as const,
             path: '/student-affairs/class-adviser-governance',
             primaryAccessGroup: 'ADMIN' as const,

@@ -56,6 +56,7 @@ import {
   hasStaffSemesterProfilesAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
+  resolveClassAdviserGovernanceDepartmentScope,
   resolveUpstreamLoginLockedUserId,
 } from '@/entities/auth-access';
 
@@ -916,11 +917,24 @@ async function classAdviserGovernancePageLoader({ request }: LoaderFunctionArgs)
     };
   }
 
+  const departmentScope = resolveClassAdviserGovernanceDepartmentScope({
+    accessGroup: snapshot.userInfo.accessGroup,
+    staffDepartmentId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
+  });
+
+  if (departmentScope.isForbidden) {
+    return {
+      isForbidden: true,
+    };
+  }
+
   return {
+    canSelectDepartment: departmentScope.canSelectDepartment,
     currentAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
     },
+    defaultDepartmentId: departmentScope.defaultDepartmentId,
     identityStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
     slotGroup: snapshot.slotGroup,

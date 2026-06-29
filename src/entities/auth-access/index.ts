@@ -36,6 +36,8 @@ type PayloadCryptoAccessInput = {
   accessGroup?: readonly string[];
 };
 
+export const DEFAULT_CLASS_ADVISER_GOVERNANCE_DEPARTMENT_ID = 'ORG0302';
+
 function hasAcademicStaffManagerAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
@@ -173,6 +175,29 @@ export function hasClassAdviserGovernanceAccess(input: {
     (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
       slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
   );
+}
+
+export function resolveClassAdviserGovernanceDepartmentScope(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  staffDepartmentId?: string | null;
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return {
+      canSelectDepartment: true,
+      defaultDepartmentId: DEFAULT_CLASS_ADVISER_GOVERNANCE_DEPARTMENT_ID,
+      isForbidden: false,
+    };
+  }
+
+  const staffDepartmentId = input.staffDepartmentId?.trim() || null;
+
+  return {
+    canSelectDepartment: false,
+    defaultDepartmentId: staffDepartmentId,
+    isForbidden: !staffDepartmentId,
+  };
 }
 
 export function hasStudentRosterMembershipReconciliationAccess(input: {

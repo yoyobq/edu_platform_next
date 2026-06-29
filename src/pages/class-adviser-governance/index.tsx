@@ -9,7 +9,9 @@ import { type AuthAccessGroup, resolveUpstreamLoginLockedUserId } from '@/entiti
 import type { UpstreamAccountIdentity } from '@/entities/upstream-session';
 
 type ClassAdviserGovernancePageLoaderData = {
+  canSelectDepartment?: boolean;
   currentAccount?: UpstreamAccountIdentity;
+  defaultDepartmentId?: string | null;
   identityStaffId?: string | null;
   isForbidden?: boolean;
   slotGroup?: readonly string[];
@@ -25,7 +27,9 @@ export function ClassAdviserGovernancePage() {
 
   return (
     <ClassAdviserGovernancePageContent
+      canSelectDepartment={loaderData.canSelectDepartment}
       currentAccount={loaderData.currentAccount}
+      defaultDepartmentId={loaderData.defaultDepartmentId}
       lockedUpstreamLoginUserId={resolveUpstreamLoginLockedUserId({
         accessGroup: loaderData.userAccessGroup,
         slotGroup: loaderData.slotGroup,

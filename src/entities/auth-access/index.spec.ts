@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   AUTH_ACCESS_GROUPS,
   canAccessPayloadCrypto,
+  DEFAULT_CLASS_ADVISER_GOVERNANCE_DEPARTMENT_ID,
   hasAcademicCalendarManagementAccess,
   hasAcademicCalendarReadAccess,
   hasAcademicCurriculumPlanHomepageAccess,
@@ -25,6 +26,7 @@ import {
   hasStudentRosterMembershipReconciliationAccess,
   hasUpstreamDataSyncAccess,
   isAuthAccessGroup,
+  resolveClassAdviserGovernanceDepartmentScope,
   resolveUpstreamLoginLockedUserId,
 } from './index';
 
@@ -210,6 +212,34 @@ describe('auth access policy', () => {
     ).toBe(false);
     expect(hasClassAdviserGovernanceAccess({ accessGroup: ['STAFF'] })).toBe(false);
     expect(hasClassAdviserGovernanceAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+  });
+
+  it('resolves class adviser governance department scope from the current account', () => {
+    expect(resolveClassAdviserGovernanceDepartmentScope({ accessGroup: ['ADMIN'] })).toEqual({
+      canSelectDepartment: true,
+      defaultDepartmentId: DEFAULT_CLASS_ADVISER_GOVERNANCE_DEPARTMENT_ID,
+      isForbidden: false,
+    });
+    expect(
+      resolveClassAdviserGovernanceDepartmentScope({
+        accessGroup: ['STAFF'],
+        staffDepartmentId: ' ORG0306 ',
+      }),
+    ).toEqual({
+      canSelectDepartment: false,
+      defaultDepartmentId: 'ORG0306',
+      isForbidden: false,
+    });
+    expect(
+      resolveClassAdviserGovernanceDepartmentScope({
+        accessGroup: ['STAFF'],
+        staffDepartmentId: null,
+      }),
+    ).toEqual({
+      canSelectDepartment: false,
+      defaultDepartmentId: null,
+      isForbidden: true,
+    });
   });
 
   it('allows roster membership reconciliation entry to admins and staff', () => {
