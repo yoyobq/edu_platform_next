@@ -11,16 +11,6 @@ export type MaterialImportIssueGroup = {
   sourceFilename: string | null;
 };
 
-export type MaterialImportIssueTargetTerm = {
-  label?: string | null;
-  schoolYear: string | null;
-  semester: string | null;
-};
-
-export type MaterialImportIssueDisplayOptions = {
-  targetTerm?: MaterialImportIssueTargetTerm | null;
-};
-
 type MutableMaterialImportIssueGroup = MaterialImportIssueGroup & {
   positionSet: Set<string>;
 };
@@ -33,12 +23,7 @@ type MaterialImportIssuePosition = {
 function resolveMaterialImportIssueMessage(
   issue: StudentConductGradeMaterialImportIssue,
   type: MaterialImportIssueDisplayType,
-  options: MaterialImportIssueDisplayOptions,
 ) {
-  if (issue.code === 'DOCUMENT_TERM_MISMATCH') {
-    return resolveDocumentTermMismatchMessage(issue, options);
-  }
-
   const message = issue.message?.trim();
 
   if (message) {
@@ -50,93 +35,6 @@ function resolveMaterialImportIssueMessage(
   }
 
   return '材料中存在阻断导入的问题，请修正后重新上传。';
-}
-
-function resolveDocumentTermMismatchMessage(
-  issue: StudentConductGradeMaterialImportIssue,
-  options: MaterialImportIssueDisplayOptions,
-) {
-  const materialTermLabel = formatAcademicTermLabel({
-    schoolYear: issue.schoolYear,
-    semester: issue.semester,
-  });
-  const targetTermLabel = resolveTargetTermLabel(options.targetTerm);
-
-  if (materialTermLabel && targetTermLabel) {
-    return `上传文档中出现 ${materialTermLabel} 字样，和当前导入学期 ${targetTermLabel} 不一致。请确认是否仍按当前 tab 导入。`;
-  }
-
-  if (materialTermLabel) {
-    return `上传文档中出现 ${materialTermLabel} 字样，和本次导入目标不一致。请确认是否仍按当前 tab 导入。`;
-  }
-
-  return '上传文档中的学期信息和当前导入学期不一致。请确认是否仍按当前 tab 导入。';
-}
-
-function resolveTargetTermLabel(term: MaterialImportIssueTargetTerm | null | undefined) {
-  if (!term) {
-    return null;
-  }
-
-  return (
-    formatAcademicTermLabel({
-      schoolYear: term.schoolYear,
-      semester: term.semester,
-    }) ??
-    term.label?.trim() ??
-    null
-  );
-}
-
-function formatAcademicTermLabel(input: { schoolYear: string | null; semester: string | null }) {
-  const schoolYearLabel = formatSchoolYearLabel(input.schoolYear);
-  const semesterLabel = formatSemesterLabel(input.semester);
-
-  if (schoolYearLabel && semesterLabel) {
-    return `${schoolYearLabel}${semesterLabel}`;
-  }
-
-  return schoolYearLabel ?? semesterLabel;
-}
-
-function formatSchoolYearLabel(value: string | null) {
-  const text = value?.trim();
-
-  if (!text) {
-    return null;
-  }
-
-  const startYearMatch = text.match(/^(20\d{2})$/);
-  if (startYearMatch) {
-    const startYear = Number(startYearMatch[1]);
-
-    return `${startYear}-${startYear + 1}学年`;
-  }
-
-  const rangeMatch = text.match(/^(20\d{2})[-—–~～至](20\d{2})$/);
-  if (rangeMatch) {
-    return `${rangeMatch[1]}-${rangeMatch[2]}学年`;
-  }
-
-  return `${text}学年`;
-}
-
-function formatSemesterLabel(value: string | null) {
-  const text = value?.trim();
-
-  if (!text) {
-    return null;
-  }
-
-  if (text === '1') {
-    return '第一学期';
-  }
-
-  if (text === '2') {
-    return '第二学期';
-  }
-
-  return `第${text}学期`;
 }
 
 function resolveMaterialImportIssuePosition(
@@ -257,12 +155,11 @@ function formatChinesePositiveInteger(value: number) {
 export function buildMaterialImportIssueGroups(
   issues: readonly StudentConductGradeMaterialImportIssue[],
   type: MaterialImportIssueDisplayType,
-  options: MaterialImportIssueDisplayOptions = {},
 ): MaterialImportIssueGroup[] {
   const groupByKey = new Map<string, MutableMaterialImportIssueGroup>();
 
   issues.forEach((issue) => {
-    const message = resolveMaterialImportIssueMessage(issue, type, options);
+    const message = resolveMaterialImportIssueMessage(issue, type);
     const sourceFilename = issue.sourceFilename?.trim() || null;
     const key = JSON.stringify([
       issue.sourceFileDigest,
@@ -270,8 +167,6 @@ export function buildMaterialImportIssueGroups(
       sourceFilename,
       issue.code,
       message,
-      issue.schoolYear,
-      issue.semester,
       issue.fieldKey,
       issue.studentId,
     ]);

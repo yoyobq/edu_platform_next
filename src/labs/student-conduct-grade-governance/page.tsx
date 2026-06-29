@@ -71,6 +71,7 @@ import {
   type StudentConductGradeClassTermOptions,
   type StudentConductGradeEffectiveView,
   type StudentConductGradeFieldCell,
+  type StudentConductGradeMaterialImportPreviewRow,
   type StudentConductGradeMaterialImportResult,
   type StudentConductGradePatchFieldKey,
   type StudentConductGradePatchRowIssue,
@@ -123,9 +124,9 @@ const CONDUCT_SCORE_COLUMN_WIDTH = 72;
 const CONDUCT_GRADE_COLUMN_WIDTH = 84;
 const CONDUCT_PATCH_SCORE_COLUMN_WIDTH = 116;
 const CONDUCT_PATCH_GRADE_COLUMN_WIDTH = 116;
-const CONDUCT_PATCH_CLEAR_COLUMN_WIDTH = 150;
 const CONDUCT_STATUS_COLUMN_WIDTH = 112;
 const CONDUCT_ACTION_COLUMN_WIDTH = 82;
+const CONDUCT_PATCH_ACTION_COLUMN_WIDTH = 170;
 const CONDUCT_TABLE_SCROLL_X =
   STUDENT_NUMBER_COLUMN_WIDTH +
   STUDENT_NAME_COLUMN_WIDTH +
@@ -138,18 +139,19 @@ const CONDUCT_PATCH_TABLE_SCROLL_X =
   CONDUCT_SCORE_COLUMN_WIDTH -
   CONDUCT_GRADE_COLUMN_WIDTH +
   CONDUCT_PATCH_SCORE_COLUMN_WIDTH +
-  CONDUCT_PATCH_GRADE_COLUMN_WIDTH +
-  CONDUCT_PATCH_CLEAR_COLUMN_WIDTH;
+  CONDUCT_PATCH_GRADE_COLUMN_WIDTH -
+  CONDUCT_ACTION_COLUMN_WIDTH +
+  CONDUCT_PATCH_ACTION_COLUMN_WIDTH;
 
 const CONDUCT_CONFIRMED_GRADE_OPTIONS = ['优', '良', '中', '差'].map((grade) => ({
   label: grade,
   value: grade,
 }));
 
-const CONDUCT_PATCH_FIELD_LABELS: Record<StudentConductGradePatchFieldKey, string> = {
-  confirmedGrade: '确认等级',
-  score: '分数',
-};
+const CONDUCT_PATCH_FIELD_KEYS = [
+  'score',
+  'confirmedGrade',
+] satisfies StudentConductGradePatchFieldKey[];
 
 const STATUS_LABELS: Record<string, string> = {
   CORRECTION_CLEANUP_PENDING: '补正待清理',
@@ -323,6 +325,31 @@ function canClearConductPatchField(
   return student.manualPatchFieldKeys.includes(fieldKey);
 }
 
+function listClearableConductPatchFields(student: StudentConductGradeStudent) {
+  return CONDUCT_PATCH_FIELD_KEYS.filter((fieldKey) =>
+    canClearConductPatchField(student, fieldKey),
+  );
+}
+
+function areAllConductPatchClearFieldsSelected(
+  draft: ConductPatchDraft | undefined,
+  fieldKeys: readonly StudentConductGradePatchFieldKey[],
+) {
+  return (
+    fieldKeys.length > 0 &&
+    fieldKeys.every((fieldKey) => isConductPatchClearSelected(draft, fieldKey))
+  );
+}
+
+function hasConductGradeConflict(student: StudentConductGradeStudent) {
+  return (
+    student.conflictCodes.length > 0 ||
+    student.fields.score.conflict ||
+    student.fields.estimatedGrade.conflict ||
+    student.fields.confirmedGrade.conflict
+  );
+}
+
 function isUpstreamConductGradeField(cell: StudentConductGradeFieldCell) {
   return Boolean(cell.value !== null && cell.source === 'UPSTREAM');
 }
@@ -375,6 +402,58 @@ function buildConductPatchStudentInputs(
     .filter((student): student is PatchStudentConductGradeCorrectionStudentInput =>
       Boolean(student),
     );
+}
+
+function buildMaterialImportPreviewDrafts(
+  rows: readonly StudentConductGradeMaterialImportPreviewRow[],
+) {
+  return Object.fromEntries(
+    rows.flatMap((row) => {
+      const draft = normalizeConductPatchDraft({
+        clearFieldKeys: [],
+        ...(row.score ? { score: row.score } : {}),
+        ...(row.confirmedGrade ? { confirmedGrade: row.confirmedGrade } : {}),
+      });
+
+      return draft ? [[row.studentId, draft]] : [];
+    }),
+  );
+}
+
+function mergeMaterialImportPreviewDrafts(
+  currentDrafts: Record<string, ConductPatchDraft>,
+  rows: readonly StudentConductGradeMaterialImportPreviewRow[],
+) {
+  const nextDrafts = { ...currentDrafts };
+
+  rows.forEach((row) => {
+    const currentDraft = currentDrafts[row.studentId] ?? {
+      clearFieldKeys: [],
+    };
+    const scoreClearSelected = currentDraft.clearFieldKeys.includes('score');
+    const gradeClearSelected = currentDraft.clearFieldKeys.includes('confirmedGrade');
+    const nextDraft = normalizeConductPatchDraft({
+      clearFieldKeys: [...currentDraft.clearFieldKeys],
+      ...(currentDraft.score
+        ? { score: currentDraft.score }
+        : !scoreClearSelected && row.score
+          ? { score: row.score }
+          : {}),
+      ...(currentDraft.confirmedGrade
+        ? { confirmedGrade: currentDraft.confirmedGrade }
+        : !gradeClearSelected && row.confirmedGrade
+          ? { confirmedGrade: row.confirmedGrade }
+          : {}),
+    });
+
+    if (nextDraft) {
+      nextDrafts[row.studentId] = nextDraft;
+    } else {
+      delete nextDrafts[row.studentId];
+    }
+  });
+
+  return nextDrafts;
 }
 
 function renderFieldCell(cell: StudentConductGradeFieldCell) {
@@ -500,7 +579,7 @@ export function StudentConductGradeGovernanceLabPage() {
   const { token } = theme.useToken();
   const loaderData = useLoaderData() as StudentConductGradeGovernanceLabLoaderData | null;
   const currentAccount = loaderData?.currentAccount ?? null;
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
   const [terms, setTerms] = useState<StudentConductGradeClassTermOption[]>([]);
   const [termOptions, setTermOptions] = useState<StudentConductGradeClassTermOptions | null>(null);
@@ -519,10 +598,14 @@ export function StudentConductGradeGovernanceLabPage() {
     null,
   );
   const [patchDrafts, setPatchDrafts] = useState<Record<string, ConductPatchDraft>>({});
+  const [materialImportPreviewDrafts, setMaterialImportPreviewDrafts] = useState<
+    Record<string, ConductPatchDraft>
+  >({});
   const [patchRowIssues, setPatchRowIssues] = useState<ConductPatchRowIssueView[]>([]);
   const [materialImportFiles, setMaterialImportFiles] = useState<File[]>([]);
   const [materialImportResult, setMaterialImportResult] =
     useState<StudentConductGradeMaterialImportResult | null>(null);
+  const [hasMaterialImportPatchDrafts, setHasMaterialImportPatchDrafts] = useState(false);
   const [materialImportErrorMessage, setMaterialImportErrorMessage] = useState<string | null>(null);
   const [isPatchMode, setIsPatchMode] = useState(false);
   const [isPatchingCorrections, setIsPatchingCorrections] = useState(false);
@@ -605,6 +688,17 @@ export function StudentConductGradeGovernanceLabPage() {
         : [],
     [materialImportResult],
   );
+  const hasPendingMaterialImportConfirmation = materialWarningConfirmationKeys.length > 0;
+  const materialImportPreviewDraftCount = useMemo(
+    () => Object.keys(materialImportPreviewDrafts).length,
+    [materialImportPreviewDrafts],
+  );
+  const shouldConfirmLeavingPatchMode =
+    isPatchMode &&
+    (isImportingMaterial ||
+      hasPendingMaterialImportConfirmation ||
+      hasMaterialImportPatchDrafts ||
+      materialImportPreviewDraftCount > 0);
   const conductSyncMenuItems = useMemo<MenuProps['items']>(
     () => [
       {
@@ -660,6 +754,8 @@ export function StudentConductGradeGovernanceLabPage() {
     ) => {
       setIsPatchMode(Boolean(options.keepPatchMode));
       setPatchDrafts({});
+      setMaterialImportPreviewDrafts({});
+      setHasMaterialImportPatchDrafts(false);
       setPatchRowIssues([]);
       setMaterialImportFiles([]);
       setMaterialImportErrorMessage(null);
@@ -673,6 +769,26 @@ export function StudentConductGradeGovernanceLabPage() {
       }
     },
     [],
+  );
+
+  const confirmLeavingPatchMode = useCallback(
+    async (leave: () => Promise<void> | void) => {
+      if (!shouldConfirmLeavingPatchMode) {
+        await leave();
+        return;
+      }
+
+      modal.confirm({
+        title: '离开补录操作？',
+        content: '当前补录材料已经处理过，但尚未通过“保存补录”落库。现在离开会丢弃这些内容。',
+        okText: '确认离开',
+        cancelText: '继续补录',
+        onOk: async () => {
+          await leave();
+        },
+      });
+    },
+    [modal, shouldConfirmLeavingPatchMode],
   );
 
   const updatePatchDraft = useCallback(
@@ -717,21 +833,26 @@ export function StudentConductGradeGovernanceLabPage() {
     [updatePatchDraft],
   );
 
-  const handlePatchClearToggle = useCallback(
-    (student: StudentConductGradeStudent, fieldKey: StudentConductGradePatchFieldKey) => {
-      if (!canClearConductPatchField(student, fieldKey)) {
+  const handlePatchClearAllToggle = useCallback(
+    (student: StudentConductGradeStudent) => {
+      const clearableFields = listClearableConductPatchFields(student);
+
+      if (clearableFields.length === 0) {
         return;
       }
 
       updatePatchDraft(student.studentId, (draft) => {
-        const clearSelected = isConductPatchClearSelected(draft, fieldKey);
+        const clearSelected = areAllConductPatchClearFieldsSelected(draft, clearableFields);
         const clearFieldKeys = clearSelected
-          ? draft.clearFieldKeys.filter((item) => item !== fieldKey)
-          : [...draft.clearFieldKeys, fieldKey];
+          ? draft.clearFieldKeys.filter((fieldKey) => !clearableFields.includes(fieldKey))
+          : Array.from(new Set([...draft.clearFieldKeys, ...clearableFields]));
+        const shouldClearScore = clearableFields.includes('score');
+        const shouldClearConfirmedGrade = clearableFields.includes('confirmedGrade');
 
         return {
           ...draft,
-          [fieldKey]: undefined,
+          ...(shouldClearScore ? { score: undefined } : {}),
+          ...(shouldClearConfirmedGrade ? { confirmedGrade: undefined } : {}),
           clearFieldKeys,
         };
       });
@@ -1106,20 +1227,23 @@ export function StudentConductGradeGovernanceLabPage() {
   }, [loadClassTermsAndSelection, resetPatchWorkspace]);
 
   const reloadCurrentSelection = useCallback(async () => {
-    if (!selectedClass) {
-      await loadCatalog();
-      return;
-    }
+    await confirmLeavingPatchMode(async () => {
+      if (!selectedClass) {
+        await loadCatalog();
+        return;
+      }
 
-    if (!selectedTerm || termGenerationBlocked) {
-      await loadClassTermsAndSelection(selectedClass, {
-        preferredTermKey: selectedTermKey,
-      });
-      return;
-    }
+      if (!selectedTerm || termGenerationBlocked) {
+        await loadClassTermsAndSelection(selectedClass, {
+          preferredTermKey: selectedTermKey,
+        });
+        return;
+      }
 
-    await loadSelectionData(selectedClass, selectedTerm);
+      await loadSelectionData(selectedClass, selectedTerm);
+    });
   }, [
+    confirmLeavingPatchMode,
     loadCatalog,
     loadClassTermsAndSelection,
     loadSelectionData,
@@ -1131,42 +1255,46 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const handleClassChange = useCallback(
     async (classId: string) => {
-      const nextClass = classes.find((item) => item.id === classId) ?? null;
+      await confirmLeavingPatchMode(async () => {
+        const nextClass = classes.find((item) => item.id === classId) ?? null;
 
-      activeSelectionRef.current = {
-        classOption: nextClass,
-        classId: nextClass?.id ?? null,
-        term: null,
-        termKey: null,
-      };
-      setSelectedClassId(classId || null);
-      setStudentSearch('');
+        activeSelectionRef.current = {
+          classOption: nextClass,
+          classId: nextClass?.id ?? null,
+          term: null,
+          termKey: null,
+        };
+        setSelectedClassId(classId || null);
+        setStudentSearch('');
 
-      if (nextClass) {
-        await loadClassTermsAndSelection(nextClass);
-      }
+        if (nextClass) {
+          await loadClassTermsAndSelection(nextClass);
+        }
+      });
     },
-    [classes, loadClassTermsAndSelection],
+    [classes, confirmLeavingPatchMode, loadClassTermsAndSelection],
   );
 
   const handleTermChange = useCallback(
     async (termKey: string) => {
-      const nextTerm = terms.find((term) => buildTermKey(term) === termKey) ?? null;
+      await confirmLeavingPatchMode(async () => {
+        const nextTerm = terms.find((term) => buildTermKey(term) === termKey) ?? null;
 
-      activeSelectionRef.current = {
-        classOption: selectedClass,
-        classId: selectedClass?.id ?? null,
-        term: nextTerm,
-        termKey: termKey || null,
-      };
-      setSelectedTermKey(termKey || null);
-      setStudentSearch('');
+        activeSelectionRef.current = {
+          classOption: selectedClass,
+          classId: selectedClass?.id ?? null,
+          term: nextTerm,
+          termKey: termKey || null,
+        };
+        setSelectedTermKey(termKey || null);
+        setStudentSearch('');
 
-      if (selectedClass && nextTerm) {
-        await loadSelectionData(selectedClass, nextTerm);
-      }
+        if (selectedClass && nextTerm) {
+          await loadSelectionData(selectedClass, nextTerm);
+        }
+      });
     },
-    [loadSelectionData, selectedClass, terms],
+    [confirmLeavingPatchMode, loadSelectionData, selectedClass, terms],
   );
 
   const handleCleanup = useCallback(
@@ -1232,14 +1360,18 @@ export function StudentConductGradeGovernanceLabPage() {
     setMaterialImportErrorMessage(null);
     setMaterialImportFiles([]);
     setMaterialImportResult(null);
+    setMaterialImportPreviewDrafts({});
+    setHasMaterialImportPatchDrafts(false);
     setPatchResult(null);
     setPatchRowIssues([]);
     setIsPatchMode(true);
   }, []);
 
   const handleCancelPatchMode = useCallback(() => {
-    resetPatchWorkspace();
-  }, [resetPatchWorkspace]);
+    void confirmLeavingPatchMode(() => {
+      resetPatchWorkspace();
+    });
+  }, [confirmLeavingPatchMode, resetPatchWorkspace]);
 
   const handleSubmitPatch = useCallback(async () => {
     if (!conductView) {
@@ -1248,6 +1380,11 @@ export function StudentConductGradeGovernanceLabPage() {
 
     if (termGenerationBlocked) {
       setErrorMessage(termBlockingMessage);
+      return;
+    }
+
+    if (hasPendingMaterialImportConfirmation) {
+      message.warning('请先确认或取消当前材料导入。');
       return;
     }
 
@@ -1321,6 +1458,7 @@ export function StudentConductGradeGovernanceLabPage() {
     }
   }, [
     conductView,
+    hasPendingMaterialImportConfirmation,
     loadSelectionData,
     message,
     patchDrafts,
@@ -1331,6 +1469,7 @@ export function StudentConductGradeGovernanceLabPage() {
   const handleMaterialImportFilesChange = useCallback((files: File[]) => {
     setMaterialImportFiles(files);
     setMaterialImportErrorMessage(null);
+    setMaterialImportPreviewDrafts({});
     setMaterialImportResult(null);
   }, []);
 
@@ -1349,7 +1488,10 @@ export function StudentConductGradeGovernanceLabPage() {
   );
 
   const runMaterialImport = useCallback(
-    async (confirmedWarningKeys: readonly string[] = []) => {
+    async (
+      confirmedWarningKeys: readonly string[] = [],
+      selectedMaterialFiles: readonly File[] = materialImportFiles,
+    ) => {
       if (!selectedClass || !selectedTerm) {
         return;
       }
@@ -1359,7 +1501,7 @@ export function StudentConductGradeGovernanceLabPage() {
         return;
       }
 
-      if (materialImportFiles.length === 0) {
+      if (selectedMaterialFiles.length === 0) {
         message.warning('请先选择操行材料。');
         return;
       }
@@ -1383,7 +1525,7 @@ export function StudentConductGradeGovernanceLabPage() {
         const result = await importStudentConductGradeMaterials({
           classCode: selectedClass.classCode,
           confirmedWarningKeys,
-          files: materialImportFiles,
+          files: selectedMaterialFiles,
           schoolYear: selectedTerm.schoolYear,
           semester: selectedTerm.semester,
         });
@@ -1395,9 +1537,12 @@ export function StudentConductGradeGovernanceLabPage() {
         setMaterialImportResult(result);
 
         if (result.status === 'WARNING_CONFIRMATION_REQUIRED') {
+          setMaterialImportPreviewDrafts(buildMaterialImportPreviewDrafts(result.previewRows));
           message.warning('操行材料需要确认后才能导入。');
           return;
         }
+
+        setMaterialImportPreviewDrafts({});
 
         if (result.status === 'BLOCKED') {
           message.error('操行材料存在阻断问题，未写入本地补正。');
@@ -1440,9 +1585,28 @@ export function StudentConductGradeGovernanceLabPage() {
     ],
   );
 
+  const handleMaterialImportFilesSelected = useCallback(
+    (files: File[]) => {
+      handleMaterialImportFilesChange(files);
+      void runMaterialImport([], files);
+    },
+    [handleMaterialImportFilesChange, runMaterialImport],
+  );
+
   const handleConfirmMaterialImportWarnings = useCallback(() => {
-    void runMaterialImport(materialWarningConfirmationKeys);
-  }, [materialWarningConfirmationKeys, runMaterialImport]);
+    if (materialImportResult?.status !== 'WARNING_CONFIRMATION_REQUIRED') {
+      return;
+    }
+
+    setPatchDrafts((currentDrafts) =>
+      mergeMaterialImportPreviewDrafts(currentDrafts, materialImportResult.previewRows),
+    );
+    setPatchRowIssues([]);
+    setMaterialImportPreviewDrafts({});
+    setHasMaterialImportPatchDrafts(materialImportResult.previewRows.length > 0);
+    setMaterialImportResult(null);
+    message.success('已确认材料信号，请检查预填内容后保存补录。');
+  }, [materialImportResult, message]);
 
   const renderPatchActionButtons = () => (
     <Space size="small" wrap>
@@ -1450,10 +1614,12 @@ export function StudentConductGradeGovernanceLabPage() {
         disabled={isImportingMaterial || isPatchingCorrections}
         onClick={handleCancelPatchMode}
       >
-        取消
+        离开补录操作
       </Button>
       <Button
-        disabled={isImportingMaterial || patchDraftCount === 0}
+        disabled={
+          isImportingMaterial || hasPendingMaterialImportConfirmation || patchDraftCount === 0
+        }
         icon={<SaveOutlined />}
         loading={isPatchingCorrections}
         type="primary"
@@ -1466,7 +1632,11 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const renderPatchActionBar = () => (
     <div className="student-conduct-grade-governance-patch-action-bar">
-      <span>已选择 {patchDraftCount} 名学生补录；只提交已修改或清除字段。</span>
+      <span>
+        {hasPendingMaterialImportConfirmation
+          ? '材料导入等待确认；请在提示框内确认，或离开补录操作。'
+          : `已选择 ${patchDraftCount} 名学生补录；只提交已修改或清除字段。`}
+      </span>
       {renderPatchActionButtons()}
     </div>
   );
@@ -1502,16 +1672,21 @@ export function StudentConductGradeGovernanceLabPage() {
           }
 
           const draft = patchDrafts[record.studentId];
+          const previewDraft = hasPendingMaterialImportConfirmation
+            ? materialImportPreviewDrafts[record.studentId]
+            : undefined;
           const clearSelected = isConductPatchClearSelected(draft, 'score');
 
           return (
             <div onClick={(event) => event.stopPropagation()}>
               <Input
                 allowClear
-                disabled={clearSelected || isPatchingCorrections}
+                disabled={
+                  clearSelected || isPatchingCorrections || hasPendingMaterialImportConfirmation
+                }
                 placeholder={formatFieldValue(record.fields.score)}
                 size="small"
-                value={draft?.score ?? ''}
+                value={draft?.score ?? previewDraft?.score ?? ''}
                 onChange={(event) =>
                   handlePatchFieldChange(record.studentId, 'score', event.target.value)
                 }
@@ -1536,18 +1711,23 @@ export function StudentConductGradeGovernanceLabPage() {
           }
 
           const draft = patchDrafts[record.studentId];
+          const previewDraft = hasPendingMaterialImportConfirmation
+            ? materialImportPreviewDrafts[record.studentId]
+            : undefined;
           const clearSelected = isConductPatchClearSelected(draft, 'confirmedGrade');
 
           return (
             <div onClick={(event) => event.stopPropagation()}>
               <Select
                 allowClear
-                disabled={clearSelected || isPatchingCorrections}
+                disabled={
+                  clearSelected || isPatchingCorrections || hasPendingMaterialImportConfirmation
+                }
                 options={CONDUCT_CONFIRMED_GRADE_OPTIONS}
                 placeholder={formatFieldValue(record.fields.confirmedGrade)}
                 size="small"
                 style={{ width: '100%' }}
-                value={draft?.confirmedGrade}
+                value={draft?.confirmedGrade ?? previewDraft?.confirmedGrade}
                 onChange={(value) =>
                   handlePatchFieldChange(record.studentId, 'confirmedGrade', value)
                 }
@@ -1557,51 +1737,6 @@ export function StudentConductGradeGovernanceLabPage() {
         },
         title: '确认等级',
       },
-      ...(isPatchMode
-        ? [
-            {
-              ...buildStableColumnSizing<StudentConductGradeStudent>(
-                CONDUCT_PATCH_CLEAR_COLUMN_WIDTH,
-              ),
-              align: 'center' as const,
-              key: 'clearPatch',
-              render: (_: unknown, record: StudentConductGradeStudent) => {
-                const draft = patchDrafts[record.studentId];
-                const clearableFields = (
-                  ['score', 'confirmedGrade'] satisfies StudentConductGradePatchFieldKey[]
-                ).filter((fieldKey) => canClearConductPatchField(record, fieldKey));
-
-                if (clearableFields.length === 0) {
-                  return <span className="text-text-secondary">-</span>;
-                }
-
-                return (
-                  <Space size={4} wrap onClick={(event) => event.stopPropagation()}>
-                    {clearableFields.map((fieldKey) => {
-                      const clearSelected = isConductPatchClearSelected(draft, fieldKey);
-
-                      return (
-                        <Button
-                          danger={clearSelected}
-                          disabled={isPatchingCorrections}
-                          key={fieldKey}
-                          size="small"
-                          type={clearSelected ? 'primary' : 'default'}
-                          onClick={() => handlePatchClearToggle(record, fieldKey)}
-                        >
-                          {clearSelected
-                            ? `取消${CONDUCT_PATCH_FIELD_LABELS[fieldKey]}`
-                            : `清除${CONDUCT_PATCH_FIELD_LABELS[fieldKey]}`}
-                        </Button>
-                      );
-                    })}
-                  </Space>
-                );
-              },
-              title: '清除补正',
-            },
-          ]
-        : []),
       {
         ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_STATUS_COLUMN_WIDTH),
         align: 'center',
@@ -1611,35 +1746,62 @@ export function StudentConductGradeGovernanceLabPage() {
         title: '数据源',
       },
       {
-        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_ACTION_COLUMN_WIDTH),
+        ...buildStableColumnSizing<StudentConductGradeStudent>(
+          isPatchMode ? CONDUCT_PATCH_ACTION_COLUMN_WIDTH : CONDUCT_ACTION_COLUMN_WIDTH,
+        ),
         align: 'center',
         key: 'actions',
-        render: (_, record) => (
-          <Space onClick={(event) => event.stopPropagation()}>
-            <Button size="small" type="link" onClick={() => setSelectedStudentId(record.studentId)}>
-              明细
-            </Button>
-            {!isPatchMode && record.status === 'CORRECTION_CLEANUP_PENDING' ? (
-              <Popconfirm
-                title="清理已失效本地补正？"
-                description="清理只会移除 stale correction，不会覆盖 upstream。"
-                okText="清理"
-                cancelText="取消"
-                onConfirm={() => void handleCleanup(record)}
-              >
+        render: (_, record) => {
+          const draft = patchDrafts[record.studentId];
+          const clearableFields = listClearableConductPatchFields(record);
+          const clearSelected = areAllConductPatchClearFieldsSelected(draft, clearableFields);
+          const hasConflict = hasConductGradeConflict(record);
+
+          return (
+            <Space size={4} wrap onClick={(event) => event.stopPropagation()}>
+              {isPatchMode && clearableFields.length > 0 ? (
                 <Button
-                  danger
+                  danger={clearSelected}
+                  disabled={isPatchingCorrections || hasPendingMaterialImportConfirmation}
                   icon={<ClearOutlined />}
-                  loading={cleanupStudentId === record.studentId}
+                  size="small"
+                  type={clearSelected ? 'primary' : 'default'}
+                  onClick={() => handlePatchClearAllToggle(record)}
+                >
+                  {clearSelected ? '取消清除' : '清除补正'}
+                </Button>
+              ) : null}
+              {hasConflict ? (
+                <Button
                   size="small"
                   type="link"
+                  onClick={() => setSelectedStudentId(record.studentId)}
                 >
-                  清理
+                  查看冲突
                 </Button>
-              </Popconfirm>
-            ) : null}
-          </Space>
-        ),
+              ) : null}
+              {!isPatchMode && record.status === 'CORRECTION_CLEANUP_PENDING' ? (
+                <Popconfirm
+                  title="清理已失效本地补正？"
+                  description="清理只会移除 stale correction，不会覆盖 upstream。"
+                  okText="清理"
+                  cancelText="取消"
+                  onConfirm={() => void handleCleanup(record)}
+                >
+                  <Button
+                    danger
+                    icon={<ClearOutlined />}
+                    loading={cleanupStudentId === record.studentId}
+                    size="small"
+                    type="link"
+                  >
+                    清理
+                  </Button>
+                </Popconfirm>
+              ) : null}
+            </Space>
+          );
+        },
         title: '操作',
       },
     ];
@@ -1648,10 +1810,12 @@ export function StudentConductGradeGovernanceLabPage() {
   }, [
     cleanupStudentId,
     handleCleanup,
-    handlePatchClearToggle,
+    handlePatchClearAllToggle,
     handlePatchFieldChange,
+    hasPendingMaterialImportConfirmation,
     isPatchMode,
     isPatchingCorrections,
+    materialImportPreviewDrafts,
     patchDrafts,
   ]);
 
@@ -1804,7 +1968,7 @@ export function StudentConductGradeGovernanceLabPage() {
                     icon={<ReloadOutlined />}
                     onClick={() => void reloadCurrentSelection()}
                   >
-                    重新加载
+                    本地读取
                   </Button>
                   <Dropdown
                     disabled={conductSyncDisabled}
@@ -1819,13 +1983,15 @@ export function StudentConductGradeGovernanceLabPage() {
                       icon={<CloudSyncOutlined />}
                       loading={syncingScope !== null}
                     >
-                      同步操行
+                      校园网同步
                     </Button>
                   </Dropdown>
                   {conductPatchVisible ? (
                     <Button
+                      color="primary"
                       disabled={conductPatchDisabled || isPatchMode}
                       icon={<EditOutlined />}
+                      variant="filled"
                       onClick={handleStartPatchMode}
                     >
                       补录
@@ -1867,20 +2033,19 @@ export function StudentConductGradeGovernanceLabPage() {
                               errorMessage={materialImportErrorMessage}
                               files={materialImportFiles}
                               isImporting={isImportingMaterial}
+                              patchActionBar={renderPatchActionBar()}
                               result={materialImportResult}
                               warningConfirmationKeys={materialWarningConfirmationKeys}
                               onConfirmWarnings={handleConfirmMaterialImportWarnings}
                               onFilesChange={handleMaterialImportFilesChange}
-                              onImport={() => void runMaterialImport()}
+                              onFilesSelected={handleMaterialImportFilesSelected}
                               onRejectFile={handleRejectMaterialImportFile}
                               onRejectTooManyFiles={handleRejectTooManyMaterialImportFiles}
                             />
                           ) : null}
-                          {isPatchMode ? renderPatchActionBar() : null}
                           <Table<StudentConductGradeStudent>
                             columns={columns}
                             dataSource={filteredStudents}
-                            footer={isPatchMode ? () => renderPatchActionBar() : undefined}
                             locale={{
                               emptyText: (
                                 <Empty

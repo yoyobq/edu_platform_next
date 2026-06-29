@@ -122,6 +122,27 @@
   justify-content: space-between;
 }
 
+.student-conduct-grade-governance-import-issue {
+  font-size: var(--ant-font-size-sm);
+  line-height: var(--ant-line-height-sm);
+}
+
+.student-conduct-grade-governance-import-issue-alert .ant-alert-message {
+  font-size: var(--ant-font-size-sm);
+  line-height: var(--ant-line-height-sm);
+}
+
+.student-conduct-grade-governance-import-issue-source {
+  display: inline-flex;
+  font-size: var(--ant-font-size-sm);
+  line-height: var(--ant-line-height-sm);
+}
+
+.student-conduct-grade-governance-import-issue-source .ant-tag {
+  font-size: var(--ant-font-size-sm);
+  line-height: var(--ant-line-height-sm);
+}
+
 .student-conduct-grade-governance-patch-action-bar {
   align-items: center;
   display: flex;

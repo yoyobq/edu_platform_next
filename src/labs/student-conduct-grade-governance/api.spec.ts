@@ -585,6 +585,7 @@ describe('student-conduct-grade-governance api', () => {
 
   it('imports conduct grade materials through one-shot multipart rest', async () => {
     const docxFile = new File(['docx'], 'conduct.docx');
+    const xlsFile = new File(['xls'], 'conduct.xls');
     const payload = {
       affectedStudents: 0,
       blockingErrors: [],
@@ -596,6 +597,16 @@ describe('student-conduct-grade-governance api', () => {
       schoolYear: '2025',
       sectionKey: 'CONDUCT_GRADE',
       semester: '1',
+      previewRows: [
+        {
+          confirmedGrade: '优',
+          score: '106',
+          schoolYear: '2025',
+          semester: '1',
+          studentId: '323010201',
+          studentName: '学生甲',
+        },
+      ],
       status: 'WARNING_CONFIRMATION_REQUIRED',
       totalFiles: 1,
       totalParsedRows: 1,
@@ -633,7 +644,7 @@ describe('student-conduct-grade-governance api', () => {
       importStudentConductGradeMaterials({
         classCode: ' 2501 ',
         confirmedWarningKeys: [' warning-key-1 '],
-        files: [docxFile],
+        files: [docxFile, xlsFile],
         schoolYear: ' 2025 ',
         semester: ' 1 ',
       }),
@@ -644,6 +655,16 @@ describe('student-conduct-grade-governance api', () => {
         totalParsedRows: 1,
         totalResolvedRows: 0,
       },
+      previewRows: [
+        {
+          confirmedGrade: '优',
+          score: '106',
+          schoolYear: '2025',
+          semester: '1',
+          studentId: '323010201',
+          studentName: '学生甲',
+        },
+      ],
       warnings: [
         expect.objectContaining({
           code: 'DOCUMENT_TERM_MISMATCH',
@@ -673,7 +694,7 @@ describe('student-conduct-grade-governance api', () => {
     expect(formData.get('schoolYear')).toBe('2025');
     expect(formData.get('semester')).toBe('1');
     expect(formData.get('confirmedWarningKeys')).toBe('["warning-key-1"]');
-    expect(formData.getAll('files')).toEqual([docxFile]);
+    expect(formData.getAll('files')).toEqual([docxFile, xlsFile]);
   });
 
   it('refreshes local session before retrying material import after unauthorized response', async () => {

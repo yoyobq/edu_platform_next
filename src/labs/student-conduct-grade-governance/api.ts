@@ -241,6 +241,15 @@ export type StudentConductGradeMaterialImportIssue = {
   warningKey: string | null;
 };
 
+export type StudentConductGradeMaterialImportPreviewRow = {
+  confirmedGrade: string | null;
+  score: string | null;
+  schoolYear: string;
+  semester: string;
+  studentId: string;
+  studentName: string;
+};
+
 export type StudentConductGradeMaterialImportResult = {
   affectedStudents: number | null;
   blockingErrors: StudentConductGradeMaterialImportIssue[];
@@ -252,6 +261,7 @@ export type StudentConductGradeMaterialImportResult = {
   schoolYear: string | null;
   sectionKey: string | null;
   semester: string | null;
+  previewRows: StudentConductGradeMaterialImportPreviewRow[];
   status: StudentConductGradeMaterialImportStatus;
   summary: Record<string, unknown>;
   totalFiles: number | null;
@@ -641,6 +651,42 @@ function normalizeMaterialImportIssues(value: unknown) {
   return value.map((issue) => normalizeMaterialImportIssue(issue));
 }
 
+function normalizeMaterialImportPreviewRow(
+  value: unknown,
+): StudentConductGradeMaterialImportPreviewRow | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  const studentId = normalizeOptionalStringValue(value.studentId);
+  const studentName = normalizeOptionalStringValue(value.studentName);
+  const schoolYear = normalizeOptionalStringValue(value.schoolYear);
+  const semester = normalizeOptionalStringValue(value.semester);
+
+  if (!studentId || !studentName || !schoolYear || !semester) {
+    return null;
+  }
+
+  return {
+    confirmedGrade: normalizeOptionalStringValue(value.confirmedGrade),
+    score: normalizeOptionalStringValue(value.score),
+    schoolYear,
+    semester,
+    studentId,
+    studentName,
+  };
+}
+
+function normalizeMaterialImportPreviewRows(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .map((row) => normalizeMaterialImportPreviewRow(row))
+    .filter((row): row is StudentConductGradeMaterialImportPreviewRow => Boolean(row));
+}
+
 function assertMaterialImportResult(value: unknown): StudentConductGradeMaterialImportResult {
   if (!isRecord(value)) {
     throw new Error('操行材料导入返回结果异常。');
@@ -657,6 +703,7 @@ function assertMaterialImportResult(value: unknown): StudentConductGradeMaterial
     schoolYear: normalizeOptionalStringValue(value.schoolYear),
     sectionKey: normalizeOptionalStringValue(value.sectionKey),
     semester: normalizeOptionalStringValue(value.semester),
+    previewRows: normalizeMaterialImportPreviewRows(value.previewRows),
     status: normalizeMaterialImportStatus(value.status),
     summary: buildMaterialImportSummary(value),
     totalFiles: normalizeOptionalNumberValue(value.totalFiles),
