@@ -76,12 +76,6 @@
   background: var(--ant-color-primary-bg);
 }
 
-.student-conduct-grade-governance-table-shell
-  .ant-table-tbody
-  > tr.student-conduct-grade-governance-row-clickable {
-  cursor: pointer;
-}
-
 .student-conduct-grade-governance-table-shell .ant-table-tbody > tr > td {
   transition: background-color 0.2s ease;
 }

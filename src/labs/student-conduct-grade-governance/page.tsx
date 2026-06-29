@@ -125,7 +125,6 @@ const CONDUCT_PATCH_SCORE_COLUMN_WIDTH = 116;
 const CONDUCT_PATCH_GRADE_COLUMN_WIDTH = 116;
 const CONDUCT_PATCH_CLEAR_COLUMN_WIDTH = 150;
 const CONDUCT_STATUS_COLUMN_WIDTH = 112;
-const CONDUCT_CONFLICT_COLUMN_WIDTH = 150;
 const CONDUCT_ACTION_COLUMN_WIDTH = 82;
 const CONDUCT_TABLE_SCROLL_X =
   STUDENT_NUMBER_COLUMN_WIDTH +
@@ -133,7 +132,6 @@ const CONDUCT_TABLE_SCROLL_X =
   CONDUCT_SCORE_COLUMN_WIDTH +
   CONDUCT_GRADE_COLUMN_WIDTH +
   CONDUCT_STATUS_COLUMN_WIDTH +
-  CONDUCT_CONFLICT_COLUMN_WIDTH +
   CONDUCT_ACTION_COLUMN_WIDTH;
 const CONDUCT_PATCH_TABLE_SCROLL_X =
   CONDUCT_TABLE_SCROLL_X +
@@ -323,6 +321,31 @@ function canClearConductPatchField(
   return student.manualPatchFieldKeys.includes(fieldKey);
 }
 
+function isUpstreamConductGradeField(cell: StudentConductGradeFieldCell) {
+  return Boolean(cell.value !== null && cell.source === 'UPSTREAM');
+}
+
+function canPatchConductGradeStudent(student: StudentConductGradeStudent) {
+  if (
+    student.status === 'UPSTREAM_CONFIRMED' &&
+    !canClearConductPatchField(student, 'score') &&
+    !canClearConductPatchField(student, 'confirmedGrade')
+  ) {
+    return false;
+  }
+
+  return (
+    !isUpstreamConductGradeField(student.fields.score) ||
+    !isUpstreamConductGradeField(student.fields.confirmedGrade) ||
+    canClearConductPatchField(student, 'score') ||
+    canClearConductPatchField(student, 'confirmedGrade')
+  );
+}
+
+function canPatchConductGradeView(view: StudentConductGradeEffectiveView | null) {
+  return view?.students.some((student) => canPatchConductGradeStudent(student)) ?? false;
+}
+
 function buildConductPatchStudentInputs(
   students: readonly StudentConductGradeStudent[],
   drafts: Record<string, ConductPatchDraft>,
@@ -393,41 +416,21 @@ function buildConductRowClassName(
       ? 'student-conduct-grade-governance-row-even'
       : 'student-conduct-grade-governance-row-odd',
     record.studentId === selectedStudentId ? 'student-conduct-grade-governance-row-selected' : null,
-    'student-conduct-grade-governance-row-clickable',
   ]
     .filter(Boolean)
     .join(' ');
-}
-
-function buildConductTableRowProps(
-  record: Pick<StudentConductGradeStudent, 'studentId'>,
-  index: number | undefined,
-  selectedStudentId: string | null,
-  setSelectedStudentId: (studentId: string | null) => void,
-) {
-  return {
-    className: buildConductRowClassName(record, index, selectedStudentId),
-    onClick: () => {
-      setSelectedStudentId(selectedStudentId === record.studentId ? null : record.studentId);
-    },
-  };
 }
 
 function filterConductStudents(
   students: readonly StudentConductGradeStudent[],
   input: {
     keyword: string;
-    status: string;
   },
 ) {
   const keyword = input.keyword.trim().toLowerCase();
 
   return students
     .filter((student) => {
-      if (input.status !== 'ALL' && student.status !== input.status) {
-        return false;
-      }
-
       if (!keyword) {
         return true;
       }
@@ -442,31 +445,6 @@ function filterConductStudents(
         (STATUS_PRIORITY[first.status] ?? 90) - (STATUS_PRIORITY[second.status] ?? 90) ||
         compareTextValue(first.studentId, second.studentId),
     );
-}
-
-function buildStatusOptions(students: readonly StudentConductGradeStudent[]) {
-  const countByStatus = new Map<string, number>();
-
-  for (const student of students) {
-    countByStatus.set(student.status, (countByStatus.get(student.status) ?? 0) + 1);
-  }
-
-  const statuses = Array.from(countByStatus.keys()).sort(
-    (first, second) =>
-      (STATUS_PRIORITY[first] ?? 90) - (STATUS_PRIORITY[second] ?? 90) ||
-      compareTextValue(first, second),
-  );
-
-  return [
-    {
-      label: `全部状态（${students.length}）`,
-      value: 'ALL',
-    },
-    ...statuses.map((status) => ({
-      label: `${resolveStatusLabel(status)}（${countByStatus.get(status) ?? 0}）`,
-      value: status,
-    })),
-  ];
 }
 
 function formatSyncScope(action: PendingConductSyncRequest) {
@@ -529,7 +507,6 @@ export function StudentConductGradeGovernanceLabPage() {
   const [overview, setOverview] = useState<StudentPrivateProfileClassOverview | null>(null);
   const [conductView, setConductView] = useState<StudentConductGradeEffectiveView | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState('ALL');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -613,13 +590,8 @@ export function StudentConductGradeGovernanceLabPage() {
     () =>
       filterConductStudents(conductView?.students ?? [], {
         keyword: studentSearch,
-        status: statusFilter,
       }),
-    [conductView?.students, statusFilter, studentSearch],
-  );
-  const statusOptions = useMemo(
-    () => buildStatusOptions(conductView?.students ?? []),
-    [conductView?.students],
+    [conductView?.students, studentSearch],
   );
   const patchDraftCount = useMemo(() => Object.keys(patchDrafts).length, [patchDrafts]);
   const materialWarningConfirmationKeys = useMemo(
@@ -665,6 +637,7 @@ export function StudentConductGradeGovernanceLabPage() {
     !selectedTerm ||
     !conductView ||
     termGenerationBlocked;
+  const conductPatchVisible = canPatchConductGradeView(conductView);
 
   useEffect(() => {
     activeSelectionRef.current = {
@@ -806,7 +779,6 @@ export function StudentConductGradeGovernanceLabPage() {
 
         if (resolveOverviewReadiness(nextOverview).missingSnapshotCount > 0) {
           setConductView(null);
-          setStatusFilter('ALL');
           return;
         }
 
@@ -821,7 +793,6 @@ export function StudentConductGradeGovernanceLabPage() {
         }
 
         setConductView(nextView);
-        setStatusFilter('ALL');
       } catch (error) {
         if (loadRequestSeqRef.current !== requestSeq) {
           return;
@@ -858,7 +829,6 @@ export function StudentConductGradeGovernanceLabPage() {
       setTerms([]);
       setTermOptions(null);
       setStudentSearch('');
-      setStatusFilter('ALL');
 
       try {
         const nextTermOptions = await fetchStudentConductGradeClassTermOptions({
@@ -1115,7 +1085,6 @@ export function StudentConductGradeGovernanceLabPage() {
       setOverview(null);
       setConductView(null);
       setStudentSearch('');
-      setStatusFilter('ALL');
 
       if (nextClass) {
         await loadClassTermsAndSelection(nextClass);
@@ -1170,7 +1139,6 @@ export function StudentConductGradeGovernanceLabPage() {
       };
       setSelectedClassId(classId || null);
       setStudentSearch('');
-      setStatusFilter('ALL');
 
       if (nextClass) {
         await loadClassTermsAndSelection(nextClass);
@@ -1191,7 +1159,6 @@ export function StudentConductGradeGovernanceLabPage() {
       };
       setSelectedTermKey(termKey || null);
       setStudentSearch('');
-      setStatusFilter('ALL');
 
       if (selectedClass && nextTerm) {
         await loadSelectionData(selectedClass, nextTerm);
@@ -1609,24 +1576,7 @@ export function StudentConductGradeGovernanceLabPage() {
         dataIndex: 'status',
         key: 'status',
         render: (status: string) => renderStatusTag(status),
-        title: '本地存储',
-      },
-      {
-        ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_CONFLICT_COLUMN_WIDTH),
-        key: 'conflictCodes',
-        render: (_, record) =>
-          record.conflictCodes.length > 0 ? (
-            <Space size={4} wrap>
-              {record.conflictCodes.map((code) => (
-                <Tag color="orange" key={code}>
-                  {code}
-                </Tag>
-              ))}
-            </Space>
-          ) : (
-            <span className="text-text-secondary">-</span>
-          ),
-        title: '冲突',
+        title: '数据源',
       },
       {
         ...buildStableColumnSizing<StudentConductGradeStudent>(CONDUCT_ACTION_COLUMN_WIDTH),
@@ -1816,14 +1766,6 @@ export function StudentConductGradeGovernanceLabPage() {
                     onChange={(event) => setStudentSearch(event.target.value)}
                   />
                 </label>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm text-text-secondary">治理状态</span>
-                  <Select
-                    options={statusOptions}
-                    value={statusFilter}
-                    onChange={(value) => setStatusFilter(value)}
-                  />
-                </label>
                 <div className="flex items-end gap-2">
                   <Button
                     disabled={isLoadingCatalog || isLoadingData}
@@ -1848,13 +1790,15 @@ export function StudentConductGradeGovernanceLabPage() {
                       同步操行
                     </Button>
                   </Dropdown>
-                  <Button
-                    disabled={conductPatchDisabled || isPatchMode}
-                    icon={<EditOutlined />}
-                    onClick={handleStartPatchMode}
-                  >
-                    补录
-                  </Button>
+                  {conductPatchVisible ? (
+                    <Button
+                      disabled={conductPatchDisabled || isPatchMode}
+                      icon={<EditOutlined />}
+                      onClick={handleStartPatchMode}
+                    >
+                      补录
+                    </Button>
+                  ) : null}
                 </div>
               </div>
             </div>
@@ -1938,19 +1882,14 @@ export function StudentConductGradeGovernanceLabPage() {
                                 />
                               ),
                             }}
-                            onRow={(record, index) =>
-                              buildConductTableRowProps(
-                                record,
-                                index,
-                                selectedStudentId,
-                                setSelectedStudentId,
-                              )
-                            }
                             pagination={{
                               defaultPageSize: 50,
                               pageSizeOptions: [30, 50, 100],
                               showSizeChanger: true,
                             }}
+                            rowClassName={(record, index) =>
+                              buildConductRowClassName(record, index, selectedStudentId)
+                            }
                             rowKey={(record) => record.studentId}
                             scroll={{
                               x: isPatchMode
