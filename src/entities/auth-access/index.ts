@@ -157,6 +157,24 @@ export function hasStaffSemesterProfilesAccess(input: {
   return hasAcademicCalendarManagementAccess(input);
 }
 
+export function hasClassAdviserGovernanceAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return (
+    accessGroup.includes('STAFF') &&
+    (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
+      slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
+  );
+}
+
 export function hasStudentRosterMembershipReconciliationAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
 }) {

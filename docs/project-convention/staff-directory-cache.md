@@ -45,11 +45,9 @@
 
 只需要给已有业务列表补姓名的页面使用 `staffDirectoryEntries`，对 `missingStaffIds` 展示原始 `staffId` 兜底。
 
-例外：`/labs/admin-class-adviser-governance` 需要 admin 从 upstream 教师目录选择教师，
-并在本地 `member_staff` 尚未建立时向后端提交 `staffName` 快照。该实验链路可以直接使用
-`fetchTeacherDirectory(sessionToken)` 读取 upstream 返回的原始教师项，候选展示不再额外拼接
-`staffId + name`，提交时仍收敛为 `staffId` 和 `staffName`。这不改变稳定业务页默认使用
-`staffDirectory` / `staffDirectoryEntries` 的约定。
+`/student-affairs/class-adviser-governance` 指派班主任时也遵守该约定：页面优先使用
+`staffDirectory` 缓存和 `StaffDirectoryTeacherAutoComplete`，缓存缺失时允许手动输入
+`staffId`，并在本地 `member_staff` 尚未建立时向后端提交 `staffName` 快照。
 
 ## 公共教师选择 UI
 

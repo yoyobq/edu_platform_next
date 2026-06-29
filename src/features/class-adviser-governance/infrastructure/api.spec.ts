@@ -1,16 +1,10 @@
-// src/labs/admin-class-adviser-governance/api.spec.ts
+// src/features/class-adviser-governance/infrastructure/api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, isGraphQLIngressErrorMock } =
-  vi.hoisted(() => ({
-    executeGraphQLMock: vi.fn(),
-    executeUpstreamSessionGraphQLMock: vi.fn(),
-    isGraphQLIngressErrorMock: vi.fn(),
-  }));
-
-vi.mock('@/entities/upstream-session', () => ({
-  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
+const { executeGraphQLMock, isGraphQLIngressErrorMock } = vi.hoisted(() => ({
+  executeGraphQLMock: vi.fn(),
+  isGraphQLIngressErrorMock: vi.fn(),
 }));
 
 vi.mock('@/shared/graphql', () => ({
@@ -19,19 +13,20 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
-  assignClassAdviserByStaffId,
-  fetchTeacherDirectory,
-  listClassAdviserGovernanceClasses,
-  listLocalDepartmentOptions,
   normalizeAssignClassAdviserByStaffIdInput,
   normalizeListClassAdviserGovernanceClassesInput,
+} from '../application/input-normalization';
+
+import {
+  assignClassAdviserByStaffId,
+  listClassAdviserGovernanceClasses,
+  listLocalDepartmentOptions,
   resolveClassAdviserGovernanceErrorMessage,
 } from './api';
 
-describe('admin-class-adviser-governance api', () => {
+describe('class-adviser-governance api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
-    executeUpstreamSessionGraphQLMock.mockReset();
     isGraphQLIngressErrorMock.mockReset();
     isGraphQLIngressErrorMock.mockReturnValue(false);
   });
@@ -164,39 +159,6 @@ describe('admin-class-adviser-governance api', () => {
       {
         isEnabled: true,
         limit: 500,
-      },
-    );
-  });
-
-  it('fetches upstream teacher directory with session token', async () => {
-    const payload = {
-      expiresAt: '2026-06-26T08:00:00.000Z',
-      teachers: [
-        {
-          code: 'T1001',
-          image: '',
-          name: '张老师',
-          text: '张老师',
-          value: 'T1001',
-        },
-      ],
-      upstreamSessionToken: 'rolling-token-001',
-    };
-
-    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
-      fetchTeacherDirectory: payload,
-    });
-
-    await expect(
-      fetchTeacherDirectory({
-        upstreamSessionToken: ' upstream-token-001 ',
-      }),
-    ).resolves.toEqual(payload);
-
-    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('AdminClassAdviserGovernanceTeacherDirectory'),
-      {
-        sessionToken: 'upstream-token-001',
       },
     );
   });

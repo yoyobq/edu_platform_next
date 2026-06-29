@@ -7,6 +7,7 @@ import {
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
+  hasClassAdviserGovernanceAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentProfileFilingAccess,
@@ -264,6 +265,26 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
       : []),
   ];
 
+  const studentAffairsChildren: NavigationLeafItem[] = [
+    ...(hasClassAdviserGovernanceAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'TeamOutlined',
+            key: '/student-affairs/class-adviser-governance',
+            label: '班主任治理',
+            navMode: 'rail' as const,
+            path: '/student-affairs/class-adviser-governance',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+  ];
+
   return [
     ...(calendarScheduleChildren.length > 0
       ? [
@@ -297,6 +318,18 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             iconKey: 'TeamOutlined',
             key: 'class-affairs',
             label: '班务管理',
+            navMode: 'rail' as const,
+          },
+        ]
+      : []),
+    ...(studentAffairsChildren.length > 0
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            children: studentAffairsChildren,
+            iconKey: 'TeamOutlined',
+            key: 'student-affairs',
+            label: '学工管理',
             navMode: 'rail' as const,
           },
         ]

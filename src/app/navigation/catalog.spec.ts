@@ -36,6 +36,7 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'class-affairs',
+      'student-affairs',
       'academic-affairs',
       'upstream-data-sync',
       'labs',
@@ -47,6 +48,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
+    ]);
+    expect(findGroup(items, 'student-affairs')?.children.map((item) => item.key)).toEqual([
+      '/student-affairs/class-adviser-governance',
     ]);
     expect(findGroup(items, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -78,8 +82,8 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
-      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',
@@ -109,6 +113,9 @@ describe('navigation catalog', () => {
         '/academic-affairs/external-teacher-compensation',
       ],
     );
+    expect(findGroup(prodAdminItems, 'student-affairs')?.children.map((item) => item.key)).toEqual([
+      '/student-affairs/class-adviser-governance',
+    ]);
     expect(
       findGroup(prodAdminItems, 'upstream-data-sync')?.children.map((item) => item.key),
     ).toEqual([
@@ -140,8 +147,8 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
-      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -180,6 +187,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -251,13 +259,19 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'class-affairs',
+      'student-affairs',
       'labs',
+    ]);
+    expect(findGroup(staffItems, 'academic-affairs')).toBeUndefined();
+    expect(findGroup(staffItems, 'student-affairs')?.children.map((item) => item.key)).toEqual([
+      '/student-affairs/class-adviser-governance',
     ]);
     expect(findGroup(staffItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -349,6 +363,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -374,6 +389,7 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'class-affairs',
+      'student-affairs',
       'academic-affairs',
       'labs',
     ]);
@@ -383,6 +399,9 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
+    ]);
+    expect(findGroup(staffItems, 'student-affairs')?.children.map((item) => item.key)).toEqual([
+      '/student-affairs/class-adviser-governance',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -400,6 +419,7 @@ describe('navigation catalog', () => {
       '/class-affairs/student-profile-filing',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -439,6 +459,15 @@ describe('navigation catalog', () => {
         appEnv: 'dev',
       }),
     ).toBe(true);
+    expect(
+      canAccessNavigationPath('/student-affairs/class-adviser-governance', {
+        accountId: 1002,
+        primaryAccessGroup: 'STAFF',
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+        appEnv: 'dev',
+      }),
+    ).toBe(true);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {
@@ -466,9 +495,12 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/upstream-session-reference', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/student-course-results-view', buildFilter())).toBe(true);
-    expect(canAccessNavigationPath('/labs/admin-class-adviser-governance', buildFilter())).toBe(
-      true,
-    );
+    expect(
+      canAccessNavigationPath('/student-affairs/class-adviser-governance', buildFilter()),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath('/academic-affairs/class-adviser-governance', buildFilter()),
+    ).toBe(false);
     expect(canAccessNavigationPath('/labs/student-private-profile', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath(
@@ -501,13 +533,26 @@ describe('navigation catalog', () => {
     ).toBe(false);
     expect(
       canAccessNavigationPath(
-        '/labs/admin-class-adviser-governance',
+        '/student-affairs/class-adviser-governance',
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
           slotGroup: ['CLASS_ADVISER'],
         }),
       ),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath(
+        '/student-affairs/class-adviser-governance',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      canAccessNavigationPath('/student-affairs/class-adviser-governance', studentFilter),
     ).toBe(false);
     expect(
       canAccessNavigationPath(
@@ -785,6 +830,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
       '/class-affairs/student-profile-filing',
+      '/student-affairs/class-adviser-governance',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
@@ -798,8 +844,8 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-demo',
       '/labs/student-course-results-pull',
       '/labs/student-course-results-view',
-      '/labs/admin-class-adviser-governance',
       '/labs/student-private-profile',
+      '/labs/student-conduct-grade-governance',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/sandbox/playground',

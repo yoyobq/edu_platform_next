@@ -52,6 +52,7 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminAccess,
+  hasClassAdviserGovernanceAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
@@ -60,10 +61,6 @@ import {
 
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
-import {
-  adminClassAdviserGovernanceLabAccess,
-  loadAdminClassAdviserGovernanceLabRouteModule,
-} from '@/labs/admin-class-adviser-governance';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
@@ -263,6 +260,10 @@ const loadMyCurriculumPlanHomepageRouteModule = loadPageRouteModule(
 const loadIntegratedPlanCorrectionsRouteModule = loadPageRouteModule(
   () => import('@/pages/integrated-plan-corrections'),
   'IntegratedPlanCorrectionsPage',
+);
+const loadClassAdviserGovernanceRouteModule = loadPageRouteModule(
+  () => import('@/pages/class-adviser-governance'),
+  'ClassAdviserGovernancePage',
 );
 const loadStudentRosterMembershipReconciliationRouteModule = loadPageRouteModule(
   () => import('@/pages/student-roster-membership-reconciliation'),
@@ -727,24 +728,6 @@ async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs
   });
 }
 
-async function adminClassAdviserGovernanceLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: adminClassAdviserGovernanceLabAccess,
-    getData: (snapshot) => ({
-      currentAccount: {
-        accountId: snapshot.accountId,
-        displayName: snapshot.displayName,
-        lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
-          accessGroup: snapshot.userInfo.accessGroup,
-          slotGroup: snapshot.slotGroup,
-          staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
-        }),
-      },
-    }),
-    request,
-  });
-}
-
 function resolveStudentPrivateProfileLockedUpstreamLoginUserId(snapshot: AuthSessionSnapshot) {
   if (snapshot.userInfo.accessGroup.includes('ADMIN')) {
     return null;
@@ -907,6 +890,41 @@ async function studentRosterMembershipReconciliationPageLoader({ request }: Load
 
   return {
     isForbidden: false,
+  };
+}
+
+async function classAdviserGovernancePageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasClassAdviserGovernanceAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
+
+  return {
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+    },
+    identityStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    isForbidden: false,
+    slotGroup: snapshot.slotGroup,
+    userAccessGroup: snapshot.userInfo.accessGroup,
   };
 }
 
@@ -1477,6 +1495,11 @@ const router = createBrowserRouter([
         lazy: loadIntegratedPlanCorrectionsRouteModule,
       },
       {
+        path: '/student-affairs/class-adviser-governance',
+        loader: classAdviserGovernancePageLoader,
+        lazy: loadClassAdviserGovernanceRouteModule,
+      },
+      {
         path: '/academic-affairs/student-roster-membership-reconciliation',
         loader: studentRosterMembershipReconciliationPageLoader,
         lazy: loadStudentRosterMembershipReconciliationRouteModule,
@@ -1545,11 +1568,6 @@ const router = createBrowserRouter([
             path: 'student-course-results-view',
             loader: studentCourseResultsViewLabLoader,
             lazy: loadStudentCourseResultsViewLabRouteModule,
-          },
-          {
-            path: 'admin-class-adviser-governance',
-            loader: adminClassAdviserGovernanceLabLoader,
-            lazy: loadAdminClassAdviserGovernanceLabRouteModule,
           },
           {
             path: 'student-private-profile',

@@ -20,8 +20,8 @@
 
 当前启用范围：
 
-- `ADMIN` 账号：只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用正式侧栏；菜单可包含首页、校历课表、教务助手、教务管理、上游数据同步、labs / sandbox 与系统管理等入口，其中 sandbox 仅在 dev / test 暴露。
-- `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表、教务助手、班务管理与 staff labs，部分 `slotGroup` 会增加每周课表、成绩汇总、教务管理等入口。
+- `ADMIN` 账号：只要当前会话 `accessGroup` 包含 `ADMIN`，即可启用正式侧栏；菜单可包含首页、校历课表、教务助手、班务管理、学工管理、教务管理、上游数据同步、labs / sandbox 与系统管理等入口，其中 sandbox 仅在 dev / test 暴露。
+- `STAFF` 账号：当前已通过 `academic-affairs` provider 启用正式侧栏；普通 staff 可见首页、校历课表、教务助手、班务管理与 staff labs，部分 `slotGroup` 会增加每周课表、成绩汇总、学工管理、教务管理等入口。
 - 纯 `STUDENT` 入口：当前已有独立轻量导航与账户菜单，最终导航树至少包含首页 `/`、`/calendar-schedule/semester-calendar` 学期校历与学生可见 labs；它不是 staff/admin 那套完整分组骨架。
 - public entry 与其他尚未拆出的轻壳页面仍保持无正式侧栏导航。
 
@@ -44,6 +44,7 @@
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
   - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/course-results-summary`
+  - `学工管理`：`/student-affairs/class-adviser-governance`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`

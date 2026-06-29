@@ -1,4 +1,4 @@
-// src/labs/admin-class-adviser-governance/page.tsx
+// src/features/class-adviser-governance/ui/class-adviser-governance-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -12,7 +12,6 @@ import {
 import {
   Alert,
   App as AntApp,
-  AutoComplete,
   Button,
   Card,
   Descriptions,
@@ -27,7 +26,6 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { useLoaderData } from 'react-router';
 
 import {
   buildDepartmentSelectOptions,
@@ -37,6 +35,8 @@ import {
 import {
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
+  type StaffDirectoryResult,
+  StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
   type UpstreamAccountIdentity,
   UpstreamLoginModal,
@@ -46,21 +46,27 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
+import { resolveClassAdviserGovernanceStaffDirectory } from '../application/staff-directory-cache-workflow';
+import {
+  resolveAssignableClassAdviserStaffId,
+  resolveClassAdviserGovernanceStaffName,
+  validateClassAdviserGovernanceStaffId,
+} from '../application/staff-directory-selection';
+import type {
+  AssignClassAdviserByStaffIdResult,
+  ClassAdviserGovernanceActiveAdviser,
+  ClassAdviserGovernanceClass,
+} from '../application/types';
 import {
   assignClassAdviserByStaffId,
-  type AssignClassAdviserByStaffIdResult,
-  type ClassAdviserGovernanceActiveAdviser,
-  type ClassAdviserGovernanceClass,
-  fetchTeacherDirectory,
   listClassAdviserGovernanceClasses,
   listLocalDepartmentOptions,
   resolveClassAdviserGovernanceErrorMessage,
-  type TeacherDirectoryResult,
-} from './api';
-import { adminClassAdviserGovernanceLabMeta } from './meta';
+} from '../infrastructure/api';
 
-type AdminClassAdviserGovernanceLabLoaderData = {
-  currentAccount: UpstreamAccountIdentity;
+export type ClassAdviserGovernancePageContentProps = {
+  currentAccount: UpstreamAccountIdentity | null;
+  lockedUpstreamLoginUserId?: string | null;
 };
 
 type FilterFormValues = {
@@ -73,13 +79,6 @@ type AssignFormValues = {
   remarks?: string;
   staffId: string;
   staffName?: string;
-};
-
-type TeacherSearchOption = {
-  label: string;
-  name: string;
-  staffId: string;
-  value: string;
 };
 
 function formatOptionalValue(value: number | string | null | undefined) {
@@ -247,140 +246,10 @@ function buildColumns(input: {
   ];
 }
 
-function removeStaffIdFromTeacherName(value: string, staffId: string) {
-  const normalizedValue = value.trim();
-  const normalizedStaffId = staffId.trim();
-
-  if (!normalizedValue || !normalizedStaffId) {
-    return normalizedValue;
-  }
-
-  if (normalizedValue === normalizedStaffId) {
-    return '';
-  }
-
-  if (!normalizedValue.startsWith(normalizedStaffId)) {
-    return normalizedValue;
-  }
-
-  return normalizedValue
-    .slice(normalizedStaffId.length)
-    .replace(/^[\s:：\-()（）]+/, '')
-    .trim();
-}
-
-function buildTeacherSearchOptions(result: TeacherDirectoryResult): TeacherSearchOption[] {
-  return result.teachers
-    .map((teacher) => {
-      const staffId = teacher.code.trim() || teacher.value.trim();
-      const label = teacher.text.trim() || teacher.name.trim() || staffId;
-      const rawName = teacher.name.trim() || teacher.text.trim();
-      const name = removeStaffIdFromTeacherName(rawName, staffId);
-
-      if (!staffId || !label) {
-        return null;
-      }
-
-      return {
-        label,
-        name,
-        staffId,
-        value: label,
-      };
-    })
-    .filter((teacher): teacher is TeacherSearchOption => teacher !== null);
-}
-
-function resolveTeacherStaffIdFromValue(
-  value: string | undefined,
-  options: readonly TeacherSearchOption[],
-) {
-  const normalizedValue = value?.trim() ?? '';
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  const matchedOption = options.find(
-    (option) =>
-      option.staffId === normalizedValue ||
-      option.value === normalizedValue ||
-      option.label === normalizedValue ||
-      option.name === normalizedValue,
-  );
-
-  if (matchedOption) {
-    return matchedOption.staffId;
-  }
-
-  return normalizedValue.split(/\s+/)[0] ?? '';
-}
-
-function resolveTeacherNameFromValue(
-  value: string | undefined,
-  options: readonly TeacherSearchOption[],
-) {
-  const normalizedValue = value?.trim() ?? '';
-
-  if (!normalizedValue) {
-    return '';
-  }
-
-  const matchedOption = options.find(
-    (option) =>
-      option.staffId === normalizedValue ||
-      option.value === normalizedValue ||
-      option.label === normalizedValue ||
-      option.name === normalizedValue,
-  );
-
-  if (matchedOption) {
-    return (
-      matchedOption.name || removeStaffIdFromTeacherName(matchedOption.label, matchedOption.staffId)
-    );
-  }
-
-  return removeStaffIdFromTeacherName(
-    normalizedValue,
-    resolveTeacherStaffIdFromValue(value, options),
-  );
-}
-
-function validateStaffIdInput(value: string | undefined, options: readonly TeacherSearchOption[]) {
-  const staffId = resolveTeacherStaffIdFromValue(value, options);
-
-  if (!staffId) {
-    return Promise.reject(new Error('请输入教职工 ID'));
-  }
-
-  if (staffId.length > 8) {
-    return Promise.reject(new Error('教职工 ID 不能超过 8 个字符'));
-  }
-
-  if (/\s/.test(staffId) || staffId.includes("'")) {
-    return Promise.reject(new Error('教职工 ID 不能包含空白或单引号'));
-  }
-
-  return Promise.resolve();
-}
-
-function filterTeacherOption(inputValue: string, option?: TeacherSearchOption) {
-  const keyword = inputValue.trim().toLowerCase();
-
-  if (!keyword || !option) {
-    return true;
-  }
-
-  return (
-    option.staffId.toLowerCase().includes(keyword) ||
-    option.name.toLowerCase().includes(keyword) ||
-    option.label.toLowerCase().includes(keyword)
-  );
-}
-
-export function AdminClassAdviserGovernanceLabPage() {
-  const loaderData = useLoaderData() as AdminClassAdviserGovernanceLabLoaderData | null;
-  const currentAccount = loaderData?.currentAccount ?? null;
+export function ClassAdviserGovernancePageContent({
+  currentAccount,
+  lockedUpstreamLoginUserId = null,
+}: ClassAdviserGovernancePageContentProps) {
   const { message } = AntApp.useApp();
   const [filterForm] = Form.useForm<FilterFormValues>();
   const [assignForm] = Form.useForm<AssignFormValues>();
@@ -393,13 +262,14 @@ export function AdminClassAdviserGovernanceLabPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
-  const [teacherDirectoryResult, setTeacherDirectoryResult] =
-    useState<TeacherDirectoryResult | null>(null);
-  const [teacherDirectoryError, setTeacherDirectoryError] = useState<string | null>(null);
-  const [isLoadingTeacherDirectory, setIsLoadingTeacherDirectory] = useState(false);
-  const teacherOptions = useMemo(
-    () => (teacherDirectoryResult ? buildTeacherSearchOptions(teacherDirectoryResult) : []),
-    [teacherDirectoryResult],
+  const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
+    null,
+  );
+  const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
+  const [isLoadingStaffDirectory, setIsLoadingStaffDirectory] = useState(false);
+  const staffDirectoryTeachers = useMemo(
+    () => staffDirectoryResult?.teachers ?? [],
+    [staffDirectoryResult],
   );
   const isAssignModalOpen = selectedClass !== null;
   const departmentLabelById = useMemo(
@@ -415,9 +285,13 @@ export function AdminClassAdviserGovernanceLabPage() {
   } = useUpstreamLoginModalController({
     account: currentAccount,
     keepAlive: true,
+    lockedUserId: lockedUpstreamLoginUserId,
     resolveLoginErrorMessage: (error) =>
       resolveUpstreamErrorMessage(error, '暂时无法登录 upstream。'),
   });
+  const upstreamSessionKey = upstreamSession
+    ? `${upstreamSession.accountId}:${upstreamSession.upstreamSessionToken}`
+    : 'none';
 
   const loadClasses = useCallback(async (values: FilterFormValues) => {
     setIsLoading(true);
@@ -459,34 +333,49 @@ export function AdminClassAdviserGovernanceLabPage() {
     }
   }, []);
 
-  const loadTeacherDirectory = useCallback(
-    async (session: StoredUpstreamSession) => {
-      setIsLoadingTeacherDirectory(true);
-      setTeacherDirectoryError(null);
+  const loadStaffDirectory = useCallback(
+    async (input: { forceRefresh?: boolean; session?: StoredUpstreamSession | null } = {}) => {
+      const session = input.session ?? upstreamSession ?? null;
+
+      if (input.forceRefresh && !session) {
+        openLoginModal();
+        return;
+      }
+
+      setIsLoadingStaffDirectory(true);
+      setStaffDirectoryError(null);
 
       try {
-        const result = await fetchTeacherDirectory({
-          upstreamSessionToken: session.upstreamSessionToken,
+        const result = await resolveClassAdviserGovernanceStaffDirectory({
+          currentDirectory: input.forceRefresh ? null : staffDirectoryResult,
+          forceRefresh: input.forceRefresh,
+          persistSessionFromResult,
+          session,
         });
 
-        setTeacherDirectoryResult(result);
-        persistSessionFromResult(session, result);
+        setStaffDirectoryResult(result.directory);
       } catch (error) {
-        const errorMessage = resolveUpstreamErrorMessage(error, '暂时无法读取教师目录。');
+        const errorMessage = resolveUpstreamErrorMessage(error, '暂时无法加载教师目录。');
 
-        setTeacherDirectoryError(errorMessage);
+        setStaffDirectoryError(errorMessage);
 
-        if (isExpiredUpstreamSessionError(error)) {
+        if (session && isExpiredUpstreamSessionError(error)) {
           openLoginModalForExpiredSession({
             loginError: errorMessage,
             session,
           });
         }
       } finally {
-        setIsLoadingTeacherDirectory(false);
+        setIsLoadingStaffDirectory(false);
       }
     },
-    [openLoginModalForExpiredSession, persistSessionFromResult],
+    [
+      openLoginModal,
+      openLoginModalForExpiredSession,
+      persistSessionFromResult,
+      staffDirectoryResult,
+      upstreamSession,
+    ],
   );
 
   const refreshCurrentList = useCallback(async () => {
@@ -525,7 +414,7 @@ export function AdminClassAdviserGovernanceLabPage() {
       const result = await assignClassAdviserByStaffId({
         classId: selectedClass.classId,
         remarks: values.remarks,
-        staffId: resolveTeacherStaffIdFromValue(values.staffId, teacherOptions),
+        staffId: resolveAssignableClassAdviserStaffId(values.staffId, staffDirectoryTeachers),
         staffName: values.staffName,
       });
 
@@ -540,7 +429,7 @@ export function AdminClassAdviserGovernanceLabPage() {
     } finally {
       setIsAssigning(false);
     }
-  }, [assignForm, message, refreshCurrentList, selectedClass, teacherOptions]);
+  }, [assignForm, message, refreshCurrentList, selectedClass, staffDirectoryTeachers]);
 
   const columns = useMemo(
     () =>
@@ -557,12 +446,23 @@ export function AdminClassAdviserGovernanceLabPage() {
   }, [loadDepartments]);
 
   useEffect(() => {
-    if (!isAssignModalOpen || !upstreamSession || teacherOptions.length > 0) {
+    if (
+      !isAssignModalOpen ||
+      isLoadingStaffDirectory ||
+      (staffDirectoryResult && (staffDirectoryResult.cacheStatus !== 'MISS' || !upstreamSession))
+    ) {
       return;
     }
 
-    void loadTeacherDirectory(upstreamSession);
-  }, [isAssignModalOpen, loadTeacherDirectory, teacherOptions.length, upstreamSession]);
+    void loadStaffDirectory();
+  }, [
+    isAssignModalOpen,
+    isLoadingStaffDirectory,
+    loadStaffDirectory,
+    staffDirectoryResult,
+    upstreamSession,
+    upstreamSessionKey,
+  ]);
 
   useEffect(() => {
     void loadClasses({
@@ -576,7 +476,6 @@ export function AdminClassAdviserGovernanceLabPage() {
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-6 py-6">
       <DecoratedPageHeader
-        badge={<Tag>{adminClassAdviserGovernanceLabMeta.name}</Tag>}
         description="补齐本地已同步学生归属班级的班主任任职事实。"
         icon={<TeamOutlined />}
         title="班主任治理"
@@ -706,47 +605,39 @@ export function AdminClassAdviserGovernanceLabPage() {
             </Descriptions>
 
             <Form<AssignFormValues> form={assignForm} layout="vertical" requiredMark={false}>
-              {teacherDirectoryError ? (
-                <Alert showIcon type="warning" title={teacherDirectoryError} />
+              {staffDirectoryError ? (
+                <Alert showIcon type="warning" title={staffDirectoryError} />
               ) : null}
 
               <div className="flex flex-wrap items-center gap-2">
-                {upstreamSession ? (
-                  <>
-                    <Tag color={teacherOptions.length > 0 ? 'green' : 'blue'}>
-                      教师目录：
-                      {teacherOptions.length > 0 ? `${teacherOptions.length} 人` : '待读取'}
-                    </Tag>
-                    {teacherDirectoryResult?.expiresAt ? (
-                      <Tag>过期：{formatDateTime(teacherDirectoryResult.expiresAt)}</Tag>
-                    ) : null}
-                    <Button
-                      icon={<ReloadOutlined />}
-                      loading={isLoadingTeacherDirectory}
-                      size="small"
-                      onClick={() => {
-                        void loadTeacherDirectory(upstreamSession);
-                      }}
-                    >
-                      刷新教师目录
-                    </Button>
-                  </>
-                ) : (
-                  <>
-                    <Tag>教师目录未读取</Tag>
-                    <Button
-                      icon={<LoginOutlined />}
-                      loading={upstreamLoginModalProps.isSubmitting}
-                      size="small"
-                      type="primary"
-                      onClick={() => {
-                        openLoginModal();
-                      }}
-                    >
-                      登录 upstream 后读取
-                    </Button>
-                  </>
-                )}
+                <Tag color={staffDirectoryTeachers.length > 0 ? 'green' : 'blue'}>
+                  教师目录：
+                  {staffDirectoryResult
+                    ? `${staffDirectoryResult.cacheStatus} / ${staffDirectoryResult.teacherCount} 人`
+                    : '待读取'}
+                </Tag>
+                {staffDirectoryResult?.cacheExpiresAt ? (
+                  <Tag>缓存过期：{formatDateTime(staffDirectoryResult.cacheExpiresAt)}</Tag>
+                ) : null}
+                <Button
+                  icon={upstreamSession ? <ReloadOutlined /> : <LoginOutlined />}
+                  loading={isLoadingStaffDirectory || upstreamLoginModalProps.isSubmitting}
+                  size="small"
+                  type={upstreamSession ? 'default' : 'primary'}
+                  onClick={() => {
+                    if (!upstreamSession) {
+                      openLoginModal();
+                      return;
+                    }
+
+                    void loadStaffDirectory({
+                      forceRefresh: true,
+                      session: upstreamSession,
+                    });
+                  }}
+                >
+                  {upstreamSession ? '刷新教师目录' : '登录后刷新'}
+                </Button>
               </div>
 
               <Form.Item
@@ -755,30 +646,24 @@ export function AdminClassAdviserGovernanceLabPage() {
                 rules={[
                   {
                     validator: (_rule, value: string | undefined) =>
-                      validateStaffIdInput(value, teacherOptions),
+                      validateClassAdviserGovernanceStaffId(value, staffDirectoryTeachers),
                   },
                 ]}
               >
-                <AutoComplete
-                  allowClear
+                <StaffDirectoryTeacherAutoComplete
                   autoFocus
-                  filterOption={(inputValue, option) =>
-                    filterTeacherOption(inputValue, option as TeacherSearchOption | undefined)
+                  directoryUnavailableContent={
+                    staffDirectoryError ? '目录不可用，可直接输入 staffId' : '可直接输入 staffId'
                   }
-                  loading={isLoadingTeacherDirectory}
-                  notFoundContent={
-                    isLoadingTeacherDirectory ? '读取中' : '暂无教师目录，可直接输入 staffId'
-                  }
-                  options={teacherOptions}
+                  loading={isLoadingStaffDirectory}
                   placeholder="搜索教师姓名或 staffId"
+                  teachers={staffDirectoryTeachers}
                   onChange={(value) => {
                     assignForm.setFieldsValue({
-                      staffName: resolveTeacherNameFromValue(value, teacherOptions),
-                    });
-                  }}
-                  onSelect={(value) => {
-                    assignForm.setFieldsValue({
-                      staffName: resolveTeacherNameFromValue(value, teacherOptions),
+                      staffName: resolveClassAdviserGovernanceStaffName(
+                        value,
+                        staffDirectoryTeachers,
+                      ),
                     });
                   }}
                 />
@@ -846,7 +731,7 @@ export function AdminClassAdviserGovernanceLabPage() {
 
       <UpstreamLoginModal
         {...upstreamLoginModalProps}
-        description="读取教师目录需要 upstream session；登录后将通过 fetchTeacherDirectory 获取教师 staffId 与姓名。"
+        description="刷新教师目录需要 upstream session；登录后将通过 Staff Directory Cache 更新教师 staffId 与姓名。"
         title="登录 upstream"
       />
     </div>

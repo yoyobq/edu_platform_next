@@ -18,6 +18,7 @@ import {
   hasAcademicWorkloadAccess,
   hasAcademicWorkloadManagerAccess,
   hasAdminAccess,
+  hasClassAdviserGovernanceAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentProfileFilingAccess,
@@ -179,6 +180,36 @@ describe('auth access policy', () => {
       }),
     ).toBe(false);
     expect(hasStaffSemesterProfilesAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('allows class adviser governance to admins, academic officers, and student affairs officers', () => {
+    expect(hasClassAdviserGovernanceAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasClassAdviserGovernanceAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasClassAdviserGovernanceAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasClassAdviserGovernanceAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['CLASS_ADVISER'],
+      }),
+    ).toBe(false);
+    expect(
+      hasClassAdviserGovernanceAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['COUNSELOR'],
+      }),
+    ).toBe(false);
+    expect(hasClassAdviserGovernanceAccess({ accessGroup: ['STAFF'] })).toBe(false);
+    expect(hasClassAdviserGovernanceAccess({ accessGroup: ['STUDENT'] })).toBe(false);
   });
 
   it('allows roster membership reconciliation entry to admins and staff', () => {
