@@ -2,15 +2,26 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, isGraphQLIngressErrorMock } =
-  vi.hoisted(() => ({
-    executeGraphQLMock: vi.fn(),
-    executeUpstreamSessionGraphQLMock: vi.fn(),
-    isGraphQLIngressErrorMock: vi.fn(),
-  }));
+const {
+  executeGraphQLMock,
+  executeUpstreamSessionGraphQLMock,
+  fetchMock,
+  getGraphQLEndpointMock,
+  getGraphQLRuntimeConfigMock,
+  isGraphQLIngressErrorMock,
+} = vi.hoisted(() => ({
+  executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
+  fetchMock: vi.fn(),
+  getGraphQLEndpointMock: vi.fn(),
+  getGraphQLRuntimeConfigMock: vi.fn(),
+  isGraphQLIngressErrorMock: vi.fn(),
+}));
 
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
+  getGraphQLEndpoint: getGraphQLEndpointMock,
+  getGraphQLRuntimeConfig: getGraphQLRuntimeConfigMock,
   isGraphQLIngressError: isGraphQLIngressErrorMock,
 }));
 
@@ -26,23 +37,32 @@ import {
   fetchStudentConductGradeClassTermOptions,
   fetchStudentConductGradeEffectiveView,
   fetchStudentPrivateProfileClassOverview,
+  importStudentConductGradeMaterials,
   listStudentPrivateProfileClassOptions,
   normalizeConductClassTermOptionsInput,
   normalizeConductCleanupInput,
   normalizeConductViewInput,
+  normalizeImportStudentConductGradeMaterialsInput,
   normalizePatchStudentConductGradeCorrectionsInput,
   normalizeRefreshConductClassInput,
   patchStudentConductGradeCorrections,
   readStudentConductGradePatchRowIssues,
   refreshStudentConductGradeClassFromUpstream,
+  resolveStudentConductGradeMaterialImportUrl,
 } from './api';
 
 describe('student-conduct-grade-governance api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
+    fetchMock.mockReset();
+    getGraphQLEndpointMock.mockReset();
+    getGraphQLRuntimeConfigMock.mockReset();
     isGraphQLIngressErrorMock.mockReset();
+    getGraphQLEndpointMock.mockReturnValue('http://127.0.0.1:3000/graphql');
+    getGraphQLRuntimeConfigMock.mockReturnValue({});
     isGraphQLIngressErrorMock.mockReturnValue(false);
+    vi.stubGlobal('fetch', fetchMock);
   });
 
   it('normalizes conduct view and cleanup inputs', () => {
@@ -152,6 +172,45 @@ describe('student-conduct-grade-governance api', () => {
         },
       ],
     });
+  });
+
+  it('normalizes material import input and rejects legacy file formats', () => {
+    const docxFile = new File(['docx'], 'conduct.docx');
+    const xlsxFile = new File(['xlsx'], 'conduct.xlsx');
+
+    expect(
+      normalizeImportStudentConductGradeMaterialsInput({
+        classCode: ' 2501 ',
+        confirmedWarningKeys: [' key-1 ', 'key-1', ''],
+        files: [docxFile, xlsxFile],
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
+      }),
+    ).toEqual({
+      classCode: '2501',
+      confirmedWarningKeys: ['key-1'],
+      files: [docxFile, xlsxFile],
+      schoolYear: '2025',
+      semester: '1',
+    });
+
+    expect(() =>
+      normalizeImportStudentConductGradeMaterialsInput({
+        classCode: '2501',
+        files: [],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).toThrow('请选择需要导入的操行材料。');
+
+    expect(() =>
+      normalizeImportStudentConductGradeMaterialsInput({
+        classCode: '2501',
+        files: [new File(['xls'], 'conduct.xls')],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).toThrow('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
   });
 
   it('rejects invalid conduct correction patch inputs before graphql', () => {
@@ -503,6 +562,130 @@ describe('student-conduct-grade-governance api', () => {
           ],
         },
       },
+    );
+  });
+
+  it('imports conduct grade materials through one-shot multipart rest', async () => {
+    const docxFile = new File(['docx'], 'conduct.docx');
+    const payload = {
+      blockingErrors: [],
+      status: 'WARNING_CONFIRMATION_REQUIRED',
+      summary: {
+        totalFiles: 1,
+      },
+      warnings: [
+        {
+          code: 'DOCUMENT_TERM_MISMATCH',
+          message: '材料学期与当前选择不一致',
+          sourceFilename: 'conduct.docx',
+          sourceRow: null,
+          sourceSheetOrTable: '表1',
+          warningKey: 'warning-key-1',
+        },
+      ],
+    };
+
+    fetchMock.mockResolvedValueOnce(
+      new Response(JSON.stringify({ data: payload, success: true }), {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        status: 200,
+      }),
+    );
+
+    await expect(
+      importStudentConductGradeMaterials({
+        classCode: ' 2501 ',
+        confirmedWarningKeys: [' warning-key-1 '],
+        files: [docxFile],
+        schoolYear: ' 2025 ',
+        semester: ' 1 ',
+      }),
+    ).resolves.toEqual(payload);
+
+    expect(resolveStudentConductGradeMaterialImportUrl()).toBe(
+      'http://127.0.0.1:3000/student-private-profile/conduct-grade-material-imports',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      'http://127.0.0.1:3000/student-private-profile/conduct-grade-material-imports',
+      expect.objectContaining({
+        body: expect.any(FormData),
+        method: 'POST',
+      }),
+    );
+
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const formData = request.body as FormData;
+
+    expect(formData.get('classCode')).toBe('2501');
+    expect(formData.get('schoolYear')).toBe('2025');
+    expect(formData.get('semester')).toBe('1');
+    expect(formData.get('confirmedWarningKeys')).toBe('["warning-key-1"]');
+    expect(formData.getAll('files')).toEqual([docxFile]);
+  });
+
+  it('refreshes local session before retrying material import after unauthorized response', async () => {
+    const refreshSessionMock = vi.fn();
+    const docxFile = new File(['docx'], 'conduct.docx');
+
+    getGraphQLRuntimeConfigMock.mockReturnValue({
+      getAccessToken: () => 'token-1',
+      refreshSession: refreshSessionMock,
+    });
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ message: 'TOKEN_EXPIRED' }), {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          status: 401,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              blockingErrors: [],
+              status: 'IMPORTED',
+              summary: {
+                writtenFieldCount: 1,
+              },
+              warnings: [],
+            },
+            success: true,
+          }),
+          {
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            status: 200,
+          },
+        ),
+      );
+
+    await expect(
+      importStudentConductGradeMaterials({
+        classCode: '2501',
+        files: [docxFile],
+        schoolYear: '2025',
+        semester: '1',
+      }),
+    ).resolves.toMatchObject({
+      status: 'IMPORTED',
+      summary: {
+        writtenFieldCount: 1,
+      },
+    });
+
+    expect(refreshSessionMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[0]?.[1]).toEqual(
+      expect.objectContaining({
+        headers: {
+          Authorization: 'Bearer token-1',
+        },
+      }),
     );
   });
 

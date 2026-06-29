@@ -12,7 +12,12 @@ import {
   normalizeOptionalTextValue,
   normalizeRequiredTextValue,
 } from '@/shared/form-normalization';
-import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
+import {
+  executeGraphQL,
+  getGraphQLEndpoint,
+  getGraphQLRuntimeConfig,
+  isGraphQLIngressError,
+} from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
@@ -214,6 +219,36 @@ export type StudentConductGradePatchRowIssue = {
   studentId?: string | null;
 };
 
+export type StudentConductGradeMaterialImportStatus =
+  | 'BLOCKED'
+  | 'IMPORTED'
+  | 'NO_CHANGES'
+  | 'WARNING_CONFIRMATION_REQUIRED';
+
+export type StudentConductGradeMaterialImportIssue = {
+  code: string;
+  message: string | null;
+  sourceFilename: string | null;
+  sourceRow: number | null;
+  sourceSheetOrTable: string | null;
+  warningKey: string | null;
+};
+
+export type StudentConductGradeMaterialImportResult = {
+  blockingErrors: StudentConductGradeMaterialImportIssue[];
+  status: StudentConductGradeMaterialImportStatus;
+  summary: Record<string, unknown>;
+  warnings: StudentConductGradeMaterialImportIssue[];
+};
+
+export type ImportStudentConductGradeMaterialsInput = {
+  classCode: string;
+  confirmedWarningKeys?: readonly string[] | null;
+  files: readonly File[];
+  schoolYear: string;
+  semester: string;
+};
+
 type ClassOptionsResponse = {
   studentPrivateProfileClassOptions: StudentPrivateProfileClassOption[];
 };
@@ -244,7 +279,10 @@ type RefreshConductClassResponse = {
 
 const CONDUCT_PATCH_FIELD_KEYS = ['score', 'confirmedGrade'] as const;
 const CONDUCT_PATCH_FIELD_KEY_SET = new Set<string>(CONDUCT_PATCH_FIELD_KEYS);
+const CONDUCT_GRADE_MATERIAL_IMPORT_PATH =
+  '/student-private-profile/conduct-grade-material-imports';
 const MAX_PATCH_STUDENT_ROWS = 500;
+const SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS = new Set(['docx', 'xlsx']);
 
 const CLASS_OPTIONS_QUERY = `
   query StudentConductGradeGovernanceClassOptions(
@@ -451,6 +489,179 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
+function readRestEnvelopeMessage(payload: unknown) {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  if (typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message;
+  }
+
+  const error = payload.error;
+
+  if (isRecord(error) && typeof error.message === 'string' && error.message.trim()) {
+    return error.message;
+  }
+
+  return null;
+}
+
+async function readRestFailureMessage(response: Response) {
+  const contentType = response.headers.get('Content-Type') ?? '';
+
+  if (contentType.includes('application/json')) {
+    try {
+      return readRestEnvelopeMessage(await response.json());
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    const text = await response.text();
+
+    return text.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function buildAuthorizationHeaders() {
+  const accessToken = getGraphQLRuntimeConfig().getAccessToken?.() ?? null;
+
+  return accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+}
+
+function normalizeMaterialImportStatus(status: unknown): StudentConductGradeMaterialImportStatus {
+  if (
+    status === 'BLOCKED' ||
+    status === 'IMPORTED' ||
+    status === 'NO_CHANGES' ||
+    status === 'WARNING_CONFIRMATION_REQUIRED'
+  ) {
+    return status;
+  }
+
+  throw new Error('操行材料导入返回状态异常。');
+}
+
+function normalizeOptionalStringValue(value: unknown) {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function normalizeOptionalNumberValue(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function normalizeMaterialImportIssue(value: unknown): StudentConductGradeMaterialImportIssue {
+  if (!isRecord(value) || typeof value.code !== 'string' || !value.code.trim()) {
+    throw new Error('操行材料导入问题返回结果异常。');
+  }
+
+  return {
+    code: value.code.trim(),
+    message: normalizeOptionalStringValue(value.message),
+    sourceFilename: normalizeOptionalStringValue(value.sourceFilename),
+    sourceRow: normalizeOptionalNumberValue(value.sourceRow),
+    sourceSheetOrTable: normalizeOptionalStringValue(value.sourceSheetOrTable),
+    warningKey: normalizeOptionalStringValue(value.warningKey),
+  };
+}
+
+function normalizeMaterialImportIssues(value: unknown) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.map((issue) => normalizeMaterialImportIssue(issue));
+}
+
+function assertMaterialImportResult(value: unknown): StudentConductGradeMaterialImportResult {
+  if (!isRecord(value)) {
+    throw new Error('操行材料导入返回结果异常。');
+  }
+
+  const summary = isRecord(value.summary) ? value.summary : {};
+
+  return {
+    blockingErrors: normalizeMaterialImportIssues(value.blockingErrors),
+    status: normalizeMaterialImportStatus(value.status),
+    summary,
+    warnings: normalizeMaterialImportIssues(value.warnings),
+  };
+}
+
+async function parseMaterialImportResponse(response: Response) {
+  let payload: unknown;
+
+  try {
+    payload = await response.json();
+  } catch {
+    throw new Error('操行材料导入返回结果异常。');
+  }
+
+  if (!response.ok) {
+    throw new Error(readRestEnvelopeMessage(payload) ?? '操行材料导入失败。');
+  }
+
+  if (isRecord(payload) && 'data' in payload) {
+    if (payload.success === false) {
+      throw new Error(readRestEnvelopeMessage(payload) ?? '操行材料导入失败。');
+    }
+
+    return assertMaterialImportResult(payload.data);
+  }
+
+  return assertMaterialImportResult(payload);
+}
+
+function getFileExtension(fileName: string) {
+  return fileName.split('.').pop()?.trim().toLowerCase() ?? '';
+}
+
+function normalizeConductGradeMaterialFiles(files: readonly File[]) {
+  if (files.length === 0) {
+    throw new Error('请选择需要导入的操行材料。');
+  }
+
+  return files.map((file) => {
+    const extension = getFileExtension(file.name);
+
+    if (!SUPPORTED_CONDUCT_GRADE_MATERIAL_FILE_EXTENSIONS.has(extension)) {
+      throw new Error('操行材料仅支持 .docx / .xlsx，请将 .doc / .xls 另存为新格式后上传。');
+    }
+
+    return file;
+  });
+}
+
+function normalizeConfirmedWarningKeys(confirmedWarningKeys: readonly string[] | null | undefined) {
+  const keys = confirmedWarningKeys?.map((key) => key.trim()).filter((key) => key.length > 0) ?? [];
+
+  return Array.from(new Set(keys));
+}
+
+function createMaterialImportFormData(
+  input: ReturnType<typeof normalizeImportStudentConductGradeMaterialsInput>,
+) {
+  const formData = new FormData();
+
+  formData.append('classCode', input.classCode);
+  formData.append('schoolYear', input.schoolYear);
+  formData.append('semester', input.semester);
+
+  if (input.confirmedWarningKeys.length > 0) {
+    formData.append('confirmedWarningKeys', JSON.stringify(input.confirmedWarningKeys));
+  }
+
+  input.files.forEach((file) => {
+    formData.append('files', file);
+  });
+
+  return formData;
+}
+
 function normalizeConductPatchFieldKey(fieldKey: unknown): StudentConductGradePatchFieldKey {
   if (typeof fieldKey !== 'string' || !CONDUCT_PATCH_FIELD_KEY_SET.has(fieldKey)) {
     throw new Error('操行补录清除字段只支持 score、confirmedGrade。');
@@ -533,6 +744,24 @@ export function normalizePatchStudentConductGradeCorrectionsInput(
     semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
     students: input.students.map((student) => normalizeConductPatchStudent(student)),
   };
+}
+
+export function normalizeImportStudentConductGradeMaterialsInput(
+  input: ImportStudentConductGradeMaterialsInput,
+) {
+  return {
+    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
+    confirmedWarningKeys: normalizeConfirmedWarningKeys(input.confirmedWarningKeys),
+    files: normalizeConductGradeMaterialFiles(input.files),
+    schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
+    semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
+  };
+}
+
+export function resolveStudentConductGradeMaterialImportUrl(
+  graphQLEndpoint = getGraphQLEndpoint(),
+) {
+  return new URL(CONDUCT_GRADE_MATERIAL_IMPORT_PATH, graphQLEndpoint).toString();
 }
 
 export function normalizeConductClassTermOptionsInput(
@@ -721,6 +950,40 @@ export async function patchStudentConductGradeCorrections(
   });
 
   return response.patchStudentConductGradeCorrections;
+}
+
+export async function importStudentConductGradeMaterials(
+  input: ImportStudentConductGradeMaterialsInput,
+) {
+  const normalizedInput = normalizeImportStudentConductGradeMaterialsInput(input);
+  const runtimeConfig = getGraphQLRuntimeConfig();
+  const dispatchImport = () =>
+    fetch(resolveStudentConductGradeMaterialImportUrl(), {
+      body: createMaterialImportFormData(normalizedInput),
+      headers: buildAuthorizationHeaders(),
+      method: 'POST',
+    });
+
+  let response = await dispatchImport();
+
+  if (response.status === 401 && runtimeConfig.refreshSession) {
+    try {
+      await runtimeConfig.refreshSession();
+      response = await dispatchImport();
+    } catch {
+      runtimeConfig.onAuthFailure?.();
+      throw new Error('登录状态已失效，请重新登录后再导入操行材料。');
+    }
+
+    if (response.status === 401) {
+      runtimeConfig.onAuthFailure?.();
+      throw new Error(
+        (await readRestFailureMessage(response)) ?? '登录状态已失效，请重新登录后再导入操行材料。',
+      );
+    }
+  }
+
+  return await parseMaterialImportResponse(response);
 }
 
 export async function refreshStudentConductGradeClassFromUpstream(

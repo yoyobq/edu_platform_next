@@ -56,6 +56,7 @@ import {
   fetchStudentConductGradeClassTermOptions,
   fetchStudentConductGradeEffectiveView,
   fetchStudentPrivateProfileClassOverview,
+  importStudentConductGradeMaterials,
   isExpiredUpstreamSessionError,
   listStudentPrivateProfileClassOptions,
   patchStudentConductGradeCorrections,
@@ -70,12 +71,14 @@ import {
   type StudentConductGradeClassTermOptions,
   type StudentConductGradeEffectiveView,
   type StudentConductGradeFieldCell,
+  type StudentConductGradeMaterialImportResult,
   type StudentConductGradePatchFieldKey,
   type StudentConductGradePatchRowIssue,
   type StudentConductGradeStudent,
   type StudentPrivateProfileClassOption,
   type StudentPrivateProfileClassOverview,
 } from './api';
+import { StudentConductGradeMaterialImportPanel } from './material-import-panel';
 import { studentConductGradeGovernanceLabMeta } from './meta';
 
 import './student-conduct-grade-governance-page.css';
@@ -538,14 +541,20 @@ export function StudentConductGradeGovernanceLabPage() {
   );
   const [patchDrafts, setPatchDrafts] = useState<Record<string, ConductPatchDraft>>({});
   const [patchRowIssues, setPatchRowIssues] = useState<ConductPatchRowIssueView[]>([]);
+  const [materialImportFiles, setMaterialImportFiles] = useState<File[]>([]);
+  const [materialImportResult, setMaterialImportResult] =
+    useState<StudentConductGradeMaterialImportResult | null>(null);
+  const [materialImportErrorMessage, setMaterialImportErrorMessage] = useState<string | null>(null);
   const [isPatchMode, setIsPatchMode] = useState(false);
   const [isPatchingCorrections, setIsPatchingCorrections] = useState(false);
+  const [isImportingMaterial, setIsImportingMaterial] = useState(false);
   const [syncingScope, setSyncingScope] = useState<'ALL_TERMS' | 'TERM' | null>(null);
   const [upstreamActionRequest, setUpstreamActionRequest] = useState<UpstreamActionRequest | null>(
     null,
   );
   const loadRequestSeqRef = useRef(0);
   const cleanupRequestSeqRef = useRef(0);
+  const materialImportRequestSeqRef = useRef(0);
   const patchRequestSeqRef = useRef(0);
   const activeSelectionRef = useRef<{
     classOption: StudentPrivateProfileClassOption | null;
@@ -613,6 +622,15 @@ export function StudentConductGradeGovernanceLabPage() {
     [conductView?.students],
   );
   const patchDraftCount = useMemo(() => Object.keys(patchDrafts).length, [patchDrafts]);
+  const materialWarningConfirmationKeys = useMemo(
+    () =>
+      materialImportResult?.status === 'WARNING_CONFIRMATION_REQUIRED'
+        ? materialImportResult.warnings
+            .map((warning) => warning.warningKey)
+            .filter((warningKey): warningKey is string => Boolean(warningKey))
+        : [],
+    [materialImportResult],
+  );
   const conductSyncMenuItems = useMemo<MenuProps['items']>(
     () => [
       {
@@ -632,6 +650,7 @@ export function StudentConductGradeGovernanceLabPage() {
     isLoadingCatalog ||
     isLoadingData ||
     isPatchMode ||
+    isImportingMaterial ||
     isPatchingCorrections ||
     !selectedClass ||
     !selectedTerm ||
@@ -640,6 +659,7 @@ export function StudentConductGradeGovernanceLabPage() {
   const conductPatchDisabled =
     isLoadingCatalog ||
     isLoadingData ||
+    isImportingMaterial ||
     isPatchingCorrections ||
     !selectedClass ||
     !selectedTerm ||
@@ -655,15 +675,30 @@ export function StudentConductGradeGovernanceLabPage() {
     };
   }, [selectedClass, selectedClassId, selectedTerm, selectedTermKey]);
 
-  const resetPatchWorkspace = useCallback((options: { preserveResult?: boolean } = {}) => {
-    setIsPatchMode(false);
-    setPatchDrafts({});
-    setPatchRowIssues([]);
+  const resetPatchWorkspace = useCallback(
+    (
+      options: {
+        keepPatchMode?: boolean;
+        preserveMaterialImportResult?: boolean;
+        preserveResult?: boolean;
+      } = {},
+    ) => {
+      setIsPatchMode(Boolean(options.keepPatchMode));
+      setPatchDrafts({});
+      setPatchRowIssues([]);
+      setMaterialImportFiles([]);
+      setMaterialImportErrorMessage(null);
 
-    if (!options.preserveResult) {
-      setPatchResult(null);
-    }
-  }, []);
+      if (!options.preserveResult) {
+        setPatchResult(null);
+      }
+
+      if (!options.preserveMaterialImportResult) {
+        setMaterialImportResult(null);
+      }
+    },
+    [],
+  );
 
   const updatePatchDraft = useCallback(
     (studentId: string, updater: (draft: ConductPatchDraft) => ConductPatchDraft) => {
@@ -734,6 +769,8 @@ export function StudentConductGradeGovernanceLabPage() {
       classOption: StudentPrivateProfileClassOption,
       term: StudentConductGradeClassTermOption,
       options: {
+        keepPatchMode?: boolean;
+        preserveMaterialImportResult?: boolean;
         preservePatchResult?: boolean;
       } = {},
     ) => {
@@ -751,6 +788,8 @@ export function StudentConductGradeGovernanceLabPage() {
       setErrorMessage(null);
       setSelectedStudentId(null);
       resetPatchWorkspace({
+        keepPatchMode: options.keepPatchMode,
+        preserveMaterialImportResult: options.preserveMaterialImportResult,
         preserveResult: options.preservePatchResult,
       });
 
@@ -1221,6 +1260,9 @@ export function StudentConductGradeGovernanceLabPage() {
 
   const handleStartPatchMode = useCallback(() => {
     setErrorMessage(null);
+    setMaterialImportErrorMessage(null);
+    setMaterialImportFiles([]);
+    setMaterialImportResult(null);
     setPatchResult(null);
     setPatchRowIssues([]);
     setIsPatchMode(true);
@@ -1316,6 +1358,115 @@ export function StudentConductGradeGovernanceLabPage() {
     termBlockingMessage,
     termGenerationBlocked,
   ]);
+
+  const handleMaterialImportFilesChange = useCallback((files: File[]) => {
+    setMaterialImportFiles(files);
+    setMaterialImportErrorMessage(null);
+    setMaterialImportResult(null);
+  }, []);
+
+  const handleRejectMaterialImportFile = useCallback(
+    (fileName: string) => {
+      message.error(`${fileName} 不是支持的材料格式，请另存为 .docx / .xlsx 后上传。`);
+    },
+    [message],
+  );
+
+  const runMaterialImport = useCallback(
+    async (confirmedWarningKeys: readonly string[] = []) => {
+      if (!selectedClass || !selectedTerm) {
+        return;
+      }
+
+      if (termGenerationBlocked) {
+        setErrorMessage(termBlockingMessage);
+        return;
+      }
+
+      if (materialImportFiles.length === 0) {
+        message.warning('请先选择操行材料。');
+        return;
+      }
+
+      const importSelection = activeSelectionRef.current;
+      const importRequestSeq = materialImportRequestSeqRef.current + 1;
+      const canApplyImportResult = () => {
+        const currentSelection = activeSelectionRef.current;
+
+        return (
+          currentSelection.classId === importSelection.classId &&
+          currentSelection.termKey === importSelection.termKey
+        );
+      };
+
+      materialImportRequestSeqRef.current = importRequestSeq;
+      setIsImportingMaterial(true);
+      setMaterialImportErrorMessage(null);
+
+      try {
+        const result = await importStudentConductGradeMaterials({
+          classCode: selectedClass.classCode,
+          confirmedWarningKeys,
+          files: materialImportFiles,
+          schoolYear: selectedTerm.schoolYear,
+          semester: selectedTerm.semester,
+        });
+
+        if (!canApplyImportResult()) {
+          return;
+        }
+
+        setMaterialImportResult(result);
+
+        if (result.status === 'WARNING_CONFIRMATION_REQUIRED') {
+          message.warning('操行材料需要确认后才能导入。');
+          return;
+        }
+
+        if (result.status === 'BLOCKED') {
+          message.error('操行材料存在阻断问题，未写入本地补正。');
+          return;
+        }
+
+        setMaterialImportFiles([]);
+        message[result.status === 'NO_CHANGES' ? 'info' : 'success'](
+          result.status === 'NO_CHANGES' ? '操行材料解析完成，没有新的补正。' : '操行材料已导入。',
+        );
+
+        if (importSelection.classOption && importSelection.term) {
+          await loadSelectionData(importSelection.classOption, importSelection.term, {
+            keepPatchMode: true,
+            preserveMaterialImportResult: true,
+          });
+        }
+      } catch (error) {
+        if (!canApplyImportResult()) {
+          return;
+        }
+
+        setMaterialImportErrorMessage(
+          error instanceof Error ? error.message : '暂时无法导入操行材料。',
+        );
+      } finally {
+        if (materialImportRequestSeqRef.current === importRequestSeq) {
+          setIsImportingMaterial(false);
+        }
+      }
+    },
+    [
+      loadSelectionData,
+      materialImportFiles,
+      message,
+      selectedClass,
+      selectedTerm,
+      termBlockingMessage,
+      termGenerationBlocked,
+    ],
+  );
+
+  const handleConfirmMaterialImportWarnings = useCallback(() => {
+    void runMaterialImport(materialWarningConfirmationKeys);
+  }, [materialWarningConfirmationKeys, runMaterialImport]);
 
   const columns = useMemo<ColumnsType<StudentConductGradeStudent>>(() => {
     const baseColumns: ColumnsType<StudentConductGradeStudent> = [
@@ -1730,6 +1881,24 @@ export function StudentConductGradeGovernanceLabPage() {
                         </div>
                       ) : conductView ? (
                         <div className="flex flex-col gap-4">
+                          {isPatchMode && selectedClass && selectedTerm ? (
+                            <StudentConductGradeMaterialImportPanel
+                              context={{
+                                classLabel: formatClassLabel(selectedClass),
+                                termLabel: formatTermLabel(selectedTerm),
+                              }}
+                              disabled={isPatchingCorrections}
+                              errorMessage={materialImportErrorMessage}
+                              files={materialImportFiles}
+                              isImporting={isImportingMaterial}
+                              result={materialImportResult}
+                              warningConfirmationKeys={materialWarningConfirmationKeys}
+                              onConfirmWarnings={handleConfirmMaterialImportWarnings}
+                              onFilesChange={handleMaterialImportFilesChange}
+                              onImport={() => void runMaterialImport()}
+                              onRejectFile={handleRejectMaterialImportFile}
+                            />
+                          ) : null}
                           <Table<StudentConductGradeStudent>
                             columns={columns}
                             dataSource={filteredStudents}
@@ -1742,13 +1911,13 @@ export function StudentConductGradeGovernanceLabPage() {
                                       </span>
                                       <Space size="small" wrap>
                                         <Button
-                                          disabled={isPatchingCorrections}
+                                          disabled={isImportingMaterial || isPatchingCorrections}
                                           onClick={handleCancelPatchMode}
                                         >
                                           取消
                                         </Button>
                                         <Button
-                                          disabled={patchDraftCount === 0}
+                                          disabled={isImportingMaterial || patchDraftCount === 0}
                                           icon={<SaveOutlined />}
                                           loading={isPatchingCorrections}
                                           type="primary"

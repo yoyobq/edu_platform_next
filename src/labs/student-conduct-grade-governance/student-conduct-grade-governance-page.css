@@ -86,6 +86,48 @@
   transition: background-color 0.2s ease;
 }
 
+.student-conduct-grade-governance-import-panel {
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: var(--ant-border-radius-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ant-margin);
+  padding: var(--ant-padding);
+}
+
+.student-conduct-grade-governance-import-head {
+  align-items: center;
+  display: flex;
+  gap: var(--ant-margin-sm);
+  justify-content: space-between;
+}
+
+.student-conduct-grade-governance-import-head > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ant-margin-xxs);
+  min-width: 0;
+}
+
+.student-conduct-grade-governance-import-head span {
+  color: var(--ant-color-text);
+  font-weight: var(--ant-font-weight-strong, 600);
+}
+
+.student-conduct-grade-governance-import-head small,
+.student-conduct-grade-governance-import-actions > span {
+  color: var(--ant-color-text-secondary);
+  font-size: var(--ant-font-size-sm);
+}
+
+.student-conduct-grade-governance-import-actions {
+  align-items: center;
+  display: flex;
+  gap: var(--ant-margin-sm);
+  justify-content: space-between;
+}
+
 .student-conduct-grade-governance-patch-footer {
   align-items: center;
   display: flex;
