@@ -489,7 +489,7 @@ function DiagnosticCollapse({ children }: { children: ReactNode }) {
 }
 
 function formatApproxByteSize(byteSize: number | null | undefined) {
-  if (!Number.isFinite(byteSize) || byteSize <= 0) {
+  if (typeof byteSize !== 'number' || !Number.isFinite(byteSize) || byteSize <= 0) {
     return '约 0 KB';
   }
 
@@ -1998,12 +1998,15 @@ export function StudentPrivateProfileLabPage() {
     summary,
   ]);
 
-  const handleSupplementFileBeforeUpload: UploadProps['beforeUpload'] = useCallback((file) => {
-    setSupplementUploadFile(file);
-    setSupplementUploadResult(null);
-    setSupplementDryRunResult(null);
-    return false;
-  }, []);
+  const handleSupplementFileBeforeUpload = useCallback<NonNullable<UploadProps['beforeUpload']>>(
+    (file) => {
+      setSupplementUploadFile(file);
+      setSupplementUploadResult(null);
+      setSupplementDryRunResult(null);
+      return false;
+    },
+    [],
+  );
 
   const handleSupplementFileRemove = useCallback(() => {
     clearSupplementRuntimeState();

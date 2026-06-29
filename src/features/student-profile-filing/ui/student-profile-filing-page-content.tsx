@@ -92,9 +92,9 @@ type StudentProfileFilingSupplementSection = 'education' | 'family';
 type StudentProfileFilingSupplementSummarySection = 'education' | 'family';
 
 type FamilySupplementFormValues = {
-  name?: string;
+  name: string;
   phone?: string;
-  relationshipCode?: string;
+  relationshipCode: string;
   workplace?: string;
 };
 
@@ -325,7 +325,9 @@ function resolveMissingProfileTagTextClassName(label: string) {
     .join(' ');
 }
 
-function listStudentProfileFilingSupplementSections(student: StudentProfileFilingStudent) {
+function listStudentProfileFilingSupplementSections(
+  student: StudentProfileFilingStudent,
+): StudentProfileFilingSupplementSection[] {
   if (!student.snapshotPresent || !student.upstreamIdPresent) {
     return [];
   }
@@ -547,7 +549,7 @@ function resolveInferredCurrentSchoolEndText(option: StudentProfileFilingClassOp
     currentYear > expectedGraduationYear ||
     (currentYear === expectedGraduationYear && currentMonth >= 6);
 
-  if (option.classInSchool === false || hasReachedGraduationMonth) {
+  if (option?.classInSchool === false || hasReachedGraduationMonth) {
     return `${expectedGraduationYear} 年 6 月`;
   }
 

@@ -71,6 +71,7 @@ function failRestoreSession(input: {
 function retainRestoreSession(input: {
   error: unknown;
   isBackground: boolean;
+  ports: AuthPorts;
   snapshot: AuthStoredSession;
 }) {
   const errorMessage = getSessionErrorMessage(input.error, '当前会话暂时无法恢复，请稍后重试。');
@@ -154,6 +155,7 @@ export async function restoreSession(
           return retainRestoreSession({
             error: refreshError,
             isBackground: options?.background === true,
+            ports,
             snapshot,
           });
         }
@@ -162,6 +164,7 @@ export async function restoreSession(
       return retainRestoreSession({
         error,
         isBackground: options?.background === true,
+        ports,
         snapshot,
       });
     }

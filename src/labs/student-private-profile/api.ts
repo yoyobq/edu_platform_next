@@ -436,22 +436,22 @@ export type StudentPrivateProfileSupplementTemplateCode =
 export type StudentPrivateProfileSupplementMode = 'FLEXIBLE' | 'STRICT';
 
 export type StudentPrivateProfileSupplementTemplateColumn = {
-  aliases: string[];
+  aliases: readonly string[];
   alwaysRequired: boolean;
   auditPolicy: 'NEVER_LOG_VALUE' | string;
   destination: 'UPSTREAM_WRITE_THROUGH' | string | null;
-  enumValues: string[];
+  enumValues: readonly string[];
   fieldKey: string | null;
   key: string;
   label: string;
-  requiredForActions: StudentPrivateProfileWriteThroughAction[];
+  requiredForActions: readonly StudentPrivateProfileWriteThroughAction[];
   sensitive: boolean;
   valueType: 'DATE' | 'ENUM' | 'STRING' | string;
 };
 
 export type StudentPrivateProfileSupplementTemplate = {
-  actions: StudentPrivateProfileWriteThroughAction[];
-  columns: StudentPrivateProfileSupplementTemplateColumn[];
+  actions: readonly StudentPrivateProfileWriteThroughAction[];
+  columns: readonly StudentPrivateProfileSupplementTemplateColumn[];
   mode: StudentPrivateProfileSupplementMode;
   sectionKey: 'EDUCATION_RESUME' | 'FAMILY' | string;
   templateCode: StudentPrivateProfileSupplementTemplateCode;
@@ -1309,7 +1309,7 @@ export function normalizeStudentRegistrationCardGenerationInput(input: {
 
 export function normalizeStudentPrivateProfileSupplementTemplateInput(input: {
   mode?: StudentPrivateProfileSupplementMode | null | undefined;
-  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateCode: string | null | undefined;
 }) {
   const normalizedInput: {
     mode?: StudentPrivateProfileSupplementMode;
@@ -1330,7 +1330,7 @@ export function normalizeStudentPrivateProfileSupplementTemplateInput(input: {
 export function normalizeStudentPrivateProfileSupplementDryRunInput(input: {
   fileToken: string | null | undefined;
   mode?: StudentPrivateProfileSupplementMode | null | undefined;
-  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateCode: string | null | undefined;
   templateVersion: number | null | undefined;
 }) {
   const templateVersion = input.templateVersion;
@@ -1780,6 +1780,7 @@ function applySupplementStudentNameNotes(input: {
   input.worksheet.getCell(`${getExcelColumnName(studentIdColumnNumber + 1)}2`).note =
     `学生姓名：${normalizedStudentName}`;
   input.worksheet.getCell(`${getExcelColumnName(studentIdColumnNumber + 1)}2`).dataValidation = {
+    formulae: [1, 32767],
     prompt: `学生姓名：${normalizedStudentName}`,
     promptTitle: '当前学生',
     showInputMessage: true,
@@ -2355,7 +2356,7 @@ export async function generateStudentRegistrationCardDocument(input: {
 
 export async function getStudentPrivateProfileSupplementTemplate(input: {
   mode?: StudentPrivateProfileSupplementMode | null | undefined;
-  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateCode: string | null | undefined;
 }) {
   const response = await executeGraphQL<
     StudentPrivateProfileSupplementTemplateResponse,
@@ -2447,7 +2448,7 @@ export async function downloadStudentRegistrationCardDocument(input: {
 export async function dryRunStudentPrivateProfileSupplement(input: {
   fileToken: string | null | undefined;
   mode?: StudentPrivateProfileSupplementMode | null | undefined;
-  templateCode: StudentPrivateProfileSupplementTemplateCode | null | undefined;
+  templateCode: string | null | undefined;
   templateVersion: number | null | undefined;
 }) {
   const response = await executeGraphQL<
@@ -2547,7 +2548,9 @@ export async function compareStudentPrivateProfileFields(input: {
 }) {
   const response = await executeGraphQL<
     CompareStudentPrivateProfileResponse,
-    OperationVariables & ReturnType<typeof normalizeCompareStudentPrivateProfileFieldsInput>
+    OperationVariables & {
+      input: ReturnType<typeof normalizeCompareStudentPrivateProfileFieldsInput>;
+    }
   >(COMPARE_STUDENT_PRIVATE_PROFILE_MUTATION, {
     input: normalizeCompareStudentPrivateProfileFieldsInput(input),
   });
@@ -2561,7 +2564,9 @@ export async function patchStudentPrivateProfileFields(input: {
 }) {
   const response = await executeGraphQL<
     PatchStudentPrivateProfileResponse,
-    OperationVariables & ReturnType<typeof normalizePatchStudentPrivateProfileFieldsInput>
+    OperationVariables & {
+      input: ReturnType<typeof normalizePatchStudentPrivateProfileFieldsInput>;
+    }
   >(PATCH_STUDENT_PRIVATE_PROFILE_MUTATION, {
     input: normalizePatchStudentPrivateProfileFieldsInput(input),
   });
@@ -2591,7 +2596,9 @@ export async function patchStudentPrivateProfileFamilyMembers(input: {
 }) {
   const response = await executeGraphQL<
     PatchStudentPrivateProfileFamilyMembersResponse,
-    OperationVariables & ReturnType<typeof normalizePatchStudentPrivateProfileFamilyMembersInput>
+    OperationVariables & {
+      input: ReturnType<typeof normalizePatchStudentPrivateProfileFamilyMembersInput>;
+    }
   >(PATCH_STUDENT_PRIVATE_PROFILE_FAMILY_MEMBERS_MUTATION, {
     input: normalizePatchStudentPrivateProfileFamilyMembersInput(input),
   });
