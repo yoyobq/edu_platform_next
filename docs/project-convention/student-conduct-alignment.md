@@ -19,12 +19,9 @@
   `studentConductGradeClassTermOptions(input: { classCode })`
 - 前端不得使用全局 `academic_semester.isVisible` 列表推学期
 - 前端不得按年份自行拼装操行学期
-- `studentConductGradeEffectiveView`
-- `refreshStudentConductGradeClassFromUpstream`
-- `cleanupStudentConductGradeCorrection`
-- `patchStudentConductGradeCorrections`
-- 后续操行 Excel `dry-run / import`
-  都必须使用 `terms[]` 返回的 `schoolYear + semester`
+- `studentConductGradeEffectiveView`、`refreshStudentConductGradeClassFromUpstream`、
+  `cleanupStudentConductGradeCorrection`、`patchStudentConductGradeCorrections`、
+  补录材料导入 dry-run 都必须使用 `terms[]` 返回的 `schoolYear + semester`
 
 ## 当前学期口径
 
@@ -85,6 +82,7 @@
 - 补录成功后前端重新读取当前仍选中的班级和学期
 - 若用户在补录进行中切换班级或学期，旧请求结果不会覆盖当前选择
 - 补录材料导入只把 Word / Excel 历史文档解析为草稿预填，不直接落库
+- 本地开发如需解析旧版 `.doc / .xls`，需安装本地 Office/LibreOffice 转换能力
 - 真正保存仍统一调用 `patchStudentConductGradeCorrections`
 
 - 清理动作仅对 `CORRECTION_CLEANUP_PENDING` 状态学生开放
