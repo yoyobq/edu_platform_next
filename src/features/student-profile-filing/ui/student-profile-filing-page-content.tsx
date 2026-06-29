@@ -1519,7 +1519,7 @@ export function StudentProfileFilingPageContent({
           const supplementSections = listStudentProfileFilingSupplementSections(record);
 
           return (
-            <Space direction="vertical" size={4}>
+            <Space orientation="vertical" size={4}>
               <Tooltip title={buildRefreshableTooltip(record)}>
                 <Button
                   disabled={
@@ -1679,7 +1679,7 @@ export function StudentProfileFilingPageContent({
           description={`成功 ${refreshDigest.successCount}，失败 ${
             refreshDigest.failureCount
           }，会话有效期 ${formatUpstreamSessionDateTime(refreshDigest.expiresAt)}。`}
-          message={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
+          title={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
           type={refreshDigest.failureCount > 0 ? 'warning' : 'success'}
         />
       ) : null}
@@ -1763,6 +1763,7 @@ export function StudentProfileFilingPageContent({
       <Drawer
         destroyOnHidden
         open={Boolean(supplementDrawerState)}
+        size={480}
         title={
           activeSupplementStudent ? (
             <span className="student-profile-filing-supplement-drawer-title">
@@ -1780,7 +1781,6 @@ export function StudentProfileFilingPageContent({
             '补充资料'
           )
         }
-        width={480}
         onClose={closeSupplementDrawer}
       >
         {supplementDrawerState ? (
@@ -1801,8 +1801,8 @@ export function StudentProfileFilingPageContent({
                 <Alert
                   closable
                   description={supplementFeedback.description}
-                  message={supplementFeedback.message}
                   showIcon
+                  title={supplementFeedback.message}
                   type={supplementFeedback.type}
                   onClose={() => setSupplementFeedback(null)}
                 />
