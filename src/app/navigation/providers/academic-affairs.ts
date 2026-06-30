@@ -219,7 +219,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
     })
       ? [
           {
-            allowedAccessGroups: ['STAFF'] as const,
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'ReconciliationOutlined',
             key: '/academic-affairs/student-roster-membership-reconciliation',
             label: '本地建班',

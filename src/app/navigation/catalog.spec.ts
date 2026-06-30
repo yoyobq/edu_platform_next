@@ -69,6 +69,7 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(items, 'class-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
     ]);
@@ -139,6 +140,7 @@ describe('navigation catalog', () => {
       '/academic-assistant/academic-workload',
     ]);
     expect(findGroup(prodAdminItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
     ]);
@@ -157,7 +159,7 @@ describe('navigation catalog', () => {
     ).toEqual(['/admin/users', '/admin/verification-issuance', '/errors/preview']);
   });
 
-  it('shows roster reconciliation as a stable staff entry', () => {
+  it('shows roster reconciliation as a stable admin and staff entry', () => {
     const staffItems = getNavigationItems(
       buildFilter({
         accountId: 1001,
@@ -730,7 +732,7 @@ describe('navigation catalog', () => {
         '/academic-affairs/student-roster-membership-reconciliation',
         buildFilter(),
       ),
-    ).toBe(false);
+    ).toBe(true);
     expect(canAccessNavigationPath('/class-affairs/student-profile-filing', buildFilter())).toBe(
       true,
     );
@@ -832,6 +834,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/my-curriculum-plan-homepage',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
+      '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
       '/student-affairs/class-adviser-governance',
