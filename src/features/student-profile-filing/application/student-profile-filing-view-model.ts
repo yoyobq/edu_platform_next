@@ -139,6 +139,16 @@ export function listMissingStudentProfileFilingCompletenessLabels(
   );
 }
 
+export function listVisibleMissingStudentProfileFilingCompletenessLabels(
+  student: Pick<StudentProfileFilingStudent, 'profileCompletenessFlags' | 'snapshotPresent'>,
+) {
+  if (!student.snapshotPresent) {
+    return [];
+  }
+
+  return listMissingStudentProfileFilingCompletenessLabels(student.profileCompletenessFlags);
+}
+
 export function resolveStudentProfileFilingStatus(
   student: Pick<
     StudentProfileFilingStudent,
@@ -231,6 +241,12 @@ export function summarizeStudentProfileFilingStudents(
   });
 
   return summary;
+}
+
+export function shouldShowStudentProfileFilingInitialClassEmptyState(
+  summary: StudentProfileFilingSummary,
+) {
+  return summary.totalCount > 0 && summary.pendingCount === summary.totalCount;
 }
 
 export function listStudentProfileFilingRefreshableStudentIds(

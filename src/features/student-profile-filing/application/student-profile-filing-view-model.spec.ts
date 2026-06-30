@@ -8,9 +8,11 @@ import {
   countStudentProfileFilingCompleteness,
   isStudentProfileFilingDroppedStudent,
   listStudentProfileFilingRefreshableStudentIds,
+  listVisibleMissingStudentProfileFilingCompletenessLabels,
   resolveStudentProfileFilingActionIntent,
   resolveStudentProfileFilingDroppedSemesterNotice,
   resolveStudentProfileFilingStatus,
+  shouldShowStudentProfileFilingInitialClassEmptyState,
   summarizeStudentProfileFilingStudents,
 } from './student-profile-filing-view-model';
 
@@ -177,5 +179,70 @@ describe('student profile filing view model', () => {
       'S002',
       'S004',
     ]);
+  });
+
+  it('does not show per-section missing reminders before the first local snapshot exists', () => {
+    const missingFlags = {
+      educationObserved: false,
+      familyObserved: false,
+      personalObserved: false,
+      photoObserved: false,
+      recordObserved: false,
+      sensitiveIdentifiersObserved: false,
+    };
+
+    expect(
+      listVisibleMissingStudentProfileFilingCompletenessLabels(
+        buildStudent({
+          attentionLevel: 'MISSING_SNAPSHOT',
+          profileCompletenessFlags: missingFlags,
+          snapshotPresent: false,
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      listVisibleMissingStudentProfileFilingCompletenessLabels(
+        buildStudent({
+          profileCompletenessFlags: {
+            ...completeFlags,
+            familyObserved: false,
+            photoObserved: false,
+          },
+        }),
+      ),
+    ).toEqual(['照片', '家庭']);
+  });
+
+  it('uses the class-level empty state only when every student is waiting for initial filing', () => {
+    expect(
+      shouldShowStudentProfileFilingInitialClassEmptyState({
+        blockedCount: 0,
+        filedCount: 0,
+        pendingCount: 2,
+        refreshableCount: 2,
+        totalCount: 2,
+        warningCount: 0,
+      }),
+    ).toBe(true);
+    expect(
+      shouldShowStudentProfileFilingInitialClassEmptyState({
+        blockedCount: 0,
+        filedCount: 1,
+        pendingCount: 1,
+        refreshableCount: 2,
+        totalCount: 2,
+        warningCount: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldShowStudentProfileFilingInitialClassEmptyState({
+        blockedCount: 1,
+        filedCount: 0,
+        pendingCount: 1,
+        refreshableCount: 1,
+        totalCount: 2,
+        warningCount: 0,
+      }),
+    ).toBe(false);
   });
 });

@@ -24,7 +24,6 @@ import {
   Select,
   Space,
   Spin,
-  Statistic,
   Table,
   Tag,
   Tooltip,
@@ -48,8 +47,10 @@ import {
   isStudentProfileFilingDroppedStudent,
   listMissingStudentProfileFilingCompletenessLabels,
   listStudentProfileFilingRefreshableStudentIds,
+  listVisibleMissingStudentProfileFilingCompletenessLabels,
   resolveStudentProfileFilingActionIntent,
   resolveStudentProfileFilingDroppedSemesterNotice,
+  shouldShowStudentProfileFilingInitialClassEmptyState,
   STUDENT_PROFILE_FILING_ACTION_LABELS,
   STUDENT_PROFILE_FILING_COMPLETENESS_ITEMS,
   summarizeStudentProfileFilingStudents,
@@ -220,34 +221,6 @@ const FAMILY_RELATIONSHIP_LABELS: Record<string, string> = {
   '3': '祖父母',
   '4': '兄弟姐妹',
 };
-
-const COMPACT_WORKBENCH_QUERY = '(max-width: 1120px)';
-
-function useCompactWorkbenchLayout() {
-  const [isCompactWorkbenchLayout, setIsCompactWorkbenchLayout] = useState(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(COMPACT_WORKBENCH_QUERY).matches,
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(COMPACT_WORKBENCH_QUERY);
-    const handleChange = () => {
-      setIsCompactWorkbenchLayout(mediaQuery.matches);
-    };
-
-    handleChange();
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
-
-  return isCompactWorkbenchLayout;
-}
 
 function buildRefreshableTooltip(student: StudentProfileFilingStudent) {
   const actionIntent = resolveStudentProfileFilingActionIntent(student);
@@ -708,7 +681,6 @@ export function StudentProfileFilingPageContent({
   const [refreshDigest, setRefreshDigest] = useState<RefreshDigest | null>(null);
   const educationDefaultsAppliedRef = useRef<AppliedEducationSupplementDefaults | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
-  const isCompactWorkbenchLayout = useCompactWorkbenchLayout();
 
   const loadOverview = useCallback(
     async (classId: string) => {
@@ -1372,6 +1344,11 @@ export function StudentProfileFilingPageContent({
 
     return '建档当前班级';
   }, [summary.filedCount, summary.pendingCount, summary.warningCount]);
+  const shouldShowInitialClassEmptyState =
+    overview !== null &&
+    !isLoadingOverview &&
+    shouldShowStudentProfileFilingInitialClassEmptyState(summary);
+  const tableStudents = shouldShowInitialClassEmptyState ? [] : students;
 
   const columns = useMemo<ColumnsType<StudentProfileFilingStudent>>(
     () => [
@@ -1396,6 +1373,14 @@ export function StudentProfileFilingPageContent({
       {
         key: 'completeness',
         render: (_, record) => {
+          if (!record.snapshotPresent) {
+            return (
+              <Tooltip title="建档后显示资料进度">
+                <Tag color="processing">待建档</Tag>
+              </Tooltip>
+            );
+          }
+
           const observedCount = countStudentProfileFilingCompleteness(
             record.profileCompletenessFlags,
           );
@@ -1422,6 +1407,8 @@ export function StudentProfileFilingPageContent({
         key: 'warnings',
         render: (_, record) => {
           const droppedSemesterNotice = resolveStudentProfileFilingDroppedSemesterNotice(record);
+          const missingCompletenessLabels =
+            listVisibleMissingStudentProfileFilingCompletenessLabels(record);
           const tags: StudentProfileFilingNoticeTag[] = [
             ...(!record.upstreamIdPresent
               ? [
@@ -1432,9 +1419,16 @@ export function StudentProfileFilingPageContent({
                   },
                 ]
               : []),
-            ...listMissingStudentProfileFilingCompletenessLabels(
-              record.profileCompletenessFlags,
-            ).map((label) => ({
+            ...(record.upstreamIdPresent && !record.snapshotPresent
+              ? [
+                  {
+                    color: 'processing',
+                    key: 'missing-snapshot',
+                    label: '待建档',
+                  },
+                ]
+              : []),
+            ...missingCompletenessLabels.map((label) => ({
               color: 'default',
               key: `missing:${label}`,
               label: formatMissingProfileTagLabel(label),
@@ -1687,18 +1681,40 @@ export function StudentProfileFilingPageContent({
       ) : null}
 
       <section className="student-profile-filing-workbench-section">
-        <div
-          className={
-            isCompactWorkbenchLayout
-              ? 'student-profile-filing-workbench student-profile-filing-workbench-compact'
-              : 'student-profile-filing-workbench'
-          }
-        >
+        <div className="student-profile-filing-workbench">
           <div className="student-profile-filing-table-pane">
             <Table<StudentProfileFilingStudent>
               columns={columns}
-              dataSource={students}
+              dataSource={tableStudents}
               loading={isLoadingOverview}
+              locale={
+                shouldShowInitialClassEmptyState
+                  ? {
+                      emptyText: (
+                        <div className="student-profile-filing-table-empty">
+                          <Empty
+                            description="当前班级尚未建立本地资料快照"
+                            image={Empty.PRESENTED_IMAGE_SIMPLE}
+                          >
+                            <Button
+                              disabled={
+                                !selectedClassId ||
+                                isLoadingOverview ||
+                                refreshableStudentIds.length === 0
+                              }
+                              icon={<SolutionOutlined />}
+                              loading={isClassFiling}
+                              type="primary"
+                              onClick={handleClassFiling}
+                            >
+                              建档当前班级
+                            </Button>
+                          </Empty>
+                        </div>
+                      ),
+                    }
+                  : undefined
+              }
               pagination={{
                 defaultPageSize: 30,
                 pageSizeOptions: [30, 60],
@@ -1729,36 +1745,6 @@ export function StudentProfileFilingPageContent({
               }
             />
           </div>
-
-          <aside className="student-profile-filing-summary-pane" aria-label="班级建档概览">
-            <div className="student-profile-filing-summary-title">建档概览</div>
-            <Spin spinning={isLoadingOverview}>
-              {overview ? (
-                <div className="student-profile-filing-stats">
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="学生数" value={summary.totalCount} />
-                  </div>
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="已建档" value={summary.filedCount} />
-                  </div>
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="待建档" value={summary.pendingCount} />
-                  </div>
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="需关注" value={summary.warningCount} />
-                  </div>
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="缺学工关联" value={summary.blockedCount} />
-                  </div>
-                  <div className="student-profile-filing-stat-item">
-                    <Statistic title="可更新" value={summary.refreshableCount} />
-                  </div>
-                </div>
-              ) : (
-                <Empty description="暂无概览" image={Empty.PRESENTED_IMAGE_SIMPLE} />
-              )}
-            </Spin>
-          </aside>
         </div>
       </section>
 
