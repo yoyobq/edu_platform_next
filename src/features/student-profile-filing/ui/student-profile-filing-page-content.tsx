@@ -120,11 +120,14 @@ type AppliedEducationSupplementDefaults = {
 type PendingFilingAction =
   | {
       classId: string;
+      studentName: string;
       studentId: string;
       type: 'student';
     }
   | {
       classId: string;
+      classLabel: string | null;
+      requestedCount: number;
       type: 'class';
     }
   | {
@@ -186,12 +189,30 @@ type RefreshDigest = {
   traceId: string | null;
 };
 
+type FilingProgressState = {
+  expectedDurationMs: number;
+  label: string;
+  percent: number;
+  requestedCount: number;
+  scope: 'class' | 'student';
+  status: 'active' | 'success';
+};
+
 type StudentProfileFilingNoticeTag = {
   color: string;
   key: string;
   label: string;
   textClassName?: string;
 };
+
+const FILING_PROGRESS_INITIAL_PERCENT = 6;
+const FILING_PROGRESS_MAX_RUNNING_PERCENT = 96;
+const FILING_PROGRESS_RESET_DELAY_MS = 900;
+const FILING_PROGRESS_TICK_MS = 700;
+const STUDENT_FILING_EXPECTED_DURATION_MS = 30_000;
+const CLASS_FILING_BASE_EXPECTED_DURATION_MS = 18_000;
+const CLASS_FILING_PER_STUDENT_EXPECTED_DURATION_MS = 1_800;
+const CLASS_FILING_MAX_EXPECTED_DURATION_MS = 150_000;
 
 const MISSING_PROFILE_TAG_TEXT_CLASS_NAMES: Record<string, string> = {
   基本信息: 'student-profile-filing-missing-tag-text-personal',
@@ -279,6 +300,31 @@ function renderRefreshIssue(result: StudentProfileFilingBatchRefreshItem) {
   }
 
   return '无';
+}
+
+function calculateFilingProgressPercent(input: { elapsedMs: number; expectedDurationMs: number }) {
+  const expectedDurationMs = Math.max(input.expectedDurationMs, FILING_PROGRESS_TICK_MS);
+  const ratio = Math.min(input.elapsedMs / expectedDurationMs, 1);
+  const easedRatio = 1 - (1 - ratio) ** 2;
+
+  return Math.min(
+    FILING_PROGRESS_MAX_RUNNING_PERCENT,
+    Math.max(
+      FILING_PROGRESS_INITIAL_PERCENT,
+      Math.round(
+        FILING_PROGRESS_INITIAL_PERCENT +
+          (FILING_PROGRESS_MAX_RUNNING_PERCENT - FILING_PROGRESS_INITIAL_PERCENT) * easedRatio,
+      ),
+    ),
+  );
+}
+
+function resolveClassFilingExpectedDurationMs(requestedCount: number) {
+  return Math.min(
+    CLASS_FILING_MAX_EXPECTED_DURATION_MS,
+    CLASS_FILING_BASE_EXPECTED_DURATION_MS +
+      Math.max(requestedCount, 1) * CLASS_FILING_PER_STUDENT_EXPECTED_DURATION_MS,
+  );
 }
 
 function formatMissingProfileTagLabel(label: string) {
@@ -679,8 +725,92 @@ export function StudentProfileFilingPageContent({
   );
   const [supplementFeedback, setSupplementFeedback] = useState<SupplementFeedback | null>(null);
   const [refreshDigest, setRefreshDigest] = useState<RefreshDigest | null>(null);
+  const [filingProgress, setFilingProgress] = useState<FilingProgressState | null>(null);
   const educationDefaultsAppliedRef = useRef<AppliedEducationSupplementDefaults | null>(null);
+  const filingProgressStartedAtRef = useRef<number | null>(null);
+  const filingProgressResetTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
+
+  const clearFilingProgressResetTimer = useCallback(() => {
+    if (filingProgressResetTimerRef.current) {
+      window.clearTimeout(filingProgressResetTimerRef.current);
+      filingProgressResetTimerRef.current = null;
+    }
+  }, []);
+
+  const startFilingProgress = useCallback(
+    (input: Omit<FilingProgressState, 'percent' | 'status'>) => {
+      clearFilingProgressResetTimer();
+      filingProgressStartedAtRef.current = Date.now();
+      setFilingProgress({
+        ...input,
+        percent: FILING_PROGRESS_INITIAL_PERCENT,
+        status: 'active',
+      });
+    },
+    [clearFilingProgressResetTimer],
+  );
+
+  const completeFilingProgress = useCallback(() => {
+    clearFilingProgressResetTimer();
+    filingProgressStartedAtRef.current = null;
+    setFilingProgress((current) =>
+      current
+        ? {
+            ...current,
+            percent: 100,
+            status: 'success',
+          }
+        : current,
+    );
+    filingProgressResetTimerRef.current = window.setTimeout(() => {
+      setFilingProgress(null);
+      filingProgressResetTimerRef.current = null;
+    }, FILING_PROGRESS_RESET_DELAY_MS);
+  }, [clearFilingProgressResetTimer]);
+
+  const cancelFilingProgress = useCallback(() => {
+    clearFilingProgressResetTimer();
+    filingProgressStartedAtRef.current = null;
+    setFilingProgress(null);
+  }, [clearFilingProgressResetTimer]);
+
+  useEffect(() => {
+    if (filingProgress?.status !== 'active') {
+      return undefined;
+    }
+
+    const intervalId = window.setInterval(() => {
+      const startedAt = filingProgressStartedAtRef.current;
+
+      if (!startedAt) {
+        return;
+      }
+
+      setFilingProgress((current) => {
+        if (!current || current.status !== 'active') {
+          return current;
+        }
+
+        return {
+          ...current,
+          percent: calculateFilingProgressPercent({
+            elapsedMs: Date.now() - startedAt,
+            expectedDurationMs: current.expectedDurationMs,
+          }),
+        };
+      });
+    }, FILING_PROGRESS_TICK_MS);
+
+    return () => window.clearInterval(intervalId);
+  }, [filingProgress?.status]);
+
+  useEffect(
+    () => () => {
+      clearFilingProgressResetTimer();
+    },
+    [clearFilingProgressResetTimer],
+  );
 
   const loadOverview = useCallback(
     async (classId: string) => {
@@ -787,7 +917,14 @@ export function StudentProfileFilingPageContent({
     ) => {
       setFilingStudentId(action.studentId);
       setRefreshDigest(null);
+      startFilingProgress({
+        expectedDurationMs: STUDENT_FILING_EXPECTED_DURATION_MS,
+        label: `${action.studentName}（${action.studentId}）`,
+        requestedCount: 1,
+        scope: 'student',
+      });
 
+      let completed = false;
       try {
         const result = await refreshStudentProfileFilingStudent({
           studentId: action.studentId,
@@ -806,6 +943,8 @@ export function StudentProfileFilingPageContent({
           }),
         );
         await loadOverview(action.classId);
+        completed = true;
+        completeFilingProgress();
 
         if (result.success) {
           message.success('学生建档快照已更新。');
@@ -813,10 +952,20 @@ export function StudentProfileFilingPageContent({
           message.warning('学生建档请求已返回，请检查结果。');
         }
       } finally {
+        if (!completed) {
+          cancelFilingProgress();
+        }
         setFilingStudentId(null);
       }
     },
-    [loadOverview, message, persistSessionFromResult],
+    [
+      cancelFilingProgress,
+      completeFilingProgress,
+      loadOverview,
+      message,
+      persistSessionFromResult,
+      startFilingProgress,
+    ],
   );
 
   const runClassFilingWithSession = useCallback(
@@ -826,7 +975,14 @@ export function StudentProfileFilingPageContent({
     ) => {
       setIsClassFiling(true);
       setRefreshDigest(null);
+      startFilingProgress({
+        expectedDurationMs: resolveClassFilingExpectedDurationMs(action.requestedCount),
+        label: action.classLabel ?? '当前班级',
+        requestedCount: action.requestedCount,
+        scope: 'class',
+      });
 
+      let completed = false;
       try {
         const result = await refreshStudentProfileFilingClass({
           classId: action.classId,
@@ -844,6 +1000,8 @@ export function StudentProfileFilingPageContent({
           traceId: result.traceId,
         });
         await loadOverview(action.classId);
+        completed = true;
+        completeFilingProgress();
 
         if (result.failureCount > 0) {
           message.warning('整班建档已完成，部分学生需要检查。');
@@ -851,10 +1009,20 @@ export function StudentProfileFilingPageContent({
           message.success('整班建档快照已更新。');
         }
       } finally {
+        if (!completed) {
+          cancelFilingProgress();
+        }
         setIsClassFiling(false);
       }
     },
-    [loadOverview, message, persistSessionFromResult],
+    [
+      cancelFilingProgress,
+      completeFilingProgress,
+      loadOverview,
+      message,
+      persistSessionFromResult,
+      startFilingProgress,
+    ],
   );
 
   const runSupplementWithSession = useCallback(
@@ -1145,9 +1313,13 @@ export function StudentProfileFilingPageContent({
 
     requestFilingAction({
       classId: selectedClassId,
+      classLabel: selectedClassOption
+        ? formatStudentProfileFilingClassLabel(selectedClassOption)
+        : null,
+      requestedCount: refreshableStudentIds.length,
       type: 'class',
     });
-  }, [message, refreshableStudentIds, requestFilingAction, selectedClassId]);
+  }, [message, refreshableStudentIds, requestFilingAction, selectedClassId, selectedClassOption]);
 
   const openSupplementDrawer = useCallback(
     async (student: StudentProfileFilingStudent) => {
@@ -1529,6 +1701,7 @@ export function StudentProfileFilingPageContent({
                   onClick={() =>
                     requestFilingAction({
                       classId: overview?.classId ?? selectedClassId ?? '',
+                      studentName: record.studentName,
                       studentId: record.studentId,
                       type: 'student',
                     })
@@ -1669,13 +1842,37 @@ export function StudentProfileFilingPageContent({
         </div>
       </Card>
 
-      {refreshDigest ? (
+      {filingProgress ? (
+        <Alert
+          showIcon
+          description={
+            <div className="student-profile-filing-upstream-progress">
+              <Progress
+                percent={filingProgress.percent}
+                status={filingProgress.status === 'success' ? 'success' : 'active'}
+              />
+              <div className="student-profile-filing-upstream-progress-meta">
+                <span className="student-profile-filing-upstream-progress-label">
+                  {filingProgress.scope === 'class' ? '范围' : '学生'}：{filingProgress.label}
+                </span>
+                <span className="student-profile-filing-upstream-progress-count">
+                  本次 {filingProgress.requestedCount} 人
+                </span>
+              </div>
+            </div>
+          }
+          message={
+            filingProgress.status === 'success' ? '学工系统资料读取完成' : '正在读取学工系统资料'
+          }
+          type={filingProgress.status === 'success' ? 'success' : 'info'}
+        />
+      ) : refreshDigest ? (
         <Alert
           showIcon
           description={`成功 ${refreshDigest.successCount}，失败 ${
             refreshDigest.failureCount
           }，会话有效期 ${formatUpstreamSessionDateTime(refreshDigest.expiresAt)}。`}
-          title={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
+          message={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
           type={refreshDigest.failureCount > 0 ? 'warning' : 'success'}
         />
       ) : null}
