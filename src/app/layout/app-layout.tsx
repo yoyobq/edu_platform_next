@@ -57,6 +57,8 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
+import { hasAdminAccess } from '@/entities/auth-access';
+
 import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
 import { ENTRY_SIDECAR_OPEN_EVENT } from '@/shared/workbench-events';
@@ -82,8 +84,6 @@ type MainFrameStyle = CSSProperties & {
 };
 
 const NAV_RAIL_CONTROL_SIZE = 40;
-// Temporarily hide the floating entry trigger; keep the implementation for later restoration.
-const SHOULD_SHOW_ENTRY_TRIGGER = false;
 const EntrySidecar = lazy(() =>
   import('./entry-sidecar').then((module) => ({ default: module.EntrySidecar })),
 );
@@ -129,6 +129,9 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
   const isSessionResolving = authSession.status === 'restoring' || isHydrating;
   const hasExplicitChildren = typeof children !== 'undefined';
   const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
+  const shouldShowEntryTrigger = activeSnapshot
+    ? hasAdminAccess({ accessGroup: activeSnapshot.userInfo.accessGroup })
+    : false;
   const revalidator = useRevalidator();
   const mainMeasureRef = useMemo(() => ({ current: mainElement }), [mainElement]);
   const { band: mainWidthBand, width: mainWidth } = useWidthBand(
@@ -736,7 +739,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
             <div data-overlay-mount="cross-region-visual" />
           </div>
 
-          {SHOULD_SHOW_ENTRY_TRIGGER ? (
+          {shouldShowEntryTrigger ? (
             <div
               className="entry-trigger-shell fixed bottom-8 right-8 z-top-control-bar rounded-full shadow-surface"
               data-entry-open={isOpen ? 'true' : 'false'}
