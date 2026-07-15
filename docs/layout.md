@@ -145,6 +145,9 @@ layout 不只是静态切片，也要处理路由切换时的状态延续。
 - `main` 的路由切换不应默认销毁或重置 Sidecar 的完整状态
 - Sidecar 的挂载节点应位于路由 `<Outlet />` 之外，保持全局级存在
 - 当前右下角 Entry Sidecar 浮动入口仅对 `accessGroup` 包含 `ADMIN` 的已登录用户显示；Sidecar 实现、快捷键与受控打开事件保持独立
+- `dev` 下的管理员 Sidecar 当前通过 Qwen 文本改写 Workflow 提供单轮异步预览；`test` 仅允许通过受控 availability 参数验证，`prod` 不启用该调试链路
+- 当前只把未完成的 `workflowId` 与恢复所需最小信息暂存到浏览器；Workflow 终态或用户显式停止等待/新建对话后清理，不把短期 output 当作正式聊天历史
+- 当前没有 token streaming、Conversation 或 Message 事实源；UI 必须明确提示单轮、非流式和不保存历史的限制
 - 当 `main` 从列表页跳转到详情页时，Sidecar 默认保留历史对话，仅更新当前页面上下文
 - 只有在用户显式发起“新对话”或切换到不同业务域时，才允许清空 Sidecar
 

@@ -728,7 +728,7 @@ export function StudentProfileFilingPageContent({
   const [filingProgress, setFilingProgress] = useState<FilingProgressState | null>(null);
   const educationDefaultsAppliedRef = useRef<AppliedEducationSupplementDefaults | null>(null);
   const filingProgressStartedAtRef = useRef<number | null>(null);
-  const filingProgressResetTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const filingProgressResetTimerRef = useRef<number | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
 
   const clearFilingProgressResetTimer = useCallback(() => {

@@ -46,6 +46,16 @@ function getDefaultMessages(
     ];
   }
 
+  if (availability.isAvailable) {
+    return [
+      {
+        id: 'system-ai-preview-welcome',
+        role: 'system',
+        content: '这是管理员 AI 单轮预览。每条消息独立生成，当前页面刷新后只恢复未完成任务。',
+      },
+    ];
+  }
+
   return [
     {
       id: 'system-welcome',
@@ -78,10 +88,11 @@ function getBubbleContentClassName(message: SessionMessage) {
 
 export function EntrySidecar() {
   const { close, isOpen, reportMeasuredWidth } = useSidecarState();
-  const { session, submitQuery } = useCollaborationSession();
+  const { resetSession, session, submitQuery } = useCollaborationSession();
   const navigate = useNavigate();
   const [draft, setDraft] = useState('');
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const messageEndRef = useRef<HTMLDivElement | null>(null);
   const senderRef = useRef<SenderRef | null>(null);
   const sidecarZIndex = readZIndexToken('--z-index-sidecar-container', 1100);
   const availabilityView = getAvailabilityViewState(session.availability);
@@ -100,6 +111,20 @@ export function EntrySidecar() {
   useEffect(() => {
     reportMeasuredWidth(sidecarWidth);
   }, [reportMeasuredWidth, sidecarWidth]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+
+    const animationFrame = window.requestAnimationFrame(() => {
+      messageEndRef.current?.scrollIntoView({ block: 'nearest' });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(animationFrame);
+    };
+  }, [isOpen, session.messages]);
 
   useEffect(() => {
     const drawerWrapper = panelRef.current?.closest('.ant-drawer-content-wrapper');
@@ -178,7 +203,13 @@ export function EntrySidecar() {
         data-sidecar-width-band={sidecarWidthBand}
         style={getSidecarSurfaceStyle(sidecarWidth)}
       >
-        {availabilityView.isUnavailable ? (
+        {availabilityView.isAvailable ? (
+          <Alert
+            type="info"
+            showIcon
+            title="当前接入 Qwen 单轮异步预览；暂不保存聊天历史，也不支持流式输出。"
+          />
+        ) : availabilityView.isUnavailable ? (
           <Alert type="info" showIcon title="增强入口暂未连接，你仍可正常使用项目功能。" />
         ) : availabilityView.isDegraded ? (
           <Alert
@@ -197,17 +228,20 @@ export function EntrySidecar() {
         <Divider style={{ marginBlock: 0 }} />
 
         <div className="flex-1 overflow-y-auto">
-          <div className="sidecar-scroll-stack flex h-full flex-col justify-center">
+          <div className="sidecar-scroll-stack flex min-h-full flex-col">
             {visibleMessages.map((message) => {
               return (
                 <div
                   key={message.id}
                   className={`sidecar-message-shell${message.role === 'user' ? ' ml-auto' : ''}`}
+                  data-message-status={message.status}
                 >
                   <Bubble
                     placement={message.role === 'user' ? 'end' : 'start'}
                     classNames={{ content: getBubbleContentClassName(message) }}
-                    content={message.content}
+                    content={
+                      <div className="whitespace-pre-wrap break-words">{message.content}</div>
+                    }
                   />
 
                   {message.cards && message.cards.length > 0 ? (
@@ -268,6 +302,7 @@ export function EntrySidecar() {
                 </div>
               );
             })}
+            <div ref={messageEndRef} aria-hidden="true" />
             <Typography.Text type="secondary">
               {availabilityView.isReadonly
                 ? '当前入口暂不接收新输入。你仍可浏览已有记录，待入口恢复后再继续。'
@@ -275,20 +310,36 @@ export function EntrySidecar() {
                   ? '增强入口暂未连接。你仍可输入目标页面名称，先查看相关入口卡片，再进入对应页面。'
                   : availabilityView.isDegraded
                     ? '增强入口当前不稳定。你仍可输入目标页面名称或操作意图，我会优先给出本地入口。'
-                    : '你可以直接描述目标，我会帮你找到页面、整理信息或起草下一步。'}
+                    : '当前每条消息独立生成，Qwen 会在任务完成后一次性返回完整回复。'}
             </Typography.Text>
           </div>
         </div>
 
         <div className="sidecar-input-shell border border-border bg-bg-container shadow-card">
+          {availabilityView.isAvailable && session.messages.length > 0 ? (
+            <div className="flex justify-end">
+              <Button
+                size="small"
+                type="link"
+                onClick={() => {
+                  resetSession();
+                  setDraft('');
+                }}
+              >
+                {session.status === 'loading' ? '停止等待并新建对话' : '新对话'}
+              </Button>
+            </div>
+          ) : null}
           <Sender
             ref={senderRef}
             value={draft}
             onChange={(value) => setDraft(value)}
-            disabled={availabilityView.isReadonly}
+            disabled={availabilityView.isReadonly || session.status === 'loading'}
+            loading={session.status === 'loading'}
             onSubmit={(message) => {
-              submitQuery(message);
-              setDraft('');
+              if (submitQuery(message)) {
+                setDraft('');
+              }
             }}
             placeholder={
               availabilityView.isReadonly
@@ -297,7 +348,7 @@ export function EntrySidecar() {
                   ? '输入你想去的页面名称'
                   : availabilityView.isDegraded
                     ? '输入目标页面名称或操作意图'
-                    : '告诉我你想查看什么，或想完成什么'
+                    : '输入单轮问题或任务'
             }
           />
         </div>

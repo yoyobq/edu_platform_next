@@ -1,7 +1,8 @@
 import { expect, type Page, type Route } from '@playwright/test';
 
-import { AUTH_SESSION_STORAGE_KEY } from '../../src/shared/auth-session';
 import { routes } from '../fixtures/routes';
+
+const AUTH_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
 
 type AuthAccessGroup = 'ADMIN' | 'GUEST' | 'REGISTRANT' | 'STAFF' | 'STUDENT';
 type SessionIdentityKind = AuthAccessGroup;

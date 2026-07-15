@@ -1,6 +1,6 @@
 // src/app/providers/collaboration-session-provider.tsx
 
-import { type ReactNode, useMemo, useReducer } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useReducer } from 'react';
 import { useLocation } from 'react-router';
 
 import {
@@ -10,9 +10,10 @@ import {
   matchLocalEntryCards,
 } from '@/app/lib';
 
+import { AI_CHAT_INPUT_MAX_LENGTH, useAiChatSession } from '@/features/ai-chat';
 import { useAuthSessionState } from '@/features/auth';
 
-import type { AuthAccessGroup } from '@/entities/auth-access';
+import { type AuthAccessGroup, hasAdminAccess } from '@/entities/auth-access';
 
 import {
   type AppEnv,
@@ -20,26 +21,25 @@ import {
   CollaborationSessionContext,
   type CollaborationSessionContextValue,
   type CollaborationSessionState,
-  type EntryMode,
   type SessionMessage,
 } from './collaboration-session';
 
-const MOCK_COLLABORATION_AVAILABILITY = 'unavailable' as const;
+const DEFAULT_COLLABORATION_AVAILABILITY = 'unavailable' as const;
 
-type CollaborationSessionAction =
+type LocalSessionAction =
   | { type: 'reset' }
+  | { type: 'reject-input'; payload: { systemReply: string } }
   | {
       type: 'submit-query';
       payload: {
-        cards?: EntryCard[];
+        cards: EntryCard[];
         message: string;
-        mode: EntryMode;
-        systemReply?: string;
+        systemReply: string;
       };
     };
 
-const INITIAL_SESSION_STATE: CollaborationSessionState = {
-  availability: MOCK_COLLABORATION_AVAILABILITY,
+const INITIAL_LOCAL_SESSION_STATE: CollaborationSessionState = {
+  availability: DEFAULT_COLLABORATION_AVAILABILITY,
   mode: 'local',
   status: 'idle',
   messages: [],
@@ -54,29 +54,17 @@ function createSessionMessage(
   const randomSuffix =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
       ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   return {
     id: `${role}-${randomSuffix}`,
     role,
     content,
-    cards,
+    ...(cards ? { cards } : {}),
   };
 }
 
-function buildSystemReply(mode: EntryMode, systemReply?: string): string {
-  if (systemReply) {
-    return systemReply;
-  }
-
-  if (mode === 'local') {
-    return '我先记下这个目标。下一步会优先按本地语义入口整理相关页面卡片。';
-  }
-
-  return '我先记下这个目标。下一步会结合上下文帮你整理页面、信息或草稿。';
-}
-
-function getCurrentAvailability(search: string): CollaborationAvailability {
+function getRequestedAvailability(search: string): CollaborationAvailability | null {
   const value = new URLSearchParams(search).get('availability');
 
   if (
@@ -88,39 +76,52 @@ function getCurrentAvailability(search: string): CollaborationAvailability {
     return value;
   }
 
-  return MOCK_COLLABORATION_AVAILABILITY;
+  return null;
 }
 
-function collaborationSessionReducer(
+function resolveCurrentAvailability(input: {
+  currentAppEnv: AppEnv;
+  hasAiPreviewAccess: boolean;
+  search: string;
+}): CollaborationAvailability {
+  if (!input.hasAiPreviewAccess || input.currentAppEnv === 'prod') {
+    return DEFAULT_COLLABORATION_AVAILABILITY;
+  }
+
+  const requestedAvailability = getRequestedAvailability(input.search);
+
+  if (requestedAvailability) {
+    return requestedAvailability;
+  }
+
+  return input.currentAppEnv === 'dev' ? 'available' : DEFAULT_COLLABORATION_AVAILABILITY;
+}
+
+function localSessionReducer(
   state: CollaborationSessionState,
-  action: CollaborationSessionAction,
+  action: LocalSessionAction,
 ): CollaborationSessionState {
   switch (action.type) {
     case 'reset':
-      return INITIAL_SESSION_STATE;
-    case 'submit-query': {
-      const trimmedMessage = action.payload.message.trim();
-
-      if (!trimmedMessage) {
-        return state;
-      }
-
+      return INITIAL_LOCAL_SESSION_STATE;
+    case 'reject-input':
       return {
         ...state,
-        mode: action.payload.mode,
+        status: 'error',
+        errorMessage: action.payload.systemReply,
+        messages: [...state.messages, createSessionMessage('system', action.payload.systemReply)],
+      };
+    case 'submit-query':
+      return {
+        ...state,
         status: 'ready',
         errorMessage: null,
         messages: [
           ...state.messages,
-          createSessionMessage('user', trimmedMessage),
-          createSessionMessage(
-            'system',
-            buildSystemReply(action.payload.mode, action.payload.systemReply),
-            action.payload.cards,
-          ),
+          createSessionMessage('user', action.payload.message),
+          createSessionMessage('system', action.payload.systemReply, action.payload.cards),
         ],
       };
-    }
     default:
       return state;
   }
@@ -135,61 +136,123 @@ export function CollaborationSessionProvider({
   children,
   currentAppEnv,
 }: CollaborationSessionProviderProps) {
-  const [session, dispatch] = useReducer(collaborationSessionReducer, INITIAL_SESSION_STATE);
+  const [localSession, dispatchLocalSession] = useReducer(
+    localSessionReducer,
+    INITIAL_LOCAL_SESSION_STATE,
+  );
   const location = useLocation();
   const authSession = useAuthSessionState();
-  const currentAvailability = getCurrentAvailability(location.search);
+  const activeSnapshot = authSession.status === 'authenticated' ? authSession.snapshot : null;
+  const hasAiPreviewAccess = activeSnapshot
+    ? hasAdminAccess({ accessGroup: activeSnapshot.userInfo.accessGroup })
+    : false;
+  const aiChatEnabled = hasAiPreviewAccess && currentAppEnv !== 'prod';
+  const currentAvailability = resolveCurrentAvailability({
+    currentAppEnv,
+    hasAiPreviewAccess,
+    search: location.search,
+  });
+  const {
+    reset: resetAiChat,
+    state: aiChatState,
+    submit: submitAiChat,
+  } = useAiChatSession({
+    accountId: activeSnapshot?.accountId,
+    enabled: aiChatEnabled,
+  });
+  const usesAiChat = currentAvailability === 'available';
+  const aiMessages = useMemo<SessionMessage[]>(
+    () =>
+      aiChatState.messages.map((message) => ({
+        content: message.content,
+        id: message.id,
+        role: message.role === 'assistant' ? 'system' : 'user',
+        status: message.status,
+      })),
+    [aiChatState.messages],
+  );
+
+  useEffect(() => {
+    dispatchLocalSession({ type: 'reset' });
+  }, [activeSnapshot?.accountId]);
+
+  const resetSession = useCallback(() => {
+    resetAiChat();
+    dispatchLocalSession({ type: 'reset' });
+  }, [resetAiChat]);
+
+  const submitQuery = useCallback(
+    (message: string): boolean => {
+      const trimmedMessage = message.trim();
+
+      if (!trimmedMessage || currentAvailability === 'readonly') {
+        return false;
+      }
+
+      if (usesAiChat) {
+        return submitAiChat(trimmedMessage);
+      }
+
+      if (trimmedMessage.length > AI_CHAT_INPUT_MAX_LENGTH) {
+        dispatchLocalSession({
+          type: 'reject-input',
+          payload: { systemReply: '单条消息不能超过 12000 个字符。' },
+        });
+        return false;
+      }
+
+      const cards = matchLocalEntryCards(
+        trimmedMessage,
+        getAvailableLocalEntryCards({
+          accountId: activeSnapshot?.accountId,
+          appEnv: currentAppEnv,
+          primaryAccessGroup: activeSnapshot?.primaryAccessGroup ?? ('GUEST' as AuthAccessGroup),
+          accessGroup: activeSnapshot?.userInfo.accessGroup ?? ['GUEST'],
+          slotGroup: activeSnapshot?.slotGroup ?? [],
+          search: location.search,
+        }),
+      );
+
+      dispatchLocalSession({
+        type: 'submit-query',
+        payload: {
+          message: trimmedMessage,
+          cards,
+          systemReply: buildLocalEntryReply(trimmedMessage, cards),
+        },
+      });
+      return true;
+    },
+    [activeSnapshot, currentAppEnv, currentAvailability, location.search, submitAiChat, usesAiChat],
+  );
 
   const value = useMemo<CollaborationSessionContextValue>(
     () => ({
-      session: {
-        ...session,
-        availability: currentAvailability,
-      },
-      resetSession: () => dispatch({ type: 'reset' }),
-      submitQuery: (message) => {
-        const trimmedMessage = message.trim();
-
-        if (!trimmedMessage) {
-          return;
-        }
-
-        if (currentAvailability === 'readonly') {
-          return;
-        }
-
-        const prefersLocalEntry =
-          currentAvailability === 'unavailable' || currentAvailability === 'degraded';
-        const mode: EntryMode = prefersLocalEntry ? 'local' : 'ai';
-        const cards: EntryCard[] = prefersLocalEntry
-          ? matchLocalEntryCards(
-              trimmedMessage,
-              getAvailableLocalEntryCards({
-                accountId: authSession.snapshot?.accountId,
-                appEnv: currentAppEnv,
-                primaryAccessGroup:
-                  authSession.snapshot?.primaryAccessGroup ?? ('GUEST' as AuthAccessGroup),
-                accessGroup: authSession.snapshot?.userInfo.accessGroup ?? ['GUEST'],
-                slotGroup: authSession.snapshot?.slotGroup ?? [],
-                search: location.search,
-              }),
-            )
-          : [];
-
-        dispatch({
-          type: 'submit-query',
-          payload: {
-            message: trimmedMessage,
-            cards,
-            mode,
-            systemReply: prefersLocalEntry
-              ? buildLocalEntryReply(trimmedMessage, cards)
-              : undefined,
+      session: usesAiChat
+        ? {
+            availability: currentAvailability,
+            mode: 'ai',
+            status: aiChatState.status,
+            messages: aiMessages,
+            errorMessage: aiChatState.errorMessage,
+          }
+        : {
+            ...localSession,
+            availability: currentAvailability,
           },
-        });
-      },
+      resetSession,
+      submitQuery,
     }),
-    [authSession.snapshot, currentAppEnv, currentAvailability, location.search, session],
+    [
+      aiChatState.errorMessage,
+      aiChatState.status,
+      aiMessages,
+      currentAvailability,
+      localSession,
+      resetSession,
+      submitQuery,
+      usesAiChat,
+    ],
   );
 
   return (
