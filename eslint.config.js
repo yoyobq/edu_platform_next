@@ -243,17 +243,16 @@ export default defineConfig([
         },
       },
       'boundaries/elements': [
-        { type: 'app', pattern: 'src/app/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'pages', pattern: 'src/pages/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'widgets', pattern: 'src/widgets/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'features', pattern: 'src/features/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'entities', pattern: 'src/entities/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'shared', pattern: 'src/shared/*', mode: 'folder', capture: ['moduleName'] },
-        { type: 'labs', pattern: 'src/labs/*', mode: 'folder', capture: ['moduleName'] },
+        { type: 'app', pattern: 'src/app/*', capture: ['moduleName'] },
+        { type: 'pages', pattern: 'src/pages/*', capture: ['moduleName'] },
+        { type: 'widgets', pattern: 'src/widgets/*', capture: ['moduleName'] },
+        { type: 'features', pattern: 'src/features/*', capture: ['moduleName'] },
+        { type: 'entities', pattern: 'src/entities/*', capture: ['moduleName'] },
+        { type: 'shared', pattern: 'src/shared/*', capture: ['moduleName'] },
+        { type: 'labs', pattern: 'src/labs/*', capture: ['moduleName'] },
         {
           type: 'sandbox',
           pattern: 'src/sandbox/*',
-          mode: 'folder',
           capture: ['moduleName'],
         },
       ],
@@ -265,70 +264,110 @@ export default defineConfig([
           default: 'disallow',
           message:
             'Import violates boundary rules. 请查阅 docs/dependency-rules.md。 如需例外，必须先人工评审并记录到对应 labs 模块的 meta.ts exception。禁止用深层 import 或相对路径绕过规则。',
-          rules: [
+          policies: [
             {
-              from: { type: 'app' },
+              from: { element: { type: 'app' } },
               allow: [
-                { to: { type: 'app' } },
-                { to: { type: ['pages', 'widgets', 'features', 'entities', 'shared'] } },
+                { to: { element: { type: 'app' } } },
                 {
-                  from: { captured: { moduleName: 'router' } },
-                  to: { type: ['labs', 'sandbox'] },
+                  to: {
+                    element: { type: ['pages', 'widgets', 'features', 'entities', 'shared'] },
+                  },
+                },
+                {
+                  from: { element: { captured: { moduleName: 'router' } } },
+                  to: { element: { type: ['labs', 'sandbox'] } },
                 },
               ],
             },
             {
-              from: { type: 'pages' },
-              allow: [
-                { to: { type: 'pages', captured: { moduleName: '{{from.moduleName}}' } } },
-                { to: { type: ['widgets', 'features', 'entities', 'shared'] } },
-              ],
-            },
-            {
-              from: { type: 'widgets' },
-              allow: [
-                { to: { type: 'widgets', captured: { moduleName: '{{from.moduleName}}' } } },
-                { to: { type: ['features', 'entities', 'shared'] } },
-              ],
-            },
-            {
-              from: { type: 'features' },
+              from: { element: { type: 'pages' } },
               allow: [
                 {
-                  to: { type: 'features', captured: { moduleName: '{{from.moduleName}}' } },
+                  to: {
+                    element: {
+                      type: 'pages',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
                 },
-                { to: { type: ['entities', 'shared'] } },
+                { to: { element: { type: ['widgets', 'features', 'entities', 'shared'] } } },
               ],
             },
             {
-              from: { type: 'entities' },
+              from: { element: { type: 'widgets' } },
               allow: [
                 {
-                  to: { type: 'entities', captured: { moduleName: '{{from.moduleName}}' } },
+                  to: {
+                    element: {
+                      type: 'widgets',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
                 },
-                { to: { type: 'shared' } },
+                { to: { element: { type: ['features', 'entities', 'shared'] } } },
               ],
             },
             {
-              from: { type: 'shared' },
-              allow: [{ to: { type: 'shared' } }],
+              from: { element: { type: 'features' } },
+              allow: [
+                {
+                  to: {
+                    element: {
+                      type: 'features',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
+                },
+                { to: { element: { type: ['entities', 'shared'] } } },
+              ],
             },
             {
-              from: { type: 'labs' },
+              from: { element: { type: 'entities' } },
+              allow: [
+                {
+                  to: {
+                    element: {
+                      type: 'entities',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
+                },
+                { to: { element: { type: 'shared' } } },
+              ],
+            },
+            {
+              from: { element: { type: 'shared' } },
+              allow: [{ to: { element: { type: 'shared' } } }],
+            },
+            {
+              from: { element: { type: 'labs' } },
               allow: [
                 // labs 依赖 entities 时仍受 no-restricted-imports 约束，只能使用 @/entities/<name> 公开入口
-                { to: { type: 'labs', captured: { moduleName: '{{from.moduleName}}' } } },
-                { to: { type: ['shared', 'entities'] } },
+                {
+                  to: {
+                    element: {
+                      type: 'labs',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
+                },
+                { to: { element: { type: ['shared', 'entities'] } } },
               ],
             },
             {
-              from: { type: 'sandbox' },
+              from: { element: { type: 'sandbox' } },
               allow: [
                 // sandbox 依赖 entities 时仍受 no-restricted-imports 约束，只能使用 @/entities/<name> 公开入口
                 {
-                  to: { type: 'sandbox', captured: { moduleName: '{{from.moduleName}}' } },
+                  to: {
+                    element: {
+                      type: 'sandbox',
+                      captured: { moduleName: '{{from.element.captured.moduleName}}' },
+                    },
+                  },
                 },
-                { to: { type: ['shared', 'entities'] } },
+                { to: { element: { type: ['shared', 'entities'] } } },
               ],
             },
           ],

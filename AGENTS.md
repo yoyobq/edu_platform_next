@@ -10,7 +10,7 @@ AI agent rules. Keep this file short; use `docs/` for details.
 
 ## Workspace
 
-- Stack: React 19, TS 5.9, Vite 8, React Router 7 Data Mode, Apollo, antd 6, Ant Design X, Tailwind 4, Vitest, Playwright.
+- Stack: React 19, TS 6, Vite 8, React Router 8 Data Mode, Apollo, antd 6, Ant Design X, Tailwind 4, Vitest, Playwright.
 - Alias: `@/` maps to `src/`.
 - Env files live in `env/`, not repo root.
 - Do not create `packages/`, `apps/`, or a new monorepo shape.
