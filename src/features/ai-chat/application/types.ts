@@ -80,11 +80,23 @@ export type AiChatSessionState = {
   status: 'error' | 'idle' | 'loading' | 'ready';
 };
 
-export type PendingAiChatTurn = {
+export type PendingAiChatTurnBase = {
   accountId: number;
   assistantMessageId: string;
   startedAt: number;
   userMessage: string;
   userMessageId: string;
+};
+
+export type PendingAiChatAdmissionTurn = PendingAiChatTurnBase & {
+  phase: 'admission';
+  requestId: string;
+  traceId: string;
+};
+
+export type PendingAiChatWorkflowTurn = PendingAiChatTurnBase & {
+  phase: 'workflow';
   workflowId: string;
 };
+
+export type PendingAiChatTurn = PendingAiChatAdmissionTurn | PendingAiChatWorkflowTurn;

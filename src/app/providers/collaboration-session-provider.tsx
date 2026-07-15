@@ -8,6 +8,7 @@ import {
   type EntryCard,
   getAvailableLocalEntryCards,
   matchLocalEntryCards,
+  readCollaborationAvailability,
 } from '@/app/lib';
 
 import { AI_CHAT_INPUT_MAX_LENGTH, useAiChatSession } from '@/features/ai-chat';
@@ -64,21 +65,6 @@ function createSessionMessage(
   };
 }
 
-function getRequestedAvailability(search: string): CollaborationAvailability | null {
-  const value = new URLSearchParams(search).get('availability');
-
-  if (
-    value === 'available' ||
-    value === 'degraded' ||
-    value === 'readonly' ||
-    value === 'unavailable'
-  ) {
-    return value;
-  }
-
-  return null;
-}
-
 function resolveCurrentAvailability(input: {
   currentAppEnv: AppEnv;
   hasAiPreviewAccess: boolean;
@@ -88,7 +74,7 @@ function resolveCurrentAvailability(input: {
     return DEFAULT_COLLABORATION_AVAILABILITY;
   }
 
-  const requestedAvailability = getRequestedAvailability(input.search);
+  const requestedAvailability = readCollaborationAvailability(input.search);
 
   if (requestedAvailability) {
     return requestedAvailability;
@@ -171,6 +157,13 @@ export function CollaborationSessionProvider({
       })),
     [aiChatState.messages],
   );
+  const projectedMessages = useMemo(
+    () =>
+      usesAiChat
+        ? [...localSession.messages, ...aiMessages]
+        : [...aiMessages, ...localSession.messages],
+    [aiMessages, localSession.messages, usesAiChat],
+  );
 
   useEffect(() => {
     dispatchLocalSession({ type: 'reset' });
@@ -233,12 +226,13 @@ export function CollaborationSessionProvider({
             availability: currentAvailability,
             mode: 'ai',
             status: aiChatState.status,
-            messages: aiMessages,
+            messages: projectedMessages,
             errorMessage: aiChatState.errorMessage,
           }
         : {
             ...localSession,
             availability: currentAvailability,
+            messages: projectedMessages,
           },
       resetSession,
       submitQuery,
@@ -246,9 +240,9 @@ export function CollaborationSessionProvider({
     [
       aiChatState.errorMessage,
       aiChatState.status,
-      aiMessages,
       currentAvailability,
       localSession,
+      projectedMessages,
       resetSession,
       submitQuery,
       usesAiChat,

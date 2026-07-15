@@ -1,12 +1,26 @@
 // src/app/lib/collaboration-url.ts
 
-const COLLABORATION_AVAILABILITY_VALUES = ['available', 'degraded', 'readonly', 'unavailable'];
+export type CollaborationAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
+
+const COLLABORATION_AVAILABILITY_VALUES = new Set<CollaborationAvailability>([
+  'available',
+  'degraded',
+  'readonly',
+  'unavailable',
+]);
+
+export function readCollaborationAvailability(search: string): CollaborationAvailability | null {
+  const value = new URLSearchParams(search).get('availability');
+
+  return value && COLLABORATION_AVAILABILITY_VALUES.has(value as CollaborationAvailability)
+    ? (value as CollaborationAvailability)
+    : null;
+}
 
 export function withCollaborationSearch(pathname: string, search: string): string {
-  const searchParams = new URLSearchParams(search);
-  const availability = searchParams.get('availability');
+  const availability = readCollaborationAvailability(search);
 
-  if (!availability || !COLLABORATION_AVAILABILITY_VALUES.includes(availability)) {
+  if (!availability) {
     return pathname;
   }
 

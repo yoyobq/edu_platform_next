@@ -6,9 +6,13 @@ const { executeGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
 }));
 
-vi.mock('@/shared/graphql', () => ({
-  executeGraphQL: executeGraphQLMock,
-}));
+vi.mock('@/shared/graphql', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/shared/graphql')>();
+
+  return { ...actual, executeGraphQL: executeGraphQLMock };
+});
+
+import { GraphQLIngressError } from '@/shared/graphql';
 
 import { queryAiChatTurn, queueAiChatTurn } from './ai-chat-api';
 
@@ -84,5 +88,29 @@ describe('ai chat api', () => {
       expect.stringContaining('AiWorkflowDemoResult'),
       { input: { workflowId: 'workflow-1' } },
     );
+  });
+
+  it('translates malformed mutation responses into an ambiguous application error', async () => {
+    executeGraphQLMock.mockRejectedValueOnce(
+      new GraphQLIngressError({ type: 'malformed', message: 'missing data' }),
+    );
+
+    await expect(
+      queueAiChatTurn({ message: '解释一下这段代码', requestId: 'request-1', traceId: 'trace-1' }),
+    ).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      retryDisposition: 'ambiguous',
+    });
+  });
+
+  it('translates malformed query responses into a retryable application error', async () => {
+    executeGraphQLMock.mockRejectedValueOnce(
+      new GraphQLIngressError({ type: 'malformed', message: 'missing data' }),
+    );
+
+    await expect(queryAiChatTurn('workflow-1')).rejects.toMatchObject({
+      code: 'UNAVAILABLE',
+      retryDisposition: 'retryable',
+    });
   });
 });

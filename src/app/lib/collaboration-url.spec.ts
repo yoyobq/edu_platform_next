@@ -2,9 +2,15 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { withCollaborationSearch } from './collaboration-url';
+import { readCollaborationAvailability, withCollaborationSearch } from './collaboration-url';
 
 describe('collaboration url', () => {
+  it('reads only supported collaboration availability values', () => {
+    expect(readCollaborationAvailability('?availability=readonly')).toBe('readonly');
+    expect(readCollaborationAvailability('?availability=offline')).toBeNull();
+    expect(readCollaborationAvailability('?debug=1')).toBeNull();
+  });
+
   it('keeps valid app-level availability search across stable links', () => {
     expect(
       withCollaborationSearch(

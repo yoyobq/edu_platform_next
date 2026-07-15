@@ -2,13 +2,13 @@
 
 import { createContext, useContext } from 'react';
 
-import type { EntryCard } from '@/app/lib';
+import type { CollaborationAvailability, EntryCard } from '@/app/lib';
 
 import type { AiChatTurnStatus } from '@/features/ai-chat';
 
 export type AppEnv = 'dev' | 'test' | 'prod';
 export type EntryMode = 'ai' | 'local';
-export type CollaborationAvailability = 'available' | 'degraded' | 'readonly' | 'unavailable';
+export type { CollaborationAvailability } from '@/app/lib';
 export type SessionStatus = 'idle' | 'ready' | 'loading' | 'error';
 export type SessionMessageRole = 'system' | 'user';
 

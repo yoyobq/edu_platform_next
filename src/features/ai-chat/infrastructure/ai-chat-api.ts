@@ -2,6 +2,7 @@
 
 import { executeGraphQL } from '@/shared/graphql';
 
+import type { AiChatGateway } from '../application/ports';
 import type {
   AiChatAdmissionStatus,
   AiChatEnqueueResult,
@@ -10,6 +11,8 @@ import type {
   AiChatWorkflowResult,
   AiChatWorkflowStatus,
 } from '../application/types';
+
+import { toAiChatRequestError } from './ai-chat-error';
 
 const QUEUE_AI_CHAT_TURN_MUTATION = `
   mutation QueueExampleTextRewriteWorkflow($input: QueueExampleTextRewriteWorkflowInput!) {
@@ -168,40 +171,53 @@ export async function queueAiChatTurn(input: {
   requestId: string;
   traceId: string;
 }): Promise<AiChatEnqueueResult> {
-  const runtimeConfig = getAiChatRuntimeConfig();
-  const data = await executeGraphQL<
-    { queueExampleTextRewriteWorkflow: RawAiChatEnqueueResult },
-    {
+  try {
+    const runtimeConfig = getAiChatRuntimeConfig();
+    const data = await executeGraphQL<
+      { queueExampleTextRewriteWorkflow: RawAiChatEnqueueResult },
+      {
+        input: {
+          provider: string;
+          model: string;
+          originalText: string;
+          requirement: string;
+          workflowDedupKey: string;
+          traceId: string;
+        };
+      }
+    >(QUEUE_AI_CHAT_TURN_MUTATION, {
       input: {
-        provider: string;
-        model: string;
-        originalText: string;
-        requirement: string;
-        workflowDedupKey: string;
-        traceId: string;
-      };
-    }
-  >(QUEUE_AI_CHAT_TURN_MUTATION, {
-    input: {
-      provider: runtimeConfig.provider,
-      model: runtimeConfig.model,
-      originalText: input.message,
-      requirement: AI_CHAT_REQUIREMENT,
-      workflowDedupKey: `chat-preview:${input.requestId}`,
-      traceId: `chat-preview:${input.traceId}`,
-    },
-  });
+        provider: runtimeConfig.provider,
+        model: runtimeConfig.model,
+        originalText: input.message,
+        requirement: AI_CHAT_REQUIREMENT,
+        workflowDedupKey: `chat-preview:${input.requestId}`,
+        traceId: `chat-preview:${input.traceId}`,
+      },
+    });
 
-  return mapEnqueueResult(data.queueExampleTextRewriteWorkflow);
+    return mapEnqueueResult(data.queueExampleTextRewriteWorkflow);
+  } catch (error) {
+    throw toAiChatRequestError(error, { malformedResponseIsAmbiguous: true });
+  }
 }
 
 export async function queryAiChatTurn(workflowId: string): Promise<AiChatWorkflowResult | null> {
-  const data = await executeGraphQL<
-    { aiWorkflowDemoResult: RawAiChatWorkflowResult | null },
-    { input: { workflowId: string } }
-  >(AI_CHAT_WORKFLOW_RESULT_QUERY, {
-    input: { workflowId },
-  });
+  try {
+    const data = await executeGraphQL<
+      { aiWorkflowDemoResult: RawAiChatWorkflowResult | null },
+      { input: { workflowId: string } }
+    >(AI_CHAT_WORKFLOW_RESULT_QUERY, {
+      input: { workflowId },
+    });
 
-  return data.aiWorkflowDemoResult ? mapWorkflowResult(data.aiWorkflowDemoResult) : null;
+    return data.aiWorkflowDemoResult ? mapWorkflowResult(data.aiWorkflowDemoResult) : null;
+  } catch (error) {
+    throw toAiChatRequestError(error, { malformedResponseIsAmbiguous: false });
+  }
 }
+
+export const aiChatGateway: AiChatGateway = {
+  queryTurn: queryAiChatTurn,
+  queueTurn: queueAiChatTurn,
+};

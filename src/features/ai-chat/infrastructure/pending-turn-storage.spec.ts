@@ -32,6 +32,7 @@ describe('pending ai chat turn storage', () => {
     const pendingTurn = {
       accountId: 9527,
       assistantMessageId: 'system-1',
+      phase: 'workflow' as const,
       startedAt: 1_752_364_800_000,
       userMessage: '请解释这段代码',
       userMessageId: 'user-1',
@@ -49,11 +50,47 @@ describe('pending ai chat turn storage', () => {
 
   it('removes malformed recovery data', () => {
     window.localStorage.setItem(
-      'edu-mate.ai-chat.pending.v1:9527',
+      'edu-mate.ai-chat.pending.v2:9527',
       JSON.stringify({ accountId: 9527, workflowId: '' }),
     );
 
     expect(loadPendingAiChatTurn(9527)).toBeNull();
     expect(window.localStorage.length).toBe(0);
+  });
+
+  it('stores admission identifiers and migrates legacy workflow recovery data', () => {
+    const pendingAdmission = {
+      accountId: 9527,
+      assistantMessageId: 'system-admission',
+      phase: 'admission' as const,
+      requestId: 'request-1',
+      startedAt: 1_752_364_800_000,
+      traceId: 'trace-1',
+      userMessage: '请解释这段代码',
+      userMessageId: 'user-1',
+    };
+
+    savePendingAiChatTurn(pendingAdmission);
+    expect(loadPendingAiChatTurn(9527)).toEqual(pendingAdmission);
+
+    clearPendingAiChatTurn(9527);
+    window.localStorage.setItem(
+      'edu-mate.ai-chat.pending.v1:9527',
+      JSON.stringify({
+        accountId: 9527,
+        assistantMessageId: 'system-legacy',
+        startedAt: 1_752_364_800_000,
+        userMessage: '恢复旧任务',
+        userMessageId: 'user-legacy',
+        workflowId: 'workflow-legacy',
+      }),
+    );
+
+    expect(loadPendingAiChatTurn(9527)).toMatchObject({
+      phase: 'workflow',
+      workflowId: 'workflow-legacy',
+    });
+    expect(window.localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')).toBeNull();
+    expect(window.localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')).not.toBeNull();
   });
 });

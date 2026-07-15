@@ -1,28 +1,12 @@
 // src/features/ai-chat/application/workflow.ts
 
-import { isGraphQLIngressError } from '@/shared/graphql';
-
+import { isAiChatRequestError } from './request-error';
 import type { AiChatEnqueueResult, AiChatTurnPresentation, AiChatWorkflowResult } from './types';
 
 export const AI_CHAT_INPUT_MAX_LENGTH = 12_000;
-export const AI_CHAT_QUERY_RETRY_DELAY_MS = 3_000;
 
 const FAST_POLL_WINDOW_MS = 10_000;
 const NORMAL_POLL_WINDOW_MS = 60_000;
-
-function hasStableGraphQLErrorCode(error: unknown, code: string): boolean {
-  if (!isGraphQLIngressError(error)) {
-    return false;
-  }
-
-  return (
-    error.graphqlErrors?.some((graphqlError) => {
-      const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
-
-      return extensions?.code === code;
-    }) ?? false
-  );
-}
 
 function readGeneratedText(outputPayload: unknown): string | null {
   if (!outputPayload || typeof outputPayload !== 'object' || Array.isArray(outputPayload)) {
@@ -196,27 +180,27 @@ export function resolveAiChatPollDelay(input: {
   return 5_000;
 }
 
-export function shouldRetryAiChatQuery(error: unknown): boolean {
-  if (!isGraphQLIngressError(error)) {
-    return false;
-  }
+export function resolveAiChatRetryDelay(input: { elapsedMs: number; randomValue: number }): number {
+  const baseDelay = resolveAiChatPollDelay({
+    elapsedMs: input.elapsedMs,
+    status: 'waiting_for_service',
+  });
+  const boundedRandomValue = Math.min(1, Math.max(0, input.randomValue));
+  const jitterFactor = 0.8 + boundedRandomValue * 0.4;
 
-  return (
-    error.isRetryable ||
-    (error.type === 'graphql' && hasStableGraphQLErrorCode(error, 'INTERNAL_SERVER_ERROR'))
-  );
+  return Math.round(baseDelay * jitterFactor);
+}
+
+export function shouldRetryAiChatQuery(error: unknown): boolean {
+  return isAiChatRequestError(error) && error.retryDisposition !== 'none';
+}
+
+export function shouldRetryAiChatAdmission(error: unknown): boolean {
+  return isAiChatRequestError(error) && error.retryDisposition !== 'none';
 }
 
 export function resolveAiChatRequestErrorMessage(error: unknown): string {
-  if (hasStableGraphQLErrorCode(error, 'FORBIDDEN')) {
-    return '当前账号没有使用 AI 预览的权限。';
-  }
-
-  if (hasStableGraphQLErrorCode(error, 'BAD_USER_INPUT')) {
-    return '输入内容不符合要求，请修改后重试。';
-  }
-
-  if (isGraphQLIngressError(error) && error.type === 'auth') {
+  if (isAiChatRequestError(error)) {
     return error.userMessage;
   }
 

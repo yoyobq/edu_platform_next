@@ -144,7 +144,7 @@ test('刷新页面后，应使用保存的 workflowId 恢复查询且不重复�
   await expect(page.getByText('Qwen 正在生成完整回复。')).toBeVisible();
 
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')))
+    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')))
     .not.toBeNull();
 
   workflowState.complete = true;
@@ -155,7 +155,7 @@ test('刷新页面后，应使用保存的 workflowId 恢复查询且不重复�
   expect(workflowState.queueCount).toBe(1);
   expect(workflowState.resultQueryCount).toBeGreaterThanOrEqual(2);
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')))
+    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')))
     .toBeNull();
 });
 
@@ -169,12 +169,12 @@ test('查询遇到非终态权限错误时，应保留恢复信息直到用户�
 
   await expect(page.getByText(/当前账号没有使用 AI 预览的权限/)).toBeVisible();
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')))
+    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')))
     .not.toBeNull();
 
   await page.getByRole('button', { name: '停止等待并新建对话' }).click();
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')))
+    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')))
     .toBeNull();
   await expect(page.getByPlaceholder('输入单轮问题或任务')).toBeEnabled();
 });
@@ -190,11 +190,45 @@ test('admission 返回前显式停止时，不应在响应后恢复已丢弃的�
 
   await expect.poll(() => workflowState.queueResponseCount).toBe(1);
   await expect
-    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v1:9527')))
+    .poll(() => page.evaluate(() => localStorage.getItem('edu-mate.ai-chat.pending.v2:9527')))
     .toBeNull();
 
   await page.reload();
   await openEntrySidecar(page);
   await expect(page.getByText('不要恢复这条任务')).toHaveCount(0);
   expect(workflowState.queueCount).toBe(1);
+});
+
+test('availability 切换时，应保留并继续更新已有 AI 任务，再允许本地降级输入', async ({ page }) => {
+  await openHomeWithSearch(page, '?availability=available');
+  const workflowState = await mockAiChatWorkflow(page, {
+    completeAfterQueryCount: Number.POSITIVE_INFINITY,
+  });
+
+  await openEntrySidecar(page);
+  await page.getByPlaceholder('输入单轮问题或任务').fill('切换状态后继续显示');
+  await page.getByPlaceholder('输入单轮问题或任务').press('Enter');
+  await expect(page.getByText('Qwen 正在生成完整回复。')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/?availability=readonly');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  await expect(page.getByText('当前入口为只读模式，你仍可查看已有内容。')).toBeVisible();
+  await expect(page.getByText('切换状态后继续显示')).toBeVisible();
+  await expect(page.getByText('Qwen 正在生成完整回复。')).toBeVisible();
+
+  workflowState.complete = true;
+  await expect(page.getByText('这是 Qwen 返回的完整回复。')).toBeVisible();
+
+  await page.evaluate(() => {
+    window.history.pushState({}, '', '/?availability=degraded');
+    window.dispatchEvent(new PopStateEvent('popstate'));
+  });
+  const input = page.getByPlaceholder('输入目标页面名称或操作意图');
+
+  await input.fill('沙盒');
+  await input.press('Enter');
+  await expect(page.getByText('这是 Qwen 返回的完整回复。')).toBeVisible();
+  await expect(page.getByText('沙盒演练场')).toBeVisible();
 });

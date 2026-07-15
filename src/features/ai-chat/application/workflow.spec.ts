@@ -2,13 +2,14 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { GraphQLIngressError } from '@/shared/graphql';
-
+import { AiChatRequestError } from './request-error';
 import type { AiChatEnqueueResult, AiChatWorkflowResult } from './types';
 import {
   resolveAiChatAdmissionPresentation,
   resolveAiChatPollDelay,
+  resolveAiChatRetryDelay,
   resolveAiChatWorkflowPresentation,
+  shouldRetryAiChatAdmission,
   shouldRetryAiChatQuery,
 } from './workflow';
 
@@ -42,6 +43,17 @@ function buildWorkflowResult(overrides: Partial<AiChatWorkflowResult> = {}): AiC
     updatedAt: '2026-07-13T00:00:01.000Z',
     ...overrides,
   };
+}
+
+function buildRequestError(
+  retryDisposition: AiChatRequestError['retryDisposition'],
+): AiChatRequestError {
+  return new AiChatRequestError({
+    code: 'UNAVAILABLE',
+    message: 'request failed',
+    retryDisposition,
+    userMessage: 'request failed',
+  });
 }
 
 describe('ai chat workflow presentation', () => {
@@ -116,36 +128,20 @@ describe('ai chat workflow presentation', () => {
     );
   });
 
+  it('adds bounded jitter to the accumulated retry backoff', () => {
+    expect(resolveAiChatRetryDelay({ elapsedMs: 1_000, randomValue: 0 })).toBe(2_400);
+    expect(resolveAiChatRetryDelay({ elapsedMs: 11_000, randomValue: 0.5 })).toBe(10_000);
+    expect(resolveAiChatRetryDelay({ elapsedMs: 61_000, randomValue: 1 })).toBe(36_000);
+  });
+
   it('retries query transport failures and stable internal server errors', () => {
-    expect(
-      shouldRetryAiChatQuery(
-        new GraphQLIngressError({ type: 'network', message: 'network unavailable' }),
-      ),
-    ).toBe(true);
+    expect(shouldRetryAiChatQuery(buildRequestError('retryable'))).toBe(true);
+    expect(shouldRetryAiChatQuery(buildRequestError('ambiguous'))).toBe(true);
+    expect(shouldRetryAiChatQuery(buildRequestError('none'))).toBe(false);
+  });
 
-    expect(
-      shouldRetryAiChatQuery(
-        new GraphQLIngressError({
-          type: 'graphql',
-          message: 'internal',
-          graphqlErrors: [
-            {
-              message: 'internal',
-              extensions: { code: 'INTERNAL_SERVER_ERROR' },
-            },
-          ],
-        }),
-      ),
-    ).toBe(true);
-
-    expect(
-      shouldRetryAiChatQuery(
-        new GraphQLIngressError({
-          type: 'graphql',
-          message: 'forbidden',
-          graphqlErrors: [{ message: 'forbidden', extensions: { code: 'FORBIDDEN' } }],
-        }),
-      ),
-    ).toBe(false);
+  it('retries ambiguous admission responses but not stable business rejections', () => {
+    expect(shouldRetryAiChatAdmission(buildRequestError('ambiguous'))).toBe(true);
+    expect(shouldRetryAiChatAdmission(buildRequestError('none'))).toBe(false);
   });
 });
