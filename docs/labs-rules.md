@@ -157,6 +157,11 @@ export const demoLabMeta = {
   - 用于验证默认 `CACHE_FIRST`、不带 upstream token 的班级学生课程成绩快照展示
   - 当前只对 `ADMIN` 暴露，不进入 staff labs
   - 仅作为成绩快照展示流程的实验入口；若后续成为正式成绩查看入口，应迁入正式区拥有者切片
+- `/labs/student-evaluation-comment`
+  - 用于验证学期/毕业正式评语的班级批量编辑、CAS 冲突恢复和学生本人只读链路
+  - 对 `ADMIN / STAFF / STUDENT` 暴露；页面按当前会话投影编辑/本人视图，最终业务权限始终以后端为准
+  - 班级候选使用已有 Class 接口或 `myManagedClasses`；辅导员候选接口缺失时允许直接输入本地 `classId`
+  - 不承载 AI 草稿、历史版本、导入导出或跨班批量操作；确认稳定后应迁入正式学生评语拥有者切片
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程
   - 当前对 `ADMIN / STAFF` 暴露，不要求教务 slot

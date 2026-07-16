@@ -74,6 +74,11 @@ import {
   studentCourseResultsViewLabAccess,
 } from '@/labs/student-course-results-view';
 import {
+  loadStudentEvaluationCommentLabRouteModule,
+  studentEvaluationCommentLabAccess,
+  type StudentEvaluationCommentLabLoaderData,
+} from '@/labs/student-evaluation-comment';
+import {
   loadStudentPrivateProfileLabRouteModule,
   studentPrivateProfileLabAccess,
 } from '@/labs/student-private-profile';
@@ -726,6 +731,30 @@ async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs
 async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentCourseResultsViewLabAccess,
+    request,
+  });
+}
+
+function resolveStudentEvaluationCommentLabData(
+  snapshot: AuthSessionSnapshot,
+): StudentEvaluationCommentLabLoaderData {
+  const isAdmin = snapshot.userInfo.accessGroup.includes('ADMIN');
+  const isStaff = snapshot.userInfo.accessGroup.includes('STAFF');
+  const isClassAdviser = isStaff && snapshot.slotGroup.includes(CLASS_ADVISER_SLOT_GROUP);
+  const isCounselor = isStaff && snapshot.slotGroup.includes(COUNSELOR_SLOT_GROUP);
+  const canEditClassScope = isAdmin || isClassAdviser || isCounselor;
+
+  return {
+    canEditClassScope,
+    classOptionSource: isAdmin ? 'ALL' : isClassAdviser ? 'MANAGED' : 'MANUAL',
+    defaultView: canEditClassScope ? 'class-scope' : 'mine',
+  };
+}
+
+async function studentEvaluationCommentLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: studentEvaluationCommentLabAccess,
+    getData: resolveStudentEvaluationCommentLabData,
     request,
   });
 }
@@ -1612,6 +1641,11 @@ const router = createBrowserRouter([
             path: 'student-course-results-view',
             loader: studentCourseResultsViewLabLoader,
             lazy: loadStudentCourseResultsViewLabRouteModule,
+          },
+          {
+            path: 'student-evaluation-comment',
+            loader: studentEvaluationCommentLabLoader,
+            lazy: loadStudentEvaluationCommentLabRouteModule,
           },
           {
             path: 'student-private-profile',

@@ -50,9 +50,10 @@
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：
-  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-course-results-pull`、`/labs/student-course-results-view`
+  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-course-results-pull`、`/labs/student-course-results-view`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
   - student：`/labs/zquiz-exam-activities`、`/labs/zquiz-practice-activities`
+  - admin / staff / student：`/labs/student-evaluation-comment`
 - `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：

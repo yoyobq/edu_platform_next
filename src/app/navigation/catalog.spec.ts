@@ -87,6 +87,7 @@ describe('navigation catalog', () => {
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -153,6 +154,7 @@ describe('navigation catalog', () => {
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -191,6 +193,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
     ]);
     expect(
       canAccessNavigationPath(
@@ -277,6 +280,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
     ]);
     expect(
       canAccessNavigationPath(
@@ -368,6 +372,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -424,6 +429,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
     ]);
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
@@ -489,6 +495,8 @@ describe('navigation catalog', () => {
     );
     expect(canAccessNavigationPath('/labs/zquiz-exam-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
+    expect(canAccessNavigationPath('/labs/student-evaluation-comment', studentFilter)).toBe(true);
+    expect(canAccessNavigationPath('/labs/student-evaluation-comment', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-activity-builder', studentFilter)).toBe(false);
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', studentFilter)).toBe(
       false,
@@ -813,6 +821,7 @@ describe('navigation catalog', () => {
       'labs',
     ]);
     expect(findGroup(studentItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-evaluation-comment',
       '/labs/zquiz-exam-activities',
       '/labs/zquiz-practice-activities',
     ]);
@@ -854,6 +863,7 @@ describe('navigation catalog', () => {
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
+      '/labs/student-evaluation-comment',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',
