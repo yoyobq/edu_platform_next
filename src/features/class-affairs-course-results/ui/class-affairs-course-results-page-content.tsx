@@ -7,7 +7,20 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Empty, Form, Input, Select, Space, Spin, Table, Tag, theme } from 'antd';
+import {
+  Alert,
+  Button,
+  Empty,
+  Form,
+  Input,
+  Select,
+  Space,
+  Spin,
+  Table,
+  Tag,
+  theme,
+  Tooltip,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
@@ -118,19 +131,20 @@ function courseColumns(
     key: course.key,
     render: (_, row) => renderScoreCell(row, course.key),
     title: (
-      <span
-        style={{
-          color: colorText,
-          display: 'block',
-          fontSize: 12,
-          lineHeight: 1.25,
-          whiteSpace: 'normal',
-          wordBreak: 'break-all',
-        }}
-        title={[course.courseName, course.teacherName].filter(Boolean).join(' · ')}
-      >
-        {course.title}
-      </span>
+      <Tooltip title={course.teacherName ? `授课教师：${course.teacherName}` : null}>
+        <span
+          style={{
+            color: colorText,
+            display: 'block',
+            fontSize: 12,
+            lineHeight: 1.25,
+            whiteSpace: 'normal',
+            wordBreak: 'break-all',
+          }}
+        >
+          {course.courseName ?? course.courseId ?? '未命名课程'}
+        </span>
+      </Tooltip>
     ),
     width: COURSE_COLUMN_WIDTH,
   }));

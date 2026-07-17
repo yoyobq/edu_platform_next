@@ -35,10 +35,16 @@ export type StudentConductGradeWorkspaceClassOption = {
   trainingYears: number | null;
 };
 
+export type StudentConductGradeFieldConflict =
+  | 'CORRECTION_CLEANUP_PENDING'
+  | 'UPSTREAM_CHANGED_SINCE_CORRECTION';
+
+export type StudentConductGradeFieldSource = 'UPSTREAM_CONFIRMED' | 'LOCAL_CORRECTION' | 'MISSING';
+
 export type StudentConductGradeFieldCell = {
-  conflict: boolean;
+  conflict: StudentConductGradeFieldConflict | null;
   displayValue?: string | null;
-  source: string | null;
+  source: StudentConductGradeFieldSource;
   value: number | string | null;
 };
 

@@ -40,6 +40,11 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { buildStableColumnSizing } from '@/shared/ui/stable-table';
 
+import {
+  resolveConductGradeConflictCopy,
+  resolveConductGradeFieldLabel,
+  resolveConductGradeSourceLabel,
+} from '../application/conduct-grade-display';
 import { resolveStudentConductGradeIssueMessage } from '../application/material-import-issue-display';
 import {
   cleanupStudentConductGradeCorrection,
@@ -133,6 +138,7 @@ const CONDUCT_PATCH_FIELD_KEYS = [
   'score',
   'confirmedGrade',
 ] satisfies StudentConductGradePatchFieldKey[];
+const UPSTREAM_CHANGED_SINCE_CORRECTION = 'UPSTREAM_CHANGED_SINCE_CORRECTION';
 
 const STATUS_LABELS: Record<string, string> = {
   CORRECTION_CLEANUP_PENDING: '补正待清理',
@@ -300,7 +306,7 @@ function hasConductGradeConflict(student: StudentConductGradeStudent) {
 }
 
 function isUpstreamConductGradeField(cell: StudentConductGradeFieldCell) {
-  return Boolean(cell.value !== null && cell.source === 'UPSTREAM');
+  return Boolean(cell.value !== null && cell.source === 'UPSTREAM_CONFIRMED');
 }
 
 function canPatchConductGradeStudent(student: StudentConductGradeStudent) {
@@ -407,6 +413,49 @@ function mergeMaterialImportPreviewDrafts(
 
 function renderFieldCell(cell: StudentConductGradeFieldCell) {
   return <span>{formatFieldValue(cell)}</span>;
+}
+
+function renderFieldDetail(cell: StudentConductGradeFieldCell) {
+  const conflictCopy = cell.conflict ? resolveConductGradeConflictCopy(cell.conflict) : null;
+
+  return (
+    <Space size={4} wrap>
+      <span>{formatFieldValue(cell)}</span>
+      <Tag>{resolveConductGradeSourceLabel(cell.source)}</Tag>
+      {conflictCopy ? (
+        <Tooltip title={conflictCopy.description}>
+          <Tag color="orange">{conflictCopy.label}</Tag>
+        </Tooltip>
+      ) : null}
+    </Space>
+  );
+}
+
+function listBaselineConflictFieldLabels(student: StudentConductGradeStudent) {
+  return (
+    [
+      ['score', student.fields.score],
+      ['estimatedGrade', student.fields.estimatedGrade],
+      ['confirmedGrade', student.fields.confirmedGrade],
+    ] as const
+  )
+    .filter(([, cell]) => cell.conflict === UPSTREAM_CHANGED_SINCE_CORRECTION)
+    .map(([fieldKey]) => resolveConductGradeFieldLabel(fieldKey));
+}
+
+function listMissingBaselineConflictFieldLabels(student: StudentConductGradeStudent) {
+  return (
+    [
+      ['score', student.fields.score],
+      ['estimatedGrade', student.fields.estimatedGrade],
+      ['confirmedGrade', student.fields.confirmedGrade],
+    ] as const
+  )
+    .filter(
+      ([, cell]) =>
+        cell.conflict === UPSTREAM_CHANGED_SINCE_CORRECTION && cell.source === 'MISSING',
+    )
+    .map(([fieldKey]) => resolveConductGradeFieldLabel(fieldKey));
 }
 
 function renderTargetTermSnapshotAlert(missingSnapshotCount: number) {
@@ -661,6 +710,18 @@ export function StudentConductAlignmentPageContent({
     () => conductView?.students.find((student) => student.studentId === selectedStudentId) ?? null,
     [conductView?.students, selectedStudentId],
   );
+  const selectedStudentBaselineConflictFields = useMemo(
+    () => (selectedStudent ? listBaselineConflictFieldLabels(selectedStudent) : []),
+    [selectedStudent],
+  );
+  const selectedStudentMissingConflictFields = useMemo(
+    () => (selectedStudent ? listMissingBaselineConflictFieldLabels(selectedStudent) : []),
+    [selectedStudent],
+  );
+  const selectedStudentCanReviewCorrection =
+    selectedStudent?.manualPatchFieldKeys.some((fieldKey) =>
+      CONDUCT_PATCH_FIELD_KEYS.includes(fieldKey as StudentConductGradePatchFieldKey),
+    ) ?? false;
   const workspaceActionByCode = useMemo(
     () => new Map(workspaceActions.map((action) => [action.action, action])),
     [workspaceActions],
@@ -677,6 +738,13 @@ export function StudentConductAlignmentPageContent({
   );
   const targetTermMissingSnapshotCount = useMemo(
     () => conductView?.students.filter((student) => !student.mainSnapshotPresent).length ?? 0,
+    [conductView?.students],
+  );
+  const baselineConflictCount = useMemo(
+    () =>
+      conductView?.students.filter(
+        (student) => student.status === UPSTREAM_CHANGED_SINCE_CORRECTION,
+      ).length ?? 0,
     [conductView?.students],
   );
   const rosterEligibilityDescription = conductView
@@ -1331,6 +1399,24 @@ export function StudentConductAlignmentPageContent({
     setIsPatchMode(true);
   }, []);
 
+  const handleStartStudentConflictReview = useCallback(
+    (student: StudentConductGradeStudent) => {
+      if (!isPatchMode) {
+        handleStartPatchMode();
+      }
+      setStudentSearch(student.studentId);
+      setSelectedStudentId(null);
+      const missingFields = listMissingBaselineConflictFieldLabels(student);
+      const missingNotice = missingFields.length
+        ? `当前校园网没有${missingFields.join('、')}；清除旧补正后将显示“缺失”。`
+        : '';
+      message[missingFields.length ? 'warning' : 'info'](
+        `已定位到该学生。${missingNotice}请重新填写需要保留的补正，或选择“清除补正”后保存。`,
+      );
+    },
+    [handleStartPatchMode, isPatchMode, message],
+  );
+
   const handleCancelPatchMode = useCallback(() => {
     void confirmLeavingPatchMode(() => {
       resetPatchWorkspace();
@@ -1742,7 +1828,7 @@ export function StudentConductAlignmentPageContent({
                   type="link"
                   onClick={() => setSelectedStudentId(record.studentId)}
                 >
-                  查看冲突
+                  {record.status === UPSTREAM_CHANGED_SINCE_CORRECTION ? '复核' : '查看冲突'}
                 </Button>
               ) : null}
               {!isPatchMode && record.status === 'CORRECTION_CLEANUP_PENDING' ? (
@@ -1838,6 +1924,14 @@ export function StudentConductAlignmentPageContent({
                     ? 'warning'
                     : 'info'
                 }
+              />
+            ) : null}
+            {baselineConflictCount > 0 ? (
+              <Alert
+                showIcon
+                description="校园网记录在本地补正后发生了变化，旧补正已暂停生效。请点击对应学生操作列的“复核”，确认保留或清除补正。"
+                title={`有 ${baselineConflictCount} 名学生的操行补正需要复核`}
+                type="warning"
               />
             ) : null}
             {syncResult ? (
@@ -2038,11 +2132,42 @@ export function StudentConductAlignmentPageContent({
         destroyOnHidden
         open={Boolean(selectedStudent)}
         size={560}
-        title={selectedStudent?.studentName ?? selectedStudent?.studentId ?? '学生明细'}
+        title={
+          selectedStudent
+            ? `操行复核 · ${selectedStudent.studentName ?? selectedStudent.studentId}`
+            : '操行复核'
+        }
         onClose={() => setSelectedStudentId(null)}
       >
         {selectedStudent ? (
           <Space orientation="vertical" size="large" style={{ width: '100%' }}>
+            {selectedStudent.status === UPSTREAM_CHANGED_SINCE_CORRECTION ? (
+              <Alert
+                showIcon
+                action={
+                  selectedStudentCanReviewCorrection ? (
+                    <Button
+                      disabled={conductPatchDisabled}
+                      type="primary"
+                      onClick={() => handleStartStudentConflictReview(selectedStudent)}
+                    >
+                      进入该生复核
+                    </Button>
+                  ) : undefined
+                }
+                description={
+                  selectedStudentCanReviewCorrection
+                    ? `旧补正涉及：${selectedStudentBaselineConflictFields.join('、') || '未知字段'}。${
+                        selectedStudentMissingConflictFields.length
+                          ? `当前校园网没有${selectedStudentMissingConflictFields.join('、')}，清除旧补正后这些字段会显示“缺失”。`
+                          : ''
+                      }请核对当前值；需要保留时重新填写补正，不再需要时清除补正并保存。`
+                    : '该冲突涉及当前页面不支持修改的历史字段，请联系管理员进一步处理。'
+                }
+                title="校园网基线已变化，旧补正暂未生效"
+                type="warning"
+              />
+            ) : null}
             <Descriptions bordered column={1} size="small">
               <Descriptions.Item label="学生 ID">{selectedStudent.studentId}</Descriptions.Item>
               <Descriptions.Item label="姓名">
@@ -2069,44 +2194,48 @@ export function StudentConductAlignmentPageContent({
 
             <Descriptions bordered column={1} size="small" title="字段">
               <Descriptions.Item label="分数">
-                {renderFieldCell(selectedStudent.fields.score)}
+                {renderFieldDetail(selectedStudent.fields.score)}
               </Descriptions.Item>
               <Descriptions.Item label="推定等级">
-                {renderFieldCell(selectedStudent.fields.estimatedGrade)}
+                {renderFieldDetail(selectedStudent.fields.estimatedGrade)}
               </Descriptions.Item>
               <Descriptions.Item label="确认等级">
-                {renderFieldCell(selectedStudent.fields.confirmedGrade)}
+                {renderFieldDetail(selectedStudent.fields.confirmedGrade)}
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions bordered column={1} size="small" title="数据提示">
+            <Descriptions bordered column={1} size="small" title="补正与提示">
               <Descriptions.Item label="本地补正字段">
                 {selectedStudent.manualPatchFieldKeys.length > 0 ? (
                   <Space size={4} wrap>
                     {selectedStudent.manualPatchFieldKeys.map((fieldKey) => (
                       <Tag color="blue" key={fieldKey}>
-                        {fieldKey}
+                        {resolveConductGradeFieldLabel(fieldKey)}
                       </Tag>
                     ))}
                   </Space>
                 ) : (
-                  '-'
+                  '无'
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="冲突码">
+              <Descriptions.Item label="需要处理">
                 {selectedStudent.conflictCodes.length > 0 ? (
                   <Space size={4} wrap>
-                    {selectedStudent.conflictCodes.map((code) => (
-                      <Tag color="orange" key={code}>
-                        {code}
-                      </Tag>
-                    ))}
+                    {selectedStudent.conflictCodes.map((code) => {
+                      const conflictCopy = resolveConductGradeConflictCopy(code);
+
+                      return (
+                        <Tooltip title={conflictCopy.description} key={code}>
+                          <Tag color="orange">{conflictCopy.label}</Tag>
+                        </Tooltip>
+                      );
+                    })}
                   </Space>
                 ) : (
-                  '-'
+                  '无'
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="记录提示">
+              <Descriptions.Item label="记录警告">
                 {selectedStudent.conductSection.warningCodes.length > 0 ? (
                   <Space size={4} wrap>
                     {selectedStudent.conductSection.warningCodes.map((code) => (
@@ -2116,7 +2245,7 @@ export function StudentConductAlignmentPageContent({
                     ))}
                   </Space>
                 ) : (
-                  '-'
+                  '无'
                 )}
               </Descriptions.Item>
             </Descriptions>

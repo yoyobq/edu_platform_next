@@ -88,7 +88,6 @@ export type ClassCourseGradeCourseColumn = {
   courseName: string | null;
   key: string;
   teacherName: string | null;
-  title: string;
 };
 
 export type ClassCourseGradeStudentRow = {
@@ -231,7 +230,7 @@ const CLASS_COURSE_GRADE_WORKSPACE_QUERY = `
         specialStudentCount
         resultRowCount
         regularMatrix {
-          courseColumns { key courseId courseName teacherName title }
+          courseColumns { key courseId courseName teacherName }
           studentRows {
             studentId
             studentName
@@ -253,7 +252,7 @@ const CLASS_COURSE_GRADE_WORKSPACE_QUERY = `
           }
         }
         specialMatrix {
-          courseColumns { key courseId courseName teacherName title }
+          courseColumns { key courseId courseName teacherName }
           studentRows {
             studentId
             studentName

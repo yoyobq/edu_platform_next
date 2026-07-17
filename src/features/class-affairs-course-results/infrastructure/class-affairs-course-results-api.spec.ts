@@ -38,7 +38,8 @@ describe('class affairs course grade workspace api', () => {
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
     expect(query).toContain('regularMatrix');
     expect(query).toContain('specialMatrix');
-    expect(query).toContain('courseColumns');
+    expect(query).toContain('courseColumns { key courseId courseName teacherName }');
+    expect(query).not.toContain('courseColumns { key courseId courseName teacherName title }');
     expect(query).toContain('includedInTermRoster');
   });
 
