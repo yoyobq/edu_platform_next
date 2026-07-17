@@ -370,7 +370,6 @@ describe('student-private-profile lab api', () => {
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('sessionToken');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('fetchClassStudentCourseResults');
   });
 
   it('loads class overview without upstream access and requests thin status fields', async () => {

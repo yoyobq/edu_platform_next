@@ -5,79 +5,95 @@ import { executeGraphQL } from '@/shared/graphql';
 import type {
   BatchWriteStudentEvaluationCommentsResult,
   MyStudentEvaluationComments,
-  StudentEvaluationCommentClassOption,
-  StudentEvaluationCommentClassOptionSource,
-  StudentEvaluationCommentClassScope,
   StudentEvaluationCommentScopeInput,
-  StudentEvaluationCommentSemester,
+  StudentEvaluationCommentWorkspace,
   StudentEvaluationCommentWriteItem,
 } from '../types';
 
-const LIST_LOCAL_CLASS_OPTIONS_QUERY = `
-  query StudentEvaluationCommentLocalClassOptions($input: ListLocalClassOptionsInput) {
-    listLocalClassOptions(input: $input) {
-      id
-      departmentId
-      classCode
-      className
-      gradeYear
-    }
-  }
-`;
-
-const LIST_MY_MANAGED_CLASSES_QUERY = `
-  query StudentEvaluationCommentMyManagedClasses {
-    myManagedClasses {
-      id
-      departmentId
-      classCode
-      className
-      gradeYear
-    }
-  }
-`;
-
-const LIST_ACADEMIC_SEMESTERS_QUERY = `
-  query StudentEvaluationCommentAcademicSemesters($limit: Int) {
-    academicSemesters(limit: $limit) {
-      id
-      isCurrent
-      isVisible
-      name
-      schoolYear
-      sortOrder
-      termNumber
-    }
-  }
-`;
-
-const STUDENT_EVALUATION_COMMENT_CLASS_SCOPE_QUERY = `
-  query StudentEvaluationCommentClassScope(
-    $input: StudentEvaluationCommentClassScopeInput!
-  ) {
-    studentEvaluationCommentClassScope(input: $input) {
-      classItem {
-        id
+const STUDENT_EVALUATION_COMMENT_WORKSPACE_QUERY = `
+  query StudentEvaluationCommentWorkspace($input: StudentEvaluationCommentWorkspaceInput!) {
+    studentEvaluationCommentWorkspace(input: $input) {
+      status
+      commentKind
+      classOptions {
+        classId
         classCode
         className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
       }
-      scope {
-        scopeKey
-        commentKind
+      selectedClass {
+        classId
+        classCode
+        className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
+      }
+      termOptions {
         semesterId
+        schoolYear
+        termNumber
+        sequence
+        label
+        isCurrent
       }
-      students {
-        studentId
-        studentName
-        studentStatus
-        comment {
-          content
-          revision {
-            payloadHash
-            payloadVersion
+      selectedTerm {
+        semesterId
+        schoolYear
+        termNumber
+        sequence
+        label
+        isCurrent
+      }
+      actions {
+        action
+        allowed
+        reasonCode
+        reasonMessage
+      }
+      warnings {
+        code
+        message
+        schoolYear
+        termNumber
+        isCurrent
+      }
+      view {
+        classItem {
+          id
+          classCode
+          className
+        }
+        scope {
+          scopeKey
+          commentKind
+          semesterId
+        }
+        students {
+          studentId
+          studentName
+          studentStatus
+          comment {
+            content
+            revision {
+              payloadHash
+              payloadVersion
+            }
+            source
+            updatedAt
           }
-          source
-          updatedAt
         }
       }
     }
@@ -123,55 +139,23 @@ const MY_STUDENT_EVALUATION_COMMENTS_QUERY = `
   }
 `;
 
-export async function listStudentEvaluationCommentClassOptions(
-  source: StudentEvaluationCommentClassOptionSource,
-  keyword?: string,
-) {
-  if (source === 'MANUAL') {
-    return [];
-  }
-
-  if (source === 'MANAGED') {
-    const response = await executeGraphQL<
-      { myManagedClasses: StudentEvaluationCommentClassOption[] },
-      Record<string, never>
-    >(LIST_MY_MANAGED_CLASSES_QUERY, {});
-
-    return response.myManagedClasses;
-  }
-
+export async function getStudentEvaluationCommentWorkspace(input: {
+  classId?: string | null;
+  commentKind: StudentEvaluationCommentWorkspace['commentKind'];
+  semesterId?: number | null;
+}) {
   const response = await executeGraphQL<
-    { listLocalClassOptions: StudentEvaluationCommentClassOption[] },
-    { input: { keyword: string | null } }
-  >(LIST_LOCAL_CLASS_OPTIONS_QUERY, {
-    input: {
-      keyword: keyword?.trim() || null,
-    },
-  });
+    { studentEvaluationCommentWorkspace: StudentEvaluationCommentWorkspace },
+    { input: typeof input }
+  >(STUDENT_EVALUATION_COMMENT_WORKSPACE_QUERY, { input });
 
-  return response.listLocalClassOptions;
+  return response.studentEvaluationCommentWorkspace;
 }
 
-export async function listStudentEvaluationCommentSemesters() {
-  const response = await executeGraphQL<
-    { academicSemesters: StudentEvaluationCommentSemester[] },
-    { limit: number }
-  >(LIST_ACADEMIC_SEMESTERS_QUERY, { limit: 500 });
-
-  return response.academicSemesters;
-}
-
-export async function getStudentEvaluationCommentClassScope(
-  input: StudentEvaluationCommentScopeInput,
-) {
-  const response = await executeGraphQL<
-    { studentEvaluationCommentClassScope: StudentEvaluationCommentClassScope },
-    { input: StudentEvaluationCommentScopeInput }
-  >(STUDENT_EVALUATION_COMMENT_CLASS_SCOPE_QUERY, { input });
-
-  return response.studentEvaluationCommentClassScope;
-}
-
+/*
+ * Mutations deliberately return only their write summary. The caller reloads the
+ * workspace so selections, action governance and revisions remain one snapshot.
+ */
 export async function batchWriteStudentEvaluationComments(input: {
   items: StudentEvaluationCommentWriteItem[];
   scope: StudentEvaluationCommentScopeInput;

@@ -4,11 +4,8 @@ export type StudentEvaluationCommentKind = 'TERM' | 'GRADUATION';
 export type StudentEvaluationCommentSource = 'MANUAL';
 export type StudentEvaluationCommentWriteAction = 'UPSERT' | 'CLEAR';
 
-export type StudentEvaluationCommentClassOptionSource = 'ALL' | 'MANAGED' | 'MANUAL';
-
 export type StudentEvaluationCommentLabLoaderData = {
   canEditClassScope: boolean;
-  classOptionSource: StudentEvaluationCommentClassOptionSource;
   defaultView: 'class-scope' | 'mine';
 };
 
@@ -18,20 +15,40 @@ export type StudentEvaluationCommentRevision = {
 };
 
 export type StudentEvaluationCommentClassOption = {
-  classCode: string | null;
+  blockingReasonCode: string | null;
+  blockingReasonMessage: string | null;
+  catalogStatus: string;
+  classCode: string;
+  classId: string;
   className: string;
   departmentId: string;
   gradeYear: number | null;
-  id: string;
+  majorId: string | null;
+  majorName: string | null;
+  trainingYears: number | null;
 };
 
-export type StudentEvaluationCommentSemester = {
-  id: number;
+export type StudentEvaluationCommentTermOption = {
   isCurrent: boolean;
-  isVisible: boolean;
-  name: string;
+  label: string;
   schoolYear: number;
-  sortOrder: number;
+  semesterId: number;
+  sequence: number;
+  termNumber: number;
+};
+
+export type StudentEvaluationCommentWorkspaceAction = {
+  action: string;
+  allowed: boolean;
+  reasonCode: string | null;
+  reasonMessage: string | null;
+};
+
+export type StudentEvaluationCommentWorkspaceWarning = {
+  code: string;
+  isCurrent: boolean;
+  message: string;
+  schoolYear: number;
   termNumber: number;
 };
 
@@ -61,6 +78,18 @@ export type StudentEvaluationCommentClassScope = {
     semesterId: number | null;
   };
   students: StudentEvaluationCommentClassScopeStudent[];
+};
+
+export type StudentEvaluationCommentWorkspace = {
+  actions: StudentEvaluationCommentWorkspaceAction[];
+  classOptions: StudentEvaluationCommentClassOption[];
+  commentKind: StudentEvaluationCommentKind;
+  selectedClass: StudentEvaluationCommentClassOption | null;
+  selectedTerm: StudentEvaluationCommentTermOption | null;
+  status: string;
+  termOptions: StudentEvaluationCommentTermOption[];
+  view: StudentEvaluationCommentClassScope | null;
+  warnings: StudentEvaluationCommentWorkspaceWarning[];
 };
 
 export type StudentEvaluationCommentScopeInput = {

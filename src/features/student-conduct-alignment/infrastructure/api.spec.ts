@@ -34,14 +34,10 @@ vi.mock('@/entities/upstream-session', () => ({
 
 import {
   cleanupStudentConductGradeCorrection,
-  fetchStudentConductGradeClassTermOptions,
-  fetchStudentConductGradeEffectiveView,
-  fetchStudentPrivateProfileClassOverview,
+  fetchStudentConductGradeWorkspace,
   importStudentConductGradeMaterials,
-  listStudentPrivateProfileClassOptions,
-  normalizeConductClassTermOptionsInput,
   normalizeConductCleanupInput,
-  normalizeConductViewInput,
+  normalizeConductWorkspaceInput,
   normalizeImportStudentConductGradeMaterialsInput,
   normalizePatchStudentConductGradeCorrectionsInput,
   normalizeRefreshConductClassInput,
@@ -67,81 +63,69 @@ describe('student-conduct-alignment api', () => {
 
   it('normalizes conduct view and cleanup inputs', () => {
     expect(
-      normalizeConductClassTermOptionsInput({
-        classCode: ' 2501 ',
+      normalizeConductWorkspaceInput({
+        classId: ' class-1 ',
+        semesterId: 7,
       }),
     ).toEqual({
-      classCode: '2501',
-    });
-
-    expect(
-      normalizeConductViewInput({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
-      }),
-    ).toEqual({
-      classCode: '2501',
-      schoolYear: '2025',
-      semester: '1',
+      classId: 'class-1',
+      semesterId: 7,
     });
 
     expect(
       normalizeConductCleanupInput({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
+        classId: ' class-1 ',
+        semesterId: 7,
         studentId: ' stu-1 ',
       }),
     ).toEqual({
-      classCode: '2501',
-      schoolYear: '2025',
-      semester: '1',
+      classId: 'class-1',
+      semesterId: 7,
       studentId: 'stu-1',
     });
   });
 
-  it('normalizes conduct upstream refresh scope and rejects semester-only input', () => {
+  it('normalizes conduct upstream refresh scope and validates semester scope', () => {
     expect(
       normalizeRefreshConductClassInput({
-        classCode: ' 2501 ',
+        classId: ' class-1 ',
+        scope: 'ALL_TERMS',
         upstreamSessionToken: ' token-1 ',
       }),
     ).toEqual({
-      classCode: '2501',
-      schoolYear: undefined,
-      semester: undefined,
+      classId: 'class-1',
+      scope: 'ALL_TERMS',
       upstreamSessionToken: 'token-1',
     });
 
     expect(
       normalizeRefreshConductClassInput({
-        classCode: '2501',
-        schoolYear: ' 2025 ',
+        classId: 'class-1',
+        scope: 'SELECTED_TERM',
+        semesterId: 7,
         upstreamSessionToken: ' token-1 ',
       }),
     ).toEqual({
-      classCode: '2501',
-      schoolYear: '2025',
-      semester: undefined,
+      classId: 'class-1',
+      scope: 'SELECTED_TERM',
+      semesterId: 7,
       upstreamSessionToken: 'token-1',
     });
 
     expect(() =>
       normalizeRefreshConductClassInput({
-        classCode: '2501',
-        semester: ' 2 ',
+        classId: 'class-1',
+        scope: 'SELECTED_TERM',
         upstreamSessionToken: ' token-1 ',
       }),
-    ).toThrow('同步指定学期时必须同时提供学年。');
+    ).toThrow('同步所选学期时必须提供 semesterId。');
   });
 
   it('normalizes conduct correction patch input and omits empty fields', () => {
     expect(
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
+        classId: ' class-1 ',
+        semesterId: 7,
         students: [
           {
             confirmedGrade: ' 优 ',
@@ -157,9 +141,8 @@ describe('student-conduct-alignment api', () => {
         ],
       }),
     ).toEqual({
-      classCode: '2501',
-      schoolYear: '2025',
-      semester: '1',
+      classId: 'class-1',
+      semesterId: 7,
       students: [
         {
           confirmedGrade: '优',
@@ -236,18 +219,16 @@ describe('student-conduct-alignment api', () => {
   it('rejects invalid conduct correction patch inputs before graphql', () => {
     expect(() =>
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
+        classId: 'class-1',
+        semesterId: 7,
         students: [],
       }),
     ).toThrow('请至少选择一名需要补录操行的学生。');
 
     expect(() =>
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
+        classId: 'class-1',
+        semesterId: 7,
         students: [
           {
             confirmedGrade: ' ',
@@ -260,9 +241,8 @@ describe('student-conduct-alignment api', () => {
 
     expect(() =>
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
+        classId: 'class-1',
+        semesterId: 7,
         students: [
           {
             clearFieldKeys: ['score'],
@@ -275,9 +255,8 @@ describe('student-conduct-alignment api', () => {
 
     expect(() =>
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
+        classId: 'class-1',
+        semesterId: 7,
         students: [
           {
             clearFieldKeys: ['estimatedGrade' as 'score'],
@@ -289,9 +268,8 @@ describe('student-conduct-alignment api', () => {
 
     expect(() =>
       normalizePatchStudentConductGradeCorrectionsInput({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
+        classId: 'class-1',
+        semesterId: 7,
         students: Array.from({ length: 501 }, (_, index) => ({
           score: String(index),
           studentId: `stu-${index}`,
@@ -300,156 +278,86 @@ describe('student-conduct-alignment api', () => {
     ).toThrow('单次操行补录最多提交 500 名学生。');
   });
 
-  it('loads class options through the private profile class option contract', async () => {
-    const payload = [
-      {
-        authorizationPath: 'CLASS_ADVISER',
-        classCode: '2501',
-        className: '25计算机1班',
-        id: 'class-1',
-        resolvedAuthorityCode: 'CLASS_ADVISER',
-        studentCount: 42,
-      },
-    ];
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      studentPrivateProfileClassOptions: payload,
-    });
-
-    await expect(listStudentPrivateProfileClassOptions()).resolves.toBe(payload);
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('StudentConductGradeGovernanceClassOptions'),
-      {
-        input: {},
-      },
-    );
-  });
-
-  it('loads canonical conduct grade term options by class code', async () => {
-    const payload = {
+  it('loads the conduct workspace with server-owned selection, actions and view', async () => {
+    const classOption = {
       blockingReasonCode: null,
       blockingReasonMessage: null,
-      currentSchoolYear: '2025',
-      currentSemester: '2',
-      generationStatus: 'READY',
-      terms: [
-        {
-          isCurrent: true,
-          label: '25-26学年 第二学期',
-          schoolYear: '2025',
-          semester: '2',
-        },
-      ],
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      studentConductGradeClassTermOptions: payload,
-    });
-
-    await expect(
-      fetchStudentConductGradeClassTermOptions({
-        classCode: ' 2501 ',
-      }),
-    ).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-
-    expect(query).toContain('studentConductGradeClassTermOptions');
-    expect(query).toContain('generationStatus');
-    expect(query).toContain('blockingReasonMessage');
-    expect(query).toContain('currentSchoolYear');
-    expect(query).toContain('terms');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('StudentConductGradeGovernanceClassTermOptions'),
-      {
-        input: {
-          classCode: '2501',
-        },
-      },
-    );
-  });
-
-  it('loads class overview with snapshot and upstream id signals', async () => {
-    const payload = {
+      catalogStatus: 'READY',
       classCode: '2501',
       classId: 'class-1',
       className: '25计算机1班',
-      studentCount: 1,
-      students: [],
+      departmentId: 'dept-1',
+      gradeYear: 2025,
+      majorId: 'major-1',
+      majorName: '计算机',
+      trainingYears: 4,
+    };
+    const termOption = {
+      isCurrent: true,
+      label: '2025-2026学年第二学期',
+      schoolYear: 2025,
+      semesterId: 7,
+      sequence: 2,
+      termNumber: 2,
+    };
+    const payload = {
+      actions: [
+        {
+          action: 'PATCH_CORRECTIONS',
+          allowed: true,
+          reasonCode: null,
+          reasonMessage: null,
+        },
+      ],
+      classOptions: [classOption],
+      selectedClass: classOption,
+      selectedTerm: termOption,
+      status: 'READY',
+      termOptions: [termOption],
+      view: {
+        classCode: '2501',
+        classId: 'class-1',
+        className: '25计算机1班',
+        rosterEligibilitySummary: {
+          excludedAfterExitCount: 0,
+          excludedBeforeEntryCount: 0,
+          excludedNotCheckedInCount: 1,
+          inScopeCount: 0,
+          unresolvedEffectiveSemesterCount: 0,
+        },
+        schoolYear: '2025',
+        sectionKey: 'CONDUCT_GRADE',
+        semester: '2',
+        studentCount: 0,
+        students: [],
+      },
+      warnings: [],
     };
 
-    executeGraphQLMock.mockResolvedValueOnce({
-      studentPrivateProfileClassOverview: payload,
-    });
+    executeGraphQLMock.mockResolvedValueOnce({ studentConductGradeWorkspace: payload });
 
     await expect(
-      fetchStudentPrivateProfileClassOverview({
-        classId: ' class-1 ',
-      }),
-    ).resolves.toBe(payload);
+      fetchStudentConductGradeWorkspace({ classId: ' class-1 ', semesterId: 7 }),
+    ).resolves.toMatchObject({
+      ...payload,
+      classOptions: [expect.objectContaining({ id: 'class-1' })],
+      selectedClass: expect.objectContaining({ id: 'class-1' }),
+    });
 
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
 
-    expect(query).toContain('snapshotPresent');
-    expect(query).toContain('upstreamIdPresent');
-    expect(query).toContain('studentName');
-    expect(query).toContain('studentStatus');
-    expect(query).not.toContain('profileCompletenessFlags');
-    expect(query).not.toContain('sectionStatuses');
-    expect(query).not.toContain('warningCodes');
-    expect(query).not.toContain('sourceObservedAt');
-    expect(query).not.toContain('lastSyncedAt');
+    expect(query).toContain('studentConductGradeWorkspace');
+    expect(query).toContain('sequence');
+    expect(query).toContain('actions');
+    expect(query).toContain('manualPatchFieldKeys');
+    expect(query).toContain('rosterEligibilitySummary');
+    expect(query).toMatch(/score\s*\{\s*value\s+source\s+conflict\s*\}/);
     expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('StudentConductGradeGovernanceClassOverview'),
+      expect.stringContaining('StudentConductGradeGovernanceWorkspace'),
       {
         input: {
           classId: 'class-1',
-        },
-      },
-    );
-  });
-
-  it('loads conduct effective view with field source and conflict metadata', async () => {
-    const payload = {
-      classCode: '2501',
-      classId: 'class-1',
-      className: '25计算机1班',
-      schoolYear: '2025',
-      sectionKey: 'CONDUCT_GRADE',
-      semester: '1',
-      studentCount: 0,
-      students: [],
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      studentConductGradeEffectiveView: payload,
-    });
-
-    await expect(
-      fetchStudentConductGradeEffectiveView({
-        classCode: '2501',
-        schoolYear: '2025',
-        semester: '1',
-      }),
-    ).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-
-    expect(query).toContain('studentConductGradeEffectiveView');
-    expect(query).toContain('manualPatchFieldKeys');
-    expect(query).toContain('conflictCodes');
-    expect(query).toContain('confirmedGrade');
-    expect(query).toContain('displayValue');
-    expect(query).toMatch(/score\s*\{\s*value\s+source\s+conflict\s*\}/);
-    expect(query).not.toContain('summary');
-    expect(query).not.toContain('correctionCleanupPendingCount');
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('StudentConductGradeGovernanceEffectiveView'),
-      {
-        input: {
-          classCode: '2501',
-          schoolYear: '2025',
-          semester: '1',
+          semesterId: 7,
         },
       },
     );
@@ -473,9 +381,8 @@ describe('student-conduct-alignment api', () => {
 
     await expect(
       cleanupStudentConductGradeCorrection({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
+        classId: ' class-1 ',
+        semesterId: 7,
         studentId: ' stu-1 ',
       }),
     ).resolves.toBe(payload);
@@ -488,9 +395,8 @@ describe('student-conduct-alignment api', () => {
       expect.stringContaining('StudentConductGradeGovernanceCleanup'),
       {
         input: {
-          classCode: '2501',
-          schoolYear: '2025',
-          semester: '1',
+          classId: 'class-1',
+          semesterId: 7,
           studentId: 'stu-1',
         },
       },
@@ -537,9 +443,8 @@ describe('student-conduct-alignment api', () => {
 
     await expect(
       patchStudentConductGradeCorrections({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
+        classId: ' class-1 ',
+        semesterId: 7,
         students: [
           {
             confirmedGrade: ' 优 ',
@@ -566,9 +471,8 @@ describe('student-conduct-alignment api', () => {
       expect.stringContaining('StudentConductGradeGovernancePatchCorrections'),
       {
         input: {
-          classCode: '2501',
-          schoolYear: '2025',
-          semester: '1',
+          classId: 'class-1',
+          semesterId: 7,
           students: [
             {
               confirmedGrade: '优',
@@ -886,6 +790,7 @@ describe('student-conduct-alignment api', () => {
       createdCount: 40,
       expiresAt: '2026-06-26T10:00:00.000Z',
       failureCount: 0,
+      failures: [],
       processedRegistrationCount: 1,
       requestedRegistrationCount: 1,
       skippedRegistrationCount: 0,
@@ -913,9 +818,9 @@ describe('student-conduct-alignment api', () => {
 
     await expect(
       refreshStudentConductGradeClassFromUpstream({
-        classCode: ' 2501 ',
-        schoolYear: ' 2025 ',
-        semester: ' 2 ',
+        classId: ' class-1 ',
+        scope: 'SELECTED_TERM',
+        semesterId: 7,
         upstreamSessionToken: ' token-1 ',
       }),
     ).resolves.toBe(payload);
@@ -926,6 +831,8 @@ describe('student-conduct-alignment api', () => {
     expect(query).toContain('requestedRegistrationCount');
     expect(query).toContain('writtenStudentCount');
     expect(query).toContain('termResults');
+    expect(query).toContain('failures');
+    expect(query).toContain('reasonMessage');
     expect(query).toContain('upstreamSessionToken');
     expect(query).not.toContain('requestedCount');
     expect(query).not.toContain('successCount');
@@ -933,9 +840,9 @@ describe('student-conduct-alignment api', () => {
       expect.stringContaining('StudentConductGradeGovernanceRefreshClass'),
       {
         input: {
-          classCode: '2501',
-          schoolYear: '2025',
-          semester: '2',
+          classId: 'class-1',
+          scope: 'SELECTED_TERM',
+          semesterId: 7,
           upstreamSessionToken: 'token-1',
         },
       },

@@ -1,28 +1,16 @@
 // src/features/class-affairs-course-results/ui/class-affairs-course-results-page-content.tsx
 
-import {
-  type Dispatch,
-  type SetStateAction,
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   CloudSyncOutlined,
   FileSearchOutlined,
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Empty, Form, Input, Select, Spin, Table, Tabs, Tag, theme } from 'antd';
+import { Alert, Button, Empty, Form, Input, Select, Space, Spin, Table, Tag, theme } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-import {
-  type AcademicSemesterRecord,
-  buildAcademicTermKey as buildTermKey,
-  formatAcademicSchoolYear as formatSchoolYear,
-  formatAcademicSemester as formatSemester,
-} from '@/entities/academic-semester';
+import { AcademicTermTabs } from '@/entities/academic-semester';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -35,31 +23,30 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import { buildStableColumnSizing } from '@/shared/ui/stable-table';
+import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
-  fetchManagedClassCourseResults,
-  listMyManagedClasses,
-  type ManagedClassCourseResultsClass,
-  type ManagedClassCourseResultsTerm,
+  buildCourseGradeRefreshRequest,
+  type CourseGradeRefreshFeedback,
+  type CourseGradeRefreshRequest,
+  type CourseGradeRefreshScope,
+  resolveCourseGradeRefreshFeedback,
+} from '../application/course-grade-refresh';
+import {
+  type ClassCourseGradeAction,
+  type ClassCourseGradeCourseColumn,
+  type ClassCourseGradeMatrix,
+  type ClassCourseGradeStudentRow,
+  type ClassCourseGradeWorkspace,
+  getClassCourseGradeWorkspace,
   type ManagedCourseResultRecord,
-  type ManagedCourseResultsDisplayDecisionOutcome,
-  type ManagedCourseResultsDisplayReasonCode,
-  type ManagedCourseResultsDisplayStatus,
-  type ManagedCourseResultsItem,
-  type ManagedCourseResultsResult,
-  type ManagedCourseResultsStudentStatus,
-  requestAcademicSemesters,
+  refreshClassCourseGrades,
   resolveUpstreamErrorMessage,
 } from '../infrastructure/class-affairs-course-results-api';
 import {
-  buildCourseResultsTermDisplayStateByKey,
   COURSE_RESULTS_REASON_LABELS,
   COURSE_RESULTS_STUDENT_STATUS_LABELS,
-  splitCourseResultsItemsForDisplay,
 } from '../lib/result-display';
-
-import './class-affairs-course-results-page-content.css';
 
 type CurrentAccount = {
   accountId: number;
@@ -68,560 +55,157 @@ type CurrentAccount = {
   staffId: string | null;
 };
 
-type PendingRefreshRequest = {
-  classCode: string;
-  scope: 'ALL_TERMS' | 'CURRENT_TERM';
-  term: ManagedClassCourseResultsTerm;
-};
+const STUDENT_NUMBER_COLUMN_WIDTH = 106;
+const STUDENT_NAME_COLUMN_WIDTH = 88;
+const COURSE_COLUMN_WIDTH = 76;
 
-type DisplayRow = ManagedCourseResultRecord & {
-  studentName: string | null;
-  studentNumber: string;
-};
-
-type PivotScoreCell = {
-  periodicFinalTotalScore: string | null;
-  totalScore: string | null;
-};
-
-type PivotCourseColumn = {
-  courseId: string | null;
-  courseName: string | null;
-  key: string;
-  teacherName: string | null;
-  title: string;
-};
-
-type PivotStudentRow = {
-  resultCount: number;
-  resultDisplayDecisionOutcome: ManagedCourseResultsDisplayDecisionOutcome | null;
-  resultDisplayMessage: string | null;
-  resultDisplayReasonCode: ManagedCourseResultsDisplayReasonCode | null;
-  resultDisplayStatus: ManagedCourseResultsDisplayStatus;
-  scores: Record<string, PivotScoreCell[]>;
-  studentName: string | null;
-  studentNumber: string;
-  studentStatus: ManagedCourseResultsStudentStatus | null;
-};
-
-const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
-const STUDENT_NUMBER_COLUMN_WIDTH = 98;
-const STUDENT_NAME_COLUMN_WIDTH = 82;
-const SPECIAL_STATUS_COLUMN_WIDTH = 92;
-const SPECIAL_REASON_COLUMN_WIDTH = 128;
-const SPECIAL_MESSAGE_COLUMN_WIDTH = 220;
-const PIVOT_COURSE_COLUMN_WIDTH = 72;
-const PIVOT_BASE_SCROLL_X = STUDENT_NUMBER_COLUMN_WIDTH + STUDENT_NAME_COLUMN_WIDTH;
-const SPECIAL_PIVOT_BASE_SCROLL_X =
-  PIVOT_BASE_SCROLL_X +
-  SPECIAL_STATUS_COLUMN_WIDTH +
-  SPECIAL_REASON_COLUMN_WIDTH +
-  SPECIAL_MESSAGE_COLUMN_WIDTH;
-const LOCAL_CLASS_SETUP_PATH = '/academic-affairs/student-roster-membership-reconciliation';
-const STUDENT_ROSTER_SYNC_REQUIRED_PREFIX = '目标班级尚未同步学生名单';
-const STUDENT_ROSTER_SYNC_LINK_TEXT = '同步学生名单';
-
-function useCompactViewport() {
-  const [isCompactViewport, setIsCompactViewport] = useState(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(COMPACT_VIEWPORT_QUERY).matches,
-  );
-
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(COMPACT_VIEWPORT_QUERY);
-    const handleChange = () => {
-      setIsCompactViewport(mediaQuery.matches);
-    };
-
-    handleChange();
-    mediaQuery.addEventListener('change', handleChange);
-
-    return () => {
-      mediaQuery.removeEventListener('change', handleChange);
-    };
-  }, []);
-
-  return isCompactViewport;
-}
-
-function toDisplayTerm(term: ManagedClassCourseResultsTerm | null) {
-  if (!term) {
-    return null;
-  }
-
-  const schoolYear = Number(term.schoolYear);
-  const termNumber = Number(term.semester);
-
-  if (!Number.isSafeInteger(schoolYear) || !Number.isSafeInteger(termNumber)) {
-    return null;
-  }
-
-  return {
-    schoolYear,
-    termNumber,
-  };
-}
-
-function formatClassLabel(item: ManagedClassCourseResultsClass) {
-  return `${item.className || item.classCode}（${item.classCode}）`;
-}
-
-function resolveClassCode(item: ManagedClassCourseResultsClass) {
-  return item.classCode?.trim() || null;
-}
-
-function renderCourseResultsErrorTitle(message: string) {
-  if (!message.includes(STUDENT_ROSTER_SYNC_REQUIRED_PREFIX)) {
-    return message;
-  }
-
-  const linkTextIndex = message.lastIndexOf(STUDENT_ROSTER_SYNC_LINK_TEXT);
-
-  if (linkTextIndex < 0) {
-    return message;
-  }
-
-  return (
-    <>
-      {message.slice(0, linkTextIndex)}
-      <a href={LOCAL_CLASS_SETUP_PATH}>{STUDENT_ROSTER_SYNC_LINK_TEXT}</a>
-      {message.slice(linkTextIndex + STUDENT_ROSTER_SYNC_LINK_TEXT.length)}
-    </>
-  );
-}
-
-function compareManagedClasses(
-  first: ManagedClassCourseResultsClass,
-  second: ManagedClassCourseResultsClass,
+function findAction(
+  workspace: ClassCourseGradeWorkspace | null,
+  action: ClassCourseGradeAction['action'],
 ) {
-  const gradeCompare = (second.gradeYear ?? -1) - (first.gradeYear ?? -1);
-
-  if (gradeCompare !== 0) {
-    return gradeCompare;
-  }
-
-  return compareTextValue(resolveClassCode(second), resolveClassCode(first));
+  return workspace?.actions.find((item) => item.action === action) ?? null;
 }
 
-function compareTextValue(a: string | null, b: string | null) {
-  return (a ?? '').localeCompare(b ?? '', 'zh-CN', {
-    numeric: true,
-    sensitivity: 'base',
-  });
+function filterRows(rows: readonly ClassCourseGradeStudentRow[], keyword: string) {
+  const normalized = keyword.trim().toLowerCase();
+  if (!normalized) return [...rows];
+  return rows.filter(
+    (row) =>
+      row.studentId.toLowerCase().includes(normalized) ||
+      row.studentName.toLowerCase().includes(normalized),
+  );
 }
 
-function buildCourseKey(row: DisplayRow) {
-  return [
-    row.courseId?.trim() || row.courseName?.trim() || 'no-course',
-    row.teacherName?.trim() || 'no-teacher',
-  ].join('::');
+function scoreParts(result: ManagedCourseResultRecord) {
+  const total = result.totalScore?.trim();
+  const periodic = result.periodicFinalTotalScore?.trim();
+  if (total && periodic && total !== periodic) return [total, periodic];
+  return [total || periodic || '-'];
 }
 
-function resolveCourseName(row: DisplayRow) {
-  return row.courseName?.trim() || row.courseId?.trim() || '未返回课程';
+function renderScoreText(value: string) {
+  const isFailing = /^-?\d+(?:\.\d+)?$/.test(value) && Number(value) < 60;
+  return isFailing ? <span style={{ color: 'var(--ant-color-error)' }}>{value}</span> : value;
 }
 
-function renderStableTextCell(value: string | null | undefined) {
-  if (!value) {
-    return <span className="text-text-secondary">-</span>;
-  }
+function renderScoreCell(row: ClassCourseGradeStudentRow, courseKey: string) {
+  const results = row.cells.find((cell) => cell.courseKey === courseKey)?.results ?? [];
+  if (!results.length) return <span className="text-text-secondary">-</span>;
 
   return (
-    <span
-      title={value}
-      style={{
-        display: 'block',
-        fontVariantNumeric: 'tabular-nums',
-        overflow: 'hidden',
-        textOverflow: 'ellipsis',
-        whiteSpace: 'nowrap',
-        width: '100%',
-      }}
-    >
-      {value}
+    <span>
+      {results.map((result, resultIndex) => (
+        <span key={`${courseKey}:${resultIndex}`}>
+          {resultIndex > 0 ? <span className="text-text-tertiary"> ｜ </span> : null}
+          {scoreParts(result).map((part, partIndex) => (
+            <span key={`${part}:${partIndex}`}>
+              {partIndex > 0 ? <span className="text-text-tertiary"> / </span> : null}
+              {renderScoreText(part)}
+            </span>
+          ))}
+        </span>
+      ))}
     </span>
   );
 }
 
-function resolveStudentStatusTagColor(status: ManagedCourseResultsStudentStatus | null) {
-  switch (status) {
-    case 'DROPPED':
-      return 'red';
-    case 'SUSPENDED':
-      return 'orange';
-    case 'ENROLLED':
-      return 'green';
-    default:
-      return 'blue';
-  }
-}
-
-function renderTagCell(label: string | null, color: string) {
-  if (!label) {
-    return <span className="text-text-secondary">-</span>;
-  }
-
-  return (
-    <Tag color={color} style={{ marginInlineEnd: 0 }}>
-      {label}
-    </Tag>
-  );
-}
-
-function renderStudentStatusCell(status: ManagedCourseResultsStudentStatus | null) {
-  return renderTagCell(
-    status ? COURSE_RESULTS_STUDENT_STATUS_LABELS[status] : null,
-    resolveStudentStatusTagColor(status),
-  );
-}
-
-function renderDisplayReasonCell(reasonCode: ManagedCourseResultsDisplayReasonCode | null) {
-  return renderTagCell(reasonCode ? COURSE_RESULTS_REASON_LABELS[reasonCode] : '特殊情况', 'gold');
-}
-
-function buildScoreParts(cell: PivotScoreCell) {
-  const totalScore = cell.totalScore?.trim();
-  const periodicScore = cell.periodicFinalTotalScore?.trim();
-
-  if (totalScore && periodicScore && totalScore !== periodicScore) {
-    return [totalScore, periodicScore];
-  }
-
-  return [totalScore || periodicScore || '-'];
-}
-
-function isFailingScoreText(value: string) {
-  if (!/^-?\d+(?:\.\d+)?$/.test(value)) {
-    return false;
-  }
-
-  return Number(value) < 60;
-}
-
-function renderScorePart(value: string, index: number) {
-  const content = isFailingScoreText(value) ? (
-    <span style={{ color: 'var(--ant-color-error)' }}>{value}</span>
-  ) : (
-    value
-  );
-
-  if (index === 0) {
-    return <span key={`${value}:${index}`}>{content}</span>;
-  }
-
-  return (
-    <span key={`${value}:${index}`}>
-      <span className="text-text-tertiary"> / </span>
-      {content}
-    </span>
-  );
-}
-
-function renderScoreCells(cells: readonly PivotScoreCell[] | undefined) {
-  if (!cells?.length) {
-    return <span className="text-text-secondary">-</span>;
-  }
-
-  return <span>{cells.flatMap(buildScoreParts).map(renderScorePart)}</span>;
-}
-
-function filterStudentItemsBySearch(
-  items: readonly ManagedCourseResultsItem[],
-  keyword: string | undefined,
-) {
-  const normalizedKeyword = keyword?.trim().toLowerCase();
-
-  if (!normalizedKeyword) {
-    return [...items];
-  }
-
-  return items.filter((item) => {
-    const studentNumber = item.studentNumber.toLowerCase();
-    const studentName = item.studentName?.toLowerCase() ?? '';
-
-    return studentNumber.includes(normalizedKeyword) || studentName.includes(normalizedKeyword);
-  });
-}
-
-function filterItemsByTerm(
-  items: readonly ManagedCourseResultsItem[],
-  term: ManagedClassCourseResultsTerm | null,
-) {
-  if (!term) {
-    return [];
-  }
-
-  return items
-    .map((item) => ({
-      ...item,
-      results: item.results.filter(
-        (record) => record.schoolYear === term.schoolYear && record.semester === term.semester,
-      ),
-    }))
-    .filter((item) => item.results.length > 0);
-}
-
-function buildTermLabel(schoolYear: string, semester: string) {
-  return `${formatSchoolYear(schoolYear)} ${formatSemester(semester)}`;
-}
-
-function resolveCurrentTermKey(currentSemester: AcademicSemesterRecord | null) {
-  if (!currentSemester) {
-    return null;
-  }
-
-  return `${currentSemester.schoolYear}::${currentSemester.termNumber}`;
-}
-
-function buildTermsFromResult(
-  result: ManagedCourseResultsResult | null,
-  academicSemesters: readonly AcademicSemesterRecord[],
-) {
-  const semesterByTermKey = new Map(
-    academicSemesters.map((semester) => [
-      `${semester.schoolYear}::${semester.termNumber}`,
-      semester,
-    ]),
-  );
-  const currentSemester = academicSemesters.find((semester) => semester.isCurrent) ?? null;
-  const currentTermKey = resolveCurrentTermKey(currentSemester);
-  const termByKey = new Map<string, ManagedClassCourseResultsTerm>();
-
-  for (const item of result?.items ?? []) {
-    for (const record of item.results) {
-      const schoolYear = record.schoolYear?.trim();
-      const semester = record.semester?.trim();
-
-      if (!schoolYear || !semester) {
-        continue;
-      }
-
-      const key = `${schoolYear}::${semester}`;
-
-      if (termByKey.has(key)) {
-        continue;
-      }
-
-      const matchedSemester = semesterByTermKey.get(key) ?? null;
-
-      termByKey.set(key, {
-        canPullFromUpstream: true,
-        disabledReason: null,
-        hasLocalData: true,
-        id: matchedSemester?.id ?? null,
-        isCurrent: key === currentTermKey,
-        label: buildTermLabel(schoolYear, semester),
-        schoolYear,
-        semester,
-      });
-    }
-  }
-
-  return [...termByKey.values()].sort(
-    (first, second) =>
-      compareTextValue(second.schoolYear, first.schoolYear) ||
-      compareTextValue(second.semester, first.semester),
-  );
-}
-
-function buildPivotTableData(items: readonly ManagedCourseResultsItem[]) {
-  const courseColumnByKey = new Map<string, PivotCourseColumn>();
-  const studentRows = items
-    .map<PivotStudentRow>((item) => {
-      const scores: Record<string, PivotScoreCell[]> = {};
-
-      for (const record of item.results) {
-        const row: DisplayRow = {
-          ...record,
-          studentName: item.studentName,
-          studentNumber: item.studentNumber,
-        };
-        const courseKey = buildCourseKey(row);
-
-        if (!courseColumnByKey.has(courseKey)) {
-          courseColumnByKey.set(courseKey, {
-            courseId: row.courseId,
-            courseName: row.courseName,
-            key: courseKey,
-            teacherName: row.teacherName,
-            title: resolveCourseName(row),
-          });
-        }
-
-        scores[courseKey] = [
-          ...(scores[courseKey] ?? []),
-          {
-            periodicFinalTotalScore: row.periodicFinalTotalScore,
-            totalScore: row.totalScore,
-          },
-        ];
-      }
-
-      return {
-        resultCount: item.results.length,
-        resultDisplayDecisionOutcome: item.resultDisplayDecisionOutcome,
-        resultDisplayMessage: item.resultDisplayMessage,
-        resultDisplayReasonCode: item.resultDisplayReasonCode,
-        resultDisplayStatus: item.resultDisplayStatus,
-        scores,
-        studentName: item.studentName,
-        studentNumber: item.studentNumber,
-        studentStatus: item.studentStatus,
-      };
-    })
-    .sort((a, b) => compareTextValue(a.studentNumber, b.studentNumber));
-
-  return {
-    courseColumns: [...courseColumnByKey.values()].sort((a, b) =>
-      compareTextValue(a.courseName, b.courseName),
-    ),
-    studentRows,
-  };
-}
-
-function buildPivotColumns(
-  courseColumns: readonly PivotCourseColumn[],
-  isCompactViewport: boolean,
-  token: ReturnType<typeof theme.useToken>['token'],
-): ColumnsType<PivotStudentRow> {
-  return [
-    ...buildStudentIdentityColumns(isCompactViewport),
-    ...buildCourseScoreColumns(courseColumns, token),
-  ];
-}
-
-function buildStudentIdentityColumns(isCompactViewport: boolean): ColumnsType<PivotStudentRow> {
-  return [
-    {
-      ...buildStableColumnSizing<PivotStudentRow>(STUDENT_NUMBER_COLUMN_WIDTH),
-      align: 'center' as const,
-      dataIndex: 'studentNumber',
-      fixed: isCompactViewport ? undefined : 'left',
-      key: 'studentNumber',
-      render: (studentNumber: string) => renderStableTextCell(studentNumber),
-      title: '学号',
-    },
-    {
-      ...buildStableColumnSizing<PivotStudentRow>(STUDENT_NAME_COLUMN_WIDTH),
-      dataIndex: 'studentName',
-      fixed: isCompactViewport ? undefined : 'left',
-      key: 'studentName',
-      render: (studentName: string | null) => renderStableTextCell(studentName),
-      title: '姓名',
-    },
-  ];
-}
-
-function buildCourseScoreColumns(
-  courseColumns: readonly PivotCourseColumn[],
-  token: ReturnType<typeof theme.useToken>['token'],
-): ColumnsType<PivotStudentRow> {
-  return courseColumns.map((course) => ({
-    ...buildStableColumnSizing<PivotStudentRow>(PIVOT_COURSE_COLUMN_WIDTH),
-    align: 'center' as const,
+function courseColumns(
+  columns: readonly ClassCourseGradeCourseColumn[],
+  colorText: string,
+): ColumnsType<ClassCourseGradeStudentRow> {
+  return columns.map((course) => ({
+    align: 'center',
     key: course.key,
-    render: (_: unknown, record: PivotStudentRow) => renderScoreCells(record.scores[course.key]),
+    render: (_, row) => renderScoreCell(row, course.key),
     title: (
       <span
         style={{
-          color: token.colorText,
+          color: colorText,
           display: 'block',
-          fontSize: token.fontSizeSM,
-          lineHeight: token.lineHeightSM,
-          marginInline: 'auto',
-          maxWidth: '4em',
-          textAlign: 'center',
+          fontSize: 12,
+          lineHeight: 1.25,
           whiteSpace: 'normal',
           wordBreak: 'break-all',
         }}
+        title={[course.courseName, course.teacherName].filter(Boolean).join(' · ')}
       >
         {course.title}
       </span>
     ),
+    width: COURSE_COLUMN_WIDTH,
   }));
 }
 
-function buildSpecialPivotColumns(
-  courseColumns: readonly PivotCourseColumn[],
-  isCompactViewport: boolean,
-  token: ReturnType<typeof theme.useToken>['token'],
-): ColumnsType<PivotStudentRow> {
+function identityColumns(): ColumnsType<ClassCourseGradeStudentRow> {
   return [
-    ...buildStudentIdentityColumns(isCompactViewport),
     {
-      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_STATUS_COLUMN_WIDTH),
-      align: 'center' as const,
-      key: 'studentStatus',
-      render: (_: unknown, record: PivotStudentRow) =>
-        renderStudentStatusCell(record.studentStatus),
-      title: '学生状态',
+      dataIndex: 'studentId',
+      fixed: 'left',
+      key: 'studentId',
+      title: '学号',
+      width: STUDENT_NUMBER_COLUMN_WIDTH,
     },
     {
-      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_REASON_COLUMN_WIDTH),
-      align: 'center' as const,
-      key: 'resultDisplayReasonCode',
-      render: (_: unknown, record: PivotStudentRow) =>
-        renderDisplayReasonCell(record.resultDisplayReasonCode),
-      title: '特殊原因',
+      dataIndex: 'studentName',
+      fixed: 'left',
+      key: 'studentName',
+      title: '姓名',
+      width: STUDENT_NAME_COLUMN_WIDTH,
     },
-    {
-      ...buildStableColumnSizing<PivotStudentRow>(SPECIAL_MESSAGE_COLUMN_WIDTH),
-      key: 'resultDisplayMessage',
-      render: (_: unknown, record: PivotStudentRow) =>
-        renderStableTextCell(record.resultDisplayMessage || '该学生当前学期成绩按特殊情况展示'),
-      title: '说明',
-    },
-    ...buildCourseScoreColumns(courseColumns, token),
   ];
 }
 
-function resolveScrollX(courseColumnCount: number) {
-  return PIVOT_BASE_SCROLL_X + courseColumnCount * PIVOT_COURSE_COLUMN_WIDTH;
+function buildRegularColumns(
+  matrix: ClassCourseGradeMatrix | null,
+  colorText: string,
+): ColumnsType<ClassCourseGradeStudentRow> {
+  return [...identityColumns(), ...courseColumns(matrix?.courseColumns ?? [], colorText)];
 }
 
-function resolveSpecialScrollX(courseColumnCount: number) {
-  return SPECIAL_PIVOT_BASE_SCROLL_X + courseColumnCount * PIVOT_COURSE_COLUMN_WIDTH;
-}
-
-function buildCourseResultsRowClassName(
-  record: Pick<PivotStudentRow, 'studentNumber'>,
-  index: number | undefined,
-  selectedStudentNumber: string | null,
-) {
+function buildSpecialColumns(
+  matrix: ClassCourseGradeMatrix | null,
+  colorText: string,
+): ColumnsType<ClassCourseGradeStudentRow> {
   return [
-    index !== undefined && index % 2 === 0
-      ? 'class-affairs-course-results-row-even'
-      : 'class-affairs-course-results-row-odd',
-    record.studentNumber === selectedStudentNumber
-      ? 'class-affairs-course-results-row-selected'
-      : null,
-    'class-affairs-course-results-row-clickable',
-  ]
-    .filter(Boolean)
-    .join(' ');
-}
-
-function buildCourseResultsTableRowProps(
-  record: Pick<PivotStudentRow, 'studentNumber'>,
-  index: number | undefined,
-  selectedStudentNumber: string | null,
-  setSelectedStudentNumber: Dispatch<SetStateAction<string | null>>,
-) {
-  return {
-    className: buildCourseResultsRowClassName(record, index, selectedStudentNumber),
-    onClick: () => {
-      setSelectedStudentNumber((current) =>
-        current === record.studentNumber ? null : record.studentNumber,
-      );
+    ...identityColumns(),
+    {
+      align: 'center',
+      key: 'studentStatus',
+      render: (_, row) => <Tag>{COURSE_RESULTS_STUDENT_STATUS_LABELS[row.studentStatus]}</Tag>,
+      title: '学生状态',
+      width: 100,
     },
-  };
+    {
+      align: 'center',
+      key: 'decisionReasonCode',
+      render: (_, row) => (
+        <Tag color="gold">
+          {row.decisionReasonCode
+            ? COURSE_RESULTS_REASON_LABELS[row.decisionReasonCode]
+            : row.rosterEligibilityStatus}
+        </Tag>
+      ),
+      title: '特殊原因',
+      width: 140,
+    },
+    {
+      dataIndex: 'specialReasonMessage',
+      key: 'specialReasonMessage',
+      render: (value: string | null) => value || '该学生按特殊情况展示',
+      title: '说明',
+      width: 220,
+    },
+    ...courseColumns(matrix?.courseColumns ?? [], colorText),
+  ];
 }
 
-function resolveRefreshScope(term: ManagedClassCourseResultsTerm) {
-  return term.isCurrent ? 'CURRENT_TERM' : 'ALL_TERMS';
+function matrixScrollX(matrix: ClassCourseGradeMatrix | null, special: boolean) {
+  return (
+    STUDENT_NUMBER_COLUMN_WIDTH +
+    STUDENT_NAME_COLUMN_WIDTH +
+    (special ? 460 : 0) +
+    (matrix?.courseColumns.length ?? 0) * COURSE_COLUMN_WIDTH
+  );
 }
 
 export function ClassAffairsCourseResultsPageContent({
@@ -630,26 +214,18 @@ export function ClassAffairsCourseResultsPageContent({
   currentAccount: CurrentAccount;
 }) {
   const { token } = theme.useToken();
-  const isCompactViewport = useCompactViewport();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
-  const [classes, setClasses] = useState<ManagedClassCourseResultsClass[]>([]);
-  const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
-  const [selectedClassCode, setSelectedClassCode] = useState<string | null>(null);
-  const [activeTermKey, setActiveTermKey] = useState<string | null>(null);
-  const [result, setResult] = useState<ManagedCourseResultsResult | null>(null);
+  const [workspace, setWorkspace] = useState<ClassCourseGradeWorkspace | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
-  const [selectedStudentNumber, setSelectedStudentNumber] = useState<string | null>(null);
-  const [hasLoadedAllLocalTerms, setHasLoadedAllLocalTerms] = useState(false);
-  const [isLoadingOverview, setIsLoadingOverview] = useState(false);
-  const [isLoadingResults, setIsLoadingResults] = useState(false);
-  const [overviewError, setOverviewError] = useState<string | null>(null);
-  const [resultError, setResultError] = useState<string | null>(null);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [refreshFeedback, setRefreshFeedback] = useState<CourseGradeRefreshFeedback | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
-  const [pendingRefreshRequest, setPendingRefreshRequest] = useState<PendingRefreshRequest | null>(
-    null,
-  );
+  const [pendingRefreshRequest, setPendingRefreshRequest] =
+    useState<CourseGradeRefreshRequest | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId?.trim() || null;
   const {
     clear,
@@ -668,151 +244,62 @@ export function ClassAffairsCourseResultsPageContent({
     lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
   });
-  const terms = useMemo(
-    () => buildTermsFromResult(result, academicSemesters),
-    [academicSemesters, result],
+  const selectedRefreshAction = findAction(workspace, 'REFRESH_SELECTED_TERM');
+  const allRefreshAction = findAction(workspace, 'REFRESH_ALL_TERMS');
+  const regularRows = useMemo(
+    () => filterRows(workspace?.view?.regularMatrix.studentRows ?? [], studentSearch),
+    [studentSearch, workspace?.view?.regularMatrix.studentRows],
   );
-  const hasManagedClasses = classes.length > 0;
-  const usableClasses = useMemo(
-    () => classes.filter((item) => resolveClassCode(item)).sort(compareManagedClasses),
-    [classes],
+  const specialRows = useMemo(
+    () => filterRows(workspace?.view?.specialMatrix.studentRows ?? [], studentSearch),
+    [studentSearch, workspace?.view?.specialMatrix.studentRows],
   );
-  const selectedClass = useMemo(
-    () => usableClasses.find((item) => resolveClassCode(item) === selectedClassCode) ?? null,
-    [selectedClassCode, usableClasses],
+  const regularColumns = useMemo(
+    () => buildRegularColumns(workspace?.view?.regularMatrix ?? null, token.colorText),
+    [token.colorText, workspace?.view?.regularMatrix],
   );
-  const termDisplayStateByKey = useMemo(
-    () => buildCourseResultsTermDisplayStateByKey(terms, selectedClass?.gradeYear ?? null),
-    [selectedClass?.gradeYear, terms],
-  );
-  const hasOnlyIncompleteClasses = hasManagedClasses && usableClasses.length === 0;
-  const classOptions = useMemo(
-    () =>
-      usableClasses.map((item) => ({
-        label: formatClassLabel(item),
-        value: resolveClassCode(item) as string,
-      })),
-    [usableClasses],
-  );
-  const activeTerm = useMemo(
-    () => terms.find((term) => buildTermKey(term) === activeTermKey) ?? null,
-    [activeTermKey, terms],
-  );
-  const searchedItems = useMemo(
-    () => filterStudentItemsBySearch(result?.items ?? [], studentSearch),
-    [result?.items, studentSearch],
-  );
-  const visibleItems = useMemo(
-    () => filterItemsByTerm(searchedItems, activeTerm),
-    [activeTerm, searchedItems],
-  );
-  const displayItems = useMemo(
-    () =>
-      splitCourseResultsItemsForDisplay(visibleItems, {
-        activeSemesterId: activeTerm?.id ?? null,
-        activeTerm: toDisplayTerm(activeTerm),
-        semesters: academicSemesters,
-      }),
-    [academicSemesters, activeTerm, visibleItems],
-  );
-  const regularPivotData = useMemo(
-    () => buildPivotTableData(displayItems.regularItems),
-    [displayItems.regularItems],
-  );
-  const specialPivotData = useMemo(
-    () => buildPivotTableData(displayItems.specialItems),
-    [displayItems.specialItems],
-  );
-  const pivotColumns = useMemo(
-    () => buildPivotColumns(regularPivotData.courseColumns, isCompactViewport, token),
-    [isCompactViewport, regularPivotData.courseColumns, token],
-  );
-  const specialPivotColumns = useMemo(
-    () => buildSpecialPivotColumns(specialPivotData.courseColumns, isCompactViewport, token),
-    [isCompactViewport, specialPivotData.courseColumns, token],
+  const specialColumns = useMemo(
+    () => buildSpecialColumns(workspace?.view?.specialMatrix ?? null, token.colorText),
+    [token.colorText, workspace?.view?.specialMatrix],
   );
 
-  const loadManagedClasses = useCallback(async () => {
-    setIsLoadingOverview(true);
-    setOverviewError(null);
-
+  const loadWorkspace = useCallback(async (input: { classId?: string; semesterId?: number }) => {
+    setIsLoading(true);
+    setWorkspaceError(null);
+    setRefreshFeedback(null);
     try {
-      const [nextClasses, nextAcademicSemesters] = await Promise.all([
-        listMyManagedClasses(),
-        // Historical result tabs and membership effective semesters may be hidden.
-        requestAcademicSemesters({ limit: 500 }),
-      ]);
-      const nextUsableClasses = nextClasses
-        .filter((item) => resolveClassCode(item))
-        .sort(compareManagedClasses);
-      const nextClassCode = resolveClassCode(nextUsableClasses[0] ?? { classCode: null });
-
-      setClasses(nextClasses);
-      setAcademicSemesters(nextAcademicSemesters);
-      setSelectedClassCode(nextClassCode);
-      setActiveTermKey(null);
-      setHasLoadedAllLocalTerms(false);
-      return nextClassCode;
+      setWorkspace(await getClassCourseGradeWorkspace(input));
     } catch (error) {
-      setClasses([]);
-      setAcademicSemesters([]);
-      setSelectedClassCode(null);
-      setActiveTermKey(null);
-      setOverviewError(error instanceof Error ? error.message : '暂时无法加载本地负责班级。');
-      return null;
+      setWorkspaceError(resolveUpstreamErrorMessage(error, '暂时无法读取班级成绩工作台。'));
     } finally {
-      setIsLoadingOverview(false);
+      setIsLoading(false);
     }
   }, []);
 
-  const readResults = useCallback(
-    async (input: {
-      classCode: string;
-      includeAllLocalTerms?: boolean;
-      term?: ManagedClassCourseResultsTerm | null;
-    }) => {
-      setIsLoadingResults(true);
-      setResultError(null);
-
-      try {
-        const nextResult = await fetchManagedClassCourseResults({
-          classCode: input.classCode,
-          refreshMode: 'CACHE_FIRST',
-          schoolYear: input.term?.schoolYear,
-          semester: input.term?.semester,
-        });
-
-        setResult(nextResult);
-        setHasLoadedAllLocalTerms(input.includeAllLocalTerms === true || !input.term);
-      } catch (error) {
-        setResult(null);
-        setResultError(error instanceof Error ? error.message : '暂时无法读取班级成绩。');
-      } finally {
-        setIsLoadingResults(false);
-      }
-    },
-    [],
-  );
+  useEffect(() => {
+    void loadWorkspace({});
+  }, [loadWorkspace]);
 
   const runRefresh = useCallback(
-    async (session: StoredUpstreamSession, request: PendingRefreshRequest) => {
-      setIsLoadingResults(true);
-      setResultError(null);
+    async (session: StoredUpstreamSession, request: CourseGradeRefreshRequest) => {
+      setIsRefreshing(true);
+      setWorkspaceError(null);
+      setRefreshFeedback(null);
       setLoginError(null);
-
       try {
-        const nextResult = await fetchManagedClassCourseResults({
-          classCode: request.classCode,
-          refreshMode: 'REFRESH',
-          schoolYear: request.scope === 'CURRENT_TERM' ? request.term.schoolYear : undefined,
-          semester: request.scope === 'CURRENT_TERM' ? request.term.semester : undefined,
+        const result = await refreshClassCourseGrades({
+          classId: request.classId,
+          scope: request.scope,
+          semesterId: request.mutationSemesterId,
           upstreamSessionToken: session.upstreamSessionToken,
         });
-
-        persistSessionFromResult(session, nextResult);
-        setResult(nextResult);
-        setActiveTermKey(request.scope === 'CURRENT_TERM' ? buildTermKey(request.term) : null);
-        setHasLoadedAllLocalTerms(request.scope === 'ALL_TERMS');
+        persistSessionFromResult(session, result);
+        setPendingRefreshRequest(null);
+        await loadWorkspace({
+          classId: request.classId,
+          semesterId: request.returnSemesterId ?? undefined,
+        });
+        setRefreshFeedback(resolveCourseGradeRefreshFeedback(result));
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
           clear();
@@ -828,96 +315,44 @@ export function ClassAffairsCourseResultsPageContent({
           setIsLoginModalOpen(true);
           return;
         }
-
-        setResultError(resolveUpstreamErrorMessage(error, '暂时无法同步成绩。'));
+        setWorkspaceError(resolveUpstreamErrorMessage(error, '暂时无法同步成绩。'));
       } finally {
-        setIsLoadingResults(false);
+        setIsRefreshing(false);
       }
     },
-    [clear, lockedUpstreamLoginUserId, loginForm, persistSessionFromResult, rememberedCredentials],
-  );
-
-  const handleClassChange = useCallback(
-    async (classCode: string) => {
-      setResult(null);
-      setStudentSearch('');
-      setSelectedStudentNumber(null);
-      setSelectedClassCode(classCode || null);
-      setActiveTermKey(null);
-      setHasLoadedAllLocalTerms(false);
-
-      if (classCode) {
-        await readResults({
-          classCode,
-        });
-      }
-    },
-    [readResults],
-  );
-
-  const handleReload = useCallback(async () => {
-    if (!selectedClassCode) {
-      const nextClassCode = await loadManagedClasses();
-
-      if (nextClassCode) {
-        await readResults({
-          classCode: nextClassCode,
-        });
-      }
-
-      return;
-    }
-
-    await handleClassChange(selectedClassCode);
-  }, [handleClassChange, loadManagedClasses, readResults, selectedClassCode]);
-
-  const handleTermChange = useCallback(
-    async (termKey: string) => {
-      const nextTerm = terms.find((term) => buildTermKey(term) === termKey) ?? null;
-
-      setActiveTermKey(termKey);
-      setSelectedStudentNumber(null);
-
-      if (!nextTerm || !selectedClassCode || nextTerm.hasLocalData === false) {
-        return;
-      }
-
-      if (!hasLoadedAllLocalTerms) {
-        await readResults({
-          classCode: selectedClassCode,
-          includeAllLocalTerms: true,
-        });
-      }
-    },
-    [hasLoadedAllLocalTerms, readResults, selectedClassCode, terms],
+    [
+      clear,
+      loadWorkspace,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      persistSessionFromResult,
+      rememberedCredentials,
+    ],
   );
 
   const requestRefresh = useCallback(
-    async (term: ManagedClassCourseResultsTerm) => {
-      if (!selectedClassCode) {
-        return;
-      }
+    async (scope: CourseGradeRefreshScope) => {
+      const selectedClass = workspace?.selectedClass;
+      const selectedTerm = workspace?.selectedTerm;
+      if (!selectedClass || (scope === 'SELECTED_TERM' && !selectedTerm)) return;
 
-      const nextRequest: PendingRefreshRequest = {
-        classCode: selectedClassCode,
-        scope: resolveRefreshScope(term),
-        term,
-      };
-
-      setPendingRefreshRequest(nextRequest);
+      const request = buildCourseGradeRefreshRequest({
+        classId: selectedClass.classId,
+        scope,
+        selectedSemesterId: selectedTerm?.semesterId ?? null,
+      });
+      setPendingRefreshRequest(request);
       setLoginError(null);
 
       const canUseStoredSession = canUseStoredUpstreamSessionForLockedUser({
         lockedUserId: lockedUpstreamLoginUserId,
         session: storedSession,
       });
-
       if (!storedSession || !canUseStoredSession) {
         if (storedSession && !canUseStoredSession) {
           clear();
           setLoginError('请使用当前登录账号对应的工号登录智慧校园。');
         }
-
         loginForm.setFieldsValue(
           buildUpstreamLoginCredentialsInitialValues({
             lockedUserId: lockedUpstreamLoginUserId,
@@ -927,8 +362,7 @@ export function ClassAffairsCourseResultsPageContent({
         setIsLoginModalOpen(true);
         return;
       }
-
-      await runRefresh(storedSession, nextRequest);
+      await runRefresh(storedSession, request);
     },
     [
       clear,
@@ -936,29 +370,26 @@ export function ClassAffairsCourseResultsPageContent({
       loginForm,
       rememberedCredentials,
       runRefresh,
-      selectedClassCode,
       storedSession,
+      workspace,
     ],
   );
 
   const handleLoginFinish = useCallback(
     async (values: UpstreamLoginFormValues) => {
       if (!pendingRefreshRequest) {
-        setLoginError('同步请求已失效，请重新选择学期。');
+        setLoginError('同步请求已失效，请重新选择范围。');
         return;
       }
-
       setIsSubmittingLogin(true);
       setLoginError(null);
-
       try {
         const nextSession = await loginUpstream(values);
-        const nextRequest = pendingRefreshRequest;
-
+        const request = pendingRefreshRequest;
         setPendingRefreshRequest(null);
         setIsLoginModalOpen(false);
         loginForm.resetFields();
-        await runRefresh(nextSession, nextRequest);
+        await runRefresh(nextSession, request);
       } catch (error) {
         setLoginError(resolveUpstreamErrorMessage(error, '暂时无法登录智慧校园。'));
       } finally {
@@ -969,34 +400,7 @@ export function ClassAffairsCourseResultsPageContent({
   );
 
   useEffect(() => {
-    let isCancelled = false;
-
-    async function bootstrap() {
-      const nextClassCode = await loadManagedClasses();
-
-      if (isCancelled) {
-        return;
-      }
-
-      if (nextClassCode) {
-        await readResults({
-          classCode: nextClassCode,
-        });
-      }
-    }
-
-    void bootstrap();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [loadManagedClasses, readResults]);
-
-  useEffect(() => {
-    if (!keepAliveFailure) {
-      return;
-    }
-
+    if (!keepAliveFailure) return;
     clear();
     setLoginError(keepAliveFailure.message);
     loginForm.setFieldsValue(
@@ -1009,72 +413,75 @@ export function ClassAffairsCourseResultsPageContent({
     setIsLoginModalOpen(true);
   }, [clear, keepAliveFailure, lockedUpstreamLoginUserId, loginForm, rememberedCredentials]);
 
-  useEffect(() => {
-    if (terms.length === 0) {
-      setActiveTermKey(null);
-      return;
-    }
-
-    if (activeTermKey && terms.some((term) => buildTermKey(term) === activeTermKey)) {
-      return;
-    }
-
-    setActiveTermKey(buildTermKey(terms[0]));
-  }, [activeTermKey, terms]);
-
-  const emptyState = activeTerm ? (
-    <div className="flex min-h-70 items-center justify-center">
-      <Empty
-        description={
-          activeTerm.disabledReason ||
-          (activeTerm.canPullFromUpstream ? '当前学期暂无本地成绩' : '当前学期暂未开放成绩同步')
-        }
-      >
-        {activeTerm.canPullFromUpstream ? (
-          <Button
-            icon={<CloudSyncOutlined />}
-            loading={isLoadingResults}
-            type="primary"
-            onClick={() => void requestRefresh(activeTerm)}
-          >
-            {activeTerm.isCurrent ? '同步当前学期成绩' : '同步该班成绩'}
-          </Button>
-        ) : null}
-      </Empty>
-    </div>
-  ) : (
-    <div className="flex min-h-70 items-center justify-center">
-      <Empty description="暂无可查看学期" />
-    </div>
-  );
+  const view = workspace?.view ?? null;
+  const isBusy = isLoading || isRefreshing;
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
       <DecoratedPageHeader
         badge={<Tag color="blue">班务管理</Tag>}
-        description="查看负责班级的课程成绩汇总；缺少本地成绩时再按需同步智慧校园。"
+        description="后端统一计算可操作班级、真实学期、正式名单和课程矩阵；本页只负责选择与渲染。"
         icon={<FileSearchOutlined />}
         title="成绩汇总"
       />
 
       <section className="rounded-card bg-bg-container p-5 shadow-card">
         <div className="flex flex-col gap-4">
-          {overviewError ? <Alert showIcon title={overviewError} type="error" /> : null}
-          {resultError ? (
-            <Alert showIcon title={renderCourseResultsErrorTitle(resultError)} type="error" />
+          {workspaceError ? <Alert showIcon title={workspaceError} type="error" /> : null}
+          {(workspace?.warnings ?? []).map((warning) => (
+            <Alert
+              key={`${warning.code}-${warning.schoolYear}-${warning.termNumber}`}
+              showIcon
+              description={warning.message}
+              title={`${warning.schoolYear} 学年第 ${warning.termNumber} 学期配置提醒`}
+              type={warning.isCurrent ? 'warning' : 'info'}
+            />
+          ))}
+          {refreshFeedback ? (
+            <Alert
+              showIcon
+              description={
+                <div className="flex flex-col gap-2">
+                  <span>{refreshFeedback.description}</span>
+                  {refreshFeedback.failures.length ? (
+                    <ul className="m-0 flex list-disc flex-col gap-1 pl-5">
+                      {refreshFeedback.failures.map((failure) => (
+                        <li key={`${failure.studentNumber}:${failure.message}`}>
+                          {failure.studentNumber}：{failure.message}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              }
+              title={refreshFeedback.title}
+              type={refreshFeedback.type}
+            />
           ) : null}
-          <div className="grid gap-4 md:grid-cols-[minmax(0,320px)_minmax(0,260px)_auto]">
+          <ResponsiveGrid
+            className="gap-4"
+            columns={{
+              compact: 1,
+              regular: 'minmax(0, 320px) minmax(0, 260px) auto',
+            }}
+          >
             <label className="flex flex-col gap-2">
               <span className="text-sm text-text-secondary">负责班级</span>
               <Select
-                disabled={isLoadingOverview || isLoadingResults}
-                loading={isLoadingOverview}
+                disabled={isBusy}
+                loading={isLoading}
                 optionFilterProp="label"
-                options={classOptions}
-                placeholder="暂无负责班级"
+                options={(workspace?.classOptions ?? []).map((item) => ({
+                  label: `${item.className}（${item.classCode}）`,
+                  value: item.classId,
+                }))}
+                placeholder="暂无可操作班级"
                 showSearch
-                value={selectedClassCode ?? undefined}
-                onChange={(value) => void handleClassChange(value)}
+                value={workspace?.selectedClass?.classId}
+                onChange={(classId) => {
+                  setStudentSearch('');
+                  void loadWorkspace({ classId });
+                }}
               />
             </label>
             <label className="flex flex-col gap-2">
@@ -1084,226 +491,144 @@ export function ClassAffairsCourseResultsPageContent({
                 placeholder="输入学号或姓名"
                 prefix={<SearchOutlined />}
                 value={studentSearch}
-                onChange={(event) => {
-                  setStudentSearch(event.target.value);
-                  setSelectedStudentNumber(null);
-                }}
+                onChange={(event) => setStudentSearch(event.target.value)}
               />
             </label>
             <div className="flex items-end">
               <Button
-                disabled={isLoadingOverview || isLoadingResults}
+                disabled={isBusy || !workspace?.selectedClass}
                 icon={<ReloadOutlined />}
-                onClick={() => void handleReload()}
+                onClick={() =>
+                  void loadWorkspace({
+                    classId: workspace?.selectedClass?.classId,
+                    semesterId: workspace?.selectedTerm?.semesterId,
+                  })
+                }
               >
                 重新加载
               </Button>
             </div>
-          </div>
+          </ResponsiveGrid>
+          <Space wrap>
+            <Button
+              disabled={isBusy || !selectedRefreshAction?.allowed}
+              icon={<CloudSyncOutlined />}
+              loading={isRefreshing}
+              title={selectedRefreshAction?.reasonMessage ?? undefined}
+              type="primary"
+              onClick={() => void requestRefresh('SELECTED_TERM')}
+            >
+              同步当前所选学期
+            </Button>
+            <Button
+              disabled={isBusy || !allRefreshAction?.allowed}
+              icon={<CloudSyncOutlined />}
+              title={allRefreshAction?.reasonMessage ?? undefined}
+              onClick={() => void requestRefresh('ALL_TERMS')}
+            >
+              同步全部真实学期
+            </Button>
+            {view ? (
+              <span className="text-sm text-text-secondary">
+                正式名单 {view.includedRosterCount} 人 · 普通 {view.regularStudentCount} 人 · 特殊{' '}
+                {view.specialStudentCount} 人 · 成绩 {view.resultRowCount} 行
+              </span>
+            ) : null}
+          </Space>
+          {!selectedRefreshAction?.allowed && selectedRefreshAction?.reasonMessage ? (
+            <Alert showIcon title={selectedRefreshAction.reasonMessage} type="warning" />
+          ) : null}
         </div>
       </section>
 
       <section className="class-affairs-course-results-table-shell">
-        {isLoadingOverview && classes.length === 0 && !result ? (
+        {isLoading && !workspace ? (
           <div className="flex min-h-80 items-center justify-center">
             <Spin size="large" />
           </div>
-        ) : terms.length ? (
-          <Tabs
-            activeKey={activeTermKey ?? undefined}
-            items={terms.map((term) => {
-              const termKey = buildTermKey(term);
-              const isActive = termKey === activeTermKey;
-              const termDisplayState = termDisplayStateByKey.get(termKey) ?? null;
-              const semesterOrdinal = termDisplayState?.ordinal ?? null;
-              const isBeforeClassEntry = termDisplayState?.isBeforeClassEntry === true;
-
-              return {
-                children: isActive ? (
-                  isLoadingResults ? (
-                    <div className="flex min-h-80 items-center justify-center">
-                      <Spin size="large" />
-                    </div>
-                  ) : term.hasLocalData ? (
-                    <div className="flex flex-col gap-4">
-                      {term.isCurrent ? (
-                        <div className="flex justify-end">
-                          <Button
-                            icon={<CloudSyncOutlined />}
-                            loading={isLoadingResults}
-                            onClick={() => void requestRefresh(term)}
-                          >
-                            同步当前学期
-                          </Button>
-                        </div>
-                      ) : null}
-                      <Table<PivotStudentRow>
-                        columns={pivotColumns}
-                        dataSource={regularPivotData.studentRows}
-                        locale={{
-                          emptyText: (
-                            <Empty
-                              description={
-                                specialPivotData.studentRows.length > 0
-                                  ? '当前学期普通学生暂无成绩'
-                                  : '暂无学生成绩'
-                              }
-                              image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            />
-                          ),
-                        }}
-                        onRow={(record, index) =>
-                          buildCourseResultsTableRowProps(
-                            record,
-                            index,
-                            selectedStudentNumber,
-                            setSelectedStudentNumber,
-                          )
-                        }
-                        pagination={{
-                          defaultPageSize: 60,
-                          pageSizeOptions: [30, 60],
-                          showSizeChanger: true,
-                        }}
-                        rowKey={(record) => record.studentNumber}
-                        scroll={{ x: resolveScrollX(regularPivotData.courseColumns.length) }}
-                        size="small"
-                        tableLayout="fixed"
+        ) : workspace?.termOptions.length ? (
+          <AcademicTermTabs
+            activeSemesterId={workspace.selectedTerm?.semesterId}
+            disabled={isBusy}
+            records={workspace.termOptions}
+            onChange={(semesterId) => {
+              setStudentSearch('');
+              void loadWorkspace({
+                classId: workspace.selectedClass?.classId,
+                semesterId,
+              });
+            }}
+          >
+            {isLoading ? (
+              <div className="flex min-h-80 items-center justify-center">
+                <Spin size="large" />
+              </div>
+            ) : view ? (
+              <div className="flex flex-col gap-5">
+                <Table<ClassCourseGradeStudentRow>
+                  columns={regularColumns}
+                  dataSource={regularRows}
+                  locale={{
+                    emptyText: (
+                      <Empty
+                        description="正式名单中暂无匹配学生"
+                        image={Empty.PRESENTED_IMAGE_SIMPLE}
                       />
-                      {specialPivotData.studentRows.length > 0 ? (
-                        <div className="flex flex-col gap-3">
-                          <div className="flex flex-col gap-1">
-                            <span className="text-base font-medium text-text">
-                              特殊情况学生成绩
-                            </span>
-                            <span className="text-sm text-text-secondary">
-                              转出、休学、退学及转入前、复学前、留级前成绩在此单独展示。
-                            </span>
-                          </div>
-                          <Table<PivotStudentRow>
-                            columns={specialPivotColumns}
-                            dataSource={specialPivotData.studentRows}
-                            onRow={(record, index) =>
-                              buildCourseResultsTableRowProps(
-                                record,
-                                index,
-                                selectedStudentNumber,
-                                setSelectedStudentNumber,
-                              )
-                            }
-                            pagination={{
-                              defaultPageSize: 30,
-                              pageSizeOptions: [15, 30],
-                              showSizeChanger: true,
-                            }}
-                            rowKey={(record) => record.studentNumber}
-                            scroll={{
-                              x: resolveSpecialScrollX(specialPivotData.courseColumns.length),
-                            }}
-                            size="small"
-                            tableLayout="fixed"
-                          />
-                        </div>
-                      ) : null}
+                    ),
+                  }}
+                  pagination={{
+                    defaultPageSize: 60,
+                    pageSizeOptions: [30, 60],
+                    showSizeChanger: true,
+                  }}
+                  rowKey="studentId"
+                  scroll={{ x: matrixScrollX(view.regularMatrix, false) }}
+                  size="small"
+                  tableLayout="fixed"
+                />
+                {specialRows.length ? (
+                  <div className="flex flex-col gap-3">
+                    <div>
+                      <div className="text-base font-medium text-text">特殊情况学生成绩</div>
+                      <div className="text-sm text-text-secondary">
+                        仅展示后端正式名单候选中，由后端判定为特殊情况的历史成绩。
+                      </div>
                     </div>
-                  ) : (
-                    emptyState
-                  )
-                ) : null,
-                disabled: !term.hasLocalData && term.isCurrent && !term.canPullFromUpstream,
-                key: termKey,
-                label: (
-                  <span
-                    className={[
-                      'class-affairs-course-results-term-tab-label',
-                      isBeforeClassEntry
-                        ? 'class-affairs-course-results-term-tab-label-before-entry'
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                  >
-                    <span
-                      className={[
-                        'class-affairs-course-results-term-tab-primary',
-                        isActive ? 'class-affairs-course-results-term-tab-primary-active' : null,
-                      ]
-                        .filter(Boolean)
-                        .join(' ')}
-                    >
-                      {formatSchoolYear(term.schoolYear)}
-                    </span>
-                    <span className="class-affairs-course-results-term-tab-secondary">
-                      <span className="class-affairs-course-results-term-tab-secondary-text">
-                        {formatSemester(term.semester)}
-                      </span>
-                      {!term.hasLocalData ? (
-                        <span className="class-affairs-course-results-term-tab-badge class-affairs-course-results-term-tab-badge-pending">
-                          待同步
-                        </span>
-                      ) : semesterOrdinal ? (
-                        <span className="class-affairs-course-results-term-tab-badge">
-                          {semesterOrdinal}
-                        </span>
-                      ) : null}
-                    </span>
-                  </span>
-                ),
-              };
-            })}
-            size="small"
-            tabBarGutter={token.marginXS}
-            tabPlacement="start"
-            onChange={(key) => void handleTermChange(key)}
-          />
+                    <Table<ClassCourseGradeStudentRow>
+                      columns={specialColumns}
+                      dataSource={specialRows}
+                      pagination={{
+                        defaultPageSize: 30,
+                        pageSizeOptions: [15, 30],
+                        showSizeChanger: true,
+                      }}
+                      rowKey="studentId"
+                      scroll={{ x: matrixScrollX(view.specialMatrix, true) }}
+                      size="small"
+                      tableLayout="fixed"
+                    />
+                  </div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="flex min-h-80 items-center justify-center">
+                <Empty description="当前学期暂无成绩" />
+              </div>
+            )}
+          </AcademicTermTabs>
         ) : (
           <div className="flex min-h-80 items-center justify-center">
-            {!hasManagedClasses ? (
-              <Empty description="还没有本地负责班级">
-                <div className="mb-4 max-w-xl text-sm text-text-secondary">
-                  请先在“本地建班”完成班主任身份认定，认定后即可查看成绩汇总。
-                </div>
-                <Button href={LOCAL_CLASS_SETUP_PATH} type="primary">
-                  去本地建班
-                </Button>
-              </Empty>
-            ) : hasOnlyIncompleteClasses ? (
-              <Empty description="本地班级数据不完整">
-                <div className="max-w-xl text-sm text-text-secondary">
-                  当前负责班级缺少 classCode，暂时无法查询成绩，请联系管理员修复班级数据。
-                </div>
-              </Empty>
-            ) : (
-              <Empty description="暂无负责班级成绩">
-                {selectedClassCode ? (
-                  <Button
-                    icon={<CloudSyncOutlined />}
-                    loading={isLoadingResults}
-                    type="primary"
-                    onClick={() =>
-                      void requestRefresh({
-                        canPullFromUpstream: true,
-                        disabledReason: null,
-                        hasLocalData: false,
-                        id: null,
-                        isCurrent: false,
-                        label: '该班成绩',
-                        schoolYear: '',
-                        semester: '',
-                      })
-                    }
-                  >
-                    同步该班成绩
-                  </Button>
-                ) : null}
-              </Empty>
-            )}
+            <Empty
+              description={
+                workspace?.status === 'NO_CLASSES' ? '暂无可操作班级' : '暂无可查看真实学期'
+              }
+            />
           </div>
         )}
       </section>
 
       <UpstreamLoginModal
-        description="仅在需要同步缺失成绩时使用；当前学期只同步当前学期，历史学期会同步该班全部成绩。"
+        description="同步完成后会重查本地成绩工作台，不在查询过程中访问智慧校园。"
         form={loginForm}
         hasRememberedCredentials={hasRememberedCredentials}
         isSubmitting={isSubmittingLogin}

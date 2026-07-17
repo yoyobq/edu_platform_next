@@ -270,7 +270,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
     })
       ? [
           {
-            allowedAccessGroups: ['STAFF'] as const,
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'TableOutlined',
             key: '/class-affairs/course-results-summary',
             label: '成绩汇总',

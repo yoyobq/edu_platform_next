@@ -72,6 +72,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
+      '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(items, 'upstream-data-sync')?.children.map((item) => item.key)).toEqual([
       '/upstream-data-sync/major-sync',
@@ -82,8 +83,6 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
-      '/labs/student-course-results-pull',
-      '/labs/student-course-results-view',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
@@ -144,13 +143,12 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
+      '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
-      '/labs/student-course-results-pull',
-      '/labs/student-course-results-view',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
@@ -207,7 +205,7 @@ describe('navigation catalog', () => {
     ).toBe(true);
   });
 
-  it('shows class affairs course results only to class advisers and counselors', () => {
+  it('shows class affairs course results to every backend-authorized identity', () => {
     const classAdviserItems = getNavigationItems(
       buildFilter({
         accountId: 1002,
@@ -275,7 +273,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'class-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
-      '/class-affairs/student-conduct-alignment',
+      '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
       '/labs/zquiz-activity-builder',
@@ -284,7 +282,7 @@ describe('navigation catalog', () => {
     ]);
     expect(
       canAccessNavigationPath(
-        '/labs/student-course-results-pull',
+        '/class-affairs/course-results-summary',
         buildFilter({
           accountId: 1004,
           primaryAccessGroup: 'STAFF',
@@ -292,18 +290,7 @@ describe('navigation catalog', () => {
           slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
         }),
       ),
-    ).toBe(false);
-    expect(
-      canAccessNavigationPath(
-        '/labs/student-course-results-view',
-        buildFilter({
-          accountId: 1004,
-          primaryAccessGroup: 'STAFF',
-          accessGroup: ['STAFF'],
-          slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
-        }),
-      ),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canAccessNavigationPath(
         '/upstream-data-sync/major-sync',
@@ -503,8 +490,6 @@ describe('navigation catalog', () => {
     );
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', buildFilter())).toBe(true);
     expect(canAccessNavigationPath('/labs/upstream-session-reference', buildFilter())).toBe(true);
-    expect(canAccessNavigationPath('/labs/student-course-results-pull', buildFilter())).toBe(true);
-    expect(canAccessNavigationPath('/labs/student-course-results-view', buildFilter())).toBe(true);
     expect(
       canAccessNavigationPath('/student-affairs/class-adviser-governance', buildFilter()),
     ).toBe(true);
@@ -521,26 +506,6 @@ describe('navigation catalog', () => {
         buildFilter({
           primaryAccessGroup: 'STAFF',
           accessGroup: ['STAFF'],
-        }),
-      ),
-    ).toBe(false);
-    expect(
-      canAccessNavigationPath(
-        '/labs/student-course-results-pull',
-        buildFilter({
-          primaryAccessGroup: 'STAFF',
-          accessGroup: ['STAFF'],
-          slotGroup: ['CLASS_ADVISER'],
-        }),
-      ),
-    ).toBe(false);
-    expect(
-      canAccessNavigationPath(
-        '/labs/student-course-results-view',
-        buildFilter({
-          primaryAccessGroup: 'STAFF',
-          accessGroup: ['STAFF'],
-          slotGroup: ['CLASS_ADVISER'],
         }),
       ),
     ).toBe(false);
@@ -566,24 +531,6 @@ describe('navigation catalog', () => {
     ).toBe(true);
     expect(
       canAccessNavigationPath('/student-affairs/class-adviser-governance', studentFilter),
-    ).toBe(false);
-    expect(
-      canAccessNavigationPath(
-        '/labs/student-course-results-pull',
-        buildFilter({
-          primaryAccessGroup: 'STAFF',
-          accessGroup: ['STAFF'],
-        }),
-      ),
-    ).toBe(false);
-    expect(
-      canAccessNavigationPath(
-        '/labs/student-course-results-view',
-        buildFilter({
-          primaryAccessGroup: 'STAFF',
-          accessGroup: ['STAFF'],
-        }),
-      ),
     ).toBe(false);
     expect(
       canAccessNavigationPath('/academic-affairs/my-curriculum-plan-homepage', buildFilter()),
@@ -846,6 +793,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
       '/class-affairs/student-conduct-alignment',
+      '/class-affairs/course-results-summary',
       '/student-affairs/class-adviser-governance',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/staff-semester-profiles',
@@ -858,8 +806,6 @@ describe('navigation catalog', () => {
       '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
-      '/labs/student-course-results-pull',
-      '/labs/student-course-results-view',
       '/labs/student-private-profile',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',

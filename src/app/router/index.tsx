@@ -53,6 +53,7 @@ import {
   hasAcademicWorkloadManagerAccess,
   hasAdminAccess,
   hasClassAdviserGovernanceAccess,
+  hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
   hasStudentProfileFilingAccess,
@@ -65,14 +66,6 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  loadStudentCourseResultsPullLabRouteModule,
-  studentCourseResultsPullLabAccess,
-} from '@/labs/student-course-results-pull';
-import {
-  loadStudentCourseResultsViewLabRouteModule,
-  studentCourseResultsViewLabAccess,
-} from '@/labs/student-course-results-view';
 import {
   loadStudentEvaluationCommentLabRouteModule,
   studentEvaluationCommentLabAccess,
@@ -721,20 +714,6 @@ async function upstreamSessionReferenceLabLoader({ request }: LoaderFunctionArgs
   });
 }
 
-async function studentCourseResultsPullLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: studentCourseResultsPullLabAccess,
-    request,
-  });
-}
-
-async function studentCourseResultsViewLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: studentCourseResultsViewLabAccess,
-    request,
-  });
-}
-
 function resolveStudentEvaluationCommentLabData(
   snapshot: AuthSessionSnapshot,
 ): StudentEvaluationCommentLabLoaderData {
@@ -746,7 +725,6 @@ function resolveStudentEvaluationCommentLabData(
 
   return {
     canEditClassScope,
-    classOptionSource: isAdmin ? 'ALL' : isClassAdviser ? 'MANAGED' : 'MANUAL',
     defaultView: canEditClassScope ? 'class-scope' : 'mine',
   };
 }
@@ -969,6 +947,15 @@ async function classAffairsCourseResultsPageLoader({ request }: LoaderFunctionAr
 
   if (snapshot.needsProfileCompletion) {
     throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasClassAffairsCourseResultsAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return { isForbidden: true };
   }
 
   return {
@@ -1631,16 +1618,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-reference',
             loader: upstreamSessionReferenceLabLoader,
             lazy: loadUpstreamSessionReferenceLabRouteModule,
-          },
-          {
-            path: 'student-course-results-pull',
-            loader: studentCourseResultsPullLabLoader,
-            lazy: loadStudentCourseResultsPullLabRouteModule,
-          },
-          {
-            path: 'student-course-results-view',
-            loader: studentCourseResultsViewLabLoader,
-            lazy: loadStudentCourseResultsViewLabRouteModule,
           },
           {
             path: 'student-evaluation-comment',

@@ -22,10 +22,7 @@ export function StudentEvaluationCommentLabPage() {
         ? [
             {
               children: (
-                <StudentEvaluationCommentClassScopeEditor
-                  classOptionSource={loaderData.classOptionSource}
-                  onDirtyChange={setHasUnsavedChanges}
-                />
+                <StudentEvaluationCommentClassScopeEditor onDirtyChange={setHasUnsavedChanges} />
               ),
               icon: <FormOutlined />,
               key: 'class-scope',
@@ -40,7 +37,7 @@ export function StudentEvaluationCommentLabPage() {
         label: '我的正式评语',
       },
     ],
-    [loaderData.canEditClassScope, loaderData.classOptionSource],
+    [loaderData.canEditClassScope],
   );
 
   return (

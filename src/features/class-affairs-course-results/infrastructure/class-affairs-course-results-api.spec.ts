@@ -13,153 +13,86 @@ vi.mock('@/entities/upstream-session', () => ({
     error instanceof Error ? error.message : fallback,
 }));
 
-vi.mock('@/shared/graphql', () => ({
-  executeGraphQL: executeGraphQLMock,
-}));
+vi.mock('@/shared/graphql', () => ({ executeGraphQL: executeGraphQLMock }));
 
 import {
-  fetchManagedClassCourseResults,
-  listMyManagedClasses,
-  normalizeFetchManagedClassCourseResultsInput,
+  getClassCourseGradeWorkspace,
+  refreshClassCourseGrades,
 } from './class-affairs-course-results-api';
 
-describe('class affairs course results api', () => {
+describe('class affairs course grade workspace api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
   });
 
-  it('normalizes cache reads and upstream refresh input', () => {
-    expect(
-      normalizeFetchManagedClassCourseResultsInput({
-        classCode: ' 2501 ',
-        refreshMode: 'CACHE_FIRST',
-        schoolYear: ' 2025 ',
-        semester: ' 1 ',
-      }),
-    ).toEqual({
-      classCode: '2501',
-      refreshMode: 'CACHE_FIRST',
-      schoolYear: '2025',
-      semester: '1',
-    });
+  it('queries one backend-owned workspace and requests the score matrix', async () => {
+    const payload = { classOptions: [], status: 'NO_CLASSES', view: null };
+    executeGraphQLMock.mockResolvedValueOnce({ classCourseGradeWorkspace: payload });
 
-    expect(
-      normalizeFetchManagedClassCourseResultsInput({
-        classCode: ' 2501 ',
-        refreshMode: 'REFRESH',
-        upstreamSessionToken: ' token-1 ',
-      }),
-    ).toEqual({
-      classCode: '2501',
-      refreshMode: 'REFRESH',
-      sessionToken: 'token-1',
-    });
-  });
-
-  it('loads my managed classes and keeps nullable classCode', async () => {
-    const payload = [
-      {
-        classCode: '2501',
-        className: '25计算机1班',
-        departmentId: 'ORG01',
-        gradeYear: 2025,
-        id: 'class-1',
-      },
-      {
-        classCode: null,
-        className: '历史班级',
-        departmentId: 'ORG01',
-        gradeYear: null,
-        id: 'class-2',
-      },
-    ];
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      myManagedClasses: payload,
-    });
-
-    await expect(listMyManagedClasses()).resolves.toBe(payload);
+    await expect(getClassCourseGradeWorkspace({})).resolves.toBe(payload);
     expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('MyManagedClasses'),
-      {},
-    );
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('classCode');
-  });
-
-  it('reads cached managed class results through the existing course results mutation', async () => {
-    const payload = {
-      classCode: '2501',
-      className: '25计算机1班',
-      items: [],
-      rowCount: 0,
-      studentCount: 0,
-    };
-
-    executeGraphQLMock.mockResolvedValueOnce({
-      fetchClassStudentCourseResults: payload,
-    });
-
-    await expect(
-      fetchManagedClassCourseResults({
-        classCode: '2501',
-        refreshMode: 'CACHE_FIRST',
-      }),
-    ).resolves.toBe(payload);
-    expect(executeGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('FetchClassStudentCourseResults'),
-      {
-        input: {
-          classCode: '2501',
-          refreshMode: 'CACHE_FIRST',
-        },
-      },
+      expect.stringContaining('query ClassCourseGradeWorkspace'),
+      { input: {} },
     );
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-
-    expect(query).toContain('studentStatus');
-    expect(query).toContain('resultDisplayStatus');
-    expect(query).toContain('resultDisplayDecisionOutcome');
-    expect(query).toContain('resultDisplayReasonCode');
-    expect(query).toContain('resultDisplayEffectiveSemesterId');
-    expect(query).toContain('resultDisplayMessage');
+    expect(query).toContain('regularMatrix');
+    expect(query).toContain('specialMatrix');
+    expect(query).toContain('courseColumns');
+    expect(query).toContain('includedInTermRoster');
   });
 
-  it('refreshes managed class results through upstream session graphql', async () => {
+  it('refreshes a selected semester and sends the upstream token only to the mutation', async () => {
     const payload = {
       classCode: '2501',
-      className: '25计算机1班',
-      expiresAt: '2026-06-14T10:00:00.000Z',
-      items: [],
-      rowCount: 0,
-      studentCount: 0,
-      upstreamSessionToken: 'token-2',
+      classId: 'C2501',
+      scope: 'SELECTED_TERM',
+      status: 'REFRESHED',
     };
-
     executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
-      fetchClassStudentCourseResults: payload,
+      refreshClassCourseGrades: payload,
     });
 
     await expect(
-      fetchManagedClassCourseResults({
-        classCode: '2501',
-        refreshMode: 'REFRESH',
-        schoolYear: '2025',
-        semester: '2',
-        upstreamSessionToken: 'token-1',
+      refreshClassCourseGrades({
+        classId: 'C2501',
+        scope: 'SELECTED_TERM',
+        semesterId: 202501,
+        upstreamSessionToken: '{"token":"secret"}',
       }),
     ).resolves.toBe(payload);
     expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
-      expect.stringContaining('FetchClassStudentCourseResults'),
+      expect.stringContaining('mutation RefreshClassCourseGrades'),
       {
         input: {
-          classCode: '2501',
-          refreshMode: 'REFRESH',
-          schoolYear: '2025',
-          semester: '2',
-          sessionToken: 'token-1',
+          classId: 'C2501',
+          scope: 'SELECTED_TERM',
+          semesterId: 202501,
+          sessionToken: '{"token":"secret"}',
         },
       },
     );
+  });
+
+  it('omits semesterId for an all-term refresh', async () => {
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      refreshClassCourseGrades: { status: 'REFRESHED' },
+    });
+
+    await refreshClassCourseGrades({
+      classId: 'C2501',
+      scope: 'ALL_TERMS',
+      semesterId: 202501,
+      upstreamSessionToken: '{"token":"secret"}',
+    });
+
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: {
+        classId: 'C2501',
+        scope: 'ALL_TERMS',
+        semesterId: undefined,
+        sessionToken: '{"token":"secret"}',
+      },
+    });
   });
 });

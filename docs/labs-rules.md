@@ -149,18 +149,10 @@ export const demoLabMeta = {
   - 页面只展示登录、恢复、pending action 与 modal controller，不绑定具体 upstream 业务接口
   - 后续需要 upstream session 的 lab，应优先参考该页，而不是复制业务型
     `/labs/upstream-session-demo`
-- `/labs/student-course-results-pull`
-  - 用于验证按本地班级 classCode、学年和可选学期拉取学生课程成绩并写入本地加密快照的链路
-  - 当前只对 `ADMIN` 暴露，不进入 staff labs
-  - 仅作为成绩快照拉取流程的实验入口；若后续成为正式查询或管理能力，应迁入正式区拥有者切片
-- `/labs/student-course-results-view`
-  - 用于验证默认 `CACHE_FIRST`、不带 upstream token 的班级学生课程成绩快照展示
-  - 当前只对 `ADMIN` 暴露，不进入 staff labs
-  - 仅作为成绩快照展示流程的实验入口；若后续成为正式成绩查看入口，应迁入正式区拥有者切片
 - `/labs/student-evaluation-comment`
   - 用于验证学期/毕业正式评语的班级批量编辑、CAS 冲突恢复和学生本人只读链路
   - 对 `ADMIN / STAFF / STUDENT` 暴露；页面按当前会话投影编辑/本人视图，最终业务权限始终以后端为准
-  - 班级候选使用已有 Class 接口或 `myManagedClasses`；辅导员候选接口缺失时允许直接输入本地 `classId`
+  - 编辑页只使用评语 workspace 返回的班级、真实学期、正式名单与 action
   - 不承载 AI 草稿、历史版本、导入导出或跨班批量操作；确认稳定后应迁入正式学生评语拥有者切片
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程

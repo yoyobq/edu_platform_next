@@ -232,7 +232,16 @@ export function hasStudentConductAlignmentAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
-  return hasStudentProfileFilingAccess(input);
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  return (
+    accessGroup.includes('ADMIN') ||
+    (accessGroup.includes('STAFF') &&
+      (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
+        slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
+        slotGroup.includes(COUNSELOR_SLOT_GROUP)))
+  );
 }
 
 export function hasUpstreamDataSyncAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
@@ -249,8 +258,11 @@ export function hasClassAffairsCourseResultsAccess(input: {
   const slotGroup = input.slotGroup ?? [];
 
   return (
-    accessGroup.includes('STAFF') &&
-    (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) || slotGroup.includes(COUNSELOR_SLOT_GROUP))
+    accessGroup.includes('ADMIN') ||
+    (accessGroup.includes('STAFF') &&
+      (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
+        slotGroup.includes(COUNSELOR_SLOT_GROUP) ||
+        slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP)))
   );
 }
 

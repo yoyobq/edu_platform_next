@@ -2,97 +2,35 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
-  executeGraphQLMock: vi.fn(),
-}));
+const { executeGraphQLMock } = vi.hoisted(() => ({ executeGraphQLMock: vi.fn() }));
 
-vi.mock('@/shared/graphql', () => ({
-  executeGraphQL: executeGraphQLMock,
-}));
+vi.mock('@/shared/graphql', () => ({ executeGraphQL: executeGraphQLMock }));
 
 import {
   batchWriteStudentEvaluationComments,
   getMyStudentEvaluationComments,
-  getStudentEvaluationCommentClassScope,
-  listStudentEvaluationCommentClassOptions,
-  listStudentEvaluationCommentSemesters,
+  getStudentEvaluationCommentWorkspace,
 } from './api';
 
 describe('student evaluation comment api', () => {
-  beforeEach(() => {
-    executeGraphQLMock.mockReset();
-  });
+  beforeEach(() => executeGraphQLMock.mockReset());
 
-  it('searches all local classes with a normalized keyword for admin', async () => {
-    const payload = [{ id: '1021904', className: '计算机2024级1班' }];
-    executeGraphQLMock.mockResolvedValueOnce({ listLocalClassOptions: payload });
+  it('queries options, governance and class view as one workspace', async () => {
+    const payload = { classOptions: [], commentKind: 'TERM', status: 'NO_CLASSES', view: null };
+    executeGraphQLMock.mockResolvedValueOnce({ studentEvaluationCommentWorkspace: payload });
 
-    await expect(listStudentEvaluationCommentClassOptions('ALL', ' 计算机 ')).resolves.toBe(
+    await expect(getStudentEvaluationCommentWorkspace({ commentKind: 'TERM' })).resolves.toBe(
       payload,
     );
-
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('query StudentEvaluationCommentWorkspace'),
+      { input: { commentKind: 'TERM' } },
+    );
     const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('StudentEvaluationCommentLocalClassOptions');
-    expect(query).toContain('listLocalClassOptions(input: $input)');
-    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
-      input: { keyword: '计算机' },
-    });
-  });
-
-  it('uses myManagedClasses for class adviser candidates', async () => {
-    const payload = [{ id: '1021904', className: '计算机2024级1班' }];
-    executeGraphQLMock.mockResolvedValueOnce({ myManagedClasses: payload });
-
-    await expect(listStudentEvaluationCommentClassOptions('MANAGED')).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('StudentEvaluationCommentMyManagedClasses');
-    expect(query).toContain('myManagedClasses');
-    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({});
-  });
-
-  it('does not call GraphQL when the class id must be entered manually', async () => {
-    await expect(listStudentEvaluationCommentClassOptions('MANUAL')).resolves.toEqual([]);
-    expect(executeGraphQLMock).not.toHaveBeenCalled();
-  });
-
-  it('loads all local semesters without filtering out hidden records', async () => {
-    const payload = [{ id: 202501, name: '2025-2026 第一学期' }];
-    executeGraphQLMock.mockResolvedValueOnce({ academicSemesters: payload });
-
-    await expect(listStudentEvaluationCommentSemesters()).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('StudentEvaluationCommentAcademicSemesters');
-    expect(query).toContain('academicSemesters(limit: $limit)');
-    expect(query).not.toContain('isVisible:');
-    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({ limit: 500 });
-  });
-
-  it('reads a graduation class scope with an explicit null semester', async () => {
-    const payload = { classItem: { id: '1021904' }, students: [] };
-    executeGraphQLMock.mockResolvedValueOnce({
-      studentEvaluationCommentClassScope: payload,
-    });
-
-    await expect(
-      getStudentEvaluationCommentClassScope({
-        classId: '1021904',
-        commentKind: 'GRADUATION',
-        semesterId: null,
-      }),
-    ).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('StudentEvaluationCommentClassScopeInput!');
+    expect(query).toContain('classOptions');
+    expect(query).toContain('termOptions');
+    expect(query).toContain('actions');
     expect(query).toContain('revision');
-    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
-      input: {
-        classId: '1021904',
-        commentKind: 'GRADUATION',
-        semesterId: null,
-      },
-    });
   });
 
   it('writes one scope with the caller-provided opaque revision', async () => {
@@ -102,9 +40,7 @@ describe('student evaluation comment api', () => {
       items: [{ status: 'UPDATED', studentId: '324010112' }],
       status: 'UPDATED',
     };
-    executeGraphQLMock.mockResolvedValueOnce({
-      batchWriteStudentEvaluationComments: payload,
-    });
+    executeGraphQLMock.mockResolvedValueOnce({ batchWriteStudentEvaluationComments: payload });
 
     await expect(
       batchWriteStudentEvaluationComments({
@@ -116,16 +52,9 @@ describe('student evaluation comment api', () => {
             studentId: '324010112',
           },
         ],
-        scope: {
-          classId: '1021904',
-          commentKind: 'TERM',
-          semesterId: 202501,
-        },
+        scope: { classId: '1021904', commentKind: 'TERM', semesterId: 202501 },
       }),
     ).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('BatchWriteStudentEvaluationCommentsInput!');
     expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
       input: {
         classId: '1021904',
@@ -148,11 +77,6 @@ describe('student evaluation comment api', () => {
     executeGraphQLMock.mockResolvedValueOnce({ myStudentEvaluationComments: payload });
 
     await expect(getMyStudentEvaluationComments()).resolves.toBe(payload);
-
-    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
-    expect(query).toContain('query MyStudentEvaluationComments');
-    expect(query).not.toContain('$studentId');
-    expect(query).not.toContain('myStudentEvaluationComments(');
     expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({});
   });
 });

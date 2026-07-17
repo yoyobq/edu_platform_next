@@ -288,7 +288,7 @@ describe('auth access policy', () => {
     expect(hasStudentProfileFilingAccess({ accessGroup: ['STUDENT'] })).toBe(false);
   });
 
-  it('allows student conduct alignment to the same scoped staff as student filing', () => {
+  it('matches the student conduct workspace authority policy', () => {
     expect(hasStudentConductAlignmentAccess({ accessGroup: ['ADMIN'] })).toBe(true);
     expect(
       hasStudentConductAlignmentAccess({
@@ -301,7 +301,7 @@ describe('auth access policy', () => {
         accessGroup: ['STAFF'],
         slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       hasStudentConductAlignmentAccess({
         accessGroup: ['STAFF'],
@@ -326,7 +326,7 @@ describe('auth access policy', () => {
     expect(hasUpstreamDataSyncAccess({})).toBe(false);
   });
 
-  it('allows class affairs course results to class advisers and counselors only', () => {
+  it('aligns class affairs course results with backend workspace authority', () => {
     expect(
       hasClassAffairsCourseResultsAccess({
         accessGroup: ['STAFF'],
@@ -339,7 +339,13 @@ describe('auth access policy', () => {
         slotGroup: ['COUNSELOR'],
       }),
     ).toBe(true);
-    expect(hasClassAffairsCourseResultsAccess({ accessGroup: ['ADMIN'] })).toBe(false);
+    expect(
+      hasClassAffairsCourseResultsAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(hasClassAffairsCourseResultsAccess({ accessGroup: ['ADMIN'] })).toBe(true);
     expect(hasClassAffairsCourseResultsAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 

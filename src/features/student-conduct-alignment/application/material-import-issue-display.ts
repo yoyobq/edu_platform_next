@@ -30,21 +30,38 @@ type MaterialImportIssuePosition = {
   label: string;
 };
 
+const CONDUCT_GRADE_ISSUE_MESSAGES: Readonly<Record<string, string>> = {
+  DETAIL_STUDENT_NOT_IN_CLASS: '学生不在该批次对应学期的正式名单。',
+  STUDENT_NOT_IN_TERM_ROSTER: '学生不属于目标学期正式名单。',
+};
+
+type StudentConductGradeIssueMessageInput = {
+  code?: string | null;
+  message?: string | null;
+  reasonCode?: string | null;
+  reasonMessage?: string | null;
+};
+
+export function resolveStudentConductGradeIssueMessage(
+  issue: StudentConductGradeIssueMessageInput,
+  fallback: string,
+) {
+  const code = issue.code ?? issue.reasonCode ?? '';
+  const message = issue.message ?? issue.reasonMessage;
+
+  return CONDUCT_GRADE_ISSUE_MESSAGES[code] ?? (message?.trim() || fallback);
+}
+
 function resolveMaterialImportIssueMessage(
   issue: MaterialImportIssueDisplayInput,
   type: MaterialImportIssueDisplayType,
 ) {
-  const message = issue.message?.trim();
-
-  if (message) {
-    return message;
-  }
-
-  if (type === 'warning') {
-    return '材料中存在需要确认的信息，请确认后继续导入。';
-  }
-
-  return '材料中存在阻断导入的问题，请修正后重新上传。';
+  return resolveStudentConductGradeIssueMessage(
+    issue,
+    type === 'warning'
+      ? '材料中存在需要确认的信息，请确认后继续导入。'
+      : '材料中存在阻断导入的问题，请修正后重新上传。',
+  );
 }
 
 function resolveMaterialImportIssuePosition(

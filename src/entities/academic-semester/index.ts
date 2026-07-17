@@ -33,3 +33,5 @@ export { AcademicSemesterFormItem } from './ui/academic-semester-form-item';
 export { AcademicSemesterPeriodFormItems } from './ui/academic-semester-period-form-items';
 export type { AcademicSemesterSelectProps } from './ui/academic-semester-select';
 export { AcademicSemesterSelect } from './ui/academic-semester-select';
+export type { AcademicTermTabRecord } from './ui/academic-term-tabs';
+export { AcademicTermTabs } from './ui/academic-term-tabs';

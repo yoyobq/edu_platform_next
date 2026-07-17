@@ -2,22 +2,15 @@
 
 import type { OperationVariables } from '@apollo/client';
 
-import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 import {
   executeUpstreamSessionGraphQL,
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import {
-  normalizeOptionalTextValue,
-  normalizeRequiredTextValue,
-} from '@/shared/form-normalization';
 import { executeGraphQL } from '@/shared/graphql';
 
 export { resolveUpstreamErrorMessage };
 
-export type ManagedCourseResultsRefreshMode = 'CACHE_FIRST' | 'REFRESH';
-export type ManagedCourseResultsSource = 'CACHE' | 'STALE_CACHE' | 'UPSTREAM';
 export type ManagedCourseResultsStudentStatus =
   | 'PRE_REGISTERED'
   | 'NOT_CHECKED_IN'
@@ -26,10 +19,11 @@ export type ManagedCourseResultsStudentStatus =
   | 'SUSPENDED'
   | 'GRADUATED'
   | 'DROPPED';
-export type ManagedCourseResultsDisplayStatus = 'NORMAL' | 'SPECIAL_CASE';
+
 export type ManagedCourseResultsDisplayDecisionOutcome = 'INCLUDE' | 'EXCLUDE';
 export type ManagedCourseResultsDisplayReasonCode =
   | 'DROPPED_CONFIRMED'
+  | 'NOT_CHECKED_IN_CONFIRMED'
   | 'TRANSFERRED_OUT_CONFIRMED'
   | 'TRANSFERRED_IN_CONFIRMED'
   | 'RETAINED_GRADE_CONFIRMED'
@@ -37,35 +31,42 @@ export type ManagedCourseResultsDisplayReasonCode =
   | 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
   | 'CLASS_MEMBERSHIP_CORRECTION';
 
-export type ListAcademicSemestersInput = {
-  isCurrent?: boolean;
-  isVisible?: boolean;
-  limit?: number;
-  schoolYear?: number;
-  termNumber?: number;
-};
-
-type AcademicSemestersResponse = {
-  academicSemesters: AcademicSemesterRecord[];
-};
-
-export type ManagedClassCourseResultsClass = {
-  classCode: string | null;
+export type ClassCourseGradeClassOption = {
+  blockingReasonCode: string | null;
+  blockingReasonMessage: string | null;
+  catalogStatus: string;
+  classCode: string;
+  classId: string;
   className: string;
   departmentId: string;
   gradeYear: number | null;
-  id: string;
+  majorId: string | null;
+  majorName: string | null;
+  trainingYears: number | null;
 };
 
-export type ManagedClassCourseResultsTerm = {
-  canPullFromUpstream: boolean;
-  disabledReason: string | null;
-  hasLocalData: boolean;
-  id: number | null;
+export type ClassCourseGradeTermOption = {
   isCurrent: boolean;
   label: string;
-  schoolYear: string;
-  semester: string;
+  schoolYear: number;
+  semesterId: number;
+  sequence: number;
+  termNumber: number;
+};
+
+export type ClassCourseGradeAction = {
+  action: 'REFRESH_SELECTED_TERM' | 'REFRESH_ALL_TERMS';
+  allowed: boolean;
+  reasonCode: string | null;
+  reasonMessage: string | null;
+};
+
+export type ClassCourseGradeWarning = {
+  code: string;
+  isCurrent: boolean;
+  message: string;
+  schoolYear: number;
+  termNumber: number;
 };
 
 export type ManagedCourseResultRecord = {
@@ -82,192 +83,252 @@ export type ManagedCourseResultRecord = {
   totalScore: string | null;
 };
 
-export type ManagedCourseResultsItem = {
-  fetchedAt: string | null;
-  results: ManagedCourseResultRecord[];
-  resultDisplayDecisionOutcome: ManagedCourseResultsDisplayDecisionOutcome | null;
-  resultDisplayEffectiveSemesterId: number | null;
-  resultDisplayMessage: string | null;
-  resultDisplayReasonCode: ManagedCourseResultsDisplayReasonCode | null;
-  resultDisplayStatus: ManagedCourseResultsDisplayStatus;
-  source: ManagedCourseResultsSource;
-  studentName: string | null;
-  studentNumber: string;
-  studentStatus: ManagedCourseResultsStudentStatus | null;
+export type ClassCourseGradeCourseColumn = {
+  courseId: string | null;
+  courseName: string | null;
+  key: string;
+  teacherName: string | null;
+  title: string;
 };
 
-export type ManagedCourseResultsResult = {
+export type ClassCourseGradeStudentRow = {
+  cells: Array<{
+    courseKey: string;
+    results: ManagedCourseResultRecord[];
+  }>;
+  decisionOutcome: ManagedCourseResultsDisplayDecisionOutcome | null;
+  decisionReasonCode: ManagedCourseResultsDisplayReasonCode | null;
+  effectiveSemesterId: number | null;
+  includedInTermRoster: boolean;
+  rosterEligibilityStatus: string;
+  snapshotFetchedAt: string | null;
+  specialReasonMessage: string | null;
+  studentId: string;
+  studentName: string;
+  studentStatus: ManagedCourseResultsStudentStatus;
+};
+
+export type ClassCourseGradeMatrix = {
+  courseColumns: ClassCourseGradeCourseColumn[];
+  studentRows: ClassCourseGradeStudentRow[];
+};
+
+export type ClassCourseGradeWorkspaceView = {
   classCode: string;
-  className: string | null;
-  expiresAt?: string | null;
-  items: ManagedCourseResultsItem[];
+  classId: string;
+  className: string;
+  includedRosterCount: number;
+  regularMatrix: ClassCourseGradeMatrix;
+  regularStudentCount: number;
+  resultRowCount: number;
+  rosterCandidateCount: number;
+  schoolYear: number;
+  semesterId: number;
+  specialMatrix: ClassCourseGradeMatrix;
+  specialStudentCount: number;
+  termNumber: number;
+};
+
+export type ClassCourseGradeWorkspace = {
+  actions: ClassCourseGradeAction[];
+  classOptions: ClassCourseGradeClassOption[];
+  selectedClass: ClassCourseGradeClassOption | null;
+  selectedTerm: ClassCourseGradeTermOption | null;
+  status: string;
+  termOptions: ClassCourseGradeTermOption[];
+  view: ClassCourseGradeWorkspaceView | null;
+  warnings: ClassCourseGradeWarning[];
+};
+
+export type RefreshClassCourseGradesResult = {
+  classCode: string;
+  classId: string;
+  expiresAt: string | null;
+  failedStudentCount: number;
+  failures: Array<{
+    message: string;
+    studentNumber: string;
+  }>;
   rowCount: number;
+  scope: 'SELECTED_TERM' | 'ALL_TERMS';
+  semesterId: number | null;
+  sessionStrategy: string | null;
+  status: 'REFRESHED' | 'PARTIAL';
   studentCount: number;
-  upstreamSessionToken?: string | null;
+  upstreamFetchedStudentCount: number;
+  upstreamSessionToken: string | null;
 };
 
-export type FetchManagedClassCourseResultsInput = {
-  classCode: string;
-  refreshMode: ManagedCourseResultsRefreshMode;
-  schoolYear?: string | null;
-  semester?: string | null;
-  upstreamSessionToken?: string | null;
-};
-
-type MyManagedClassesResponse = {
-  myManagedClasses: ManagedClassCourseResultsClass[];
-};
-
-type FetchResultsResponse = {
-  fetchClassStudentCourseResults: ManagedCourseResultsResult;
-};
-
-const MY_MANAGED_CLASSES_QUERY = `
-  query MyManagedClasses {
-    myManagedClasses {
-      id
-      departmentId
-      classCode
-      className
-      gradeYear
-    }
-  }
-`;
-
-const LIST_ACADEMIC_SEMESTERS_QUERY = `
-  query AcademicSemesters(
-    $isCurrent: Boolean
-    $isVisible: Boolean
-    $limit: Int
-    $schoolYear: Int
-    $termNumber: Int
-  ) {
-    academicSemesters(
-      isCurrent: $isCurrent
-      isVisible: $isVisible
-      limit: $limit
-      schoolYear: $schoolYear
-      termNumber: $termNumber
-    ) {
-      createdAt
-      endDate
-      examStartDate
-      firstTeachingDate
-      id
-      isCurrent
-      isVisible
-      name
-      schoolYear
-      sortOrder
-      startDate
-      termNumber
-      updatedAt
-    }
-  }
-`;
-
-const FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION = `
-  mutation FetchClassStudentCourseResults($input: FetchClassStudentCourseResultsInput!) {
-    fetchClassStudentCourseResults(input: $input) {
-      classCode
-      className
-      studentCount
-      rowCount
-      upstreamSessionToken
-      expiresAt
-      items {
-        studentNumber
-        studentName
-        studentStatus
-        resultDisplayStatus
-        resultDisplayDecisionOutcome
-        resultDisplayReasonCode
-        resultDisplayEffectiveSemesterId
-        resultDisplayMessage
-        source
-        fetchedAt
-        results {
-          schoolYear
-          semester
-          courseId
-          courseName
-          teacherName
-          totalScore
-          isPass
-          courseNature
-          courseDivide
-          attendExamType
-          periodicFinalTotalScore
+const CLASS_COURSE_GRADE_WORKSPACE_QUERY = `
+  query ClassCourseGradeWorkspace($input: ClassCourseGradeWorkspaceInput!) {
+    classCourseGradeWorkspace(input: $input) {
+      status
+      classOptions {
+        classId
+        classCode
+        className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
+      }
+      selectedClass {
+        classId
+        classCode
+        className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
+      }
+      termOptions {
+        semesterId
+        schoolYear
+        termNumber
+        sequence
+        label
+        isCurrent
+      }
+      selectedTerm {
+        semesterId
+        schoolYear
+        termNumber
+        sequence
+        label
+        isCurrent
+      }
+      actions {
+        action
+        allowed
+        reasonCode
+        reasonMessage
+      }
+      warnings {
+        code
+        message
+        schoolYear
+        termNumber
+        isCurrent
+      }
+      view {
+        classId
+        classCode
+        className
+        semesterId
+        schoolYear
+        termNumber
+        rosterCandidateCount
+        includedRosterCount
+        regularStudentCount
+        specialStudentCount
+        resultRowCount
+        regularMatrix {
+          courseColumns { key courseId courseName teacherName title }
+          studentRows {
+            studentId
+            studentName
+            studentStatus
+            includedInTermRoster
+            rosterEligibilityStatus
+            decisionOutcome
+            decisionReasonCode
+            effectiveSemesterId
+            specialReasonMessage
+            snapshotFetchedAt
+            cells {
+              courseKey
+              results {
+                schoolYear semester courseId courseName teacherName totalScore isPass
+                courseNature courseDivide attendExamType periodicFinalTotalScore
+              }
+            }
+          }
+        }
+        specialMatrix {
+          courseColumns { key courseId courseName teacherName title }
+          studentRows {
+            studentId
+            studentName
+            studentStatus
+            includedInTermRoster
+            rosterEligibilityStatus
+            decisionOutcome
+            decisionReasonCode
+            effectiveSemesterId
+            specialReasonMessage
+            snapshotFetchedAt
+            cells {
+              courseKey
+              results {
+                schoolYear semester courseId courseName teacherName totalScore isPass
+                courseNature courseDivide attendExamType periodicFinalTotalScore
+              }
+            }
+          }
         }
       }
     }
   }
 `;
 
-async function requestGraphQL<TData, TVariables extends OperationVariables>(
-  query: string,
-  variables: TVariables,
-): Promise<TData> {
-  return executeGraphQL(query, variables);
-}
-
-function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
-  return Object.fromEntries(
-    Object.entries(input).filter(([, value]) => value !== undefined),
-  ) as Partial<TValue>;
-}
-
-export function normalizeFetchManagedClassCourseResultsInput(
-  input: FetchManagedClassCourseResultsInput,
-) {
-  return compactInput({
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级' }),
-    refreshMode: input.refreshMode,
-    schoolYear: normalizeOptionalTextValue(input.schoolYear, 'to_undefined'),
-    semester: normalizeOptionalTextValue(input.semester, 'to_undefined'),
-    sessionToken: normalizeOptionalTextValue(input.upstreamSessionToken, 'to_undefined'),
-  });
-}
-
-export async function listMyManagedClasses() {
-  try {
-    const response = await requestGraphQL<MyManagedClassesResponse, Record<string, never>>(
-      MY_MANAGED_CLASSES_QUERY,
-      {},
-    );
-
-    return response.myManagedClasses;
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载本地负责班级。'));
-  }
-}
-
-export async function requestAcademicSemesters(input: ListAcademicSemestersInput = {}) {
-  try {
-    const response = await requestGraphQL<
-      AcademicSemestersResponse,
-      OperationVariables & ListAcademicSemestersInput
-    >(LIST_ACADEMIC_SEMESTERS_QUERY, input);
-
-    return response.academicSemesters;
-  } catch (error) {
-    throw new Error(resolveUpstreamErrorMessage(error, '暂时无法加载学期列表。'));
-  }
-}
-
-export async function fetchManagedClassCourseResults(input: FetchManagedClassCourseResultsInput) {
-  const variables = {
-    input: normalizeFetchManagedClassCourseResultsInput(input),
-  };
-  const fetchResults = variables.input.sessionToken
-    ? executeUpstreamSessionGraphQL
-    : requestGraphQL;
-  const response = await fetchResults<
-    FetchResultsResponse,
-    {
-      input: ReturnType<typeof normalizeFetchManagedClassCourseResultsInput>;
+const REFRESH_CLASS_COURSE_GRADES_MUTATION = `
+  mutation RefreshClassCourseGrades($input: RefreshClassCourseGradesInput!) {
+    refreshClassCourseGrades(input: $input) {
+      status
+      classId
+      classCode
+      semesterId
+      scope
+      studentCount
+      rowCount
+      failedStudentCount
+      upstreamFetchedStudentCount
+      upstreamSessionToken
+      expiresAt
+      sessionStrategy
+      failures { studentNumber message }
     }
-  >(FETCH_CLASS_STUDENT_COURSE_RESULTS_MUTATION, variables);
+  }
+`;
 
-  return response.fetchClassStudentCourseResults;
+export async function getClassCourseGradeWorkspace(input: {
+  classId?: string | null;
+  semesterId?: number | null;
+}) {
+  const response = await executeGraphQL<
+    { classCourseGradeWorkspace: ClassCourseGradeWorkspace },
+    { input: typeof input }
+  >(CLASS_COURSE_GRADE_WORKSPACE_QUERY, { input });
+
+  return response.classCourseGradeWorkspace;
+}
+
+export async function refreshClassCourseGrades(input: {
+  classId: string;
+  scope: 'SELECTED_TERM' | 'ALL_TERMS';
+  semesterId?: number | null;
+  upstreamSessionToken: string;
+}) {
+  const variables = {
+    input: {
+      classId: input.classId,
+      scope: input.scope,
+      semesterId: input.scope === 'SELECTED_TERM' ? input.semesterId : undefined,
+      sessionToken: input.upstreamSessionToken,
+    },
+  };
+  const response = await executeUpstreamSessionGraphQL<
+    { refreshClassCourseGrades: RefreshClassCourseGradesResult },
+    OperationVariables & typeof variables
+  >(REFRESH_CLASS_COURSE_GRADES_MUTATION, variables);
+
+  return response.refreshClassCourseGrades;
 }

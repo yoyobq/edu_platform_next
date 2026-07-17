@@ -21,29 +21,18 @@ import {
 
 export { isExpiredUpstreamSessionError, resolveUpstreamErrorMessage };
 
-export type StudentPrivateProfileClassOption = {
-  authorizationPath: string;
+export type StudentConductGradeWorkspaceClassOption = {
+  blockingReasonCode: string | null;
+  blockingReasonMessage: string | null;
   classCode: string;
   className: string;
+  catalogStatus: string;
+  departmentId: string;
+  gradeYear: number | null;
   id: string;
-  resolvedAuthorityCode: string;
-  studentCount: number;
-};
-
-export type StudentPrivateProfileClassOverviewStudent = {
-  snapshotPresent: boolean;
-  studentId: string;
-  studentName: string | null;
-  studentStatus: string | null;
-  upstreamIdPresent: boolean;
-};
-
-export type StudentPrivateProfileClassOverview = {
-  classCode: string;
-  classId: string;
-  className: string;
-  studentCount: number;
-  students: StudentPrivateProfileClassOverviewStudent[];
+  majorId: string | null;
+  majorName: string | null;
+  trainingYears: number | null;
 };
 
 export type StudentConductGradeFieldCell = {
@@ -66,6 +55,7 @@ export type StudentConductGradeStudent = {
     estimatedGrade: StudentConductGradeFieldCell;
     score: StudentConductGradeFieldCell;
   };
+  mainSnapshotPresent: boolean;
   manualPatchFieldKeys: string[];
   status: string;
   studentId: string;
@@ -73,10 +63,19 @@ export type StudentConductGradeStudent = {
   studentStatus: string | null;
 };
 
+export type StudentConductGradeRosterEligibilitySummary = {
+  excludedAfterExitCount: number;
+  excludedBeforeEntryCount: number;
+  excludedNotCheckedInCount: number;
+  inScopeCount: number;
+  unresolvedEffectiveSemesterCount: number;
+};
+
 export type StudentConductGradeEffectiveView = {
   classCode: string;
   classId: string;
   className: string;
+  rosterEligibilitySummary: StudentConductGradeRosterEligibilitySummary;
   schoolYear: string;
   sectionKey: string;
   semester: string;
@@ -95,37 +94,50 @@ export type StudentConductGradeCorrectionCleanupResult = {
   termKey: string;
 };
 
-export type StudentConductGradeEffectiveViewInput = {
-  classCode: string;
-  schoolYear: string;
-  semester: string;
+export type StudentConductGradeWorkspaceInput = {
+  classId?: string | null;
+  semesterId?: number | null;
 };
 
 export type StudentConductGradeCorrectionCleanupInput = {
-  classCode: string;
-  schoolYear: string;
-  semester: string;
+  classId: string;
+  semesterId: number;
   studentId: string;
 };
 
-export type StudentConductGradeClassTermOption = {
+export type StudentConductGradeWorkspaceTermOption = {
   isCurrent: boolean;
   label: string;
-  schoolYear: string;
-  semester: string;
+  semesterId: number;
+  schoolYear: number;
+  sequence: number;
+  termNumber: number;
 };
 
-export type StudentConductGradeClassTermOptions = {
-  blockingReasonCode: string | null;
-  blockingReasonMessage: string | null;
-  currentSchoolYear: string | null;
-  currentSemester: string | null;
-  generationStatus: string;
-  terms: StudentConductGradeClassTermOption[];
+export type StudentConductGradeWorkspaceAction = {
+  action: 'PATCH_CORRECTIONS' | 'REFRESH_ALL_TERMS' | 'REFRESH_SELECTED_TERM';
+  allowed: boolean;
+  reasonCode: string | null;
+  reasonMessage: string | null;
 };
 
-export type StudentConductGradeClassTermOptionsInput = {
-  classCode: string;
+export type StudentConductGradeWorkspaceWarning = {
+  code: string;
+  isCurrent: boolean;
+  message: string;
+  schoolYear: number;
+  termNumber: number;
+};
+
+export type StudentConductGradeWorkspace = {
+  actions: StudentConductGradeWorkspaceAction[];
+  classOptions: StudentConductGradeWorkspaceClassOption[];
+  selectedClass: StudentConductGradeWorkspaceClassOption | null;
+  selectedTerm: StudentConductGradeWorkspaceTermOption | null;
+  status: string;
+  termOptions: StudentConductGradeWorkspaceTermOption[];
+  view: StudentConductGradeEffectiveView | null;
+  warnings: StudentConductGradeWorkspaceWarning[];
 };
 
 export type StudentConductGradeSyncTermStatus = 'FAILED' | 'PARTIAL' | 'SKIPPED' | 'SYNCED';
@@ -138,11 +150,20 @@ export type RefreshStudentConductGradeTermResult = {
   writtenStudentCount: number;
 };
 
+export type RefreshStudentConductGradeFailure = {
+  reasonCode: string;
+  reasonMessage: string;
+  schoolYear: string | null;
+  semester: string | null;
+  studentNumber: string | null;
+};
+
 export type RefreshStudentConductGradeClassResult = {
   confirmedRegistrationCount: number;
   createdCount: number;
   expiresAt: string | null;
   failureCount: number;
+  failures: RefreshStudentConductGradeFailure[];
   processedRegistrationCount: number;
   requestedRegistrationCount: number;
   skippedRegistrationCount: number;
@@ -157,9 +178,9 @@ export type RefreshStudentConductGradeClassResult = {
 };
 
 export type RefreshStudentConductGradeClassInput = {
-  classCode: string;
-  schoolYear?: string | null;
-  semester?: string | null;
+  classId: string;
+  scope: 'ALL_TERMS' | 'SELECTED_TERM';
+  semesterId?: number | null;
   upstreamSessionToken: string;
 };
 
@@ -173,9 +194,8 @@ export type PatchStudentConductGradeCorrectionStudentInput = {
 };
 
 export type PatchStudentConductGradeCorrectionsInput = {
-  classCode: string;
-  schoolYear: string;
-  semester: string;
+  classId: string;
+  semesterId: number;
   students: readonly PatchStudentConductGradeCorrectionStudentInput[];
 };
 
@@ -283,20 +303,19 @@ export type ImportStudentConductGradeMaterialsInput = {
   semester: string;
 };
 
-type ClassOptionsResponse = {
-  studentPrivateProfileClassOptions: StudentPrivateProfileClassOption[];
-};
-
-type ClassTermOptionsResponse = {
-  studentConductGradeClassTermOptions: StudentConductGradeClassTermOptions;
-};
-
-type ClassOverviewResponse = {
-  studentPrivateProfileClassOverview: StudentPrivateProfileClassOverview;
-};
-
-type ConductViewResponse = {
-  studentConductGradeEffectiveView: StudentConductGradeEffectiveView;
+type ConductWorkspaceResponse = {
+  studentConductGradeWorkspace: {
+    actions: StudentConductGradeWorkspaceAction[];
+    classOptions: Array<Omit<StudentConductGradeWorkspaceClassOption, 'id'> & { classId: string }>;
+    selectedClass:
+      | (Omit<StudentConductGradeWorkspaceClassOption, 'id'> & { classId: string })
+      | null;
+    selectedTerm: StudentConductGradeWorkspaceTermOption | null;
+    status: string;
+    termOptions: StudentConductGradeWorkspaceTermOption[];
+    view: StudentConductGradeEffectiveView | null;
+    warnings: StudentConductGradeWorkspaceWarning[];
+  };
 };
 
 type ConductCleanupResponse = {
@@ -339,66 +358,68 @@ const CONDUCT_GRADE_MATERIAL_IMPORT_SUMMARY_KEYS = [
   'unchangedFieldCount',
 ] as const;
 
-const CLASS_OPTIONS_QUERY = `
-  query StudentConductGradeGovernanceClassOptions(
-    $input: StudentPrivateProfileClassOptionsInput
+const CONDUCT_WORKSPACE_QUERY = `
+  query StudentConductGradeGovernanceWorkspace(
+    $input: StudentConductGradeWorkspaceInput!
   ) {
-    studentPrivateProfileClassOptions(input: $input) {
-      id
-      classCode
-      className
-      studentCount
-      resolvedAuthorityCode
-      authorizationPath
-    }
-  }
-`;
-
-const CLASS_TERM_OPTIONS_QUERY = `
-  query StudentConductGradeGovernanceClassTermOptions(
-    $input: StudentConductGradeClassTermOptionsInput!
-  ) {
-    studentConductGradeClassTermOptions(input: $input) {
-      generationStatus
-      blockingReasonCode
-      blockingReasonMessage
-      currentSchoolYear
-      currentSemester
-      terms {
+    studentConductGradeWorkspace(input: $input) {
+      status
+      classOptions {
+        classId
+        classCode
+        className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
+      }
+      selectedClass {
+        classId
+        classCode
+        className
+        departmentId
+        gradeYear
+        majorId
+        majorName
+        trainingYears
+        catalogStatus
+        blockingReasonCode
+        blockingReasonMessage
+      }
+      termOptions {
+        semesterId
         schoolYear
-        semester
+        termNumber
+        sequence
         label
         isCurrent
       }
-    }
-  }
-`;
-
-const CLASS_OVERVIEW_QUERY = `
-  query StudentConductGradeGovernanceClassOverview(
-    $input: StudentPrivateProfileClassOverviewInput!
-  ) {
-    studentPrivateProfileClassOverview(input: $input) {
-      classId
-      classCode
-      className
-      studentCount
-      students {
-        studentId
-        studentName
-        studentStatus
-        upstreamIdPresent
-        snapshotPresent
+      selectedTerm {
+        semesterId
+        schoolYear
+        termNumber
+        sequence
+        label
+        isCurrent
       }
-    }
-  }
-`;
-
-const CONDUCT_VIEW_QUERY = `
-  query StudentConductGradeGovernanceEffectiveView(
-    $input: StudentConductGradeEffectiveViewInput!
-  ) {
-    studentConductGradeEffectiveView(input: $input) {
+      actions {
+        action
+        allowed
+        reasonCode
+        reasonMessage
+      }
+      warnings {
+        code
+        message
+        schoolYear
+        termNumber
+        isCurrent
+      }
+      view {
       sectionKey
       classId
       classCode
@@ -406,10 +427,18 @@ const CONDUCT_VIEW_QUERY = `
       schoolYear
       semester
       studentCount
+      rosterEligibilitySummary {
+        inScopeCount
+        excludedAfterExitCount
+        excludedBeforeEntryCount
+        excludedNotCheckedInCount
+        unresolvedEffectiveSemesterCount
+      }
       students {
         studentId
         studentName
         studentStatus
+        mainSnapshotPresent
         conductSection {
           snapshotPresent
           sourceStatus
@@ -438,6 +467,7 @@ const CONDUCT_VIEW_QUERY = `
         conflictCodes
         manualPatchFieldKeys
         status
+      }
       }
     }
   }
@@ -513,6 +543,13 @@ const REFRESH_CONDUCT_CLASS_MUTATION = `
       updatedCount
       unchangedCount
       failureCount
+      failures {
+        schoolYear
+        semester
+        studentNumber
+        reasonCode
+        reasonMessage
+      }
       upstreamSessionToken
       expiresAt
       traceId
@@ -868,19 +905,17 @@ function normalizeConductPatchStudent(student: PatchStudentConductGradeCorrectio
   return normalizedStudent;
 }
 
-export function normalizeConductViewInput(input: StudentConductGradeEffectiveViewInput) {
-  return {
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
-    schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
-    semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
-  };
+export function normalizeConductWorkspaceInput(input: StudentConductGradeWorkspaceInput) {
+  return compactInput({
+    classId: normalizeOptionalTextValue(input.classId, 'to_undefined'),
+    semesterId: normalizeOptionalPositiveInteger(input.semesterId, 'semesterId'),
+  });
 }
 
 export function normalizeConductCleanupInput(input: StudentConductGradeCorrectionCleanupInput) {
   return {
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
-    schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
-    semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
+    classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
+    semesterId: normalizeRequiredPositiveInteger(input.semesterId, 'semesterId'),
     studentId: normalizeRequiredTextValue(input.studentId, { label: '学生' }),
   };
 }
@@ -897,9 +932,8 @@ export function normalizePatchStudentConductGradeCorrectionsInput(
   }
 
   return {
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
-    schoolYear: normalizeRequiredTextValue(input.schoolYear, { label: '学年' }),
-    semester: normalizeRequiredTextValue(input.semester, { label: '学期' }),
+    classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
+    semesterId: normalizeRequiredPositiveInteger(input.semesterId, 'semesterId'),
     students: input.students.map((student) => normalizeConductPatchStudent(student)),
   };
 }
@@ -922,36 +956,39 @@ export function resolveStudentConductGradeMaterialImportUrl(
   return new URL(CONDUCT_GRADE_MATERIAL_IMPORT_PATH, graphQLEndpoint).toString();
 }
 
-export function normalizeConductClassTermOptionsInput(
-  input: StudentConductGradeClassTermOptionsInput,
-) {
-  return {
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
-  };
-}
-
 export function normalizeRefreshConductClassInput(input: RefreshStudentConductGradeClassInput) {
-  const schoolYear = normalizeOptionalTextValue(input.schoolYear, 'to_undefined');
-  const semester = normalizeOptionalTextValue(input.semester, 'to_undefined');
-
-  if (semester && !schoolYear) {
-    throw new Error('同步指定学期时必须同时提供学年。');
+  const semesterId = normalizeOptionalPositiveInteger(input.semesterId, 'semesterId');
+  if (input.scope === 'SELECTED_TERM' && semesterId === undefined) {
+    throw new Error('同步所选学期时必须提供 semesterId。');
+  }
+  if (input.scope === 'ALL_TERMS' && semesterId !== undefined) {
+    throw new Error('同步全部学期时不得提供 semesterId。');
   }
 
-  return {
-    classCode: normalizeRequiredTextValue(input.classCode, { label: '班级代码' }),
-    schoolYear,
-    semester,
+  return compactInput({
+    classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
+    scope: input.scope,
+    semesterId,
     upstreamSessionToken: normalizeRequiredTextValue(input.upstreamSessionToken, {
       label: 'upstream session token',
     }),
-  };
+  });
 }
 
-export function normalizeClassOverviewInput(input: { classId: string }) {
-  return {
-    classId: normalizeRequiredTextValue(input.classId, { label: '班级' }),
-  };
+function normalizeRequiredPositiveInteger(value: number, label: string) {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error(`${label} 必须是正整数。`);
+  }
+  return value;
+}
+
+function normalizeOptionalPositiveInteger(
+  value: number | null | undefined,
+  label: string,
+): number | undefined {
+  return value === undefined || value === null
+    ? undefined
+    : normalizeRequiredPositiveInteger(value, label);
 }
 
 export function readStudentConductGradePatchRowIssues(
@@ -1026,60 +1063,17 @@ export function resolveStudentConductGradePatchErrorMessage(error: unknown, fall
   return error instanceof Error ? error.message : fallback;
 }
 
-export async function listStudentPrivateProfileClassOptions() {
+export async function fetchStudentConductGradeWorkspace(input: StudentConductGradeWorkspaceInput) {
   const response = await requestGraphQL<
-    ClassOptionsResponse,
+    ConductWorkspaceResponse,
     {
-      input: Record<string, never>;
+      input: ReturnType<typeof normalizeConductWorkspaceInput>;
     }
-  >(CLASS_OPTIONS_QUERY, {
-    input: {},
+  >(CONDUCT_WORKSPACE_QUERY, {
+    input: normalizeConductWorkspaceInput(input),
   });
 
-  return response.studentPrivateProfileClassOptions;
-}
-
-export async function fetchStudentPrivateProfileClassOverview(input: { classId: string }) {
-  const response = await requestGraphQL<
-    ClassOverviewResponse,
-    {
-      input: ReturnType<typeof normalizeClassOverviewInput>;
-    }
-  >(CLASS_OVERVIEW_QUERY, {
-    input: normalizeClassOverviewInput(input),
-  });
-
-  return response.studentPrivateProfileClassOverview;
-}
-
-export async function fetchStudentConductGradeClassTermOptions(
-  input: StudentConductGradeClassTermOptionsInput,
-) {
-  const response = await requestGraphQL<
-    ClassTermOptionsResponse,
-    {
-      input: ReturnType<typeof normalizeConductClassTermOptionsInput>;
-    }
-  >(CLASS_TERM_OPTIONS_QUERY, {
-    input: normalizeConductClassTermOptionsInput(input),
-  });
-
-  return response.studentConductGradeClassTermOptions;
-}
-
-export async function fetchStudentConductGradeEffectiveView(
-  input: StudentConductGradeEffectiveViewInput,
-) {
-  const response = await requestGraphQL<
-    ConductViewResponse,
-    {
-      input: ReturnType<typeof normalizeConductViewInput>;
-    }
-  >(CONDUCT_VIEW_QUERY, {
-    input: normalizeConductViewInput(input),
-  });
-
-  return response.studentConductGradeEffectiveView;
+  return normalizeConductWorkspace(response.studentConductGradeWorkspace);
 }
 
 export async function cleanupStudentConductGradeCorrection(
@@ -1166,4 +1160,27 @@ export async function refreshStudentConductGradeClassFromUpstream(
   });
 
   return response.refreshStudentConductGradeClassFromUpstream;
+}
+
+function normalizeConductWorkspace(
+  workspace: ConductWorkspaceResponse['studentConductGradeWorkspace'],
+): StudentConductGradeWorkspace {
+  return {
+    ...workspace,
+    classOptions: workspace.classOptions.map(normalizeWorkspaceClassOption),
+    selectedClass: workspace.selectedClass
+      ? normalizeWorkspaceClassOption(workspace.selectedClass)
+      : null,
+    termOptions: workspace.termOptions,
+    selectedTerm: workspace.selectedTerm,
+  };
+}
+
+function normalizeWorkspaceClassOption(
+  option: ConductWorkspaceResponse['studentConductGradeWorkspace']['classOptions'][number],
+): StudentConductGradeWorkspaceClassOption {
+  return {
+    ...option,
+    id: option.classId,
+  };
 }

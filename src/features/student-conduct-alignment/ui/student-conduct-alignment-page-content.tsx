@@ -25,21 +25,12 @@ import {
   Space,
   Spin,
   Table,
-  Tabs,
   Tag,
-  theme,
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-import {
-  buildAcademicTermKey as buildTermKey,
-  buildAcademicTermOrdinalByKey,
-  formatAcademicSchoolYear as formatSchoolYear,
-  formatAcademicSemester as formatSemester,
-  formatAcademicTermLabel,
-  sortAcademicTermsByTimelineDesc,
-} from '@/entities/academic-semester';
+import { AcademicTermTabs } from '@/entities/academic-semester';
 import {
   type StoredUpstreamSession,
   UpstreamLoginModal,
@@ -49,14 +40,12 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { buildStableColumnSizing } from '@/shared/ui/stable-table';
 
+import { resolveStudentConductGradeIssueMessage } from '../application/material-import-issue-display';
 import {
   cleanupStudentConductGradeCorrection,
-  fetchStudentConductGradeClassTermOptions,
-  fetchStudentConductGradeEffectiveView,
-  fetchStudentPrivateProfileClassOverview,
+  fetchStudentConductGradeWorkspace,
   importStudentConductGradeMaterials,
   isExpiredUpstreamSessionError,
-  listStudentPrivateProfileClassOptions,
   patchStudentConductGradeCorrections,
   type PatchStudentConductGradeCorrectionsResult,
   type PatchStudentConductGradeCorrectionStudentInput,
@@ -65,8 +54,6 @@ import {
   type RefreshStudentConductGradeClassResult,
   resolveStudentConductGradePatchErrorMessage,
   resolveUpstreamErrorMessage,
-  type StudentConductGradeClassTermOption,
-  type StudentConductGradeClassTermOptions,
   type StudentConductGradeEffectiveView,
   type StudentConductGradeFieldCell,
   type StudentConductGradeMaterialImportPreviewRow,
@@ -74,8 +61,11 @@ import {
   type StudentConductGradePatchFieldKey,
   type StudentConductGradePatchRowIssue,
   type StudentConductGradeStudent,
-  type StudentPrivateProfileClassOption,
-  type StudentPrivateProfileClassOverview,
+  type StudentConductGradeWorkspace,
+  type StudentConductGradeWorkspaceAction,
+  type StudentConductGradeWorkspaceClassOption,
+  type StudentConductGradeWorkspaceTermOption,
+  type StudentConductGradeWorkspaceWarning,
 } from '../infrastructure/api';
 
 import { StudentConductGradeMaterialImportPanel } from './material-import-panel';
@@ -88,15 +78,10 @@ export type StudentConductAlignmentCurrentAccount = {
   lockedUpstreamLoginUserId: string | null;
 };
 
-type OverviewReadiness = {
-  missingSnapshotCount: number;
-  upstreamIdMissingCount: number;
-};
-
 type PendingConductSyncRequest = {
-  classOption: StudentPrivateProfileClassOption;
+  classOption: StudentConductGradeWorkspaceClassOption;
   scope: 'ALL_TERMS' | 'TERM';
-  term?: StudentConductGradeClassTermOption;
+  term?: StudentConductGradeWorkspaceTermOption;
 };
 
 type UpstreamActionRequest = {
@@ -172,48 +157,16 @@ function compareTextValue(a: string | null | undefined, b: string | null | undef
   });
 }
 
-function resolveDefaultTermKey(
-  terms: readonly StudentConductGradeClassTermOption[],
-  preferredTermKey?: string | null,
-) {
-  if (preferredTermKey && terms.some((term) => buildTermKey(term) === preferredTermKey)) {
-    return preferredTermKey;
-  }
-
-  const defaultTerm = terms[0] ?? null;
-
-  return defaultTerm ? buildTermKey(defaultTerm) : null;
+function buildTermKey(term: StudentConductGradeWorkspaceTermOption) {
+  return String(term.semesterId);
 }
 
-function formatTermLabel(term: StudentConductGradeClassTermOption) {
-  return formatAcademicTermLabel(term);
+function formatTermLabel(term: StudentConductGradeWorkspaceTermOption) {
+  return term.label;
 }
 
-function isTermGenerationBlocked(options: StudentConductGradeClassTermOptions | null) {
-  return options?.generationStatus === 'CLASS_CONFIG_MISSING';
-}
-
-function formatClassLabel(option: StudentPrivateProfileClassOption) {
+function formatClassLabel(option: StudentConductGradeWorkspaceClassOption) {
   return `${option.className || option.classCode}（${option.classCode}）`;
-}
-
-function sortClassOptions(options: readonly StudentPrivateProfileClassOption[]) {
-  return [...options].sort(
-    (first, second) =>
-      compareTextValue(second.classCode, first.classCode) ||
-      compareTextValue(first.className, second.className),
-  );
-}
-
-function resolveOverviewReadiness(
-  overview: StudentPrivateProfileClassOverview | null,
-): OverviewReadiness {
-  return {
-    missingSnapshotCount:
-      overview?.students.filter((student) => !student.snapshotPresent).length ?? 0,
-    upstreamIdMissingCount:
-      overview?.students.filter((student) => !student.upstreamIdPresent).length ?? 0,
-  };
 }
 
 function resolveStatusLabel(status: string | null | undefined) {
@@ -456,17 +409,18 @@ function renderFieldCell(cell: StudentConductGradeFieldCell) {
   return <span>{formatFieldValue(cell)}</span>;
 }
 
-function renderSnapshotInitializationAlert(missingSnapshotCount: number) {
+function renderTargetTermSnapshotAlert(missingSnapshotCount: number) {
   return (
     <Alert
       showIcon
       type="warning"
-      title="本地快照尚未完整初始化"
+      title="目标学期正式名单存在未初始化快照"
       description={
         <span>
-          当前班级有 {missingSnapshotCount} 名学生缺少本地快照。请先到{' '}
+          当前学期正式名单有 {missingSnapshotCount}{' '}
+          名学生缺少主快照。页面仍按后端名单展示；同步或补录前可到{' '}
           <a href="/class-affairs/student-profile-filing">学生建档</a>
-          初始化快照后再对齐操行。
+          完成初始化。
         </span>
       }
     />
@@ -534,33 +488,70 @@ function formatSyncScope(action: PendingConductSyncRequest) {
 }
 
 function resolveTermResultLabel(
-  term: Pick<StudentConductGradeClassTermOption, 'schoolYear' | 'semester'>,
-  knownTerms: readonly StudentConductGradeClassTermOption[],
+  term: Pick<
+    RefreshStudentConductGradeClassResult['termResults'][number],
+    'schoolYear' | 'semester'
+  >,
+  knownTerms: readonly StudentConductGradeWorkspaceTermOption[],
 ) {
   return (
     knownTerms.find(
       (knownTerm) =>
-        knownTerm.schoolYear === term.schoolYear && knownTerm.semester === term.semester,
+        String(knownTerm.schoolYear) === term.schoolYear &&
+        String(knownTerm.termNumber) === term.semester,
     )?.label ?? `${term.schoolYear}/${term.semester}`
   );
 }
 
 function formatSyncResultTitle(
   result: RefreshStudentConductGradeClassResult,
-  knownTerms: readonly StudentConductGradeClassTermOption[],
+  knownTerms: readonly StudentConductGradeWorkspaceTermOption[],
 ) {
   const termSummary = result.termResults
     .map((term) => `${resolveTermResultLabel(term, knownTerms)} ${term.status}`)
+    .join('；');
+  const failureSummary = (result.failures ?? [])
+    .slice(0, 3)
+    .map((failure) => {
+      const studentLabel = failure.studentNumber ? `${failure.studentNumber}：` : '';
+      return `${studentLabel}${resolveStudentConductGradeIssueMessage(
+        failure,
+        '该操行批次处理失败。',
+      )}`;
+    })
     .join('；');
 
   return [
     `登记批次 ${result.requestedRegistrationCount} 个，确认 ${result.confirmedRegistrationCount} 个，处理 ${result.processedRegistrationCount} 个，跳过 ${result.skippedRegistrationCount} 个`,
     `写入学生 ${result.writtenStudentCount} 名，新建 ${result.createdCount} 条，更新 ${result.updatedCount} 条，未变化 ${result.unchangedCount} 条，失败 ${result.failureCount} 条`,
     termSummary ? `批次：${termSummary}` : null,
+    failureSummary ? `失败详情：${failureSummary}` : null,
+    (result.failures?.length ?? 0) > 3
+      ? `另有 ${(result.failures?.length ?? 0) - 3} 条失败未展开`
+      : null,
     result.traceId ? `traceId：${result.traceId}` : null,
   ]
     .filter((item): item is string => Boolean(item))
     .join('。');
+}
+
+function formatRosterEligibilitySummary(view: StudentConductGradeEffectiveView) {
+  const summary = view.rosterEligibilitySummary;
+
+  return [
+    summary.excludedNotCheckedInCount > 0
+      ? `确认未报到排除 ${summary.excludedNotCheckedInCount} 人`
+      : null,
+    summary.excludedAfterExitCount > 0 ? `离开裁定排除 ${summary.excludedAfterExitCount} 人` : null,
+    summary.excludedBeforeEntryCount > 0
+      ? `尚未进入该班排除 ${summary.excludedBeforeEntryCount} 人`
+      : null,
+    summary.unresolvedEffectiveSemesterCount > 0
+      ? `生效学期不明确并保守保留 ${summary.unresolvedEffectiveSemesterCount} 人`
+      : null,
+  ]
+    .filter((item): item is string => Boolean(item))
+    .join('；');
 }
 
 function formatPatchResultTitle(result: PatchStudentConductGradeCorrectionsResult) {
@@ -579,14 +570,18 @@ type StudentConductAlignmentPageContentProps = {
 export function StudentConductAlignmentPageContent({
   currentAccount,
 }: StudentConductAlignmentPageContentProps) {
-  const { token } = theme.useToken();
   const { message, modal } = App.useApp();
-  const [classes, setClasses] = useState<StudentPrivateProfileClassOption[]>([]);
-  const [terms, setTerms] = useState<StudentConductGradeClassTermOption[]>([]);
-  const [termOptions, setTermOptions] = useState<StudentConductGradeClassTermOptions | null>(null);
+  const [classes, setClasses] = useState<StudentConductGradeWorkspaceClassOption[]>([]);
+  const [terms, setTerms] = useState<StudentConductGradeWorkspaceTermOption[]>([]);
+  const [workspaceStatus, setWorkspaceStatus] = useState('NO_CLASSES');
+  const [workspaceActions, setWorkspaceActions] = useState<StudentConductGradeWorkspaceAction[]>(
+    [],
+  );
+  const [workspaceWarnings, setWorkspaceWarnings] = useState<StudentConductGradeWorkspaceWarning[]>(
+    [],
+  );
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedTermKey, setSelectedTermKey] = useState<string | null>(null);
-  const [overview, setOverview] = useState<StudentPrivateProfileClassOverview | null>(null);
   const [conductView, setConductView] = useState<StudentConductGradeEffectiveView | null>(null);
   const [studentSearch, setStudentSearch] = useState('');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
@@ -620,9 +615,9 @@ export function StudentConductAlignmentPageContent({
   const materialImportRequestSeqRef = useRef(0);
   const patchRequestSeqRef = useRef(0);
   const activeSelectionRef = useRef<{
-    classOption: StudentPrivateProfileClassOption | null;
+    classOption: StudentConductGradeWorkspaceClassOption | null;
     classId: string | null;
-    term: StudentConductGradeClassTermOption | null;
+    term: StudentConductGradeWorkspaceTermOption | null;
     termKey: string | null;
   }>({
     classOption: null,
@@ -666,12 +661,13 @@ export function StudentConductAlignmentPageContent({
     () => conductView?.students.find((student) => student.studentId === selectedStudentId) ?? null,
     [conductView?.students, selectedStudentId],
   );
-  const overviewReadiness = useMemo(() => resolveOverviewReadiness(overview), [overview]);
-  const snapshotInitializationBlocked = overviewReadiness.missingSnapshotCount > 0;
-  const termGenerationBlocked = isTermGenerationBlocked(termOptions);
+  const workspaceActionByCode = useMemo(
+    () => new Map(workspaceActions.map((action) => [action.action, action])),
+    [workspaceActions],
+  );
+  const termGenerationBlocked = workspaceStatus === 'CLASS_CONFIG_MISSING';
   const termBlockingMessage =
-    termOptions?.blockingReasonMessage || '当前班级缺少生成操行学期所需配置。';
-  const termOrdinalByKey = useMemo(() => buildAcademicTermOrdinalByKey(terms), [terms]);
+    selectedClass?.blockingReasonMessage || '当前班级缺少生成操行学期所需配置。';
   const filteredStudents = useMemo(
     () =>
       filterConductStudents(conductView?.students ?? [], {
@@ -679,6 +675,13 @@ export function StudentConductAlignmentPageContent({
       }),
     [conductView?.students, studentSearch],
   );
+  const targetTermMissingSnapshotCount = useMemo(
+    () => conductView?.students.filter((student) => !student.mainSnapshotPresent).length ?? 0,
+    [conductView?.students],
+  );
+  const rosterEligibilityDescription = conductView
+    ? formatRosterEligibilitySummary(conductView)
+    : '';
   const patchDraftCount = useMemo(() => Object.keys(patchDrafts).length, [patchDrafts]);
   const materialWarningConfirmationKeys = useMemo(
     () =>
@@ -703,17 +706,18 @@ export function StudentConductAlignmentPageContent({
   const conductSyncMenuItems = useMemo<MenuProps['items']>(
     () => [
       {
-        disabled: !selectedTerm || termGenerationBlocked,
+        disabled:
+          !selectedTerm || workspaceActionByCode.get('REFRESH_SELECTED_TERM')?.allowed !== true,
         key: 'TERM',
         label: selectedTerm ? `同步所选学期（${formatTermLabel(selectedTerm)}）` : '同步所选学期',
       },
       {
-        disabled: termGenerationBlocked,
+        disabled: workspaceActionByCode.get('REFRESH_ALL_TERMS')?.allowed !== true,
         key: 'ALL_TERMS',
         label: '同步该班全部学期',
       },
     ],
-    [selectedTerm, termGenerationBlocked],
+    [selectedTerm, workspaceActionByCode],
   );
   const conductSyncDisabled =
     isLoadingCatalog ||
@@ -722,9 +726,8 @@ export function StudentConductAlignmentPageContent({
     isImportingMaterial ||
     isPatchingCorrections ||
     !selectedClass ||
-    !selectedTerm ||
-    terms.length === 0 ||
-    termGenerationBlocked;
+    (workspaceActionByCode.get('REFRESH_SELECTED_TERM')?.allowed !== true &&
+      workspaceActionByCode.get('REFRESH_ALL_TERMS')?.allowed !== true);
   const conductPatchDisabled =
     isLoadingCatalog ||
     isLoadingData ||
@@ -733,7 +736,7 @@ export function StudentConductAlignmentPageContent({
     !selectedClass ||
     !selectedTerm ||
     !conductView ||
-    termGenerationBlocked;
+    workspaceActionByCode.get('PATCH_CORRECTIONS')?.allowed !== true;
   const conductPatchVisible = canPatchConductGradeView(conductView);
 
   useEffect(() => {
@@ -861,10 +864,29 @@ export function StudentConductAlignmentPageContent({
     [updatePatchDraft],
   );
 
+  const applyWorkspaceResult = useCallback((workspace: StudentConductGradeWorkspace) => {
+    const nextTermKey = workspace.selectedTerm ? buildTermKey(workspace.selectedTerm) : null;
+
+    setClasses(workspace.classOptions);
+    setSelectedClassId(workspace.selectedClass?.id ?? null);
+    setTerms(workspace.termOptions);
+    setWorkspaceStatus(workspace.status);
+    setSelectedTermKey(nextTermKey);
+    setWorkspaceActions(workspace.actions);
+    setWorkspaceWarnings(workspace.warnings);
+    setConductView(workspace.view);
+    activeSelectionRef.current = {
+      classOption: workspace.selectedClass,
+      classId: workspace.selectedClass?.id ?? null,
+      term: workspace.selectedTerm,
+      termKey: nextTermKey,
+    };
+  }, []);
+
   const loadSelectionData = useCallback(
     async (
-      classOption: StudentPrivateProfileClassOption,
-      term: StudentConductGradeClassTermOption,
+      classOption: StudentConductGradeWorkspaceClassOption,
+      term: StudentConductGradeWorkspaceTermOption,
       options: {
         keepPatchMode?: boolean;
         preserveMaterialImportResult?: boolean;
@@ -891,32 +913,16 @@ export function StudentConductAlignmentPageContent({
       });
 
       try {
-        const nextOverview = await fetchStudentPrivateProfileClassOverview({
+        const workspace = await fetchStudentConductGradeWorkspace({
           classId: classOption.id,
+          semesterId: term.semesterId,
         });
 
         if (loadRequestSeqRef.current !== requestSeq) {
           return;
         }
 
-        setOverview(nextOverview);
-
-        if (resolveOverviewReadiness(nextOverview).missingSnapshotCount > 0) {
-          setConductView(null);
-          return;
-        }
-
-        const nextView = await fetchStudentConductGradeEffectiveView({
-          classCode: classOption.classCode,
-          schoolYear: term.schoolYear,
-          semester: term.semester,
-        });
-
-        if (loadRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-
-        setConductView(nextView);
+        applyWorkspaceResult(workspace);
       } catch (error) {
         if (loadRequestSeqRef.current !== requestSeq) {
           return;
@@ -930,12 +936,12 @@ export function StudentConductAlignmentPageContent({
         }
       }
     },
-    [resetPatchWorkspace],
+    [applyWorkspaceResult, resetPatchWorkspace],
   );
 
   const loadClassTermsAndSelection = useCallback(
     async (
-      classOption: StudentPrivateProfileClassOption,
+      classOption: StudentConductGradeWorkspaceClassOption,
       input: {
         preferredTermKey?: string | null;
       } = {},
@@ -948,76 +954,32 @@ export function StudentConductAlignmentPageContent({
       setSelectedStudentId(null);
       setSyncResult(null);
       resetPatchWorkspace();
-      setOverview(null);
       setConductView(null);
       setTerms([]);
-      setTermOptions(null);
       setStudentSearch('');
 
       try {
-        const nextTermOptions = await fetchStudentConductGradeClassTermOptions({
-          classCode: classOption.classCode,
-        });
-
-        if (loadRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-
-        const nextTerms = sortAcademicTermsByTimelineDesc(nextTermOptions.terms);
-        const nextTermKey = isTermGenerationBlocked(nextTermOptions)
-          ? null
-          : resolveDefaultTermKey(nextTerms, input.preferredTermKey);
-        const nextTerm = nextTerms.find((term) => buildTermKey(term) === nextTermKey) ?? null;
-
-        setTermOptions(nextTermOptions);
-        setTerms(nextTerms);
-        setSelectedTermKey(nextTermKey);
-        activeSelectionRef.current = {
-          classOption,
+        const preferredSemesterId = input.preferredTermKey
+          ? terms.find((term) => buildTermKey(term) === input.preferredTermKey)?.semesterId
+          : undefined;
+        const workspace = await fetchStudentConductGradeWorkspace({
           classId: classOption.id,
-          term: nextTerm,
-          termKey: nextTermKey,
-        };
-
-        if (isTermGenerationBlocked(nextTermOptions) || !nextTerm) {
-          return;
-        }
-
-        const nextOverview = await fetchStudentPrivateProfileClassOverview({
-          classId: classOption.id,
+          semesterId: preferredSemesterId,
         });
 
         if (loadRequestSeqRef.current !== requestSeq) {
           return;
         }
 
-        setOverview(nextOverview);
-
-        if (resolveOverviewReadiness(nextOverview).missingSnapshotCount > 0) {
-          setConductView(null);
-          return;
-        }
-
-        const nextView = await fetchStudentConductGradeEffectiveView({
-          classCode: classOption.classCode,
-          schoolYear: nextTerm.schoolYear,
-          semester: nextTerm.semester,
-        });
-
-        if (loadRequestSeqRef.current !== requestSeq) {
-          return;
-        }
-
-        setConductView(nextView);
+        applyWorkspaceResult(workspace);
       } catch (error) {
         if (loadRequestSeqRef.current !== requestSeq) {
           return;
         }
 
-        setTermOptions(null);
+        setWorkspaceStatus('NO_TERMS');
         setTerms([]);
         setSelectedTermKey(null);
-        setOverview(null);
         setConductView(null);
         setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行对齐入口。');
       } finally {
@@ -1026,7 +988,7 @@ export function StudentConductAlignmentPageContent({
         }
       }
     },
-    [resetPatchWorkspace],
+    [applyWorkspaceResult, resetPatchWorkspace, terms],
   );
 
   const runSyncWithSession = useCallback(
@@ -1046,9 +1008,9 @@ export function StudentConductAlignmentPageContent({
 
       try {
         const result = await refreshStudentConductGradeClassFromUpstream({
-          classCode: action.classOption.classCode,
-          schoolYear: action.term?.schoolYear,
-          semester: action.term?.semester,
+          classId: action.classOption.id,
+          scope: action.scope === 'TERM' ? 'SELECTED_TERM' : 'ALL_TERMS',
+          semesterId: action.term?.semesterId,
           upstreamSessionToken: session.upstreamSessionToken,
         });
 
@@ -1085,9 +1047,9 @@ export function StudentConductAlignmentPageContent({
         try {
           const refreshedSession = await refreshSession(session);
           const result = await refreshStudentConductGradeClassFromUpstream({
-            classCode: action.classOption.classCode,
-            schoolYear: action.term?.schoolYear,
-            semester: action.term?.semester,
+            classId: action.classOption.id,
+            scope: action.scope === 'TERM' ? 'SELECTED_TERM' : 'ALL_TERMS',
+            semesterId: action.term?.semesterId,
             upstreamSessionToken: refreshedSession.upstreamSessionToken,
           });
 
@@ -1197,35 +1159,24 @@ export function StudentConductAlignmentPageContent({
     resetPatchWorkspace();
 
     try {
-      const nextClasses = await listStudentPrivateProfileClassOptions();
-      const sortedClasses = sortClassOptions(nextClasses);
-      const nextClass = sortedClasses[0] ?? null;
+      const workspace = await fetchStudentConductGradeWorkspace({});
 
-      setClasses(sortedClasses);
-      setSelectedClassId(nextClass?.id ?? null);
-      setTerms([]);
-      setTermOptions(null);
-      setSelectedTermKey(null);
-      setOverview(null);
-      setConductView(null);
+      applyWorkspaceResult(workspace);
       setStudentSearch('');
-
-      if (nextClass) {
-        await loadClassTermsAndSelection(nextClass);
-      }
     } catch (error) {
       setClasses([]);
       setTerms([]);
-      setTermOptions(null);
+      setWorkspaceStatus('NO_CLASSES');
       setSelectedClassId(null);
       setSelectedTermKey(null);
-      setOverview(null);
       setConductView(null);
+      setWorkspaceActions([]);
+      setWorkspaceWarnings([]);
       setErrorMessage(error instanceof Error ? error.message : '暂时无法加载操行对齐入口。');
     } finally {
       setIsLoadingCatalog(false);
     }
-  }, [loadClassTermsAndSelection, resetPatchWorkspace]);
+  }, [applyWorkspaceResult, resetPatchWorkspace]);
 
   const reloadCurrentSelection = useCallback(async () => {
     await confirmLeavingPatchMode(async () => {
@@ -1300,7 +1251,12 @@ export function StudentConductAlignmentPageContent({
 
   const handleCleanup = useCallback(
     async (student: StudentConductGradeStudent) => {
-      if (!conductView || student.status !== 'CORRECTION_CLEANUP_PENDING') {
+      if (
+        !conductView ||
+        !selectedClass ||
+        !selectedTerm ||
+        student.status !== 'CORRECTION_CLEANUP_PENDING'
+      ) {
         return;
       }
 
@@ -1326,9 +1282,8 @@ export function StudentConductAlignmentPageContent({
 
       try {
         const result = await cleanupStudentConductGradeCorrection({
-          classCode: conductView.classCode,
-          schoolYear: conductView.schoolYear,
-          semester: conductView.semester,
+          classId: selectedClass.id,
+          semesterId: selectedTerm.semesterId,
           studentId: student.studentId,
         });
 
@@ -1353,7 +1308,15 @@ export function StudentConductAlignmentPageContent({
         }
       }
     },
-    [conductView, loadSelectionData, message, termBlockingMessage, termGenerationBlocked],
+    [
+      conductView,
+      loadSelectionData,
+      message,
+      selectedClass,
+      selectedTerm,
+      termBlockingMessage,
+      termGenerationBlocked,
+    ],
   );
 
   const handleStartPatchMode = useCallback(() => {
@@ -1375,7 +1338,7 @@ export function StudentConductAlignmentPageContent({
   }, [confirmLeavingPatchMode, resetPatchWorkspace]);
 
   const handleSubmitPatch = useCallback(async () => {
-    if (!conductView) {
+    if (!conductView || !selectedClass || !selectedTerm) {
       return;
     }
 
@@ -1415,9 +1378,8 @@ export function StudentConductAlignmentPageContent({
 
     try {
       const result = await patchStudentConductGradeCorrections({
-        classCode: conductView.classCode,
-        schoolYear: conductView.schoolYear,
-        semester: conductView.semester,
+        classId: selectedClass.id,
+        semesterId: selectedTerm.semesterId,
         students,
       });
 
@@ -1442,6 +1404,7 @@ export function StudentConductAlignmentPageContent({
 
       const rowIssues = readStudentConductGradePatchRowIssues(error).map((issue) => ({
         ...issue,
+        message: resolveStudentConductGradeIssueMessage(issue, '该学生的操行补录数据不符合要求。'),
         studentId: issue.studentId ?? students[issue.rowIndex]?.studentId ?? null,
       }));
 
@@ -1463,6 +1426,8 @@ export function StudentConductAlignmentPageContent({
     loadSelectionData,
     message,
     patchDrafts,
+    selectedClass,
+    selectedTerm,
     termBlockingMessage,
     termGenerationBlocked,
   ]);
@@ -1527,8 +1492,8 @@ export function StudentConductAlignmentPageContent({
           classCode: selectedClass.classCode,
           confirmedWarningKeys,
           files: selectedMaterialFiles,
-          schoolYear: selectedTerm.schoolYear,
-          semester: selectedTerm.semester,
+          schoolYear: String(selectedTerm.schoolYear),
+          semester: String(selectedTerm.termNumber),
         });
 
         if (!canApplyImportResult()) {
@@ -1840,283 +1805,234 @@ export function StudentConductAlignmentPageContent({
         title="操行对齐"
       />
 
-      {snapshotInitializationBlocked ? (
+      <>
         <section className="rounded-card bg-bg-container p-5 shadow-card">
           <div className="flex flex-col gap-4">
-            <label className="flex max-w-sm flex-col gap-2">
-              <span className="text-sm text-text-secondary">班级</span>
-              <Select
-                disabled={isLoadingCatalog || isLoadingData}
-                loading={isLoadingCatalog}
-                optionFilterProp="label"
-                options={classes.map((option) => ({
-                  label: formatClassLabel(option),
-                  value: option.id,
-                }))}
-                placeholder="暂无可见班级"
-                showSearch
-                value={selectedClassId ?? undefined}
-                onChange={(value) => void handleClassChange(value)}
+            {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
+            {termGenerationBlocked ? (
+              <Alert
+                showIcon
+                type="warning"
+                title="班级操行学期配置缺失"
+                description={termBlockingMessage}
               />
-            </label>
-            {renderSnapshotInitializationAlert(overviewReadiness.missingSnapshotCount)}
-          </div>
-        </section>
-      ) : (
-        <>
-          <section className="rounded-card bg-bg-container p-5 shadow-card">
-            <div className="flex flex-col gap-4">
-              {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
-              {termGenerationBlocked ? (
-                <Alert
-                  showIcon
-                  type="warning"
-                  title="班级操行学期配置缺失"
-                  description={termBlockingMessage}
-                />
-              ) : null}
-              {overviewReadiness.upstreamIdMissingCount > 0 ? (
-                <Alert
-                  showIcon
-                  type="info"
-                  title="存在缺少校园网标识的学生"
-                  description={`当前班级有 ${overviewReadiness.upstreamIdMissingCount} 名学生缺少校园网标识，班级范围以后端名单为准。`}
-                />
-              ) : null}
-              {syncResult ? (
-                <Alert
-                  showIcon
-                  type={syncResult.failureCount > 0 ? 'warning' : 'success'}
-                  title="校园网操行同步完成"
-                  description={formatSyncResultTitle(syncResult, terms)}
-                />
-              ) : null}
-              {patchResult ? (
-                <Alert
-                  showIcon
-                  type={patchResult.skippedUpstreamFieldCount > 0 ? 'warning' : 'success'}
-                  title="操行补录完成"
-                  description={formatPatchResultTitle(patchResult)}
-                />
-              ) : null}
-              {patchRowIssues.length > 0 ? (
-                <Alert
-                  showIcon
-                  type="error"
-                  title="操行补录校验失败"
-                  description={
-                    <Space direction="vertical" size={2}>
-                      {patchRowIssues.slice(0, 8).map((issue) => (
-                        <span key={`${issue.rowIndex}-${issue.code}`}>
-                          第 {issue.rowIndex + 1} 行
-                          {issue.studentId ? `（${issue.studentId}）` : ''}：{issue.code}
-                          {issue.message ? `，${issue.message}` : ''}
-                        </span>
-                      ))}
-                      {patchRowIssues.length > 8 ? (
-                        <span>另有 {patchRowIssues.length - 8} 条行级错误未展开。</span>
-                      ) : null}
-                    </Space>
-                  }
-                />
-              ) : null}
+            ) : null}
+            {workspaceWarnings.length > 0 ? (
+              <Alert
+                showIcon
+                type="warning"
+                title="部分真实学期尚未配置"
+                description={workspaceWarnings.map((warning) => warning.message).join('；')}
+              />
+            ) : null}
+            {targetTermMissingSnapshotCount > 0
+              ? renderTargetTermSnapshotAlert(targetTermMissingSnapshotCount)
+              : null}
+            {rosterEligibilityDescription ? (
+              <Alert
+                showIcon
+                description={rosterEligibilityDescription}
+                title="名单已按目标学期校准"
+                type={
+                  conductView?.rosterEligibilitySummary.unresolvedEffectiveSemesterCount
+                    ? 'warning'
+                    : 'info'
+                }
+              />
+            ) : null}
+            {syncResult ? (
+              <Alert
+                showIcon
+                type={syncResult.failureCount > 0 ? 'warning' : 'success'}
+                title="校园网操行同步完成"
+                description={formatSyncResultTitle(syncResult, terms)}
+              />
+            ) : null}
+            {patchResult ? (
+              <Alert
+                showIcon
+                type={patchResult.skippedUpstreamFieldCount > 0 ? 'warning' : 'success'}
+                title="操行补录完成"
+                description={formatPatchResultTitle(patchResult)}
+              />
+            ) : null}
+            {patchRowIssues.length > 0 ? (
+              <Alert
+                showIcon
+                type="error"
+                title="操行补录校验失败"
+                description={
+                  <Space direction="vertical" size={2}>
+                    {patchRowIssues.slice(0, 8).map((issue) => (
+                      <span key={`${issue.rowIndex}-${issue.code}`}>
+                        第 {issue.rowIndex + 1} 行{issue.studentId ? `（${issue.studentId}）` : ''}
+                        ：{issue.code}
+                        {issue.message ? `，${issue.message}` : ''}
+                      </span>
+                    ))}
+                    {patchRowIssues.length > 8 ? (
+                      <span>另有 {patchRowIssues.length - 8} 条行级错误未展开。</span>
+                    ) : null}
+                  </Space>
+                }
+              />
+            ) : null}
 
-              <div
-                className="grid gap-4"
-                style={{
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-                }}
-              >
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm text-text-secondary">班级</span>
-                  <Select
-                    disabled={isLoadingCatalog || isLoadingData}
-                    loading={isLoadingCatalog}
-                    optionFilterProp="label"
-                    options={classes.map((option) => ({
-                      label: formatClassLabel(option),
-                      value: option.id,
-                    }))}
-                    placeholder="暂无可见班级"
-                    showSearch
-                    value={selectedClassId ?? undefined}
-                    onChange={(value) => void handleClassChange(value)}
-                  />
-                </label>
-                <label className="flex flex-col gap-2">
-                  <span className="text-sm text-text-secondary">学生</span>
-                  <Input
-                    allowClear
-                    prefix={<SearchOutlined />}
-                    placeholder="输入学号或姓名"
-                    value={studentSearch}
-                    onChange={(event) => setStudentSearch(event.target.value)}
-                  />
-                </label>
-                <div className="flex items-end gap-2">
+            <div
+              className="grid gap-4"
+              style={{
+                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+              }}
+            >
+              <label className="flex flex-col gap-2">
+                <span className="text-sm text-text-secondary">班级</span>
+                <Select
+                  disabled={isLoadingCatalog || isLoadingData}
+                  loading={isLoadingCatalog}
+                  optionFilterProp="label"
+                  options={classes.map((option) => ({
+                    label: formatClassLabel(option),
+                    value: option.id,
+                  }))}
+                  placeholder="暂无可见班级"
+                  showSearch
+                  value={selectedClassId ?? undefined}
+                  onChange={(value) => void handleClassChange(value)}
+                />
+              </label>
+              <label className="flex flex-col gap-2">
+                <span className="text-sm text-text-secondary">学生</span>
+                <Input
+                  allowClear
+                  prefix={<SearchOutlined />}
+                  placeholder="输入学号或姓名"
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                />
+              </label>
+              <div className="flex items-end gap-2">
+                <Button
+                  disabled={isLoadingCatalog || isLoadingData}
+                  icon={<ReloadOutlined />}
+                  onClick={() => void reloadCurrentSelection()}
+                >
+                  本地读取
+                </Button>
+                <Dropdown
+                  disabled={conductSyncDisabled}
+                  menu={{
+                    items: conductSyncMenuItems,
+                    onClick: handleConductSyncMenuClick,
+                  }}
+                  trigger={['click']}
+                >
                   <Button
-                    disabled={isLoadingCatalog || isLoadingData}
-                    icon={<ReloadOutlined />}
-                    onClick={() => void reloadCurrentSelection()}
-                  >
-                    本地读取
-                  </Button>
-                  <Dropdown
                     disabled={conductSyncDisabled}
-                    menu={{
-                      items: conductSyncMenuItems,
-                      onClick: handleConductSyncMenuClick,
-                    }}
-                    trigger={['click']}
+                    icon={<CloudSyncOutlined />}
+                    loading={syncingScope !== null}
                   >
-                    <Button
-                      disabled={conductSyncDisabled}
-                      icon={<CloudSyncOutlined />}
-                      loading={syncingScope !== null}
-                    >
-                      校园网同步
-                    </Button>
-                  </Dropdown>
-                  {conductPatchVisible ? (
-                    <Button
-                      color="primary"
-                      disabled={conductPatchDisabled || isPatchMode}
-                      icon={<EditOutlined />}
-                      variant="filled"
-                      onClick={handleStartPatchMode}
-                    >
-                      补录
-                    </Button>
-                  ) : null}
-                </div>
+                    校园网同步
+                  </Button>
+                </Dropdown>
+                {conductPatchVisible ? (
+                  <Button
+                    color="primary"
+                    disabled={conductPatchDisabled || isPatchMode}
+                    icon={<EditOutlined />}
+                    variant="filled"
+                    onClick={handleStartPatchMode}
+                  >
+                    补录
+                  </Button>
+                ) : null}
               </div>
             </div>
-          </section>
+          </div>
+        </section>
 
-          <section className="student-conduct-alignment-table-shell">
-            {isLoadingCatalog ? (
-              <div className="flex min-h-80 items-center justify-center">
-                <Spin size="large" />
-              </div>
-            ) : selectedClass && terms.length > 0 && !termGenerationBlocked ? (
-              <Tabs
-                activeKey={selectedTermKey ?? undefined}
-                items={terms.map((term) => {
-                  const termKey = buildTermKey(term);
-                  const isActive = termKey === selectedTermKey;
-                  const termOrdinal = termOrdinalByKey.get(termKey) ?? null;
-
-                  return {
-                    children: isActive ? (
-                      isLoadingData ? (
-                        <div className="flex min-h-80 items-center justify-center">
-                          <Spin size="large" />
-                        </div>
-                      ) : conductView ? (
-                        <div className="flex flex-col gap-4">
-                          {isPatchMode && selectedClass && selectedTerm ? (
-                            <StudentConductGradeMaterialImportPanel
-                              context={{
-                                classLabel: formatClassLabel(selectedClass),
-                                termLabel: formatTermLabel(selectedTerm),
-                              }}
-                              disabled={isPatchingCorrections}
-                              errorMessage={materialImportErrorMessage}
-                              files={materialImportFiles}
-                              isImporting={isImportingMaterial}
-                              patchActionBar={renderPatchActionBar()}
-                              result={materialImportResult}
-                              warningConfirmationKeys={materialWarningConfirmationKeys}
-                              onConfirmWarnings={handleConfirmMaterialImportWarnings}
-                              onFilesChange={handleMaterialImportFilesChange}
-                              onFilesSelected={handleMaterialImportFilesSelected}
-                              onRejectFile={handleRejectMaterialImportFile}
-                              onRejectTooManyFiles={handleRejectTooManyMaterialImportFiles}
-                            />
-                          ) : null}
-                          <Table<StudentConductGradeStudent>
-                            columns={columns}
-                            dataSource={filteredStudents}
-                            locale={{
-                              emptyText: (
-                                <Empty
-                                  description="暂无操行数据"
-                                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                                />
-                              ),
-                            }}
-                            pagination={{
-                              defaultPageSize: 50,
-                              pageSizeOptions: [30, 50, 100],
-                              showSizeChanger: true,
-                            }}
-                            rowClassName={(record, index) =>
-                              buildConductRowClassName(record, index, selectedStudentId)
-                            }
-                            rowKey={(record) => record.studentId}
-                            scroll={{
-                              x: isPatchMode
-                                ? CONDUCT_PATCH_TABLE_SCROLL_X
-                                : CONDUCT_TABLE_SCROLL_X,
-                            }}
-                            size="small"
-                            tableLayout="fixed"
-                          />
-                        </div>
-                      ) : (
-                        <div className="flex min-h-80 items-center justify-center">
-                          <Empty description="暂无操行有效视图" />
-                        </div>
-                      )
-                    ) : null,
-                    key: termKey,
-                    label: (
-                      <span className="student-conduct-alignment-term-tab-label">
-                        <span
-                          className={[
-                            'student-conduct-alignment-term-tab-primary',
-                            isActive ? 'student-conduct-alignment-term-tab-primary-active' : null,
-                          ]
-                            .filter(Boolean)
-                            .join(' ')}
-                        >
-                          {formatSchoolYear(term.schoolYear)}
-                        </span>
-                        <span className="student-conduct-alignment-term-tab-secondary">
-                          <span className="student-conduct-alignment-term-tab-secondary-text">
-                            {formatSemester(term.semester)}
-                          </span>
-                          {termOrdinal !== null ? (
-                            <span className="student-conduct-alignment-term-tab-badge">
-                              {termOrdinal}
-                            </span>
-                          ) : null}
-                        </span>
-                      </span>
-                    ),
-                  };
-                })}
-                size="small"
-                tabBarGutter={token.marginXS}
-                tabPlacement="start"
-                onChange={(key) => void handleTermChange(key)}
+        <section className="student-conduct-alignment-table-shell">
+          {isLoadingCatalog ? (
+            <div className="flex min-h-80 items-center justify-center">
+              <Spin size="large" />
+            </div>
+          ) : selectedClass && terms.length > 0 && !termGenerationBlocked ? (
+            <AcademicTermTabs
+              activeSemesterId={selectedTerm?.semesterId}
+              disabled={isLoadingData || syncingScope !== null || isPatchingCorrections}
+              records={terms}
+              onChange={(semesterId) => void handleTermChange(String(semesterId))}
+            >
+              {isLoadingData ? (
+                <div className="flex min-h-80 items-center justify-center">
+                  <Spin size="large" />
+                </div>
+              ) : conductView ? (
+                <div className="flex flex-col gap-4">
+                  {isPatchMode && selectedClass && selectedTerm ? (
+                    <StudentConductGradeMaterialImportPanel
+                      context={{
+                        classLabel: formatClassLabel(selectedClass),
+                        termLabel: formatTermLabel(selectedTerm),
+                      }}
+                      disabled={isPatchingCorrections}
+                      errorMessage={materialImportErrorMessage}
+                      files={materialImportFiles}
+                      isImporting={isImportingMaterial}
+                      patchActionBar={renderPatchActionBar()}
+                      result={materialImportResult}
+                      warningConfirmationKeys={materialWarningConfirmationKeys}
+                      onConfirmWarnings={handleConfirmMaterialImportWarnings}
+                      onFilesChange={handleMaterialImportFilesChange}
+                      onFilesSelected={handleMaterialImportFilesSelected}
+                      onRejectFile={handleRejectMaterialImportFile}
+                      onRejectTooManyFiles={handleRejectTooManyMaterialImportFiles}
+                    />
+                  ) : null}
+                  <Table<StudentConductGradeStudent>
+                    columns={columns}
+                    dataSource={filteredStudents}
+                    locale={{
+                      emptyText: (
+                        <Empty description="暂无操行数据" image={Empty.PRESENTED_IMAGE_SIMPLE} />
+                      ),
+                    }}
+                    pagination={{
+                      defaultPageSize: 50,
+                      pageSizeOptions: [30, 50, 100],
+                      showSizeChanger: true,
+                    }}
+                    rowClassName={(record, index) =>
+                      buildConductRowClassName(record, index, selectedStudentId)
+                    }
+                    rowKey={(record) => record.studentId}
+                    scroll={{
+                      x: isPatchMode ? CONDUCT_PATCH_TABLE_SCROLL_X : CONDUCT_TABLE_SCROLL_X,
+                    }}
+                    size="small"
+                    tableLayout="fixed"
+                  />
+                </div>
+              ) : (
+                <div className="flex min-h-80 items-center justify-center">
+                  <Empty description="暂无操行有效视图" />
+                </div>
+              )}
+            </AcademicTermTabs>
+          ) : (
+            <div className="flex min-h-80 items-center justify-center">
+              <Empty
+                description={
+                  selectedClass
+                    ? termGenerationBlocked
+                      ? termBlockingMessage
+                      : '暂无可对齐学期'
+                    : '请选择班级'
+                }
               />
-            ) : (
-              <div className="flex min-h-80 items-center justify-center">
-                <Empty
-                  description={
-                    selectedClass
-                      ? termGenerationBlocked
-                        ? termBlockingMessage
-                        : '暂无可对齐学期'
-                      : '请选择班级'
-                  }
-                />
-              </div>
-            )}
-          </section>
-        </>
-      )}
+            </div>
+          )}
+        </section>
+      </>
 
       <Drawer
         destroyOnHidden

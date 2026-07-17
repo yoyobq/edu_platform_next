@@ -43,14 +43,14 @@
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
-  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/course-results-summary`
+  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
   - `学工管理`：`/student-affairs/class-adviser-governance`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：
-  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-course-results-pull`、`/labs/student-course-results-view`、`/labs/student-private-profile`
+  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
   - student：`/labs/zquiz-exam-activities`、`/labs/zquiz-practice-activities`
   - admin / staff / student：`/labs/student-evaluation-comment`
@@ -249,9 +249,11 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 - `payload-crypto`：稳定页位于 `/system/payload-crypto`，只对特定 admin 账号开放
 - `sandbox/playground`：只在 `dev / test` 暴露
 - `sandbox/playground`：路径仍保持 `/sandbox/...`，只是导航展示合并进 Labs 分组
-- `student-course-results-pull` / `student-course-results-view`：只对 admin 暴露，不对 staff labs 暴露
 - `zquiz-activity-builder`：对 admin / staff 暴露，不要求教务 slot
-- `class-affairs/course-results-summary`：只对 `STAFF + CLASS_ADVISER` 或 `STAFF + COUNSELOR` 暴露
+- `class-affairs/student-conduct-alignment`：对 `ADMIN`，以及具备 `ACADEMIC_OFFICER`、
+  `CLASS_ADVISER` 或 `COUNSELOR` 岗位的 `STAFF` 暴露
+- `class-affairs/course-results-summary`：对 `ADMIN`，以及具备 `STUDENT_AFFAIRS_OFFICER`、
+  `CLASS_ADVISER` 或 `COUNSELOR` 岗位的 `STAFF` 暴露
 
 这些特殊规则应继续跟随业务域 provider 归属，不回流到 layout 层。
 

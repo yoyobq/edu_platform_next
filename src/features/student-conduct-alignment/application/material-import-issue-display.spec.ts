@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildMaterialImportIssueGroups,
   type MaterialImportIssueDisplayInput,
+  resolveStudentConductGradeIssueMessage,
 } from './material-import-issue-display';
 
 function buildIssue(
@@ -25,6 +26,27 @@ function buildIssue(
 }
 
 describe('material import issue display', () => {
+  it('uses target-term roster wording for canonical roster failures', () => {
+    expect(
+      resolveStudentConductGradeIssueMessage(
+        {
+          code: 'STUDENT_NOT_IN_TERM_ROSTER',
+          message: null,
+        },
+        'fallback',
+      ),
+    ).toBe('学生不属于目标学期正式名单。');
+    expect(
+      resolveStudentConductGradeIssueMessage(
+        {
+          reasonCode: 'DETAIL_STUDENT_NOT_IN_CLASS',
+          reasonMessage: '学生不在当前班级',
+        },
+        'fallback',
+      ),
+    ).toBe('学生不在该批次对应学期的正式名单。');
+  });
+
   it('aggregates repeated term mismatch signals from the same file', () => {
     const issueGroups = buildMaterialImportIssueGroups(
       [

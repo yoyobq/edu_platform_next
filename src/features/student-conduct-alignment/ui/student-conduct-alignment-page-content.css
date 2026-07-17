@@ -1,52 +1,5 @@
 /* src/features/student-conduct-alignment/ui/student-conduct-alignment-page-content.css */
 
-.student-conduct-alignment-term-tab-label {
-  display: block;
-  max-width: 200px;
-}
-
-.student-conduct-alignment-term-tab-primary {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.student-conduct-alignment-term-tab-primary-active {
-  font-weight: var(--ant-font-weight-strong, 600);
-}
-
-.student-conduct-alignment-term-tab-secondary {
-  align-items: center;
-  color: var(--ant-color-text-secondary);
-  display: inline-flex;
-  font-size: var(--ant-font-size-sm);
-  gap: var(--ant-margin-xxs, 4px);
-  max-width: 100%;
-}
-
-.student-conduct-alignment-term-tab-secondary-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.student-conduct-alignment-term-tab-badge {
-  align-items: center;
-  background: var(--ant-color-fill-tertiary);
-  border-radius: 999px;
-  color: var(--ant-color-text-secondary);
-  display: inline-flex;
-  flex: none;
-  font-size: var(--ant-font-size-sm);
-  font-variant-numeric: tabular-nums;
-  height: 18px;
-  justify-content: center;
-  line-height: 1;
-  min-width: 18px;
-  padding-inline: 0;
-}
-
 .student-conduct-alignment-table-shell
   .ant-table-tbody
   > tr.student-conduct-alignment-row-even
