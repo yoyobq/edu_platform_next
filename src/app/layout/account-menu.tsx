@@ -362,7 +362,9 @@ export function StaffAccountMenu({
 
       if (request.mode === 'logout-fallback') {
         if (request.sessionToRevoke) {
-          await revokeAuthSession({ accessToken: request.sessionToRevoke.accessToken });
+          await revokeAuthSession({
+            accessToken: request.sessionToRevoke.accessToken,
+          }).catch(() => undefined);
         }
 
         commitAccountRecords(
@@ -408,7 +410,7 @@ export function StaffAccountMenu({
       try {
         const restoredFallbackSession = await restoreAccountSwitchLabSession(fallbackSession);
 
-        await revokeAuthSession({ accessToken: session.accessToken });
+        await revokeAuthSession({ accessToken: session.accessToken }).catch(() => undefined);
         commitAccountRecords(
           upsertAccountSwitchLabRecord(
             nextRecords.filter(

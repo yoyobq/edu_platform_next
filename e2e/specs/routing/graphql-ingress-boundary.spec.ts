@@ -105,12 +105,28 @@ async function fulfillGraphQL(route: Route, body: unknown) {
   });
 }
 
-async function fulfillGraphQLError(route: Route, message: string, code?: string) {
+async function fulfillGraphQLError(
+  route: Route,
+  message: string,
+  extensions: {
+    category?: string;
+    detailCode?: string;
+  } = {},
+) {
+  const hasExtensions = Boolean(extensions.category || extensions.detailCode);
+
   await fulfillGraphQL(route, {
     errors: [
       {
         message,
-        ...(code ? { extensions: { code } } : {}),
+        ...(hasExtensions
+          ? {
+              extensions: {
+                ...(extensions.category ? { code: extensions.category } : {}),
+                ...(extensions.detailCode ? { errorCode: extensions.detailCode } : {}),
+              },
+            }
+          : {}),
       },
     ],
   });
@@ -258,7 +274,9 @@ test('public-auth 请求收到 auth 错时不应触发 refresh，且继续停留
 
     if (query.includes('mutation RequestPasswordResetEmail')) {
       forgotPasswordAuthHeader = getAuthorization(route);
-      await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
+      await fulfillGraphQLError(route, 'UNAUTHENTICATED', {
+        category: 'UNAUTHENTICATED',
+      });
       return;
     }
 
@@ -424,7 +442,9 @@ test('普通 protected 请求收到 UNAUTHENTICATED 后触发一次 refresh 并�
       debugRequestAuthHeaders.push(getAuthorization(route) ?? 'NONE');
 
       if (debugRequestCount === 1) {
-        await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
+        await fulfillGraphQLError(route, 'UNAUTHENTICATED', {
+          category: 'UNAUTHENTICATED',
+        });
         return;
       }
 
@@ -500,12 +520,17 @@ test('普通 protected 请求收到 UNAUTHENTICATED 后 refresh 失败应触发 
     }
 
     if (query.includes('mutation Refresh')) {
-      await fulfillGraphQLError(route, 'INVALID_REFRESH_TOKEN', 'BAD_USER_INPUT');
+      await fulfillGraphQLError(route, 'INVALID_REFRESH_TOKEN', {
+        category: 'UNAUTHENTICATED',
+        detailCode: 'INVALID_REFRESH_TOKEN',
+      });
       return;
     }
 
     if (query.includes('query DebugEncryptSstsPayload')) {
-      await fulfillGraphQLError(route, 'UNAUTHENTICATED', 'UNAUTHENTICATED');
+      await fulfillGraphQLError(route, 'UNAUTHENTICATED', {
+        category: 'UNAUTHENTICATED',
+      });
       return;
     }
 
@@ -544,7 +569,9 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
       meAuthHeaders.push(getAuthorization(route) ?? 'NONE');
 
       if (meRequestCount === 1) {
-        await fulfillGraphQLError(route, 'TOKEN_INVALID', 'UNAUTHENTICATED');
+        await fulfillGraphQLError(route, 'TOKEN_INVALID', {
+          category: 'UNAUTHENTICATED',
+        });
         return;
       }
 
@@ -640,7 +667,8 @@ test('restore -> me 的非 auth 失败不应误触发 refresh', async ({ page })
 
   await page.goto(routes.home);
 
-  await expect(page).toHaveURL(/\/login\?redirect=%2F$/);
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'root-admin');
   expect(refreshRequestCount).toBe(0);
 });
 

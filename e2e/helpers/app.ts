@@ -3,6 +3,7 @@ import { expect, type Page, type Route } from '@playwright/test';
 import { routes } from '../fixtures/routes';
 
 const AUTH_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.auth.session.v2';
+const NAV_PINNED_FULL_STORAGE_KEY = 'app.nav.prefersPinnedFull';
 
 type AuthAccessGroup = 'ADMIN' | 'GUEST' | 'REGISTRANT' | 'STAFF' | 'STUDENT';
 type SessionIdentityKind = AuthAccessGroup;
@@ -882,7 +883,10 @@ export async function mockAuthGraphQL(
       return;
     }
 
-    if (query.includes('query AdminUsers')) {
+    if (
+      query.includes('query AdminUsers') ||
+      query.includes('query VerificationAccountPickerAdminUsers')
+    ) {
       if (options.adminUsersErrorMessage) {
         await fulfillGraphQLError(route, options.adminUsersErrorMessage);
         return;
@@ -1034,4 +1038,37 @@ export async function openEntrySidecar(page: Page): Promise<void> {
   }
 
   await expect(sidecar).toBeVisible();
+}
+
+export async function ensureFullNavigation(page: Page): Promise<void> {
+  const collapseButton = page.getByRole('button', { name: '收起导航菜单' });
+  const expandButton = page.getByRole('button', { name: '展开导航菜单' });
+
+  await expect
+    .poll(async () => (await collapseButton.isVisible()) || (await expandButton.isVisible()))
+    .toBe(true);
+
+  if (await collapseButton.isVisible()) {
+    return;
+  }
+
+  await expandButton.click();
+  await expect(collapseButton).toBeVisible();
+}
+
+export async function seedNavigationPinnedFullPreference(
+  page: Page,
+  prefersPinnedFull: boolean,
+): Promise<void> {
+  await page.addInitScript(
+    ({ key, value }) => {
+      if (window.localStorage.getItem(key) === null) {
+        window.localStorage.setItem(key, value);
+      }
+    },
+    {
+      key: NAV_PINNED_FULL_STORAGE_KEY,
+      value: prefersPinnedFull ? '1' : '0',
+    },
+  );
 }

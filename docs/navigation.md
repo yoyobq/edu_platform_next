@@ -113,6 +113,9 @@
 
 **持久化策略（当前实现）：** `prefersPinnedFull` 持久化到 `localStorage`；进入壳层后仍先由 capability 决定基础档位，再结合可用宽度恢复到 `full`。
 
+无历史偏好且不是极窄竖屏时，具备 `rail` 基础档位的导航在宽敞屏幕首次进入默认展示为
+`full`；测试和业务代码不得假设首次进入一定处于 `rail`。
+
 ## 主身份菜单骨架
 
 由 `primaryAccessGroup` 决定一级骨架的主身份语义，各身份独立设计，不默认做成继承关系。
@@ -129,8 +132,8 @@
 | ------------ | ------------- | --------------------------------------------------- |
 | `ADMIN`      | `rail / full` | 已启用正式侧栏入口                                  |
 | `STAFF`      | `rail / full` | 已启用正式侧栏入口，部分入口按 `slotGroup` 增量开放 |
-| `STUDENT`    | `none / rail` | 已启用独立轻量入口：首页、学期校历、学生 labs       |
-| `GUEST`      | `none`        | 第一版保持 `none`                                   |
+| `STUDENT`    | `rail / full` | 已启用独立轻量入口：首页、学期校历、学生 labs       |
+| `GUEST`      | `rail / full` | 已启用首页与异常预览入口                            |
 | `REGISTRANT` | `none`        | 不进入正式菜单                                      |
 
 跨主身份共享入口通过 navigation manifest 投影实现，不在多个身份骨架下重复声明同一页面。

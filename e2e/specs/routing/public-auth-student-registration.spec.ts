@@ -3,7 +3,7 @@
 import type { Route } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
-import { AUTH_STORAGE_KEY, mockApiHealth } from '../../helpers/app';
+import { AUTH_STORAGE_KEY, ensureFullNavigation, mockApiHealth } from '../../helpers/app';
 import { expect, test } from '../../test';
 
 function getGraphQLPayload(route: Route) {
@@ -365,7 +365,7 @@ test('学生完成注册、验证邮箱、登录后应可从学生导航进入�
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: '学生首页' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '我的学习首页' })).toBeVisible();
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await expect(page.getByRole('menuitem', { name: '学期校历' })).toBeVisible();
   await page.getByRole('menuitem', { name: '学期校历' }).click();
 

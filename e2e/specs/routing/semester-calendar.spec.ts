@@ -3,6 +3,7 @@ import { type Page } from '@playwright/test';
 import { routes } from '../../fixtures/routes';
 import {
   AUTH_STORAGE_KEY,
+  ensureFullNavigation,
   mockApiHealth,
   mockAuthGraphQL,
   seedAuthSession,
@@ -413,8 +414,7 @@ test('student 访问正式学期校历页时应成功，并使用独立学生导
   await page.keyboard.press('Escape');
   await expect(page.getByText('规则说明')).toHaveCount(0);
 
-  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await expect(page.getByRole('menuitem', { name: '学期校历' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: '校历课表' })).toHaveCount(0);
   await expect(page.getByRole('menuitem', { name: '教务助手' })).toHaveCount(0);
@@ -450,7 +450,12 @@ test('正式学期校历页应支持切换学期并刷新周视图内容', async
     .getByText('2026-2027 学年第一学期', { exact: true })
     .click();
 
-  await expect(page.getByTitle('2026-2027 学年第一学期')).toBeVisible();
+  await expect(
+    page
+      .locator('.semester-calendar-card-toolbar-control')
+      .getByText('2026-2027 学年第一学期', { exact: true })
+      .filter({ visible: true }),
+  ).toBeVisible();
   await expect(page.getByText('9月').first()).toBeVisible();
   await expect(page.getByText('教学开始：2026-09-07')).toBeVisible();
   await expect(page.getByText('迎新报到')).toBeVisible();

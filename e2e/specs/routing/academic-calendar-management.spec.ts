@@ -644,7 +644,7 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
   });
   await clickRowActionButton(createdEventRow, '编辑');
   await page.getByLabel('事件标题').fill('校历联调事件（跨学期）');
-  await chooseDrawerSelectOption(page, '归属学期', '2026-2027 学年第一学期 · 2026-1');
+  await chooseDrawerSelectOption(page, '归属学期', '2026-2027 学年第一学期');
   await clickDrawerPrimaryButton(page, '保存');
 
   await expect(page.getByText('校历事件已更新。')).toBeVisible();

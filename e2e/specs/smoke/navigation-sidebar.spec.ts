@@ -1,4 +1,10 @@
-import { openEntrySidecar, openHome, openHomeAs } from '../../helpers/app';
+import {
+  ensureFullNavigation,
+  openEntrySidecar,
+  openHome,
+  openHomeAs,
+  seedNavigationPinnedFullPreference,
+} from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('accessGroup 含 ADMIN 但主身份不是 ADMIN 时，也应显示 admin 导航', async ({ page }) => {
@@ -10,8 +16,7 @@ test('accessGroup 含 ADMIN 但主身份不是 ADMIN 时，也应显示 admin �
 
   await expect(page.getByText('管理默认模板')).toBeVisible();
   await expect(page.getByRole('button', { name: /^开始(?: Alt\+K)?$/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await page.getByRole('menuitem', { name: '系统管理' }).click();
   await expect(page.getByRole('menuitem', { name: '用户管理' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: '认证码签发' })).toBeVisible();
@@ -19,13 +24,18 @@ test('accessGroup 含 ADMIN 但主身份不是 ADMIN 时，也应显示 admin �
 
 test('无 ADMIN 权限时，应显示首页导航但不显示 admin 导航', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
-  await openHomeAs(page, {
-    primaryAccessGroup: 'STUDENT',
-  });
+  await openHomeAs(
+    page,
+    {
+      primaryAccessGroup: 'STUDENT',
+    },
+    {
+      expectedHeading: '学生首页',
+    },
+  );
 
-  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
+  await ensureFullNavigation(page);
   await expect(page.getByRole('button', { name: /^开始(?: Alt\+K)?$/ })).toHaveCount(0);
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
   await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: '系统管理' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
@@ -38,9 +48,7 @@ test('guest 用户组可见 sidebar，并可进入首页与异常预览页', asy
     primaryAccessGroup: 'GUEST',
   });
 
-  await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
-
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
 
   await expect(page.getByRole('menuitem', { name: '首页' })).toBeVisible();
   await page.getByRole('menuitem', { name: '系统管理' }).click();
@@ -53,6 +61,7 @@ test('guest 用户组可见 sidebar，并可进入首页与异常预览页', asy
 
 test('管理员可在 rail 与 full 间切换，并在刷新后恢复 pinned full', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 960 });
+  await seedNavigationPinnedFullPreference(page, false);
   await openHome(page);
 
   await expect(page.getByRole('button', { name: '展开导航菜单' })).toBeVisible();
@@ -71,7 +80,6 @@ test('full 导航在主区宽度不足时，应自动折叠回 rail', async ({ p
   await page.setViewportSize({ width: 1024, height: 900 });
   await openHome(page);
 
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
   await expect(page.getByRole('button', { name: '收起导航菜单' })).toBeVisible();
 
   await openEntrySidecar(page);

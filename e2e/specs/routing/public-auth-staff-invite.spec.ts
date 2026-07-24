@@ -620,7 +620,7 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
 
   await expect(page).toHaveURL(routes.home);
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
-  await expect(page.getByText('Alice Teacher')).toBeVisible();
+  await expect(page.getByRole('main').getByText('Alice Teacher')).toBeVisible();
   await expect(page.getByText('测试课程')).toBeVisible();
   await expect(page.getByText('路由渲染异常')).toHaveCount(0);
   await expect(page.getByText('Failed to fetch')).toHaveCount(0);

@@ -1,5 +1,10 @@
 import { routes } from '../../fixtures/routes';
-import { mockApiHealth, mockAuthGraphQL, seedAuthSession } from '../../helpers/app';
+import {
+  ensureFullNavigation,
+  mockApiHealth,
+  mockAuthGraphQL,
+  seedAuthSession,
+} from '../../helpers/app';
 import { expect, test } from '../../test';
 
 test('未登录访问 admin 用户列表时，应跳到携带 redirect 的登录页', async ({ page }) => {
@@ -43,7 +48,7 @@ test('admin 用户列表应支持筛选、分页，并显示正式导航入口',
   await expect(page.getByRole('heading', { name: '用户管理' })).toBeVisible();
   await expect(page.getByText('User Management')).toBeVisible();
   await expect(page.getByText('用户列表')).toBeVisible();
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await expect(page.getByRole('menuitem', { name: '系统管理' })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: '用户管理' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /账户 ID/ })).toBeVisible();

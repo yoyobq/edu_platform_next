@@ -209,7 +209,15 @@ function buildMyProfileIdentityPayload(session: AccountSwitchTestSession) {
 async function fulfillGraphQLAuthError(route: Route) {
   await route.fulfill({
     body: JSON.stringify({
-      errors: [{ message: 'TOKEN_INVALID' }],
+      errors: [
+        {
+          message: 'TOKEN_INVALID',
+          extensions: {
+            code: 'UNAUTHENTICATED',
+            errorCode: 'TOKEN_INVALID',
+          },
+        },
+      ],
     }),
     contentType: 'application/json',
     status: 200,

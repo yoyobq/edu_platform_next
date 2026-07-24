@@ -3,6 +3,7 @@ import type { Page } from '@playwright/test';
 import { routes } from '../../fixtures/routes';
 import {
   AUTH_STORAGE_KEY,
+  ensureFullNavigation,
   mockApiHealth,
   mockAuthGraphQL,
   seedAuthSession,
@@ -974,7 +975,10 @@ test('admin 认证码签发可从用户列表发送登录邮箱变更验证邮�
       return;
     }
 
-    if (query.includes('query AdminUsers')) {
+    if (
+      query.includes('query AdminUsers') ||
+      query.includes('query VerificationAccountPickerAdminUsers')
+    ) {
       adminUsersVariables = payload?.variables ?? null;
       await route.fallback();
       return;
@@ -1234,7 +1238,7 @@ test('仅工号 1/2 的管理员会在正式导航中看到载荷加解密入口
 
   await page.goto(routes.home);
 
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await page.getByText('系统管理').click();
   await expect(page.getByText('载荷加解密')).toBeVisible();
   await page.getByText('载荷加解密').click();
@@ -1336,7 +1340,7 @@ test('其他管理员不应在正式导航中看到载荷加解密入口，且�
 
   await page.goto(routes.home);
 
-  await page.getByRole('button', { name: '展开导航菜单' }).click();
+  await ensureFullNavigation(page);
   await page.getByText('系统管理').click();
   await expect(page.getByText('载荷加解密')).toHaveCount(0);
 
