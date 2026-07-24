@@ -1,6 +1,6 @@
 // src/features/ai-chat/infrastructure/ai-chat-error.ts
 
-import { hasGraphQLErrorCode, isGraphQLIngressError } from '@/shared/graphql';
+import { hasGraphQLCategory, isGraphQLIngressError } from '@/shared/graphql';
 
 import { AiChatRequestError } from '../application/request-error';
 
@@ -12,7 +12,7 @@ export function toAiChatRequestError(
     return error;
   }
 
-  if (hasGraphQLErrorCode(error, 'FORBIDDEN')) {
+  if (hasGraphQLCategory(error, 'FORBIDDEN')) {
     return new AiChatRequestError({
       code: 'FORBIDDEN',
       message: 'AI chat request forbidden',
@@ -22,7 +22,7 @@ export function toAiChatRequestError(
     });
   }
 
-  if (hasGraphQLErrorCode(error, 'BAD_USER_INPUT')) {
+  if (hasGraphQLCategory(error, 'BAD_USER_INPUT')) {
     return new AiChatRequestError({
       code: 'BAD_USER_INPUT',
       message: 'AI chat request rejected',
@@ -42,7 +42,7 @@ export function toAiChatRequestError(
     });
   }
 
-  const isInternalGraphQLError = hasGraphQLErrorCode(error, 'INTERNAL_SERVER_ERROR');
+  const isInternalGraphQLError = hasGraphQLCategory(error, 'INTERNAL_SERVER_ERROR');
   const retryDisposition =
     isGraphQLIngressError(error) && error.type === 'malformed' && input.malformedResponseIsAmbiguous
       ? 'ambiguous'

@@ -18,7 +18,7 @@ import {
   useAuthSessionState,
 } from '@/features/auth';
 
-import { hasGraphQLErrorCode } from '@/shared/graphql';
+import { hasGraphQLDetailCode } from '@/shared/graphql';
 
 type LoginLocationState = {
   loginName?: string;
@@ -35,7 +35,7 @@ function readLoginNameFromLocationState(state: unknown) {
 }
 
 function resolveLoginSubmitErrorMessage(error: unknown) {
-  if (hasGraphQLErrorCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')) {
+  if (hasGraphQLDetailCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')) {
     return '请先验证登录邮箱。';
   }
 

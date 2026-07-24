@@ -19,6 +19,8 @@
 - 前端不得按年份自行拼装或重新排序操行学期，也不得自行推导默认班级、默认学期或按钮权限
 - GraphQL 写接口只使用 workspace 返回的 `classId + semesterId`；补录材料 REST dry-run 因协议仍为
   `classCode + schoolYear + semester`，由当前 workspace selection 派生
+- 补录材料 REST dry-run 被后端接受并处理时返回 HTTP `201`；前端仍按 `response.ok` 读取
+  `{ data, requestId }`，认证分支按 HTTP `401`，不解析 GraphQL category
 
 ## 当前学期口径
 

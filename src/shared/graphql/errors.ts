@@ -2,6 +2,13 @@ import { CombinedGraphQLErrors, ServerError, ServerParseError } from '@apollo/cl
 import type { GraphQLFormattedError } from 'graphql';
 
 export type GraphQLIngressErrorType = 'network' | 'http' | 'graphql' | 'auth' | 'malformed';
+export type GraphQLCategory =
+  | 'UNAUTHENTICATED'
+  | 'FORBIDDEN'
+  | 'BAD_USER_INPUT'
+  | 'NOT_FOUND'
+  | 'CONFLICT'
+  | 'INTERNAL_SERVER_ERROR';
 
 type GraphQLIngressErrorContext = {
   operationName?: string;
@@ -50,7 +57,7 @@ export function isGraphQLIngressError(error: unknown): error is GraphQLIngressEr
   return error instanceof GraphQLIngressError;
 }
 
-export function hasGraphQLErrorCode(error: unknown, errorCode: string): boolean {
+export function hasGraphQLCategory(error: unknown, category: GraphQLCategory): boolean {
   if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
     return false;
   }
@@ -58,7 +65,19 @@ export function hasGraphQLErrorCode(error: unknown, errorCode: string): boolean 
   return error.graphqlErrors.some((graphqlError) => {
     const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
 
-    return extensions?.code === errorCode || extensions?.errorCode === errorCode;
+    return extensions?.code === category;
+  });
+}
+
+export function hasGraphQLDetailCode(error: unknown, errorCode: string): boolean {
+  if (!isGraphQLIngressError(error) || !error.graphqlErrors?.length) {
+    return false;
+  }
+
+  return error.graphqlErrors.some((graphqlError) => {
+    const extensions = graphqlError.extensions as Record<string, unknown> | undefined;
+
+    return extensions?.errorCode === errorCode;
   });
 }
 

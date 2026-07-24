@@ -2,11 +2,11 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLErrorCodeMock } =
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLDetailCodeMock } =
   vi.hoisted(() => ({
     executeGraphQLMock: vi.fn(),
     executeUpstreamSessionGraphQLMock: vi.fn(),
-    hasGraphQLErrorCodeMock: vi.fn(),
+    hasGraphQLDetailCodeMock: vi.fn(),
   }));
 
 vi.mock('@/entities/upstream-session', () => ({
@@ -20,7 +20,7 @@ vi.mock('@/entities/upstream-session', () => ({
 
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
-  hasGraphQLErrorCode: hasGraphQLErrorCodeMock,
+  hasGraphQLDetailCode: hasGraphQLDetailCodeMock,
   isGraphQLIngressError: vi.fn(() => false),
 }));
 
@@ -30,8 +30,8 @@ describe('public auth api student registration', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
-    hasGraphQLErrorCodeMock.mockReset();
-    hasGraphQLErrorCodeMock.mockReturnValue(false);
+    hasGraphQLDetailCodeMock.mockReset();
+    hasGraphQLDetailCodeMock.mockReturnValue(false);
   });
 
   it('loads public student registration link info with path token', async () => {
@@ -265,7 +265,7 @@ describe('public auth api student registration', () => {
   it('maps student registration identity top-level link errors as link failures', async () => {
     const error = new Error('学生注册链接已过期');
 
-    hasGraphQLErrorCodeMock.mockImplementation(
+    hasGraphQLDetailCodeMock.mockImplementation(
       (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_EXPIRED',
     );
     executeGraphQLMock.mockRejectedValueOnce(error);
@@ -288,7 +288,7 @@ describe('public auth api student registration', () => {
   it('maps student registration identity top-level inactive link errors as link failures', async () => {
     const error = new Error('学生注册链接不可用');
 
-    hasGraphQLErrorCodeMock.mockImplementation(
+    hasGraphQLDetailCodeMock.mockImplementation(
       (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
     );
     executeGraphQLMock.mockRejectedValueOnce(error);
@@ -374,7 +374,7 @@ describe('public auth api student registration', () => {
   it('maps student registration account top-level link errors as link failures', async () => {
     const error = new Error('学生注册链接不可用');
 
-    hasGraphQLErrorCodeMock.mockImplementation(
+    hasGraphQLDetailCodeMock.mockImplementation(
       (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
     );
     executeGraphQLMock.mockRejectedValueOnce(error);
@@ -397,7 +397,7 @@ describe('public auth api student registration', () => {
   it('maps student registration identity mismatch as a form failure result', async () => {
     const error = new Error('身份信息不匹配');
 
-    hasGraphQLErrorCodeMock.mockReturnValue(true);
+    hasGraphQLDetailCodeMock.mockReturnValue(true);
     executeGraphQLMock.mockRejectedValueOnce(error);
 
     await expect(
@@ -418,7 +418,7 @@ describe('public auth api student registration', () => {
   it('maps final student registration link errors as link failures', async () => {
     const error = new Error('学生注册链接不可用');
 
-    hasGraphQLErrorCodeMock.mockImplementation(
+    hasGraphQLDetailCodeMock.mockImplementation(
       (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_LINK_NOT_ACTIVE',
     );
     executeGraphQLMock.mockRejectedValueOnce(error);

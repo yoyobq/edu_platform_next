@@ -542,7 +542,7 @@ describe('student-conduct-alignment api', () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        status: 200,
+        status: 201,
       }),
     );
 
@@ -667,7 +667,7 @@ describe('student-conduct-alignment api', () => {
             headers: {
               'Content-Type': 'application/json',
             },
-            status: 200,
+            status: 201,
           },
         ),
       );

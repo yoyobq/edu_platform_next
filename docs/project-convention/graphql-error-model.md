@@ -31,10 +31,18 @@
 
 - top-level GraphQL `errors` 代表 GraphQL execution error，进入 `GraphQLIngressError`
 - payload 内部的 `success: false`、`reason`、`message` 是业务结果，不进入 `GraphQLIngressError`
-- `errors[].extensions.code` 是前端可依赖的稳定机器语义
-- `extensions.errorCode` 是细分诊断信息，不作为生产运行时主分支依据
+- `errors[].extensions.code` 是前端 auth/session 与 broad recovery 可依赖的稳定机器语义
+- `extensions.errorCode` 不是全局稳定契约；只有 matching backend endpoint current doc 明确声明
+  “稳定、生产可见”的业务细分码，feature 才能据此执行场景分支
+- 生产环境的内部错误不暴露 `extensions.errorCode`、`errorMessage` 或 `details`
 - GraphQL 可能返回 HTTP 200 + `errors`，HTTP status 只代表 transport 层
 - error `message` 不作为新契约逻辑条件，只能保留为旧响应兼容
+- 后端当前的稳定 GraphQL category 包括 `UNAUTHENTICATED`、`FORBIDDEN`、
+  `BAD_USER_INPUT`、`NOT_FOUND`、`CONFLICT`、`INTERNAL_SERVER_ERROR`
+- 除 `UNAUTHENTICATED` 进入 `auth` 外，上述 GraphQL execution category 在共享入口都保持
+  `GraphQLIngressError.type = 'graphql'`；它们不是 HTTP 错误分类
+- `INTERNAL_SERVER_ERROR` 不会把共享入口改判为 `http`，是否重试由具体 feature 根据操作幂等性和
+  业务上下文决定
 
 ## 错误分类
 
@@ -83,11 +91,16 @@
 - top-level GraphQL `errors`
 - 未命中已知 Apollo transport 分类、但仍属于当前 GraphQL 执行失败的异常
 - `errors[].extensions.code === 'BAD_USER_INPUT'` 的非法输入错误，包括后端 usecase normalize 抛出的 `INPUT_NORMALIZE_*` 细分错误
+- `FORBIDDEN`、`NOT_FOUND`、`CONFLICT`、`INTERNAL_SERVER_ERROR` 等非认证 GraphQL category
 
 约束：
 
 - 不含已归入 `auth` 的 `UNAUTHENTICATED`
-- 不按 `extensions.errorCode` 或中文 `message` 做运行时分支；它们只用于展示、排查和日志
+- auth/session 与 broad recovery 不按 `extensions.errorCode` 或中文 `message` 做运行时分支
+- feature-specific 业务分支使用 `hasGraphQLDetailCode()`，且必须能指向 matching backend current
+  doc 的稳定细分码声明；category 判断只使用 `hasGraphQLCategory()`
+- feature 如需解释 `INTERNAL_SERVER_ERROR` 的重试语义，应在自己的 application /
+  infrastructure 边界处理，不修改共享 ingress 分类
 
 默认用户提示：
 

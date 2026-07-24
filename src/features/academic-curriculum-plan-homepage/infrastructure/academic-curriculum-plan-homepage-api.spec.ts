@@ -4,14 +4,13 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 
-import { executeGraphQL, hasGraphQLErrorCode } from '@/shared/graphql';
+import { executeGraphQL, hasGraphQLDetailCode } from '@/shared/graphql';
 
 import {
   fetchCurriculumPlanHomepageDepartmentOptions,
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
   isCurriculumPlanHomepagePrefillTimeWindowClosedError,
-  isCurriculumPlanHomepageSemesterInvalidDateError,
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
@@ -19,11 +18,11 @@ import {
   saveCurriculumPlanHomepage,
 } from './academic-curriculum-plan-homepage-api';
 
-const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLErrorCodeMock } =
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLDetailCodeMock } =
   vi.hoisted(() => ({
     executeGraphQLMock: vi.fn(),
     executeUpstreamSessionGraphQLMock: vi.fn(),
-    hasGraphQLErrorCodeMock: vi.fn(() => false),
+    hasGraphQLDetailCodeMock: vi.fn(() => false),
   }));
 
 vi.mock('@/entities/upstream-session', () => ({
@@ -35,19 +34,19 @@ vi.mock('@/entities/upstream-session', () => ({
 
 vi.mock('@/shared/graphql', () => ({
   executeGraphQL: executeGraphQLMock,
-  hasGraphQLErrorCode: hasGraphQLErrorCodeMock,
+  hasGraphQLDetailCode: hasGraphQLDetailCodeMock,
 }));
 
 const mockedExecuteUpstreamSessionGraphQL = vi.mocked(executeUpstreamSessionGraphQL);
 const mockedExecuteGraphQL = vi.mocked(executeGraphQL);
-const mockedHasGraphQLErrorCode = vi.mocked(hasGraphQLErrorCode);
+const mockedHasGraphQLDetailCode = vi.mocked(hasGraphQLDetailCode);
 
 describe('academic curriculum plan homepage api', () => {
   beforeEach(() => {
     mockedExecuteUpstreamSessionGraphQL.mockReset();
     mockedExecuteGraphQL.mockReset();
-    mockedHasGraphQLErrorCode.mockReset();
-    mockedHasGraphQLErrorCode.mockReturnValue(false);
+    mockedHasGraphQLDetailCode.mockReset();
+    mockedHasGraphQLDetailCode.mockReturnValue(false);
   });
 
   it('fetches homepage list with trimmed term variables and nullable department', async () => {
@@ -324,25 +323,17 @@ describe('academic curriculum plan homepage api', () => {
     });
   });
 
-  it('detects prefill time window and invalid semester date errors', () => {
+  it('detects the explicitly stable prefill time-window detail code', () => {
     const error = new Error('graphql');
 
-    mockedHasGraphQLErrorCode.mockImplementation((_error, errorCode) => {
+    mockedHasGraphQLDetailCode.mockImplementation((_error, errorCode) => {
       return (
         errorCode === 'ACADEMIC_COURSE_SCHEDULE_CURRICULUM_PLAN_HOMEPAGE_PREFILL_TIME_WINDOW_CLOSED'
       );
     });
 
     expect(isCurriculumPlanHomepagePrefillTimeWindowClosedError(error)).toBe(true);
-    expect(isCurriculumPlanHomepageSemesterInvalidDateError(error)).toBe(false);
-
-    mockedHasGraphQLErrorCode.mockImplementation((_error, errorCode) => {
-      return errorCode === 'ACADEMIC_SEMESTER_INVALID_DATE';
-    });
-
-    expect(resolveCurriculumPlanHomepagePrefillErrorMessage(error, 'fallback')).toBe(
-      '学期日期数据异常，暂时无法生成预填建议。请联系管理员核对学期日期配置。',
-    );
+    expect(resolveCurriculumPlanHomepagePrefillErrorMessage(error, 'fallback')).toBe('graphql');
   });
 
   it('loads managed historical reference candidates and keeps upstream session result', async () => {

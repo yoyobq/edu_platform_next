@@ -1,6 +1,6 @@
 // src/labs/student-evaluation-comment/application/display.ts
 
-import { hasGraphQLErrorCode, isGraphQLIngressError } from '@/shared/graphql';
+import { hasGraphQLCategory, isGraphQLIngressError } from '@/shared/graphql';
 
 const STUDENT_STATUS_LABELS: Record<string, string> = {
   DROPPED: '退学',
@@ -30,14 +30,14 @@ export function formatStudentEvaluationCommentStatus(status: string) {
 }
 
 export function isStudentEvaluationCommentConflict(error: unknown) {
-  return hasGraphQLErrorCode(error, 'CONFLICT');
+  return hasGraphQLCategory(error, 'CONFLICT');
 }
 
 export function resolveStudentEvaluationCommentErrorMessage(
   error: unknown,
   context: 'class-scope' | 'mine' | 'options' | 'save',
 ) {
-  if (hasGraphQLErrorCode(error, 'FORBIDDEN')) {
+  if (hasGraphQLCategory(error, 'FORBIDDEN')) {
     if (context === 'mine') {
       return '当前账号未绑定有效学生身份，或无权读取本人评语。';
     }
@@ -49,15 +49,15 @@ export function resolveStudentEvaluationCommentErrorMessage(
     return '当前账号没有目标班级的正式评语编辑权限。';
   }
 
-  if (hasGraphQLErrorCode(error, 'BAD_USER_INPUT')) {
+  if (hasGraphQLCategory(error, 'BAD_USER_INPUT')) {
     return '输入无效，或班级、学期、活动名单已经发生变化，请核对后重试。';
   }
 
-  if (hasGraphQLErrorCode(error, 'CONFLICT')) {
+  if (hasGraphQLCategory(error, 'CONFLICT')) {
     return '评语已被其他人修改，请重新加载当前班级数据。';
   }
 
-  if (hasGraphQLErrorCode(error, 'INTERNAL_SERVER_ERROR')) {
+  if (hasGraphQLCategory(error, 'INTERNAL_SERVER_ERROR')) {
     return '评语服务暂时不可用，请稍后重试。';
   }
 

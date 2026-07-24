@@ -12,7 +12,7 @@ import { normalizeOptionalTextValue } from '@/shared/form-normalization';
 import {
   executeGraphQL,
   type GraphQLAuthMode,
-  hasGraphQLErrorCode,
+  hasGraphQLDetailCode,
   isGraphQLIngressError,
 } from '@/shared/graphql';
 
@@ -771,7 +771,7 @@ function resolveStudentRegistrationLinkFailureReasonFromError(
   error: unknown,
 ): StudentRegistrationLinkReason | null {
   const matched = STUDENT_REGISTRATION_LINK_ERROR_CODE_REASON_MAP.find(({ codes }) =>
-    codes.some((code) => hasGraphQLErrorCode(error, code)),
+    codes.some((code) => hasGraphQLDetailCode(error, code)),
   );
 
   return matched?.reason ?? null;
@@ -798,8 +798,8 @@ function resolveLoginEmailVerificationFailureMessage(
 
 function isStudentRegistrationIdentityMismatchError(error: unknown): boolean {
   return (
-    hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH') ||
-    hasGraphQLErrorCode(error, 'IDENTITY_MISMATCH')
+    hasGraphQLDetailCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH') ||
+    hasGraphQLDetailCode(error, 'IDENTITY_MISMATCH')
   );
 }
 

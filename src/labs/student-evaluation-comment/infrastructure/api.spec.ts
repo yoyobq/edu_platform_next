@@ -137,7 +137,7 @@ describe('student evaluation comment api', () => {
           }),
           requestId: 'req-1',
         }),
-        { headers: { 'Content-Type': 'application/json' }, status: 200 },
+        { headers: { 'Content-Type': 'application/json' }, status: 201 },
       ),
     );
     vi.stubGlobal('fetch', fetchMock);
@@ -183,7 +183,7 @@ describe('student evaluation comment api', () => {
       .mockResolvedValue(
         new Response(
           JSON.stringify({ data: buildMaterialImportResult({ commentKind: 'GRADUATION' }) }),
-          { headers: { 'Content-Type': 'application/json' }, status: 200 },
+          { headers: { 'Content-Type': 'application/json' }, status: 201 },
         ),
       );
     vi.stubGlobal('fetch', fetchMock);
@@ -213,7 +213,7 @@ describe('student evaluation comment api', () => {
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ data: buildMaterialImportResult() }), {
           headers: { 'Content-Type': 'application/json' },
-          status: 200,
+          status: 201,
         }),
       );
     vi.stubGlobal('fetch', fetchMock);

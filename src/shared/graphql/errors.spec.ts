@@ -4,7 +4,12 @@ import { CombinedGraphQLErrors } from '@apollo/client/errors';
 import type { GraphQLFormattedError } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
-import { GraphQLIngressError, hasGraphQLErrorCode, toGraphQLIngressError } from './errors';
+import {
+  GraphQLIngressError,
+  hasGraphQLCategory,
+  hasGraphQLDetailCode,
+  toGraphQLIngressError,
+} from './errors';
 
 function buildCombinedGraphQLError(
   extensions: Record<string, unknown>,
@@ -62,9 +67,30 @@ describe('GraphQL ingress errors', () => {
       ],
     });
 
-    expect(hasGraphQLErrorCode(error, 'BAD_USER_INPUT')).toBe(true);
-    expect(hasGraphQLErrorCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH')).toBe(true);
-    expect(hasGraphQLErrorCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')).toBe(false);
-    expect(hasGraphQLErrorCode(new Error('plain'), 'BAD_USER_INPUT')).toBe(false);
+    expect(hasGraphQLCategory(error, 'BAD_USER_INPUT')).toBe(true);
+    expect(hasGraphQLDetailCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH')).toBe(true);
+    expect(hasGraphQLDetailCode(error, 'AUTH_LOGIN_EMAIL_NOT_VERIFIED')).toBe(false);
+    expect(hasGraphQLCategory(new Error('plain'), 'BAD_USER_INPUT')).toBe(false);
+  });
+
+  it('keeps detail-code matching separate from the broad GraphQL category', () => {
+    const error = new GraphQLIngressError({
+      type: 'graphql',
+      message: '学生已绑定账号',
+      graphqlErrors: [
+        {
+          message: '学生已绑定账号',
+          extensions: {
+            code: 'CONFLICT',
+            errorCode: 'STUDENT_REGISTRATION_STUDENT_ALREADY_BOUND',
+          },
+        },
+      ],
+    });
+
+    expect(hasGraphQLCategory(error, 'CONFLICT')).toBe(true);
+    expect(hasGraphQLDetailCode(error, 'STUDENT_REGISTRATION_STUDENT_ALREADY_BOUND')).toBe(true);
+    expect(hasGraphQLDetailCode(error, 'CONFLICT')).toBe(false);
+    expect(error.type).toBe('graphql');
   });
 });

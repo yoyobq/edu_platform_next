@@ -4,10 +4,11 @@ export {
   getGraphQLEndpoint,
   getGraphQLRuntimeConfig,
 } from './client';
-export type { GraphQLIngressErrorType } from './errors';
+export type { GraphQLCategory, GraphQLIngressErrorType } from './errors';
 export {
   GraphQLIngressError,
-  hasGraphQLErrorCode,
+  hasGraphQLCategory,
+  hasGraphQLDetailCode,
   isGraphQLIngressError,
   toGraphQLIngressError,
 } from './errors';

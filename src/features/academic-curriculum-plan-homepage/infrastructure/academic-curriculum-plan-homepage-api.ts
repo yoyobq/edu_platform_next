@@ -9,7 +9,7 @@ import {
   resolveUpstreamErrorMessage,
 } from '@/entities/upstream-session';
 
-import { executeGraphQL, type GraphQLAuthMode, hasGraphQLErrorCode } from '@/shared/graphql';
+import { executeGraphQL, type GraphQLAuthMode, hasGraphQLDetailCode } from '@/shared/graphql';
 
 import type {
   CurriculumPlanHomepageDepartmentOption,
@@ -87,7 +87,6 @@ type DepartmentsResponse = {
 
 const PREFILL_TIME_WINDOW_CLOSED_ERROR_CODE =
   'ACADEMIC_COURSE_SCHEDULE_CURRICULUM_PLAN_HOMEPAGE_PREFILL_TIME_WINDOW_CLOSED';
-const SEMESTER_INVALID_DATE_ERROR_CODE = 'ACADEMIC_SEMESTER_INVALID_DATE';
 
 const FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY = `
   query FetchCurriculumPlanHomepageList(
@@ -440,21 +439,13 @@ function normalizeOptionalString(value: string | null | undefined) {
 }
 
 export function isCurriculumPlanHomepagePrefillTimeWindowClosedError(error: unknown): boolean {
-  return hasGraphQLErrorCode(error, PREFILL_TIME_WINDOW_CLOSED_ERROR_CODE);
-}
-
-export function isCurriculumPlanHomepageSemesterInvalidDateError(error: unknown): boolean {
-  return hasGraphQLErrorCode(error, SEMESTER_INVALID_DATE_ERROR_CODE);
+  return hasGraphQLDetailCode(error, PREFILL_TIME_WINDOW_CLOSED_ERROR_CODE);
 }
 
 export function resolveCurriculumPlanHomepagePrefillErrorMessage(
   error: unknown,
   fallback: string,
 ): string {
-  if (isCurriculumPlanHomepageSemesterInvalidDateError(error)) {
-    return '学期日期数据异常，暂时无法生成预填建议。请联系管理员核对学期日期配置。';
-  }
-
   return resolveUpstreamErrorMessage(error, fallback);
 }
 

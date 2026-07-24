@@ -912,7 +912,7 @@ describe('student-private-profile lab api', () => {
           data: uploadResult,
         }),
         {
-          status: 200,
+          status: 201,
         },
       ),
     );
