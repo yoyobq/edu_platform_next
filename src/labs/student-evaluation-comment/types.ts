@@ -133,3 +133,86 @@ export type MyStudentEvaluationComments = {
     updatedAt: string;
   }>;
 };
+
+export type StudentEvaluationCommentMaterialImportStatus =
+  | 'SHEET_SELECTION_REQUIRED'
+  | 'IDENTITY_MAPPING_REQUIRED'
+  | 'READY_TO_SAVE'
+  | 'NO_CHANGES'
+  | 'BLOCKED';
+
+export type StudentEvaluationCommentMaterialNotice = {
+  code: string;
+  message: string;
+  sourceRows?: number[];
+  sourceSheet?: string;
+};
+
+export type StudentEvaluationCommentMaterialSheetOption = {
+  candidateRowCount: number;
+  recognitionMode: 'HEADER' | 'DATA_FIRST';
+  sheetName: string;
+};
+
+export type StudentEvaluationCommentMaterialIdentityMappingInput = {
+  mappingKey: string;
+  studentId: string;
+};
+
+export type StudentEvaluationCommentMaterialIdentityMappingGroup = {
+  candidates: Array<{
+    studentId: string;
+    studentName: string;
+  }>;
+  mappingKey: string;
+  sourceRows: number[];
+  sourceStudentName: string;
+  sourceStudentNumber: string | null;
+};
+
+export type StudentEvaluationCommentMaterialPreviewRow = {
+  content: string;
+  expectedRevision: StudentEvaluationCommentRevision | null;
+  matchedBy:
+    | 'STUDENT_ID'
+    | 'UPSTREAM_ID'
+    | 'NON_CANONICAL_ID_AND_UNIQUE_NAME'
+    | 'UNIQUE_NAME'
+    | 'MANUAL';
+  proposedAction: 'CREATE' | 'UPDATE';
+  sourceRow: number;
+  sourceSheet: string;
+  studentId: string;
+  studentName: string;
+};
+
+export type StudentEvaluationCommentMaterialImportResult = {
+  blockingErrors: StudentEvaluationCommentMaterialNotice[];
+  classId: string;
+  className: string;
+  commentKind: StudentEvaluationCommentKind;
+  identityMappingGroups: StudentEvaluationCommentMaterialIdentityMappingGroup[];
+  previewRows: StudentEvaluationCommentMaterialPreviewRow[];
+  selectedSheet: string | null;
+  semesterId: number | null;
+  sheetOptions: StudentEvaluationCommentMaterialSheetOption[];
+  status: StudentEvaluationCommentMaterialImportStatus;
+  summary: {
+    blankCommentCount: number;
+    createCount: number;
+    matchedRows: number;
+    parsedRows: number;
+    unchangedCount: number;
+    updateCount: number;
+  };
+  warnings: StudentEvaluationCommentMaterialNotice[];
+};
+
+export type ImportStudentEvaluationCommentMaterialInput = {
+  classId: string;
+  commentKind: StudentEvaluationCommentKind;
+  file: File;
+  identityMappings?: readonly StudentEvaluationCommentMaterialIdentityMappingInput[];
+  selectedSheet?: string;
+  semesterId: number | null;
+};

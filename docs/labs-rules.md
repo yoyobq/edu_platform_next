@@ -150,10 +150,11 @@ export const demoLabMeta = {
   - 后续需要 upstream session 的 lab，应优先参考该页，而不是复制业务型
     `/labs/upstream-session-demo`
 - `/labs/student-evaluation-comment`
-  - 用于验证学期/毕业正式评语的班级批量编辑、CAS 冲突恢复和学生本人只读链路
+  - 用于验证学期/毕业正式评语的班级批量编辑、Excel 草稿导入、CAS 冲突恢复和学生本人只读链路
   - 对 `ADMIN / STAFF / STUDENT` 暴露；页面按当前会话投影编辑/本人视图，最终业务权限始终以后端为准
   - 编辑页只使用评语 workspace 返回的班级、真实学期、正式名单与 action
-  - 不承载 AI 草稿、历史版本、导入导出或跨班批量操作；确认稳定后应迁入正式学生评语拥有者切片
+  - Excel 只执行单文件 dry-run、工作表/重名身份确认和草稿预填，最终保存仍使用正式评语 GraphQL mutation
+  - 不承载 AI 草稿、历史版本、导出或跨班批量操作；确认稳定后应迁入正式学生评语拥有者切片
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程
   - 当前对 `ADMIN / STAFF` 暴露，不要求教务 slot

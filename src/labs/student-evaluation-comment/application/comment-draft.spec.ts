@@ -80,6 +80,33 @@ describe('student evaluation comment drafts', () => {
     ]);
   });
 
+  it('uses a material import revision override when saving an imported draft', () => {
+    const student = createStudent({
+      comment: {
+        content: '原评语',
+        revision: REVISION,
+        source: 'MANUAL',
+        updatedAt: '2026-07-16T01:02:03.000Z',
+      },
+    });
+    const importedRevision = { payloadHash: 'b'.repeat(64), payloadVersion: 2 };
+
+    expect(
+      buildStudentEvaluationCommentWriteItems(
+        [student],
+        { [student.studentId]: 'Excel 评语' },
+        { [student.studentId]: importedRevision },
+      ),
+    ).toEqual([
+      {
+        action: 'UPSERT',
+        content: 'Excel 评语',
+        expectedRevision: importedRevision,
+        studentId: student.studentId,
+      },
+    ]);
+  });
+
   it('builds CLEAR only for an existing comment that becomes empty', () => {
     const existing = createStudent({
       comment: {

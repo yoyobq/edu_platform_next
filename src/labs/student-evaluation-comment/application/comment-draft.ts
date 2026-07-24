@@ -2,6 +2,7 @@
 
 import type {
   StudentEvaluationCommentClassScopeStudent,
+  StudentEvaluationCommentRevision,
   StudentEvaluationCommentWriteItem,
 } from '../types';
 
@@ -46,6 +47,7 @@ export function resolveStudentEvaluationCommentDraftState(
 export function buildStudentEvaluationCommentWriteItems(
   students: readonly StudentEvaluationCommentClassScopeStudent[],
   drafts: Readonly<Record<string, string>>,
+  expectedRevisionOverrides: Readonly<Record<string, StudentEvaluationCommentRevision | null>> = {},
 ): StudentEvaluationCommentWriteItem[] {
   const items = students.flatMap<StudentEvaluationCommentWriteItem>((student) => {
     const state = resolveStudentEvaluationCommentDraftState(
@@ -61,11 +63,19 @@ export function buildStudentEvaluationCommentWriteItems(
       throw new Error(`${student.studentName}的评语超过 1000 个字符。`);
     }
 
+    const hasExpectedRevisionOverride = Object.prototype.hasOwnProperty.call(
+      expectedRevisionOverrides,
+      student.studentId,
+    );
+    const expectedRevision = hasExpectedRevisionOverride
+      ? (expectedRevisionOverrides[student.studentId] ?? null)
+      : (student.comment?.revision ?? null);
+
     if (state.action === 'CLEAR') {
       return [
         {
           action: 'CLEAR',
-          expectedRevision: student.comment?.revision ?? null,
+          expectedRevision,
           studentId: student.studentId,
         },
       ];
@@ -75,7 +85,7 @@ export function buildStudentEvaluationCommentWriteItems(
       {
         action: 'UPSERT',
         content: state.normalizedContent,
-        expectedRevision: student.comment?.revision ?? null,
+        expectedRevision,
         studentId: student.studentId,
       },
     ];

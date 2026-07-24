@@ -52,7 +52,7 @@ export function StudentEvaluationCommentLabPage() {
 
       <Alert
         showIcon
-        description="本页不提供 AI 草稿、历史版本、导入导出或跨班批量操作；班级权限和学生身份始终由后端判定。"
+        description="本页支持人工编辑与单个 Excel 草稿导入；不提供 AI 草稿、历史版本、导出或跨班批量操作。班级权限和学生身份始终由后端判定。"
         title="Lab 边界"
         type="info"
       />

@@ -22,16 +22,23 @@ import {
   isStudentEvaluationCommentConflict,
   resolveStudentEvaluationCommentErrorMessage,
 } from '../application/display';
+import { mergeStudentEvaluationCommentMaterialPreview } from '../application/material-import-draft';
 import {
   batchWriteStudentEvaluationComments,
   getStudentEvaluationCommentWorkspace,
+  importStudentEvaluationCommentMaterial,
 } from '../infrastructure/api';
 import type {
   StudentEvaluationCommentClassScopeStudent,
   StudentEvaluationCommentKind,
+  StudentEvaluationCommentMaterialIdentityMappingInput,
+  StudentEvaluationCommentMaterialImportResult,
+  StudentEvaluationCommentRevision,
   StudentEvaluationCommentScopeInput,
   StudentEvaluationCommentWorkspace,
 } from '../types';
+
+import { StudentEvaluationCommentMaterialImportPanel } from './material-import-panel';
 
 type ClassScopeEditorProps = {
   onDirtyChange?: (isDirty: boolean) => void;
@@ -39,7 +46,7 @@ type ClassScopeEditorProps = {
 
 function requestDiscardConfirmation(
   modal: ReturnType<typeof AntApp.useApp>['modal'],
-  description = '继续后将放弃当前尚未保存的评语修改。',
+  description = '继续后将放弃当前尚未保存的评语修改或未完成的 Excel 导入。',
 ) {
   return new Promise<boolean>((resolve) => {
     modal.confirm({
@@ -74,7 +81,7 @@ function useUnsavedCommentProtection(isDirty: boolean) {
 
     const confirmation = modal.confirm({
       cancelText: '留在当前页',
-      content: '离开后将丢失当前尚未保存的评语修改。',
+      content: '离开后将丢失当前尚未保存的评语修改或未完成的 Excel 导入。',
       okButtonProps: { danger: true },
       okText: '离开页面',
       onCancel: () => blocker.reset(),
@@ -111,8 +118,20 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
   const { message, modal } = AntApp.useApp();
   const [workspace, setWorkspace] = useState<StudentEvaluationCommentWorkspace | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [expectedRevisionOverrides, setExpectedRevisionOverrides] = useState<
+    Record<string, StudentEvaluationCommentRevision | null>
+  >({});
+  const [materialFile, setMaterialFile] = useState<File | null>(null);
+  const [materialImportResult, setMaterialImportResult] =
+    useState<StudentEvaluationCommentMaterialImportResult | null>(null);
+  const [materialImportError, setMaterialImportError] = useState<string | null>(null);
+  const [materialSelectedSheet, setMaterialSelectedSheet] = useState<string | null>(null);
+  const [materialIdentitySelections, setMaterialIdentitySelections] = useState<
+    Record<string, string>
+  >({});
   const [scopeError, setScopeError] = useState<string | null>(null);
   const [isConflict, setIsConflict] = useState(false);
+  const [isImportingMaterial, setIsImportingMaterial] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -131,26 +150,50 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
   const invalidCount = draftStates.filter((state) => state.isInvalid).length;
   const hasDirtyDrafts = dirtyCount > 0;
   const writeAction = findWriteAction(workspace);
+  const hasPendingMaterialImport =
+    isImportingMaterial ||
+    (Boolean(materialFile) &&
+      (materialImportResult?.status === 'SHEET_SELECTION_REQUIRED' ||
+        materialImportResult?.status === 'IDENTITY_MAPPING_REQUIRED'));
+  const hasUnsavedWork = hasDirtyDrafts || hasPendingMaterialImport;
 
-  useUnsavedCommentProtection(hasDirtyDrafts);
+  useUnsavedCommentProtection(hasUnsavedWork);
 
   useEffect(() => {
-    onDirtyChange?.(hasDirtyDrafts);
-  }, [hasDirtyDrafts, onDirtyChange]);
+    onDirtyChange?.(hasUnsavedWork);
+  }, [hasUnsavedWork, onDirtyChange]);
 
-  const replaceWorkspace = useCallback((result: StudentEvaluationCommentWorkspace) => {
-    setWorkspace(result);
-    setDrafts(
-      Object.fromEntries(
-        (result.view?.students ?? []).map((student) => [
-          student.studentId,
-          student.comment?.content ?? '',
-        ]),
-      ),
-    );
-    setIsConflict(false);
-    setScopeError(null);
+  const clearMaterialImportDisplay = useCallback(() => {
+    setMaterialFile(null);
+    setMaterialImportResult(null);
+    setMaterialImportError(null);
+    setMaterialSelectedSheet(null);
+    setMaterialIdentitySelections({});
   }, []);
+
+  const resetMaterialImport = useCallback(() => {
+    clearMaterialImportDisplay();
+    setExpectedRevisionOverrides({});
+    setIsImportingMaterial(false);
+  }, [clearMaterialImportDisplay]);
+
+  const replaceWorkspace = useCallback(
+    (result: StudentEvaluationCommentWorkspace) => {
+      setWorkspace(result);
+      setDrafts(
+        Object.fromEntries(
+          (result.view?.students ?? []).map((student) => [
+            student.studentId,
+            student.comment?.content ?? '',
+          ]),
+        ),
+      );
+      resetMaterialImport();
+      setIsConflict(false);
+      setScopeError(null);
+    },
+    [resetMaterialImport],
+  );
 
   const loadWorkspace = useCallback(
     async (input: {
@@ -183,16 +226,16 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
       commentKind: StudentEvaluationCommentKind;
       semesterId?: number | null;
     }) => {
-      if (hasDirtyDrafts && !(await requestDiscardConfirmation(modal))) return;
+      if (hasUnsavedWork && !(await requestDiscardConfirmation(modal))) return;
       await loadWorkspace(input);
     },
-    [hasDirtyDrafts, loadWorkspace, modal],
+    [hasUnsavedWork, loadWorkspace, modal],
   );
 
   const reloadCurrentWorkspace = useCallback(async () => {
     if (!workspace?.selectedClass) return;
     if (
-      hasDirtyDrafts &&
+      hasUnsavedWork &&
       !(await requestDiscardConfirmation(
         modal,
         isConflict ? '重新加载会使用服务端最新版本，并放弃当前冲突草稿。' : undefined,
@@ -205,14 +248,18 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
       commentKind: workspace.commentKind,
       semesterId: workspace.selectedTerm?.semesterId ?? null,
     });
-  }, [hasDirtyDrafts, isConflict, loadWorkspace, modal, workspace]);
+  }, [hasUnsavedWork, isConflict, loadWorkspace, modal, workspace]);
 
   const handleSave = useCallback(async () => {
     if (!scopeResult || !writeAction?.allowed) return;
 
     let items;
     try {
-      items = buildStudentEvaluationCommentWriteItems(scopeResult.students, drafts);
+      items = buildStudentEvaluationCommentWriteItems(
+        scopeResult.students,
+        drafts,
+        expectedRevisionOverrides,
+      );
     } catch (error) {
       message.error(error instanceof Error ? error.message : '评语草稿校验失败。');
       return;
@@ -246,7 +293,139 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
     } finally {
       setIsSaving(false);
     }
-  }, [drafts, loadWorkspace, message, scopeResult, writeAction?.allowed]);
+  }, [
+    drafts,
+    expectedRevisionOverrides,
+    loadWorkspace,
+    message,
+    scopeResult,
+    writeAction?.allowed,
+  ]);
+
+  const runMaterialImport = useCallback(
+    async (input: {
+      file: File;
+      identityMappings?: readonly StudentEvaluationCommentMaterialIdentityMappingInput[];
+      selectedSheet?: string;
+    }) => {
+      if (!scopeResult || !writeAction?.allowed) return;
+
+      setIsImportingMaterial(true);
+      setMaterialImportError(null);
+      setMaterialImportResult(null);
+
+      try {
+        const result = await importStudentEvaluationCommentMaterial({
+          classId: scopeResult.classItem.id,
+          commentKind: scopeResult.scope.commentKind,
+          file: input.file,
+          ...(input.identityMappings ? { identityMappings: input.identityMappings } : {}),
+          ...(input.selectedSheet ? { selectedSheet: input.selectedSheet } : {}),
+          semesterId: scopeResult.scope.semesterId,
+        });
+
+        setMaterialSelectedSheet(result.selectedSheet ?? input.selectedSheet ?? null);
+
+        if (result.status === 'SHEET_SELECTION_REQUIRED') {
+          setMaterialImportResult(result);
+          setMaterialSelectedSheet(null);
+          setMaterialIdentitySelections({});
+          message.info('请选择需要导入的工作表。');
+          return;
+        }
+
+        if (result.status === 'IDENTITY_MAPPING_REQUIRED') {
+          setMaterialImportResult(result);
+          setMaterialIdentitySelections({});
+          message.warning('存在重名学生，请确认对应身份。');
+          return;
+        }
+
+        if (result.status === 'BLOCKED') {
+          setMaterialImportResult(result);
+          message.error('评语材料存在阻断问题，未修改页面草稿。');
+          return;
+        }
+
+        if (result.status === 'NO_CHANGES') {
+          setMaterialImportResult(result);
+          setMaterialFile(null);
+          setMaterialIdentitySelections({});
+          message.info('评语材料解析完成，没有需要预填的变化。');
+          return;
+        }
+
+        const merged = mergeStudentEvaluationCommentMaterialPreview({
+          drafts,
+          expectedRevisionOverrides,
+          previewRows: result.previewRows,
+          students: scopeResult.students,
+        });
+
+        setDrafts(merged.drafts);
+        setExpectedRevisionOverrides(merged.expectedRevisionOverrides);
+        setMaterialImportResult(result);
+        setMaterialFile(null);
+        setMaterialIdentitySelections({});
+        message.success(
+          merged.preservedDirtyStudentIds.length > 0
+            ? `已预填 ${merged.importedStudentIds.length} 名学生，保留 ${merged.preservedDirtyStudentIds.length} 条手工草稿。`
+            : `已从 Excel 预填 ${merged.importedStudentIds.length} 名学生，请检查后保存。`,
+        );
+      } catch (error) {
+        setMaterialImportError(error instanceof Error ? error.message : '暂时无法导入评语 Excel。');
+      } finally {
+        setIsImportingMaterial(false);
+      }
+    },
+    [drafts, expectedRevisionOverrides, message, scopeResult, writeAction?.allowed],
+  );
+
+  const handleMaterialFileSelected = useCallback(
+    (file: File) => {
+      setMaterialFile(file);
+      setMaterialImportResult(null);
+      setMaterialImportError(null);
+      setMaterialSelectedSheet(null);
+      setMaterialIdentitySelections({});
+      void runMaterialImport({ file });
+    },
+    [runMaterialImport],
+  );
+
+  const handleContinueMaterialSheet = useCallback(() => {
+    if (!materialFile || !materialSelectedSheet) return;
+
+    void runMaterialImport({ file: materialFile, selectedSheet: materialSelectedSheet });
+  }, [materialFile, materialSelectedSheet, runMaterialImport]);
+
+  const handleContinueMaterialMappings = useCallback(() => {
+    if (!materialFile || materialImportResult?.status !== 'IDENTITY_MAPPING_REQUIRED') return;
+
+    const identityMappings = materialImportResult.identityMappingGroups.flatMap((group) => {
+      const studentId = materialIdentitySelections[group.mappingKey];
+
+      return studentId ? [{ mappingKey: group.mappingKey, studentId }] : [];
+    });
+
+    if (identityMappings.length !== materialImportResult.identityMappingGroups.length) {
+      message.warning('请先为全部来源身份选择对应学生。');
+      return;
+    }
+
+    void runMaterialImport({
+      file: materialFile,
+      identityMappings,
+      ...(materialSelectedSheet ? { selectedSheet: materialSelectedSheet } : {}),
+    });
+  }, [
+    materialFile,
+    materialIdentitySelections,
+    materialImportResult,
+    materialSelectedSheet,
+    message,
+    runMaterialImport,
+  ]);
 
   const columns = useMemo<ColumnsType<StudentEvaluationCommentClassScopeStudent>>(
     () => [
@@ -267,7 +446,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
               <Input.TextArea
                 aria-label={`${student.studentName}正式评语`}
                 autoSize={{ maxRows: 7, minRows: 3 }}
-                disabled={isSaving || !writeAction?.allowed}
+                disabled={isImportingMaterial || isSaving || !writeAction?.allowed}
                 placeholder="输入人工正式评语；留空并保存将清除已有评语"
                 showCount={{
                   formatter: ({ value }) =>
@@ -310,7 +489,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
           return (
             <Button
               danger={Boolean(student.comment)}
-              disabled={isSaving || !content || !writeAction?.allowed}
+              disabled={isImportingMaterial || isSaving || !content || !writeAction?.allowed}
               icon={<ClearOutlined />}
               size="small"
               onClick={() => setDrafts((current) => ({ ...current, [student.studentId]: '' }))}
@@ -323,7 +502,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
         width: 90,
       },
     ],
-    [drafts, isSaving, writeAction?.allowed],
+    [drafts, isImportingMaterial, isSaving, writeAction?.allowed],
   );
 
   return (
@@ -350,7 +529,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
               <div className="mb-2">班级</div>
               <div className="w-full">
                 <Select
-                  disabled={isLoading || isSaving}
+                  disabled={isImportingMaterial || isLoading || isSaving}
                   loading={isLoading}
                   optionFilterProp="label"
                   options={(workspace?.classOptions ?? []).map((option) => ({
@@ -371,7 +550,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
               <div className="mb-2">评语类型</div>
               <Radio.Group
                 buttonStyle="solid"
-                disabled={isLoading || isSaving || !workspace?.selectedClass}
+                disabled={isImportingMaterial || isLoading || isSaving || !workspace?.selectedClass}
                 optionType="button"
                 options={[
                   { label: '学期评语', value: 'TERM' },
@@ -388,7 +567,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
             </div>
           </ResponsiveGrid>
           <Button
-            disabled={!workspace?.selectedClass}
+            disabled={isImportingMaterial || !workspace?.selectedClass}
             icon={<ReloadOutlined />}
             loading={isLoading}
             onClick={() => void reloadCurrentWorkspace()}
@@ -423,7 +602,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
       {scopeResult ? (
         <AcademicTermTabs
           activeSemesterId={workspace?.selectedTerm?.semesterId}
-          disabled={isLoading || isSaving}
+          disabled={isImportingMaterial || isLoading || isSaving}
           records={workspace?.commentKind === 'TERM' ? workspace.termOptions : []}
           onChange={(semesterId) =>
             void changeScope({
@@ -441,7 +620,13 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
                   {dirtyCount ? `${dirtyCount} 项未保存` : '全部已同步'}
                 </Tag>
                 <Button
-                  disabled={!dirtyCount || invalidCount > 0 || isLoading || !writeAction?.allowed}
+                  disabled={
+                    !dirtyCount ||
+                    invalidCount > 0 ||
+                    hasPendingMaterialImport ||
+                    isLoading ||
+                    !writeAction?.allowed
+                  }
                   icon={<CloudUploadOutlined />}
                   loading={isSaving}
                   type="primary"
@@ -454,6 +639,27 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
             title={`${scopeResult.classItem.className}（${scopeResult.classItem.classCode}）`}
           >
             <div className="flex flex-col gap-4">
+              <StudentEvaluationCommentMaterialImportPanel
+                disabled={isLoading || isSaving || !writeAction?.allowed}
+                errorMessage={materialImportError}
+                file={materialFile}
+                identitySelections={materialIdentitySelections}
+                isImporting={isImportingMaterial}
+                result={materialImportResult}
+                selectedSheet={materialSelectedSheet}
+                onClear={clearMaterialImportDisplay}
+                onContinueIdentityMappings={handleContinueMaterialMappings}
+                onContinueSheet={handleContinueMaterialSheet}
+                onFileSelected={handleMaterialFileSelected}
+                onIdentitySelectionChange={(mappingKey, studentId) =>
+                  setMaterialIdentitySelections((current) => ({
+                    ...current,
+                    [mappingKey]: studentId,
+                  }))
+                }
+                onRejectFile={(error) => message.error(error)}
+                onSelectedSheetChange={setMaterialSelectedSheet}
+              />
               {invalidCount ? (
                 <Alert
                   showIcon
