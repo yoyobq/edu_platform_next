@@ -1,12 +1,14 @@
 // src/features/auth/index.ts
 
+import { getGraphQLClient } from '@/shared/graphql';
+
 import { ensureFreshSession as runEnsureFreshSession } from './application/ensure-fresh-session';
 import { forceLogout as runForceLogout } from './application/force-logout';
 import { login as runLogin } from './application/login';
 import {
   clearLocalAuthSession as runClearLocalAuthSession,
   logout as runLogout,
-  revokeAuthSession as runRevokeAuthSession,
+  revokeAuthSessionBestEffort as runRevokeAuthSessionBestEffort,
 } from './application/logout';
 import type { AuthPorts } from './application/ports';
 import {
@@ -106,17 +108,26 @@ export function refreshSession() {
   return runRefreshSession(authPorts);
 }
 
-export function logout() {
+export async function logout() {
   markExplicitLogoutRedirectHome();
-  return runLogout(authPorts);
+
+  try {
+    await runLogout(authPorts);
+  } finally {
+    try {
+      await getGraphQLClient().clearStore();
+    } catch {
+      // Local auth cleanup must still complete when Apollo cache disposal fails.
+    }
+  }
 }
 
 export function clearLocalAuthSession() {
   return runClearLocalAuthSession(authPorts);
 }
 
-export function revokeAuthSession(input: { accessToken: string }) {
-  return runRevokeAuthSession(authPorts, input);
+export function revokeAuthSessionBestEffort(input: { accessToken: string }) {
+  return runRevokeAuthSessionBestEffort(authPorts, input);
 }
 
 export function forceLogout(reason?: string | null) {

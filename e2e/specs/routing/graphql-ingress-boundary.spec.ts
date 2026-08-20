@@ -569,7 +569,7 @@ test('auth 主流程（restore -> me）的 auth 失败不应触发 shared retry'
       meAuthHeaders.push(getAuthorization(route) ?? 'NONE');
 
       if (meRequestCount === 1) {
-        await fulfillGraphQLError(route, 'TOKEN_INVALID', {
+        await fulfillGraphQLError(route, 'JWT token 无效', {
           category: 'UNAUTHENTICATED',
         });
         return;

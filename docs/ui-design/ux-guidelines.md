@@ -114,9 +114,11 @@
 
 ### 第三工作区跳层
 
-当 AI 生成结果物超出 Sidecar 的舒适阅读范围时，通过 URL search 参数触发第三工作区面板（`src/shared/third-workspace-demo/canvas.tsx`）：
+当前第三工作区只在 labs 演示中通过 URL search 参数触发，由
+`src/labs/demo/third-workspace-demo-host.tsx` 承接：
 
-- 从 Sidecar 或 labs 页面触发，不是独立路由
+- 只从 labs 页面内的显式操作触发，不是独立路由
+- 正式 Sidecar 不 dispatch、不解释第三工作区 demo 触发词
 - 打开后覆盖在 `main` 和 Sidecar 之上，用户可随时关闭回到原位
 - 关闭按钮明确可见，不依赖 `Esc`（`Esc` 已被 Sidecar 使用）
 
@@ -492,7 +494,8 @@ AI 场景不要和普通 HTTP loading 混为一谈。
 - 表格超过约 5 列
 - 结果物已经从"回复"变成"文档 / 草稿 / 画布"
 
-已落地参考：`src/labs/demo/page.tsx` 和 `src/shared/third-workspace-demo/canvas.tsx` 演示了从主区/Sidecar 到第三工作区的跳层流程。
+已落地参考：`src/labs/demo/page.tsx` 和 `src/labs/demo/third-workspace-demo-host.tsx`
+只演示 labs 主区到第三工作区的跳层流程，不构成正式 Sidecar 合同。
 
 简单说：
 

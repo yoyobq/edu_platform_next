@@ -9,7 +9,8 @@
 - `login`：建立 pending session；后端返回 `accessToken / refreshToken`，前端映射为 `AuthPendingSession`
 - `refresh`：续期会话；后端返回新的 `accessToken / refreshToken`，前端随后执行 `me` 并产出 hydrated snapshot
 - `me`：返回前端当前会话权威快照
-- `logout`：显式退出会先调用后端，使当前账号已签发的 refresh token 失效，随后清理本地会话
+- `logout`：显式退出会先有界、best-effort 地调用后端；后端成功时使当前账号已签发的
+  refresh token 失效，无论远端成功、失败或超时都继续清理本地会话
 - `clearLocalAuthSession`：只清理本地会话，用于取消水合或被动失效，不代表后端登出
 
 当前前端统一按两步处理登录态：
@@ -38,7 +39,9 @@
 4. 在 app shell 内进入 `hydrating`
 5. 异步执行 `me`
 6. `me` 成功后进入 `authenticated`
-7. 若 `me` 失败，则清理会话并回到 `/login`
+7. 此时只有 pending token、没有可保留的完整 snapshot；若 `me` 最终命中 auth 失败，则清理
+   pending session 并回到 `/login`；若最终是非 auth 失败，则保留 pending storage、退出
+   `hydrating` 并展示错误
 
 这条规则的目的不是缩短真实总耗时，而是把“等待 `me`”从登录页内挪到壳层内，改善首次登录体感。
 
@@ -50,7 +53,8 @@
 - 只要后端要求鉴权，请求发起方就必须带上当前有效 `accessToken`
 - 后端不替前端保存“浏览器当前会话”这一层语义
 - GraphQL runtime、HTTP client、SDK wrapper 都不是 token 真源，只是请求时消费 token 的技术承载层
-- `shared/graphql` 当前不自动发起 `refresh`；会话恢复、续期与失效推进仍由 `features/auth` 负责
+- `shared/graphql` 不接管 auth 主流程中的 `refresh`；会话恢复、主动续期与失效推进仍由
+  `features/auth` 负责
 - `shared/graphql` 当前只对普通业务请求做受控的 reactive refresh；auth 主流程不参与
 - 运行时层不得在 auth feature 之外再维护一份独立 token 真源，避免与当前会话状态漂移
 - 若某个 runtime 需要鉴权，它必须在请求时读取当前 token，而不是长期缓存一份自己的 token 副本
@@ -90,17 +94,19 @@
 
 当前显式退出链路为：
 
-1. 使用当前 `accessToken` 调后端 `logout`
+1. 使用当前 `accessToken` 有界、best-effort 地调后端 `logout`
 2. `logout` 请求设置 `allowAuthRetry: false`，不触发 refresh / retry
-3. 无论后端 `logout` 成功或失败，前端都继续清本地 session、Apollo cache，并跳转登录页
-4. 后端通过递增账号级 `tokenVersion` 让该账号已签发的 refresh token 全部失效
+3. 前端最多等待当前约定的 best-effort 窗口；无论后端成功、失败或超时，都继续清本地
+   session、Apollo cache，并跳转登录页
+4. 只有后端 `logout` 成功时，才通过递增账号级 `tokenVersion` 让该账号已签发的 refresh token
+   全部失效；失败或超时时前端不得宣称远端 token 已撤销
 5. 已签发 access token 不做前端侧追踪，继续按服务端 JWT 过期策略自然失效
 
 账号切换中的“移除当前账号并切到另一个账号”也按显式退出旧账号处理：
 
 1. 先确认 fallback 账号可恢复或已重新登录
-2. 使用旧当前账号的 `accessToken` 调后端 `logout`
-3. 再把本地当前会话替换为 fallback 账号
+2. 使用旧当前账号的 `accessToken` 有界、best-effort 地调后端 `logout`
+3. 无论远端成功、失败或超时，都把本地当前会话替换为 fallback 账号
 
 账号切换中的“移除非当前账号”只表示不再保留该本地账号记录，不调用后端 `logout`。
 

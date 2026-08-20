@@ -2,7 +2,12 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clearLocalAuthSession, logout, revokeAuthSession } from './logout';
+import {
+  clearLocalAuthSession,
+  logout,
+  revokeAuthSession,
+  revokeAuthSessionBestEffort,
+} from './logout';
 import type { AuthPorts } from './ports';
 import {
   getAuthSessionState,
@@ -114,6 +119,27 @@ describe('auth logout', () => {
     setAuthenticatedSession(session);
 
     await expect(revokeAuthSession(ports, session)).rejects.toThrow('logout failed');
+
+    expect(ports.api.logout).toHaveBeenCalledWith({ accessToken: session.accessToken });
+    expect(ports.storage.clearSession).not.toHaveBeenCalled();
+    expect(getCurrentAuthSession()).toEqual(session);
+    expect(getAuthSessionState().status).toBe('authenticated');
+  });
+
+  it('bounds best-effort remote revoke without clearing local session', async () => {
+    vi.useFakeTimers();
+
+    const session = buildSessionSnapshot();
+    const ports = createPorts({
+      logout: vi.fn(() => new Promise<void>(() => undefined)),
+    });
+
+    setAuthenticatedSession(session);
+
+    const revokePromise = revokeAuthSessionBestEffort(ports, session);
+
+    await vi.advanceTimersByTimeAsync(1500);
+    await expect(revokePromise).resolves.toBeUndefined();
 
     expect(ports.api.logout).toHaveBeenCalledWith({ accessToken: session.accessToken });
     expect(ports.storage.clearSession).not.toHaveBeenCalled();

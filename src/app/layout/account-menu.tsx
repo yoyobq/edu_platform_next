@@ -32,7 +32,7 @@ import {
   logout,
   readAccountSwitchLabRecords,
   restoreAccountSwitchLabSession,
-  revokeAuthSession,
+  revokeAuthSessionBestEffort,
   upsertAccountSwitchLabRecord,
   writeAccountSwitchLabRecords,
   writeCurrentAuthSession,
@@ -362,9 +362,9 @@ export function StaffAccountMenu({
 
       if (request.mode === 'logout-fallback') {
         if (request.sessionToRevoke) {
-          await revokeAuthSession({
+          await revokeAuthSessionBestEffort({
             accessToken: request.sessionToRevoke.accessToken,
-          }).catch(() => undefined);
+          });
         }
 
         commitAccountRecords(
@@ -410,7 +410,7 @@ export function StaffAccountMenu({
       try {
         const restoredFallbackSession = await restoreAccountSwitchLabSession(fallbackSession);
 
-        await revokeAuthSession({ accessToken: session.accessToken }).catch(() => undefined);
+        await revokeAuthSessionBestEffort({ accessToken: session.accessToken });
         commitAccountRecords(
           upsertAccountSwitchLabRecord(
             nextRecords.filter(
@@ -441,9 +441,6 @@ export function StaffAccountMenu({
 
     if (isActiveAccount) {
       await logout();
-      await getGraphQLClient()
-        .clearStore()
-        .catch(() => undefined);
       navigate('/login', { replace: true });
     }
   }

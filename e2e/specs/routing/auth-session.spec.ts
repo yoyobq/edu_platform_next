@@ -211,10 +211,10 @@ async function fulfillGraphQLAuthError(route: Route) {
     body: JSON.stringify({
       errors: [
         {
-          message: 'TOKEN_INVALID',
+          message: 'JWT token 无效',
           extensions: {
             code: 'UNAUTHENTICATED',
-            errorCode: 'TOKEN_INVALID',
+            errorCode: 'JWT_TOKEN_INVALID',
           },
         },
       ],
@@ -488,7 +488,7 @@ async function mockAccountSwitchReauthGraphQL(page: Page) {
 
 async function mockActiveAccountLogoutFallbackGraphQL(
   page: Page,
-  options: { logoutError?: boolean } = {},
+  options: { logoutError?: boolean; logoutNeverSettles?: boolean } = {},
 ) {
   const adminSession = buildAccountSwitchTestSession({
     accessToken: 'admin-access-token',
@@ -541,6 +541,11 @@ async function mockActiveAccountLogoutFallbackGraphQL(
 
     if (query.includes('mutation Logout')) {
       logoutRequests.push(authorization);
+
+      if (options.logoutNeverSettles) {
+        await new Promise<void>(() => undefined);
+        return;
+      }
 
       if (options.logoutError) {
         await fulfillGraphQLAuthError(route);
@@ -839,6 +844,43 @@ test('移除当前账号时即使 logout mutation 失败，也应切到 fallback
 
   await expect.poll(() => logoutRequests.length).toBe(1);
   expect(logoutRequests[0]).toBe('Bearer admin-access-token');
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
+
+  const storedSession = await page.evaluate((storageKey) => {
+    return JSON.parse(window.localStorage.getItem(storageKey) ?? 'null') as {
+      accountId?: number;
+    } | null;
+  }, AUTH_STORAGE_KEY);
+
+  expect(storedSession?.accountId).toBe(fallbackStaffSession.accountId);
+});
+
+test('移除当前账号时即使 logout mutation 未返回，也应在超时后切到 fallback', async ({ page }) => {
+  await mockApiHealth(page);
+  const { fallbackStaffSession, logoutRequests } = await mockActiveAccountLogoutFallbackGraphQL(
+    page,
+    {
+      logoutNeverSettles: true,
+    },
+  );
+
+  await page.goto(routes.home);
+
+  await expect(page).toHaveURL(/\/$/);
+  await expectAuthenticatedUserMenu(page, 'admin-user');
+
+  await page.getByRole('button', { name: '用户菜单' }).click();
+  await page.getByRole('button', { name: '退出账户' }).click();
+  await page
+    .locator('.ant-popover')
+    .last()
+    .getByRole('button', { name: /admin-user/ })
+    .click();
+  await expect(page.getByText('换到另一个账号？')).toBeVisible();
+  await page.getByRole('button', { name: '切换过去' }).click();
+
+  await expect.poll(() => logoutRequests.length).toBe(1);
   await expect(page).toHaveURL(/\/$/);
   await expect(page.getByRole('heading', { name: /staff-user/ })).toBeVisible();
 

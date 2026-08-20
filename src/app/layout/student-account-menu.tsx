@@ -9,7 +9,6 @@ import { FONT_SCALE_OPTIONS, type FontScale } from '@/app/providers';
 
 import { type AuthSessionSnapshot, logout } from '@/features/auth';
 
-import { getGraphQLClient } from '@/shared/graphql';
 import { HexAvatar } from '@/shared/hex-avatar';
 
 type StudentAccountMenuProps = {
@@ -60,9 +59,6 @@ export function StudentAccountMenu({
 
   async function handleLogout() {
     await logout();
-    await getGraphQLClient()
-      .clearStore()
-      .catch(() => undefined);
     navigate('/login', { replace: true });
   }
 

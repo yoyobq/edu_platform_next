@@ -230,9 +230,15 @@ public 白名单当前包括：
 
 补充：
 
-- `hydrating` 期间若 `me` / `restore` 最终失败，也按“会话已失效”处理
-- 这类失败不再停留在壳层等待，而是清会话并回到 `/login`
-- 失败原因通过 auth feature 写入 flash，由登录页或 layout 宿主承接
+- 登录后只有 pending token、尚无完整 snapshot 时，`me` 最终命中 auth 失败才按“会话不可用”
+  处理：清理 pending session 并回到 `/login`
+- pending session 的 `me` 最终命中非 auth 失败时，保留 pending storage、退出 `hydrating`
+  并回到登录反馈，不把临时 transport/runtime 故障误判为远端会话失效
+- 启动恢复已有完整 snapshot 时，`me` 的非 auth 临时失败不代表会话失效；保留本地 snapshot，
+  不触发 refresh，也不跳转登录页
+- 启动恢复命中 auth 失败时，先由 auth 主流程尝试 `refresh -> me`；refresh 或后续 `me`
+  再次命中 auth 失败才清理会话
+- 需要清理会话的失败原因由 auth feature 写入 flash，再由登录页或 layout 宿主承接
 
 ### refresh 反馈承接
 
@@ -252,7 +258,7 @@ public 白名单当前包括：
 
 - `login` mutation 成功后，前端可立即离开 `/login`
 - app shell 在 `hydrating` 阶段显示受控占位，不提前渲染依赖 `me` 的正式业务内容
-- hydrate 失败时，错误优先回收到登录页 inline error，避免用户只看到瞬时 toast
+- pending session hydrate 失败时，错误优先回收到登录页 inline error，避免用户只看到瞬时 toast
 
 ## 当前长线方案
 

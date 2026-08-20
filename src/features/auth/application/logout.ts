@@ -39,15 +39,18 @@ export async function revokeAuthSession(
   await ports.api.logout({ accessToken: session.accessToken });
 }
 
+export async function revokeAuthSessionBestEffort(
+  ports: AuthPorts,
+  session: Pick<AuthStoredSession, 'accessToken'> | null | undefined,
+) {
+  await waitForBestEffortLogout(revokeAuthSession(ports, session));
+}
+
 export async function logout(ports: AuthPorts) {
   const currentSession = getCurrentAuthSession() ?? ports.storage.readSession();
 
   try {
-    await waitForBestEffortLogout(
-      currentSession?.accessToken
-        ? ports.api.logout({ accessToken: currentSession.accessToken })
-        : Promise.resolve(),
-    );
+    await revokeAuthSessionBestEffort(ports, currentSession);
   } finally {
     clearLocalAuthSession(ports);
   }
