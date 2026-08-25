@@ -18,6 +18,11 @@ export type StudentEvaluationCommentAiGenerationDisposition =
 
 export type StudentEvaluationCommentLabLoaderData = {
   canEditClassScope: boolean;
+  currentAccount: {
+    accountId: number;
+    displayName: string;
+    lockedUpstreamLoginUserId: string | null;
+  };
   defaultView: 'class-scope' | 'mine';
 };
 
@@ -177,6 +182,29 @@ export type DiscardStudentEvaluationCommentAiDraftsResult = {
 export type ConfirmStudentEvaluationCommentAiDraftsResult = {
   confirmedCount: number;
   status: 'CONFIRMED';
+};
+
+export type RefreshStudentEvaluationCommentAiBasisInput = {
+  classId: string;
+  semesterId: number;
+  upstreamSessionToken: string;
+};
+
+export type RefreshStudentEvaluationCommentAiBasisResult = {
+  confirmedRegistrationCount: number;
+  createdCount: number;
+  expiresAt: string | null;
+  failureCount: number;
+  processedRegistrationCount: number;
+  requestedRegistrationCount: number;
+  skippedRegistrationCount: number;
+  success: boolean;
+  traceId: string | null;
+  unchangedCount: number;
+  updatedCount: number;
+  upstreamSessionToken: string | null;
+  upstreamTotal: number;
+  writtenStudentCount: number;
 };
 
 export type StudentEvaluationCommentWriteItem = {

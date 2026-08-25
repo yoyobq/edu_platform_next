@@ -44,6 +44,7 @@ import {
 import type {
   StudentEvaluationCommentClassScopeStudent,
   StudentEvaluationCommentKind,
+  StudentEvaluationCommentLabLoaderData,
   StudentEvaluationCommentMaterialIdentityMappingInput,
   StudentEvaluationCommentMaterialImportResult,
   StudentEvaluationCommentRevision,
@@ -55,6 +56,7 @@ import { StudentEvaluationCommentAiDraftWorkbench } from './ai-draft-workbench';
 import { StudentEvaluationCommentMaterialImportPanel } from './material-import-panel';
 
 type ClassScopeEditorProps = {
+  currentAccount: StudentEvaluationCommentLabLoaderData['currentAccount'];
   onDirtyChange?: (isDirty: boolean) => void;
 };
 
@@ -128,7 +130,10 @@ function findWriteAction(workspace: StudentEvaluationCommentWorkspace | null) {
   return workspace?.actions.find((item) => item.action === 'WRITE_COMMENTS') ?? null;
 }
 
-export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: ClassScopeEditorProps) {
+export function StudentEvaluationCommentClassScopeEditor({
+  currentAccount,
+  onDirtyChange,
+}: ClassScopeEditorProps) {
   const { message, modal } = AntApp.useApp();
   const [editorMode, setEditorMode] = useState<'ai' | 'manual'>('manual');
   const [workspace, setWorkspace] = useState<StudentEvaluationCommentWorkspace | null>(null);
@@ -765,6 +770,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
               </Card>
             ) : workspace ? (
               <StudentEvaluationCommentAiDraftWorkbench
+                currentAccount={currentAccount}
                 manualDirtyStudentIds={manualDirtyStudentIds}
                 resetToken={workspaceResetToken}
                 workspace={workspace}

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   executeGraphQLMock,
+  executeUpstreamSessionGraphQLMock,
   getAccessTokenMock,
   getGraphQLEndpointMock,
   getGraphQLRuntimeConfigMock,
@@ -11,11 +12,16 @@ const {
   refreshSessionMock,
 } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
   getAccessTokenMock: vi.fn(),
   getGraphQLEndpointMock: vi.fn(),
   getGraphQLRuntimeConfigMock: vi.fn(),
   onAuthFailureMock: vi.fn(),
   refreshSessionMock: vi.fn(),
+}));
+
+vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
 }));
 
 vi.mock('@/shared/graphql', () => ({
@@ -32,6 +38,7 @@ import {
   getMyStudentEvaluationComments,
   getStudentEvaluationCommentWorkspace,
   importStudentEvaluationCommentMaterial,
+  refreshStudentEvaluationCommentAiBasis,
   resolveStudentEvaluationCommentMaterialImportUrl,
   saveStudentEvaluationCommentAiDraft,
 } from './api';
@@ -39,6 +46,7 @@ import {
 describe('student evaluation comment api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
     getAccessTokenMock.mockReset();
     getGraphQLEndpointMock.mockReset();
     getGraphQLRuntimeConfigMock.mockReset();
@@ -153,6 +161,48 @@ describe('student evaluation comment api', () => {
         semesterId: 202501,
       },
     });
+  });
+
+  it('refreshes the selected term AI basis through the upstream session boundary', async () => {
+    const payload = {
+      confirmedRegistrationCount: 2,
+      createdCount: 2,
+      expiresAt: '2026-08-25T08:00:00.000Z',
+      failureCount: 0,
+      processedRegistrationCount: 1,
+      requestedRegistrationCount: 1,
+      skippedRegistrationCount: 0,
+      success: true,
+      traceId: 'trace-001',
+      unchangedCount: 0,
+      updatedCount: 0,
+      upstreamSessionToken: 'rolling-token-002',
+      upstreamTotal: 1,
+      writtenStudentCount: 2,
+    };
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({
+      refreshStudentConductGradeClassFromUpstream: payload,
+    });
+
+    await expect(
+      refreshStudentEvaluationCommentAiBasis({
+        classId: ' class-1 ',
+        semesterId: 202501,
+        upstreamSessionToken: ' upstream-token-001 ',
+      }),
+    ).resolves.toBe(payload);
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation RefreshStudentEvaluationCommentAiBasis'),
+      {
+        input: {
+          classId: 'class-1',
+          scope: 'SELECTED_TERM',
+          semesterId: 202501,
+          upstreamSessionToken: 'upstream-token-001',
+        },
+      },
+    );
   });
 
   it('writes one scope with the caller-provided opaque revision', async () => {

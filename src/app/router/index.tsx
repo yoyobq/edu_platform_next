@@ -725,6 +725,15 @@ function resolveStudentEvaluationCommentLabData(
 
   return {
     canEditClassScope,
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
+    },
     defaultView: canEditClassScope ? 'class-scope' : 'mine',
   };
 }

@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import {
   CheckOutlined,
+  CloudSyncOutlined,
   DeleteOutlined,
+  LoginOutlined,
   ReloadOutlined,
   RobotOutlined,
   SaveOutlined,
@@ -22,6 +24,14 @@ import {
   Tag,
 } from 'antd';
 import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
+
+import {
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+  type StoredUpstreamSession,
+  UpstreamLoginModal,
+  useUpstreamLoginModalController,
+} from '@/entities/upstream-session';
 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
@@ -42,20 +52,34 @@ import {
   confirmStudentEvaluationCommentAiDrafts,
   discardStudentEvaluationCommentAiDrafts,
   generateStudentEvaluationCommentAiDrafts,
+  refreshStudentEvaluationCommentAiBasis,
   saveStudentEvaluationCommentAiDraft,
 } from '../infrastructure/api';
 import type {
   StudentEvaluationCommentAiDraftMutationItem,
   StudentEvaluationCommentClassScopeStudent,
+  StudentEvaluationCommentLabLoaderData,
   StudentEvaluationCommentWorkspace,
 } from '../types';
 
 type StudentEvaluationCommentAiDraftWorkbenchProps = {
+  currentAccount: StudentEvaluationCommentLabLoaderData['currentAccount'];
   manualDirtyStudentIds: ReadonlySet<string>;
   onDirtyChange?: (isDirty: boolean) => void;
   onRefreshWorkspace: () => Promise<StudentEvaluationCommentWorkspace>;
   resetToken: number;
   workspace: StudentEvaluationCommentWorkspace;
+};
+
+type StudentEvaluationCommentAiBasisSyncRequest = {
+  classId: string;
+  scopeKey: string;
+  semesterId: number;
+};
+
+type QueuedStudentEvaluationCommentAiBasisSync = {
+  request: StudentEvaluationCommentAiBasisSyncRequest;
+  session: StoredUpstreamSession;
 };
 
 const AI_POLL_FAST_WINDOW_MS = 60_000;
@@ -80,6 +104,7 @@ const ADDRESS_OPTIONS = [
 ] as const;
 
 export function StudentEvaluationCommentAiDraftWorkbench({
+  currentAccount,
   manualDirtyStudentIds,
   onDirtyChange,
   onRefreshWorkspace,
@@ -102,16 +127,44 @@ export function StudentEvaluationCommentAiDraftWorkbench({
   const [pollingTimedOut, setPollingTimedOut] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isSyncingAiBasis, setIsSyncingAiBasis] = useState(false);
   const [savingDraftIds, setSavingDraftIds] = useState<string[]>([]);
   const [batchAction, setBatchAction] = useState<'confirm' | 'discard' | null>(null);
+  const [aiBasisSyncError, setAiBasisSyncError] = useState<string | null>(null);
   const [draftErrors, setDraftErrors] = useState<Record<string, string>>({});
+  const [queuedAiBasisSync, setQueuedAiBasisSync] =
+    useState<QueuedStudentEvaluationCommentAiBasisSync | null>(null);
   const pollStartedAtRef = useRef<number | null>(null);
   const consecutivePollFailuresRef = useRef(0);
   const resetStudentsRef = useRef(students);
+  const scopeKeyRef = useRef(scopeKey);
+  const {
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
+    persistSessionFromResult,
+    refreshSession,
+    session: upstreamSession,
+  } = useUpstreamLoginModalController<StudentEvaluationCommentAiBasisSyncRequest>({
+    account: currentAccount,
+    keepAlive: true,
+    lockedUserId: currentAccount.lockedUpstreamLoginUserId,
+    resolveLoginErrorMessage: (error) =>
+      resolveUpstreamErrorMessage(error, '校园网登录失败，请检查账号或密码。'),
+    onLoginSuccess: ({ pendingAction, session }) => {
+      if (pendingAction?.scopeKey === scopeKeyRef.current) {
+        setQueuedAiBasisSync({ request: pendingAction, session });
+      }
+    },
+  });
 
   useEffect(() => {
     resetStudentsRef.current = students;
   }, [students]);
+
+  useEffect(() => {
+    scopeKeyRef.current = scopeKey;
+  }, [scopeKey]);
 
   useEffect(() => {
     dispatch({ scopeKey, students: resetStudentsRef.current, type: 'RESET_SCOPE' });
@@ -119,6 +172,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     setPollError(null);
     setPollingPaused(false);
     setPollingTimedOut(false);
+    setAiBasisSyncError(null);
     setDraftErrors({});
     pollStartedAtRef.current = null;
     consecutivePollFailuresRef.current = 0;
@@ -193,6 +247,103 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     dispatch({ students: nextWorkspace.view?.students ?? [], type: 'WORKSPACE_MERGED' });
     return nextWorkspace;
   }, [onRefreshWorkspace]);
+
+  const runAiBasisSync = useCallback(
+    async (session: StoredUpstreamSession, request: StudentEvaluationCommentAiBasisSyncRequest) => {
+      if (scopeKeyRef.current !== request.scopeKey) return;
+
+      const syncWithSession = async (activeSession: StoredUpstreamSession) => {
+        const result = await refreshStudentEvaluationCommentAiBasis({
+          classId: request.classId,
+          semesterId: request.semesterId,
+          upstreamSessionToken: activeSession.upstreamSessionToken,
+        });
+        persistSessionFromResult(activeSession, result);
+
+        if (scopeKeyRef.current === request.scopeKey) {
+          await refreshAiFacts();
+        }
+
+        message[result.failureCount > 0 ? 'warning' : 'success'](
+          result.failureCount > 0
+            ? `生成依据已同步，写入 ${result.writtenStudentCount} 名学生，另有 ${result.failureCount} 条诊断。`
+            : `生成依据已同步，写入 ${result.writtenStudentCount} 名学生。`,
+        );
+      };
+
+      setIsSyncingAiBasis(true);
+      setAiBasisSyncError(null);
+
+      try {
+        await syncWithSession(session);
+      } catch (error) {
+        if (!isExpiredUpstreamSessionError(error)) {
+          setAiBasisSyncError(resolveUpstreamErrorMessage(error, '暂时无法同步 AI 生成依据。'));
+          return;
+        }
+
+        let refreshedSession: StoredUpstreamSession;
+        try {
+          refreshedSession = await refreshSession(session);
+        } catch (refreshError) {
+          openLoginModalForExpiredSession({
+            loginError: resolveUpstreamErrorMessage(
+              refreshError,
+              '校园网会话已失效，请重新登录后继续同步生成依据。',
+            ),
+            pendingAction: request,
+            session,
+          });
+          return;
+        }
+
+        try {
+          await syncWithSession(refreshedSession);
+        } catch (retryError) {
+          if (isExpiredUpstreamSessionError(retryError)) {
+            openLoginModalForExpiredSession({
+              loginError: '校园网会话仍然无效，请重新登录后继续同步生成依据。',
+              pendingAction: request,
+              session: refreshedSession,
+            });
+            return;
+          }
+
+          setAiBasisSyncError(
+            resolveUpstreamErrorMessage(retryError, '暂时无法同步 AI 生成依据。'),
+          );
+        }
+      } finally {
+        setIsSyncingAiBasis(false);
+      }
+    },
+    [
+      message,
+      openLoginModalForExpiredSession,
+      persistSessionFromResult,
+      refreshAiFacts,
+      refreshSession,
+    ],
+  );
+
+  useEffect(() => {
+    if (!queuedAiBasisSync) return;
+
+    setQueuedAiBasisSync(null);
+    void runAiBasisSync(queuedAiBasisSync.session, queuedAiBasisSync.request);
+  }, [queuedAiBasisSync, runAiBasisSync]);
+
+  const handleAiBasisSync = useCallback(() => {
+    if (!classId || semesterId === null) return;
+
+    const request = { classId, scopeKey, semesterId };
+    if (!upstreamSession) {
+      openLoginModal({ pendingAction: request });
+      return;
+    }
+
+    void runAiBasisSync(upstreamSession, request);
+  }, [classId, openLoginModal, runAiBasisSync, scopeKey, semesterId, upstreamSession]);
 
   const shouldPoll =
     students.some((student) => student.isAiDraftGenerating) ||
@@ -536,6 +687,34 @@ export function StudentEvaluationCommentAiDraftWorkbench({
             title="选择目标学生后受理异步生成"
             type="info"
           />
+          <Alert
+            showIcon
+            action={
+              <Space wrap>
+                <Tag color={upstreamSession ? 'success' : undefined}>
+                  {upstreamSession
+                    ? `校园网：${upstreamSession.upstreamLoginId ?? '已登录'}`
+                    : '校园网未登录'}
+                </Tag>
+                <Button
+                  icon={<CloudSyncOutlined />}
+                  loading={isSyncingAiBasis}
+                  onClick={handleAiBasisSync}
+                >
+                  {upstreamSession ? '同步生成依据' : '登录并同步生成依据'}
+                </Button>
+                {upstreamSession ? (
+                  <Button icon={<LoginOutlined />} onClick={() => openLoginModal()}>
+                    重新登录校园网
+                  </Button>
+                ) : null}
+              </Space>
+            }
+            description="班级、学期和名单继续读取本地治理快照；需要更新 AI 所用的已确认操行数据时，可在这里登录校园网并同步当前班级当前学期。"
+            title="AI 生成依据治理"
+            type={upstreamSession ? 'success' : 'warning'}
+          />
+          {aiBasisSyncError ? <Alert showIcon title={aiBasisSyncError} type="error" /> : null}
           {!generateAllowed ? (
             <Alert
               showIcon
@@ -796,6 +975,8 @@ export function StudentEvaluationCommentAiDraftWorkbench({
           )}
         </div>
       </Card>
+
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }

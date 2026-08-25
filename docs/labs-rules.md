@@ -155,6 +155,7 @@ export const demoLabMeta = {
   - 编辑页只使用评语 workspace 返回的班级、真实学期、正式名单与 action
   - Excel 只执行单文件 dry-run、工作表/重名身份确认和草稿预填，最终保存仍使用正式评语 GraphQL mutation
   - AI 草稿只支持真实学期范围：老师主动选择目标，系统异步生成 7 天有效的加密草稿；草稿修改需显式保存，老师二次确认后才写入正式评语
+  - 班级、学期和名单读取本地治理快照；AI 区复用公共 upstream session，可在当前页登录并显式同步当前班级当前学期的已确认操行生成依据
   - 不承载 AI 历史版本、导出或跨班批量操作；确认稳定后应迁入正式学生评语拥有者切片
 - `/labs/zquiz-activity-builder`
   - 用于验证教师侧 Zquiz 组卷与活动发布流程

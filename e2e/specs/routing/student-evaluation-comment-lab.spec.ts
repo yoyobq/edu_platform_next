@@ -433,6 +433,106 @@ test('老师生成、编辑并二次确认 AI 草稿后才写入正式评语', a
   });
 });
 
+test('老师可在评语页登录 upstream 并继续同步当前学期 AI 生成依据', async ({ page }) => {
+  await seedAdmin(page);
+
+  let loginInput: Record<string, unknown> | null = null;
+  let basisSyncInput: Record<string, unknown> | null = null;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query StudentEvaluationCommentWorkspace')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { studentEvaluationCommentWorkspace: buildWorkspace('原始正式评语。') },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation LoginUpstreamSession')) {
+      loginInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            loginUpstreamSession: {
+              expiresAt: '2027-08-25T08:00:00.000Z',
+              upstreamSessionToken: 'upstream-token-001',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation RefreshStudentEvaluationCommentAiBasis')) {
+      basisSyncInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refreshStudentConductGradeClassFromUpstream: {
+              confirmedRegistrationCount: 2,
+              createdCount: 2,
+              expiresAt: '2027-08-25T09:00:00.000Z',
+              failureCount: 0,
+              processedRegistrationCount: 1,
+              requestedRegistrationCount: 1,
+              skippedRegistrationCount: 0,
+              success: true,
+              traceId: 'trace-001',
+              unchangedCount: 0,
+              updatedCount: 0,
+              upstreamSessionToken: 'rolling-token-002',
+              upstreamTotal: 1,
+              writtenStudentCount: 2,
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationComment);
+  await page.getByText('AI 草稿', { exact: true }).click();
+  await page.getByRole('button', { name: '登录并同步生成依据' }).click();
+
+  const dialog = page.getByRole('dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByPlaceholder('学号或工号').fill('teacher.alice');
+  await dialog.getByPlaceholder('校园网登录密码').fill('secret-password');
+  await dialog.getByRole('button', { name: '授权并继续' }).click();
+
+  await expect(page.getByText('生成依据已同步，写入 2 名学生。')).toBeVisible();
+  await expect(page.getByText('校园网：teacher.alice')).toBeVisible();
+  await expect(page.getByRole('button', { name: '同步生成依据' })).toBeVisible();
+
+  expect(loginInput).toEqual({ password: 'secret-password', userId: 'teacher.alice' });
+  expect(basisSyncInput).toEqual({
+    classId: '1021904',
+    scope: 'SELECTED_TERM',
+    semesterId: 202501,
+    upstreamSessionToken: 'upstream-token-001',
+  });
+
+  const storedSession = await page.evaluate(() =>
+    JSON.parse(localStorage.getItem('aigc-friendly-frontend.upstream.session.v2') ?? 'null'),
+  );
+  expect(storedSession).toMatchObject({
+    upstreamLoginId: 'teacher.alice',
+    upstreamSessionToken: 'rolling-token-002',
+  });
+});
+
 test('AI 草稿刷新不会覆盖人工模式的未保存评语', async ({ page }) => {
   await seedAdmin(page);
 

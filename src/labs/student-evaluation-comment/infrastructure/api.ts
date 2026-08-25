@@ -1,5 +1,7 @@
 // src/labs/student-evaluation-comment/infrastructure/api.ts
 
+import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
+
 import { executeGraphQL, getGraphQLEndpoint, getGraphQLRuntimeConfig } from '@/shared/graphql';
 
 import type {
@@ -10,6 +12,8 @@ import type {
   GenerateStudentEvaluationCommentAiDraftsResult,
   ImportStudentEvaluationCommentMaterialInput,
   MyStudentEvaluationComments,
+  RefreshStudentEvaluationCommentAiBasisInput,
+  RefreshStudentEvaluationCommentAiBasisResult,
   SaveStudentEvaluationCommentAiDraftInput,
   SaveStudentEvaluationCommentAiDraftResult,
   StudentEvaluationCommentAiDraftMutationItem,
@@ -235,6 +239,29 @@ const CONFIRM_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION = `
   }
 `;
 
+const REFRESH_STUDENT_EVALUATION_COMMENT_AI_BASIS_MUTATION = `
+  mutation RefreshStudentEvaluationCommentAiBasis(
+    $input: RefreshStudentConductGradeClassFromUpstreamInput!
+  ) {
+    refreshStudentConductGradeClassFromUpstream(input: $input) {
+      success
+      requestedRegistrationCount
+      upstreamTotal
+      confirmedRegistrationCount
+      processedRegistrationCount
+      skippedRegistrationCount
+      writtenStudentCount
+      createdCount
+      updatedCount
+      unchangedCount
+      failureCount
+      upstreamSessionToken
+      expiresAt
+      traceId
+    }
+  }
+`;
+
 export async function getStudentEvaluationCommentWorkspace(input: {
   classId?: string | null;
   commentKind: StudentEvaluationCommentWorkspace['commentKind'];
@@ -332,6 +359,25 @@ export async function confirmStudentEvaluationCommentAiDrafts(input: {
   >(CONFIRM_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION, { input: mutationInput });
 
   return response.confirmStudentEvaluationCommentAiDrafts;
+}
+
+export async function refreshStudentEvaluationCommentAiBasis(
+  input: RefreshStudentEvaluationCommentAiBasisInput,
+) {
+  const mutationInput = {
+    classId: input.classId.trim(),
+    scope: 'SELECTED_TERM' as const,
+    semesterId: input.semesterId,
+    upstreamSessionToken: input.upstreamSessionToken.trim(),
+  };
+  const response = await executeUpstreamSessionGraphQL<
+    {
+      refreshStudentConductGradeClassFromUpstream: RefreshStudentEvaluationCommentAiBasisResult;
+    },
+    { input: typeof mutationInput }
+  >(REFRESH_STUDENT_EVALUATION_COMMENT_AI_BASIS_MUTATION, { input: mutationInput });
+
+  return response.refreshStudentConductGradeClassFromUpstream;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
