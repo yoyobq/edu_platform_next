@@ -72,6 +72,11 @@ import {
   type StudentEvaluationCommentLabLoaderData,
 } from '@/labs/student-evaluation-comment';
 import {
+  loadStudentEvaluationCommentWorkbenchLabRouteModule,
+  studentEvaluationCommentWorkbenchLabAccess,
+  type StudentEvaluationCommentWorkbenchLoaderData,
+} from '@/labs/student-evaluation-comment-workbench';
+import {
   loadStudentPrivateProfileLabRouteModule,
   studentPrivateProfileLabAccess,
 } from '@/labs/student-private-profile';
@@ -742,6 +747,22 @@ async function studentEvaluationCommentLabLoader({ request }: LoaderFunctionArgs
   return loadLabRoute({
     access: studentEvaluationCommentLabAccess,
     getData: resolveStudentEvaluationCommentLabData,
+    request,
+  });
+}
+
+function resolveStudentEvaluationCommentWorkbenchLabData(
+  snapshot: AuthSessionSnapshot,
+): StudentEvaluationCommentWorkbenchLoaderData {
+  return {
+    currentAccount: resolveStudentEvaluationCommentLabData(snapshot).currentAccount,
+  };
+}
+
+async function studentEvaluationCommentWorkbenchLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: studentEvaluationCommentWorkbenchLabAccess,
+    getData: resolveStudentEvaluationCommentWorkbenchLabData,
     request,
   });
 }
@@ -1632,6 +1653,11 @@ const router = createBrowserRouter([
             path: 'student-evaluation-comment',
             loader: studentEvaluationCommentLabLoader,
             lazy: loadStudentEvaluationCommentLabRouteModule,
+          },
+          {
+            path: 'student-evaluation-comment-workbench',
+            loader: studentEvaluationCommentWorkbenchLabLoader,
+            lazy: loadStudentEvaluationCommentWorkbenchLabRouteModule,
           },
           {
             path: 'student-private-profile',

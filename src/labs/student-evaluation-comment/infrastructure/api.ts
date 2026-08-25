@@ -14,6 +14,7 @@ import type {
   MyStudentEvaluationComments,
   RefreshStudentEvaluationCommentAiBasisInput,
   RefreshStudentEvaluationCommentAiBasisResult,
+  RefreshStudentEvaluationCommentCourseBasisResult,
   SaveStudentEvaluationCommentAiDraftInput,
   SaveStudentEvaluationCommentAiDraftResult,
   StudentEvaluationCommentAiDraftMutationItem,
@@ -262,6 +263,26 @@ const REFRESH_STUDENT_EVALUATION_COMMENT_AI_BASIS_MUTATION = `
   }
 `;
 
+const REFRESH_STUDENT_EVALUATION_COMMENT_COURSE_BASIS_MUTATION = `
+  mutation RefreshStudentEvaluationCommentCourseBasis(
+    $input: RefreshClassCourseGradesInput!
+  ) {
+    refreshClassCourseGrades(input: $input) {
+      status
+      classId
+      classCode
+      semesterId
+      scope
+      studentCount
+      rowCount
+      failedStudentCount
+      upstreamFetchedStudentCount
+      upstreamSessionToken
+      expiresAt
+    }
+  }
+`;
+
 export async function getStudentEvaluationCommentWorkspace(input: {
   classId?: string | null;
   commentKind: StudentEvaluationCommentWorkspace['commentKind'];
@@ -283,19 +304,16 @@ export async function batchWriteStudentEvaluationComments(input: {
   items: StudentEvaluationCommentWriteItem[];
   scope: StudentEvaluationCommentScopeInput;
 }) {
+  const mutationInput = {
+    classId: input.scope.classId,
+    commentKind: input.scope.commentKind,
+    items: input.items.map(toStudentEvaluationCommentWriteItemInput),
+    semesterId: input.scope.semesterId,
+  };
   const response = await executeGraphQL<
     { batchWriteStudentEvaluationComments: BatchWriteStudentEvaluationCommentsResult },
-    {
-      input: StudentEvaluationCommentScopeInput & {
-        items: StudentEvaluationCommentWriteItem[];
-      };
-    }
-  >(BATCH_WRITE_STUDENT_EVALUATION_COMMENTS_MUTATION, {
-    input: {
-      ...input.scope,
-      items: input.items,
-    },
-  });
+    { input: typeof mutationInput }
+  >(BATCH_WRITE_STUDENT_EVALUATION_COMMENTS_MUTATION, { input: mutationInput });
 
   return response.batchWriteStudentEvaluationComments;
 }
@@ -323,10 +341,17 @@ export async function generateStudentEvaluationCommentAiDrafts(
 export async function saveStudentEvaluationCommentAiDraft(
   input: SaveStudentEvaluationCommentAiDraftInput,
 ) {
+  const mutationInput: SaveStudentEvaluationCommentAiDraftInput = {
+    classId: input.classId,
+    content: input.content,
+    draftId: input.draftId,
+    expectedRevision: toStudentEvaluationCommentRevisionInput(input.expectedRevision),
+    semesterId: input.semesterId,
+  };
   const response = await executeGraphQL<
     { saveStudentEvaluationCommentAiDraft: SaveStudentEvaluationCommentAiDraftResult },
     { input: SaveStudentEvaluationCommentAiDraftInput }
-  >(SAVE_STUDENT_EVALUATION_COMMENT_AI_DRAFT_MUTATION, { input });
+  >(SAVE_STUDENT_EVALUATION_COMMENT_AI_DRAFT_MUTATION, { input: mutationInput });
 
   return response.saveStudentEvaluationCommentAiDraft;
 }
@@ -335,7 +360,11 @@ export async function discardStudentEvaluationCommentAiDrafts(input: {
   items: StudentEvaluationCommentAiDraftMutationItem[];
   scope: StudentEvaluationCommentAiDraftScopeInput;
 }) {
-  const mutationInput = { ...input.scope, items: input.items };
+  const mutationInput = {
+    classId: input.scope.classId,
+    items: input.items.map(toStudentEvaluationCommentAiDraftMutationItemInput),
+    semesterId: input.scope.semesterId,
+  };
   const response = await executeGraphQL<
     {
       discardStudentEvaluationCommentAiDrafts: DiscardStudentEvaluationCommentAiDraftsResult;
@@ -350,7 +379,11 @@ export async function confirmStudentEvaluationCommentAiDrafts(input: {
   items: StudentEvaluationCommentAiDraftMutationItem[];
   scope: StudentEvaluationCommentAiDraftScopeInput;
 }) {
-  const mutationInput = { ...input.scope, items: input.items };
+  const mutationInput = {
+    classId: input.scope.classId,
+    items: input.items.map(toStudentEvaluationCommentAiDraftMutationItemInput),
+    semesterId: input.scope.semesterId,
+  };
   const response = await executeGraphQL<
     {
       confirmStudentEvaluationCommentAiDrafts: ConfirmStudentEvaluationCommentAiDraftsResult;
@@ -359,6 +392,37 @@ export async function confirmStudentEvaluationCommentAiDrafts(input: {
   >(CONFIRM_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION, { input: mutationInput });
 
   return response.confirmStudentEvaluationCommentAiDrafts;
+}
+
+function toStudentEvaluationCommentAiDraftMutationItemInput(
+  item: StudentEvaluationCommentAiDraftMutationItem,
+): StudentEvaluationCommentAiDraftMutationItem {
+  return {
+    draftId: item.draftId,
+    expectedRevision: toStudentEvaluationCommentRevisionInput(item.expectedRevision),
+  };
+}
+
+function toStudentEvaluationCommentWriteItemInput(
+  item: StudentEvaluationCommentWriteItem,
+): StudentEvaluationCommentWriteItem {
+  return {
+    action: item.action,
+    ...(item.content === undefined ? {} : { content: item.content }),
+    expectedRevision: item.expectedRevision
+      ? toStudentEvaluationCommentRevisionInput(item.expectedRevision)
+      : null,
+    studentId: item.studentId,
+  };
+}
+
+function toStudentEvaluationCommentRevisionInput(
+  revision: StudentEvaluationCommentRevision,
+): StudentEvaluationCommentRevision {
+  return {
+    payloadHash: revision.payloadHash,
+    payloadVersion: revision.payloadVersion,
+  };
 }
 
 export async function refreshStudentEvaluationCommentAiBasis(
@@ -378,6 +442,23 @@ export async function refreshStudentEvaluationCommentAiBasis(
   >(REFRESH_STUDENT_EVALUATION_COMMENT_AI_BASIS_MUTATION, { input: mutationInput });
 
   return response.refreshStudentConductGradeClassFromUpstream;
+}
+
+export async function refreshStudentEvaluationCommentCourseBasis(
+  input: RefreshStudentEvaluationCommentAiBasisInput,
+) {
+  const mutationInput = {
+    classId: input.classId.trim(),
+    scope: 'SELECTED_TERM' as const,
+    semesterId: input.semesterId,
+    sessionToken: input.upstreamSessionToken.trim(),
+  };
+  const response = await executeUpstreamSessionGraphQL<
+    { refreshClassCourseGrades: RefreshStudentEvaluationCommentCourseBasisResult },
+    { input: typeof mutationInput }
+  >(REFRESH_STUDENT_EVALUATION_COMMENT_COURSE_BASIS_MUTATION, { input: mutationInput });
+
+  return response.refreshClassCourseGrades;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

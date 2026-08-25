@@ -39,6 +39,7 @@ import {
   getStudentEvaluationCommentWorkspace,
   importStudentEvaluationCommentMaterial,
   refreshStudentEvaluationCommentAiBasis,
+  refreshStudentEvaluationCommentCourseBasis,
   resolveStudentEvaluationCommentMaterialImportUrl,
   saveStudentEvaluationCommentAiDraft,
 } from './api';
@@ -84,7 +85,12 @@ describe('student evaluation comment api', () => {
   });
 
   it('uses the dedicated AI draft mutations and opaque draft revisions', async () => {
-    const revision = { payloadHash: 'a'.repeat(64), payloadVersion: 1 };
+    const revision = {
+      __typename: 'StudentEvaluationCommentRevisionDTO',
+      payloadHash: 'a'.repeat(64),
+      payloadVersion: 1,
+    };
+    const revisionInput = { payloadHash: 'a'.repeat(64), payloadVersion: 1 };
     executeGraphQLMock
       .mockResolvedValueOnce({
         generateStudentEvaluationCommentAiDrafts: {
@@ -150,14 +156,21 @@ describe('student evaluation comment api', () => {
         classId: 'class-1',
         content: '已编辑',
         draftId: '11',
-        expectedRevision: revision,
+        expectedRevision: revisionInput,
+        semesterId: 202501,
+      },
+    });
+    expect(executeGraphQLMock.mock.calls[2]?.[1]).toEqual({
+      input: {
+        classId: 'class-1',
+        items: [{ draftId: '11', expectedRevision: revisionInput }],
         semesterId: 202501,
       },
     });
     expect(executeGraphQLMock.mock.calls[3]?.[1]).toEqual({
       input: {
         classId: 'class-1',
-        items: [{ draftId: '12', expectedRevision: revision }],
+        items: [{ draftId: '12', expectedRevision: revisionInput }],
         semesterId: 202501,
       },
     });
@@ -205,8 +218,50 @@ describe('student evaluation comment api', () => {
     );
   });
 
+  it('refreshes selected-term course grades for the AI academic basis', async () => {
+    const payload = {
+      classCode: 'C01',
+      classId: 'class-1',
+      expiresAt: '2026-08-25T08:00:00.000Z',
+      failedStudentCount: 0,
+      rowCount: 20,
+      scope: 'SELECTED_TERM' as const,
+      semesterId: 202501,
+      status: 'REFRESHED' as const,
+      studentCount: 2,
+      upstreamFetchedStudentCount: 2,
+      upstreamSessionToken: 'rolling-token-003',
+    };
+    executeUpstreamSessionGraphQLMock.mockResolvedValueOnce({ refreshClassCourseGrades: payload });
+
+    await expect(
+      refreshStudentEvaluationCommentCourseBasis({
+        classId: ' class-1 ',
+        semesterId: 202501,
+        upstreamSessionToken: ' rolling-token-002 ',
+      }),
+    ).resolves.toBe(payload);
+
+    expect(executeUpstreamSessionGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('mutation RefreshStudentEvaluationCommentCourseBasis'),
+      {
+        input: {
+          classId: 'class-1',
+          scope: 'SELECTED_TERM',
+          semesterId: 202501,
+          sessionToken: 'rolling-token-002',
+        },
+      },
+    );
+  });
+
   it('writes one scope with the caller-provided opaque revision', async () => {
-    const revision = { payloadHash: 'a'.repeat(64), payloadVersion: 1 };
+    const revision = {
+      __typename: 'StudentEvaluationCommentRevisionDTO',
+      payloadHash: 'a'.repeat(64),
+      payloadVersion: 1,
+    };
+    const revisionInput = { payloadHash: 'a'.repeat(64), payloadVersion: 1 };
     const payload = {
       counts: { created: 0, deleted: 0, unchanged: 0, updated: 1 },
       items: [{ status: 'UPDATED', studentId: '324010112' }],
@@ -236,7 +291,7 @@ describe('student evaluation comment api', () => {
           {
             action: 'UPSERT',
             content: '更新后的正式评语。',
-            expectedRevision: revision,
+            expectedRevision: revisionInput,
             studentId: '324010112',
           },
         ],

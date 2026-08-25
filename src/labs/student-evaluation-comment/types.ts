@@ -207,6 +207,20 @@ export type RefreshStudentEvaluationCommentAiBasisResult = {
   writtenStudentCount: number;
 };
 
+export type RefreshStudentEvaluationCommentCourseBasisResult = {
+  classCode: string;
+  classId: string;
+  expiresAt: string | null;
+  failedStudentCount: number;
+  rowCount: number;
+  scope: 'SELECTED_TERM';
+  semesterId: number;
+  status: 'REFRESHED' | 'PARTIAL';
+  studentCount: number;
+  upstreamFetchedStudentCount: number;
+  upstreamSessionToken: string | null;
+};
+
 export type StudentEvaluationCommentWriteItem = {
   action: StudentEvaluationCommentWriteAction;
   content?: string | null;

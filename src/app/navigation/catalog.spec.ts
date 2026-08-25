@@ -87,6 +87,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
       '/sandbox/playground',
     ]);
     expect(findGroup(items, 'system-management')?.children.map((item) => item.key)).toEqual([
@@ -153,6 +154,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
     ]);
     expect(
       findGroup(prodAdminItems, 'system-management')?.children.map((item) => item.key),
@@ -192,6 +194,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
     ]);
     expect(
       canAccessNavigationPath(
@@ -279,6 +282,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
     ]);
     expect(
       canAccessNavigationPath(
@@ -360,6 +364,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
     ]);
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
@@ -417,6 +422,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
     ]);
     expect(
       canAccessNavigationPath('/academic-affairs/staff-semester-profiles', {
@@ -484,6 +490,12 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/student-evaluation-comment', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/student-evaluation-comment', buildFilter())).toBe(true);
+    expect(
+      canAccessNavigationPath('/labs/student-evaluation-comment-workbench', studentFilter),
+    ).toBe(false);
+    expect(
+      canAccessNavigationPath('/labs/student-evaluation-comment-workbench', buildFilter()),
+    ).toBe(true);
     expect(canAccessNavigationPath('/labs/zquiz-activity-builder', studentFilter)).toBe(false);
     expect(canAccessNavigationPath('/labs/zquiz-exam-teacher-gradebook', studentFilter)).toBe(
       false,
@@ -810,6 +822,7 @@ describe('navigation catalog', () => {
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
+      '/labs/student-evaluation-comment-workbench',
       '/sandbox/playground',
       '/admin/users',
       '/admin/verification-issuance',

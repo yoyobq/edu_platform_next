@@ -53,6 +53,7 @@ import {
   discardStudentEvaluationCommentAiDrafts,
   generateStudentEvaluationCommentAiDrafts,
   refreshStudentEvaluationCommentAiBasis,
+  refreshStudentEvaluationCommentCourseBasis,
   saveStudentEvaluationCommentAiDraft,
 } from '../infrastructure/api';
 import type {
@@ -252,22 +253,43 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     async (session: StoredUpstreamSession, request: StudentEvaluationCommentAiBasisSyncRequest) => {
       if (scopeKeyRef.current !== request.scopeKey) return;
 
+      let latestSession = session;
       const syncWithSession = async (activeSession: StoredUpstreamSession) => {
-        const result = await refreshStudentEvaluationCommentAiBasis({
+        const conductResult = await refreshStudentEvaluationCommentAiBasis({
           classId: request.classId,
           semesterId: request.semesterId,
           upstreamSessionToken: activeSession.upstreamSessionToken,
         });
-        persistSessionFromResult(activeSession, result);
+        const sessionAfterConduct = persistSessionFromResult(activeSession, conductResult);
+        latestSession = sessionAfterConduct;
+        let courseResult;
+        try {
+          courseResult = await refreshStudentEvaluationCommentCourseBasis({
+            classId: request.classId,
+            semesterId: request.semesterId,
+            upstreamSessionToken: sessionAfterConduct.upstreamSessionToken,
+          });
+        } catch (error) {
+          if (scopeKeyRef.current === request.scopeKey) {
+            try {
+              await refreshAiFacts();
+            } catch {
+              // Keep the course-sync error available for session-expiry recovery below.
+            }
+          }
+          throw error;
+        }
+        latestSession = persistSessionFromResult(sessionAfterConduct, courseResult);
 
         if (scopeKeyRef.current === request.scopeKey) {
           await refreshAiFacts();
         }
 
-        message[result.failureCount > 0 ? 'warning' : 'success'](
-          result.failureCount > 0
-            ? `生成依据已同步，写入 ${result.writtenStudentCount} 名学生，另有 ${result.failureCount} 条诊断。`
-            : `生成依据已同步，写入 ${result.writtenStudentCount} 名学生。`,
+        const failureCount = conductResult.failureCount + courseResult.failedStudentCount;
+        message[failureCount > 0 ? 'warning' : 'success'](
+          failureCount > 0
+            ? `生成依据已同步：操行写入 ${conductResult.writtenStudentCount} 名，课程成绩刷新 ${courseResult.studentCount} 名，另有 ${failureCount} 条诊断。`
+            : `生成依据已同步：操行写入 ${conductResult.writtenStudentCount} 名，课程成绩刷新 ${courseResult.studentCount} 名。`,
         );
       };
 
@@ -284,7 +306,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
 
         let refreshedSession: StoredUpstreamSession;
         try {
-          refreshedSession = await refreshSession(session);
+          refreshedSession = await refreshSession(latestSession);
         } catch (refreshError) {
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
@@ -292,7 +314,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
               '校园网会话已失效，请重新登录后继续同步生成依据。',
             ),
             pendingAction: request,
-            session,
+            session: latestSession,
           });
           return;
         }
@@ -683,7 +705,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
         <div className="flex flex-col gap-4">
           <Alert
             showIcon
-            description="系统只为符合条件的目标读取已确认操行依据；生成结果先保存为 7 天有效的加密草稿，不会直接写入正式评语。"
+            description="系统综合已确认操行、共同课程总分排名和单科优势或薄弱信号生成评语；不会向模型提交姓名或课程名。生成结果先保存为 7 天有效的加密草稿，不会直接写入正式评语。"
             title="选择目标学生后受理异步生成"
             type="info"
           />
@@ -710,7 +732,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
                 ) : null}
               </Space>
             }
-            description="班级、学期和名单继续读取本地治理快照；需要更新 AI 所用的已确认操行数据时，可在这里登录校园网并同步当前班级当前学期。"
+            description="班级、学期和名单继续读取本地治理快照；登录校园网后会依次同步当前班级当前学期的操行确认数据与课程成绩快照。"
             title="AI 生成依据治理"
             type={upstreamSession ? 'success' : 'warning'}
           />
