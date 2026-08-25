@@ -5,12 +5,68 @@ import { describe, expect, it } from 'vitest';
 import type { StudentEvaluationCommentWorkbenchStudent } from '../types';
 
 import {
+  collectStudentEvaluationCommentConductBasisIssues,
   countStudentEvaluationCommentWorkflowStatuses,
   resolvePreviousStudentEvaluationCommentTerm,
+  resolveStudentEvaluationCommentConductBasisIssue,
   resolveStudentEvaluationCommentWorkflowStatus,
 } from './workbench-model';
 
 describe('student evaluation comment workbench model', () => {
+  it('matches AI generation rules when checking confirmed conduct grades', () => {
+    expect(
+      resolveStudentEvaluationCommentConductBasisIssue({
+        conflict: null,
+        displayValue: '优',
+        source: 'UPSTREAM_CONFIRMED',
+      }),
+    ).toBeNull();
+    expect(
+      resolveStudentEvaluationCommentConductBasisIssue({
+        conflict: null,
+        displayValue: '良',
+        source: 'LOCAL_CORRECTION',
+      }),
+    ).toBeNull();
+    expect(
+      resolveStudentEvaluationCommentConductBasisIssue({
+        conflict: null,
+        displayValue: null,
+        source: 'MISSING',
+      }),
+    ).toBe('CONDUCT_GRADE_MISSING');
+    expect(
+      resolveStudentEvaluationCommentConductBasisIssue({
+        conflict: 'UPSTREAM_CHANGED_SINCE_CORRECTION',
+        displayValue: null,
+        source: 'MISSING',
+      }),
+    ).toBe('CONDUCT_GRADE_CONFLICT');
+  });
+
+  it('collects student-level conduct issues for generation preflight', () => {
+    expect(
+      collectStudentEvaluationCommentConductBasisIssues([
+        {
+          fields: {
+            confirmedGrade: {
+              conflict: null,
+              displayValue: '优',
+              source: 'UPSTREAM_CONFIRMED',
+            },
+          },
+          studentId: 'ready',
+        },
+        {
+          fields: {
+            confirmedGrade: { conflict: null, displayValue: null, source: 'MISSING' },
+          },
+          studentId: 'missing',
+        },
+      ]),
+    ).toEqual({ missing: 'CONDUCT_GRADE_MISSING' });
+  });
+
   it('assigns every student to one exclusive workflow status', () => {
     const students = [
       student({ studentId: 'todo' }),

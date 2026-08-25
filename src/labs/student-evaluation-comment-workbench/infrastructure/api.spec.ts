@@ -29,6 +29,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   clearStudentEvaluationCommentProductComments,
   discardStudentEvaluationCommentProductDrafts,
+  getStudentEvaluationCommentProductConductBasis,
   getStudentEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
   writeStudentEvaluationCommentProductComment,
@@ -57,6 +58,22 @@ describe('student evaluation comment product workbench api', () => {
     ).resolves.toBe(workspace);
     expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
       input: { classId: '1021904', commentKind: 'TERM', semesterId: 3 },
+    });
+  });
+
+  it('reads confirmed conduct grades for the selected class term preflight', async () => {
+    const conductWorkspace = { view: { students: [] } };
+    executeGraphQLMock.mockResolvedValueOnce({
+      studentConductGradeWorkspace: conductWorkspace,
+    });
+
+    await expect(
+      getStudentEvaluationCommentProductConductBasis({ classId: '1021904', semesterId: 3 }),
+    ).resolves.toBe(conductWorkspace);
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('studentConductGradeWorkspace');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('confirmedGrade');
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: { classId: '1021904', semesterId: 3 },
     });
   });
 

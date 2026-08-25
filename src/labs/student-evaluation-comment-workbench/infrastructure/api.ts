@@ -13,6 +13,7 @@ import type {
   StudentEvaluationCommentAiDraft,
   StudentEvaluationCommentAiLength,
   StudentEvaluationCommentAiTone,
+  StudentEvaluationCommentConductBasisWorkspace,
   StudentEvaluationCommentMaterialIdentityMappingGroup,
   StudentEvaluationCommentMaterialImportResult,
   StudentEvaluationCommentMaterialImportStatus,
@@ -115,6 +116,27 @@ const WORKSPACE_QUERY = `
             updatedAt
           }
           isAiDraftGenerating
+        }
+      }
+    }
+  }
+`;
+
+const CONDUCT_BASIS_WORKSPACE_QUERY = `
+  query StudentEvaluationCommentProductConductBasis(
+    $input: StudentConductGradeWorkspaceInput!
+  ) {
+    studentConductGradeWorkspace(input: $input) {
+      view {
+        students {
+          studentId
+          fields {
+            confirmedGrade {
+              displayValue
+              source
+              conflict
+            }
+          }
         }
       }
     }
@@ -236,6 +258,18 @@ export function getStudentEvaluationCommentProductWorkbench(input: {
     { input: { classId?: string; commentKind: 'TERM'; semesterId?: number } }
   >(WORKSPACE_QUERY, { input: { ...input, commentKind: 'TERM' } }).then(
     (response) => response.studentEvaluationCommentWorkspace,
+  );
+}
+
+export function getStudentEvaluationCommentProductConductBasis(input: {
+  classId: string;
+  semesterId: number;
+}) {
+  return executeGraphQL<
+    { studentConductGradeWorkspace: StudentEvaluationCommentConductBasisWorkspace },
+    { input: typeof input }
+  >(CONDUCT_BASIS_WORKSPACE_QUERY, { input }).then(
+    (response) => response.studentConductGradeWorkspace,
   );
 }
 

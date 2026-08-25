@@ -30,7 +30,7 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
-import { useBlocker } from 'react-router';
+import { Link, useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
 import {
@@ -45,6 +45,7 @@ import { hasGraphQLCategory, isGraphQLIngressError } from '@/shared/graphql';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
+  collectStudentEvaluationCommentConductBasisIssues,
   countStudentEvaluationCommentCodePoints,
   countStudentEvaluationCommentWorkflowStatuses,
   normalizeStudentEvaluationCommentContent,
@@ -58,6 +59,7 @@ import {
   confirmStudentEvaluationCommentProductDrafts,
   discardStudentEvaluationCommentProductDrafts,
   generateStudentEvaluationCommentProductDrafts,
+  getStudentEvaluationCommentProductConductBasis,
   getStudentEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
   refreshStudentEvaluationCommentProductConductBasis,
@@ -138,7 +140,12 @@ export function StudentEvaluationCommentProductWorkbench({
   const [filter, setFilter] = useState<StudentEvaluationCommentWorkflowStatus>('ALL');
   const [searchText, setSearchText] = useState('');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [issuesByStudentId, setIssuesByStudentId] = useState<Record<string, string>>({});
+  const [generationIssuesByStudentId, setIssuesByStudentId] = useState<Record<string, string>>({});
+  const [conductIssuesByStudentId, setConductIssuesByStudentId] = useState<Record<string, string>>(
+    {},
+  );
+  const [conductPreflightError, setConductPreflightError] = useState<string | null>(null);
+  const [isCheckingConductBasis, setIsCheckingConductBasis] = useState(false);
   const [importedDrafts, setImportedDrafts] = useState<
     Record<string, StudentEvaluationCommentMaterialPreviewRow>
   >({});
@@ -218,15 +225,39 @@ export function StudentEvaluationCommentProductWorkbench({
   const loadWorkspace = useCallback(
     async (input: { classId?: string; semesterId?: number } = {}) => {
       setIsLoading(true);
+      setIsCheckingConductBasis(true);
       setErrorMessage(null);
       try {
         const next = await getStudentEvaluationCommentProductWorkbench(input);
+        const nextClassId = next.selectedClass?.classId;
+        const nextSemesterId = next.selectedTerm?.semesterId;
+        let nextConductIssues: Record<string, string> = {};
+        let nextConductPreflightError: string | null = null;
+
+        if (nextClassId && nextSemesterId !== undefined) {
+          try {
+            const conductWorkspace = await getStudentEvaluationCommentProductConductBasis({
+              classId: nextClassId,
+              semesterId: nextSemesterId,
+            });
+            nextConductIssues = collectStudentEvaluationCommentConductBasisIssues(
+              conductWorkspace.view?.students ?? [],
+            );
+          } catch {
+            nextConductPreflightError =
+              '暂时无法检查已确认操行等第，AI 生成时仍会由服务端最终复核。';
+          }
+        }
+
         applyWorkspace(next);
+        setConductIssuesByStudentId(nextConductIssues);
+        setConductPreflightError(nextConductPreflightError);
         return next;
       } catch (error) {
         setErrorMessage(resolveProductErrorMessage(error));
         return null;
       } finally {
+        setIsCheckingConductBasis(false);
         setIsLoading(false);
       }
     },
@@ -304,6 +335,8 @@ export function StudentEvaluationCommentProductWorkbench({
       setEditor(null);
       setSelectedStudentIds([]);
       setIssuesByStudentId({});
+      setConductIssuesByStudentId({});
+      setConductPreflightError(null);
       setImportedDrafts({});
       setImportOpen(false);
       clearMaterialImportSession();
@@ -321,6 +354,28 @@ export function StudentEvaluationCommentProductWorkbench({
     ],
   );
 
+  const actionableConductIssuesByStudentId = useMemo(() => {
+    const issues: Record<string, string> = {};
+
+    students.forEach((student) => {
+      const issue = conductIssuesByStudentId[student.studentId];
+      if (
+        issue &&
+        !student.comment &&
+        !student.aiDraft &&
+        !student.isAiDraftGenerating &&
+        !importedDraftStudentIds.has(student.studentId)
+      ) {
+        issues[student.studentId] = issue;
+      }
+    });
+
+    return issues;
+  }, [conductIssuesByStudentId, importedDraftStudentIds, students]);
+  const issuesByStudentId = useMemo(
+    () => ({ ...generationIssuesByStudentId, ...actionableConductIssuesByStudentId }),
+    [actionableConductIssuesByStudentId, generationIssuesByStudentId],
+  );
   const counts = useMemo(
     () =>
       countStudentEvaluationCommentWorkflowStatuses({
@@ -358,6 +413,16 @@ export function StudentEvaluationCommentProductWorkbench({
         student,
       }) === 'TODO',
   );
+  const selectedConductBlockedCount = selectedStudents.filter((student) =>
+    Boolean(actionableConductIssuesByStudentId[student.studentId]),
+  ).length;
+  const conductMissingCount = Object.values(actionableConductIssuesByStudentId).filter(
+    (issue) => issue === 'CONDUCT_GRADE_MISSING',
+  ).length;
+  const conductConflictCount = Object.values(actionableConductIssuesByStudentId).filter(
+    (issue) => issue === 'CONDUCT_GRADE_CONFLICT',
+  ).length;
+  const conductBlockedCount = conductMissingCount + conductConflictCount;
   const reviewCandidates = selectedStudents.filter(
     (student) => Boolean(student.aiDraft) && !importedDraftStudentIds.has(student.studentId),
   );
@@ -376,11 +441,15 @@ export function StudentEvaluationCommentProductWorkbench({
     (action) => action.action === 'GENERATE_AI_DRAFTS',
   );
   const writeAction = workspace?.actions.find((action) => action.action === 'WRITE_COMMENTS');
-  const generationDisabledReason = !generateAction?.allowed
-    ? (generateAction?.reasonMessage ?? '当前学期暂不可生成 AI 草稿')
-    : generationCandidates.length === 0
-      ? '请先选择待处理学生'
-      : undefined;
+  const generationDisabledReason = isCheckingConductBasis
+    ? '正在检查已确认操行等第'
+    : !generateAction?.allowed
+      ? (generateAction?.reasonMessage ?? '当前学期暂不可生成 AI 草稿')
+      : generationCandidates.length === 0
+        ? selectedConductBlockedCount > 0
+          ? `所选 ${selectedConductBlockedCount} 名学生缺少可用的已确认操行等第`
+          : '请先选择待处理学生'
+        : undefined;
   const styleOptions = styleReferenceStudents.flatMap((student) =>
     student.comment
       ? [{ label: `${student.studentName} · ${student.studentId}`, value: student.studentId }]
@@ -969,8 +1038,15 @@ export function StudentEvaluationCommentProductWorkbench({
             student.aiDraft?.content ??
             student.comment?.content;
           if (!content) {
-            return issuesByStudentId[student.studentId] ? (
-              <span className="text-text-secondary">生成依据尚未就绪，可人工填写或更新依据</span>
+            const issueCode = issuesByStudentId[student.studentId];
+            return issueCode ? (
+              <span className="text-text-secondary">
+                <StudentEvaluationCommentIssueMessage
+                  classId={classId}
+                  issueCode={issueCode}
+                  semesterId={semesterId}
+                />
+              </span>
             ) : (
               <span className="text-text-secondary">尚未填写评语</span>
             );
@@ -994,7 +1070,7 @@ export function StudentEvaluationCommentProductWorkbench({
         width: 100,
       },
     ],
-    [importedDraftStudentIds, importedDrafts, issuesByStudentId, openEditor],
+    [classId, importedDraftStudentIds, importedDrafts, issuesByStudentId, openEditor, semesterId],
   );
 
   const rowSelection = useMemo<TableRowSelection<StudentEvaluationCommentWorkbenchStudent>>(
@@ -1127,7 +1203,11 @@ export function StudentEvaluationCommentProductWorkbench({
                 ) : null}
                 <Tooltip title={generationDisabledReason}>
                   <Button
-                    disabled={!generateAction?.allowed || generationCandidates.length === 0}
+                    disabled={
+                      isCheckingConductBasis ||
+                      !generateAction?.allowed ||
+                      generationCandidates.length === 0
+                    }
                     icon={<RobotOutlined />}
                     onClick={() => setGenerationOpen(true)}
                   >
@@ -1166,6 +1246,30 @@ export function StudentEvaluationCommentProductWorkbench({
             title={workspace.selectedTerm?.label ?? '学期评语'}
           >
             <div className="flex flex-col gap-4">
+              {conductBlockedCount > 0 ? (
+                <Alert
+                  showIcon
+                  action={
+                    <Button
+                      icon={<CloudSyncOutlined />}
+                      loading={isSyncingBasis}
+                      size="small"
+                      onClick={handleBasisSync}
+                    >
+                      更新生成依据
+                    </Button>
+                  }
+                  description="已在学生列表中标记并排除出 AI 生成批次；更新依据后会自动重新检查，也可直接人工填写。"
+                  title={buildConductBasisAlertTitle({
+                    conflictCount: conductConflictCount,
+                    missingCount: conductMissingCount,
+                  })}
+                  type="warning"
+                />
+              ) : null}
+              {conductPreflightError ? (
+                <Alert closable showIcon title={conductPreflightError} type="warning" />
+              ) : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Segmented
                   options={STATUS_OPTIONS.map((item) => ({
@@ -1268,7 +1372,13 @@ export function StudentEvaluationCommentProductWorkbench({
               <Alert
                 showIcon
                 description="可以更新生成依据后重新生成，也可以直接人工填写正式评语。"
-                title="该学生缺少完整的 AI 生成依据"
+                title={
+                  <StudentEvaluationCommentIssueMessage
+                    classId={classId}
+                    issueCode={issuesByStudentId[editorStudent.studentId] ?? ''}
+                    semesterId={semesterId}
+                  />
+                }
                 type="warning"
               />
             ) : null}
@@ -1310,7 +1420,9 @@ export function StudentEvaluationCommentProductWorkbench({
 
       <Modal
         confirmLoading={isBatchRunning}
-        okButtonProps={{ disabled: generationCandidates.length === 0 }}
+        okButtonProps={{
+          disabled: isCheckingConductBasis || generationCandidates.length === 0,
+        }}
         okText={`生成 ${generationCandidates.length} 名学生草稿`}
         open={generationOpen}
         title="AI 生成设置"
@@ -1318,6 +1430,13 @@ export function StudentEvaluationCommentProductWorkbench({
         onOk={() => void handleGenerate()}
       >
         <div className="flex flex-col gap-4 py-3">
+          {selectedConductBlockedCount > 0 ? (
+            <Alert
+              showIcon
+              title={`所选学生中有 ${selectedConductBlockedCount} 人缺少可用的已确认操行等第，本次不会生成。`}
+              type="warning"
+            />
+          ) : null}
           <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 3, wide: 3 }}>
             <Select options={[...TONE_OPTIONS]} value={tone} onChange={setTone} />
             <Select options={[...LENGTH_OPTIONS]} value={length} onChange={setLength} />
@@ -1391,6 +1510,49 @@ function WorkflowStatusTag(input: {
   const status = resolveStudentEvaluationCommentWorkflowStatus(input);
   const presentation = STATUS_PRESENTATION[status];
   return <Tag color={presentation.color}>{presentation.label}</Tag>;
+}
+
+function resolveStudentEvaluationCommentIssueMessage(issueCode: string) {
+  if (issueCode === 'CONDUCT_GRADE_MISSING') {
+    return '缺少已确认的操行等第，暂不能 AI 生成';
+  }
+  if (issueCode === 'CONDUCT_GRADE_CONFLICT') {
+    return '操行补正状态已变化，请更新生成依据后再生成';
+  }
+  return 'AI 生成依据尚未完整，可更新依据或直接人工填写';
+}
+
+function StudentEvaluationCommentIssueMessage({
+  classId,
+  issueCode,
+  semesterId,
+}: {
+  classId: string;
+  issueCode: string;
+  semesterId: number | null;
+}) {
+  const message = resolveStudentEvaluationCommentIssueMessage(issueCode);
+  const searchParams = new URLSearchParams();
+
+  if (classId) searchParams.set('classId', classId);
+  if (semesterId !== null) searchParams.set('semesterId', String(semesterId));
+  const conductAlignmentPath = `/class-affairs/student-conduct-alignment?${searchParams.toString()}`;
+
+  return issueCode === 'CONDUCT_GRADE_MISSING' || issueCode === 'CONDUCT_GRADE_CONFLICT' ? (
+    <Link to={conductAlignmentPath}>{message}</Link>
+  ) : (
+    message
+  );
+}
+
+function buildConductBasisAlertTitle(input: { conflictCount: number; missingCount: number }) {
+  if (input.missingCount > 0 && input.conflictCount > 0) {
+    return `${input.missingCount} 名待处理学生缺少已确认操行等第，另有 ${input.conflictCount} 名操行补正需要处理。`;
+  }
+  if (input.conflictCount > 0) {
+    return `${input.conflictCount} 名待处理学生的操行补正状态已变化，暂不能 AI 生成。`;
+  }
+  return `${input.missingCount} 名待处理学生缺少已确认的操行等第，暂不能 AI 生成。`;
 }
 
 function requestConfirmation(

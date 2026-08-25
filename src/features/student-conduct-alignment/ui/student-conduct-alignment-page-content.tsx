@@ -614,10 +614,14 @@ function formatPatchResultTitle(result: PatchStudentConductGradeCorrectionsResul
 
 type StudentConductAlignmentPageContentProps = {
   currentAccount: StudentConductAlignmentCurrentAccount;
+  initialClassId?: string;
+  initialSemesterId?: number;
 };
 
 export function StudentConductAlignmentPageContent({
   currentAccount,
+  initialClassId,
+  initialSemesterId,
 }: StudentConductAlignmentPageContentProps) {
   const { message, modal } = App.useApp();
   const [classes, setClasses] = useState<StudentConductGradeWorkspaceClassOption[]>([]);
@@ -663,6 +667,10 @@ export function StudentConductAlignmentPageContent({
   const cleanupRequestSeqRef = useRef(0);
   const materialImportRequestSeqRef = useRef(0);
   const patchRequestSeqRef = useRef(0);
+  const initialSelectionRef = useRef({
+    classId: initialClassId,
+    semesterId: initialSemesterId,
+  });
   const activeSelectionRef = useRef<{
     classOption: StudentConductGradeWorkspaceClassOption | null;
     classId: string | null;
@@ -1227,7 +1235,7 @@ export function StudentConductAlignmentPageContent({
     resetPatchWorkspace();
 
     try {
-      const workspace = await fetchStudentConductGradeWorkspace({});
+      const workspace = await fetchStudentConductGradeWorkspace(initialSelectionRef.current);
 
       applyWorkspaceResult(workspace);
       setStudentSearch('');

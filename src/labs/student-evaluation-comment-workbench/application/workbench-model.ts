@@ -1,6 +1,7 @@
 // src/labs/student-evaluation-comment-workbench/application/workbench-model.ts
 
 import type {
+  StudentEvaluationCommentConductGradeField,
   StudentEvaluationCommentTermOption,
   StudentEvaluationCommentWorkbenchStudent,
 } from '../types';
@@ -14,6 +15,38 @@ export type StudentEvaluationCommentWorkflowStatus =
   | 'ISSUE';
 
 export const STUDENT_EVALUATION_COMMENT_MAX_CODE_POINTS = 1000;
+
+export type StudentEvaluationCommentConductBasisIssue =
+  | 'CONDUCT_GRADE_MISSING'
+  | 'CONDUCT_GRADE_CONFLICT';
+
+export function resolveStudentEvaluationCommentConductBasisIssue(
+  field: StudentEvaluationCommentConductGradeField,
+): StudentEvaluationCommentConductBasisIssue | null {
+  if (field.conflict === 'UPSTREAM_CHANGED_SINCE_CORRECTION') {
+    return 'CONDUCT_GRADE_CONFLICT';
+  }
+  if (!field.displayValue?.trim()) return 'CONDUCT_GRADE_MISSING';
+  if (field.source === 'UPSTREAM_CONFIRMED') return null;
+  if (field.source === 'LOCAL_CORRECTION' && field.conflict === null) return null;
+  return 'CONDUCT_GRADE_MISSING';
+}
+
+export function collectStudentEvaluationCommentConductBasisIssues(
+  students: ReadonlyArray<{
+    readonly fields: { readonly confirmedGrade: StudentEvaluationCommentConductGradeField };
+    readonly studentId: string;
+  }>,
+) {
+  const issues: Record<string, StudentEvaluationCommentConductBasisIssue> = {};
+
+  students.forEach((student) => {
+    const issue = resolveStudentEvaluationCommentConductBasisIssue(student.fields.confirmedGrade);
+    if (issue) issues[student.studentId] = issue;
+  });
+
+  return issues;
+}
 
 export function resolveStudentEvaluationCommentWorkflowStatus(input: {
   hasWorkingDraft?: boolean;

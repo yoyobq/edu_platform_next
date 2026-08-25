@@ -29,6 +29,21 @@ export type StudentEvaluationCommentWorkbenchStudent = {
   studentStatus: string;
 };
 
+export type StudentEvaluationCommentConductGradeField = {
+  conflict: 'CORRECTION_CLEANUP_PENDING' | 'UPSTREAM_CHANGED_SINCE_CORRECTION' | null;
+  displayValue: string | null;
+  source: 'UPSTREAM_CONFIRMED' | 'LOCAL_CORRECTION' | 'MISSING';
+};
+
+export type StudentEvaluationCommentConductBasisWorkspace = {
+  view: {
+    students: Array<{
+      fields: { confirmedGrade: StudentEvaluationCommentConductGradeField };
+      studentId: string;
+    }>;
+  } | null;
+};
+
 export type StudentEvaluationCommentClassOption = {
   blockingReasonCode: string | null;
   blockingReasonMessage: string | null;
