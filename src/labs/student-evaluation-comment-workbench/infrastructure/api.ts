@@ -367,6 +367,37 @@ export function writeStudentEvaluationCommentProductComments(input: {
   );
 }
 
+export function clearStudentEvaluationCommentProductComments(input: {
+  classId: string;
+  items: Array<{
+    expectedRevision: StudentEvaluationCommentRevision;
+    studentId: string;
+  }>;
+  semesterId: number;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    commentKind: 'TERM' as const,
+    items: input.items.map((item) => ({
+      action: 'CLEAR' as const,
+      expectedRevision: toRevisionInput(item.expectedRevision),
+      studentId: item.studentId,
+    })),
+    semesterId: input.semesterId,
+  };
+  return executeGraphQL<
+    {
+      batchWriteStudentEvaluationComments: {
+        counts: { created: number; deleted: number; unchanged: number; updated: number };
+        status: 'UPDATED' | 'NO_CHANGES';
+      };
+    },
+    { input: typeof mutationInput }
+  >(WRITE_COMMENTS_MUTATION, { input: mutationInput }).then(
+    (response) => response.batchWriteStudentEvaluationComments,
+  );
+}
+
 export function refreshStudentEvaluationCommentProductConductBasis(input: {
   classId: string;
   semesterId: number;

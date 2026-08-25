@@ -27,6 +27,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  clearStudentEvaluationCommentProductComments,
   discardStudentEvaluationCommentProductDrafts,
   getStudentEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
@@ -153,6 +154,41 @@ describe('student evaluation comment product workbench api', () => {
             content: '更新评语',
             expectedRevision: { payloadHash: 'b'.repeat(64), payloadVersion: 2 },
             studentId: '324010102',
+          },
+        ],
+        semesterId: 3,
+      },
+    });
+  });
+
+  it('batch clears formal comments with clean revision inputs', async () => {
+    const revisionWithTypename = {
+      __typename: 'StudentEvaluationCommentRevisionDTO',
+      payloadHash: 'c'.repeat(64),
+      payloadVersion: 1,
+    };
+    executeGraphQLMock.mockResolvedValueOnce({
+      batchWriteStudentEvaluationComments: {
+        counts: { created: 0, deleted: 1, unchanged: 0, updated: 0 },
+        status: 'UPDATED',
+      },
+    });
+
+    await clearStudentEvaluationCommentProductComments({
+      classId: '1021904',
+      items: [{ expectedRevision: revisionWithTypename, studentId: '324010101' }],
+      semesterId: 3,
+    });
+
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: {
+        classId: '1021904',
+        commentKind: 'TERM',
+        items: [
+          {
+            action: 'CLEAR',
+            expectedRevision: { payloadHash: 'c'.repeat(64), payloadVersion: 1 },
+            studentId: '324010101',
           },
         ],
         semesterId: 3,

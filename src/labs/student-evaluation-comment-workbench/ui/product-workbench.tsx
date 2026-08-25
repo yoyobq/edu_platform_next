@@ -48,11 +48,13 @@ import {
   countStudentEvaluationCommentCodePoints,
   countStudentEvaluationCommentWorkflowStatuses,
   normalizeStudentEvaluationCommentContent,
+  resolvePreviousStudentEvaluationCommentTerm,
   resolveStudentEvaluationCommentWorkflowStatus,
   STUDENT_EVALUATION_COMMENT_MAX_CODE_POINTS,
   type StudentEvaluationCommentWorkflowStatus,
 } from '../application/workbench-model';
 import {
+  clearStudentEvaluationCommentProductComments,
   confirmStudentEvaluationCommentProductDrafts,
   discardStudentEvaluationCommentProductDrafts,
   generateStudentEvaluationCommentProductDrafts,
@@ -158,6 +160,10 @@ export function StudentEvaluationCommentProductWorkbench({
   const [length, setLength] = useState<StudentEvaluationCommentAiLength>('CHARS_120_180');
   const [address, setAddress] = useState<StudentEvaluationCommentAiAddress>('THIRD_PERSON');
   const [styleExampleStudentIds, setStyleExampleStudentIds] = useState<string[]>([]);
+  const [styleReferenceStudents, setStyleReferenceStudents] = useState<
+    StudentEvaluationCommentWorkbenchStudent[]
+  >([]);
+  const [isLoadingStyleReferences, setIsLoadingStyleReferences] = useState(false);
   const [isSyncingBasis, setIsSyncingBasis] = useState(false);
   const [basisSyncError, setBasisSyncError] = useState<string | null>(null);
   const [queuedBasisSync, setQueuedBasisSync] = useState<{
@@ -170,6 +176,15 @@ export function StudentEvaluationCommentProductWorkbench({
   const classId = workspace?.selectedClass?.classId ?? '';
   const semesterId = workspace?.selectedTerm?.semesterId ?? null;
   const scopeKey = workspace?.view?.scope.scopeKey ?? '';
+  const previousTerm = useMemo(
+    () =>
+      resolvePreviousStudentEvaluationCommentTerm(
+        workspace?.termOptions ?? [],
+        workspace?.selectedTerm ?? null,
+      ),
+    [workspace?.selectedTerm, workspace?.termOptions],
+  );
+  const previousTermSemesterId = previousTerm?.semesterId ?? null;
   const editorStudent = editor
     ? (students.find((student) => student.studentId === editor.studentId) ?? null)
     : null;
@@ -221,6 +236,38 @@ export function StudentEvaluationCommentProductWorkbench({
   useEffect(() => {
     void loadWorkspace();
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    let active = true;
+    setStyleExampleStudentIds([]);
+    setStyleReferenceStudents([]);
+    if (!classId || previousTermSemesterId === null) {
+      setIsLoadingStyleReferences(false);
+      return;
+    }
+
+    setIsLoadingStyleReferences(true);
+    void getStudentEvaluationCommentProductWorkbench({
+      classId,
+      semesterId: previousTermSemesterId,
+    })
+      .then((referenceWorkspace) => {
+        if (!active) return;
+        setStyleReferenceStudents(
+          (referenceWorkspace.view?.students ?? []).filter((student) => Boolean(student.comment)),
+        );
+      })
+      .catch(() => {
+        if (active) setStyleReferenceStudents([]);
+      })
+      .finally(() => {
+        if (active) setIsLoadingStyleReferences(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [classId, previousTermSemesterId]);
 
   const reloadCurrentWorkspace = useCallback(async () => {
     if (!classId || semesterId === null) return loadWorkspace();
@@ -317,6 +364,14 @@ export function StudentEvaluationCommentProductWorkbench({
   const confirmCandidates = reviewCandidates.filter(
     (student) => resolveStudentEvaluationCommentWorkflowStatus({ student }) === 'REVIEW',
   );
+  const completedCandidates = selectedStudents.filter(
+    (student) =>
+      resolveStudentEvaluationCommentWorkflowStatus({
+        hasWorkingDraft: importedDraftStudentIds.has(student.studentId),
+        issueCode: issuesByStudentId[student.studentId],
+        student,
+      }) === 'COMPLETED',
+  );
   const generateAction = workspace?.actions.find(
     (action) => action.action === 'GENERATE_AI_DRAFTS',
   );
@@ -326,7 +381,7 @@ export function StudentEvaluationCommentProductWorkbench({
     : generationCandidates.length === 0
       ? '请先选择待处理学生'
       : undefined;
-  const styleOptions = students.flatMap((student) =>
+  const styleOptions = styleReferenceStudents.flatMap((student) =>
     student.comment
       ? [{ label: `${student.studentName} · ${student.studentId}`, value: student.studentId }]
       : [],
@@ -695,6 +750,45 @@ export function StudentEvaluationCommentProductWorkbench({
     [classId, message, modal, reloadCurrentWorkspace, reviewCandidates, semesterId],
   );
 
+  const clearFormalComments = useCallback(async () => {
+    if (!classId || semesterId === null || completedCandidates.length === 0) return;
+    if (
+      !(await requestConfirmation(modal, {
+        content: `将永久删除 ${completedCandidates.length} 条正式评语，学生会重新回到待处理状态。任一评语已被他人修改时，本批次不会删除任何记录。`,
+        danger: true,
+        okText: '确认删除',
+        title: '批量删除正式评语？',
+      }))
+    ) {
+      return;
+    }
+
+    setIsBatchRunning(true);
+    try {
+      const result = await clearStudentEvaluationCommentProductComments({
+        classId,
+        items: completedCandidates.flatMap((student) =>
+          student.comment
+            ? [{ expectedRevision: student.comment.revision, studentId: student.studentId }]
+            : [],
+        ),
+        semesterId,
+      });
+      setEditor(null);
+      setSelectedStudentIds([]);
+      message.success(
+        result.status === 'NO_CHANGES'
+          ? '服务端确认没有可删除的正式评语。'
+          : `已删除 ${result.counts.deleted} 条正式评语。`,
+      );
+      await reloadCurrentWorkspace();
+    } catch (error) {
+      message.error(resolveProductErrorMessage(error));
+    } finally {
+      setIsBatchRunning(false);
+    }
+  }, [classId, completedCandidates, message, modal, reloadCurrentWorkspace, semesterId]);
+
   const handleGenerate = useCallback(async () => {
     if (!classId || semesterId === null || generationCandidates.length === 0) return;
     setIsBatchRunning(true);
@@ -1058,6 +1152,15 @@ export function StudentEvaluationCommentProductWorkbench({
                 >
                   放弃 AI 草稿
                 </Button>
+                <Button
+                  danger
+                  disabled={!writeAction?.allowed || completedCandidates.length === 0}
+                  icon={<DeleteOutlined />}
+                  loading={isBatchRunning}
+                  onClick={() => void clearFormalComments()}
+                >
+                  {`删除正式评语 ${completedCandidates.length || ''}`.trim()}
+                </Button>
               </Space>
             }
             title={workspace.selectedTerm?.label ?? '学期评语'}
@@ -1090,7 +1193,11 @@ export function StudentEvaluationCommentProductWorkbench({
                 dataSource={visibleStudents}
                 loading={isLoading}
                 locale={{ emptyText: <Empty description="当前筛选下没有学生" /> }}
-                pagination={{ defaultPageSize: 20, showSizeChanger: true }}
+                pagination={{
+                  defaultPageSize: 60,
+                  pageSizeOptions: [30, 60],
+                  showSizeChanger: true,
+                }}
                 rowKey="studentId"
                 rowSelection={rowSelection}
                 scroll={{ x: 920 }}
@@ -1216,20 +1323,34 @@ export function StudentEvaluationCommentProductWorkbench({
             <Select options={[...LENGTH_OPTIONS]} value={length} onChange={setLength} />
             <Select options={[...ADDRESS_OPTIONS]} value={address} onChange={setAddress} />
           </ResponsiveGrid>
-          <div>
-            <div className="mb-2">正式评语风格样例（可选，最多 5 人）</div>
-            <Select
-              allowClear
-              maxCount={5}
-              mode="multiple"
-              optionFilterProp="label"
-              options={styleOptions}
-              placeholder="从本学期已有正式评语中选择"
-              style={{ width: '100%' }}
-              value={styleExampleStudentIds}
-              onChange={setStyleExampleStudentIds}
-            />
-          </div>
+          {(workspace?.selectedTerm?.sequence ?? 1) > 1 ? (
+            <div>
+              <div className="mb-2">
+                上一学期评语语气参考
+                {previousTerm ? `（${previousTerm.label}，可选，最多 5 人）` : '（可选）'}
+              </div>
+              {isLoadingStyleReferences || styleOptions.length > 0 ? (
+                <Select
+                  allowClear
+                  loading={isLoadingStyleReferences}
+                  maxCount={5}
+                  mode="multiple"
+                  optionFilterProp="label"
+                  options={styleOptions}
+                  placeholder="从上一学期已有正式评语中选择"
+                  style={{ width: '100%' }}
+                  value={styleExampleStudentIds}
+                  onChange={setStyleExampleStudentIds}
+                />
+              ) : (
+                <Alert
+                  showIcon
+                  title="上一学期暂无可用正式评语，本次生成将不使用语气参考。"
+                  type="info"
+                />
+              )}
+            </div>
+          ) : null}
         </div>
       </Modal>
 
@@ -1274,12 +1395,13 @@ function WorkflowStatusTag(input: {
 
 function requestConfirmation(
   modal: ReturnType<typeof AntApp.useApp>['modal'],
-  input: { content: string; okText: string; title: string },
+  input: { content: string; danger?: boolean; okText: string; title: string },
 ) {
   return new Promise<boolean>((resolve) => {
     modal.confirm({
       cancelText: '取消',
       content: input.content,
+      okButtonProps: input.danger ? { danger: true } : undefined,
       okText: input.okText,
       onCancel: () => resolve(false),
       onOk: () => resolve(true),

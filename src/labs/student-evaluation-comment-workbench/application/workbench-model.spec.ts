@@ -6,6 +6,7 @@ import type { StudentEvaluationCommentWorkbenchStudent } from '../types';
 
 import {
   countStudentEvaluationCommentWorkflowStatuses,
+  resolvePreviousStudentEvaluationCommentTerm,
   resolveStudentEvaluationCommentWorkflowStatus,
 } from './workbench-model';
 
@@ -54,7 +55,32 @@ describe('student evaluation comment workbench model', () => {
       }),
     ).toEqual({ ALL: 1, TODO: 0, GENERATING: 0, REVIEW: 1, COMPLETED: 0, ISSUE: 0 });
   });
+
+  it('uses the immediately preceding class term and leaves the first term without a reference', () => {
+    const terms = [
+      term({ label: '第一学期', semesterId: 1, sequence: 1 }),
+      term({ label: '第二学期', semesterId: 2, sequence: 2 }),
+      term({ label: '第三学期', semesterId: 3, sequence: 3 }),
+    ];
+
+    expect(resolvePreviousStudentEvaluationCommentTerm(terms, terms[0] ?? null)).toBeNull();
+    expect(resolvePreviousStudentEvaluationCommentTerm(terms, terms[2] ?? null)).toEqual(terms[1]);
+  });
 });
+
+function term(
+  overrides: Partial<import('../types').StudentEvaluationCommentTermOption> = {},
+): import('../types').StudentEvaluationCommentTermOption {
+  return {
+    isCurrent: false,
+    label: '学期',
+    schoolYear: 2025,
+    semesterId: 1,
+    sequence: 1,
+    termNumber: 1,
+    ...overrides,
+  };
+}
 
 function student(
   overrides: Partial<StudentEvaluationCommentWorkbenchStudent> = {},

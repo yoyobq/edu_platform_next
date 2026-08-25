@@ -1,6 +1,9 @@
 // src/labs/student-evaluation-comment-workbench/application/workbench-model.ts
 
-import type { StudentEvaluationCommentWorkbenchStudent } from '../types';
+import type {
+  StudentEvaluationCommentTermOption,
+  StudentEvaluationCommentWorkbenchStudent,
+} from '../types';
 
 export type StudentEvaluationCommentWorkflowStatus =
   | 'ALL'
@@ -64,4 +67,13 @@ export function normalizeStudentEvaluationCommentContent(content: string) {
 
 export function countStudentEvaluationCommentCodePoints(content: string) {
   return Array.from(normalizeStudentEvaluationCommentContent(content)).length;
+}
+
+export function resolvePreviousStudentEvaluationCommentTerm(
+  terms: readonly StudentEvaluationCommentTermOption[],
+  selectedTerm: StudentEvaluationCommentTermOption | null,
+) {
+  if (!selectedTerm || selectedTerm.sequence <= 1) return null;
+
+  return terms.find((term) => term.sequence === selectedTerm.sequence - 1) ?? null;
 }
