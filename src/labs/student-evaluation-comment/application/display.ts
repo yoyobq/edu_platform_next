@@ -35,7 +35,7 @@ export function isStudentEvaluationCommentConflict(error: unknown) {
 
 export function resolveStudentEvaluationCommentErrorMessage(
   error: unknown,
-  context: 'class-scope' | 'mine' | 'options' | 'save',
+  context: 'ai' | 'class-scope' | 'mine' | 'options' | 'save',
 ) {
   if (hasGraphQLCategory(error, 'FORBIDDEN')) {
     if (context === 'mine') {
@@ -54,11 +54,15 @@ export function resolveStudentEvaluationCommentErrorMessage(
   }
 
   if (hasGraphQLCategory(error, 'CONFLICT')) {
-    return '评语已被其他人修改，请重新加载当前班级数据。';
+    return context === 'ai'
+      ? 'AI 草稿状态已变化，请保留当前文本并重新加载草稿。'
+      : '评语已被其他人修改，请重新加载当前班级数据。';
   }
 
   if (hasGraphQLCategory(error, 'INTERNAL_SERVER_ERROR')) {
-    return '评语服务暂时不可用，请稍后重试。';
+    return context === 'ai'
+      ? 'AI 评语草稿服务暂时不可用，人工评语仍可继续使用。'
+      : '评语服务暂时不可用，请稍后重试。';
   }
 
   if (isGraphQLIngressError(error)) {

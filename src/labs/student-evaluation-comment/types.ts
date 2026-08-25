@@ -3,6 +3,18 @@
 export type StudentEvaluationCommentKind = 'TERM' | 'GRADUATION';
 export type StudentEvaluationCommentSource = 'MANUAL';
 export type StudentEvaluationCommentWriteAction = 'UPSERT' | 'CLEAR';
+export type StudentEvaluationCommentAiTone =
+  | 'WARM_ENCOURAGING'
+  | 'OBJECTIVE_BALANCED'
+  | 'CONCISE_DIRECT';
+export type StudentEvaluationCommentAiLength = 'CHARS_80_120' | 'CHARS_120_180' | 'CHARS_180_260';
+export type StudentEvaluationCommentAiAddress = 'SECOND_PERSON' | 'THIRD_PERSON';
+export type StudentEvaluationCommentAiGenerationDisposition =
+  | 'ACCEPTED'
+  | 'FORMAL_COMMENT_EXISTS'
+  | 'DRAFT_EXISTS'
+  | 'ALREADY_GENERATING'
+  | 'BASIS_MISSING';
 
 export type StudentEvaluationCommentLabLoaderData = {
   canEditClassScope: boolean;
@@ -38,7 +50,7 @@ export type StudentEvaluationCommentTermOption = {
 };
 
 export type StudentEvaluationCommentWorkspaceAction = {
-  action: string;
+  action: 'WRITE_COMMENTS' | 'GENERATE_AI_DRAFTS';
   allowed: boolean;
   reasonCode: string | null;
   reasonMessage: string | null;
@@ -59,8 +71,18 @@ export type StudentEvaluationCommentClassScopeComment = {
   updatedAt: string;
 };
 
+export type StudentEvaluationCommentAiDraft = {
+  content: string;
+  draftId: string;
+  expiresAt: string;
+  revision: StudentEvaluationCommentRevision;
+  updatedAt: string;
+};
+
 export type StudentEvaluationCommentClassScopeStudent = {
+  aiDraft: StudentEvaluationCommentAiDraft | null;
   comment: StudentEvaluationCommentClassScopeComment | null;
+  isAiDraftGenerating: boolean;
   studentId: string;
   studentName: string;
   studentStatus: string;
@@ -96,6 +118,65 @@ export type StudentEvaluationCommentScopeInput = {
   classId: string;
   commentKind: StudentEvaluationCommentKind;
   semesterId: number | null;
+};
+
+export type StudentEvaluationCommentAiDraftScopeInput = {
+  classId: string;
+  semesterId: number;
+};
+
+export type StudentEvaluationCommentAiGenerationOptions = {
+  address: StudentEvaluationCommentAiAddress;
+  length: StudentEvaluationCommentAiLength;
+  tone: StudentEvaluationCommentAiTone;
+};
+
+export type GenerateStudentEvaluationCommentAiDraftsInput =
+  StudentEvaluationCommentAiDraftScopeInput &
+    StudentEvaluationCommentAiGenerationOptions & {
+      studentIds: string[];
+      styleExampleStudentIds: string[];
+    };
+
+export type GenerateStudentEvaluationCommentAiDraftsResult = {
+  counts: {
+    accepted: number;
+    alreadyGenerating: number;
+    basisMissing: number;
+    draftExists: number;
+    formalCommentExists: number;
+    requested: number;
+  };
+  items: Array<{
+    disposition: StudentEvaluationCommentAiGenerationDisposition;
+    studentId: string;
+  }>;
+  status: 'ACCEPTED' | 'NO_CHANGES';
+};
+
+export type StudentEvaluationCommentAiDraftMutationItem = {
+  draftId: string;
+  expectedRevision: StudentEvaluationCommentRevision;
+};
+
+export type SaveStudentEvaluationCommentAiDraftInput = StudentEvaluationCommentAiDraftScopeInput &
+  StudentEvaluationCommentAiDraftMutationItem & {
+    content: string;
+  };
+
+export type SaveStudentEvaluationCommentAiDraftResult = {
+  draft: StudentEvaluationCommentAiDraft;
+  status: 'SAVED';
+};
+
+export type DiscardStudentEvaluationCommentAiDraftsResult = {
+  discardedCount: number;
+  status: 'DISCARDED';
+};
+
+export type ConfirmStudentEvaluationCommentAiDraftsResult = {
+  confirmedCount: number;
+  status: 'CONFIRMED';
 };
 
 export type StudentEvaluationCommentWriteItem = {

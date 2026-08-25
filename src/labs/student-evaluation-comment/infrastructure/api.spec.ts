@@ -26,10 +26,14 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   batchWriteStudentEvaluationComments,
+  confirmStudentEvaluationCommentAiDrafts,
+  discardStudentEvaluationCommentAiDrafts,
+  generateStudentEvaluationCommentAiDrafts,
   getMyStudentEvaluationComments,
   getStudentEvaluationCommentWorkspace,
   importStudentEvaluationCommentMaterial,
   resolveStudentEvaluationCommentMaterialImportUrl,
+  saveStudentEvaluationCommentAiDraft,
 } from './api';
 
 describe('student evaluation comment api', () => {
@@ -67,6 +71,88 @@ describe('student evaluation comment api', () => {
     expect(query).toContain('termOptions');
     expect(query).toContain('actions');
     expect(query).toContain('revision');
+    expect(query).toContain('aiDraft');
+    expect(query).toContain('isAiDraftGenerating');
+  });
+
+  it('uses the dedicated AI draft mutations and opaque draft revisions', async () => {
+    const revision = { payloadHash: 'a'.repeat(64), payloadVersion: 1 };
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        generateStudentEvaluationCommentAiDrafts: {
+          counts: { accepted: 1 },
+          items: [{ disposition: 'ACCEPTED', studentId: 's-1' }],
+          status: 'ACCEPTED',
+        },
+      })
+      .mockResolvedValueOnce({
+        saveStudentEvaluationCommentAiDraft: {
+          draft: { content: '已编辑', draftId: '11', revision },
+          status: 'SAVED',
+        },
+      })
+      .mockResolvedValueOnce({
+        discardStudentEvaluationCommentAiDrafts: {
+          discardedCount: 1,
+          status: 'DISCARDED',
+        },
+      })
+      .mockResolvedValueOnce({
+        confirmStudentEvaluationCommentAiDrafts: {
+          confirmedCount: 1,
+          status: 'CONFIRMED',
+        },
+      });
+
+    await generateStudentEvaluationCommentAiDrafts({
+      address: 'THIRD_PERSON',
+      classId: 'class-1',
+      length: 'CHARS_120_180',
+      semesterId: 202501,
+      studentIds: ['s-1'],
+      styleExampleStudentIds: ['s-2'],
+      tone: 'OBJECTIVE_BALANCED',
+    });
+    await saveStudentEvaluationCommentAiDraft({
+      classId: 'class-1',
+      content: '已编辑',
+      draftId: '11',
+      expectedRevision: revision,
+      semesterId: 202501,
+    });
+    await discardStudentEvaluationCommentAiDrafts({
+      items: [{ draftId: '11', expectedRevision: revision }],
+      scope: { classId: 'class-1', semesterId: 202501 },
+    });
+    await confirmStudentEvaluationCommentAiDrafts({
+      items: [{ draftId: '12', expectedRevision: revision }],
+      scope: { classId: 'class-1', semesterId: 202501 },
+    });
+
+    expect(
+      executeGraphQLMock.mock.calls.map((call) => (call[0] as string).match(/mutation (\w+)/)?.[1]),
+    ).toEqual([
+      'GenerateStudentEvaluationCommentAiDrafts',
+      'SaveStudentEvaluationCommentAiDraft',
+      'DiscardStudentEvaluationCommentAiDrafts',
+      'ConfirmStudentEvaluationCommentAiDrafts',
+    ]);
+    expect(executeGraphQLMock.mock.calls[1]?.[1]).toEqual({
+      input: {
+        classId: 'class-1',
+        content: '已编辑',
+        draftId: '11',
+        expectedRevision: revision,
+        semesterId: 202501,
+      },
+    });
+    expect(executeGraphQLMock.mock.calls[3]?.[1]).toEqual({
+      input: {
+        classId: 'class-1',
+        items: [{ draftId: '12', expectedRevision: revision }],
+        semesterId: 202501,
+      },
+    });
   });
 
   it('writes one scope with the caller-provided opaque revision', async () => {

@@ -20,7 +20,9 @@ function createStudent(
   overrides: Partial<StudentEvaluationCommentClassScopeStudent> = {},
 ): StudentEvaluationCommentClassScopeStudent {
   return {
+    aiDraft: null,
     comment: null,
+    isAiDraftGenerating: false,
     studentId: '324010112',
     studentName: '张三',
     studentStatus: 'ENROLLED',

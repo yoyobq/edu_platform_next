@@ -53,18 +53,22 @@ function buildClassScope(content: string, revision = ORIGINAL_REVISION) {
     },
     students: [
       {
+        aiDraft: null,
         comment: {
           content,
           revision,
           source: 'MANUAL',
           updatedAt: '2026-07-16T01:02:03.000Z',
         },
+        isAiDraftGenerating: false,
         studentId: '324010112',
         studentName: '张三',
         studentStatus: 'ENROLLED',
       },
       {
+        aiDraft: null,
         comment: null,
+        isAiDraftGenerating: false,
         studentId: '324010113',
         studentName: '李四',
         studentStatus: 'ENROLLED',
@@ -78,6 +82,12 @@ function buildWorkspace(content: string, revision = ORIGINAL_REVISION) {
     actions: [
       {
         action: 'WRITE_COMMENTS',
+        allowed: true,
+        reasonCode: null,
+        reasonMessage: null,
+      },
+      {
+        action: 'GENERATE_AI_DRAFTS',
         allowed: true,
         reasonCode: null,
         reasonMessage: null,
@@ -258,6 +268,265 @@ test('CAS 冲突时保留本地草稿并给出重新加载入口', async ({ page
   await expect(page.getByText('评语已被其他人修改，请重新加载当前班级数据。')).toBeVisible();
   await expect(page.getByRole('button', { name: '重新加载并放弃草稿' })).toBeVisible();
   await expect(textarea).toHaveValue('本地冲突草稿。');
+});
+
+test('老师生成、编辑并二次确认 AI 草稿后才写入正式评语', async ({ page }) => {
+  await seedAdmin(page);
+
+  let aiState: 'empty' | 'generating' | 'draft' | 'saved' | 'confirmed' = 'empty';
+  let generationInput: Record<string, unknown> | null = null;
+  let saveInput: Record<string, unknown> | null = null;
+  let confirmInput: Record<string, unknown> | null = null;
+  const draftRevision = { payloadHash: 'c'.repeat(64), payloadVersion: 1 };
+  const savedRevision = { payloadHash: 'd'.repeat(64), payloadVersion: 1 };
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query StudentEvaluationCommentWorkspace')) {
+      const result = buildWorkspace('原始正式评语。');
+      const target = result.view.students[1];
+      if (aiState === 'generating') {
+        target.isAiDraftGenerating = true;
+        aiState = 'draft';
+      } else if (aiState === 'draft' || aiState === 'saved') {
+        target.aiDraft = {
+          content: aiState === 'saved' ? '老师修改后的 AI 草稿。' : 'AI 初始草稿。',
+          draftId: '11',
+          expiresAt: '2027-08-27T00:00:00.000Z',
+          revision: aiState === 'saved' ? savedRevision : draftRevision,
+          updatedAt: '2026-08-20T01:02:03.000Z',
+        };
+      } else if (aiState === 'confirmed') {
+        target.comment = {
+          content: '老师修改后的 AI 草稿。',
+          revision: savedRevision,
+          source: 'MANUAL',
+          updatedAt: '2026-08-20T01:03:03.000Z',
+        };
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: result } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation GenerateStudentEvaluationCommentAiDrafts')) {
+      generationInput = payload?.variables?.input ?? null;
+      aiState = 'generating';
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            generateStudentEvaluationCommentAiDrafts: {
+              counts: {
+                accepted: 1,
+                alreadyGenerating: 0,
+                basisMissing: 0,
+                draftExists: 0,
+                formalCommentExists: 0,
+                requested: 1,
+              },
+              items: [{ disposition: 'ACCEPTED', studentId: '324010113' }],
+              status: 'ACCEPTED',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation SaveStudentEvaluationCommentAiDraft')) {
+      saveInput = payload?.variables?.input ?? null;
+      aiState = 'saved';
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            saveStudentEvaluationCommentAiDraft: {
+              draft: {
+                content: '老师修改后的 AI 草稿。',
+                draftId: '11',
+                expiresAt: '2027-08-27T00:00:00.000Z',
+                revision: savedRevision,
+                updatedAt: '2026-08-20T01:02:30.000Z',
+              },
+              status: 'SAVED',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation ConfirmStudentEvaluationCommentAiDrafts')) {
+      confirmInput = payload?.variables?.input ?? null;
+      aiState = 'confirmed';
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            confirmStudentEvaluationCommentAiDrafts: {
+              confirmedCount: 1,
+              status: 'CONFIRMED',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationComment);
+  await page.getByText('AI 草稿', { exact: true }).click();
+
+  const targetRow = page.getByRole('row', { name: /324010113 李四/ }).first();
+  await targetRow.getByRole('checkbox').check();
+  await page.getByRole('button', { name: '生成所选学生草稿' }).click();
+
+  await expect(page.getByText('AI 初始草稿。')).toBeVisible({ timeout: 8_000 });
+  const draftRow = page.getByRole('row', { name: /324010113 李四 待确认/ });
+  await draftRow.locator('.ant-table-row-expand-icon').click();
+  const draftEditor = page.getByRole('textbox', { name: '李四AI 评语草稿' });
+  await draftEditor.fill('老师修改后的 AI 草稿。');
+  await expect(page.getByRole('button', { name: '确认写入正式评语' })).toBeDisabled();
+  await page.getByRole('button', { name: '保存 AI 草稿' }).click();
+  await expect(page.getByRole('button', { name: '确认写入正式评语' })).toBeEnabled();
+  await page.getByRole('button', { name: '确认写入正式评语' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.locator('.ant-modal-confirm-title')).toHaveText('确认 AI 草稿为正式评语？');
+  await dialog.getByRole('button', { name: '确认写入正式评语' }).click();
+
+  await expect(page.getByText('当前范围没有生成中或待确认的 AI 草稿')).toBeVisible();
+  await page.getByText('人工 / Excel', { exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '李四正式评语' })).toHaveValue(
+    '老师修改后的 AI 草稿。',
+  );
+
+  expect(generationInput).toEqual({
+    address: 'THIRD_PERSON',
+    classId: '1021904',
+    length: 'CHARS_120_180',
+    semesterId: 202501,
+    studentIds: ['324010113'],
+    styleExampleStudentIds: [],
+    tone: 'OBJECTIVE_BALANCED',
+  });
+  expect(saveInput).toEqual({
+    classId: '1021904',
+    content: '老师修改后的 AI 草稿。',
+    draftId: '11',
+    expectedRevision: draftRevision,
+    semesterId: 202501,
+  });
+  expect(confirmInput).toEqual({
+    classId: '1021904',
+    items: [{ draftId: '11', expectedRevision: savedRevision }],
+    semesterId: 202501,
+  });
+});
+
+test('AI 草稿刷新不会覆盖人工模式的未保存评语', async ({ page }) => {
+  await seedAdmin(page);
+
+  let workspaceReadCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as { query?: string } | undefined;
+
+    if (payload?.query?.includes('query StudentEvaluationCommentWorkspace')) {
+      workspaceReadCount += 1;
+      const result = buildWorkspace(
+        workspaceReadCount === 1 ? '原始正式评语。' : '其他老师并发更新的评语。',
+        workspaceReadCount === 1
+          ? ORIGINAL_REVISION
+          : { payloadHash: 'e'.repeat(64), payloadVersion: 1 },
+      );
+      if (workspaceReadCount > 1) {
+        result.view.students[1].aiDraft = {
+          content: '刷新得到的 AI 草稿。',
+          draftId: '12',
+          expiresAt: '2027-08-27T00:00:00.000Z',
+          revision: { payloadHash: 'f'.repeat(64), payloadVersion: 1 },
+          updatedAt: '2026-08-20T02:00:00.000Z',
+        };
+      }
+
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: result } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationComment);
+  const manualEditor = page.getByRole('textbox', { name: '张三正式评语' });
+  await manualEditor.fill('尚未保存的人工评语。');
+
+  await page.getByText('AI 草稿', { exact: true }).click();
+  await page.getByRole('button', { name: '刷新草稿' }).click();
+  await expect(page.getByText('刷新得到的 AI 草稿。')).toBeVisible();
+
+  await page.getByText('人工 / Excel', { exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '张三正式评语' })).toHaveValue(
+    '尚未保存的人工评语。',
+  );
+  await expect(page.getByText('1 项未保存')).toBeVisible();
+  expect(workspaceReadCount).toBe(2);
+});
+
+test('AI 生成不可用时已有草稿仍可进入确认流程', async ({ page }) => {
+  await seedAdmin(page);
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as { query?: string } | undefined;
+
+    if (payload?.query?.includes('query StudentEvaluationCommentWorkspace')) {
+      const result = buildWorkspace('原始正式评语。');
+      const generateAction = result.actions.find(
+        (action) => action.action === 'GENERATE_AI_DRAFTS',
+      );
+      if (generateAction) {
+        generateAction.allowed = false;
+        generateAction.reasonCode = 'AI_UNAVAILABLE';
+        generateAction.reasonMessage = 'AI 服务当前不可用';
+      }
+      result.view.students[1].aiDraft = {
+        content: '已生成且仍可审阅的草稿。',
+        draftId: '13',
+        expiresAt: '2027-08-27T00:00:00.000Z',
+        revision: { payloadHash: '1'.repeat(64), payloadVersion: 1 },
+        updatedAt: '2026-08-20T03:00:00.000Z',
+      };
+
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: result } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationComment);
+  await page.getByText('AI 草稿', { exact: true }).click();
+
+  await expect(page.getByText('AI 服务当前不可用')).toBeVisible();
+  await expect(page.getByText('已生成且仍可审阅的草稿。')).toBeVisible();
+  const draftRow = page.getByRole('row', { name: /324010113 李四 待确认/ });
+  await draftRow.getByRole('checkbox').check();
+  await expect(page.getByRole('button', { name: '确认写入正式评语' })).toBeEnabled();
 });
 
 test('Excel 导入可完成工作表选择、重名映射并携带 dry-run revision 保存', async ({ page }) => {

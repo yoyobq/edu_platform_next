@@ -45,14 +45,14 @@ export function StudentEvaluationCommentLabPage() {
       <DecoratedPageHeader
         aside={hasUnsavedChanges ? <Tag color="warning">有未保存修改</Tag> : undefined}
         badge={<Tag>{studentEvaluationCommentLabMeta.name}</Tag>}
-        description="人工正式评语实验面：支持班级范围批量写入与 CAS 并发保护，并提供学生本人只读视图。"
+        description="教师可按班级范围人工编辑正式评语，或生成、审阅 AI 加密草稿；学生仅查看自己的正式评语。"
         icon={<FileTextOutlined />}
         title="学生正式评语"
       />
 
       <Alert
         showIcon
-        description="本页支持人工编辑与单个 Excel 草稿导入；不提供 AI 草稿、历史版本、导出或跨班批量操作。班级权限和学生身份始终由后端判定。"
+        description="AI 仅用于真实学期评语：系统按老师选定的学生异步生成 7 天有效的加密草稿，老师保存修改并二次确认后才写入正式评语。Excel 仍只用于人工草稿导入；本页不提供历史版本、导出或跨班批量操作。"
         title="Lab 边界"
         type="info"
       />

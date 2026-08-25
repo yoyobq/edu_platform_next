@@ -4,8 +4,16 @@ import { executeGraphQL, getGraphQLEndpoint, getGraphQLRuntimeConfig } from '@/s
 
 import type {
   BatchWriteStudentEvaluationCommentsResult,
+  ConfirmStudentEvaluationCommentAiDraftsResult,
+  DiscardStudentEvaluationCommentAiDraftsResult,
+  GenerateStudentEvaluationCommentAiDraftsInput,
+  GenerateStudentEvaluationCommentAiDraftsResult,
   ImportStudentEvaluationCommentMaterialInput,
   MyStudentEvaluationComments,
+  SaveStudentEvaluationCommentAiDraftInput,
+  SaveStudentEvaluationCommentAiDraftResult,
+  StudentEvaluationCommentAiDraftMutationItem,
+  StudentEvaluationCommentAiDraftScopeInput,
   StudentEvaluationCommentMaterialIdentityMappingGroup,
   StudentEvaluationCommentMaterialImportResult,
   StudentEvaluationCommentMaterialImportStatus,
@@ -107,6 +115,17 @@ const STUDENT_EVALUATION_COMMENT_WORKSPACE_QUERY = `
             source
             updatedAt
           }
+          aiDraft {
+            draftId
+            content
+            revision {
+              payloadHash
+              payloadVersion
+            }
+            expiresAt
+            updatedAt
+          }
+          isAiDraftGenerating
         }
       }
     }
@@ -148,6 +167,70 @@ const MY_STUDENT_EVALUATION_COMMENTS_QUERY = `
         source
         updatedAt
       }
+    }
+  }
+`;
+
+const GENERATE_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION = `
+  mutation GenerateStudentEvaluationCommentAiDrafts(
+    $input: GenerateStudentEvaluationCommentAiDraftsInput!
+  ) {
+    generateStudentEvaluationCommentAiDrafts(input: $input) {
+      status
+      counts {
+        requested
+        accepted
+        formalCommentExists
+        draftExists
+        alreadyGenerating
+        basisMissing
+      }
+      items {
+        studentId
+        disposition
+      }
+    }
+  }
+`;
+
+const SAVE_STUDENT_EVALUATION_COMMENT_AI_DRAFT_MUTATION = `
+  mutation SaveStudentEvaluationCommentAiDraft(
+    $input: SaveStudentEvaluationCommentAiDraftInput!
+  ) {
+    saveStudentEvaluationCommentAiDraft(input: $input) {
+      status
+      draft {
+        draftId
+        content
+        revision {
+          payloadHash
+          payloadVersion
+        }
+        expiresAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+const DISCARD_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION = `
+  mutation DiscardStudentEvaluationCommentAiDrafts(
+    $input: DiscardStudentEvaluationCommentAiDraftsInput!
+  ) {
+    discardStudentEvaluationCommentAiDrafts(input: $input) {
+      status
+      discardedCount
+    }
+  }
+`;
+
+const CONFIRM_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION = `
+  mutation ConfirmStudentEvaluationCommentAiDrafts(
+    $input: ConfirmStudentEvaluationCommentAiDraftsInput!
+  ) {
+    confirmStudentEvaluationCommentAiDrafts(input: $input) {
+      status
+      confirmedCount
     }
   }
 `;
@@ -197,6 +280,58 @@ export async function getMyStudentEvaluationComments() {
   >(MY_STUDENT_EVALUATION_COMMENTS_QUERY, {});
 
   return response.myStudentEvaluationComments;
+}
+
+export async function generateStudentEvaluationCommentAiDrafts(
+  input: GenerateStudentEvaluationCommentAiDraftsInput,
+) {
+  const response = await executeGraphQL<
+    { generateStudentEvaluationCommentAiDrafts: GenerateStudentEvaluationCommentAiDraftsResult },
+    { input: GenerateStudentEvaluationCommentAiDraftsInput }
+  >(GENERATE_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION, { input });
+
+  return response.generateStudentEvaluationCommentAiDrafts;
+}
+
+export async function saveStudentEvaluationCommentAiDraft(
+  input: SaveStudentEvaluationCommentAiDraftInput,
+) {
+  const response = await executeGraphQL<
+    { saveStudentEvaluationCommentAiDraft: SaveStudentEvaluationCommentAiDraftResult },
+    { input: SaveStudentEvaluationCommentAiDraftInput }
+  >(SAVE_STUDENT_EVALUATION_COMMENT_AI_DRAFT_MUTATION, { input });
+
+  return response.saveStudentEvaluationCommentAiDraft;
+}
+
+export async function discardStudentEvaluationCommentAiDrafts(input: {
+  items: StudentEvaluationCommentAiDraftMutationItem[];
+  scope: StudentEvaluationCommentAiDraftScopeInput;
+}) {
+  const mutationInput = { ...input.scope, items: input.items };
+  const response = await executeGraphQL<
+    {
+      discardStudentEvaluationCommentAiDrafts: DiscardStudentEvaluationCommentAiDraftsResult;
+    },
+    { input: typeof mutationInput }
+  >(DISCARD_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION, { input: mutationInput });
+
+  return response.discardStudentEvaluationCommentAiDrafts;
+}
+
+export async function confirmStudentEvaluationCommentAiDrafts(input: {
+  items: StudentEvaluationCommentAiDraftMutationItem[];
+  scope: StudentEvaluationCommentAiDraftScopeInput;
+}) {
+  const mutationInput = { ...input.scope, items: input.items };
+  const response = await executeGraphQL<
+    {
+      confirmStudentEvaluationCommentAiDrafts: ConfirmStudentEvaluationCommentAiDraftsResult;
+    },
+    { input: typeof mutationInput }
+  >(CONFIRM_STUDENT_EVALUATION_COMMENT_AI_DRAFTS_MUTATION, { input: mutationInput });
+
+  return response.confirmStudentEvaluationCommentAiDrafts;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

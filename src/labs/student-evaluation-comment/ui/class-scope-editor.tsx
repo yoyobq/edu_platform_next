@@ -2,7 +2,19 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ClearOutlined, CloudUploadOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Alert, App as AntApp, Button, Card, Input, Radio, Select, Space, Table, Tag } from 'antd';
+import {
+  Alert,
+  App as AntApp,
+  Button,
+  Card,
+  Input,
+  Radio,
+  Segmented,
+  Select,
+  Space,
+  Table,
+  Tag,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useBlocker } from 'react-router';
 
@@ -10,6 +22,7 @@ import { AcademicTermTabs } from '@/entities/academic-semester';
 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
+import { mergeStudentEvaluationCommentWorkspaceForAi } from '../application/ai-draft-workflow';
 import {
   buildStudentEvaluationCommentWriteItems,
   countStudentEvaluationCommentCodePoints,
@@ -38,6 +51,7 @@ import type {
   StudentEvaluationCommentWorkspace,
 } from '../types';
 
+import { StudentEvaluationCommentAiDraftWorkbench } from './ai-draft-workbench';
 import { StudentEvaluationCommentMaterialImportPanel } from './material-import-panel';
 
 type ClassScopeEditorProps = {
@@ -46,7 +60,7 @@ type ClassScopeEditorProps = {
 
 function requestDiscardConfirmation(
   modal: ReturnType<typeof AntApp.useApp>['modal'],
-  description = '继续后将放弃当前尚未保存的评语修改或未完成的 Excel 导入。',
+  description = '继续后将放弃当前尚未保存的人工、AI 草稿修改或未完成的 Excel 导入。',
 ) {
   return new Promise<boolean>((resolve) => {
     modal.confirm({
@@ -116,6 +130,7 @@ function findWriteAction(workspace: StudentEvaluationCommentWorkspace | null) {
 
 export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: ClassScopeEditorProps) {
   const { message, modal } = AntApp.useApp();
+  const [editorMode, setEditorMode] = useState<'ai' | 'manual'>('manual');
   const [workspace, setWorkspace] = useState<StudentEvaluationCommentWorkspace | null>(null);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
   const [expectedRevisionOverrides, setExpectedRevisionOverrides] = useState<
@@ -134,6 +149,8 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
   const [isImportingMaterial, setIsImportingMaterial] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [hasDirtyAiDrafts, setHasDirtyAiDrafts] = useState(false);
+  const [workspaceResetToken, setWorkspaceResetToken] = useState(0);
 
   const scopeResult = workspace?.view ?? null;
   const draftStates = useMemo(
@@ -155,7 +172,16 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
     (Boolean(materialFile) &&
       (materialImportResult?.status === 'SHEET_SELECTION_REQUIRED' ||
         materialImportResult?.status === 'IDENTITY_MAPPING_REQUIRED'));
-  const hasUnsavedWork = hasDirtyDrafts || hasPendingMaterialImport;
+  const manualDirtyStudentIds = useMemo(
+    () =>
+      new Set(
+        (scopeResult?.students ?? []).flatMap((student, index) =>
+          draftStates[index]?.isDirty ? [student.studentId] : [],
+        ),
+      ),
+    [draftStates, scopeResult],
+  );
+  const hasUnsavedWork = hasDirtyDrafts || hasPendingMaterialImport || hasDirtyAiDrafts;
 
   useUnsavedCommentProtection(hasUnsavedWork);
 
@@ -189,6 +215,9 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
         ),
       );
       resetMaterialImport();
+      setHasDirtyAiDrafts(false);
+      setWorkspaceResetToken((current) => current + 1);
+      if (result.commentKind === 'GRADUATION') setEditorMode('manual');
       setIsConflict(false);
       setScopeError(null);
     },
@@ -219,6 +248,39 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
   useEffect(() => {
     void loadWorkspace({ commentKind: 'TERM' });
   }, [loadWorkspace]);
+
+  const refreshWorkspaceForAi = useCallback(async () => {
+    if (!workspace?.selectedClass) {
+      throw new Error('当前没有可刷新的评语范围。');
+    }
+    const result = await getStudentEvaluationCommentWorkspace({
+      classId: workspace.selectedClass.classId,
+      commentKind: workspace.commentKind,
+      semesterId: workspace.selectedTerm?.semesterId ?? null,
+    });
+    const merged = mergeStudentEvaluationCommentWorkspaceForAi({
+      current: workspace,
+      next: result,
+      preserveFormalCommentStudentIds: manualDirtyStudentIds,
+    });
+    setWorkspace(merged);
+    setDrafts((current) =>
+      Object.fromEntries(
+        (merged.view?.students ?? []).map((student) => [
+          student.studentId,
+          manualDirtyStudentIds.has(student.studentId)
+            ? (current[student.studentId] ?? student.comment?.content ?? '')
+            : (student.comment?.content ?? ''),
+        ]),
+      ),
+    );
+    setExpectedRevisionOverrides((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([studentId]) => manualDirtyStudentIds.has(studentId)),
+      ),
+    );
+    return merged;
+  }, [manualDirtyStudentIds, workspace]);
 
   const changeScope = useCallback(
     async (input: {
@@ -595,7 +657,7 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
         />
       ) : null}
 
-      {!writeAction?.allowed && writeAction?.reasonMessage ? (
+      {editorMode === 'manual' && !writeAction?.allowed && writeAction?.reasonMessage ? (
         <Alert showIcon title={writeAction.reasonMessage} type="warning" />
       ) : null}
 
@@ -612,81 +674,105 @@ export function StudentEvaluationCommentClassScopeEditor({ onDirtyChange }: Clas
             })
           }
         >
-          <Card
-            extra={
-              <Space wrap>
-                <Tag>{scopeResult.scope.scopeKey}</Tag>
-                <Tag color={dirtyCount ? 'warning' : 'success'}>
-                  {dirtyCount ? `${dirtyCount} 项未保存` : '全部已同步'}
-                </Tag>
-                <Button
-                  disabled={
-                    !dirtyCount ||
-                    invalidCount > 0 ||
-                    hasPendingMaterialImport ||
-                    isLoading ||
-                    !writeAction?.allowed
-                  }
-                  icon={<CloudUploadOutlined />}
-                  loading={isSaving}
-                  type="primary"
-                  onClick={() => void handleSave()}
-                >
-                  {dirtyCount ? `保存 ${dirtyCount}` : '保存'}
-                </Button>
-              </Space>
-            }
-            title={`${scopeResult.classItem.className}（${scopeResult.classItem.classCode}）`}
-          >
-            <div className="flex flex-col gap-4">
-              <StudentEvaluationCommentMaterialImportPanel
-                disabled={isLoading || isSaving || !writeAction?.allowed}
-                errorMessage={materialImportError}
-                file={materialFile}
-                identitySelections={materialIdentitySelections}
-                isImporting={isImportingMaterial}
-                result={materialImportResult}
-                selectedSheet={materialSelectedSheet}
-                onClear={clearMaterialImportDisplay}
-                onContinueIdentityMappings={handleContinueMaterialMappings}
-                onContinueSheet={handleContinueMaterialSheet}
-                onFileSelected={handleMaterialFileSelected}
-                onIdentitySelectionChange={(mappingKey, studentId) =>
-                  setMaterialIdentitySelections((current) => ({
-                    ...current,
-                    [mappingKey]: studentId,
-                  }))
+          <div className="flex flex-col gap-4">
+            <Segmented
+              options={[
+                { label: '人工 / Excel', value: 'manual' },
+                {
+                  disabled: workspace?.commentKind !== 'TERM',
+                  label: 'AI 草稿',
+                  value: 'ai',
+                },
+              ]}
+              value={editorMode}
+              onChange={(value) => setEditorMode(value as 'ai' | 'manual')}
+            />
+            {editorMode === 'manual' ? (
+              <Card
+                extra={
+                  <Space wrap>
+                    <Tag>{scopeResult.scope.scopeKey}</Tag>
+                    <Tag color={dirtyCount ? 'warning' : 'success'}>
+                      {dirtyCount ? `${dirtyCount} 项未保存` : '全部已同步'}
+                    </Tag>
+                    <Button
+                      disabled={
+                        !dirtyCount ||
+                        invalidCount > 0 ||
+                        hasPendingMaterialImport ||
+                        isLoading ||
+                        !writeAction?.allowed
+                      }
+                      icon={<CloudUploadOutlined />}
+                      loading={isSaving}
+                      type="primary"
+                      onClick={() => void handleSave()}
+                    >
+                      {dirtyCount ? `保存 ${dirtyCount}` : '保存'}
+                    </Button>
+                  </Space>
                 }
-                onRejectFile={(error) => message.error(error)}
-                onSelectedSheetChange={setMaterialSelectedSheet}
+                title={`${scopeResult.classItem.className}（${scopeResult.classItem.classCode}）`}
+              >
+                <div className="flex flex-col gap-4">
+                  <StudentEvaluationCommentMaterialImportPanel
+                    disabled={isLoading || isSaving || !writeAction?.allowed}
+                    errorMessage={materialImportError}
+                    file={materialFile}
+                    identitySelections={materialIdentitySelections}
+                    isImporting={isImportingMaterial}
+                    result={materialImportResult}
+                    selectedSheet={materialSelectedSheet}
+                    onClear={clearMaterialImportDisplay}
+                    onContinueIdentityMappings={handleContinueMaterialMappings}
+                    onContinueSheet={handleContinueMaterialSheet}
+                    onFileSelected={handleMaterialFileSelected}
+                    onIdentitySelectionChange={(mappingKey, studentId) =>
+                      setMaterialIdentitySelections((current) => ({
+                        ...current,
+                        [mappingKey]: studentId,
+                      }))
+                    }
+                    onRejectFile={(error) => message.error(error)}
+                    onSelectedSheetChange={setMaterialSelectedSheet}
+                  />
+                  {invalidCount ? (
+                    <Alert
+                      showIcon
+                      title={`${invalidCount} 条评语超过 1000 个 Unicode 字符，请修改后保存。`}
+                      type="error"
+                    />
+                  ) : null}
+                  <Alert
+                    showIcon
+                    description="只提交变化行；更新和清除原样提交读取时的 revision，成功后统一重查工作台。"
+                    title={
+                      scopeResult.scope.commentKind === 'TERM'
+                        ? `目标学期正式名单共 ${scopeResult.students.length} 人`
+                        : `当前班级活动名单共 ${scopeResult.students.length} 人`
+                    }
+                    type="info"
+                  />
+                  <Table
+                    columns={columns}
+                    dataSource={scopeResult.students}
+                    loading={isLoading}
+                    pagination={false}
+                    rowKey="studentId"
+                    scroll={{ x: 1050 }}
+                  />
+                </div>
+              </Card>
+            ) : workspace ? (
+              <StudentEvaluationCommentAiDraftWorkbench
+                manualDirtyStudentIds={manualDirtyStudentIds}
+                resetToken={workspaceResetToken}
+                workspace={workspace}
+                onDirtyChange={setHasDirtyAiDrafts}
+                onRefreshWorkspace={refreshWorkspaceForAi}
               />
-              {invalidCount ? (
-                <Alert
-                  showIcon
-                  title={`${invalidCount} 条评语超过 1000 个 Unicode 字符，请修改后保存。`}
-                  type="error"
-                />
-              ) : null}
-              <Alert
-                showIcon
-                description="只提交变化行；更新和清除原样提交读取时的 revision，成功后统一重查工作台。"
-                title={
-                  scopeResult.scope.commentKind === 'TERM'
-                    ? `目标学期正式名单共 ${scopeResult.students.length} 人`
-                    : `当前班级活动名单共 ${scopeResult.students.length} 人`
-                }
-                type="info"
-              />
-              <Table
-                columns={columns}
-                dataSource={scopeResult.students}
-                loading={isLoading}
-                pagination={false}
-                rowKey="studentId"
-                scroll={{ x: 1050 }}
-              />
-            </div>
-          </Card>
+            ) : null}
+          </div>
         </AcademicTermTabs>
       ) : null}
     </div>

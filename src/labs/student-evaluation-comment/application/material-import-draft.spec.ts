@@ -18,9 +18,11 @@ function createStudent(
   content: string | null = null,
 ): StudentEvaluationCommentClassScopeStudent {
   return {
+    aiDraft: null,
     comment: content
       ? { content, revision: REVISION, source: 'MANUAL', updatedAt: '2026-07-22T00:00:00Z' }
       : null,
+    isAiDraftGenerating: false,
     studentId,
     studentName,
     studentStatus: 'ENROLLED',
