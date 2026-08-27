@@ -50,6 +50,7 @@ import {
   countStudentEvaluationCommentWorkflowStatuses,
   normalizeStudentEvaluationCommentContent,
   resolvePreviousStudentEvaluationCommentTerm,
+  resolveStudentEvaluationCommentAiScenario,
   resolveStudentEvaluationCommentWorkflowStatus,
   STUDENT_EVALUATION_COMMENT_MAX_CODE_POINTS,
   type StudentEvaluationCommentWorkflowStatus,
@@ -183,13 +184,20 @@ export function StudentEvaluationCommentProductWorkbench({
   const classId = workspace?.selectedClass?.classId ?? '';
   const semesterId = workspace?.selectedTerm?.semesterId ?? null;
   const scopeKey = workspace?.view?.scope.scopeKey ?? '';
+  const generationScenario = resolveStudentEvaluationCommentAiScenario({
+    selectedClass: workspace?.selectedClass ?? null,
+    selectedTerm: workspace?.selectedTerm ?? null,
+  });
+  const isOffCampusInternship = generationScenario === 'OFF_CAMPUS_INTERNSHIP';
   const previousTerm = useMemo(
     () =>
-      resolvePreviousStudentEvaluationCommentTerm(
-        workspace?.termOptions ?? [],
-        workspace?.selectedTerm ?? null,
-      ),
-    [workspace?.selectedTerm, workspace?.termOptions],
+      isOffCampusInternship
+        ? null
+        : resolvePreviousStudentEvaluationCommentTerm(
+            workspace?.termOptions ?? [],
+            workspace?.selectedTerm ?? null,
+          ),
+    [isOffCampusInternship, workspace?.selectedTerm, workspace?.termOptions],
   );
   const previousTermSemesterId = previousTerm?.semesterId ?? null;
   const editorStudent = editor
@@ -231,10 +239,18 @@ export function StudentEvaluationCommentProductWorkbench({
         const next = await getStudentEvaluationCommentProductWorkbench(input);
         const nextClassId = next.selectedClass?.classId;
         const nextSemesterId = next.selectedTerm?.semesterId;
+        const nextGenerationScenario = resolveStudentEvaluationCommentAiScenario({
+          selectedClass: next.selectedClass,
+          selectedTerm: next.selectedTerm,
+        });
         let nextConductIssues: Record<string, string> = {};
         let nextConductPreflightError: string | null = null;
 
-        if (nextClassId && nextSemesterId !== undefined) {
+        if (
+          nextGenerationScenario === 'ACADEMIC_TERM' &&
+          nextClassId &&
+          nextSemesterId !== undefined
+        ) {
           try {
             const conductWorkspace = await getStudentEvaluationCommentProductConductBasis({
               classId: nextClassId,
@@ -441,15 +457,16 @@ export function StudentEvaluationCommentProductWorkbench({
     (action) => action.action === 'GENERATE_AI_DRAFTS',
   );
   const writeAction = workspace?.actions.find((action) => action.action === 'WRITE_COMMENTS');
-  const generationDisabledReason = isCheckingConductBasis
-    ? '正在检查已确认操行等第'
-    : !generateAction?.allowed
-      ? (generateAction?.reasonMessage ?? '当前学期暂不可生成 AI 草稿')
-      : generationCandidates.length === 0
-        ? selectedConductBlockedCount > 0
-          ? `所选 ${selectedConductBlockedCount} 名学生缺少可用的已确认操行等第`
-          : '请先选择待处理学生'
-        : undefined;
+  const generationDisabledReason =
+    !isOffCampusInternship && isCheckingConductBasis
+      ? '正在检查已确认操行等第'
+      : !generateAction?.allowed
+        ? (generateAction?.reasonMessage ?? '当前学期暂不可生成 AI 草稿')
+        : generationCandidates.length === 0
+          ? selectedConductBlockedCount > 0
+            ? `所选 ${selectedConductBlockedCount} 名学生缺少可用的已确认操行等第`
+            : '请先选择待处理学生'
+          : undefined;
   const styleOptions = styleReferenceStudents.flatMap((student) =>
     student.comment
       ? [{ label: `${student.studentName} · ${student.studentId}`, value: student.studentId }]
@@ -866,9 +883,10 @@ export function StudentEvaluationCommentProductWorkbench({
         address,
         classId,
         length,
+        scenario: generationScenario,
         semesterId,
         studentIds: generationCandidates.map((student) => student.studentId),
-        styleExampleStudentIds,
+        styleExampleStudentIds: isOffCampusInternship ? [] : styleExampleStudentIds,
         tone,
       });
       setIssuesByStudentId((current) => {
@@ -895,7 +913,9 @@ export function StudentEvaluationCommentProductWorkbench({
   }, [
     address,
     classId,
+    generationScenario,
     generationCandidates,
+    isOffCampusInternship,
     length,
     message,
     reloadCurrentWorkspace,
@@ -924,7 +944,7 @@ export function StudentEvaluationCommentProductWorkbench({
 
   const runBasisSync = useCallback(
     async (session: StoredUpstreamSession, request: BasisSyncRequest) => {
-      if (scopeKeyRef.current !== request.scopeKey) return;
+      if (isOffCampusInternship || scopeKeyRef.current !== request.scopeKey) return;
       let latestSession = session;
       const executeSync = async (activeSession: StoredUpstreamSession) => {
         const conduct = await refreshStudentEvaluationCommentProductConductBasis({
@@ -977,6 +997,7 @@ export function StudentEvaluationCommentProductWorkbench({
       }
     },
     [
+      isOffCampusInternship,
       message,
       openLoginModalForExpiredSession,
       persistSessionFromResult,
@@ -992,14 +1013,22 @@ export function StudentEvaluationCommentProductWorkbench({
   }, [queuedBasisSync, runBasisSync]);
 
   const handleBasisSync = useCallback(() => {
-    if (!classId || semesterId === null || !scopeKey) return;
+    if (isOffCampusInternship || !classId || semesterId === null || !scopeKey) return;
     const request = { classId, scopeKey, semesterId };
     if (!upstreamSession) {
       openLoginModal({ pendingAction: request });
       return;
     }
     void runBasisSync(upstreamSession, request);
-  }, [classId, openLoginModal, runBasisSync, scopeKey, semesterId, upstreamSession]);
+  }, [
+    classId,
+    isOffCampusInternship,
+    openLoginModal,
+    runBasisSync,
+    scopeKey,
+    semesterId,
+    upstreamSession,
+  ]);
 
   const columns = useMemo<ColumnsType<StudentEvaluationCommentWorkbenchStudent>>(
     () => [
@@ -1133,13 +1162,15 @@ export function StudentEvaluationCommentProductWorkbench({
               >
                 刷新
               </Button>
-              <Button
-                icon={upstreamSession ? <CloudSyncOutlined /> : <LoginOutlined />}
-                loading={isSyncingBasis}
-                onClick={handleBasisSync}
-              >
-                更新生成依据
-              </Button>
+              {!isOffCampusInternship ? (
+                <Button
+                  icon={upstreamSession ? <CloudSyncOutlined /> : <LoginOutlined />}
+                  loading={isSyncingBasis}
+                  onClick={handleBasisSync}
+                >
+                  更新生成依据
+                </Button>
+              ) : null}
             </Space>
           </div>
           <div>
@@ -1153,7 +1184,9 @@ export function StudentEvaluationCommentProductWorkbench({
       </Card>
 
       {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
-      {basisSyncError ? <Alert closable showIcon title={basisSyncError} type="warning" /> : null}
+      {!isOffCampusInternship && basisSyncError ? (
+        <Alert closable showIcon title={basisSyncError} type="warning" />
+      ) : null}
       {workspace?.warnings.map((warning) => (
         <Alert
           key={`${warning.code}-${warning.schoolYear}-${warning.termNumber}`}
@@ -1204,7 +1237,7 @@ export function StudentEvaluationCommentProductWorkbench({
                 <Tooltip title={generationDisabledReason}>
                   <Button
                     disabled={
-                      isCheckingConductBasis ||
+                      (!isOffCampusInternship && isCheckingConductBasis) ||
                       !generateAction?.allowed ||
                       generationCandidates.length === 0
                     }
@@ -1246,7 +1279,7 @@ export function StudentEvaluationCommentProductWorkbench({
             title={workspace.selectedTerm?.label ?? '学期评语'}
           >
             <div className="flex flex-col gap-4">
-              {conductBlockedCount > 0 ? (
+              {!isOffCampusInternship && conductBlockedCount > 0 ? (
                 <Alert
                   showIcon
                   action={
@@ -1267,8 +1300,16 @@ export function StudentEvaluationCommentProductWorkbench({
                   type="warning"
                 />
               ) : null}
-              {conductPreflightError ? (
+              {!isOffCampusInternship && conductPreflightError ? (
                 <Alert closable showIcon title={conductPreflightError} type="warning" />
+              ) : null}
+              {isOffCampusInternship ? (
+                <Alert
+                  showIcon
+                  description="本场景不读取操行、课程成绩或上一学期风格样例，只生成围绕安全意识、职业规范、沟通协作和未来成长的一般性期许。生成结果仍需老师审阅确认。"
+                  title="最后学期按下厂/校外实习场景治理"
+                  type="info"
+                />
               ) : null}
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <Segmented
@@ -1421,7 +1462,8 @@ export function StudentEvaluationCommentProductWorkbench({
       <Modal
         confirmLoading={isBatchRunning}
         okButtonProps={{
-          disabled: isCheckingConductBasis || generationCandidates.length === 0,
+          disabled:
+            (!isOffCampusInternship && isCheckingConductBasis) || generationCandidates.length === 0,
         }}
         okText={`生成 ${generationCandidates.length} 名学生草稿`}
         open={generationOpen}
@@ -1430,19 +1472,22 @@ export function StudentEvaluationCommentProductWorkbench({
         onOk={() => void handleGenerate()}
       >
         <div className="flex flex-col gap-4 py-3">
-          {selectedConductBlockedCount > 0 ? (
+          {!isOffCampusInternship && selectedConductBlockedCount > 0 ? (
             <Alert
               showIcon
               title={`所选学生中有 ${selectedConductBlockedCount} 人缺少可用的已确认操行等第，本次不会生成。`}
               type="warning"
             />
           ) : null}
+          {isOffCampusInternship ? (
+            <Alert showIcon title="下厂/校外实习场景不使用操行、课程成绩或风格样例。" type="info" />
+          ) : null}
           <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 3, wide: 3 }}>
             <Select options={[...TONE_OPTIONS]} value={tone} onChange={setTone} />
             <Select options={[...LENGTH_OPTIONS]} value={length} onChange={setLength} />
             <Select options={[...ADDRESS_OPTIONS]} value={address} onChange={setAddress} />
           </ResponsiveGrid>
-          {(workspace?.selectedTerm?.sequence ?? 1) > 1 ? (
+          {!isOffCampusInternship && (workspace?.selectedTerm?.sequence ?? 1) > 1 ? (
             <div>
               <div className="mb-2">
                 上一学期评语语气参考

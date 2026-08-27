@@ -13,6 +13,7 @@ const CLASS_OPTION = {
   classCode: 'CS2024-01',
   classId: '1021904',
   className: '计算机2024级1班',
+  trainingYears: 4,
 };
 
 const TERM_OPTION = {
@@ -172,10 +173,106 @@ test('产品工作台以学期和状态筛选统一组织生成与审阅', async
   await expect.poll(() => generationInput).not.toBeNull();
   expect(generationInput).toMatchObject({
     classId: '1021904',
+    scenario: 'ACADEMIC_TERM',
     semesterId: 3,
     studentIds: ['324010103'],
   });
   await expect(page.getByText('生成中 1', { exact: true })).toBeVisible();
+});
+
+test('最后学期跳过操行预检并按下厂实习场景生成', async ({ page }) => {
+  await seedAdmin(page);
+  let generationInput: Record<string, unknown> | null = null;
+  let conductPreflightCalls = 0;
+  const finalClass = { ...CLASS_OPTION, trainingYears: 3 };
+  const finalTerm = {
+    ...TERM_OPTION,
+    label: '2026-2027 第二学期',
+    schoolYear: 2026,
+    semesterId: 6,
+    sequence: 6,
+    termNumber: 2,
+  };
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query StudentEvaluationCommentProductWorkbench')) {
+      const workspace = buildWorkspace();
+      workspace.classOptions = [finalClass];
+      workspace.selectedClass = finalClass;
+      workspace.selectedTerm = finalTerm;
+      workspace.termOptions = [finalTerm];
+      workspace.view.scope.scopeKey = 'TERM:6';
+      workspace.view.scope.semesterId = 6;
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: workspace } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('query StudentEvaluationCommentProductConductBasis')) {
+      conductPreflightCalls += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { studentConductGradeWorkspace: { view: { students: [] } } },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation GenerateStudentEvaluationCommentProductDrafts')) {
+      generationInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            generateStudentEvaluationCommentAiDrafts: {
+              counts: {
+                accepted: 1,
+                alreadyGenerating: 0,
+                basisMissing: 0,
+                draftExists: 0,
+                formalCommentExists: 0,
+                requested: 1,
+              },
+              items: [{ disposition: 'ACCEPTED', studentId: '324010103' }],
+              status: 'ACCEPTED',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await expect(page.getByText('最后学期按下厂/校外实习场景治理')).toBeVisible();
+  await expect(page.getByRole('button', { name: '更新生成依据' })).toHaveCount(0);
+  expect(conductPreflightCalls).toBe(0);
+
+  const targetRow = page.getByRole('row', { name: /王五/ });
+  await targetRow.getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'AI 生成 1' }).click();
+  await expect(page.getByText('下厂/校外实习场景不使用操行、课程成绩或风格样例。')).toBeVisible();
+  await expect(page.getByText(/上一学期评语语气参考/)).toHaveCount(0);
+  await page.getByRole('button', { name: '生成 1 名学生草稿' }).click();
+
+  await expect.poll(() => generationInput).not.toBeNull();
+  expect(generationInput).toMatchObject({
+    classId: '1021904',
+    scenario: 'OFF_CAMPUS_INTERNSHIP',
+    semesterId: 6,
+    studentIds: ['324010103'],
+    styleExampleStudentIds: [],
+  });
 });
 
 test('Excel 导入先进入统一列表审阅，再批量保存正式评语', async ({ page }) => {
@@ -369,6 +466,7 @@ test('第三学期只从第二学期正式评语选择语气参考', async ({ pa
 
   await expect.poll(() => generationInput).not.toBeNull();
   expect(generationInput).toMatchObject({
+    scenario: 'ACADEMIC_TERM',
     semesterId: 3,
     studentIds: ['324010103'],
     styleExampleStudentIds: ['324010101'],

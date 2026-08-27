@@ -41,6 +41,7 @@ import {
   resolveStudentEvaluationCommentAiDispositionLabel,
   resolveStudentEvaluationCommentAiDraftValidation,
   resolveStudentEvaluationCommentAiGenerationBlockingReason,
+  resolveStudentEvaluationCommentAiScenario,
   studentEvaluationCommentAiDraftWorkflowReducer,
 } from '../application/ai-draft-workflow';
 import {
@@ -117,6 +118,11 @@ export function StudentEvaluationCommentAiDraftWorkbench({
   const scopeKey = workspace.view?.scope.scopeKey ?? '';
   const semesterId = workspace.view?.scope.semesterId ?? null;
   const classId = workspace.view?.classItem.id ?? '';
+  const generationScenario = resolveStudentEvaluationCommentAiScenario({
+    selectedClass: workspace.selectedClass,
+    selectedTerm: workspace.selectedTerm,
+  });
+  const isOffCampusInternship = generationScenario === 'OFF_CAMPUS_INTERNSHIP';
   const [state, dispatch] = useReducer(
     studentEvaluationCommentAiDraftWorkflowReducer,
     { scopeKey, students },
@@ -251,7 +257,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
 
   const runAiBasisSync = useCallback(
     async (session: StoredUpstreamSession, request: StudentEvaluationCommentAiBasisSyncRequest) => {
-      if (scopeKeyRef.current !== request.scopeKey) return;
+      if (isOffCampusInternship || scopeKeyRef.current !== request.scopeKey) return;
 
       let latestSession = session;
       const syncWithSession = async (activeSession: StoredUpstreamSession) => {
@@ -341,6 +347,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     },
     [
       message,
+      isOffCampusInternship,
       openLoginModalForExpiredSession,
       persistSessionFromResult,
       refreshAiFacts,
@@ -356,7 +363,7 @@ export function StudentEvaluationCommentAiDraftWorkbench({
   }, [queuedAiBasisSync, runAiBasisSync]);
 
   const handleAiBasisSync = useCallback(() => {
-    if (!classId || semesterId === null) return;
+    if (isOffCampusInternship || !classId || semesterId === null) return;
 
     const request = { classId, scopeKey, semesterId };
     if (!upstreamSession) {
@@ -365,7 +372,15 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     }
 
     void runAiBasisSync(upstreamSession, request);
-  }, [classId, openLoginModal, runAiBasisSync, scopeKey, semesterId, upstreamSession]);
+  }, [
+    classId,
+    isOffCampusInternship,
+    openLoginModal,
+    runAiBasisSync,
+    scopeKey,
+    semesterId,
+    upstreamSession,
+  ]);
 
   const shouldPoll =
     students.some((student) => student.isAiDraftGenerating) ||
@@ -463,9 +478,10 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     try {
       const result = await generateStudentEvaluationCommentAiDrafts({
         classId,
+        scenario: generationScenario,
         semesterId,
         studentIds: selectedTargetStudentIds,
-        styleExampleStudentIds: state.styleExampleStudentIds,
+        styleExampleStudentIds: isOffCampusInternship ? [] : state.styleExampleStudentIds,
         ...state.options,
       });
       dispatch({ result, type: 'GENERATION_SETTLED' });
@@ -485,6 +501,8 @@ export function StudentEvaluationCommentAiDraftWorkbench({
     }
   }, [
     classId,
+    generationScenario,
+    isOffCampusInternship,
     message,
     refreshAiFacts,
     selectedTargetStudentIds,
@@ -705,38 +723,50 @@ export function StudentEvaluationCommentAiDraftWorkbench({
         <div className="flex flex-col gap-4">
           <Alert
             showIcon
-            description="系统综合已确认操行、共同课程总分排名和单科优势或薄弱信号生成评语；不会向模型提交姓名或课程名。生成结果先保存为 7 天有效的加密草稿，不会直接写入正式评语。"
-            title="选择目标学生后受理异步生成"
+            description={
+              isOffCampusInternship
+                ? '本场景不读取操行、课程成绩或风格样例，只生成围绕安全意识、职业规范、沟通协作和未来成长的一般性期许。生成结果先保存为 7 天有效的加密草稿，不会直接写入正式评语。'
+                : '系统综合已确认操行、共同课程总分排名和单科优势或薄弱信号生成评语；不会向模型提交姓名或课程名。生成结果先保存为 7 天有效的加密草稿，不会直接写入正式评语。'
+            }
+            title={
+              isOffCampusInternship
+                ? '最后学期按下厂/校外实习场景生成'
+                : '选择目标学生后受理异步生成'
+            }
             type="info"
           />
-          <Alert
-            showIcon
-            action={
-              <Space wrap>
-                <Tag color={upstreamSession ? 'success' : undefined}>
-                  {upstreamSession
-                    ? `校园网：${upstreamSession.upstreamLoginId ?? '已登录'}`
-                    : '校园网未登录'}
-                </Tag>
-                <Button
-                  icon={<CloudSyncOutlined />}
-                  loading={isSyncingAiBasis}
-                  onClick={handleAiBasisSync}
-                >
-                  {upstreamSession ? '同步生成依据' : '登录并同步生成依据'}
-                </Button>
-                {upstreamSession ? (
-                  <Button icon={<LoginOutlined />} onClick={() => openLoginModal()}>
-                    重新登录校园网
+          {!isOffCampusInternship ? (
+            <Alert
+              showIcon
+              action={
+                <Space wrap>
+                  <Tag color={upstreamSession ? 'success' : undefined}>
+                    {upstreamSession
+                      ? `校园网：${upstreamSession.upstreamLoginId ?? '已登录'}`
+                      : '校园网未登录'}
+                  </Tag>
+                  <Button
+                    icon={<CloudSyncOutlined />}
+                    loading={isSyncingAiBasis}
+                    onClick={handleAiBasisSync}
+                  >
+                    {upstreamSession ? '同步生成依据' : '登录并同步生成依据'}
                   </Button>
-                ) : null}
-              </Space>
-            }
-            description="班级、学期和名单继续读取本地治理快照；登录校园网后会依次同步当前班级当前学期的操行确认数据与课程成绩快照。"
-            title="AI 生成依据治理"
-            type={upstreamSession ? 'success' : 'warning'}
-          />
-          {aiBasisSyncError ? <Alert showIcon title={aiBasisSyncError} type="error" /> : null}
+                  {upstreamSession ? (
+                    <Button icon={<LoginOutlined />} onClick={() => openLoginModal()}>
+                      重新登录校园网
+                    </Button>
+                  ) : null}
+                </Space>
+              }
+              description="班级、学期和名单继续读取本地治理快照；登录校园网后会依次同步当前班级当前学期的操行确认数据与课程成绩快照。"
+              title="AI 生成依据治理"
+              type={upstreamSession ? 'success' : 'warning'}
+            />
+          ) : null}
+          {!isOffCampusInternship && aiBasisSyncError ? (
+            <Alert showIcon title={aiBasisSyncError} type="error" />
+          ) : null}
           {!generateAllowed ? (
             <Alert
               showIcon
@@ -771,22 +801,24 @@ export function StudentEvaluationCommentAiDraftWorkbench({
                         dispatch({ options: { address }, type: 'SET_OPTIONS' })
                       }
                     />
-                    <div>
-                      <div className="mb-2">正式评语风格样例（最多 5 人）</div>
-                      <Select
-                        allowClear
-                        maxCount={5}
-                        mode="multiple"
-                        optionFilterProp="label"
-                        options={styleExampleOptions}
-                        placeholder="可选"
-                        style={{ width: '100%' }}
-                        value={state.styleExampleStudentIds}
-                        onChange={(studentIds) =>
-                          dispatch({ studentIds, type: 'SET_STYLE_EXAMPLES' })
-                        }
-                      />
-                    </div>
+                    {!isOffCampusInternship ? (
+                      <div>
+                        <div className="mb-2">正式评语风格样例（最多 5 人）</div>
+                        <Select
+                          allowClear
+                          maxCount={5}
+                          mode="multiple"
+                          optionFilterProp="label"
+                          options={styleExampleOptions}
+                          placeholder="可选"
+                          style={{ width: '100%' }}
+                          value={state.styleExampleStudentIds}
+                          onChange={(studentIds) =>
+                            dispatch({ studentIds, type: 'SET_STYLE_EXAMPLES' })
+                          }
+                        />
+                      </div>
+                    ) : null}
                   </ResponsiveGrid>
                 ),
                 key: 'options',

@@ -9,6 +9,7 @@ export type StudentEvaluationCommentAiTone =
   | 'CONCISE_DIRECT';
 export type StudentEvaluationCommentAiLength = 'CHARS_80_120' | 'CHARS_120_180' | 'CHARS_180_260';
 export type StudentEvaluationCommentAiAddress = 'SECOND_PERSON' | 'THIRD_PERSON';
+export type StudentEvaluationCommentAiScenario = 'ACADEMIC_TERM' | 'OFF_CAMPUS_INTERNSHIP';
 export type StudentEvaluationCommentAiGenerationDisposition =
   | 'ACCEPTED'
   | 'FORMAL_COMMENT_EXISTS'
@@ -139,6 +140,7 @@ export type StudentEvaluationCommentAiGenerationOptions = {
 export type GenerateStudentEvaluationCommentAiDraftsInput =
   StudentEvaluationCommentAiDraftScopeInput &
     StudentEvaluationCommentAiGenerationOptions & {
+      scenario: StudentEvaluationCommentAiScenario;
       studentIds: string[];
       styleExampleStudentIds: string[];
     };

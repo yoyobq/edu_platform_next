@@ -8,6 +8,7 @@ import {
   collectStudentEvaluationCommentConductBasisIssues,
   countStudentEvaluationCommentWorkflowStatuses,
   resolvePreviousStudentEvaluationCommentTerm,
+  resolveStudentEvaluationCommentAiScenario,
   resolveStudentEvaluationCommentConductBasisIssue,
   resolveStudentEvaluationCommentWorkflowStatus,
 } from './workbench-model';
@@ -121,6 +122,29 @@ describe('student evaluation comment workbench model', () => {
 
     expect(resolvePreviousStudentEvaluationCommentTerm(terms, terms[0] ?? null)).toBeNull();
     expect(resolvePreviousStudentEvaluationCommentTerm(terms, terms[2] ?? null)).toEqual(terms[1]);
+  });
+
+  it('uses the internship scenario only for the configured final class term', () => {
+    const selectedClass = {
+      blockingReasonCode: null,
+      blockingReasonMessage: null,
+      catalogStatus: 'READY',
+      classCode: 'class-1',
+      classId: 'class-1',
+      className: '测试班',
+      trainingYears: 3,
+    };
+    const selectedTerm = term({ sequence: 6 });
+
+    expect(resolveStudentEvaluationCommentAiScenario({ selectedClass, selectedTerm })).toBe(
+      'OFF_CAMPUS_INTERNSHIP',
+    );
+    expect(
+      resolveStudentEvaluationCommentAiScenario({
+        selectedClass,
+        selectedTerm: { ...selectedTerm, sequence: 5 },
+      }),
+    ).toBe('ACADEMIC_TERM');
   });
 });
 

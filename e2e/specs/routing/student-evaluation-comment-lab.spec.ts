@@ -414,6 +414,7 @@ test('老师生成、编辑并二次确认 AI 草稿后才写入正式评语', a
     address: 'THIRD_PERSON',
     classId: '1021904',
     length: 'CHARS_120_180',
+    scenario: 'ACADEMIC_TERM',
     semesterId: 202501,
     studentIds: ['324010113'],
     styleExampleStudentIds: [],
@@ -430,6 +431,83 @@ test('老师生成、编辑并二次确认 AI 草稿后才写入正式评语', a
     classId: '1021904',
     items: [{ draftId: '11', expectedRevision: savedRevision }],
     semesterId: 202501,
+  });
+});
+
+test('最后学期按下厂实习场景生成且不展示普通学期依据治理', async ({ page }) => {
+  await seedAdmin(page);
+  let generationInput: Record<string, unknown> | null = null;
+  const finalTerm = {
+    ...TERM_OPTION,
+    label: '2027-2028 第二学期',
+    schoolYear: 2027,
+    semesterId: 202802,
+    sequence: 8,
+    termNumber: 2,
+  };
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query StudentEvaluationCommentWorkspace')) {
+      const workspace = buildWorkspace('已有正式评语。');
+      workspace.selectedTerm = finalTerm;
+      workspace.termOptions = [finalTerm];
+      workspace.view.scope.scopeKey = 'TERM:202802';
+      workspace.view.scope.semesterId = 202802;
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: workspace } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation GenerateStudentEvaluationCommentAiDrafts')) {
+      generationInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            generateStudentEvaluationCommentAiDrafts: {
+              counts: {
+                accepted: 1,
+                alreadyGenerating: 0,
+                basisMissing: 0,
+                draftExists: 0,
+                formalCommentExists: 0,
+                requested: 1,
+              },
+              items: [{ disposition: 'ACCEPTED', studentId: '324010113' }],
+              status: 'ACCEPTED',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationComment);
+  await page.getByText('AI 草稿', { exact: true }).click();
+
+  await expect(page.getByText('最后学期按下厂/校外实习场景生成')).toBeVisible();
+  await expect(page.getByRole('button', { name: /同步生成依据/ })).toHaveCount(0);
+  const targetRow = page.getByRole('row', { name: /324010113 李四/ }).first();
+  await targetRow.getByRole('checkbox').check();
+  await page.getByRole('button', { name: '生成所选学生草稿' }).click();
+
+  await expect.poll(() => generationInput).not.toBeNull();
+  expect(generationInput).toMatchObject({
+    classId: '1021904',
+    scenario: 'OFF_CAMPUS_INTERNSHIP',
+    semesterId: 202802,
+    studentIds: ['324010113'],
+    styleExampleStudentIds: [],
   });
 });
 

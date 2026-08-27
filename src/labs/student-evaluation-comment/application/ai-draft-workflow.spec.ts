@@ -13,6 +13,7 @@ import {
   mergeStudentEvaluationCommentWorkspaceForAi,
   resolveStudentEvaluationCommentAiDraftValidation,
   resolveStudentEvaluationCommentAiGenerationBlockingReason,
+  resolveStudentEvaluationCommentAiScenario,
   studentEvaluationCommentAiDraftWorkflowReducer,
 } from './ai-draft-workflow';
 
@@ -32,6 +33,40 @@ describe('student evaluation comment AI draft workflow', () => {
     });
     expect(state.targetStudentIds).toEqual([]);
     expect(state.selectedDraftIds).toEqual([]);
+  });
+
+  it('uses the internship scenario only for the configured final class term', () => {
+    const selectedClass = {
+      blockingReasonCode: null,
+      blockingReasonMessage: null,
+      catalogStatus: 'READY',
+      classCode: 'class-1',
+      classId: 'class-1',
+      className: '测试班',
+      departmentId: 'department-1',
+      gradeYear: 2024,
+      majorId: 'major-1',
+      majorName: '测试专业',
+      trainingYears: 3,
+    };
+    const selectedTerm = {
+      isCurrent: true,
+      label: '第六学期',
+      schoolYear: 2026,
+      semesterId: 6,
+      sequence: 6,
+      termNumber: 2,
+    };
+
+    expect(resolveStudentEvaluationCommentAiScenario({ selectedClass, selectedTerm })).toBe(
+      'OFF_CAMPUS_INTERNSHIP',
+    );
+    expect(
+      resolveStudentEvaluationCommentAiScenario({
+        selectedClass,
+        selectedTerm: { ...selectedTerm, sequence: 5 },
+      }),
+    ).toBe('ACADEMIC_TERM');
   });
 
   it('blocks targets that already have formal, draft, generating or manual content', () => {

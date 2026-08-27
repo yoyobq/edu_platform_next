@@ -12,6 +12,7 @@ import type {
   StudentEvaluationCommentAiAddress,
   StudentEvaluationCommentAiDraft,
   StudentEvaluationCommentAiLength,
+  StudentEvaluationCommentAiScenario,
   StudentEvaluationCommentAiTone,
   StudentEvaluationCommentConductBasisWorkspace,
   StudentEvaluationCommentMaterialIdentityMappingGroup,
@@ -40,6 +41,7 @@ const WORKSPACE_QUERY = `
         classId
         classCode
         className
+        trainingYears
         catalogStatus
         blockingReasonCode
         blockingReasonMessage
@@ -48,6 +50,7 @@ const WORKSPACE_QUERY = `
         classId
         classCode
         className
+        trainingYears
         catalogStatus
         blockingReasonCode
         blockingReasonMessage
@@ -277,6 +280,7 @@ export function generateStudentEvaluationCommentProductDrafts(input: {
   address: StudentEvaluationCommentAiAddress;
   classId: string;
   length: StudentEvaluationCommentAiLength;
+  scenario: StudentEvaluationCommentAiScenario;
   semesterId: number;
   studentIds: string[];
   styleExampleStudentIds: string[];

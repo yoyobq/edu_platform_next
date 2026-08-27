@@ -5,8 +5,11 @@ import type {
   StudentEvaluationCommentAiDraft,
   StudentEvaluationCommentAiGenerationDisposition,
   StudentEvaluationCommentAiGenerationOptions,
+  StudentEvaluationCommentAiScenario,
+  StudentEvaluationCommentClassOption,
   StudentEvaluationCommentClassScopeStudent,
   StudentEvaluationCommentRevision,
+  StudentEvaluationCommentTermOption,
   StudentEvaluationCommentWorkspace,
 } from '../types';
 
@@ -21,6 +24,20 @@ export const DEFAULT_STUDENT_EVALUATION_COMMENT_AI_OPTIONS = {
   length: 'CHARS_120_180',
   tone: 'OBJECTIVE_BALANCED',
 } as const satisfies StudentEvaluationCommentAiGenerationOptions;
+
+export function resolveStudentEvaluationCommentAiScenario(input: {
+  selectedClass: StudentEvaluationCommentClassOption | null;
+  selectedTerm: StudentEvaluationCommentTermOption | null;
+}): StudentEvaluationCommentAiScenario {
+  const trainingYears = input.selectedClass?.trainingYears;
+  const isFinalTerm =
+    typeof trainingYears === 'number' &&
+    Number.isInteger(trainingYears) &&
+    trainingYears > 0 &&
+    input.selectedTerm?.sequence === trainingYears * 2;
+
+  return isFinalTerm ? 'OFF_CAMPUS_INTERNSHIP' : 'ACADEMIC_TERM';
+}
 
 export type StudentEvaluationCommentAiDraftEdit = {
   content: string;

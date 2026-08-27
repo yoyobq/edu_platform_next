@@ -29,6 +29,7 @@ vi.mock('@/shared/graphql', () => ({
 import {
   clearStudentEvaluationCommentProductComments,
   discardStudentEvaluationCommentProductDrafts,
+  generateStudentEvaluationCommentProductDrafts,
   getStudentEvaluationCommentProductConductBasis,
   getStudentEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
@@ -58,6 +59,39 @@ describe('student evaluation comment product workbench api', () => {
     ).resolves.toBe(workspace);
     expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
       input: { classId: '1021904', commentKind: 'TERM', semesterId: 3 },
+    });
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('trainingYears');
+  });
+
+  it('sends the selected AI generation scenario explicitly', async () => {
+    const payload = { counts: { accepted: 1 }, items: [], status: 'ACCEPTED' };
+    executeGraphQLMock.mockResolvedValueOnce({
+      generateStudentEvaluationCommentAiDrafts: payload,
+    });
+
+    await expect(
+      generateStudentEvaluationCommentProductDrafts({
+        address: 'THIRD_PERSON',
+        classId: '1021904',
+        length: 'CHARS_120_180',
+        scenario: 'OFF_CAMPUS_INTERNSHIP',
+        semesterId: 6,
+        studentIds: ['student-1'],
+        styleExampleStudentIds: [],
+        tone: 'OBJECTIVE_BALANCED',
+      }),
+    ).resolves.toBe(payload);
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: {
+        address: 'THIRD_PERSON',
+        classId: '1021904',
+        length: 'CHARS_120_180',
+        scenario: 'OFF_CAMPUS_INTERNSHIP',
+        semesterId: 6,
+        studentIds: ['student-1'],
+        styleExampleStudentIds: [],
+        tone: 'OBJECTIVE_BALANCED',
+      },
     });
   });
 

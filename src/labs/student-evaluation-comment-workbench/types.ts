@@ -51,6 +51,7 @@ export type StudentEvaluationCommentClassOption = {
   classCode: string;
   classId: string;
   className: string;
+  trainingYears: number | null;
 };
 
 export type StudentEvaluationCommentTermOption = {
@@ -95,6 +96,7 @@ export type StudentEvaluationCommentAiTone =
   | 'CONCISE_DIRECT';
 export type StudentEvaluationCommentAiLength = 'CHARS_80_120' | 'CHARS_120_180' | 'CHARS_180_260';
 export type StudentEvaluationCommentAiAddress = 'SECOND_PERSON' | 'THIRD_PERSON';
+export type StudentEvaluationCommentAiScenario = 'ACADEMIC_TERM' | 'OFF_CAMPUS_INTERNSHIP';
 
 export type GenerateStudentEvaluationCommentAiDraftsResult = {
   counts: {

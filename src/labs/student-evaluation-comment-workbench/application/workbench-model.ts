@@ -1,6 +1,8 @@
 // src/labs/student-evaluation-comment-workbench/application/workbench-model.ts
 
 import type {
+  StudentEvaluationCommentAiScenario,
+  StudentEvaluationCommentClassOption,
   StudentEvaluationCommentConductGradeField,
   StudentEvaluationCommentTermOption,
   StudentEvaluationCommentWorkbenchStudent,
@@ -15,6 +17,20 @@ export type StudentEvaluationCommentWorkflowStatus =
   | 'ISSUE';
 
 export const STUDENT_EVALUATION_COMMENT_MAX_CODE_POINTS = 1000;
+
+export function resolveStudentEvaluationCommentAiScenario(input: {
+  selectedClass: StudentEvaluationCommentClassOption | null;
+  selectedTerm: StudentEvaluationCommentTermOption | null;
+}): StudentEvaluationCommentAiScenario {
+  const trainingYears = input.selectedClass?.trainingYears;
+  const isFinalTerm =
+    typeof trainingYears === 'number' &&
+    Number.isInteger(trainingYears) &&
+    trainingYears > 0 &&
+    input.selectedTerm?.sequence === trainingYears * 2;
+
+  return isFinalTerm ? 'OFF_CAMPUS_INTERNSHIP' : 'ACADEMIC_TERM';
+}
 
 export type StudentEvaluationCommentConductBasisIssue =
   | 'CONDUCT_GRADE_MISSING'

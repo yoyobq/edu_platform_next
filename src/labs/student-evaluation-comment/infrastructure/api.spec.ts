@@ -122,10 +122,23 @@ describe('student evaluation comment api', () => {
       address: 'THIRD_PERSON',
       classId: 'class-1',
       length: 'CHARS_120_180',
+      scenario: 'ACADEMIC_TERM',
       semesterId: 202501,
       studentIds: ['s-1'],
       styleExampleStudentIds: ['s-2'],
       tone: 'OBJECTIVE_BALANCED',
+    });
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: {
+        address: 'THIRD_PERSON',
+        classId: 'class-1',
+        length: 'CHARS_120_180',
+        scenario: 'ACADEMIC_TERM',
+        semesterId: 202501,
+        studentIds: ['s-1'],
+        styleExampleStudentIds: ['s-2'],
+        tone: 'OBJECTIVE_BALANCED',
+      },
     });
     await saveStudentEvaluationCommentAiDraft({
       classId: 'class-1',
