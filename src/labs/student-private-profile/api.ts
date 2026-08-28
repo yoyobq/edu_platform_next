@@ -275,6 +275,37 @@ export type StudentRegistrationCardDocumentTemplateCode =
 
 export type StudentRegistrationCardGenerationStatus = 'BLOCKED' | 'READY' | 'WARNING';
 
+export type StudentRegistrationCardTermMaterialReadinessStatus =
+  | 'COMPLETE'
+  | 'INCOMPLETE'
+  | 'NOT_APPLICABLE'
+  | 'UNAVAILABLE';
+
+export type StudentRegistrationCardTermMaterialStatus =
+  | 'MISSING'
+  | 'NOT_REQUIRED'
+  | 'READY'
+  | 'UNAVAILABLE';
+
+export type StudentRegistrationCardTermMaterialReadinessItem = {
+  conductGradeStatus: StudentRegistrationCardTermMaterialStatus;
+  evaluationCommentStatus: Exclude<StudentRegistrationCardTermMaterialStatus, 'NOT_REQUIRED'>;
+  label: string;
+  schoolYear: number;
+  semesterId: number;
+  sequence: number;
+  termNumber: number;
+};
+
+export type StudentRegistrationCardTermMaterialReadiness = {
+  completeTermCount: number;
+  expectedTermCount: number;
+  missingConductGradeCount: number;
+  missingEvaluationCommentCount: number;
+  status: StudentRegistrationCardTermMaterialReadinessStatus;
+  terms: StudentRegistrationCardTermMaterialReadinessItem[];
+};
+
 export type StudentRegistrationCardGenerationPreflight = {
   issueCodes: string[];
   missingSections: string[];
@@ -282,6 +313,7 @@ export type StudentRegistrationCardGenerationPreflight = {
   studentId: string;
   templateCode: StudentRegistrationCardDocumentTemplateCode | string;
   templateVersion: number;
+  termMaterialReadiness: StudentRegistrationCardTermMaterialReadiness;
   warningCodes: string[];
 };
 
@@ -926,6 +958,22 @@ const STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_FIELDS = `
   issueCodes
   warningCodes
   missingSections
+  termMaterialReadiness {
+    status
+    expectedTermCount
+    completeTermCount
+    missingEvaluationCommentCount
+    missingConductGradeCount
+    terms {
+      semesterId
+      sequence
+      schoolYear
+      termNumber
+      label
+      evaluationCommentStatus
+      conductGradeStatus
+    }
+  }
 `;
 
 const STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_QUERY = `

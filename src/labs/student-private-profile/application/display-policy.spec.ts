@@ -22,6 +22,9 @@ import {
   resolveStudentPrivateProfileSourceLabel,
   resolveStudentPrivateProfileStatusLabel,
   resolveStudentPrivateProfileWarningCodeLabel,
+  resolveStudentRegistrationCardGenerationCodeLabel,
+  resolveStudentRegistrationCardTermMaterialStatusLabel,
+  resolveStudentRegistrationCardTermReadinessStatusLabel,
 } from './display-policy';
 
 describe('student private profile display policy', () => {
@@ -88,6 +91,14 @@ describe('student private profile display policy', () => {
     expect(resolveStudentPrivateProfileWarningCodeLabel('CLASS_PROJECTION_MISMATCH')).toBe(
       '当前班级信息与有效班级关系不一致，已按有效班级刷新',
     );
+    expect(
+      resolveStudentRegistrationCardGenerationCodeLabel('TERM_EVALUATION_COMMENT_MISSING'),
+    ).toBe('存在学期评语缺失');
+    expect(resolveStudentRegistrationCardGenerationCodeLabel('TERM_CONDUCT_GRADE_MISSING')).toBe(
+      '存在学期操行缺失',
+    );
+    expect(resolveStudentRegistrationCardTermReadinessStatusLabel('INCOMPLETE')).toBe('存在缺失');
+    expect(resolveStudentRegistrationCardTermMaterialStatusLabel('NOT_REQUIRED')).toBe('不要求');
     expect(formatStudentPrivateProfileBoolean(true)).toBe('是');
     expect(formatStudentPrivateProfileBoolean(null)).toBe('未返回');
   });

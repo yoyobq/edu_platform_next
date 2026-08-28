@@ -679,6 +679,24 @@ describe('student-private-profile lab api', () => {
       studentId: 'S001',
       templateCode: 'STUDENT_REGISTRATION_CARD_FULL_EXPORT',
       templateVersion: 1,
+      termMaterialReadiness: {
+        status: 'INCOMPLETE',
+        expectedTermCount: 4,
+        completeTermCount: 2,
+        missingEvaluationCommentCount: 1,
+        missingConductGradeCount: 1,
+        terms: [
+          {
+            semesterId: 202501,
+            sequence: 1,
+            schoolYear: 2024,
+            termNumber: 1,
+            label: '2024-2025学年第一学期',
+            evaluationCommentStatus: 'MISSING',
+            conductGradeStatus: 'READY',
+          },
+        ],
+      },
       warningCodes: ['FAMILY_MISSING'],
     };
 
@@ -703,6 +721,9 @@ describe('student-private-profile lab api', () => {
       'studentRegistrationCardGenerationPreflight',
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('issueCodes');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('termMaterialReadiness');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('evaluationCommentStatus');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('conductGradeStatus');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('photoBase64');
 
     const generation = {

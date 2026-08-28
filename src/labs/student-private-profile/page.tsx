@@ -99,6 +99,8 @@ import {
   resolveStudentRegistrationCardGenerationMissingSectionLabel,
   resolveStudentRegistrationCardGenerationStatusColor,
   resolveStudentRegistrationCardGenerationStatusLabel,
+  resolveStudentRegistrationCardTermMaterialStatusLabel,
+  resolveStudentRegistrationCardTermReadinessStatusLabel,
   STUDENT_PRIVATE_PROFILE_CLASS_OVERVIEW_ATTENTION_FILTERS,
   STUDENT_PRIVATE_PROFILE_COMPLETENESS_ITEMS,
   STUDENT_PRIVATE_PROFILE_FAMILY_PATCH_FIELD_OPTIONS,
@@ -379,6 +381,25 @@ function renderRegistrationCardMissingSectionTags(sections: readonly string[]) {
         </Tag>
       ))}
     </Space>
+  );
+}
+
+function renderRegistrationCardTermStatusTag(status: string, readiness = false) {
+  const normalized = status.trim().toUpperCase();
+  const color =
+    normalized === 'READY' || normalized === 'COMPLETE'
+      ? 'success'
+      : normalized === 'MISSING' || normalized === 'INCOMPLETE'
+        ? 'warning'
+        : normalized === 'UNAVAILABLE'
+          ? 'warning'
+          : undefined;
+  return (
+    <Tag color={color}>
+      {readiness
+        ? resolveStudentRegistrationCardTermReadinessStatusLabel(status)
+        : resolveStudentRegistrationCardTermMaterialStatusLabel(status)}
+    </Tag>
   );
 }
 
@@ -3939,6 +3960,80 @@ export function StudentPrivateProfileLabPage() {
                             registrationCardPreflight.warningCodes,
                             'warning',
                           )}
+                        </Descriptions.Item>
+                        <Descriptions.Item label="学期材料齐备性" span={3}>
+                          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                            <Space wrap>
+                              {renderRegistrationCardTermStatusTag(
+                                registrationCardPreflight.termMaterialReadiness.status,
+                                true,
+                              )}
+                              <Tag color="processing">仅提醒，不影响生成</Tag>
+                              <Tag>
+                                应检查{' '}
+                                {registrationCardPreflight.termMaterialReadiness.expectedTermCount}{' '}
+                                学期
+                              </Tag>
+                              <Tag color="success">
+                                已齐备{' '}
+                                {registrationCardPreflight.termMaterialReadiness.completeTermCount}{' '}
+                                学期
+                              </Tag>
+                              <Tag
+                                color={
+                                  registrationCardPreflight.termMaterialReadiness
+                                    .missingEvaluationCommentCount > 0
+                                    ? 'warning'
+                                    : undefined
+                                }
+                              >
+                                缺评语{' '}
+                                {
+                                  registrationCardPreflight.termMaterialReadiness
+                                    .missingEvaluationCommentCount
+                                }
+                              </Tag>
+                              <Tag
+                                color={
+                                  registrationCardPreflight.termMaterialReadiness
+                                    .missingConductGradeCount > 0
+                                    ? 'warning'
+                                    : undefined
+                                }
+                              >
+                                缺操行{' '}
+                                {
+                                  registrationCardPreflight.termMaterialReadiness
+                                    .missingConductGradeCount
+                                }
+                              </Tag>
+                            </Space>
+                            <Table
+                              columns={[
+                                { dataIndex: 'label', title: '学期' },
+                                {
+                                  dataIndex: 'evaluationCommentStatus',
+                                  render: (status: string) =>
+                                    renderRegistrationCardTermStatusTag(status),
+                                  title: '正式评语',
+                                  width: 140,
+                                },
+                                {
+                                  dataIndex: 'conductGradeStatus',
+                                  render: (status: string) =>
+                                    renderRegistrationCardTermStatusTag(status),
+                                  title: '已确认操行',
+                                  width: 140,
+                                },
+                              ]}
+                              dataSource={registrationCardPreflight.termMaterialReadiness.terms}
+                              locale={{ emptyText: '暂无需要检查的已结束在籍学期' }}
+                              pagination={false}
+                              rowKey="semesterId"
+                              scroll={{ x: 520 }}
+                              size="small"
+                            />
+                          </Space>
                         </Descriptions.Item>
                       </Descriptions>
                     ) : (

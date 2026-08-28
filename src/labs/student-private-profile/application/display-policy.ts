@@ -15,6 +15,8 @@ import type {
   StudentPrivateProfileSupplementMode,
   StudentPrivateProfileSupplementTemplateCode,
   StudentRegistrationCardGenerationStatus,
+  StudentRegistrationCardTermMaterialReadinessStatus,
+  StudentRegistrationCardTermMaterialStatus,
 } from '../api';
 
 export const STUDENT_PRIVATE_PROFILE_COMPARE_FIELD_OPTIONS: {
@@ -354,7 +356,34 @@ const REGISTRATION_CARD_GENERATION_CODE_LABELS = new Map<string, string>([
   ['SCORE_BELOW_PASSING_RAISED_TO_60', '低于 60 的成绩按 60 展示'],
   ['DROPPED_STUDENT_SCORE_INVALID_LEFT_BLANK', '退学学生无效成绩留空'],
   ['ENROLLMENT_TIME_MISSING_FOR_EDUCATION_FALLBACK', '教育经历兜底缺少入学时间'],
+  ['GRADUATION_EVALUATION_COMMENT_MISSING', '缺正式毕业评语'],
+  ['EVALUATION_COMMENT_UNAVAILABLE', '评语能力暂不可用'],
+  ['TERM_EVALUATION_COMMENT_MISSING', '存在学期评语缺失'],
+  ['TERM_CONDUCT_GRADE_MISSING', '存在学期操行缺失'],
+  ['TERM_MATERIAL_READINESS_UNAVAILABLE', '学期材料状态暂不可判定'],
+  ['CONDUCT_GRADE_CAPABILITY_UNAVAILABLE', '操行能力暂不可用'],
+  ['ACADEMIC_SEMESTER_CAPABILITY_UNAVAILABLE', '学期配置能力暂不可用'],
 ]);
+
+const REGISTRATION_CARD_TERM_READINESS_STATUS_LABELS: Record<
+  StudentRegistrationCardTermMaterialReadinessStatus,
+  string
+> = {
+  COMPLETE: '齐备',
+  INCOMPLETE: '存在缺失',
+  NOT_APPLICABLE: '暂无已结束在籍学期',
+  UNAVAILABLE: '暂不可判定',
+};
+
+const REGISTRATION_CARD_TERM_MATERIAL_STATUS_LABELS: Record<
+  StudentRegistrationCardTermMaterialStatus,
+  string
+> = {
+  READY: '齐备',
+  MISSING: '缺失',
+  NOT_REQUIRED: '不要求',
+  UNAVAILABLE: '暂不可判定',
+};
 
 export const STUDENT_PRIVATE_PROFILE_SUPPLEMENT_TEMPLATE_OPTIONS = Object.entries(
   SUPPLEMENT_TEMPLATE_LABELS,
@@ -543,6 +572,22 @@ export function resolveStudentRegistrationCardGenerationMissingSectionLabel(sect
     GOVERNANCE_MISSING_SECTION_LABELS[
       normalizeDisplayKey(section) as StudentPrivateProfileGovernanceMissingSection
     ] ?? section
+  );
+}
+
+export function resolveStudentRegistrationCardTermReadinessStatusLabel(status: string) {
+  return (
+    REGISTRATION_CARD_TERM_READINESS_STATUS_LABELS[
+      normalizeDisplayKey(status) as StudentRegistrationCardTermMaterialReadinessStatus
+    ] ?? status
+  );
+}
+
+export function resolveStudentRegistrationCardTermMaterialStatusLabel(status: string) {
+  return (
+    REGISTRATION_CARD_TERM_MATERIAL_STATUS_LABELS[
+      normalizeDisplayKey(status) as StudentRegistrationCardTermMaterialStatus
+    ] ?? status
   );
 }
 
