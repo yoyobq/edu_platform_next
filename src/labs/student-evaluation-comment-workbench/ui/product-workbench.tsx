@@ -1,6 +1,6 @@
 // src/labs/student-evaluation-comment-workbench/ui/product-workbench.tsx
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckOutlined,
   CloudSyncOutlined,
@@ -26,6 +26,7 @@ import {
   Select,
   Space,
   Table,
+  Tabs,
   Tag,
   Tooltip,
 } from 'antd';
@@ -57,22 +58,30 @@ import {
 } from '../application/workbench-model';
 import {
   clearStudentEvaluationCommentProductComments,
+  clearStudentGraduationEvaluationCommentProductComments,
   confirmStudentEvaluationCommentProductDrafts,
+  confirmStudentGraduationEvaluationCommentProductDrafts,
   discardStudentEvaluationCommentProductDrafts,
+  discardStudentGraduationEvaluationCommentProductDrafts,
   generateStudentEvaluationCommentProductDrafts,
+  generateStudentGraduationEvaluationCommentProductDrafts,
   getStudentEvaluationCommentProductConductBasis,
   getStudentEvaluationCommentProductWorkbench,
+  getStudentGraduationEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
   refreshStudentEvaluationCommentProductConductBasis,
   refreshStudentEvaluationCommentProductCourseBasis,
   saveStudentEvaluationCommentProductDraft,
+  saveStudentGraduationEvaluationCommentProductDraft,
   writeStudentEvaluationCommentProductComment,
   writeStudentEvaluationCommentProductComments,
+  writeStudentGraduationEvaluationCommentProductComment,
 } from '../infrastructure/api';
 import type {
   StudentEvaluationCommentAiAddress,
   StudentEvaluationCommentAiLength,
   StudentEvaluationCommentAiTone,
+  StudentEvaluationCommentKind,
   StudentEvaluationCommentMaterialIdentityMappingInput,
   StudentEvaluationCommentMaterialImportResult,
   StudentEvaluationCommentMaterialPreviewRow,
@@ -135,6 +144,7 @@ export function StudentEvaluationCommentProductWorkbench({
   currentAccount,
 }: ProductWorkbenchProps) {
   const { message, modal } = AntApp.useApp();
+  const [activeCommentKind, setActiveCommentKind] = useState<StudentEvaluationCommentKind>('TERM');
   const [workspace, setWorkspace] = useState<StudentEvaluationCommentWorkbench | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -184,6 +194,7 @@ export function StudentEvaluationCommentProductWorkbench({
   const classId = workspace?.selectedClass?.classId ?? '';
   const semesterId = workspace?.selectedTerm?.semesterId ?? null;
   const scopeKey = workspace?.view?.scope.scopeKey ?? '';
+  const isGraduation = activeCommentKind === 'GRADUATION';
   const generationScenario = resolveStudentEvaluationCommentAiScenario({
     selectedClass: workspace?.selectedClass ?? null,
     selectedTerm: workspace?.selectedTerm ?? null,
@@ -191,13 +202,13 @@ export function StudentEvaluationCommentProductWorkbench({
   const isOffCampusInternship = generationScenario === 'OFF_CAMPUS_INTERNSHIP';
   const previousTerm = useMemo(
     () =>
-      isOffCampusInternship
+      isGraduation || isOffCampusInternship
         ? null
         : resolvePreviousStudentEvaluationCommentTerm(
             workspace?.termOptions ?? [],
             workspace?.selectedTerm ?? null,
           ),
-    [isOffCampusInternship, workspace?.selectedTerm, workspace?.termOptions],
+    [isGraduation, isOffCampusInternship, workspace?.selectedTerm, workspace?.termOptions],
   );
   const previousTermSemesterId = previousTerm?.semesterId ?? null;
   const editorStudent = editor
@@ -231,12 +242,24 @@ export function StudentEvaluationCommentProductWorkbench({
   }, []);
 
   const loadWorkspace = useCallback(
-    async (input: { classId?: string; semesterId?: number } = {}) => {
+    async (input: {
+      classId?: string;
+      commentKind: StudentEvaluationCommentKind;
+      semesterId?: number;
+    }) => {
       setIsLoading(true);
-      setIsCheckingConductBasis(true);
+      setIsCheckingConductBasis(input.commentKind === 'TERM');
       setErrorMessage(null);
       try {
-        const next = await getStudentEvaluationCommentProductWorkbench(input);
+        const next =
+          input.commentKind === 'GRADUATION'
+            ? await getStudentGraduationEvaluationCommentProductWorkbench({
+                ...(input.classId ? { classId: input.classId } : {}),
+              })
+            : await getStudentEvaluationCommentProductWorkbench({
+                ...(input.classId ? { classId: input.classId } : {}),
+                ...(input.semesterId !== undefined ? { semesterId: input.semesterId } : {}),
+              });
         const nextClassId = next.selectedClass?.classId;
         const nextSemesterId = next.selectedTerm?.semesterId;
         const nextGenerationScenario = resolveStudentEvaluationCommentAiScenario({
@@ -247,6 +270,7 @@ export function StudentEvaluationCommentProductWorkbench({
         let nextConductPreflightError: string | null = null;
 
         if (
+          input.commentKind === 'TERM' &&
           nextGenerationScenario === 'ACADEMIC_TERM' &&
           nextClassId &&
           nextSemesterId !== undefined
@@ -281,14 +305,14 @@ export function StudentEvaluationCommentProductWorkbench({
   );
 
   useEffect(() => {
-    void loadWorkspace();
+    void loadWorkspace({ commentKind: 'TERM' });
   }, [loadWorkspace]);
 
   useEffect(() => {
     let active = true;
     setStyleExampleStudentIds([]);
     setStyleReferenceStudents([]);
-    if (!classId || previousTermSemesterId === null) {
+    if (isGraduation || !classId || previousTermSemesterId === null) {
       setIsLoadingStyleReferences(false);
       return;
     }
@@ -314,12 +338,14 @@ export function StudentEvaluationCommentProductWorkbench({
     return () => {
       active = false;
     };
-  }, [classId, previousTermSemesterId]);
+  }, [classId, isGraduation, previousTermSemesterId]);
 
   const reloadCurrentWorkspace = useCallback(async () => {
-    if (!classId || semesterId === null) return loadWorkspace();
-    return loadWorkspace({ classId, semesterId });
-  }, [classId, loadWorkspace, semesterId]);
+    if (!classId) return loadWorkspace({ commentKind: activeCommentKind });
+    if (isGraduation) return loadWorkspace({ classId, commentKind: 'GRADUATION' });
+    if (semesterId === null) return loadWorkspace({ classId, commentKind: 'TERM' });
+    return loadWorkspace({ classId, commentKind: 'TERM', semesterId });
+  }, [activeCommentKind, classId, isGraduation, loadWorkspace, semesterId]);
 
   useEffect(() => {
     if (!students.some((student) => student.isAiDraftGenerating)) return;
@@ -337,7 +363,11 @@ export function StudentEvaluationCommentProductWorkbench({
   }, []);
 
   const requestScopeChange = useCallback(
-    async (next: { classId: string; semesterId?: number }) => {
+    async (next: {
+      classId: string;
+      commentKind?: StudentEvaluationCommentKind;
+      semesterId?: number;
+    }) => {
       if (
         (editorDirty || importedDraftStudentIds.size > 0 || hasPendingMaterialImport) &&
         !(await requestConfirmation(modal, {
@@ -358,7 +388,15 @@ export function StudentEvaluationCommentProductWorkbench({
       clearMaterialImportSession();
       setStyleExampleStudentIds([]);
       setFilter('ALL');
-      await loadWorkspace(next);
+      const nextCommentKind = next.commentKind ?? activeCommentKind;
+      const loaded = await loadWorkspace({
+        classId: next.classId,
+        commentKind: nextCommentKind,
+        ...(nextCommentKind === 'TERM' && next.semesterId !== undefined
+          ? { semesterId: next.semesterId }
+          : {}),
+      });
+      if (loaded) setActiveCommentKind(nextCommentKind);
     },
     [
       clearMaterialImportSession,
@@ -367,6 +405,7 @@ export function StudentEvaluationCommentProductWorkbench({
       hasPendingMaterialImport,
       loadWorkspace,
       modal,
+      activeCommentKind,
     ],
   );
 
@@ -458,10 +497,11 @@ export function StudentEvaluationCommentProductWorkbench({
   );
   const writeAction = workspace?.actions.find((action) => action.action === 'WRITE_COMMENTS');
   const generationDisabledReason =
-    !isOffCampusInternship && isCheckingConductBasis
+    !isGraduation && !isOffCampusInternship && isCheckingConductBasis
       ? '正在检查已确认操行等第'
       : !generateAction?.allowed
-        ? (generateAction?.reasonMessage ?? '当前学期暂不可生成 AI 草稿')
+        ? (generateAction?.reasonMessage ??
+          (isGraduation ? '当前班级暂不可生成毕业鉴定草稿' : '当前学期暂不可生成 AI 草稿'))
         : generationCandidates.length === 0
           ? selectedConductBlockedCount > 0
             ? `所选 ${selectedConductBlockedCount} 名学生缺少可用的已确认操行等第`
@@ -737,7 +777,7 @@ export function StudentEvaluationCommentProductWorkbench({
   );
 
   const saveEditor = useCallback(async () => {
-    if (!editor || !editorStudent || semesterId === null || !classId) return;
+    if (!editor || !editorStudent || !classId || (!isGraduation && semesterId === null)) return;
     const content = normalizeStudentEvaluationCommentContent(editor.content);
     const codePoints = countStudentEvaluationCommentCodePoints(content);
     if (!content || codePoints > STUDENT_EVALUATION_COMMENT_MAX_CODE_POINTS) return;
@@ -752,28 +792,46 @@ export function StudentEvaluationCommentProductWorkbench({
         }));
         message.success('Excel 草稿已更新，尚未写入正式评语。');
       } else if (editorStudent.aiDraft) {
-        await saveStudentEvaluationCommentProductDraft({
-          classId,
-          content,
-          draftId: editorStudent.aiDraft.draftId,
-          expectedRevision: editorStudent.aiDraft.revision,
-          semesterId,
-        });
+        if (isGraduation) {
+          await saveStudentGraduationEvaluationCommentProductDraft({
+            classId,
+            content,
+            draftId: editorStudent.aiDraft.draftId,
+            expectedRevision: editorStudent.aiDraft.revision,
+          });
+        } else if (semesterId !== null) {
+          await saveStudentEvaluationCommentProductDraft({
+            classId,
+            content,
+            draftId: editorStudent.aiDraft.draftId,
+            expectedRevision: editorStudent.aiDraft.revision,
+            semesterId,
+          });
+        }
         message.success('AI 草稿已保存。');
       } else {
-        await writeStudentEvaluationCommentProductComment({
-          classId,
-          content,
-          expectedRevision: editorStudent.comment?.revision ?? null,
-          semesterId,
-          studentId: editorStudent.studentId,
-        });
+        if (isGraduation) {
+          await writeStudentGraduationEvaluationCommentProductComment({
+            classId,
+            content,
+            expectedRevision: editorStudent.comment?.revision ?? null,
+            studentId: editorStudent.studentId,
+          });
+        } else if (semesterId !== null) {
+          await writeStudentEvaluationCommentProductComment({
+            classId,
+            content,
+            expectedRevision: editorStudent.comment?.revision ?? null,
+            semesterId,
+            studentId: editorStudent.studentId,
+          });
+        }
         setIssuesByStudentId((current) => {
           const next = { ...current };
           delete next[editorStudent.studentId];
           return next;
         });
-        message.success('正式评语已保存。');
+        message.success(`正式${isGraduation ? '毕业鉴定' : '评语'}已保存。`);
       }
       setEditor(null);
       if (!importedDraft) await reloadCurrentWorkspace();
@@ -782,18 +840,30 @@ export function StudentEvaluationCommentProductWorkbench({
     } finally {
       setIsEditorSaving(false);
     }
-  }, [classId, editor, editorStudent, importedDrafts, message, reloadCurrentWorkspace, semesterId]);
+  }, [
+    classId,
+    editor,
+    editorStudent,
+    importedDrafts,
+    isGraduation,
+    message,
+    reloadCurrentWorkspace,
+    semesterId,
+  ]);
 
   const runDraftBatch = useCallback(
     async (action: 'confirm' | 'discard', candidates = reviewCandidates) => {
-      if (!classId || semesterId === null || candidates.length === 0) return;
+      if (!classId || (!isGraduation && semesterId === null) || candidates.length === 0) return;
       const confirmed = await requestConfirmation(modal, {
         content:
           action === 'confirm'
-            ? `将 ${candidates.length} 条草稿写入正式评语。`
+            ? `将 ${candidates.length} 条草稿写入正式${isGraduation ? '毕业鉴定' : '评语'}。`
             : `将永久删除 ${candidates.length} 条 AI 草稿。`,
         okText: action === 'confirm' ? '确认写入' : '确认放弃',
-        title: action === 'confirm' ? '确认正式评语？' : '放弃 AI 草稿？',
+        title:
+          action === 'confirm'
+            ? `确认正式${isGraduation ? '毕业鉴定' : '评语'}？`
+            : '放弃 AI 草稿？',
       });
       if (!confirmed) return;
 
@@ -810,18 +880,24 @@ export function StudentEvaluationCommentProductWorkbench({
             : [],
         );
         if (action === 'confirm') {
-          const result = await confirmStudentEvaluationCommentProductDrafts({
-            classId,
-            items,
-            semesterId,
-          });
-          message.success(`已确认 ${result.confirmedCount} 条正式评语。`);
+          const result = isGraduation
+            ? await confirmStudentGraduationEvaluationCommentProductDrafts({ classId, items })
+            : await confirmStudentEvaluationCommentProductDrafts({
+                classId,
+                items,
+                semesterId: semesterId as number,
+              });
+          message.success(
+            `已确认 ${result.confirmedCount} 条正式${isGraduation ? '毕业鉴定' : '评语'}。`,
+          );
         } else {
-          const result = await discardStudentEvaluationCommentProductDrafts({
-            classId,
-            items,
-            semesterId,
-          });
+          const result = isGraduation
+            ? await discardStudentGraduationEvaluationCommentProductDrafts({ classId, items })
+            : await discardStudentEvaluationCommentProductDrafts({
+                classId,
+                items,
+                semesterId: semesterId as number,
+              });
           message.success(`已放弃 ${result.discardedCount} 条 AI 草稿。`);
         }
         setEditor(null);
@@ -833,17 +909,19 @@ export function StudentEvaluationCommentProductWorkbench({
         setIsBatchRunning(false);
       }
     },
-    [classId, message, modal, reloadCurrentWorkspace, reviewCandidates, semesterId],
+    [classId, isGraduation, message, modal, reloadCurrentWorkspace, reviewCandidates, semesterId],
   );
 
   const clearFormalComments = useCallback(async () => {
-    if (!classId || semesterId === null || completedCandidates.length === 0) return;
+    if (!classId || (!isGraduation && semesterId === null) || completedCandidates.length === 0) {
+      return;
+    }
     if (
       !(await requestConfirmation(modal, {
-        content: `将永久删除 ${completedCandidates.length} 条正式评语，学生会重新回到待处理状态。任一评语已被他人修改时，本批次不会删除任何记录。`,
+        content: `将永久删除 ${completedCandidates.length} 条正式${isGraduation ? '毕业鉴定' : '评语'}，学生会重新回到待处理状态。任一内容已被他人修改时，本批次不会删除任何记录。`,
         danger: true,
         okText: '确认删除',
-        title: '批量删除正式评语？',
+        title: `批量删除正式${isGraduation ? '毕业鉴定' : '评语'}？`,
       }))
     ) {
       return;
@@ -851,21 +929,24 @@ export function StudentEvaluationCommentProductWorkbench({
 
     setIsBatchRunning(true);
     try {
-      const result = await clearStudentEvaluationCommentProductComments({
-        classId,
-        items: completedCandidates.flatMap((student) =>
-          student.comment
-            ? [{ expectedRevision: student.comment.revision, studentId: student.studentId }]
-            : [],
-        ),
-        semesterId,
-      });
+      const items = completedCandidates.flatMap((student) =>
+        student.comment
+          ? [{ expectedRevision: student.comment.revision, studentId: student.studentId }]
+          : [],
+      );
+      const result = isGraduation
+        ? await clearStudentGraduationEvaluationCommentProductComments({ classId, items })
+        : await clearStudentEvaluationCommentProductComments({
+            classId,
+            items,
+            semesterId: semesterId as number,
+          });
       setEditor(null);
       setSelectedStudentIds([]);
       message.success(
         result.status === 'NO_CHANGES'
           ? '服务端确认没有可删除的正式评语。'
-          : `已删除 ${result.counts.deleted} 条正式评语。`,
+          : `已删除 ${result.counts.deleted} 条正式${isGraduation ? '毕业鉴定' : '评语'}。`,
       );
       await reloadCurrentWorkspace();
     } catch (error) {
@@ -873,36 +954,68 @@ export function StudentEvaluationCommentProductWorkbench({
     } finally {
       setIsBatchRunning(false);
     }
-  }, [classId, completedCandidates, message, modal, reloadCurrentWorkspace, semesterId]);
+  }, [
+    classId,
+    completedCandidates,
+    isGraduation,
+    message,
+    modal,
+    reloadCurrentWorkspace,
+    semesterId,
+  ]);
 
   const handleGenerate = useCallback(async () => {
-    if (!classId || semesterId === null || generationCandidates.length === 0) return;
+    if (!classId || (!isGraduation && semesterId === null) || generationCandidates.length === 0) {
+      return;
+    }
     setIsBatchRunning(true);
     try {
-      const result = await generateStudentEvaluationCommentProductDrafts({
-        address,
-        classId,
-        length,
-        scenario: generationScenario,
-        semesterId,
-        studentIds: generationCandidates.map((student) => student.studentId),
-        styleExampleStudentIds: isOffCampusInternship ? [] : styleExampleStudentIds,
-        tone,
-      });
+      const studentIds = generationCandidates.map((student) => student.studentId);
+      const result = isGraduation
+        ? await generateStudentGraduationEvaluationCommentProductDrafts({ classId, studentIds })
+        : await generateStudentEvaluationCommentProductDrafts({
+            address,
+            classId,
+            length,
+            scenario: generationScenario,
+            semesterId: semesterId as number,
+            studentIds,
+            styleExampleStudentIds: isOffCampusInternship ? [] : styleExampleStudentIds,
+            tone,
+          });
       setIssuesByStudentId((current) => {
         const next = { ...current };
         result.items.forEach((item) => {
-          if (item.disposition === 'BASIS_MISSING') next[item.studentId] = 'BASIS_MISSING';
-          else delete next[item.studentId];
+          if (
+            item.disposition === 'BASIS_MISSING' ||
+            item.disposition === 'TERM_COMMENTS_INCOMPLETE' ||
+            item.disposition === 'ENTRY_BASIS_INSUFFICIENT' ||
+            item.disposition === 'BASIS_UNAVAILABLE' ||
+            item.disposition === 'BASIS_TOO_LARGE'
+          ) {
+            next[item.studentId] = item.disposition;
+          } else delete next[item.studentId];
         });
         return next;
       });
       setGenerationOpen(false);
       setSelectedStudentIds([]);
-      message.success(
+      const blockedCount = isGraduation
+        ? result.items.filter((item) =>
+            [
+              'TERM_COMMENTS_INCOMPLETE',
+              'ENTRY_BASIS_INSUFFICIENT',
+              'BASIS_UNAVAILABLE',
+              'BASIS_TOO_LARGE',
+            ].includes(item.disposition),
+          ).length
+        : result.items.filter((item) => item.disposition === 'BASIS_MISSING').length;
+      message[result.counts.accepted ? 'success' : blockedCount ? 'warning' : 'info'](
         result.counts.accepted
-          ? `已受理 ${result.counts.accepted} 名学生，完成后列表会自动更新。`
-          : '本次没有新增生成任务。',
+          ? `已受理 ${result.counts.accepted} 名学生${blockedCount ? `，另有 ${blockedCount} 人依据不满足要求` : ''}，完成后列表会自动更新。`
+          : blockedCount
+            ? `${blockedCount} 名学生的生成依据不满足要求，请查看列表中的说明。`
+            : '本次没有新增生成任务。',
       );
       await reloadCurrentWorkspace();
     } catch (error) {
@@ -915,6 +1028,7 @@ export function StudentEvaluationCommentProductWorkbench({
     classId,
     generationScenario,
     generationCandidates,
+    isGraduation,
     isOffCampusInternship,
     length,
     message,
@@ -1077,7 +1191,9 @@ export function StudentEvaluationCommentProductWorkbench({
                 />
               </span>
             ) : (
-              <span className="text-text-secondary">尚未填写评语</span>
+              <span className="text-text-secondary">
+                {isGraduation ? '尚未填写毕业鉴定' : '尚未填写评语'}
+              </span>
             );
           }
           return <span className="line-clamp-2 whitespace-pre-wrap break-words">{content}</span>;
@@ -1099,7 +1215,15 @@ export function StudentEvaluationCommentProductWorkbench({
         width: 100,
       },
     ],
-    [classId, importedDraftStudentIds, importedDrafts, issuesByStudentId, openEditor, semesterId],
+    [
+      classId,
+      importedDraftStudentIds,
+      importedDrafts,
+      isGraduation,
+      issuesByStudentId,
+      openEditor,
+      semesterId,
+    ],
   );
 
   const rowSelection = useMemo<TableRowSelection<StudentEvaluationCommentWorkbenchStudent>>(
@@ -1150,7 +1274,9 @@ export function StudentEvaluationCommentProductWorkbench({
               showSearch
               style={{ width: '100%' }}
               value={workspace?.selectedClass?.classId}
-              onChange={(nextClassId) => void requestScopeChange({ classId: nextClassId })}
+              onChange={(nextClassId) =>
+                void requestScopeChange({ classId: nextClassId, commentKind: activeCommentKind })
+              }
             />
           </div>
           <div className="flex items-end">
@@ -1162,7 +1288,7 @@ export function StudentEvaluationCommentProductWorkbench({
               >
                 刷新
               </Button>
-              {!isOffCampusInternship ? (
+              {!isGraduation && !isOffCampusInternship ? (
                 <Button
                   icon={upstreamSession ? <CloudSyncOutlined /> : <LoginOutlined />}
                   loading={isSyncingBasis}
@@ -1174,7 +1300,7 @@ export function StudentEvaluationCommentProductWorkbench({
             </Space>
           </div>
           <div>
-            <div className="mb-2">当前学期完成度</div>
+            <div className="mb-2">{isGraduation ? '毕业鉴定完成度' : '当前学期完成度'}</div>
             <Space style={{ width: '100%' }}>
               <Progress percent={completedPercent} showInfo={false} size="small" />
               <span>{`${counts.COMPLETED} / ${counts.ALL}`}</span>
@@ -1184,7 +1310,7 @@ export function StudentEvaluationCommentProductWorkbench({
       </Card>
 
       {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
-      {!isOffCampusInternship && basisSyncError ? (
+      {!isGraduation && !isOffCampusInternship && basisSyncError ? (
         <Alert closable showIcon title={basisSyncError} type="warning" />
       ) : null}
       {workspace?.warnings.map((warning) => (
@@ -1197,14 +1323,30 @@ export function StudentEvaluationCommentProductWorkbench({
         />
       ))}
 
+      <Tabs
+        activeKey={activeCommentKind}
+        items={[
+          { disabled: isLoading || isBatchRunning, key: 'TERM', label: '学期评语' },
+          { disabled: isLoading || isBatchRunning, key: 'GRADUATION', label: '毕业鉴定' },
+        ]}
+        onChange={(nextCommentKind) =>
+          void requestScopeChange({
+            classId,
+            commentKind: nextCommentKind as StudentEvaluationCommentKind,
+          })
+        }
+      />
+
       {workspace?.selectedClass ? (
-        <AcademicTermTabs
+        <StudentEvaluationCommentScope
           activeSemesterId={workspace.selectedTerm?.semesterId}
+          commentKind={activeCommentKind}
           disabled={isLoading || isBatchRunning}
           records={workspace.termOptions}
           onChange={(nextSemesterId) =>
             void requestScopeChange({
               classId: workspace.selectedClass?.classId ?? '',
+              commentKind: 'TERM',
               semesterId: nextSemesterId,
             })
           }
@@ -1212,14 +1354,16 @@ export function StudentEvaluationCommentProductWorkbench({
           <Card
             extra={
               <Space wrap>
-                <Button
-                  disabled={!writeAction?.allowed || isBatchRunning}
-                  icon={<FileExcelOutlined />}
-                  onClick={() => void openExcelImport()}
-                >
-                  Excel 导入
-                </Button>
-                {importedCandidates.length > 0 ? (
+                {!isGraduation ? (
+                  <Button
+                    disabled={!writeAction?.allowed || isBatchRunning}
+                    icon={<FileExcelOutlined />}
+                    onClick={() => void openExcelImport()}
+                  >
+                    Excel 导入
+                  </Button>
+                ) : null}
+                {!isGraduation && importedCandidates.length > 0 ? (
                   <>
                     <Button
                       icon={<SaveOutlined />}
@@ -1237,7 +1381,7 @@ export function StudentEvaluationCommentProductWorkbench({
                 <Tooltip title={generationDisabledReason}>
                   <Button
                     disabled={
-                      (!isOffCampusInternship && isCheckingConductBasis) ||
+                      (!isGraduation && !isOffCampusInternship && isCheckingConductBasis) ||
                       !generateAction?.allowed ||
                       generationCandidates.length === 0
                     }
@@ -1272,14 +1416,14 @@ export function StudentEvaluationCommentProductWorkbench({
                   loading={isBatchRunning}
                   onClick={() => void clearFormalComments()}
                 >
-                  {`删除正式评语 ${completedCandidates.length || ''}`.trim()}
+                  {`删除正式${isGraduation ? '毕业鉴定' : '评语'} ${completedCandidates.length || ''}`.trim()}
                 </Button>
               </Space>
             }
-            title={workspace.selectedTerm?.label ?? '学期评语'}
+            title={isGraduation ? '毕业鉴定' : (workspace.selectedTerm?.label ?? '学期评语')}
           >
             <div className="flex flex-col gap-4">
-              {!isOffCampusInternship && conductBlockedCount > 0 ? (
+              {!isGraduation && !isOffCampusInternship && conductBlockedCount > 0 ? (
                 <Alert
                   showIcon
                   action={
@@ -1300,14 +1444,22 @@ export function StudentEvaluationCommentProductWorkbench({
                   type="warning"
                 />
               ) : null}
-              {!isOffCampusInternship && conductPreflightError ? (
+              {!isGraduation && !isOffCampusInternship && conductPreflightError ? (
                 <Alert closable showIcon title={conductPreflightError} type="warning" />
               ) : null}
-              {isOffCampusInternship ? (
+              {!isGraduation && isOffCampusInternship ? (
                 <Alert
                   showIcon
                   description="本场景不读取操行、课程成绩或上一学期风格样例，只生成围绕安全意识、职业规范、沟通协作和未来成长的一般性期许。生成结果仍需老师审阅确认。"
                   title="最后学期按下厂/校外实习场景治理"
+                  type="info"
+                />
+              ) : null}
+              {isGraduation ? (
+                <Alert
+                  showIcon
+                  description="正常在读学生生成前须具备全部应有学期的正式评语，实际生成只采用最近三学期；复学学生不受完整性限制，尽力采用最近三学期，但至少需要两学期。生成结果仍需老师审阅确认。"
+                  title="毕业鉴定按历史学期评语生成"
                   type="info"
                 />
               ) : null}
@@ -1349,7 +1501,7 @@ export function StudentEvaluationCommentProductWorkbench({
               />
             </div>
           </Card>
-        </AcademicTermTabs>
+        </StudentEvaluationCommentScope>
       ) : (
         <Empty description="当前账号没有可操作的班级评语范围" />
       )}
@@ -1388,13 +1540,19 @@ export function StudentEvaluationCommentProductWorkbench({
                 ? '保存草稿修改'
                 : editorStudent?.aiDraft
                   ? '保存草稿'
-                  : '保存正式评语'}
+                  : `保存正式${isGraduation ? '毕业鉴定' : '评语'}`}
             </Button>
           </Space>
         }
         open={Boolean(editor && editorStudent)}
         size="large"
-        title={editorStudent ? `${editorStudent.studentName} · ${editorStudent.studentId}` : '评语'}
+        title={
+          editorStudent
+            ? `${editorStudent.studentName} · ${editorStudent.studentId}`
+            : isGraduation
+              ? '毕业鉴定'
+              : '评语'
+        }
         onClose={() => void closeEditor()}
       >
         {editor && editorStudent ? (
@@ -1406,13 +1564,21 @@ export function StudentEvaluationCommentProductWorkbench({
                 student={editorStudent}
               />
               <Tag>
-                {editorIsImported ? 'Excel 草稿' : editorStudent.aiDraft ? 'AI 草稿' : '正式评语'}
+                {editorIsImported
+                  ? 'Excel 草稿'
+                  : editorStudent.aiDraft
+                    ? 'AI 草稿'
+                    : `正式${isGraduation ? '毕业鉴定' : '评语'}`}
               </Tag>
             </Space>
             {issuesByStudentId[editorStudent.studentId] ? (
               <Alert
                 showIcon
-                description="可以更新生成依据后重新生成，也可以直接人工填写正式评语。"
+                description={
+                  isGraduation
+                    ? '补齐历史学期评语后可重新生成，也可以直接人工填写正式毕业鉴定。'
+                    : '可以更新生成依据后重新生成，也可以直接人工填写正式评语。'
+                }
                 title={
                   <StudentEvaluationCommentIssueMessage
                     classId={classId}
@@ -1452,7 +1618,7 @@ export function StudentEvaluationCommentProductWorkbench({
                 type="primary"
                 onClick={() => void runDraftBatch('confirm', [editorStudent])}
               >
-                确认为正式评语
+                {`确认为正式${isGraduation ? '毕业鉴定' : '评语'}`}
               </Button>
             ) : null}
           </div>
@@ -1463,58 +1629,74 @@ export function StudentEvaluationCommentProductWorkbench({
         confirmLoading={isBatchRunning}
         okButtonProps={{
           disabled:
-            (!isOffCampusInternship && isCheckingConductBasis) || generationCandidates.length === 0,
+            (!isGraduation && !isOffCampusInternship && isCheckingConductBasis) ||
+            generationCandidates.length === 0,
         }}
         okText={`生成 ${generationCandidates.length} 名学生草稿`}
         open={generationOpen}
-        title="AI 生成设置"
+        title={isGraduation ? '生成毕业鉴定草稿' : 'AI 生成设置'}
         onCancel={() => setGenerationOpen(false)}
         onOk={() => void handleGenerate()}
       >
         <div className="flex flex-col gap-4 py-3">
-          {!isOffCampusInternship && selectedConductBlockedCount > 0 ? (
+          {isGraduation ? (
             <Alert
               showIcon
-              title={`所选学生中有 ${selectedConductBlockedCount} 人缺少可用的已确认操行等第，本次不会生成。`}
-              type="warning"
+              description="系统会逐人检查生成资格。正常在读学生必须已有全部应有学期的正式评语；复学学生至少需要两学期。符合条件时只采用最近三学期作为生成依据。"
+              title={`将为所选的 ${generationCandidates.length} 名学生检查并生成草稿`}
+              type="info"
             />
-          ) : null}
-          {isOffCampusInternship ? (
-            <Alert showIcon title="下厂/校外实习场景不使用操行、课程成绩或风格样例。" type="info" />
-          ) : null}
-          <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 3, wide: 3 }}>
-            <Select options={[...TONE_OPTIONS]} value={tone} onChange={setTone} />
-            <Select options={[...LENGTH_OPTIONS]} value={length} onChange={setLength} />
-            <Select options={[...ADDRESS_OPTIONS]} value={address} onChange={setAddress} />
-          </ResponsiveGrid>
-          {!isOffCampusInternship && (workspace?.selectedTerm?.sequence ?? 1) > 1 ? (
-            <div>
-              <div className="mb-2">
-                上一学期评语语气参考
-                {previousTerm ? `（${previousTerm.label}，可选，最多 5 人）` : '（可选）'}
-              </div>
-              {isLoadingStyleReferences || styleOptions.length > 0 ? (
-                <Select
-                  allowClear
-                  loading={isLoadingStyleReferences}
-                  maxCount={5}
-                  mode="multiple"
-                  optionFilterProp="label"
-                  options={styleOptions}
-                  placeholder="从上一学期已有正式评语中选择"
-                  style={{ width: '100%' }}
-                  value={styleExampleStudentIds}
-                  onChange={setStyleExampleStudentIds}
-                />
-              ) : (
+          ) : (
+            <>
+              {!isOffCampusInternship && selectedConductBlockedCount > 0 ? (
                 <Alert
                   showIcon
-                  title="上一学期暂无可用正式评语，本次生成将不使用语气参考。"
+                  title={`所选学生中有 ${selectedConductBlockedCount} 人缺少可用的已确认操行等第，本次不会生成。`}
+                  type="warning"
+                />
+              ) : null}
+              {isOffCampusInternship ? (
+                <Alert
+                  showIcon
+                  title="下厂/校外实习场景不使用操行、课程成绩或风格样例。"
                   type="info"
                 />
-              )}
-            </div>
-          ) : null}
+              ) : null}
+              <ResponsiveGrid className="gap-3" columns={{ compact: 1, regular: 3, wide: 3 }}>
+                <Select options={[...TONE_OPTIONS]} value={tone} onChange={setTone} />
+                <Select options={[...LENGTH_OPTIONS]} value={length} onChange={setLength} />
+                <Select options={[...ADDRESS_OPTIONS]} value={address} onChange={setAddress} />
+              </ResponsiveGrid>
+              {!isOffCampusInternship && (workspace?.selectedTerm?.sequence ?? 1) > 1 ? (
+                <div>
+                  <div className="mb-2">
+                    上一学期评语语气参考
+                    {previousTerm ? `（${previousTerm.label}，可选，最多 5 人）` : '（可选）'}
+                  </div>
+                  {isLoadingStyleReferences || styleOptions.length > 0 ? (
+                    <Select
+                      allowClear
+                      loading={isLoadingStyleReferences}
+                      maxCount={5}
+                      mode="multiple"
+                      optionFilterProp="label"
+                      options={styleOptions}
+                      placeholder="从上一学期已有正式评语中选择"
+                      style={{ width: '100%' }}
+                      value={styleExampleStudentIds}
+                      onChange={setStyleExampleStudentIds}
+                    />
+                  ) : (
+                    <Alert
+                      showIcon
+                      title="上一学期暂无可用正式评语，本次生成将不使用语气参考。"
+                      type="info"
+                    />
+                  )}
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </Modal>
 
@@ -1547,6 +1729,35 @@ export function StudentEvaluationCommentProductWorkbench({
   );
 }
 
+function StudentEvaluationCommentScope({
+  activeSemesterId,
+  children,
+  commentKind,
+  disabled,
+  records,
+  onChange,
+}: {
+  activeSemesterId?: number;
+  children: ReactNode;
+  commentKind: StudentEvaluationCommentKind;
+  disabled: boolean;
+  records: StudentEvaluationCommentWorkbench['termOptions'];
+  onChange: (semesterId: number) => void;
+}) {
+  if (commentKind === 'GRADUATION') return children;
+
+  return (
+    <AcademicTermTabs
+      activeSemesterId={activeSemesterId}
+      disabled={disabled}
+      records={records}
+      onChange={onChange}
+    >
+      {children}
+    </AcademicTermTabs>
+  );
+}
+
 function WorkflowStatusTag(input: {
   hasWorkingDraft?: boolean;
   issueCode?: string;
@@ -1563,6 +1774,18 @@ function resolveStudentEvaluationCommentIssueMessage(issueCode: string) {
   }
   if (issueCode === 'CONDUCT_GRADE_CONFLICT') {
     return '操行补正状态已变化，请更新生成依据后再生成';
+  }
+  if (issueCode === 'TERM_COMMENTS_INCOMPLETE') {
+    return '该生应有学期评语尚未全部完成，暂不能生成毕业鉴定';
+  }
+  if (issueCode === 'ENTRY_BASIS_INSUFFICIENT') {
+    return '该复学学生可用的正式学期评语不足两学期，暂不能生成毕业鉴定';
+  }
+  if (issueCode === 'BASIS_UNAVAILABLE') {
+    return '暂时无法读取该生的历史学期评语，请刷新后重试';
+  }
+  if (issueCode === 'BASIS_TOO_LARGE') {
+    return '该生历史评语依据超出生成限制，请联系管理员检查';
   }
   return 'AI 生成依据尚未完整，可更新依据或直接人工填写';
 }

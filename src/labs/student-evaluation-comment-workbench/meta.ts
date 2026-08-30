@@ -2,7 +2,7 @@
 
 export const studentEvaluationCommentWorkbenchLabMeta = {
   name: 'student-evaluation-comment-workbench',
-  purpose: '验证以学期为一级作用域、以学生评语状态流为核心的教师产品化工作台。',
+  purpose: '验证覆盖学期评语与毕业鉴定、以学生评语状态流为核心的教师产品化工作台。',
   owner: 'frontend',
   reviewAt: '2026-10-31',
   rollback: '移除 student-evaluation-comment-workbench lab 的路由、导航和模块目录。',

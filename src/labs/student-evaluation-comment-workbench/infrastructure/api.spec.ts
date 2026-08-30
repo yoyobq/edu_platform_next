@@ -28,13 +28,20 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   clearStudentEvaluationCommentProductComments,
+  clearStudentGraduationEvaluationCommentProductComments,
+  confirmStudentGraduationEvaluationCommentProductDrafts,
   discardStudentEvaluationCommentProductDrafts,
+  discardStudentGraduationEvaluationCommentProductDrafts,
   generateStudentEvaluationCommentProductDrafts,
+  generateStudentGraduationEvaluationCommentProductDrafts,
   getStudentEvaluationCommentProductConductBasis,
   getStudentEvaluationCommentProductWorkbench,
+  getStudentGraduationEvaluationCommentProductWorkbench,
   importStudentEvaluationCommentProductMaterial,
+  saveStudentGraduationEvaluationCommentProductDraft,
   writeStudentEvaluationCommentProductComment,
   writeStudentEvaluationCommentProductComments,
+  writeStudentGraduationEvaluationCommentProductComment,
 } from './api';
 
 describe('student evaluation comment product workbench api', () => {
@@ -61,6 +68,96 @@ describe('student evaluation comment product workbench api', () => {
       input: { classId: '1021904', commentKind: 'TERM', semesterId: 3 },
     });
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('trainingYears');
+  });
+
+  it('reads the graduation workspace without a semester', async () => {
+    const workspace = { commentKind: 'GRADUATION', status: 'READY' };
+    executeGraphQLMock.mockResolvedValueOnce({ studentEvaluationCommentWorkspace: workspace });
+
+    await expect(
+      getStudentGraduationEvaluationCommentProductWorkbench({ classId: '1021904' }),
+    ).resolves.toBe(workspace);
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: { classId: '1021904', commentKind: 'GRADUATION' },
+    });
+  });
+
+  it('generates graduation drafts with only class and selected students', async () => {
+    const payload = { counts: { accepted: 1 }, items: [], status: 'ACCEPTED' };
+    executeGraphQLMock.mockResolvedValueOnce({
+      generateStudentGraduationEvaluationCommentAiDrafts: payload,
+    });
+
+    await expect(
+      generateStudentGraduationEvaluationCommentProductDrafts({
+        classId: '1021904',
+        studentIds: ['student-1'],
+      }),
+    ).resolves.toBe(payload);
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'generateStudentGraduationEvaluationCommentAiDrafts',
+    );
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: { classId: '1021904', studentIds: ['student-1'] },
+    });
+  });
+
+  it('uses graduation-specific draft mutations without a semester', async () => {
+    const revision = {
+      __typename: 'StudentEvaluationCommentRevisionDTO',
+      payloadHash: 'd'.repeat(64),
+      payloadVersion: 3,
+    };
+    const cleanRevision = { payloadHash: 'd'.repeat(64), payloadVersion: 3 };
+    const draft = { draftId: '9' };
+    executeGraphQLMock
+      .mockResolvedValueOnce({ saveStudentGraduationEvaluationCommentAiDraft: { draft } })
+      .mockResolvedValueOnce({
+        discardStudentGraduationEvaluationCommentAiDrafts: { discardedCount: 1 },
+      })
+      .mockResolvedValueOnce({
+        confirmStudentGraduationEvaluationCommentAiDrafts: { confirmedCount: 1 },
+      });
+
+    await expect(
+      saveStudentGraduationEvaluationCommentProductDraft({
+        classId: '1021904',
+        content: '毕业鉴定草稿',
+        draftId: '9',
+        expectedRevision: revision,
+      }),
+    ).resolves.toBe(draft);
+    await discardStudentGraduationEvaluationCommentProductDrafts({
+      classId: '1021904',
+      items: [{ draftId: '9', expectedRevision: revision }],
+    });
+    await confirmStudentGraduationEvaluationCommentProductDrafts({
+      classId: '1021904',
+      items: [{ draftId: '9', expectedRevision: revision }],
+    });
+
+    expect(executeGraphQLMock.mock.calls.map((call) => call[1])).toEqual([
+      {
+        input: {
+          classId: '1021904',
+          content: '毕业鉴定草稿',
+          draftId: '9',
+          expectedRevision: cleanRevision,
+        },
+      },
+      {
+        input: {
+          classId: '1021904',
+          items: [{ draftId: '9', expectedRevision: cleanRevision }],
+        },
+      },
+      {
+        input: {
+          classId: '1021904',
+          items: [{ draftId: '9', expectedRevision: cleanRevision }],
+        },
+      },
+    ]);
   });
 
   it('sends the selected AI generation scenario explicitly', async () => {
@@ -243,6 +340,58 @@ describe('student evaluation comment product workbench api', () => {
           },
         ],
         semesterId: 3,
+      },
+    });
+  });
+
+  it('writes and clears formal graduation evaluations in the graduation scope', async () => {
+    const revision = { payloadHash: 'e'.repeat(64), payloadVersion: 1 };
+    executeGraphQLMock
+      .mockResolvedValueOnce({
+        batchWriteStudentEvaluationComments: { counts: {}, status: 'UPDATED' },
+      })
+      .mockResolvedValueOnce({
+        batchWriteStudentEvaluationComments: { counts: {}, status: 'UPDATED' },
+      });
+
+    await writeStudentGraduationEvaluationCommentProductComment({
+      classId: '1021904',
+      content: '正式毕业鉴定',
+      expectedRevision: null,
+      studentId: '324010101',
+    });
+    await clearStudentGraduationEvaluationCommentProductComments({
+      classId: '1021904',
+      items: [{ expectedRevision: revision, studentId: '324010101' }],
+    });
+
+    expect(executeGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      input: {
+        classId: '1021904',
+        commentKind: 'GRADUATION',
+        items: [
+          {
+            action: 'UPSERT',
+            content: '正式毕业鉴定',
+            expectedRevision: null,
+            studentId: '324010101',
+          },
+        ],
+        semesterId: null,
+      },
+    });
+    expect(executeGraphQLMock.mock.calls[1]?.[1]).toEqual({
+      input: {
+        classId: '1021904',
+        commentKind: 'GRADUATION',
+        items: [
+          {
+            action: 'CLEAR',
+            expectedRevision: revision,
+            studentId: '324010101',
+          },
+        ],
+        semesterId: null,
       },
     });
   });

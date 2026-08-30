@@ -143,7 +143,7 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'FileTextOutlined',
             key: '/labs/student-evaluation-comment-workbench',
-            label: '班级评语工作台',
+            label: '班级评语治理',
             navMode: 'rail' as const,
             path: '/labs/student-evaluation-comment-workbench',
             primaryAccessGroup: 'ADMIN' as const,

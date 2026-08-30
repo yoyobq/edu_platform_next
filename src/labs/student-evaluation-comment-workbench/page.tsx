@@ -17,9 +17,9 @@ export function StudentEvaluationCommentWorkbenchLabPage() {
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
       <DecoratedPageHeader
         badge={<Tag color="blue">Product Lab</Tag>}
-        description="以学期为范围完成全班评语：选择学生、生成或编辑草稿、审阅并确认正式结果。"
+        description="在学期评语与毕业鉴定两个范围内，选择学生、生成或编辑草稿、审阅并确认正式结果。"
         icon={<FileDoneOutlined />}
-        title="班级评语工作台"
+        title="班级评语治理"
       />
 
       <StudentEvaluationCommentProductWorkbench currentAccount={loaderData.currentAccount} />

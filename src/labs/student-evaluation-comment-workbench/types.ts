@@ -5,6 +5,8 @@ export type StudentEvaluationCommentRevision = {
   payloadVersion: number;
 };
 
+export type StudentEvaluationCommentKind = 'TERM' | 'GRADUATION';
+
 export type StudentEvaluationCommentAiDraft = {
   content: string;
   draftId: string;
@@ -71,14 +73,18 @@ export type StudentEvaluationCommentWorkbench = {
     reasonMessage: string | null;
   }>;
   classOptions: StudentEvaluationCommentClassOption[];
-  commentKind: 'TERM';
+  commentKind: StudentEvaluationCommentKind;
   selectedClass: StudentEvaluationCommentClassOption | null;
   selectedTerm: StudentEvaluationCommentTermOption | null;
   status: string;
   termOptions: StudentEvaluationCommentTermOption[];
   view: {
     classItem: { classCode: string; className: string; id: string };
-    scope: { commentKind: 'TERM'; scopeKey: string; semesterId: number };
+    scope: {
+      commentKind: StudentEvaluationCommentKind;
+      scopeKey: string;
+      semesterId: number | null;
+    };
     students: StudentEvaluationCommentWorkbenchStudent[];
   } | null;
   warnings: Array<{
@@ -114,6 +120,36 @@ export type GenerateStudentEvaluationCommentAiDraftsResult = {
       | 'DRAFT_EXISTS'
       | 'ALREADY_GENERATING'
       | 'BASIS_MISSING';
+    studentId: string;
+  }>;
+  status: 'ACCEPTED' | 'NO_CHANGES';
+};
+
+export type StudentGraduationEvaluationCommentAiGenerationDisposition =
+  | 'ACCEPTED'
+  | 'FORMAL_COMMENT_EXISTS'
+  | 'DRAFT_EXISTS'
+  | 'ALREADY_GENERATING'
+  | 'TERM_COMMENTS_INCOMPLETE'
+  | 'ENTRY_BASIS_INSUFFICIENT'
+  | 'BASIS_UNAVAILABLE'
+  | 'BASIS_TOO_LARGE';
+
+export type GenerateStudentGraduationEvaluationCommentAiDraftsResult = {
+  counts: {
+    accepted: number;
+    alreadyGenerating: number;
+    basisTooLarge: number;
+    basisUnavailable: number;
+    draftExists: number;
+    entryBasisInsufficient: number;
+    formalCommentExists: number;
+    requested: number;
+    termCommentsIncomplete: number;
+  };
+  items: Array<{
+    basisCommentCount: number;
+    disposition: StudentGraduationEvaluationCommentAiGenerationDisposition;
     studentId: string;
   }>;
   status: 'ACCEPTED' | 'NO_CHANGES';

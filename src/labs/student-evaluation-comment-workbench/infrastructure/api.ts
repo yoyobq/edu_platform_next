@@ -6,6 +6,7 @@ import { executeGraphQL, getGraphQLEndpoint, getGraphQLRuntimeConfig } from '@/s
 
 import type {
   GenerateStudentEvaluationCommentAiDraftsResult,
+  GenerateStudentGraduationEvaluationCommentAiDraftsResult,
   ImportStudentEvaluationCommentMaterialInput,
   RefreshStudentEvaluationCommentBasisResult,
   RefreshStudentEvaluationCommentCourseBasisResult,
@@ -210,6 +211,74 @@ const CONFIRM_AI_DRAFTS_MUTATION = `
   }
 `;
 
+const GENERATE_GRADUATION_AI_DRAFTS_MUTATION = `
+  mutation GenerateStudentGraduationEvaluationCommentProductDrafts(
+    $input: GenerateStudentGraduationEvaluationCommentAiDraftsInput!
+  ) {
+    generateStudentGraduationEvaluationCommentAiDrafts(input: $input) {
+      status
+      counts {
+        requested
+        accepted
+        formalCommentExists
+        draftExists
+        alreadyGenerating
+        termCommentsIncomplete
+        entryBasisInsufficient
+        basisUnavailable
+        basisTooLarge
+      }
+      items {
+        studentId
+        disposition
+        basisCommentCount
+      }
+    }
+  }
+`;
+
+const SAVE_GRADUATION_AI_DRAFT_MUTATION = `
+  mutation SaveStudentGraduationEvaluationCommentProductDraft(
+    $input: SaveStudentGraduationEvaluationCommentAiDraftInput!
+  ) {
+    saveStudentGraduationEvaluationCommentAiDraft(input: $input) {
+      status
+      draft {
+        draftId
+        content
+        revision {
+          payloadHash
+          payloadVersion
+        }
+        expiresAt
+        updatedAt
+      }
+    }
+  }
+`;
+
+const DISCARD_GRADUATION_AI_DRAFTS_MUTATION = `
+  mutation DiscardStudentGraduationEvaluationCommentProductDrafts(
+    $input: DiscardStudentGraduationEvaluationCommentAiDraftsInput!
+  ) {
+    discardStudentGraduationEvaluationCommentAiDrafts(input: $input) {
+      status
+      discardedCount
+    }
+  }
+`;
+
+const CONFIRM_GRADUATION_AI_DRAFTS_MUTATION = `
+  mutation ConfirmStudentGraduationEvaluationCommentProductDrafts(
+    $input: ConfirmStudentGraduationEvaluationCommentAiDraftsInput!
+  ) {
+    confirmStudentGraduationEvaluationCommentAiDrafts(input: $input) {
+      status
+      confirmedCount
+    }
+  }
+`;
+
 const WRITE_COMMENTS_MUTATION = `
   mutation WriteStudentEvaluationCommentProductComments(
     $input: BatchWriteStudentEvaluationCommentsInput!
@@ -264,6 +333,15 @@ export function getStudentEvaluationCommentProductWorkbench(input: {
   );
 }
 
+export function getStudentGraduationEvaluationCommentProductWorkbench(input: { classId?: string }) {
+  return executeGraphQL<
+    { studentEvaluationCommentWorkspace: StudentEvaluationCommentWorkbench },
+    { input: { classId?: string; commentKind: 'GRADUATION' } }
+  >(WORKSPACE_QUERY, { input: { ...input, commentKind: 'GRADUATION' } }).then(
+    (response) => response.studentEvaluationCommentWorkspace,
+  );
+}
+
 export function getStudentEvaluationCommentProductConductBasis(input: {
   classId: string;
   semesterId: number;
@@ -294,6 +372,20 @@ export function generateStudentEvaluationCommentProductDrafts(input: {
   );
 }
 
+export function generateStudentGraduationEvaluationCommentProductDrafts(input: {
+  classId: string;
+  studentIds: string[];
+}) {
+  return executeGraphQL<
+    {
+      generateStudentGraduationEvaluationCommentAiDrafts: GenerateStudentGraduationEvaluationCommentAiDraftsResult;
+    },
+    { input: typeof input }
+  >(GENERATE_GRADUATION_AI_DRAFTS_MUTATION, { input }).then(
+    (response) => response.generateStudentGraduationEvaluationCommentAiDrafts,
+  );
+}
+
 export function saveStudentEvaluationCommentProductDraft(input: {
   classId: string;
   content: string;
@@ -316,6 +408,26 @@ export function saveStudentEvaluationCommentProductDraft(input: {
   );
 }
 
+export function saveStudentGraduationEvaluationCommentProductDraft(input: {
+  classId: string;
+  content: string;
+  draftId: string;
+  expectedRevision: StudentEvaluationCommentRevision;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    content: input.content,
+    draftId: input.draftId,
+    expectedRevision: toRevisionInput(input.expectedRevision),
+  };
+  return executeGraphQL<
+    { saveStudentGraduationEvaluationCommentAiDraft: { draft: StudentEvaluationCommentAiDraft } },
+    { input: typeof mutationInput }
+  >(SAVE_GRADUATION_AI_DRAFT_MUTATION, { input: mutationInput }).then(
+    (response) => response.saveStudentGraduationEvaluationCommentAiDraft.draft,
+  );
+}
+
 export function discardStudentEvaluationCommentProductDrafts(input: {
   classId: string;
   items: Array<{ draftId: string; expectedRevision: StudentEvaluationCommentRevision }>;
@@ -331,6 +443,22 @@ export function discardStudentEvaluationCommentProductDrafts(input: {
     { input: typeof mutationInput }
   >(DISCARD_AI_DRAFTS_MUTATION, { input: mutationInput }).then(
     (response) => response.discardStudentEvaluationCommentAiDrafts,
+  );
+}
+
+export function discardStudentGraduationEvaluationCommentProductDrafts(input: {
+  classId: string;
+  items: Array<{ draftId: string; expectedRevision: StudentEvaluationCommentRevision }>;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    items: input.items.map(toDraftMutationItemInput),
+  };
+  return executeGraphQL<
+    { discardStudentGraduationEvaluationCommentAiDrafts: { discardedCount: number } },
+    { input: typeof mutationInput }
+  >(DISCARD_GRADUATION_AI_DRAFTS_MUTATION, { input: mutationInput }).then(
+    (response) => response.discardStudentGraduationEvaluationCommentAiDrafts,
   );
 }
 
@@ -352,6 +480,22 @@ export function confirmStudentEvaluationCommentProductDrafts(input: {
   );
 }
 
+export function confirmStudentGraduationEvaluationCommentProductDrafts(input: {
+  classId: string;
+  items: Array<{ draftId: string; expectedRevision: StudentEvaluationCommentRevision }>;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    items: input.items.map(toDraftMutationItemInput),
+  };
+  return executeGraphQL<
+    { confirmStudentGraduationEvaluationCommentAiDrafts: { confirmedCount: number } },
+    { input: typeof mutationInput }
+  >(CONFIRM_GRADUATION_AI_DRAFTS_MUTATION, { input: mutationInput }).then(
+    (response) => response.confirmStudentGraduationEvaluationCommentAiDrafts,
+  );
+}
+
 export function writeStudentEvaluationCommentProductComment(input: {
   classId: string;
   content: string;
@@ -370,6 +514,38 @@ export function writeStudentEvaluationCommentProductComment(input: {
     ],
     semesterId: input.semesterId,
   });
+}
+
+export function writeStudentGraduationEvaluationCommentProductComment(input: {
+  classId: string;
+  content: string;
+  expectedRevision: StudentEvaluationCommentRevision | null;
+  studentId: string;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    commentKind: 'GRADUATION' as const,
+    items: [
+      {
+        action: 'UPSERT' as const,
+        content: input.content,
+        expectedRevision: input.expectedRevision ? toRevisionInput(input.expectedRevision) : null,
+        studentId: input.studentId,
+      },
+    ],
+    semesterId: null,
+  };
+  return executeGraphQL<
+    {
+      batchWriteStudentEvaluationComments: {
+        counts: { created: number; deleted: number; unchanged: number; updated: number };
+        status: 'UPDATED' | 'NO_CHANGES';
+      };
+    },
+    { input: typeof mutationInput }
+  >(WRITE_COMMENTS_MUTATION, { input: mutationInput }).then(
+    (response) => response.batchWriteStudentEvaluationComments,
+  );
 }
 
 export function writeStudentEvaluationCommentProductComments(input: {
@@ -422,6 +598,36 @@ export function clearStudentEvaluationCommentProductComments(input: {
       studentId: item.studentId,
     })),
     semesterId: input.semesterId,
+  };
+  return executeGraphQL<
+    {
+      batchWriteStudentEvaluationComments: {
+        counts: { created: number; deleted: number; unchanged: number; updated: number };
+        status: 'UPDATED' | 'NO_CHANGES';
+      };
+    },
+    { input: typeof mutationInput }
+  >(WRITE_COMMENTS_MUTATION, { input: mutationInput }).then(
+    (response) => response.batchWriteStudentEvaluationComments,
+  );
+}
+
+export function clearStudentGraduationEvaluationCommentProductComments(input: {
+  classId: string;
+  items: Array<{
+    expectedRevision: StudentEvaluationCommentRevision;
+    studentId: string;
+  }>;
+}) {
+  const mutationInput = {
+    classId: input.classId,
+    commentKind: 'GRADUATION' as const,
+    items: input.items.map((item) => ({
+      action: 'CLEAR' as const,
+      expectedRevision: toRevisionInput(item.expectedRevision),
+      studentId: item.studentId,
+    })),
+    semesterId: null,
   };
   return executeGraphQL<
     {
