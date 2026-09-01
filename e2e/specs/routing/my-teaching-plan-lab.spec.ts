@@ -48,7 +48,15 @@ function buildEnvelope(staffId: string, staffName: string) {
     invalidReason: null,
     isComplete: true,
     isValid: true,
-    items: [buildOccurrence(staffId, staffName)],
+    items: [
+      buildOccurrence(staffId, staffName),
+      {
+        ...buildOccurrence(staffId, staffName),
+        periodEnd: 4,
+        periodStart: 3,
+        slotId: 9002,
+      },
+    ],
     truncationReason: null,
   };
 }
@@ -110,9 +118,65 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
 
   await expect(page.getByRole('heading', { name: 'My 教学计划' })).toBeVisible();
   await expect(page.getByText('数据库原理', { exact: true }).first()).toBeVisible();
-  await expect(page.getByText('9月8日 · 周二', { exact: true })).toBeVisible();
-  await expect(page.getByText('知行楼 302', { exact: true })).toBeVisible();
-  await expect(page.getByText('教师', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('table', { name: '数据库原理课程教学计划' })).toBeVisible();
+  await expect(page.getByText('1,2', { exact: true })).toBeVisible();
+  await expect(page.getByText('3,4', { exact: true })).toBeVisible();
+  await expect(page.getByText('2026-09-08', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('线下', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('输入姓名或工号选择教师', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('这是限时本地草稿，请及时导出')).toBeVisible();
+  await expect(page.getByText(/最后一次编辑 24 小时后自动清除，服务器不会保存/)).toBeVisible();
+
+  const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
+  const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');
+  await firstLocation.fill('机房 5102');
+  await firstLocation.press('Tab');
+  await expect(secondLocation).toHaveValue('机房 5102');
+  await expect(page.getByText(/已将“机房 5102”填入本课程其余 1 个空白课次/)).toBeVisible();
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出 Excel' }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe('软件 2401-数据库原理-教学计划.xlsx');
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+
+  const { default: ExcelJS } = await import('exceljs');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(downloadPath!);
+  const worksheet = workbook.getWorksheet('教学计划');
+
+  expect(worksheet?.getRow(1).values).toEqual([
+    undefined,
+    '授课时间',
+    '学时数',
+    '节次',
+    '授课方式',
+    '授课地点',
+    '授课章节与内容',
+    '课外作业',
+  ]);
+  expect(worksheet?.getRow(2).values).toEqual([
+    undefined,
+    '2026-09-08',
+    2,
+    '1,2',
+    '线下',
+    '机房 5102',
+    '',
+    '',
+  ]);
+  expect(worksheet?.getRow(3).values).toEqual([
+    undefined,
+    '2026-09-08',
+    2,
+    '3,4',
+    '线下',
+    '机房 5102',
+    '',
+    '',
+  ]);
+
   await expect.poll(() => requestedSemesterId).toBe(7);
   expect(managedQueryCount).toBe(0);
 });

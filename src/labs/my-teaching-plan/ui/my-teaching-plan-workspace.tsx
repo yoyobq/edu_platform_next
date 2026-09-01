@@ -1,16 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  CalendarOutlined,
-  ClockCircleOutlined,
-  EnvironmentOutlined,
-  ReloadOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { ReloadOutlined, UserOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
   Card,
-  Collapse,
   Empty,
   Flex,
   Select,
@@ -20,7 +13,6 @@ import {
   Tabs,
   Tag,
   theme,
-  Timeline,
   Typography,
 } from 'antd';
 
@@ -35,9 +27,6 @@ import { ResponsiveGrid, useWidthBand } from '@/shared/ui/responsive-layout';
 
 import {
   buildTeachingPlanProjection,
-  formatTeachingPlanBusinessDate,
-  formatTeachingPlanCalcEffect,
-  formatTeachingPlanWeekday,
   resolveCourseCategoryPresentation,
   type TeachingPlanCourseProjection,
 } from '../application/teaching-plan-projection';
@@ -49,10 +38,11 @@ import {
 } from '../infrastructure/api';
 import type {
   MyTeachingPlanLabLoaderData,
-  TeachingPlanOccurrence,
   TeachingPlanOccurrenceEnvelope,
   TeachingPlanTeacherOption,
 } from '../types';
+
+import { TeachingPlanSheet } from './teaching-plan-sheet';
 
 type AsyncState<T> = {
   data: T;
@@ -96,7 +86,11 @@ const CATEGORY_STYLES = {
   },
 } as const;
 
-export function MyTeachingPlanWorkspace({ canManage, currentStaff }: MyTeachingPlanLabLoaderData) {
+export function MyTeachingPlanWorkspace({
+  canManage,
+  currentAccountId,
+  currentStaff,
+}: MyTeachingPlanLabLoaderData) {
   const { token } = theme.useToken();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const { band } = useWidthBand(workspaceRef, [...WORKSPACE_WIDTH_RULES], 'regular');
@@ -246,6 +240,9 @@ export function MyTeachingPlanWorkspace({ canManage, currentStaff }: MyTeachingP
     selectedStaffId,
   });
   const viewerName = canManage ? selectedTeacher?.staffName : currentStaff?.displayName;
+  const draftStaffId =
+    selectedStaffId ?? currentStaff?.staffId ?? planState.data?.items[0]?.staffId ?? 'unknown';
+  const draftTeacherName = viewerName ?? planState.data?.items[0]?.staffName ?? '教师';
 
   return (
     <div ref={workspaceRef} className="flex flex-col gap-4">
@@ -390,12 +387,22 @@ export function MyTeachingPlanWorkspace({ canManage, currentStaff }: MyTeachingP
                   <Tag color="blue">计划真源</Tag>
                 </Space>
               }
-              title="课程日期投影"
+              title="课程教学计划"
             >
               <Tabs
                 activeKey={selectedScheduleId === null ? undefined : String(selectedScheduleId)}
                 items={projection.courses.map((course) => ({
-                  children: <CoursePlan course={course} isCompact={isCompact} />,
+                  children: (
+                    <TeachingPlanSheet
+                      course={course}
+                      currentAccountId={currentAccountId}
+                      isCompact={isCompact}
+                      semesterId={selectedSemesterId}
+                      semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
+                      targetStaffId={draftStaffId}
+                      teacherName={draftTeacherName}
+                    />
+                  ),
                   key: String(course.scheduleId),
                   label: <CourseTabLabel course={course} />,
                 }))}
@@ -448,137 +455,6 @@ function CourseTabLabel({ course }: { course: TeachingPlanCourseProjection }) {
         {course.teachingClassName} · {course.dateCount} 天
       </Typography.Text>
     </div>
-  );
-}
-
-function CoursePlan({
-  course,
-  isCompact,
-}: {
-  course: TeachingPlanCourseProjection;
-  isCompact: boolean;
-}) {
-  return (
-    <div className="flex min-w-0 flex-col gap-5">
-      <Flex gap="small" justify="space-between" vertical={isCompact}>
-        <Space orientation="vertical" size={2}>
-          <Typography.Title level={4} style={{ margin: 0 }}>
-            {course.courseName}
-          </Typography.Title>
-          <Typography.Text type="secondary">{course.teachingClassName}</Typography.Text>
-        </Space>
-        <Space wrap>
-          <Tag color="blue">{course.dateCount} 个上课日</Tag>
-          <Tag>{course.effectiveOccurrenceCount} 个课次片段</Tag>
-        </Space>
-      </Flex>
-
-      {course.months.map((month) => (
-        <section key={month.key} className="flex flex-col gap-3">
-          <Flex align="center" gap="small">
-            <CalendarOutlined />
-            <Typography.Title level={5} style={{ margin: 0 }}>
-              {month.label}
-            </Typography.Title>
-            <Typography.Text type="secondary">{month.dates.length} 天</Typography.Text>
-          </Flex>
-          <Timeline
-            items={month.dates.map((dateGroup) => ({
-              content: (
-                <Card
-                  size="small"
-                  title={`${formatTeachingPlanBusinessDate(dateGroup.date)} · ${formatTeachingPlanWeekday(dateGroup.physicalDayOfWeek)}`}
-                >
-                  <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-                    <Typography.Text type="secondary">
-                      教学周第 {dateGroup.weekIndex} 周
-                    </Typography.Text>
-                    {dateGroup.occurrences.map((occurrence) => (
-                      <OccurrenceRow key={occurrence.slotId} occurrence={occurrence} />
-                    ))}
-                  </Space>
-                </Card>
-              ),
-              color: 'blue',
-            }))}
-          />
-        </section>
-      ))}
-
-      {course.adjustmentOccurrences.length ? (
-        <Collapse
-          ghost={isCompact}
-          items={[
-            {
-              children: (
-                <Space orientation="vertical" size="small" style={{ width: '100%' }}>
-                  {course.adjustmentOccurrences.map((occurrence) => (
-                    <AdjustmentRow key={occurrence.slotId} occurrence={occurrence} />
-                  ))}
-                </Space>
-              ),
-              key: 'adjustments',
-              label: `停课与调出记录（${course.adjustmentOccurrences.length}）`,
-            },
-          ]}
-        />
-      ) : null}
-    </div>
-  );
-}
-
-function OccurrenceRow({ occurrence }: { occurrence: TeachingPlanOccurrence }) {
-  const hasLogicalDayChange = occurrence.logicalDayOfWeek !== occurrence.physicalDayOfWeek;
-
-  return (
-    <Flex align="center" gap="small" justify="space-between" wrap>
-      <Space wrap size="small">
-        <Tag icon={<ClockCircleOutlined />}>
-          第 {occurrence.periodStart}
-          {occurrence.periodEnd === occurrence.periodStart ? '' : `–${occurrence.periodEnd}`} 节
-        </Tag>
-        {occurrence.classroomName ? (
-          <Tag icon={<EnvironmentOutlined />}>{occurrence.classroomName}</Tag>
-        ) : (
-          <Tag>教室待定</Tag>
-        )}
-        {occurrence.calcEffect !== 'NORMAL' ? (
-          <Tag color={occurrence.calcEffect === 'MAKEUP' ? 'green' : 'purple'}>
-            {formatTeachingPlanCalcEffect(occurrence.calcEffect)}
-          </Tag>
-        ) : null}
-      </Space>
-      {hasLogicalDayChange ? (
-        <Typography.Text type="secondary">
-          原课表 {formatTeachingPlanWeekday(occurrence.logicalDayOfWeek)}
-        </Typography.Text>
-      ) : null}
-    </Flex>
-  );
-}
-
-function AdjustmentRow({ occurrence }: { occurrence: TeachingPlanOccurrence }) {
-  return (
-    <Card size="small">
-      <Flex gap="small" justify="space-between" wrap>
-        <Space wrap size="small">
-          <Tag color={occurrence.calcEffect === 'CANCEL' ? 'red' : 'orange'}>
-            {formatTeachingPlanCalcEffect(occurrence.calcEffect)}
-          </Tag>
-          <Typography.Text>
-            {formatTeachingPlanBusinessDate(occurrence.date)} ·{' '}
-            {formatTeachingPlanWeekday(occurrence.physicalDayOfWeek)}
-          </Typography.Text>
-          <Typography.Text type="secondary">
-            第 {occurrence.periodStart}
-            {occurrence.periodEnd === occurrence.periodStart ? '' : `–${occurrence.periodEnd}`} 节
-          </Typography.Text>
-        </Space>
-        {occurrence.classroomName ? (
-          <Typography.Text type="secondary">{occurrence.classroomName}</Typography.Text>
-        ) : null}
-      </Flex>
-    </Card>
   );
 }
 

@@ -1,5 +1,6 @@
 export type MyTeachingPlanLabLoaderData = {
   canManage: boolean;
+  currentAccountId: number;
   currentStaff: {
     displayName: string;
     staffId: string;

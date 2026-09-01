@@ -712,6 +712,7 @@ function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeaching
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     }),
+    currentAccountId: snapshot.accountId,
     currentStaff: staffIdentity
       ? {
           displayName: snapshot.displayName,
