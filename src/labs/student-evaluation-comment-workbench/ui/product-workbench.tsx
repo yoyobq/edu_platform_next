@@ -105,7 +105,13 @@ type EditorState = {
 type BasisSyncRequest = {
   classId: string;
   scopeKey: string;
+  scopeVersion: number;
   semesterId: number;
+};
+
+type WorkspaceReloadOptions = {
+  generationIssuePolicy?: 'clear' | 'preserve';
+  scopeVersion?: number;
 };
 
 const STATUS_OPTIONS: Array<{ label: string; value: StudentEvaluationCommentWorkflowStatus }> = [
@@ -188,6 +194,8 @@ export function StudentEvaluationCommentProductWorkbench({
     request: BasisSyncRequest;
     session: StoredUpstreamSession;
   } | null>(null);
+  const latestWorkspaceRequestIdRef = useRef(0);
+  const scopeVersionRef = useRef(0);
   const scopeKeyRef = useRef('');
 
   const students = useMemo(() => workspace?.view?.students ?? [], [workspace?.view?.students]);
@@ -245,8 +253,18 @@ export function StudentEvaluationCommentProductWorkbench({
     async (input: {
       classId?: string;
       commentKind: StudentEvaluationCommentKind;
+      scopeVersion?: number;
       semesterId?: number;
     }) => {
+      const scopeVersion = input.scopeVersion ?? scopeVersionRef.current;
+      if (scopeVersion !== scopeVersionRef.current) return null;
+
+      const requestId = latestWorkspaceRequestIdRef.current + 1;
+      latestWorkspaceRequestIdRef.current = requestId;
+      const isCurrentRequest = () =>
+        latestWorkspaceRequestIdRef.current === requestId &&
+        scopeVersionRef.current === scopeVersion;
+
       setIsLoading(true);
       setIsCheckingConductBasis(input.commentKind === 'TERM');
       setErrorMessage(null);
@@ -289,16 +307,19 @@ export function StudentEvaluationCommentProductWorkbench({
           }
         }
 
+        if (!isCurrentRequest()) return null;
         applyWorkspace(next);
         setConductIssuesByStudentId(nextConductIssues);
         setConductPreflightError(nextConductPreflightError);
         return next;
       } catch (error) {
-        setErrorMessage(resolveProductErrorMessage(error));
+        if (isCurrentRequest()) setErrorMessage(resolveProductErrorMessage(error));
         return null;
       } finally {
-        setIsCheckingConductBasis(false);
-        setIsLoading(false);
+        if (isCurrentRequest()) {
+          setIsCheckingConductBasis(false);
+          setIsLoading(false);
+        }
       }
     },
     [applyWorkspace],
@@ -340,16 +361,41 @@ export function StudentEvaluationCommentProductWorkbench({
     };
   }, [classId, isGraduation, previousTermSemesterId]);
 
-  const reloadCurrentWorkspace = useCallback(async () => {
-    if (!classId) return loadWorkspace({ commentKind: activeCommentKind });
-    if (isGraduation) return loadWorkspace({ classId, commentKind: 'GRADUATION' });
-    if (semesterId === null) return loadWorkspace({ classId, commentKind: 'TERM' });
-    return loadWorkspace({ classId, commentKind: 'TERM', semesterId });
-  }, [activeCommentKind, classId, isGraduation, loadWorkspace, semesterId]);
+  const reloadCurrentWorkspace = useCallback(
+    async (options: WorkspaceReloadOptions = {}) => {
+      const scopeVersion = options.scopeVersion ?? scopeVersionRef.current;
+      if (scopeVersion !== scopeVersionRef.current) return null;
+
+      const next = !classId
+        ? await loadWorkspace({ commentKind: activeCommentKind, scopeVersion })
+        : isGraduation
+          ? await loadWorkspace({ classId, commentKind: 'GRADUATION', scopeVersion })
+          : semesterId === null
+            ? await loadWorkspace({ classId, commentKind: 'TERM', scopeVersion })
+            : await loadWorkspace({ classId, commentKind: 'TERM', scopeVersion, semesterId });
+      if (
+        next &&
+        scopeVersionRef.current === scopeVersion &&
+        options.generationIssuePolicy !== 'preserve'
+      ) {
+        setIssuesByStudentId({});
+      }
+      return next;
+    },
+    [activeCommentKind, classId, isGraduation, loadWorkspace, semesterId],
+  );
 
   useEffect(() => {
     if (!students.some((student) => student.isAiDraftGenerating)) return;
-    const timerId = window.setTimeout(() => void reloadCurrentWorkspace(), 4_000);
+    const scopeVersion = scopeVersionRef.current;
+    const timerId = window.setTimeout(
+      () =>
+        void reloadCurrentWorkspace({
+          generationIssuePolicy: 'preserve',
+          scopeVersion,
+        }),
+      4_000,
+    );
     return () => window.clearTimeout(timerId);
   }, [reloadCurrentWorkspace, students]);
 
@@ -378,11 +424,15 @@ export function StudentEvaluationCommentProductWorkbench({
       ) {
         return;
       }
+      const scopeVersion = scopeVersionRef.current + 1;
+      scopeVersionRef.current = scopeVersion;
       setEditor(null);
       setSelectedStudentIds([]);
       setIssuesByStudentId({});
       setConductIssuesByStudentId({});
       setConductPreflightError(null);
+      setBasisSyncError(null);
+      setQueuedBasisSync(null);
       setImportedDrafts({});
       setImportOpen(false);
       clearMaterialImportSession();
@@ -392,11 +442,14 @@ export function StudentEvaluationCommentProductWorkbench({
       const loaded = await loadWorkspace({
         classId: next.classId,
         commentKind: nextCommentKind,
+        scopeVersion,
         ...(nextCommentKind === 'TERM' && next.semesterId !== undefined
           ? { semesterId: next.semesterId }
           : {}),
       });
-      if (loaded) setActiveCommentKind(nextCommentKind);
+      if (loaded && scopeVersionRef.current === scopeVersion) {
+        setActiveCommentKind(nextCommentKind);
+      }
     },
     [
       clearMaterialImportSession,
@@ -1017,7 +1070,7 @@ export function StudentEvaluationCommentProductWorkbench({
             ? `${blockedCount} 名学生的生成依据不满足要求，请查看列表中的说明。`
             : '本次没有新增生成任务。',
       );
-      await reloadCurrentWorkspace();
+      await reloadCurrentWorkspace({ generationIssuePolicy: 'preserve' });
     } catch (error) {
       message.error(resolveProductErrorMessage(error));
     } finally {
@@ -1052,13 +1105,21 @@ export function StudentEvaluationCommentProductWorkbench({
     resolveLoginErrorMessage: (error) =>
       resolveUpstreamErrorMessage(error, '校园网登录失败，请检查账号或密码。'),
     onLoginSuccess: ({ pendingAction, session }) => {
-      if (pendingAction) setQueuedBasisSync({ request: pendingAction, session });
+      if (
+        pendingAction?.scopeVersion === scopeVersionRef.current &&
+        pendingAction.scopeKey === scopeKeyRef.current
+      ) {
+        setQueuedBasisSync({ request: pendingAction, session });
+      }
     },
   });
 
   const runBasisSync = useCallback(
     async (session: StoredUpstreamSession, request: BasisSyncRequest) => {
-      if (isOffCampusInternship || scopeKeyRef.current !== request.scopeKey) return;
+      const isCurrentScope = () =>
+        scopeVersionRef.current === request.scopeVersion &&
+        scopeKeyRef.current === request.scopeKey;
+      if (isOffCampusInternship || !isCurrentScope()) return;
       let latestSession = session;
       const executeSync = async (activeSession: StoredUpstreamSession) => {
         const conduct = await refreshStudentEvaluationCommentProductConductBasis({
@@ -1074,6 +1135,7 @@ export function StudentEvaluationCommentProductWorkbench({
           upstreamSessionToken: afterConduct.upstreamSessionToken,
         });
         latestSession = persistSessionFromResult(afterConduct, courses);
+        if (!isCurrentScope()) return;
         const failures = conduct.failureCount + courses.failedStudentCount;
         message[failures ? 'warning' : 'success'](
           failures
@@ -1081,7 +1143,7 @@ export function StudentEvaluationCommentProductWorkbench({
             : `已更新 ${conduct.writtenStudentCount} 名操行依据和 ${courses.studentCount} 名成绩依据。`,
         );
         setIssuesByStudentId({});
-        await reloadCurrentWorkspace();
+        await reloadCurrentWorkspace({ scopeVersion: request.scopeVersion });
       };
 
       setIsSyncingBasis(true);
@@ -1089,14 +1151,17 @@ export function StudentEvaluationCommentProductWorkbench({
       try {
         await executeSync(session);
       } catch (error) {
+        if (!isCurrentScope()) return;
         if (!isExpiredUpstreamSessionError(error)) {
           setBasisSyncError(resolveUpstreamErrorMessage(error, '暂时无法更新生成依据。'));
           return;
         }
         try {
           const refreshed = await refreshSession(latestSession);
+          if (!isCurrentScope()) return;
           await executeSync(refreshed);
         } catch (retryError) {
+          if (!isCurrentScope()) return;
           openLoginModalForExpiredSession({
             loginError: resolveUpstreamErrorMessage(
               retryError,
@@ -1128,7 +1193,12 @@ export function StudentEvaluationCommentProductWorkbench({
 
   const handleBasisSync = useCallback(() => {
     if (isOffCampusInternship || !classId || semesterId === null || !scopeKey) return;
-    const request = { classId, scopeKey, semesterId };
+    const request = {
+      classId,
+      scopeKey,
+      scopeVersion: scopeVersionRef.current,
+      semesterId,
+    };
     if (!upstreamSession) {
       openLoginModal({ pendingAction: request });
       return;
@@ -1264,6 +1334,7 @@ export function StudentEvaluationCommentProductWorkbench({
           <div>
             <div className="mb-2">班级</div>
             <Select
+              disabled={isLoading || isBatchRunning}
               loading={isLoading}
               optionFilterProp="label"
               options={(workspace?.classOptions ?? []).map((item) => ({

@@ -16,6 +16,13 @@ const CLASS_OPTION = {
   trainingYears: 4,
 };
 
+const SECOND_CLASS_OPTION = {
+  ...CLASS_OPTION,
+  classCode: 'SE2024-02',
+  classId: '1021905',
+  className: '软件工程2024级2班',
+};
+
 const TERM_OPTION = {
   isCurrent: true,
   label: '2025-2026 第一学期',
@@ -34,6 +41,17 @@ async function seedAdmin(page: Page) {
     displayName: 'admin-user',
     primaryAccessGroup: 'ADMIN',
   });
+}
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, reject, resolve };
 }
 
 function buildWorkspace(generating = false, excelSaved = false, formalDeleted = false) {
@@ -153,7 +171,7 @@ test('产品工作台以学期和状态筛选统一组织生成与审阅', async
 
   await page.goto(routes.labsStudentEvaluationCommentWorkbench);
 
-  await expect(page.getByRole('heading', { name: '班级评语工作台' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '班级评语治理' })).toBeVisible();
   await expect(page.getByText('2025-2026 第一学期', { exact: true })).toBeVisible();
   await expect(page.getByText('待处理 1', { exact: true })).toBeVisible();
   await expect(page.getByText('待审阅 1', { exact: true })).toBeVisible();
@@ -178,6 +196,203 @@ test('产品工作台以学期和状态筛选统一组织生成与审阅', async
     studentIds: ['324010103'],
   });
   await expect(page.getByText('生成中 1', { exact: true })).toBeVisible();
+});
+
+test('AI 依据不足在生成后保留，手动刷新后允许服务端重新裁决', async ({ page }) => {
+  await seedAdmin(page);
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query StudentEvaluationCommentProductWorkbench')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { studentEvaluationCommentWorkspace: buildWorkspace() },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('query StudentEvaluationCommentProductConductBasis')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { studentConductGradeWorkspace: { view: { students: [] } } },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation GenerateStudentEvaluationCommentProductDrafts')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            generateStudentEvaluationCommentAiDrafts: {
+              counts: {
+                accepted: 0,
+                alreadyGenerating: 0,
+                basisMissing: 1,
+                draftExists: 0,
+                formalCommentExists: 0,
+                requested: 1,
+              },
+              items: [{ disposition: 'BASIS_MISSING', studentId: '324010103' }],
+              status: 'NO_CHANGES',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.getByText('待处理 1', { exact: true }).click();
+  await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
+  await page.getByRole('button', { name: 'AI 生成 1' }).click();
+  await page.getByRole('button', { name: '生成 1 名学生草稿' }).click();
+
+  await expect(page.getByText('问题 1', { exact: true })).toBeVisible();
+  await expect(page.getByText('待处理 0', { exact: true })).toBeVisible();
+
+  await page.getByRole('button', { name: '刷新' }).click();
+
+  await expect(page.getByText('问题 0', { exact: true })).toBeVisible();
+  await expect(page.getByText('待处理 1', { exact: true })).toBeVisible();
+});
+
+test('旧范围的依据同步完成后不应把工作台切回旧班级', async ({ page }) => {
+  await seedAdmin(page);
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      'aigc-friendly-frontend.upstream.session.v2',
+      JSON.stringify({
+        accountId: 9527,
+        expiresAt: '2027-08-25T08:00:00.000Z',
+        upstreamLoginId: 'teacher.alice',
+        upstreamSessionToken: 'upstream-token-001',
+        version: 2,
+      }),
+    );
+  });
+
+  const conductSyncStarted = createDeferred();
+  const releaseConductSync = createDeferred();
+  const requestedWorkspaceClassIds: Array<string | null> = [];
+  let courseSyncCount = 0;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { input?: Record<string, unknown> } }
+      | undefined;
+    const query = payload?.query ?? '';
+    const input = payload?.variables?.input;
+
+    if (query.includes('query StudentEvaluationCommentProductWorkbench')) {
+      const requestedClassId = typeof input?.classId === 'string' ? input.classId : null;
+      requestedWorkspaceClassIds.push(requestedClassId);
+      const selectedClass =
+        requestedClassId === SECOND_CLASS_OPTION.classId ? SECOND_CLASS_OPTION : CLASS_OPTION;
+      const workspace = buildWorkspace();
+      workspace.classOptions = [CLASS_OPTION, SECOND_CLASS_OPTION];
+      workspace.selectedClass = selectedClass;
+      workspace.view.classItem = {
+        classCode: selectedClass.classCode,
+        className: selectedClass.className,
+        id: selectedClass.classId,
+      };
+      await route.fulfill({
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: workspace } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('query StudentEvaluationCommentProductConductBasis')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { studentConductGradeWorkspace: { view: { students: [] } } },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation RefreshStudentEvaluationCommentProductConductBasis')) {
+      conductSyncStarted.resolve();
+      await releaseConductSync.promise;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refreshStudentConductGradeClassFromUpstream: {
+              expiresAt: '2027-08-25T09:00:00.000Z',
+              failureCount: 0,
+              upstreamSessionToken: 'rolling-token-002',
+              writtenStudentCount: 3,
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation RefreshStudentEvaluationCommentProductCourseBasis')) {
+      courseSyncCount += 1;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            refreshClassCourseGrades: {
+              expiresAt: '2027-08-25T10:00:00.000Z',
+              failedStudentCount: 0,
+              studentCount: 3,
+              upstreamSessionToken: 'rolling-token-003',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.getByRole('button', { name: '更新生成依据' }).click();
+  await conductSyncStarted.promise;
+
+  const classSelector = page.locator('.ant-select').first();
+  await classSelector.click();
+  await page
+    .getByText(`${SECOND_CLASS_OPTION.className} · ${SECOND_CLASS_OPTION.classCode}`, {
+      exact: true,
+    })
+    .click();
+  await expect(classSelector).toContainText(SECOND_CLASS_OPTION.className);
+
+  releaseConductSync.resolve();
+  await expect.poll(() => courseSyncCount).toBe(1);
+  await expect(page.getByRole('button', { name: '更新生成依据' })).not.toHaveClass(
+    /ant-btn-loading/,
+  );
+
+  const secondClassRequestIndex = requestedWorkspaceClassIds.lastIndexOf(
+    SECOND_CLASS_OPTION.classId,
+  );
+  expect(secondClassRequestIndex).toBeGreaterThanOrEqual(0);
+  expect(requestedWorkspaceClassIds.slice(secondClassRequestIndex + 1)).not.toContain(
+    CLASS_OPTION.classId,
+  );
+  await expect(classSelector).toContainText(SECOND_CLASS_OPTION.className);
+  await expect(page.getByText(/已更新 3 名操行依据/)).toHaveCount(0);
 });
 
 test('最后学期跳过操行预检并按下厂实习场景生成', async ({ page }) => {
