@@ -56,6 +56,16 @@ function buildEnvelope(staffId: string, staffName: string) {
         periodStart: 3,
         slotId: 9002,
       },
+      {
+        ...buildOccurrence(staffId, staffName),
+        courseCategory: 'INTEGRATED',
+        courseName: '操作系统',
+        date: '2026-09-09',
+        physicalDayOfWeek: 3,
+        scheduleId: 902,
+        slotId: 9003,
+        teachingClassName: '软件 2402',
+      },
     ],
     truncationReason: null,
   };
@@ -123,9 +133,23 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await expect(page.getByText('3,4', { exact: true })).toBeVisible();
   await expect(page.getByText('2026-09-08', { exact: true })).toHaveCount(2);
   await expect(page.getByText('线下', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('columnheader', { name: '授课章节与内容' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: '课外作业' })).toBeVisible();
+  await expect(page.getByText('待填写', { exact: true })).toHaveCount(4);
   await expect(page.getByText('输入姓名或工号选择教师', { exact: true })).toHaveCount(0);
   await expect(page.getByText('这是限时本地草稿，请及时导出')).toBeVisible();
   await expect(page.getByText(/最后一次编辑 24 小时后自动清除，服务器不会保存/)).toBeVisible();
+
+  const previousCourseButton = page.getByRole('button', { name: '上一门课程' });
+  const nextCourseButton = page.getByRole('button', { name: '下一门课程' });
+  await expect(previousCourseButton).toBeDisabled();
+  await nextCourseButton.click();
+  await expect(page.getByText('一体化课程使用另一种教学计划表')).toBeVisible();
+  await expect(page.getByRole('table', { name: '操作系统课程教学计划' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toHaveCount(0);
+  await expect(nextCourseButton).toBeDisabled();
+  await previousCourseButton.click();
+  await expect(page.getByRole('table', { name: '数据库原理课程教学计划' })).toBeVisible();
 
   const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
   const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');

@@ -2,7 +2,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   DownloadOutlined,
   EnvironmentOutlined,
-  FileExcelOutlined,
   FormOutlined,
   LaptopOutlined,
 } from '@ant-design/icons';
@@ -24,6 +23,7 @@ import {
   formatTeachingPlanBusinessDate,
   formatTeachingPlanCalcEffect,
   formatTeachingPlanWeekday,
+  resolveCourseCategoryPresentation,
   type TeachingPlanCourseProjection,
 } from '../application/teaching-plan-projection';
 import {
@@ -49,6 +49,7 @@ const DELIVERY_MODE_OPTIONS = [
 
 export function TeachingPlanSheet({
   course,
+  courseNavigation,
   currentAccountId,
   isCompact,
   semesterId,
@@ -57,6 +58,7 @@ export function TeachingPlanSheet({
   teacherName,
 }: {
   course: TeachingPlanCourseProjection;
+  courseNavigation: React.ReactNode;
   currentAccountId: number;
   isCompact: boolean;
   semesterId: number;
@@ -166,6 +168,22 @@ export function TeachingPlanSheet({
     }
   };
 
+  if (resolveCourseCategoryPresentation(course.courseCategory).kind === 'integrated') {
+    return (
+      <div className="overflow-hidden rounded-[var(--radius-surface)] border border-border bg-bg-container shadow-card">
+        <div className="border-b border-border px-4">{courseNavigation}</div>
+        <div className="p-4">
+          <Alert
+            description="当前 A–G 教学计划模板不适用于一体化课程，因此不会生成填写表格或提供本模板的 Excel 导出。"
+            showIcon
+            title="一体化课程使用另一种教学计划表"
+            type="info"
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="overflow-hidden rounded-[var(--radius-surface)] border border-border bg-bg-container shadow-card">
@@ -173,11 +191,7 @@ export function TeachingPlanSheet({
           <Flex gap="middle" justify="space-between" vertical={isCompact}>
             <div className="flex min-w-0 flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
-                <FileExcelOutlined className="text-success" />
-                <Typography.Title level={4} style={{ margin: 0 }}>
-                  课程教学计划
-                </Typography.Title>
-                <Tag color="blue">Excel A–E</Tag>
+                <Tag color="blue">Excel A–G</Tag>
                 <Tag icon={<FormOutlined />}>本地草稿</Tag>
               </div>
               <Typography.Text type="secondary">
@@ -210,23 +224,14 @@ export function TeachingPlanSheet({
               type="warning"
             />
           </div>
-
-          <div
-            className="grid gap-4 bg-bg-layout p-3"
-            style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}
-          >
-            <SheetMeta label="课程" value={course.courseName} />
-            <SheetMeta label="教学班" value={course.teachingClassName} />
-            <SheetMeta label="教师" value={teacherName} />
-            <SheetMeta label="学期" value={semesterName} />
-            <SheetMeta label="计划行" value={`${rows.length} 行`} />
-          </div>
         </div>
+
+        <div className="border-b border-border px-4">{courseNavigation}</div>
 
         <div className="overflow-x-auto">
           <table
             aria-label={`${course.courseName}课程教学计划`}
-            className="w-full min-w-[800px] border-separate border-spacing-0 text-sm"
+            className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm"
           >
             <colgroup>
               <col className="w-12" />
@@ -234,14 +239,16 @@ export function TeachingPlanSheet({
               <col className="w-24" />
               <col className="w-28" />
               <col className="w-32" />
-              <col />
+              <col className="w-56" />
+              <col className="w-72" />
+              <col className="w-56" />
             </colgroup>
             <thead>
               <tr className="bg-bg-layout text-xs text-text-tertiary">
                 <th className="border-b border-r border-border px-3 py-2" scope="col">
                   #
                 </th>
-                {['A', 'B', 'C', 'D', 'E'].map((letter) => (
+                {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((letter) => (
                   <th
                     className="border-b border-r border-border px-3 py-2 font-medium last:border-r-0"
                     key={letter}
@@ -270,6 +277,12 @@ export function TeachingPlanSheet({
                 <th className="border-b border-border px-3 py-3" scope="col">
                   授课地点
                 </th>
+                <th className="border-b border-l border-border px-3 py-3" scope="col">
+                  授课章节与内容
+                </th>
+                <th className="border-b border-l border-border px-3 py-3" scope="col">
+                  课外作业
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -279,7 +292,7 @@ export function TeachingPlanSheet({
                   key={row.rowKey}
                 >
                   <td className="border-b border-r border-border bg-bg-layout px-3 py-3 text-center text-xs text-text-tertiary">
-                    {index + 2}
+                    {index + 1}
                   </td>
                   <td className="border-b border-r border-border px-3 py-3">
                     <div className="flex flex-col gap-1">
@@ -328,17 +341,34 @@ export function TeachingPlanSheet({
                       onPressEnter={(event) => event.currentTarget.blur()}
                     />
                   </td>
+                  <td className="border-b border-l border-border px-3 py-3 text-text-tertiary">
+                    待填写
+                  </td>
+                  <td className="border-b border-l border-border px-3 py-3 text-text-tertiary">
+                    待填写
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
 
-        <div className="flex items-start gap-2 bg-bg-layout p-3 text-xs text-text-secondary">
+        <div
+          className="grid gap-4 border-t border-border bg-bg-layout p-3"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}
+        >
+          <SheetMeta label="课程" value={course.courseName} />
+          <SheetMeta label="教学班" value={course.teachingClassName} />
+          <SheetMeta label="教师" value={teacherName} />
+          <SheetMeta label="学期" value={semesterName} />
+          <SheetMeta label="计划行" value={`${rows.length} 行`} />
+        </div>
+
+        <div className="flex items-start gap-2 border-t border-border bg-bg-layout p-3 text-xs text-text-secondary">
           <LaptopOutlined className="mt-0.5" />
           <span>
             每次打开页面都会根据当前真源重新生成 A–C；本地草稿只匹配当前仍存在的课次行。
-            F“授课章节与内容”和 G“课外作业”暂留空后直接导出。
+            F“授课章节与内容”和 G“课外作业”已预留，当前以空列导出。
           </span>
         </div>
       </div>

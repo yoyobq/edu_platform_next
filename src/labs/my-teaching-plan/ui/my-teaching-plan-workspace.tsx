@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ReloadOutlined, UserOutlined } from '@ant-design/icons';
+import { LeftOutlined, ReloadOutlined, RightOutlined, UserOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -9,10 +9,8 @@ import {
   Select,
   Skeleton,
   Space,
-  Statistic,
   Tabs,
   Tag,
-  theme,
   Typography,
 } from 'antd';
 
@@ -91,7 +89,6 @@ export function MyTeachingPlanWorkspace({
   currentAccountId,
   currentStaff,
 }: MyTeachingPlanLabLoaderData) {
-  const { token } = theme.useToken();
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const { band } = useWidthBand(workspaceRef, [...WORKSPACE_WIDTH_RULES], 'regular');
   const isCompact = band === 'compact';
@@ -243,6 +240,11 @@ export function MyTeachingPlanWorkspace({
   const draftStaffId =
     selectedStaffId ?? currentStaff?.staffId ?? planState.data?.items[0]?.staffId ?? 'unknown';
   const draftTeacherName = viewerName ?? planState.data?.items[0]?.staffName ?? '教师';
+  const selectedCourse =
+    projection.courses.find((course) => course.scheduleId === selectedScheduleId) ??
+    projection.courses[0];
+  const selectedCourseIndex = selectedCourse ? projection.courses.indexOf(selectedCourse) : -1;
+  const showCourseNavigationControls = projection.courses.length > 1;
 
   return (
     <div ref={workspaceRef} className="flex flex-col gap-4">
@@ -365,20 +367,6 @@ export function MyTeachingPlanWorkspace({
             />
           ) : null}
 
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 3 }}>
-            <MetricCard
-              hint={selectedSemester?.name ?? '所选学期'}
-              title="课程"
-              value={projection.courses.length}
-            />
-            <MetricCard hint="去重后的有效上课日" title="上课日期" value={projection.dateCount} />
-            <MetricCard
-              hint="按节次保留课次片段"
-              title="有效课次"
-              value={projection.effectiveOccurrenceCount}
-            />
-          </ResponsiveGrid>
-
           {projection.courses.length ? (
             <Card
               extra={
@@ -389,27 +377,74 @@ export function MyTeachingPlanWorkspace({
               }
               title="课程教学计划"
             >
-              <Tabs
-                activeKey={selectedScheduleId === null ? undefined : String(selectedScheduleId)}
-                items={projection.courses.map((course) => ({
-                  children: (
-                    <TeachingPlanSheet
-                      course={course}
-                      currentAccountId={currentAccountId}
-                      isCompact={isCompact}
-                      semesterId={selectedSemesterId}
-                      semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
-                      targetStaffId={draftStaffId}
-                      teacherName={draftTeacherName}
+              {selectedCourse ? (
+                <TeachingPlanSheet
+                  course={selectedCourse}
+                  courseNavigation={
+                    <Tabs
+                      activeKey={String(selectedCourse.scheduleId)}
+                      items={projection.courses.map((course, index) => ({
+                        key: String(course.scheduleId),
+                        label: (
+                          <CourseTabLabel
+                            course={course}
+                            isActive={course.scheduleId === selectedCourse.scheduleId}
+                            showDivider={index < projection.courses.length - 1}
+                          />
+                        ),
+                      }))}
+                      tabBarGutter={0}
+                      tabBarExtraContent={
+                        showCourseNavigationControls ? (
+                          <div className="flex items-center gap-1 px-2 text-xs text-text-secondary">
+                            <Button
+                              aria-label="上一门课程"
+                              disabled={selectedCourseIndex <= 0}
+                              icon={<LeftOutlined />}
+                              size="small"
+                              title="上一门课程"
+                              type="text"
+                              onClick={() => {
+                                const previousCourse = projection.courses[selectedCourseIndex - 1];
+                                if (previousCourse) {
+                                  setSelectedScheduleId(previousCourse.scheduleId);
+                                }
+                              }}
+                            />
+                            <span className="min-w-12 text-center tabular-nums">
+                              {selectedCourseIndex + 1} / {projection.courses.length}
+                            </span>
+                            <Button
+                              aria-label="下一门课程"
+                              disabled={selectedCourseIndex >= projection.courses.length - 1}
+                              icon={<RightOutlined />}
+                              size="small"
+                              title="下一门课程"
+                              type="text"
+                              onClick={() => {
+                                const nextCourse = projection.courses[selectedCourseIndex + 1];
+                                if (nextCourse) {
+                                  setSelectedScheduleId(nextCourse.scheduleId);
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : null
+                      }
+                      tabBarStyle={{ marginBottom: 0 }}
+                      tabPlacement="top"
+                      onChange={(key) => setSelectedScheduleId(Number(key))}
                     />
-                  ),
-                  key: String(course.scheduleId),
-                  label: <CourseTabLabel course={course} />,
-                }))}
-                tabBarGutter={token.marginXS}
-                tabPlacement={isCompact ? 'top' : 'start'}
-                onChange={(key) => setSelectedScheduleId(Number(key))}
-              />
+                  }
+                  currentAccountId={currentAccountId}
+                  isCompact={isCompact}
+                  key={`${selectedSemesterId}:${draftStaffId}:${selectedCourse.scheduleId}`}
+                  semesterId={selectedSemesterId}
+                  semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
+                  targetStaffId={draftStaffId}
+                  teacherName={draftTeacherName}
+                />
+              ) : null}
             </Card>
           ) : (
             <Card>
@@ -431,29 +466,32 @@ function FilterField({ children, label }: { children: React.ReactNode; label: st
   );
 }
 
-function MetricCard({ hint, title, value }: { hint: string; title: string; value: number }) {
-  return (
-    <Card size="small">
-      <Statistic title={title} value={value} />
-      <Typography.Text type="secondary">{hint}</Typography.Text>
-    </Card>
-  );
-}
-
-function CourseTabLabel({ course }: { course: TeachingPlanCourseProjection }) {
+function CourseTabLabel({
+  course,
+  isActive,
+  showDivider,
+}: {
+  course: TeachingPlanCourseProjection;
+  isActive: boolean;
+  showDivider: boolean;
+}) {
   const category = resolveCourseCategoryPresentation(course.courseCategory);
 
   return (
-    <div className="flex min-w-0 flex-col gap-1 py-1 text-left">
+    <div
+      className={`flex min-w-52 flex-col gap-1 px-4 py-2 text-left transition-colors duration-150 hover:bg-fill-secondary ${
+        showDivider ? 'border-r border-border' : ''
+      } ${isActive ? 'bg-fill-secondary' : ''}`}
+    >
+      <span className="font-medium text-inherit">{course.courseName}</span>
       <Space size="small" wrap>
-        <Typography.Text strong>{course.courseName}</Typography.Text>
+        <Typography.Text type="secondary">
+          {course.teachingClassName} · {course.dateCount} 天
+        </Typography.Text>
         <Tag style={CATEGORY_STYLES[category.kind]} variant="filled">
           {category.label}
         </Tag>
       </Space>
-      <Typography.Text type="secondary">
-        {course.teachingClassName} · {course.dateCount} 天
-      </Typography.Text>
     </div>
   );
 }
