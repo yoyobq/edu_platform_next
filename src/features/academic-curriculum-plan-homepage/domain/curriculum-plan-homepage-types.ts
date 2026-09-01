@@ -15,7 +15,7 @@ export type CurriculumPlanHomepageListItem = {
   className: string | null;
   courseCategory: string | null;
   courseName: string | null;
-  planId: string;
+  planId: string | null;
   rawPlan: Record<string, unknown> | null;
   reviewStatus: string | null;
   schoolYear: string | null;
@@ -44,12 +44,21 @@ export type CurriculumPlanHomepageDetailResult = {
 };
 
 export type SaveCurriculumPlanHomepageResult = {
-  code: string | null;
+  code: number | null;
   data: unknown;
   expiresAt: string | null;
   msg: string | null;
+  planId: string | null;
   success: boolean;
   upstreamSessionToken: string;
+};
+
+export type CurriculumPlanHomepageSaveTarget = {
+  departmentId: string | null;
+  planId: string | null;
+  schoolYear: string;
+  semester: string;
+  teachingClassId: string;
 };
 
 export type CurriculumPlanHomepageDepartmentOption = {

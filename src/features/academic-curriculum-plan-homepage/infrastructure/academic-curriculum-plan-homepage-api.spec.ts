@@ -177,10 +177,11 @@ describe('academic curriculum plan homepage api', () => {
   it('saves the full upstream-style homepage object without remapping keys', async () => {
     mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       saveCurriculumPlanHomepage: {
-        code: '0',
+        code: 200,
         data: { saved: true },
         expiresAt: '2026-06-01T09:00:00.000Z',
         msg: 'ok',
+        planId: 'plan-001',
         success: true,
         upstreamSessionToken: 'upstream-token-003',
       },
@@ -196,6 +197,13 @@ describe('academic curriculum plan homepage api', () => {
     await expect(
       saveCurriculumPlanHomepage({
         homepage,
+        target: {
+          departmentId: ' ORG0302 ',
+          planId: ' plan-001 ',
+          schoolYear: ' 2025 ',
+          semester: ' 2 ',
+          teachingClassId: ' CLASS-001 ',
+        },
         upstreamSessionToken: 'upstream-token-002',
       }),
     ).resolves.toMatchObject({
@@ -209,11 +217,18 @@ describe('academic curriculum plan homepage api', () => {
       input: {
         homepage,
         sessionToken: 'upstream-token-002',
+        target: {
+          departmentId: 'ORG0302',
+          planId: 'plan-001',
+          schoolYear: '2025',
+          semester: '2',
+          teachingClassId: 'CLASS-001',
+        },
       },
     });
   });
 
-  it('previews managed homepage prefill with typed context', async () => {
+  it('previews managed homepage prefill before the plan id is created', async () => {
     mockedExecuteGraphQL.mockResolvedValueOnce({
       previewAcademicCurriculumPlanHomepagePrefill: {
         fieldWriteRules: [
@@ -247,7 +262,7 @@ describe('academic curriculum plan homepage api', () => {
         mode: 'managed',
         overrideTimeWindow: true,
         phase: 'INITIAL',
-        planId: ' plan-001 ',
+        planId: null,
       }),
     ).resolves.toMatchObject({
       homepagePatch: {
@@ -273,7 +288,7 @@ describe('academic curriculum plan homepage api', () => {
       },
       overrideTimeWindow: true,
       phase: 'INITIAL',
-      planId: 'plan-001',
+      planId: null,
     });
   });
 
@@ -300,7 +315,7 @@ describe('academic curriculum plan homepage api', () => {
       },
       mode: 'my',
       phase: 'FINAL',
-      planId: 'plan-001',
+      planId: null,
     });
     expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
       'query PreviewMyAcademicCurriculumPlanHomepagePrefill',
@@ -319,7 +334,7 @@ describe('academic curriculum plan homepage api', () => {
         weeklyHours: null,
       },
       phase: 'FINAL',
-      planId: 'plan-001',
+      planId: null,
     });
   });
 
@@ -387,7 +402,7 @@ describe('academic curriculum plan homepage api', () => {
         },
         mode: 'managed',
         phase: 'INITIAL',
-        planId: 'plan-001',
+        planId: null,
         upstreamSessionToken: 'upstream-token-003',
       }),
     ).resolves.toMatchObject({
@@ -406,7 +421,7 @@ describe('academic curriculum plan homepage api', () => {
         weeklyHours: 4,
       },
       phase: 'INITIAL',
-      planId: 'plan-001',
+      planId: null,
       upstreamSessionToken: 'upstream-token-003',
     });
   });

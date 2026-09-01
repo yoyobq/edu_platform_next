@@ -57,6 +57,7 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  buildEmptyCurriculumPlanHomepageDraft,
   buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
@@ -66,6 +67,10 @@ import {
   type InitialReferenceLessonDistributionStrategy,
   validateCurriculumPlanHomepageBeforeSave,
 } from '../application/draft-policy';
+import {
+  resolveCurriculumPlanHomepageItemKey as resolvePlanItemKey,
+  resolveCurriculumPlanHomepageTeachingClassId as resolveTeachingClassId,
+} from '../application/plan-item-policy';
 import {
   type CurrentCurriculumPlanHomepageAccount,
   type CurriculumPlanHomepageDetailResult,
@@ -111,8 +116,9 @@ type PendingAction =
     }
   | {
       homepage: Record<string, unknown>;
-      planId: string;
+      item: CurriculumPlanHomepageListItem;
       type: 'save';
+      values: SearchFormValues;
     }
   | {
       item: CurriculumPlanHomepageListItem;
@@ -243,8 +249,8 @@ function resolvePrefillMode(account: CurrentCurriculumPlanHomepageAccount | null
   return 'my' satisfies CurriculumPlanHomepagePrefillMode;
 }
 
-function buildPhaseKey(planId: string, phase: CurriculumPlanHomepagePrefillPhase) {
-  return `${planId}:${phase}`;
+function buildPhaseKey(itemKey: string, phase: CurriculumPlanHomepagePrefillPhase) {
+  return `${itemKey}:${phase}`;
 }
 
 function confirmPrefillTimeWindowOverride() {
@@ -1696,8 +1702,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
   >({});
   const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
   const [listResult, setListResult] = useState<CurriculumPlanHomepageListResult | null>(null);
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
-  const [detailResult, setDetailResult] = useState<CurriculumPlanHomepageDetailResult | null>(null);
+  const [loadedSearchValues, setLoadedSearchValues] = useState<SearchFormValues | null>(null);
+  const [selectedItemKey, setSelectedItemKey] = useState<string | null>(null);
+  const [, setDetailResult] = useState<CurriculumPlanHomepageDetailResult | null>(null);
   const [homepageDrafts, setHomepageDrafts] = useState<Record<string, Record<string, unknown>>>({});
   const [referenceCandidateResults, setReferenceCandidateResults] = useState<
     Record<string, CurriculumPlanHomepageReferenceCandidatesResult>
@@ -1752,7 +1759,8 @@ export function AcademicCurriculumPlanHomepagePageContent({
   });
   const clearResults = useCallback(() => {
     setListResult(null);
-    setSelectedPlanId(null);
+    setLoadedSearchValues(null);
+    setSelectedItemKey(null);
     setDetailResult(null);
     setHomepageDrafts({});
     setReferenceCandidateResults({});
@@ -1814,7 +1822,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
         if (action.type === 'list') {
           setIsLoadingList(true);
           setDetailResult(null);
-          setSelectedPlanId(null);
+          setSelectedItemKey(null);
           setHomepageDrafts({});
           setReferenceCandidateResults({});
           setReferenceHomepageDetails({});
@@ -1833,6 +1841,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
           persistSessionFromResult(currentSession, result);
           setListResult(result);
+          setLoadedSearchValues(action.values);
           return;
         }
 
@@ -1840,24 +1849,87 @@ export function AcademicCurriculumPlanHomepagePageContent({
           setIsSavingHomepage(true);
           setSaveSuccessMessage(null);
 
+          const teachingClassId = resolveTeachingClassId(action.item);
+
+          if (!teachingClassId) {
+            throw new Error('当前记录缺少教学班 ID，无法保存授课计划首页。');
+          }
+
           const result = await saveCurriculumPlanHomepage({
             homepage: action.homepage,
+            target: {
+              departmentId: action.values.departmentId ?? null,
+              planId: action.item.planId,
+              schoolYear: action.values.schoolYear,
+              semester: action.values.semester,
+              teachingClassId,
+            },
             upstreamSessionToken: currentSession.upstreamSessionToken,
           });
 
-          persistSessionFromResult(currentSession, result);
+          const savedSession = persistSessionFromResult(currentSession, result);
 
           if (!result.success) {
-            throw new Error(result.msg?.trim() || result.code || '授课计划首页保存失败。');
+            throw new Error(
+              result.msg?.trim() ||
+                (result.code === null ? '授课计划首页保存失败。' : String(result.code)),
+            );
           }
 
           setSaveSuccessMessage(result.msg?.trim() || '授课计划首页已保存。');
+
+          try {
+            const refreshedList = await fetchCurriculumPlanHomepageList({
+              ...action.values,
+              upstreamSessionToken: savedSession.upstreamSessionToken,
+            });
+            const refreshedSession = persistSessionFromResult(savedSession, refreshedList);
+            const itemKey = resolvePlanItemKey(action.item);
+            const refreshedItem = refreshedList.items.find(
+              (item) => resolvePlanItemKey(item) === itemKey,
+            );
+            const savedPlanId = refreshedItem?.planId ?? result.planId;
+
+            setListResult(refreshedList);
+            setLoadedSearchValues(action.values);
+            setSelectedItemKey(itemKey);
+
+            if (!savedPlanId) {
+              return;
+            }
+
+            const refreshedDetail = await fetchCurriculumPlanHomepageDetail({
+              planId: savedPlanId,
+              upstreamSessionToken: refreshedSession.upstreamSessionToken,
+            });
+
+            persistSessionFromResult(refreshedSession, refreshedDetail);
+            setDetailResult(refreshedDetail);
+            setHomepageDrafts((current) => ({
+              ...current,
+              [itemKey]: buildHomepageDraftFromDetail(refreshedDetail),
+            }));
+            setSuggestedFieldsByPlan((current) => {
+              const next = { ...current };
+              delete next[itemKey];
+              return next;
+            });
+          } catch (error) {
+            setActionError({
+              message: resolveUpstreamErrorMessage(
+                error,
+                '首页已保存，但暂时无法刷新新生成的教学计划 ID，请手动重新读取列表。',
+              ),
+              target: 'list',
+            });
+          }
           return;
         }
 
         if (action.type === 'prefillCandidates') {
-          const referenceKey = buildPhaseKey(action.item.planId, action.phase);
-          const endChapterKey = buildPhaseKey(action.item.planId, 'FINAL');
+          const itemKey = resolvePlanItemKey(action.item);
+          const referenceKey = buildPhaseKey(itemKey, action.phase);
+          const endChapterKey = buildPhaseKey(itemKey, 'FINAL');
 
           setLoadingReferenceKey(referenceKey);
           setSaveSuccessMessage(null);
@@ -1880,6 +1952,19 @@ export function AcademicCurriculumPlanHomepagePageContent({
             return;
           }
 
+          if (!action.item.planId) {
+            setEndChapterCandidateResults((current) => ({
+              ...current,
+              [endChapterKey]: {
+                candidateGroups: [],
+                expiresAt: referenceResult.expiresAt,
+                upstreamSessionToken: referenceResult.upstreamSessionToken,
+                warnings: ['当前计划尚未首次保存，保存后才能读取教学截止章节候选。'],
+              },
+            }));
+            return;
+          }
+
           setLoadingEndChapterKey(endChapterKey);
 
           const endChapterResult = await listCurriculumPlanHomepageTeachingEndChapterCandidates({
@@ -1899,7 +1984,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
         }
 
         if (action.type === 'referenceCandidates') {
-          const key = buildPhaseKey(action.item.planId, action.phase);
+          const key = buildPhaseKey(resolvePlanItemKey(action.item), action.phase);
 
           setLoadingReferenceKey(key);
           setSaveSuccessMessage(null);
@@ -1921,10 +2006,23 @@ export function AcademicCurriculumPlanHomepagePageContent({
         }
 
         if (action.type === 'teachingEndChapterCandidates') {
-          const key = buildPhaseKey(action.item.planId, action.phase);
+          const key = buildPhaseKey(resolvePlanItemKey(action.item), action.phase);
 
           setLoadingEndChapterKey(key);
           setSaveSuccessMessage(null);
+
+          if (!action.item.planId) {
+            setEndChapterCandidateResults((current) => ({
+              ...current,
+              [key]: {
+                candidateGroups: [],
+                expiresAt: null,
+                upstreamSessionToken: currentSession.upstreamSessionToken,
+                warnings: ['当前计划尚未首次保存，保存后才能读取教学截止章节候选。'],
+              },
+            }));
+            return;
+          }
 
           const result = await listCurriculumPlanHomepageTeachingEndChapterCandidates({
             context: buildTeachingEndChapterContext(action.item),
@@ -1944,7 +2042,17 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
         setIsLoadingDetail(true);
         setSaveSuccessMessage(null);
-        setSelectedPlanId(action.item.planId);
+        const itemKey = resolvePlanItemKey(action.item);
+        setSelectedItemKey(itemKey);
+
+        if (!action.item.planId) {
+          setDetailResult(null);
+          setHomepageDrafts((current) => ({
+            ...current,
+            [itemKey]: current[itemKey] ?? buildEmptyCurriculumPlanHomepageDraft(),
+          }));
+          return;
+        }
 
         const result = await fetchCurriculumPlanHomepageDetail({
           planId: action.item.planId,
@@ -1955,11 +2063,11 @@ export function AcademicCurriculumPlanHomepagePageContent({
         setDetailResult(result);
         setHomepageDrafts((current) => ({
           ...current,
-          [result.planId]: buildHomepageDraftFromDetail(result),
+          [itemKey]: buildHomepageDraftFromDetail(result),
         }));
         setSuggestedFieldsByPlan((current) => {
           const next = { ...current };
-          delete next[result.planId];
+          delete next[itemKey];
           return next;
         });
       };
@@ -1995,7 +2103,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
         }
 
         setDetailResult(null);
-        setSelectedPlanId(action.item.planId);
+        setSelectedItemKey(resolvePlanItemKey(action.item));
         setActionError({
           message: resolveUpstreamErrorMessage(error, '暂时无法读取授课计划首页详情。'),
           target: 'detail',
@@ -2087,11 +2195,17 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
   const handleSelectPlan = useCallback(
     async (item: CurriculumPlanHomepageListItem) => {
-      if (!item.planId.trim()) {
-        setActionError({
-          message: '当前记录缺少教学计划 ID，无法读取首页详情。',
-          target: 'detail',
-        });
+      const itemKey = resolvePlanItemKey(item);
+
+      setSelectedItemKey(itemKey);
+      setActionError(null);
+
+      if (!item.planId) {
+        setDetailResult(null);
+        setHomepageDrafts((current) => ({
+          ...current,
+          [itemKey]: current[itemKey] ?? buildEmptyCurriculumPlanHomepageDraft(),
+        }));
         return;
       }
 
@@ -2127,8 +2241,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
   );
 
   const handleSaveHomepage = useCallback(
-    async (planId: string) => {
-      const draft = homepageDrafts[planId];
+    async (item: CurriculumPlanHomepageListItem) => {
+      const itemKey = resolvePlanItemKey(item);
+      const draft = homepageDrafts[itemKey];
 
       if (!draft) {
         setActionError({
@@ -2138,34 +2253,45 @@ export function AcademicCurriculumPlanHomepagePageContent({
         return;
       }
 
-      const validation = validateCurriculumPlanHomepageBeforeSave(draft);
+      if (!loadedSearchValues) {
+        setActionError({
+          message: '当前列表查询条件已失效，请重新读取计划列表后再保存。',
+          target: 'save',
+        });
+        return;
+      }
+
+      const validation = validateCurriculumPlanHomepageBeforeSave(draft, {
+        requireMeaningfulContent: item.planId === null,
+      });
 
       if (!validation.valid) {
         setSaveSuccessMessage(null);
         setSaveValidationMessagesByPlan((current) => ({
           ...current,
-          [planId]: validation.errors.join('；'),
+          [itemKey]: validation.errors.join('；'),
         }));
         return;
       }
 
       setSaveValidationMessagesByPlan((current) => {
-        if (!current[planId]) {
+        if (!current[itemKey]) {
           return current;
         }
 
         const next = { ...current };
-        delete next[planId];
+        delete next[itemKey];
         return next;
       });
 
       await ensureSessionAndRun({
         homepage: draft,
-        planId,
+        item,
         type: 'save',
+        values: loadedSearchValues,
       });
     },
-    [ensureSessionAndRun, homepageDrafts],
+    [ensureSessionAndRun, homepageDrafts, loadedSearchValues],
   );
 
   const applyDraftUpdate = useCallback((planId: string, nextDraft: Record<string, unknown>) => {
@@ -2289,8 +2415,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
   const handlePreviewPrefill = useCallback(
     async (item: CurriculumPlanHomepageListItem, phase: CurriculumPlanHomepagePrefillPhase) => {
-      const draft = homepageDrafts[item.planId];
-      const key = buildPhaseKey(item.planId, phase);
+      const itemKey = resolvePlanItemKey(item);
+      const draft = homepageDrafts[itemKey];
+      const key = buildPhaseKey(itemKey, phase);
 
       if (!draft) {
         setActionError({
@@ -2379,7 +2506,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
   const handleOpenPrefillModal = useCallback(
     async (item: CurriculumPlanHomepageListItem, phase: CurriculumPlanHomepagePrefillPhase) => {
-      if (!homepageDrafts[item.planId]) {
+      if (!homepageDrafts[resolvePlanItemKey(item)]) {
         setActionError({
           message: '当前首页详情尚未加载完成，暂时无法预填。',
           target: 'prefill',
@@ -2497,9 +2624,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
       return;
     }
 
-    const key = buildPhaseKey(prefillModal.item.planId, prefillModal.phase);
+    const itemKey = resolvePlanItemKey(prefillModal.item);
+    const key = buildPhaseKey(itemKey, prefillModal.phase);
     const update = prefillPreviewUpdates[key];
-    const draft = homepageDrafts[prefillModal.item.planId];
+    const draft = homepageDrafts[itemKey];
 
     if (!update) {
       setActionError({
@@ -2593,7 +2721,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
       }
 
       if (prefillModal.phase === 'FINAL' && selectedEndChapterCandidateKey) {
-        const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
+        const endChapterKey = buildPhaseKey(itemKey, 'FINAL');
         const selectedEndChapter = flattenEndChapterCandidates(
           endChapterCandidateResults[endChapterKey] ?? null,
         ).find((option) => option.key === selectedEndChapterCandidateKey);
@@ -2616,13 +2744,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
         return;
       }
 
-      applyDraftUpdateWithSuggestions(
-        prefillModal.item.planId,
-        draft,
-        nextDraft,
-        changes,
-        sourceOverrides,
-      );
+      applyDraftUpdateWithSuggestions(itemKey, draft, nextDraft, changes, sourceOverrides);
       setPrefillModal(null);
     } catch (error) {
       setActionError({
@@ -2650,10 +2772,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const planTabItems = useMemo(
     () =>
       (listResult?.items ?? []).map((item) => {
-        const isActiveItem = selectedPlanId === item.planId;
-        const matchedDetail = detailResult?.planId === item.planId ? detailResult : null;
-        const draft = homepageDrafts[item.planId];
-        const suggestions = suggestedFieldsByPlan[item.planId] ?? {};
+        const itemKey = resolvePlanItemKey(item);
+        const isActiveItem = selectedItemKey === itemKey;
+        const draft = homepageDrafts[itemKey];
+        const suggestions = suggestedFieldsByPlan[itemKey] ?? {};
         const prefillActionStates = buildPrefillActionStates({
           ignoreTimeWindow: isAdminAccount,
           isLoadingAcademicSemesters,
@@ -2679,9 +2801,9 @@ export function AcademicCurriculumPlanHomepagePageContent({
                 </Flex>
               ) : (
                 <Space orientation="vertical" size={token.marginSM} style={{ width: '100%' }}>
-                  {matchedDetail && draft ? (
+                  {draft ? (
                     <CurriculumPlanHomepageFormPreview
-                      key={matchedDetail.planId}
+                      key={itemKey}
                       homepage={draft}
                       isCompactViewport={isCompactViewport}
                       isLoadingPrefill={isPreviewingPrefill && isActiveItem}
@@ -2690,28 +2812,28 @@ export function AcademicCurriculumPlanHomepagePageContent({
                       statusMessage={isActiveItem ? saveSuccessMessage : null}
                       suggestions={suggestions}
                       validationMessage={
-                        isActiveItem ? (saveValidationMessagesByPlan[item.planId] ?? null) : null
+                        isActiveItem ? (saveValidationMessagesByPlan[itemKey] ?? null) : null
                       }
                       onConfirmAllSuggestions={() => {
-                        confirmAllSuggestedFields(item.planId);
+                        confirmAllSuggestedFields(itemKey);
                       }}
                       onConfirmSuggestion={(field) => {
-                        confirmSuggestedField(item.planId, field);
+                        confirmSuggestedField(itemKey, field);
                       }}
                       onPreviewPrefill={(phase) => {
                         void handleOpenPrefillModal(item, phase);
                       }}
                       onRevertAllSuggestions={() => {
-                        revertAllSuggestedFields(item.planId);
+                        revertAllSuggestedFields(itemKey);
                       }}
                       onRevertSuggestion={(field) => {
-                        revertSuggestedField(item.planId, field);
+                        revertSuggestedField(itemKey, field);
                       }}
                       onSave={() => {
-                        void handleSaveHomepage(item.planId);
+                        void handleSaveHomepage(item);
                       }}
                       onUpdateField={(field, value) => {
-                        updateHomepageDraftField(item.planId, field, value);
+                        updateHomepageDraftField(itemKey, field, value);
                       }}
                       token={token}
                     />
@@ -2722,7 +2844,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
               )}
             </div>
           ),
-          key: item.planId,
+          key: itemKey,
           label: (
             <div
               style={{ maxWidth: isCompactViewport ? 180 : 200 }}
@@ -2755,7 +2877,6 @@ export function AcademicCurriculumPlanHomepagePageContent({
         };
       }),
     [
-      detailResult,
       confirmAllSuggestedFields,
       confirmSuggestedField,
       academicSemesters,
@@ -2773,7 +2894,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
       revertSuggestedField,
       saveSuccessMessage,
       saveValidationMessagesByPlan,
-      selectedPlanId,
+      selectedItemKey,
       suggestedFieldsByPlan,
       token,
       updateHomepageDraftField,
@@ -2781,10 +2902,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
   );
 
   const prefillModalKey = prefillModal
-    ? buildPhaseKey(prefillModal.item.planId, prefillModal.phase)
+    ? buildPhaseKey(resolvePlanItemKey(prefillModal.item), prefillModal.phase)
     : null;
   const prefillModalEndChapterKey = prefillModal
-    ? buildPhaseKey(prefillModal.item.planId, 'FINAL')
+    ? buildPhaseKey(resolvePlanItemKey(prefillModal.item), 'FINAL')
     : null;
   const currentPrefillUpdate = prefillModalKey
     ? (prefillPreviewUpdates[prefillModalKey] ?? null)
@@ -2944,7 +3065,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
       return;
     }
 
-    const endChapterKey = buildPhaseKey(prefillModal.item.planId, 'FINAL');
+    const endChapterKey = buildPhaseKey(resolvePlanItemKey(prefillModal.item), 'FINAL');
     const endChapterOptions = flattenEndChapterCandidates(
       endChapterCandidateResults[endChapterKey] ?? null,
     );
@@ -3097,29 +3218,32 @@ export function AcademicCurriculumPlanHomepagePageContent({
     }
 
     const activeItem =
-      listResult.items.find((item) => item.planId === selectedPlanId) ?? listResult.items[0];
+      listResult.items.find((item) => resolvePlanItemKey(item) === selectedItemKey) ??
+      listResult.items[0];
 
     if (!activeItem) {
       return;
     }
 
-    if (detailResult?.planId === activeItem.planId && selectedPlanId === activeItem.planId) {
+    const activeItemKey = resolvePlanItemKey(activeItem);
+
+    if (homepageDrafts[activeItemKey] && selectedItemKey === activeItemKey) {
       return;
     }
 
-    if (selectedPlanId !== activeItem.planId) {
-      setSelectedPlanId(activeItem.planId);
+    if (selectedItemKey !== activeItemKey) {
+      setSelectedItemKey(activeItemKey);
     }
 
     void handleSelectPlan(activeItem);
   }, [
-    detailResult?.planId,
     handleSelectPlan,
+    homepageDrafts,
     isLoadingDetail,
     isLoadingList,
     isLoginModalOpen,
     listResult?.items,
-    selectedPlanId,
+    selectedItemKey,
     storedSession,
   ]);
 
@@ -3277,13 +3401,18 @@ export function AcademicCurriculumPlanHomepagePageContent({
 
       {listResult?.items?.length ? (
         <Tabs
-          activeKey={selectedPlanId ?? listResult.items[0]?.planId}
+          activeKey={
+            selectedItemKey ??
+            (listResult.items[0] ? resolvePlanItemKey(listResult.items[0]) : undefined)
+          }
           items={planTabItems}
           size="small"
           tabBarGutter={token.marginXS}
           tabPlacement={isCompactViewport ? 'top' : 'start'}
-          onChange={(nextPlanId) => {
-            const nextItem = listResult.items.find((item) => item.planId === nextPlanId);
+          onChange={(nextItemKey) => {
+            const nextItem = listResult.items.find(
+              (item) => resolvePlanItemKey(item) === nextItemKey,
+            );
 
             if (!nextItem) {
               return;

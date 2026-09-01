@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildEmptyCurriculumPlanHomepageDraft,
   buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
@@ -69,6 +70,40 @@ describe('curriculum plan homepage draft policy', () => {
 
   it('allows saving when lesson validation groups are empty', () => {
     expect(validateCurriculumPlanHomepageBeforeSave({})).toEqual({
+      errors: [],
+      valid: true,
+    });
+  });
+
+  it('builds an editable empty draft for a teaching class without a plan id', () => {
+    expect(buildEmptyCurriculumPlanHomepageDraft()).toMatchObject({
+      lecture_plan_id: null,
+      teaching_objectives: null,
+      teaching_weeks: null,
+      textbook_name: null,
+      weekly_lessons: null,
+    });
+  });
+
+  it('rejects a pure empty first save but accepts meaningful content', () => {
+    expect(
+      validateCurriculumPlanHomepageBeforeSave(buildEmptyCurriculumPlanHomepageDraft(), {
+        requireMeaningfulContent: true,
+      }),
+    ).toEqual({
+      errors: ['首次保存至少需要填写一项授课计划内容。'],
+      valid: false,
+    });
+
+    expect(
+      validateCurriculumPlanHomepageBeforeSave(
+        {
+          ...buildEmptyCurriculumPlanHomepageDraft(),
+          textbook_name: '网页设计教材',
+        },
+        { requireMeaningfulContent: true },
+      ),
+    ).toEqual({
       errors: [],
       valid: true,
     });

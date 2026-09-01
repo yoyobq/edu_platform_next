@@ -20,6 +20,7 @@ import type {
   CurriculumPlanHomepagePrefillPhase,
   CurriculumPlanHomepagePrefillResult,
   CurriculumPlanHomepageReferenceCandidatesResult,
+  CurriculumPlanHomepageSaveTarget,
   CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
   SaveCurriculumPlanHomepageResult,
 } from '../domain/curriculum-plan-homepage-types';
@@ -156,13 +157,14 @@ const SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
       success
       msg
       data
+      planId
     }
   }
 `;
 
 const PREVIEW_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
   query PreviewAcademicCurriculumPlanHomepagePrefill(
-    $planId: String!
+    $planId: String
     $phase: String!
     $context: CurriculumPlanHomepagePrefillContextInput!
     $overrideTimeWindow: Boolean
@@ -186,7 +188,7 @@ const PREVIEW_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
 
 const PREVIEW_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
   query PreviewMyAcademicCurriculumPlanHomepagePrefill(
-    $planId: String!
+    $planId: String
     $phase: String!
     $context: MyCurriculumPlanHomepagePrefillContextInput!
     $overrideTimeWindow: Boolean
@@ -211,7 +213,7 @@ const PREVIEW_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY = `
 const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY = `
   query ListAcademicCurriculumPlanHomepageReferenceCandidates(
     $upstreamSessionToken: String!
-    $planId: String!
+    $planId: String
     $phase: String!
     $context: CurriculumPlanHomepageReferenceCandidatesContextInput!
   ) {
@@ -257,7 +259,7 @@ const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY = `
 const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY = `
   query ListMyAcademicCurriculumPlanHomepageReferenceCandidates(
     $upstreamSessionToken: String!
-    $planId: String!
+    $planId: String
     $phase: String!
     $context: MyCurriculumPlanHomepageReferenceCandidatesContextInput!
   ) {
@@ -544,6 +546,7 @@ export async function fetchCurriculumPlanHomepageDetail(input: {
 
 export async function saveCurriculumPlanHomepage(input: {
   homepage: Record<string, unknown>;
+  target: CurriculumPlanHomepageSaveTarget;
   upstreamSessionToken: string;
 }) {
   const response = await executeUpstreamSessionGraphQL<
@@ -552,12 +555,20 @@ export async function saveCurriculumPlanHomepage(input: {
       input: {
         homepage: Record<string, unknown>;
         sessionToken: string;
+        target: CurriculumPlanHomepageSaveTarget;
       };
     }
   >(SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION, {
     input: {
       homepage: input.homepage,
       sessionToken: input.upstreamSessionToken,
+      target: {
+        departmentId: normalizeOptionalString(input.target.departmentId),
+        planId: normalizeOptionalString(input.target.planId),
+        schoolYear: normalizeRequiredString(input.target.schoolYear, '学年'),
+        semester: normalizeRequiredString(input.target.semester, '学期'),
+        teachingClassId: normalizeRequiredString(input.target.teachingClassId, '教学班 ID'),
+      },
     },
   });
 
@@ -569,7 +580,7 @@ export async function previewCurriculumPlanHomepagePrefill(input: {
   mode: CurriculumPlanHomepagePrefillMode;
   overrideTimeWindow?: boolean;
   phase: CurriculumPlanHomepagePrefillPhase;
-  planId: string;
+  planId: string | null;
 }) {
   const commonVariables = {
     ...(input.overrideTimeWindow === undefined
@@ -578,7 +589,7 @@ export async function previewCurriculumPlanHomepagePrefill(input: {
           overrideTimeWindow: input.overrideTimeWindow,
         }),
     phase: input.phase,
-    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+    planId: normalizeOptionalString(input.planId),
   };
 
   if (input.mode === 'managed') {
@@ -588,7 +599,7 @@ export async function previewCurriculumPlanHomepagePrefill(input: {
         context: Required<CurriculumPlanHomepagePrefillContext>;
         overrideTimeWindow?: boolean;
         phase: CurriculumPlanHomepagePrefillPhase;
-        planId: string;
+        planId: string | null;
       }
     >(PREVIEW_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY, {
       ...commonVariables,
@@ -616,7 +627,7 @@ export async function previewCurriculumPlanHomepagePrefill(input: {
       context: Omit<CurriculumPlanHomepagePrefillContext, 'staffId'>;
       overrideTimeWindow?: boolean;
       phase: CurriculumPlanHomepagePrefillPhase;
-      planId: string;
+      planId: string | null;
     }
   >(PREVIEW_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_PREFILL_QUERY, {
     ...commonVariables,
@@ -648,12 +659,12 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
   };
   mode: CurriculumPlanHomepagePrefillMode;
   phase: CurriculumPlanHomepagePrefillPhase;
-  planId: string;
+  planId: string | null;
   upstreamSessionToken: string;
 }) {
   const commonVariables = {
     phase: input.phase,
-    planId: normalizeRequiredString(input.planId, '教学计划 ID'),
+    planId: normalizeOptionalString(input.planId),
     upstreamSessionToken: input.upstreamSessionToken,
   };
 
@@ -670,7 +681,7 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
           weeklyHours: number | null;
         };
         phase: CurriculumPlanHomepagePrefillPhase;
-        planId: string;
+        planId: string | null;
         upstreamSessionToken: string;
       }
     >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {
@@ -699,7 +710,7 @@ export async function listCurriculumPlanHomepageReferenceCandidates(input: {
         weeklyHours: number | null;
       };
       phase: CurriculumPlanHomepagePrefillPhase;
-      planId: string;
+      planId: string | null;
       upstreamSessionToken: string;
     }
   >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_REFERENCE_CANDIDATES_QUERY, {

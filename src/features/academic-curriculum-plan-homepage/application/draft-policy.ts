@@ -29,6 +29,36 @@ export type CurriculumPlanHomepageSaveValidationResult = {
   valid: boolean;
 };
 
+export type CurriculumPlanHomepageSaveValidationOptions = {
+  requireMeaningfulContent?: boolean;
+};
+
+const HOMEPAGE_EDITABLE_FIELDS = [
+  'textbook_name',
+  'teaching_objectives',
+  'improvement_measures',
+  'teaching_weeks',
+  'weekly_lessons',
+  'total_lessons',
+  'lecture_lessons',
+  'review_exam_lessons',
+  'training_lessons',
+  'flexible_lessons',
+  'teaching_end_chapter_content',
+  'planned_lessons',
+  'extra_lessons',
+  'completed_lessons',
+  'reduced_lessons',
+  'compensated_lessons',
+] as const;
+
+const HOMEPAGE_TEXT_FIELDS = new Set<string>([
+  'textbook_name',
+  'teaching_objectives',
+  'improvement_measures',
+  'teaching_end_chapter_content',
+]);
+
 const FIELD_LABELS: Record<string, string> = {
   compensated_lessons: '弥补',
   completed_lessons: '完成课时',
@@ -268,15 +298,49 @@ function validateFinalCompletion(draft: Record<string, unknown>) {
 
 export function validateCurriculumPlanHomepageBeforeSave(
   draft: Record<string, unknown>,
+  options: CurriculumPlanHomepageSaveValidationOptions = {},
 ): CurriculumPlanHomepageSaveValidationResult {
-  const errors = [validateLessonDistribution(draft), validateFinalCompletion(draft)].filter(
-    (error): error is string => Boolean(error),
-  );
+  const errors = [
+    options.requireMeaningfulContent && !hasMeaningfulCurriculumPlanHomepageContent(draft)
+      ? '首次保存至少需要填写一项授课计划内容。'
+      : null,
+    validateLessonDistribution(draft),
+    validateFinalCompletion(draft),
+  ].filter((error): error is string => Boolean(error));
 
   return {
     errors,
     valid: errors.length === 0,
   };
+}
+
+export function buildEmptyCurriculumPlanHomepageDraft(): Record<string, unknown> {
+  return {
+    ...Object.fromEntries(HOMEPAGE_EDITABLE_FIELDS.map((field) => [field, null])),
+    lecture_plan_id: null,
+  };
+}
+
+export function hasMeaningfulCurriculumPlanHomepageContent(draft: Record<string, unknown>) {
+  return HOMEPAGE_EDITABLE_FIELDS.some((field) => {
+    const value = draft[field];
+
+    if (HOMEPAGE_TEXT_FIELDS.has(field)) {
+      return typeof value === 'string' && value.trim().length > 0;
+    }
+
+    if (typeof value === 'number') {
+      return Number.isFinite(value) && value !== 0;
+    }
+
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Number(value);
+
+      return Number.isFinite(parsed) ? parsed !== 0 : true;
+    }
+
+    return false;
+  });
 }
 
 function appendUniqueLine(currentValue: unknown, line: string) {
