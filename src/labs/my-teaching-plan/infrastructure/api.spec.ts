@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { executeGraphQLMock } = vi.hoisted(() => ({
+const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
   executeGraphQLMock: vi.fn(),
+  executeUpstreamSessionGraphQLMock: vi.fn(),
+}));
+
+vi.mock('@/entities/upstream-session', () => ({
+  executeUpstreamSessionGraphQL: executeUpstreamSessionGraphQLMock,
 }));
 
 vi.mock('@/shared/graphql', () => ({
@@ -10,6 +15,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  requestCurriculumPlanDetailReferenceCandidates,
   requestManagedTeachingPlan,
   requestManagedTeachingPlanTeacherOptions,
   requestMyTeachingPlan,
@@ -19,6 +25,7 @@ import {
 describe('my teaching plan lab api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
+    executeUpstreamSessionGraphQLMock.mockReset();
   });
 
   it('读取可见学期并保留完整学期记录', async () => {
@@ -70,6 +77,38 @@ describe('my teaching plan lab api', () => {
       semesterId: 8,
       keyword: '张',
       limit: 20,
+    });
+  });
+
+  it('管理者查询历史教学计划明细时携带目标教师和当前课程上下文', async () => {
+    const result = { items: [], upstreamSessionToken: 'token-2', warnings: [] };
+    executeUpstreamSessionGraphQLMock.mockResolvedValue({
+      listAcademicCurriculumPlanDetailReferenceCandidates: result,
+    });
+
+    await expect(
+      requestCurriculumPlanDetailReferenceCandidates({
+        courseName: ' 网页设计 ',
+        mode: 'managed',
+        plannedLessons: 32,
+        schoolYear: ' 2026 ',
+        semester: '1',
+        staffId: ' T001 ',
+        upstreamSessionToken: 'token-1',
+      }),
+    ).resolves.toBe(result);
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[0]).toContain(
+      'listAcademicCurriculumPlanDetailReferenceCandidates',
+    );
+    expect(executeUpstreamSessionGraphQLMock.mock.calls[0]?.[1]).toEqual({
+      context: {
+        courseName: '网页设计',
+        plannedLessons: 32,
+        schoolYear: '2026',
+        semester: '1',
+        staffId: 'T001',
+      },
+      upstreamSessionToken: 'token-1',
     });
   });
 });

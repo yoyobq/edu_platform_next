@@ -20,6 +20,19 @@ const CURRENT_SEMESTER = {
   updatedAt: '2026-08-01T00:00:00.000Z',
 };
 
+const UPSTREAM_SESSION_STORAGE_KEY = 'aigc-friendly-frontend.upstream.session.v2';
+
+function createDeferred<T = void>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  return { promise, reject, resolve };
+}
+
 function buildOccurrence(staffId: string, staffName: string) {
   return {
     calcEffect: 'NORMAL',
@@ -95,17 +108,34 @@ async function seedStaff(
 
 test('普通教师默认按当前学期查看本人的课程日期真源投影', async ({ page }) => {
   await seedStaff(page);
+  await page.addInitScript(
+    ({ key, session }) => window.localStorage.setItem(key, JSON.stringify(session)),
+    {
+      key: UPSTREAM_SESSION_STORAGE_KEY,
+      session: {
+        accountId: 1001,
+        expiresAt: '2027-01-01T00:00:00.000Z',
+        upstreamLoginId: 'staff-1001',
+        upstreamSessionToken: 'upstream-token-1',
+        version: 2,
+      },
+    },
+  );
   let requestedSemesterId: number | null = null;
   let managedQueryCount = 0;
+  let historyReferenceInput: Record<string, unknown> | null = null;
   let updatedClassroomInput: { classroomName: string; scheduleId: number } | null = null;
+  const classroomUpdate = createDeferred();
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
       | {
           query?: string;
           variables?: {
+            context?: Record<string, unknown>;
             input?: { classroomName: string; scheduleId: number };
             semesterId?: number;
+            upstreamSessionToken?: string;
           };
         }
       | undefined;
@@ -134,8 +164,64 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
       managedQueryCount += 1;
     }
 
+    if (query.includes('query MyAcademicCurriculumPlanDetailReferenceCandidates')) {
+      historyReferenceInput = payload?.variables ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            listMyAcademicCurriculumPlanDetailReferenceCandidates: {
+              expiresAt: '2027-01-01T01:00:00.000Z',
+              upstreamSessionToken: 'upstream-token-2',
+              warnings: [],
+              items: [
+                {
+                  courseName: '数据库原理',
+                  items: [
+                    {
+                      chapterAndContent: '历史内容 1',
+                      dayOfWeek: 2,
+                      homework: '历史作业 1',
+                      lessonHours: 2,
+                      sectionId: '1,2',
+                      sectionName: '第一、二节',
+                      sourceDetailId: 'DETAIL-1',
+                      weekNumber: 1,
+                    },
+                    {
+                      chapterAndContent: '历史内容 2',
+                      dayOfWeek: 2,
+                      homework: '历史作业 2',
+                      lessonHours: 2,
+                      sectionId: '3,4',
+                      sectionName: '第三、四节',
+                      sourceDetailId: 'DETAIL-2',
+                      weekNumber: 1,
+                    },
+                  ],
+                  matchKind: 'EXACT',
+                  plannedLessons: 4,
+                  plannedLessonsDiff: 0,
+                  rank: 1,
+                  recommended: true,
+                  schoolYear: '2025',
+                  semester: '2',
+                  sourcePlanId: 'PLAN-HISTORY-1',
+                  teachingClassName: '软件 2301',
+                  weekCount: 1,
+                  weeklyHours: 4,
+                },
+              ],
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
     if (query.includes('mutation UpdateAcademicCourseScheduleClassroomName')) {
       updatedClassroomInput = payload?.variables?.input ?? null;
+      await classroomUpdate.promise;
       await route.fulfill({
         body: JSON.stringify({
           data: {
@@ -161,10 +247,31 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await expect(page.getByText('线下', { exact: true })).toHaveCount(2);
   await expect(page.getByRole('columnheader', { name: '授课章节与内容' })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: '课外作业' })).toBeVisible();
-  await expect(page.getByText('待填写', { exact: true })).toHaveCount(4);
+  await expect(page.getByPlaceholder('填写授课章节与内容')).toHaveCount(2);
+  await expect(page.getByPlaceholder('填写课外作业')).toHaveCount(2);
   await expect(page.getByText('输入姓名或工号选择教师', { exact: true })).toHaveCount(0);
   await expect(page.getByText('逐课次内容仍是限时本地草稿，请及时导出')).toBeVisible();
   await expect(page.getByText(/统一授课地点会保存到服务器/)).toBeVisible();
+
+  const firstChapter = page.getByLabel('2026-09-08第1,2节授课章节与内容');
+  await firstChapter.fill('教师已填写内容');
+  await page.getByRole('button', { name: '参考历史计划' }).click();
+  const historyDialog = page.getByRole('dialog', { name: /选择“数据库原理”的历史教学计划/ });
+  await expect(historyDialog.getByText('2025 学年第 2 学期')).toBeVisible();
+  await historyDialog.getByRole('button', { name: '填充空白项' }).click();
+  await expect(firstChapter).toHaveValue('教师已填写内容');
+  await expect(page.getByLabel('2026-09-08第1,2节课外作业')).toHaveValue('历史作业 1');
+  await expect(page.getByLabel('2026-09-08第3,4节授课章节与内容')).toHaveValue('历史内容 2');
+  await expect(page.getByLabel('2026-09-08第3,4节课外作业')).toHaveValue('历史作业 2');
+  expect(historyReferenceInput).toEqual({
+    context: {
+      courseName: '数据库原理',
+      plannedLessons: 4,
+      schoolYear: '2026',
+      semester: '1',
+    },
+    upstreamSessionToken: 'upstream-token-1',
+  });
 
   const previousCourseButton = page.getByRole('button', { name: '上一门课程' });
   const nextCourseButton = page.getByRole('button', { name: '下一门课程' });
@@ -191,7 +298,11 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   const unifiedClassroomInput = page.getByLabel('统一授课地点');
   await expect(unifiedClassroomInput).toHaveValue('知行楼 302');
   await unifiedClassroomInput.fill('机房 5102');
-  await page.getByRole('button', { name: '应用并保存' }).click();
+  await unifiedClassroomInput.press('Enter');
+
+  await expect(firstLocation).toBeDisabled();
+  await expect(secondLocation).toBeDisabled();
+  classroomUpdate.resolve();
 
   await expect
     .poll(() => updatedClassroomInput)
@@ -231,8 +342,8 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
     '1,2',
     '线下',
     '机房 5102',
-    '',
-    '',
+    '教师已填写内容',
+    '历史作业 1',
   ]);
   expect(worksheet?.getRow(3).values).toEqual([
     undefined,
@@ -241,8 +352,8 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
     '3,4',
     '线下',
     '机房 5102',
-    '',
-    '',
+    '历史内容 2',
+    '历史作业 2',
   ]);
 
   await expect.poll(() => requestedSemesterId).toBe(7);

@@ -5,7 +5,9 @@ import type { TeachingPlanCourseProjection } from './teaching-plan-projection';
 export type TeachingPlanDeliveryMode = 'OFFLINE' | 'ONLINE';
 
 export type TeachingPlanRowDraft = {
+  chapterAndContent?: string;
   deliveryMode: TeachingPlanDeliveryMode;
+  homework?: string;
   locationOverride?: string;
 };
 
@@ -15,9 +17,9 @@ export type TeachingPlanCourseDraft = {
 };
 
 export type TeachingPlanSheetRow = {
-  chapterAndContent: '';
+  chapterAndContent: string;
   deliveryMode: TeachingPlanDeliveryMode;
-  homework: '';
+  homework: string;
   location: string;
   occurrence: TeachingPlanOccurrence;
   periodsText: string;
@@ -44,9 +46,9 @@ export function buildTeachingPlanSheetRows(
         const rowDraft = draft.rows[rowKey];
 
         return {
-          chapterAndContent: '',
+          chapterAndContent: rowDraft?.chapterAndContent ?? '',
           deliveryMode: rowDraft?.deliveryMode ?? 'OFFLINE',
-          homework: '',
+          homework: rowDraft?.homework ?? '',
           location: rowDraft?.locationOverride ?? course.classroomName ?? '',
           occurrence,
           periodsText: formatOccurrencePeriods(occurrence),
@@ -128,6 +130,8 @@ export function isTeachingPlanCourseDraft(value: unknown): value is TeachingPlan
     (row) =>
       isRecord(row) &&
       (row.deliveryMode === 'ONLINE' || row.deliveryMode === 'OFFLINE') &&
+      (typeof row.chapterAndContent === 'undefined' || typeof row.chapterAndContent === 'string') &&
+      (typeof row.homework === 'undefined' || typeof row.homework === 'string') &&
       (typeof row.locationOverride === 'undefined' || typeof row.locationOverride === 'string'),
   );
 }

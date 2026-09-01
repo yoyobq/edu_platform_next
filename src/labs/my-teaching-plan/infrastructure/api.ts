@@ -1,10 +1,15 @@
 import type { OperationVariables } from '@apollo/client';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-import type { TeachingPlanOccurrenceEnvelope, TeachingPlanTeacherOption } from '../types';
+import type {
+  CurriculumPlanDetailReferenceCandidatesResult,
+  TeachingPlanOccurrenceEnvelope,
+  TeachingPlanTeacherOption,
+} from '../types';
 
 type AcademicSemestersResponse = {
   academicSemesters: AcademicSemesterRecord[];
@@ -29,6 +34,14 @@ type UpdateCourseScheduleClassroomNameResponse = {
     classroomName: string;
     scheduleId: number;
   };
+};
+
+type ManagedCurriculumPlanDetailReferenceCandidatesResponse = {
+  listAcademicCurriculumPlanDetailReferenceCandidates: CurriculumPlanDetailReferenceCandidatesResult;
+};
+
+type MyCurriculumPlanDetailReferenceCandidatesResponse = {
+  listMyAcademicCurriculumPlanDetailReferenceCandidates: CurriculumPlanDetailReferenceCandidatesResult;
 };
 
 const TEACHING_PLAN_OCCURRENCE_FIELDS = `
@@ -133,6 +146,64 @@ const UPDATE_COURSE_SCHEDULE_CLASSROOM_NAME_MUTATION = `
   }
 `;
 
+const CURRICULUM_PLAN_DETAIL_REFERENCE_FIELDS = `
+  expiresAt
+  items {
+    courseName
+    items {
+      chapterAndContent
+      dayOfWeek
+      homework
+      lessonHours
+      sectionId
+      sectionName
+      sourceDetailId
+      weekNumber
+    }
+    matchKind
+    plannedLessons
+    plannedLessonsDiff
+    rank
+    recommended
+    schoolYear
+    semester
+    sourcePlanId
+    teachingClassName
+    weekCount
+    weeklyHours
+  }
+  upstreamSessionToken
+  warnings
+`;
+
+const MANAGED_CURRICULUM_PLAN_DETAIL_REFERENCE_CANDIDATES_QUERY = `
+  query AcademicCurriculumPlanDetailReferenceCandidates(
+    $context: CurriculumPlanDetailReferenceCandidatesContextInput!
+    $upstreamSessionToken: String!
+  ) {
+    listAcademicCurriculumPlanDetailReferenceCandidates(
+      context: $context
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      ${CURRICULUM_PLAN_DETAIL_REFERENCE_FIELDS}
+    }
+  }
+`;
+
+const MY_CURRICULUM_PLAN_DETAIL_REFERENCE_CANDIDATES_QUERY = `
+  query MyAcademicCurriculumPlanDetailReferenceCandidates(
+    $context: MyCurriculumPlanDetailReferenceCandidatesContextInput!
+    $upstreamSessionToken: String!
+  ) {
+    listMyAcademicCurriculumPlanDetailReferenceCandidates(
+      context: $context
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      ${CURRICULUM_PLAN_DETAIL_REFERENCE_FIELDS}
+    }
+  }
+`;
+
 export async function requestMyTeachingPlanAcademicSemesters() {
   return requestWithMessage(
     ACADEMIC_SEMESTERS_QUERY,
@@ -191,6 +262,49 @@ export async function requestUpdateAcademicCourseScheduleClassroomName(input: {
       response.updateAcademicCourseScheduleClassroomName,
     '暂时无法保存统一授课地点。',
   );
+}
+
+export async function requestCurriculumPlanDetailReferenceCandidates(input: {
+  courseName: string;
+  mode: 'managed' | 'self';
+  plannedLessons: number;
+  schoolYear: string;
+  semester: string;
+  staffId: string;
+  upstreamSessionToken: string;
+}) {
+  const commonContext = {
+    courseName: input.courseName.trim(),
+    plannedLessons: input.plannedLessons,
+    schoolYear: input.schoolYear.trim(),
+    semester: input.semester.trim(),
+  };
+
+  if (input.mode === 'managed') {
+    const response = await executeUpstreamSessionGraphQL<
+      ManagedCurriculumPlanDetailReferenceCandidatesResponse,
+      {
+        context: typeof commonContext & { staffId: string };
+        upstreamSessionToken: string;
+      }
+    >(MANAGED_CURRICULUM_PLAN_DETAIL_REFERENCE_CANDIDATES_QUERY, {
+      context: { ...commonContext, staffId: input.staffId.trim() },
+      upstreamSessionToken: input.upstreamSessionToken,
+    });
+    return response.listAcademicCurriculumPlanDetailReferenceCandidates;
+  }
+
+  const response = await executeUpstreamSessionGraphQL<
+    MyCurriculumPlanDetailReferenceCandidatesResponse,
+    {
+      context: typeof commonContext;
+      upstreamSessionToken: string;
+    }
+  >(MY_CURRICULUM_PLAN_DETAIL_REFERENCE_CANDIDATES_QUERY, {
+    context: commonContext,
+    upstreamSessionToken: input.upstreamSessionToken,
+  });
+  return response.listMyAcademicCurriculumPlanDetailReferenceCandidates;
 }
 
 async function requestWithMessage<TData, TVariables extends OperationVariables, TResult>(

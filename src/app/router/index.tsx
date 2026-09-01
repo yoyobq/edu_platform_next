@@ -712,6 +712,16 @@ function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeaching
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     }),
+    currentAccount: {
+      accountId: snapshot.accountId,
+      displayName: snapshot.displayName,
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        context: 'academicStaffManager',
+        slotGroup: snapshot.slotGroup,
+        staffId: staffIdentity?.id ?? null,
+      }),
+    },
     currentAccountId: snapshot.accountId,
     currentStaff: staffIdentity
       ? {

@@ -86,6 +86,7 @@ const CATEGORY_STYLES = {
 
 export function MyTeachingPlanWorkspace({
   canManage,
+  currentAccount,
   currentAccountId,
   currentStaff,
 }: MyTeachingPlanLabLoaderData) {
@@ -397,6 +398,7 @@ export function MyTeachingPlanWorkspace({
             >
               {selectedCourse ? (
                 <TeachingPlanSheet
+                  canManage={canManage}
                   course={selectedCourse}
                   courseNavigation={
                     <Tabs
@@ -454,11 +456,14 @@ export function MyTeachingPlanWorkspace({
                       onChange={(key) => setSelectedScheduleId(Number(key))}
                     />
                   }
+                  currentAccount={currentAccount}
                   currentAccountId={currentAccountId}
                   isCompact={isCompact}
                   key={`${selectedSemesterId}:${draftStaffId}:${selectedCourse.scheduleId}`}
                   semesterId={selectedSemesterId}
                   semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
+                  semesterNumber={selectedSemester?.termNumber ?? 1}
+                  schoolYear={String(selectedSemester?.schoolYear ?? '')}
                   targetStaffId={draftStaffId}
                   teacherName={draftTeacherName}
                   onClassroomNameUpdated={updateClassroomNameInPlan}

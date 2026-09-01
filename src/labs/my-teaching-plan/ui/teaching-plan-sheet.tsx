@@ -1,14 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { DownloadOutlined, EditOutlined, FormOutlined, LaptopOutlined } from '@ant-design/icons';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  DownloadOutlined,
+  EditOutlined,
+  FormOutlined,
+  HistoryOutlined,
+  LaptopOutlined,
+} from '@ant-design/icons';
 import {
   Alert,
   App as AntApp,
   Button,
   Card,
   Collapse,
+  Empty,
   Flex,
   Input,
+  Modal,
   Popover,
+  Radio,
   Select,
   Space,
   Tag,
@@ -16,6 +25,15 @@ import {
   Typography,
 } from 'antd';
 
+import {
+  isExpiredUpstreamSessionError,
+  resolveUpstreamErrorMessage,
+  type StoredUpstreamSession,
+  UpstreamLoginModal,
+  useUpstreamLoginModalController,
+} from '@/entities/upstream-session';
+
+import { fillEmptyTeachingPlanRowsFromHistory } from '../application/historical-plan-fill';
 import {
   formatTeachingPlanBusinessDate,
   formatTeachingPlanCalcEffect,
@@ -31,7 +49,10 @@ import {
   type TeachingPlanDeliveryMode,
   updateTeachingPlanRowDraft,
 } from '../application/teaching-plan-sheet';
-import { requestUpdateAcademicCourseScheduleClassroomName } from '../infrastructure/api';
+import {
+  requestCurriculumPlanDetailReferenceCandidates,
+  requestUpdateAcademicCourseScheduleClassroomName,
+} from '../infrastructure/api';
 import {
   buildTeachingPlanDraftStorageKey,
   readTeachingPlanCourseDraft,
@@ -39,7 +60,11 @@ import {
   writeTeachingPlanCourseDraft,
 } from '../infrastructure/draft-storage';
 import { exportTeachingPlanExcel } from '../infrastructure/teaching-plan-excel-export';
-import type { TeachingPlanOccurrence } from '../types';
+import type {
+  CurriculumPlanDetailReferenceCandidate,
+  MyTeachingPlanLabLoaderData,
+  TeachingPlanOccurrence,
+} from '../types';
 
 const DELIVERY_MODE_OPTIONS = [
   { label: '线下', value: 'OFFLINE' },
@@ -49,20 +74,28 @@ const DELIVERY_MODE_OPTIONS = [
 export function TeachingPlanSheet({
   course,
   courseNavigation,
+  canManage,
+  currentAccount,
   currentAccountId,
   isCompact,
   semesterId,
   semesterName,
+  semesterNumber,
+  schoolYear,
   targetStaffId,
   teacherName,
   onClassroomNameUpdated,
 }: {
   course: TeachingPlanCourseProjection;
   courseNavigation: React.ReactNode;
+  canManage: boolean;
+  currentAccount: MyTeachingPlanLabLoaderData['currentAccount'];
   currentAccountId: number;
   isCompact: boolean;
   semesterId: number;
   semesterName: string;
+  semesterNumber: number;
+  schoolYear: string;
   targetStaffId: string;
   teacherName: string;
   onClassroomNameUpdated: (scheduleId: number, classroomName: string) => void;
@@ -86,6 +119,17 @@ export function TeachingPlanSheet({
   const [classroomEditorOpen, setClassroomEditorOpen] = useState(false);
   const [classroomEditorValue, setClassroomEditorValue] = useState(course.classroomName ?? '');
   const [classroomEditorError, setClassroomEditorError] = useState<string | null>(null);
+  const [historyCandidates, setHistoryCandidates] = useState<
+    CurriculumPlanDetailReferenceCandidate[]
+  >([]);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyWarnings, setHistoryWarnings] = useState<string[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [queuedHistorySession, setQueuedHistorySession] = useState<StoredUpstreamSession | null>(
+    null,
+  );
+  const [selectedHistoryPlanId, setSelectedHistoryPlanId] = useState<string | null>(null);
   const draftRef = useRef(draft);
 
   useEffect(() => {
@@ -95,6 +139,10 @@ export function TeachingPlanSheet({
   }, [storageKey]);
 
   const rows = useMemo(() => buildTeachingPlanSheetRows(course, draft), [course, draft]);
+  const plannedLessons = useMemo(
+    () => rows.reduce((total, row) => total + row.teachingHours, 0),
+    [rows],
+  );
 
   const applyDraft = (nextDraft: TeachingPlanCourseDraft) => {
     draftRef.current = nextDraft;
@@ -112,6 +160,119 @@ export function TeachingPlanSheet({
         patch,
         rowKey,
       }),
+    );
+  };
+
+  const {
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
+    persistSessionFromResult,
+    session: upstreamSession,
+  } = useUpstreamLoginModalController<'load-history'>({
+    account: currentAccount,
+    keepAlive: true,
+    lockedUserId: currentAccount.lockedUpstreamLoginUserId,
+    resolveLoginErrorMessage: (error) =>
+      resolveUpstreamErrorMessage(error, '校园网登录失败，请检查账号或密码。'),
+    onLoginSuccess: ({ pendingAction, session }) => {
+      if (pendingAction === 'load-history') {
+        setQueuedHistorySession(session);
+      }
+    },
+  });
+
+  const loadHistoryCandidates = useCallback(
+    async (activeSession: StoredUpstreamSession) => {
+      setIsLoadingHistory(true);
+      setHistoryError(null);
+      try {
+        const result = await requestCurriculumPlanDetailReferenceCandidates({
+          courseName: course.courseName,
+          mode: canManage ? 'managed' : 'self',
+          plannedLessons,
+          schoolYear,
+          semester: String(semesterNumber),
+          staffId: targetStaffId,
+          upstreamSessionToken: activeSession.upstreamSessionToken,
+        });
+        persistSessionFromResult(activeSession, result);
+        setHistoryCandidates(result.items);
+        setHistoryWarnings(result.warnings);
+        setSelectedHistoryPlanId(result.items[0]?.sourcePlanId ?? null);
+        setHistoryModalOpen(true);
+      } catch (error) {
+        if (isExpiredUpstreamSessionError(error)) {
+          openLoginModalForExpiredSession({
+            loginError: 'upstream 会话已失效，请重新登录后继续。',
+            pendingAction: 'load-history',
+            session: activeSession,
+          });
+        } else {
+          setHistoryError(
+            resolveUpstreamErrorMessage(error, '暂时无法加载历史教学计划，请稍后重试。'),
+          );
+        }
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    },
+    [
+      canManage,
+      course.courseName,
+      openLoginModalForExpiredSession,
+      persistSessionFromResult,
+      plannedLessons,
+      schoolYear,
+      semesterNumber,
+      targetStaffId,
+    ],
+  );
+
+  useEffect(() => {
+    if (!queuedHistorySession) {
+      return;
+    }
+    const session = queuedHistorySession;
+    setQueuedHistorySession(null);
+    void loadHistoryCandidates(session);
+  }, [loadHistoryCandidates, queuedHistorySession]);
+
+  const openHistoryReference = () => {
+    if (upstreamSession) {
+      void loadHistoryCandidates(upstreamSession);
+      return;
+    }
+    openLoginModal({
+      fallbackUserId: targetStaffId,
+      pendingAction: 'load-history',
+    });
+  };
+
+  const applySelectedHistory = () => {
+    const reference = historyCandidates.find(
+      (candidate) => candidate.sourcePlanId === selectedHistoryPlanId,
+    );
+    if (!reference) {
+      return;
+    }
+    const result = fillEmptyTeachingPlanRowsFromHistory({
+      course,
+      draft: draftRef.current,
+      reference,
+    });
+    applyDraft(result.draft);
+    setHistoryModalOpen(false);
+    if (result.filledCellCount === 0) {
+      void message.info('当前课次没有可补充的空白章节或作业');
+      return;
+    }
+    const mismatchNotice =
+      result.referenceRowCount === result.targetRowCount
+        ? ''
+        : `；已按顺序对应前 ${result.mappedRowCount} 行`;
+    void message.success(
+      `已从历史计划补充 ${result.filledRowCount} 行、${result.filledCellCount} 个单元格${mismatchNotice}`,
     );
   };
 
@@ -257,6 +418,14 @@ export function TeachingPlanSheet({
             <Space wrap>
               <Button
                 disabled={rows.length === 0}
+                icon={<HistoryOutlined />}
+                loading={isLoadingHistory}
+                onClick={openHistoryReference}
+              >
+                参考历史计划
+              </Button>
+              <Button
+                disabled={rows.length === 0}
                 icon={<DownloadOutlined />}
                 loading={isExporting}
                 type="primary"
@@ -275,6 +444,7 @@ export function TeachingPlanSheet({
               type="warning"
             />
           </div>
+          {historyError ? <Alert closable showIcon title={historyError} type="error" /> : null}
         </div>
 
         <div className="border-b border-border px-4">{courseNavigation}</div>
@@ -443,7 +613,7 @@ export function TeachingPlanSheet({
                   <td className="border-b border-border px-2 py-2">
                     <Input
                       aria-label={`${row.teachingDate}第${row.periodsText}节授课地点`}
-                      disabled={isSavingClassroomName && !course.classroomName}
+                      disabled={isSavingClassroomName}
                       maxLength={64}
                       placeholder="填写授课地点"
                       size="small"
@@ -458,11 +628,29 @@ export function TeachingPlanSheet({
                       onPressEnter={(event) => event.currentTarget.blur()}
                     />
                   </td>
-                  <td className="border-b border-l border-border px-3 py-3 text-text-tertiary">
-                    待填写
+                  <td className="border-b border-l border-border px-2 py-2">
+                    <Input.TextArea
+                      aria-label={`${row.teachingDate}第${row.periodsText}节授课章节与内容`}
+                      autoSize={{ maxRows: 6, minRows: 2 }}
+                      maxLength={2000}
+                      placeholder="填写授课章节与内容"
+                      value={row.chapterAndContent}
+                      variant="borderless"
+                      onChange={(event) =>
+                        updateRow(row.rowKey, { chapterAndContent: event.target.value })
+                      }
+                    />
                   </td>
-                  <td className="border-b border-l border-border px-3 py-3 text-text-tertiary">
-                    待填写
+                  <td className="border-b border-l border-border px-2 py-2">
+                    <Input.TextArea
+                      aria-label={`${row.teachingDate}第${row.periodsText}节课外作业`}
+                      autoSize={{ maxRows: 6, minRows: 2 }}
+                      maxLength={2000}
+                      placeholder="填写课外作业"
+                      value={row.homework}
+                      variant="borderless"
+                      onChange={(event) => updateRow(row.rowKey, { homework: event.target.value })}
+                    />
                   </td>
                 </tr>
               ))}
@@ -485,7 +673,7 @@ export function TeachingPlanSheet({
           <LaptopOutlined className="mt-0.5" />
           <span>
             每次打开页面都会根据当前真源重新生成 A–C；本地草稿只匹配当前仍存在的课次行。
-            F“授课章节与内容”和 G“课外作业”已预留，当前以空列导出。
+            F“授课章节与内容”和 G“课外作业”可手工编辑，也可选择历史计划按课次顺序补充空白项。
           </span>
         </div>
       </div>
@@ -511,6 +699,59 @@ export function TeachingPlanSheet({
           ]}
         />
       ) : null}
+
+      <Modal
+        destroyOnHidden
+        okButtonProps={{ disabled: selectedHistoryPlanId === null }}
+        okText="填充空白项"
+        open={historyModalOpen}
+        title={`选择“${course.courseName}”的历史教学计划`}
+        onCancel={() => setHistoryModalOpen(false)}
+        onOk={applySelectedHistory}
+      >
+        <div className="flex flex-col gap-3">
+          <Typography.Text type="secondary">
+            候选来自近 6 学期，优先同名且总课时相近的计划。应用时按课次顺序对应，只填当前空白的
+            F/G。
+          </Typography.Text>
+          {historyWarnings.length ? (
+            <Alert showIcon title="部分历史计划明细读取失败，已自动忽略" type="warning" />
+          ) : null}
+          {historyCandidates.length ? (
+            <div className="flex flex-col gap-2">
+              <Radio.Group
+                value={selectedHistoryPlanId}
+                onChange={(event) => setSelectedHistoryPlanId(String(event.target.value))}
+              >
+                {historyCandidates.map((candidate) => (
+                  <Radio key={candidate.sourcePlanId} value={candidate.sourcePlanId}>
+                    <Space wrap size="small">
+                      <Typography.Text strong>
+                        {candidate.schoolYear} 学年第 {candidate.semester} 学期
+                      </Typography.Text>
+                      <Typography.Text>{candidate.courseName ?? '未命名课程'}</Typography.Text>
+                      {candidate.teachingClassName ? (
+                        <Typography.Text type="secondary">
+                          {candidate.teachingClassName}
+                        </Typography.Text>
+                      ) : null}
+                      <Tag color={candidate.recommended ? 'blue' : undefined}>
+                        {candidate.items.length} 行
+                      </Tag>
+                    </Space>
+                  </Radio>
+                ))}
+              </Radio.Group>
+            </div>
+          ) : (
+            <Empty
+              description="近 6 学期没有找到可用的同课程历史计划"
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+            />
+          )}
+        </div>
+      </Modal>
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }
