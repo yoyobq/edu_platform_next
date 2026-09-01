@@ -4,9 +4,14 @@ import type { TeachingPlanOccurrence } from '../types';
 
 import { buildTeachingPlanProjection } from './teaching-plan-projection';
 import {
-  buildTeachingPlanSheetRows,
+  buildTeachingPlanDisplayRows,
+  buildTeachingPlanFormalRows,
   clearTeachingPlanLocationOverrides,
   createEmptyTeachingPlanCourseDraft,
+  deleteTeachingPlanContentRow,
+  moveTeachingPlanContentRow,
+  moveTeachingPlanContentRowToEmptySlot,
+  updateTeachingPlanContentRow,
   updateTeachingPlanRowDraft,
 } from './teaching-plan-sheet';
 
@@ -16,7 +21,7 @@ describe('teaching plan sheet', () => {
       occurrence({ slotId: 11, periodStart: 1, periodEnd: 2 }),
       occurrence({ slotId: 12, periodStart: 3, periodEnd: 4 }),
     ]);
-    const rows = buildTeachingPlanSheetRows(
+    const rows = buildTeachingPlanFormalRows(
       projection.courses[0]!,
       createEmptyTeachingPlanCourseDraft(),
     );
@@ -28,16 +33,17 @@ describe('teaching plan sheet', () => {
     ]);
   });
 
-  it('授课方式默认线下且保留未来 Excel F/G 空列模型', () => {
+  it('正式课次和 F/G 内容组独立投影，内容更多时 A-E 保持空白', () => {
     const course = buildTeachingPlanProjection([occurrence({ classroomName: null })]).courses[0]!;
-    const [row] = buildTeachingPlanSheetRows(course, createEmptyTeachingPlanCourseDraft());
+    const draft = createEmptyTeachingPlanCourseDraft(2);
+    const formalRows = buildTeachingPlanFormalRows(course, draft);
+    const rows = buildTeachingPlanDisplayRows({ contentRows: draft.contentRows, formalRows });
 
-    expect(row).toMatchObject({
-      chapterAndContent: '',
-      deliveryMode: 'OFFLINE',
-      homework: '',
-      location: '',
-    });
+    expect(rows).toHaveLength(2);
+    expect(rows[0]?.formalRow).toMatchObject({ deliveryMode: 'OFFLINE', location: '' });
+    expect(rows[0]?.contentRow).toMatchObject({ chapterAndContent: '', homework: '' });
+    expect(rows[1]?.formalRow).toBeNull();
+    expect(rows[1]?.contentRow).not.toBeNull();
   });
 
   it('后端统一地点应作为默认值，修改授课方式不应把它覆盖为空', () => {
@@ -47,7 +53,7 @@ describe('teaching plan sheet', () => {
       rowKey: '2026-03-02:10:NORMAL',
       patch: { deliveryMode: 'ONLINE' },
     });
-    const [row] = buildTeachingPlanSheetRows(course, draft);
+    const [row] = buildTeachingPlanFormalRows(course, draft);
 
     expect(row).toMatchObject({ deliveryMode: 'ONLINE', location: '课表教室' });
   });
@@ -60,10 +66,51 @@ describe('teaching plan sheet', () => {
       patch: { locationOverride: '实训楼 201' },
     });
 
-    expect(buildTeachingPlanSheetRows(course, draft)[0]?.location).toBe('实训楼 201');
+    expect(buildTeachingPlanFormalRows(course, draft)[0]?.location).toBe('实训楼 201');
     expect(
-      buildTeachingPlanSheetRows(course, clearTeachingPlanLocationOverrides(draft))[0]?.location,
+      buildTeachingPlanFormalRows(course, clearTeachingPlanLocationOverrides(draft))[0]?.location,
     ).toBe('课表教室');
+  });
+
+  it('可补齐、编辑、移动和删除固定的章节与作业内容组', () => {
+    let draft = createEmptyTeachingPlanCourseDraft(3);
+    const firstId = draft.contentRows[0]!.id;
+    const thirdId = draft.contentRows[2]!.id;
+    draft = updateTeachingPlanContentRow({
+      contentRowId: firstId,
+      draft,
+      patch: { chapterAndContent: '第一章', homework: '作业一' },
+    });
+    draft = moveTeachingPlanContentRow({ draft, fromIndex: 0, toIndex: 2 });
+
+    expect(draft.contentRows.map((row) => row?.id)).toEqual([expect.any(String), thirdId, firstId]);
+    expect(draft.contentRows[2]).toMatchObject({
+      chapterAndContent: '第一章',
+      homework: '作业一',
+    });
+
+    draft = deleteTeachingPlanContentRow({ contentRowId: thirdId, draft });
+    expect(draft.contentRows).toHaveLength(2);
+    expect(draft.contentRows.some((row) => row?.id === thirdId)).toBe(false);
+  });
+
+  it('内容不足时可拖到后方空格，并保留来源与中间的未定义位置', () => {
+    const original = createEmptyTeachingPlanCourseDraft(43);
+    const row42 = original.contentRows[41];
+    const row43 = original.contentRows[42];
+    const draft = moveTeachingPlanContentRowToEmptySlot({
+      draft: original,
+      fromIndex: 41,
+      toIndex: 45,
+    });
+
+    expect(draft.contentRows).toHaveLength(46);
+    expect(draft.contentRows[41]).toBeNull();
+    expect(draft.contentRows[42]).toBe(row43);
+    expect(draft.contentRows[43]).toBeNull();
+    expect(draft.contentRows[44]).toBeNull();
+    expect(draft.contentRows[45]).toBe(row42);
+    expect(draft.contentRows.filter((row) => row !== null)).toHaveLength(43);
   });
 });
 

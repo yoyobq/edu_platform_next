@@ -1,44 +1,34 @@
 import { describe, expect, it } from 'vitest';
 
-import type { CurriculumPlanDetailReferenceCandidate, TeachingPlanOccurrence } from '../types';
+import type { CurriculumPlanDetailReferenceCandidate } from '../types';
 
-import { fillEmptyTeachingPlanRowsFromHistory } from './historical-plan-fill';
-import { buildTeachingPlanProjection } from './teaching-plan-projection';
+import { replaceTeachingPlanContentRowsFromHistory } from './historical-plan-fill';
 import {
-  buildTeachingPlanSheetRows,
   createEmptyTeachingPlanCourseDraft,
-  updateTeachingPlanRowDraft,
+  updateTeachingPlanContentRow,
 } from './teaching-plan-sheet';
 
 describe('historical teaching plan fill', () => {
-  it('按课次顺序只补空白 F/G，不覆盖已有编辑', () => {
-    const course = buildTeachingPlanProjection([
-      occurrence({ slotId: 10, date: '2026-03-02' }),
-      occurrence({ slotId: 11, date: '2026-03-09', weekIndex: 2 }),
-    ]).courses[0]!;
-    const original = updateTeachingPlanRowDraft({
-      draft: createEmptyTeachingPlanCourseDraft(),
-      rowKey: '2026-03-02:10:NORMAL',
-      patch: { chapterAndContent: '教师已填写内容' },
+  it('用历史计划完整替换现有 F/G 内容、顺序和行数', () => {
+    const seededDraft = createEmptyTeachingPlanCourseDraft(1);
+    const original = updateTeachingPlanContentRow({
+      contentRowId: seededDraft.contentRows[0]!.id,
+      draft: seededDraft,
+      patch: { chapterAndContent: '教师已填写内容', homework: '教师已填写作业' },
     });
 
-    const result = fillEmptyTeachingPlanRowsFromHistory({
-      course,
+    const result = replaceTeachingPlanContentRowsFromHistory({
       draft: original,
       reference: referenceCandidate(),
     });
-    const rows = buildTeachingPlanSheetRows(course, result.draft);
 
-    expect(rows.map((row) => [row.chapterAndContent, row.homework])).toEqual([
-      ['教师已填写内容', '历史作业 1'],
+    expect(result.draft.contentRows.map((row) => [row?.chapterAndContent, row?.homework])).toEqual([
+      ['历史内容 1', '历史作业 1'],
       ['历史内容 2', '历史作业 2'],
     ]);
     expect(result).toMatchObject({
-      filledCellCount: 3,
-      filledRowCount: 2,
-      mappedRowCount: 2,
+      previousRowCount: 1,
       referenceRowCount: 2,
-      targetRowCount: 2,
     });
   });
 });
@@ -71,29 +61,5 @@ function detail(chapterAndContent: string, homework: string) {
     lessonHours: 2,
     chapterAndContent,
     homework,
-  };
-}
-
-function occurrence(overrides: Partial<TeachingPlanOccurrence>): TeachingPlanOccurrence {
-  return {
-    calcEffect: 'NORMAL',
-    classroomName: '课表教室',
-    coefficient: '1.00',
-    courseCategory: 'THEORY',
-    courseName: '网页设计',
-    date: '2026-03-02',
-    isEffective: true,
-    logicalDayOfWeek: 1,
-    periodEnd: 2,
-    periodStart: 1,
-    physicalDayOfWeek: 1,
-    scheduleId: 1,
-    semesterId: 8,
-    slotId: 10,
-    staffId: 'T001',
-    staffName: '张老师',
-    teachingClassName: '信息 2501 班',
-    weekIndex: 1,
-    ...overrides,
   };
 }

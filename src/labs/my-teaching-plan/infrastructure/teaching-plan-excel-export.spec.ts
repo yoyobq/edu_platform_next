@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildTeachingPlanProjection } from '../application/teaching-plan-projection';
 import {
-  buildTeachingPlanSheetRows,
+  buildTeachingPlanFormalRows,
   createEmptyTeachingPlanCourseDraft,
 } from '../application/teaching-plan-sheet';
 import type { TeachingPlanOccurrence } from '../types';
@@ -10,6 +10,7 @@ import type { TeachingPlanOccurrence } from '../types';
 import {
   buildTeachingPlanExcelFileName,
   buildTeachingPlanExcelRows,
+  buildTeachingPlanXlsBuffer,
 } from './teaching-plan-excel-export';
 
 describe('teaching plan excel export', () => {
@@ -18,32 +19,58 @@ describe('teaching plan excel export', () => {
       occurrence({ slotId: 11, periodStart: 1, periodEnd: 2 }),
       occurrence({ slotId: 12, periodStart: 3, periodEnd: 4 }),
     ]);
-    const rows = buildTeachingPlanSheetRows(
-      projection.courses[0]!,
-      createEmptyTeachingPlanCourseDraft(),
-    );
+    const draft = createEmptyTeachingPlanCourseDraft(2);
+    const formalRows = buildTeachingPlanFormalRows(projection.courses[0]!, draft);
 
-    expect(buildTeachingPlanExcelRows(rows)).toEqual([
+    expect(buildTeachingPlanExcelRows({ contentRows: draft.contentRows, formalRows })).toEqual([
       ['2026-03-02', 2, '1,2', '线下', '', '', ''],
       ['2026-03-02', 2, '3,4', '线下', '', '', ''],
     ]);
   });
 
-  it('生成可直接下载的安全 xlsx 文件名', () => {
+  it('生成可直接下载的安全 xls 文件名', () => {
     expect(
       buildTeachingPlanExcelFileName({
         courseName: '网页设计/制作',
         teachingClassName: '信息 2301 班',
       }),
-    ).toBe('信息 2301 班-网页设计 制作-教学计划.xlsx');
+    ).toBe('信息 2301 班-网页设计 制作-教学计划.xls');
+  });
+
+  it('生成真实的 OLE/BIFF xls，而不是只修改文件后缀', async () => {
+    const course = buildTeachingPlanProjection([occurrence({})]).courses[0]!;
+    const draft = createEmptyTeachingPlanCourseDraft(1);
+    const formalRows = buildTeachingPlanFormalRows(course, draft);
+    const buffer = await buildTeachingPlanXlsBuffer({
+      contentRows: draft.contentRows,
+      courseName: course.courseName,
+      formalRows,
+      teachingClassName: course.teachingClassName,
+    });
+
+    expect(Array.from(new Uint8Array(buffer, 0, 8))).toEqual([
+      0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1,
+    ]);
   });
 
   it('导出时应使用后端统一地点', () => {
     const course = buildTeachingPlanProjection([occurrence({ classroomName: '知行楼 302' })])
       .courses[0]!;
-    const rows = buildTeachingPlanSheetRows(course, createEmptyTeachingPlanCourseDraft());
+    const draft = createEmptyTeachingPlanCourseDraft(1);
+    const formalRows = buildTeachingPlanFormalRows(course, draft);
 
-    expect(buildTeachingPlanExcelRows(rows)[0]?.[4]).toBe('知行楼 302');
+    expect(buildTeachingPlanExcelRows({ contentRows: draft.contentRows, formalRows })[0]?.[4]).toBe(
+      '知行楼 302',
+    );
+  });
+
+  it('内容组数量与正式课次数不一致时拒绝生成 Excel 行', () => {
+    const course = buildTeachingPlanProjection([occurrence({})]).courses[0]!;
+    const formalRows = buildTeachingPlanFormalRows(course, createEmptyTeachingPlanCourseDraft());
+
+    expect(() => buildTeachingPlanExcelRows({ contentRows: [], formalRows })).toThrow(
+      '教学计划内容行数（0）必须与正式课次数（1）一致',
+    );
   });
 });
 

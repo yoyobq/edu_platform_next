@@ -4,7 +4,7 @@ import {
   type TeachingPlanCourseDraft,
 } from '../application/teaching-plan-sheet';
 
-const STORAGE_PREFIX = 'my-teaching-plan:course-draft:v3';
+const STORAGE_PREFIX = 'my-teaching-plan:course-draft:v4';
 export const TEACHING_PLAN_DRAFT_TTL_HOURS = 24;
 
 const TEACHING_PLAN_DRAFT_TTL_MS = TEACHING_PLAN_DRAFT_TTL_HOURS * 60 * 60 * 1_000;
@@ -12,19 +12,7 @@ const TEACHING_PLAN_DRAFT_TTL_MS = TEACHING_PLAN_DRAFT_TTL_HOURS * 60 * 60 * 1_0
 type StoredTeachingPlanCourseDraft = {
   draft: TeachingPlanCourseDraft;
   expiresAt: number;
-  version: 3;
-};
-
-type LegacyTeachingPlanCourseDraft = {
-  initialLocationApplied: boolean;
-  rows: Record<string, { deliveryMode: 'OFFLINE' | 'ONLINE'; location: string }>;
-  version: 2;
-};
-
-type LegacyStoredTeachingPlanCourseDraft = {
-  draft: LegacyTeachingPlanCourseDraft;
-  expiresAt: number;
-  version: 2;
+  version: 4;
 };
 
 export function buildTeachingPlanDraftStorageKey(input: {
@@ -42,42 +30,33 @@ export function buildTeachingPlanDraftStorageKey(input: {
   ].join(':');
 }
 
-export function readTeachingPlanCourseDraft(storageKey: string): TeachingPlanCourseDraft {
+export function readTeachingPlanCourseDraft(
+  storageKey: string,
+  contentRowCount = 0,
+): TeachingPlanCourseDraft {
   if (typeof window === 'undefined') {
-    return createEmptyTeachingPlanCourseDraft();
+    return createEmptyTeachingPlanCourseDraft(contentRowCount);
   }
 
   try {
     const raw = window.localStorage.getItem(storageKey);
     if (!raw) {
-      return createEmptyTeachingPlanCourseDraft();
+      return createEmptyTeachingPlanCourseDraft(contentRowCount);
     }
 
     const parsed: unknown = JSON.parse(raw);
-    if (
-      !isStoredTeachingPlanCourseDraft(parsed) &&
-      !isLegacyStoredTeachingPlanCourseDraft(parsed)
-    ) {
+    if (!isStoredTeachingPlanCourseDraft(parsed)) {
       window.localStorage.removeItem(storageKey);
-      return createEmptyTeachingPlanCourseDraft();
+      return createEmptyTeachingPlanCourseDraft(contentRowCount);
     }
     if (parsed.expiresAt <= Date.now()) {
       window.localStorage.removeItem(storageKey);
-      return createEmptyTeachingPlanCourseDraft();
-    }
-
-    if (isLegacyStoredTeachingPlanCourseDraft(parsed)) {
-      const migrated = migrateLegacyDraft(parsed.draft);
-      window.localStorage.setItem(
-        storageKey,
-        JSON.stringify({ draft: migrated, expiresAt: parsed.expiresAt, version: 3 }),
-      );
-      return migrated;
+      return createEmptyTeachingPlanCourseDraft(contentRowCount);
     }
 
     return parsed.draft;
   } catch {
-    return createEmptyTeachingPlanCourseDraft();
+    return createEmptyTeachingPlanCourseDraft(contentRowCount);
   }
 }
 
@@ -90,7 +69,7 @@ export function writeTeachingPlanCourseDraft(storageKey: string, draft: Teaching
     const storedDraft: StoredTeachingPlanCourseDraft = {
       draft,
       expiresAt: Date.now() + TEACHING_PLAN_DRAFT_TTL_MS,
-      version: 3,
+      version: 4,
     };
     window.localStorage.setItem(storageKey, JSON.stringify(storedDraft));
   } catch {
@@ -104,51 +83,11 @@ function isStoredTeachingPlanCourseDraft(value: unknown): value is StoredTeachin
   }
 
   return (
-    value.version === 3 &&
+    value.version === 4 &&
     typeof value.expiresAt === 'number' &&
     Number.isFinite(value.expiresAt) &&
     isTeachingPlanCourseDraft(value.draft)
   );
-}
-
-function isLegacyStoredTeachingPlanCourseDraft(
-  value: unknown,
-): value is LegacyStoredTeachingPlanCourseDraft {
-  if (!isRecord(value) || value.version !== 2 || !isRecord(value.draft)) {
-    return false;
-  }
-  const draft = value.draft;
-  if (
-    draft.version !== 2 ||
-    typeof draft.initialLocationApplied !== 'boolean' ||
-    !isRecord(draft.rows) ||
-    typeof value.expiresAt !== 'number' ||
-    !Number.isFinite(value.expiresAt)
-  ) {
-    return false;
-  }
-
-  return Object.values(draft.rows).every(
-    (row) =>
-      isRecord(row) &&
-      (row.deliveryMode === 'ONLINE' || row.deliveryMode === 'OFFLINE') &&
-      typeof row.location === 'string',
-  );
-}
-
-function migrateLegacyDraft(draft: LegacyTeachingPlanCourseDraft): TeachingPlanCourseDraft {
-  return {
-    rows: Object.fromEntries(
-      Object.entries(draft.rows).map(([rowKey, row]) => [
-        rowKey,
-        {
-          deliveryMode: row.deliveryMode,
-          ...(row.location ? { locationOverride: row.location } : {}),
-        },
-      ]),
-    ),
-    version: 3,
-  };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

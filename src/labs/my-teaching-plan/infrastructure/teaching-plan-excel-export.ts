@@ -1,7 +1,11 @@
-import type { TeachingPlanSheetRow } from '../application/teaching-plan-sheet';
+import type {
+  TeachingPlanContentRowDraft,
+  TeachingPlanFormalRow,
+} from '../application/teaching-plan-sheet';
 
-const EXCEL_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const EXCEL_MIME_TYPE = 'application/vnd.ms-excel';
 const OBJECT_URL_REVOKE_DELAY_MS = 1_000;
+const TEACHING_PLAN_COLUMN_WIDTHS = [14.35, 16.35, 22.63, 17.72, 18.44, 30.99, 11.9];
 
 export const TEACHING_PLAN_EXCEL_HEADERS = [
   '授课时间',
@@ -23,17 +27,19 @@ export type TeachingPlanExcelRow = readonly [
   homework: string,
 ];
 
-export function buildTeachingPlanExcelRows(
-  rows: readonly TeachingPlanSheetRow[],
-): TeachingPlanExcelRow[] {
-  return rows.map((row) => [
+export function buildTeachingPlanExcelRows(input: {
+  contentRows: readonly (TeachingPlanContentRowDraft | null)[];
+  formalRows: readonly TeachingPlanFormalRow[];
+}): TeachingPlanExcelRow[] {
+  assertTeachingPlanExportRowCount(input);
+  return input.formalRows.map((row, index) => [
     row.teachingDate,
     row.teachingHours,
     row.periodsText,
     row.deliveryMode === 'ONLINE' ? '线上' : '线下',
     row.location,
-    row.chapterAndContent,
-    row.homework,
+    input.contentRows[index]?.chapterAndContent ?? '',
+    input.contentRows[index]?.homework ?? '',
   ]);
 }
 
@@ -50,81 +56,41 @@ export function buildTeachingPlanExcelFileName(input: {
     .replace(/\s+/gu, ' ')
     .trim();
 
-  return `${sanitized || '教学计划'}.xlsx`;
+  return `${sanitized || '教学计划'}.xls`;
 }
 
-export async function exportTeachingPlanExcel(input: {
+type TeachingPlanExcelExportInput = {
+  contentRows: readonly (TeachingPlanContentRowDraft | null)[];
   courseName: string;
-  rows: readonly TeachingPlanSheetRow[];
+  formalRows: readonly TeachingPlanFormalRow[];
   teachingClassName: string;
-}) {
-  const ExcelJS = await import('exceljs');
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('教学计划');
+};
 
-  workbook.creator = 'Edu Mate';
-  worksheet.columns = [
-    { width: 14.35 },
-    { width: 16.35 },
-    { width: 22.63 },
-    { width: 17.72 },
-    { width: 18.44 },
-    { width: 30.99 },
-    { width: 11.9 },
-  ];
-  worksheet.addRow([...TEACHING_PLAN_EXCEL_HEADERS]);
-  worksheet.addRows(buildTeachingPlanExcelRows(input.rows).map((row) => [...row]));
-  worksheet.views = [{ state: 'frozen', ySplit: 1 }];
-  worksheet.autoFilter = 'A1:G1';
-  worksheet.pageSetup = {
-    fitToPage: true,
-    fitToWidth: 1,
-    orientation: 'landscape',
-    paperSize: 9,
-  };
+export async function buildTeachingPlanXlsBuffer(input: TeachingPlanExcelExportInput) {
+  assertTeachingPlanExportRowCount(input);
+  const XLSX = await import('xlsx');
+  const workbook = XLSX.utils.book_new();
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [...TEACHING_PLAN_EXCEL_HEADERS],
+    ...buildTeachingPlanExcelRows(input).map((row) => [...row]),
+  ]);
+  worksheet['!cols'] = TEACHING_PLAN_COLUMN_WIDTHS.map((width) => ({ width }));
+  worksheet['!rows'] = Array.from({ length: input.formalRows.length + 1 }, (_, index) => ({
+    hpt: index === 0 ? 26 : 24,
+  }));
+  worksheet['!autofilter'] = { ref: `A1:G${input.formalRows.length + 1}` };
+  workbook.Props = { Author: 'Edu Mate' };
+  XLSX.utils.book_append_sheet(workbook, worksheet, '教学计划');
 
-  worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
-    row.height = rowNumber === 1 ? 26 : 24;
-    row.eachCell({ includeEmpty: true }, (cell, columnNumber) => {
-      cell.alignment = {
-        horizontal: columnNumber <= 5 ? 'center' : 'left',
-        vertical: 'middle',
-        wrapText: true,
-      };
-      cell.border = {
-        bottom: { color: { argb: 'FFBFBFBF' }, style: 'thin' },
-        left: { color: { argb: 'FFBFBFBF' }, style: 'thin' },
-        right: { color: { argb: 'FFBFBFBF' }, style: 'thin' },
-        top: { color: { argb: 'FFBFBFBF' }, style: 'thin' },
-      };
-      cell.font = {
-        bold: rowNumber === 1,
-        name: 'Microsoft YaHei',
-        size: 11,
-      };
-      if (rowNumber === 1) {
-        cell.fill = {
-          fgColor: { argb: 'FFE7E6E6' },
-          pattern: 'solid',
-          type: 'pattern',
-        };
-      }
-    });
-  });
+  return XLSX.write(workbook, {
+    bookType: 'xls',
+    type: 'array',
+  }) as ArrayBuffer;
+}
 
-  for (let rowNumber = 2; rowNumber <= input.rows.length + 1; rowNumber += 1) {
-    worksheet.getCell(rowNumber, 4).dataValidation = {
-      allowBlank: false,
-      error: '请选择“线上”或“线下”',
-      errorTitle: '授课方式无效',
-      formulae: ['"线上,线下"'],
-      showErrorMessage: true,
-      type: 'list',
-    };
-  }
-
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer as ArrayBuffer], { type: EXCEL_MIME_TYPE });
+export async function exportTeachingPlanExcel(input: TeachingPlanExcelExportInput) {
+  const buffer = await buildTeachingPlanXlsBuffer(input);
+  const blob = new Blob([buffer], { type: EXCEL_MIME_TYPE });
   downloadBlob(
     blob,
     buildTeachingPlanExcelFileName({
@@ -132,6 +98,22 @@ export async function exportTeachingPlanExcel(input: {
       teachingClassName: input.teachingClassName,
     }),
   );
+}
+
+function assertTeachingPlanExportRowCount(input: {
+  contentRows: readonly (TeachingPlanContentRowDraft | null)[];
+  formalRows: readonly TeachingPlanFormalRow[];
+}) {
+  const contentRowCount = input.contentRows.filter((row) => row !== null).length;
+  if (
+    input.formalRows.length === 0 ||
+    input.contentRows.length !== input.formalRows.length ||
+    contentRowCount !== input.formalRows.length
+  ) {
+    throw new Error(
+      `教学计划内容行数（${contentRowCount}）必须与正式课次数（${input.formalRows.length}）一致，且中间不能留有空位`,
+    );
+  }
 }
 
 function downloadBlob(blob: Blob, fileName: string) {

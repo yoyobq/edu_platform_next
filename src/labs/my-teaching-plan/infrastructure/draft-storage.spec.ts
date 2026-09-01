@@ -27,10 +27,11 @@ describe('teaching plan draft storage', () => {
 
   it('只在最后编辑后的 24 小时内恢复本地草稿', () => {
     writeTeachingPlanCourseDraft(STORAGE_KEY, {
+      contentRows: [{ chapterAndContent: '第一章', homework: '作业一', id: 'content-1' }],
       rows: {
         row1: { deliveryMode: 'OFFLINE', locationOverride: '机房 5102' },
       },
-      version: 3,
+      version: 4,
     });
 
     expect(TEACHING_PLAN_DRAFT_TTL_HOURS).toBe(24);
@@ -38,52 +39,32 @@ describe('teaching plan draft storage', () => {
       deliveryMode: 'OFFLINE',
       locationOverride: '机房 5102',
     });
+    expect(readTeachingPlanCourseDraft(STORAGE_KEY).contentRows).toHaveLength(1);
 
     vi.mocked(Date.now).mockReturnValue(1_800_000_000_000 + 24 * 60 * 60 * 1_000);
 
-    expect(readTeachingPlanCourseDraft(STORAGE_KEY).rows).toEqual({});
+    expect(readTeachingPlanCourseDraft(STORAGE_KEY, 2).contentRows).toHaveLength(2);
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
-  it('删除不带期限的旧草稿，避免形成无限期本地存储', () => {
-    window.localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({ initialLocationApplied: false, rows: {}, version: 1 }),
-    );
-
-    expect(readTeachingPlanCourseDraft(STORAGE_KEY).rows).toEqual({});
-    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
-  });
-
-  it('把有期限的 v2 地点草稿迁移为逐行例外且不延长原期限', () => {
-    const expiresAt = 1_800_000_000_000 + 60_000;
+  it('忽略并删除旧版草稿，按当前正式课次数初始化 v4 内容行', () => {
     window.localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify({
         draft: {
-          initialLocationApplied: true,
-          rows: {
-            row1: { deliveryMode: 'ONLINE', location: '旧草稿机房' },
-            row2: { deliveryMode: 'OFFLINE', location: '' },
-          },
-          version: 2,
+          rows: { row1: { chapterAndContent: '旧内容', deliveryMode: 'ONLINE' } },
+          version: 3,
         },
-        expiresAt,
-        version: 2,
+        expiresAt: 1_800_000_060_000,
+        version: 3,
       }),
     );
 
-    expect(readTeachingPlanCourseDraft(STORAGE_KEY)).toEqual({
-      rows: {
-        row1: { deliveryMode: 'ONLINE', locationOverride: '旧草稿机房' },
-        row2: { deliveryMode: 'OFFLINE' },
-      },
-      version: 3,
-    });
-    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}')).toMatchObject({
-      expiresAt,
-      version: 3,
-    });
+    const draft = readTeachingPlanCourseDraft(STORAGE_KEY, 3);
+
+    expect(draft).toMatchObject({ rows: {}, version: 4 });
+    expect(draft.contentRows).toHaveLength(3);
+    expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
   it('同一目标教师的草稿按当前登录账号隔离', () => {
@@ -95,10 +76,11 @@ describe('teaching plan draft storage', () => {
     });
 
     writeTeachingPlanCourseDraft(STORAGE_KEY, {
+      contentRows: [],
       rows: {
         row1: { deliveryMode: 'OFFLINE', locationOverride: '管理员一的机房' },
       },
-      version: 3,
+      version: 4,
     });
 
     expect(readTeachingPlanCourseDraft(otherAccountStorageKey).rows).toEqual({});

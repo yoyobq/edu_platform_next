@@ -197,6 +197,16 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
                       sourceDetailId: 'DETAIL-2',
                       weekNumber: 1,
                     },
+                    {
+                      chapterAndContent: '历史内容 3',
+                      dayOfWeek: 2,
+                      homework: '历史作业 3',
+                      lessonHours: 2,
+                      sectionId: '5,6',
+                      sectionName: '第五、六节',
+                      sourceDetailId: 'DETAIL-3',
+                      weekNumber: 2,
+                    },
                   ],
                   matchKind: 'EXACT',
                   plannedLessons: 4,
@@ -258,11 +268,74 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await page.getByRole('button', { name: '参考历史计划' }).click();
   const historyDialog = page.getByRole('dialog', { name: /选择“数据库原理”的历史教学计划/ });
   await expect(historyDialog.getByText('2025 学年第 2 学期')).toBeVisible();
-  await historyDialog.getByRole('button', { name: '填充空白项' }).click();
-  await expect(firstChapter).toHaveValue('教师已填写内容');
+  await historyDialog.getByRole('button', { name: '替换当前内容' }).click();
+  const replaceDialog = page.getByRole('dialog', { name: '替换当前章节与作业？' });
+  await expect(replaceDialog.getByText(/当前有 2 行章节与作业，历史计划有 3 行/)).toBeVisible();
+  await replaceDialog.getByRole('button', { name: '确认替换' }).click();
+  await expect(firstChapter).toHaveValue('历史内容 1');
   await expect(page.getByLabel('2026-09-08第1,2节课外作业')).toHaveValue('历史作业 1');
   await expect(page.getByLabel('2026-09-08第3,4节授课章节与内容')).toHaveValue('历史内容 2');
   await expect(page.getByLabel('2026-09-08第3,4节课外作业')).toHaveValue('历史作业 2');
+  await expect(page.getByLabel('第3行授课章节与内容')).toHaveValue('历史内容 3');
+  await expect(page.getByLabel('第3行课外作业')).toHaveValue('历史作业 3');
+  await expect(page.getByLabel('第3行无正式授课数据')).toBeVisible();
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeDisabled();
+
+  const thirdDragHandle = page.getByRole('button', { name: '拖动第3行章节与作业' });
+  const firstChapterBox = await firstChapter.boundingBox();
+  expect(firstChapterBox).not.toBeNull();
+  const dragData = await page.evaluateHandle(() => new DataTransfer());
+  await thirdDragHandle.dispatchEvent('dragstart', { dataTransfer: dragData });
+  await firstChapter.dispatchEvent('dragover', {
+    clientY: firstChapterBox!.y,
+    dataTransfer: dragData,
+  });
+  await expect(firstChapter.locator('xpath=ancestor::td')).toHaveClass(/border-t-primary/);
+  await firstChapter.dispatchEvent('drop', {
+    clientY: firstChapterBox!.y,
+    dataTransfer: dragData,
+  });
+  await thirdDragHandle.dispatchEvent('dragend', { dataTransfer: dragData });
+  await expect(firstChapter).toHaveValue('历史内容 3');
+  await expect(page.getByLabel('2026-09-08第1,2节课外作业')).toHaveValue('历史作业 3');
+
+  await page.getByRole('button', { name: '删除第3行章节与作业' }).click();
+  await expect(page.getByPlaceholder('填写授课章节与内容')).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeEnabled();
+  await page.getByRole('button', { name: '撤销' }).click();
+  await expect(page.getByPlaceholder('填写授课章节与内容')).toHaveCount(3);
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeDisabled();
+  await page.getByRole('button', { name: '删除第3行章节与作业' }).click();
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeEnabled();
+
+  await page.getByRole('button', { name: '删除第2行章节与作业' }).click();
+  const secondChapter = page.getByLabel('2026-09-08第3,4节授课章节与内容');
+  const secondChapterBox = await secondChapter.boundingBox();
+  expect(secondChapterBox).not.toBeNull();
+  const emptySlotDragData = await page.evaluateHandle(() => new DataTransfer());
+  await page
+    .getByRole('button', { name: '拖动第1行章节与作业' })
+    .dispatchEvent('dragstart', { dataTransfer: emptySlotDragData });
+  await secondChapter.dispatchEvent('dragover', {
+    clientY: secondChapterBox!.y,
+    dataTransfer: emptySlotDragData,
+  });
+  await expect(secondChapter.locator('xpath=ancestor::td')).toHaveClass(/border-y-primary/);
+  await secondChapter.dispatchEvent('drop', {
+    clientY: secondChapterBox!.y,
+    dataTransfer: emptySlotDragData,
+  });
+  await page
+    .getByRole('button', { name: '拖动第2行章节与作业' })
+    .dispatchEvent('dragend', { dataTransfer: emptySlotDragData });
+  await expect(firstChapter).toHaveValue('');
+  await expect(secondChapter).toHaveValue('历史内容 3');
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeDisabled();
+
+  await page.getByRole('button', { name: '创建第1行章节与作业' }).click();
+  await firstChapter.fill('历史内容 1');
+  await page.getByLabel('2026-09-08第1,2节课外作业').fill('历史作业 1');
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeEnabled();
   expect(historyReferenceInput).toEqual({
     context: {
       courseName: '数据库原理',
@@ -316,17 +389,21 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出 Excel' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe('软件 2401-数据库原理-教学计划.xlsx');
+  expect(download.suggestedFilename()).toBe('软件 2401-数据库原理-教学计划.xls');
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
 
-  const { default: ExcelJS } = await import('exceljs');
-  const workbook = new ExcelJS.Workbook();
-  await workbook.xlsx.readFile(downloadPath!);
-  const worksheet = workbook.getWorksheet('教学计划');
+  const { default: XLSX } = await import('xlsx');
+  const workbook = XLSX.readFile(downloadPath!);
+  const worksheet = workbook.Sheets['教学计划'];
+  expect(worksheet).toBeDefined();
+  const exportedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet!, {
+    defval: '',
+    header: 1,
+    raw: true,
+  });
 
-  expect(worksheet?.getRow(1).values).toEqual([
-    undefined,
+  expect(exportedRows[0]).toEqual([
     '授课时间',
     '学时数',
     '节次',
@@ -335,25 +412,23 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
     '授课章节与内容',
     '课外作业',
   ]);
-  expect(worksheet?.getRow(2).values).toEqual([
-    undefined,
+  expect(exportedRows[1]).toEqual([
     '2026-09-08',
     2,
     '1,2',
     '线下',
     '机房 5102',
-    '教师已填写内容',
+    '历史内容 1',
     '历史作业 1',
   ]);
-  expect(worksheet?.getRow(3).values).toEqual([
-    undefined,
+  expect(exportedRows[2]).toEqual([
     '2026-09-08',
     2,
     '3,4',
     '线下',
     '机房 5102',
-    '历史内容 2',
-    '历史作业 2',
+    '历史内容 3',
+    '历史作业 3',
   ]);
 
   await expect.poll(() => requestedSemesterId).toBe(7);

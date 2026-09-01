@@ -1,61 +1,26 @@
 import type { CurriculumPlanDetailReferenceCandidate } from '../types';
 
-import type { TeachingPlanCourseProjection } from './teaching-plan-projection';
-import {
-  buildTeachingPlanSheetRows,
-  type TeachingPlanCourseDraft,
-  updateTeachingPlanRowDraft,
-} from './teaching-plan-sheet';
+import type { TeachingPlanContentRowDraft, TeachingPlanCourseDraft } from './teaching-plan-sheet';
 
-export type HistoricalPlanFillResult = {
+export type HistoricalPlanReplaceResult = {
   draft: TeachingPlanCourseDraft;
-  filledCellCount: number;
-  filledRowCount: number;
-  mappedRowCount: number;
+  previousRowCount: number;
   referenceRowCount: number;
-  targetRowCount: number;
 };
 
-export function fillEmptyTeachingPlanRowsFromHistory(input: {
-  course: TeachingPlanCourseProjection;
+export function replaceTeachingPlanContentRowsFromHistory(input: {
   draft: TeachingPlanCourseDraft;
   reference: CurriculumPlanDetailReferenceCandidate;
-}): HistoricalPlanFillResult {
-  const targetRows = buildTeachingPlanSheetRows(input.course, input.draft);
-  const mappedRowCount = Math.min(targetRows.length, input.reference.items.length);
-  let draft = input.draft;
-  let filledCellCount = 0;
-  let filledRowCount = 0;
-
-  for (let index = 0; index < mappedRowCount; index += 1) {
-    const target = targetRows[index];
-    const source = input.reference.items[index];
-    if (!target || !source) {
-      continue;
-    }
-    const patch: { chapterAndContent?: string; homework?: string } = {};
-    const chapterAndContent = source.chapterAndContent?.trim();
-    const homework = source.homework?.trim();
-    if (!target.chapterAndContent.trim() && chapterAndContent) {
-      patch.chapterAndContent = chapterAndContent;
-      filledCellCount += 1;
-    }
-    if (!target.homework.trim() && homework) {
-      patch.homework = homework;
-      filledCellCount += 1;
-    }
-    if (Object.keys(patch).length > 0) {
-      draft = updateTeachingPlanRowDraft({ draft, patch, rowKey: target.rowKey });
-      filledRowCount += 1;
-    }
-  }
+}): HistoricalPlanReplaceResult {
+  const contentRows: TeachingPlanContentRowDraft[] = input.reference.items.map((item, index) => ({
+    chapterAndContent: item.chapterAndContent?.trim() ?? '',
+    homework: item.homework?.trim() ?? '',
+    id: `history:${input.reference.sourcePlanId}:${item.sourceDetailId ?? 'row'}:${index}`,
+  }));
 
   return {
-    draft,
-    filledCellCount,
-    filledRowCount,
-    mappedRowCount,
-    referenceRowCount: input.reference.items.length,
-    targetRowCount: targetRows.length,
+    draft: { ...input.draft, contentRows },
+    previousRowCount: input.draft.contentRows.filter((row) => row !== null).length,
+    referenceRowCount: contentRows.length,
   };
 }

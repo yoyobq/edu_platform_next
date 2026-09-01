@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DeleteOutlined,
   DownloadOutlined,
+  DragOutlined,
   EditOutlined,
   FormOutlined,
   HistoryOutlined,
   LaptopOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -33,7 +36,7 @@ import {
   useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
-import { fillEmptyTeachingPlanRowsFromHistory } from '../application/historical-plan-fill';
+import { replaceTeachingPlanContentRowsFromHistory } from '../application/historical-plan-fill';
 import {
   formatTeachingPlanBusinessDate,
   formatTeachingPlanCalcEffect,
@@ -42,11 +45,20 @@ import {
   type TeachingPlanCourseProjection,
 } from '../application/teaching-plan-projection';
 import {
-  buildTeachingPlanSheetRows,
+  appendTeachingPlanContentRow,
+  buildTeachingPlanDisplayRows,
+  buildTeachingPlanFormalRows,
   clearTeachingPlanLocationOverrides,
+  deleteTeachingPlanContentRow,
+  ensureTeachingPlanContentRowAtIndex,
+  insertTeachingPlanContentRow,
+  moveTeachingPlanContentRow,
+  moveTeachingPlanContentRowToEmptySlot,
   setTeachingPlanRowLocationOverride,
+  type TeachingPlanContentRowDraft,
   type TeachingPlanCourseDraft,
   type TeachingPlanDeliveryMode,
+  updateTeachingPlanContentRow,
   updateTeachingPlanRowDraft,
 } from '../application/teaching-plan-sheet';
 import {
@@ -100,7 +112,7 @@ export function TeachingPlanSheet({
   teacherName: string;
   onClassroomNameUpdated: (scheduleId: number, classroomName: string) => void;
 }) {
-  const { message } = AntApp.useApp();
+  const { message, modal, notification } = AntApp.useApp();
   const storageKey = useMemo(
     () =>
       buildTeachingPlanDraftStorageKey({
@@ -112,7 +124,7 @@ export function TeachingPlanSheet({
     [course.scheduleId, currentAccountId, semesterId, targetStaffId],
   );
   const [draft, setDraft] = useState<TeachingPlanCourseDraft>(() =>
-    readTeachingPlanCourseDraft(storageKey),
+    readTeachingPlanCourseDraft(storageKey, course.effectiveOccurrenceCount),
   );
   const [isExporting, setIsExporting] = useState(false);
   const [isSavingClassroomName, setIsSavingClassroomName] = useState(false);
@@ -130,18 +142,43 @@ export function TeachingPlanSheet({
     null,
   );
   const [selectedHistoryPlanId, setSelectedHistoryPlanId] = useState<string | null>(null);
+  const [draggedContentRowId, setDraggedContentRowId] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<{
+    index: number;
+    position: 'after' | 'at' | 'before';
+  } | null>(null);
   const draftRef = useRef(draft);
+  const dragPreviewRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    const nextDraft = readTeachingPlanCourseDraft(storageKey);
+    const nextDraft = readTeachingPlanCourseDraft(storageKey, course.effectiveOccurrenceCount);
     draftRef.current = nextDraft;
     setDraft(nextDraft);
-  }, [storageKey]);
+  }, [course.effectiveOccurrenceCount, storageKey]);
 
-  const rows = useMemo(() => buildTeachingPlanSheetRows(course, draft), [course, draft]);
+  useEffect(
+    () => () => {
+      dragPreviewRef.current?.remove();
+    },
+    [],
+  );
+
+  const formalRows = useMemo(() => buildTeachingPlanFormalRows(course, draft), [course, draft]);
+  const displayRows = useMemo(
+    () => buildTeachingPlanDisplayRows({ contentRows: draft.contentRows, formalRows }),
+    [draft.contentRows, formalRows],
+  );
+  const contentRowCount = useMemo(
+    () => draft.contentRows.filter((contentRow) => contentRow !== null).length,
+    [draft.contentRows],
+  );
+  const canExport =
+    formalRows.length > 0 &&
+    draft.contentRows.length === formalRows.length &&
+    contentRowCount === formalRows.length;
   const plannedLessons = useMemo(
-    () => rows.reduce((total, row) => total + row.teachingHours, 0),
-    [rows],
+    () => formalRows.reduce((total, row) => total + row.teachingHours, 0),
+    [formalRows],
   );
 
   const applyDraft = (nextDraft: TeachingPlanCourseDraft) => {
@@ -161,6 +198,120 @@ export function TeachingPlanSheet({
         rowKey,
       }),
     );
+  };
+
+  const updateContentRowAtIndex = (
+    index: number,
+    patch: Parameters<typeof updateTeachingPlanContentRow>[0]['patch'],
+  ) => {
+    const ensuredDraft = ensureTeachingPlanContentRowAtIndex({
+      draft: draftRef.current,
+      index,
+    });
+    const contentRow = ensuredDraft.contentRows[index];
+    if (!contentRow) {
+      return;
+    }
+    applyDraft(
+      updateTeachingPlanContentRow({
+        contentRowId: contentRow.id,
+        draft: ensuredDraft,
+        patch,
+      }),
+    );
+  };
+
+  const ensureContentRowAtIndex = (index: number) => {
+    const nextDraft = ensureTeachingPlanContentRowAtIndex({
+      draft: draftRef.current,
+      index,
+    });
+    if (nextDraft !== draftRef.current) {
+      applyDraft(nextDraft);
+    }
+  };
+
+  const appendContentRow = () => {
+    applyDraft(appendTeachingPlanContentRow(draftRef.current));
+  };
+
+  const removeContentRow = (contentRow: TeachingPlanContentRowDraft, index: number) => {
+    applyDraft(
+      deleteTeachingPlanContentRow({
+        contentRowId: contentRow.id,
+        draft: draftRef.current,
+      }),
+    );
+    const notificationKey = `teaching-plan-content-row:${contentRow.id}`;
+    notification.open({
+      actions: (
+        <Button
+          size="small"
+          type="link"
+          onClick={() => {
+            applyDraft(
+              insertTeachingPlanContentRow({
+                contentRow,
+                draft: draftRef.current,
+                index,
+              }),
+            );
+            notification.destroy(notificationKey);
+          }}
+        >
+          撤销
+        </Button>
+      ),
+      duration: 5,
+      key: notificationKey,
+      title: `已删除第 ${index + 1} 行章节与作业`,
+    });
+  };
+
+  const clearDragState = () => {
+    dragPreviewRef.current?.remove();
+    dragPreviewRef.current = null;
+    setDraggedContentRowId(null);
+    setDropTarget(null);
+  };
+
+  const handleContentRowDrop = (targetIndex: number, position: 'after' | 'at' | 'before') => {
+    if (!draggedContentRowId) {
+      return;
+    }
+    const fromIndex = draftRef.current.contentRows.findIndex(
+      (contentRow) => contentRow?.id === draggedContentRowId,
+    );
+    if (fromIndex < 0) {
+      clearDragState();
+      return;
+    }
+
+    if (position === 'at') {
+      applyDraft(
+        moveTeachingPlanContentRowToEmptySlot({
+          draft: draftRef.current,
+          fromIndex,
+          toIndex: targetIndex,
+        }),
+      );
+      clearDragState();
+      return;
+    }
+
+    let toIndex = targetIndex + (position === 'after' ? 1 : 0);
+    if (fromIndex < toIndex) {
+      toIndex -= 1;
+    }
+    toIndex = Math.min(Math.max(toIndex, 0), draftRef.current.contentRows.length - 1);
+    applyDraft(
+      moveTeachingPlanContentRow({
+        draft: draftRef.current,
+        fromIndex,
+        toIndex,
+      }),
+    );
+    clearDragState();
   };
 
   const {
@@ -256,24 +407,34 @@ export function TeachingPlanSheet({
     if (!reference) {
       return;
     }
-    const result = fillEmptyTeachingPlanRowsFromHistory({
-      course,
-      draft: draftRef.current,
-      reference,
+    modal.confirm({
+      cancelText: '取消',
+      content: (
+        <div className="flex flex-col gap-2">
+          <Typography.Text>
+            当前有 {draftRef.current.contentRows.filter((row) => row !== null).length}{' '}
+            行章节与作业，历史计划有 {reference.items.length} 行。
+          </Typography.Text>
+          <Typography.Text type="secondary">
+            确认后会整组替换当前 F/G 内容、行序和行数，现有手工编辑将被覆盖。
+          </Typography.Text>
+        </div>
+      ),
+      okButtonProps: { danger: true },
+      okText: '确认替换',
+      title: '替换当前章节与作业？',
+      onOk: () => {
+        const result = replaceTeachingPlanContentRowsFromHistory({
+          draft: draftRef.current,
+          reference,
+        });
+        applyDraft(result.draft);
+        setHistoryModalOpen(false);
+        void message.success(
+          `已用历史计划将章节与作业从 ${result.previousRowCount} 行替换为 ${result.referenceRowCount} 行`,
+        );
+      },
     });
-    applyDraft(result.draft);
-    setHistoryModalOpen(false);
-    if (result.filledCellCount === 0) {
-      void message.info('当前课次没有可补充的空白章节或作业');
-      return;
-    }
-    const mismatchNotice =
-      result.referenceRowCount === result.targetRowCount
-        ? ''
-        : `；已按顺序对应前 ${result.mappedRowCount} 行`;
-    void message.success(
-      `已从历史计划补充 ${result.filledRowCount} 行、${result.filledCellCount} 个单元格${mismatchNotice}`,
-    );
   };
 
   const commitRowLocation = async (rowKey: string, rawLocation: string) => {
@@ -366,20 +527,27 @@ export function TeachingPlanSheet({
   };
 
   const handleExport = async () => {
-    if (isExporting || rows.length === 0) {
+    if (isExporting) {
+      return;
+    }
+    if (!canExport) {
+      void message.warning(
+        `内容行数（${draftRef.current.contentRows.filter((row) => row !== null).length}）必须与正式课次数（${formalRows.length}）一致且不能留有空位，才能导出`,
+      );
       return;
     }
 
     setIsExporting(true);
     try {
       await exportTeachingPlanExcel({
+        contentRows: draftRef.current.contentRows,
         courseName: course.courseName,
-        rows,
+        formalRows,
         teachingClassName: course.teachingClassName,
       });
       void message.success('Excel 已导出；需要长期保留时，请妥善保存该文件');
-    } catch {
-      void message.error('Excel 导出失败，请稍后重试');
+    } catch (error: unknown) {
+      void message.error(error instanceof Error ? error.message : 'Excel 导出失败，请稍后重试');
     } finally {
       setIsExporting(false);
     }
@@ -410,29 +578,42 @@ export function TeachingPlanSheet({
               <div className="flex flex-wrap items-center gap-2">
                 <Tag color="blue">Excel A–G</Tag>
                 <Tag icon={<FormOutlined />}>本地草稿</Tag>
+                <Tag color={canExport ? 'green' : 'orange'}>
+                  正式 {formalRows.length} / 内容 {contentRowCount}
+                </Tag>
               </div>
               <Typography.Text type="secondary">
-                每行对应一个真源课次片段；连续四节若已切成两个双节片段，将保持为两行。
+                A–E 来自正式课次；F/G 是可独立增删和排序的章节与作业内容组。
               </Typography.Text>
             </div>
             <Space wrap>
               <Button
-                disabled={rows.length === 0}
+                disabled={formalRows.length === 0}
                 icon={<HistoryOutlined />}
                 loading={isLoadingHistory}
                 onClick={openHistoryReference}
               >
                 参考历史计划
               </Button>
-              <Button
-                disabled={rows.length === 0}
-                icon={<DownloadOutlined />}
-                loading={isExporting}
-                type="primary"
-                onClick={() => void handleExport()}
+              <Tooltip
+                title={
+                  canExport
+                    ? undefined
+                    : `内容行数（${contentRowCount}）需与正式课次数（${formalRows.length}）一致，且不能留有空位`
+                }
               >
-                导出 Excel
-              </Button>
+                <span>
+                  <Button
+                    disabled={!canExport}
+                    icon={<DownloadOutlined />}
+                    loading={isExporting}
+                    type="primary"
+                    onClick={() => void handleExport()}
+                  >
+                    导出 Excel
+                  </Button>
+                </span>
+              </Tooltip>
             </Space>
           </Flex>
 
@@ -445,6 +626,14 @@ export function TeachingPlanSheet({
             />
           </div>
           {historyError ? <Alert closable showIcon title={historyError} type="error" /> : null}
+          {!canExport && formalRows.length > 0 ? (
+            <Alert
+              description={`当前有 ${contentRowCount} 个 F/G 内容组、${formalRows.length} 个正式课次。请补齐所有空位并增删至数量一致；内容单元格可以留空。`}
+              showIcon
+              title="当前不可导出"
+              type="info"
+            />
+          ) : null}
         </div>
 
         <div className="border-b border-border px-4">{courseNavigation}</div>
@@ -566,94 +755,230 @@ export function TeachingPlanSheet({
                   授课章节与内容
                 </th>
                 <th className="border-b border-l border-border px-3 py-3" scope="col">
-                  课外作业
+                  <div className="flex items-center justify-between gap-2">
+                    <span>课外作业</span>
+                    <Tooltip title="在末尾新增一个章节与作业内容组">
+                      <Button
+                        aria-label="新增内容行"
+                        icon={<PlusOutlined />}
+                        size="small"
+                        type="text"
+                        onClick={appendContentRow}
+                      />
+                    </Tooltip>
+                  </div>
                 </th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((row, index) => (
-                <tr
-                  className="transition-colors duration-150 hover:bg-fill-secondary"
-                  key={row.rowKey}
-                >
-                  <td className="border-b border-r border-border bg-bg-layout px-3 py-3 text-center text-xs text-text-tertiary">
-                    {index + 1}
-                  </td>
-                  <td className="border-b border-r border-border px-3 py-3">
-                    <div className="flex flex-col gap-1">
-                      <span className="font-medium text-text">{row.teachingDate}</span>
-                      <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
-                        <span>{formatTeachingPlanWeekday(row.occurrence.physicalDayOfWeek)}</span>
-                        <span>第 {row.occurrence.weekIndex} 周</span>
-                        {row.occurrence.calcEffect !== 'NORMAL' ? (
-                          <Tag color={row.occurrence.calcEffect === 'MAKEUP' ? 'green' : 'purple'}>
-                            {formatTeachingPlanCalcEffect(row.occurrence.calcEffect)}
-                          </Tag>
-                        ) : null}
+              {displayRows.map(({ contentRow, formalRow, rowKey }, index) => {
+                const contentLabel = formalRow
+                  ? `${formalRow.teachingDate}第${formalRow.periodsText}节`
+                  : `第${index + 1}行`;
+                const dropIndicatorClass =
+                  dropTarget?.index === index && dropTarget.position === 'before'
+                    ? 'border-t-2 border-t-primary'
+                    : dropTarget?.index === index && dropTarget.position === 'after'
+                      ? 'border-b-2 border-b-primary'
+                      : dropTarget?.index === index && dropTarget.position === 'at'
+                        ? 'border-y-2 border-y-primary bg-fill-secondary'
+                        : '';
+
+                return (
+                  <tr
+                    className={`transition-colors duration-150 hover:bg-fill-secondary ${
+                      draggedContentRowId === contentRow?.id ? 'bg-fill-secondary opacity-50' : ''
+                    }`}
+                    key={rowKey}
+                    onDragOver={(event) => {
+                      if (!draggedContentRowId) {
+                        return;
+                      }
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = 'move';
+                      const bounds = event.currentTarget.getBoundingClientRect();
+                      setDropTarget({
+                        index,
+                        position: contentRow
+                          ? event.clientY < bounds.top + bounds.height / 2
+                            ? 'before'
+                            : 'after'
+                          : 'at',
+                      });
+                    }}
+                    onDrop={(event) => {
+                      if (!dropTarget || dropTarget.index !== index) {
+                        return;
+                      }
+                      event.preventDefault();
+                      handleContentRowDrop(index, dropTarget.position);
+                    }}
+                  >
+                    <td className="border-b border-r border-border bg-bg-layout px-3 py-3 text-center text-xs text-text-tertiary">
+                      {index + 1}
+                    </td>
+                    {formalRow ? (
+                      <>
+                        <td className="border-b border-r border-border px-3 py-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="font-medium text-text">{formalRow.teachingDate}</span>
+                            <div className="flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+                              <span>
+                                {formatTeachingPlanWeekday(formalRow.occurrence.physicalDayOfWeek)}
+                              </span>
+                              <span>第 {formalRow.occurrence.weekIndex} 周</span>
+                              {formalRow.occurrence.calcEffect !== 'NORMAL' ? (
+                                <Tag
+                                  color={
+                                    formalRow.occurrence.calcEffect === 'MAKEUP'
+                                      ? 'green'
+                                      : 'purple'
+                                  }
+                                >
+                                  {formatTeachingPlanCalcEffect(formalRow.occurrence.calcEffect)}
+                                </Tag>
+                              ) : null}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="border-b border-r border-border px-3 py-3 text-center font-medium text-text">
+                          {formalRow.teachingHours}
+                        </td>
+                        <td className="border-b border-r border-border px-3 py-3 text-center font-medium text-text">
+                          {formalRow.periodsText}
+                        </td>
+                        <td className="border-b border-r border-border px-2 py-2">
+                          <Select<TeachingPlanDeliveryMode>
+                            aria-label={`${formalRow.teachingDate}第${formalRow.periodsText}节授课方式`}
+                            options={DELIVERY_MODE_OPTIONS}
+                            size="small"
+                            style={{ width: '100%' }}
+                            value={formalRow.deliveryMode}
+                            variant="borderless"
+                            onChange={(deliveryMode) =>
+                              updateRow(formalRow.rowKey, { deliveryMode })
+                            }
+                          />
+                        </td>
+                        <td className="border-b border-border px-2 py-2">
+                          <Input
+                            aria-label={`${formalRow.teachingDate}第${formalRow.periodsText}节授课地点`}
+                            disabled={isSavingClassroomName}
+                            maxLength={64}
+                            placeholder="填写授课地点"
+                            size="small"
+                            value={formalRow.location}
+                            variant="borderless"
+                            onBlur={(event) =>
+                              void commitRowLocation(formalRow.rowKey, event.currentTarget.value)
+                            }
+                            onChange={(event) =>
+                              updateRow(formalRow.rowKey, {
+                                locationOverride: event.target.value,
+                              })
+                            }
+                            onPressEnter={(event) => event.currentTarget.blur()}
+                          />
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        {Array.from({ length: 5 }, (_, blankColumnIndex) => (
+                          <td
+                            aria-label={
+                              blankColumnIndex === 0 ? `第${index + 1}行无正式授课数据` : undefined
+                            }
+                            className="border-b border-r border-border bg-bg-layout/50 px-3 py-3"
+                            key={blankColumnIndex}
+                          />
+                        ))}
+                      </>
+                    )}
+                    <td
+                      className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
+                    >
+                      <Input.TextArea
+                        aria-label={`${contentLabel}授课章节与内容`}
+                        autoSize={{ maxRows: 6, minRows: 2 }}
+                        maxLength={2000}
+                        placeholder="填写授课章节与内容"
+                        value={contentRow?.chapterAndContent ?? ''}
+                        variant="borderless"
+                        onChange={(event) =>
+                          updateContentRowAtIndex(index, {
+                            chapterAndContent: event.target.value,
+                          })
+                        }
+                        onFocus={() => ensureContentRowAtIndex(index)}
+                      />
+                    </td>
+                    <td
+                      className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
+                    >
+                      <div className="flex items-stretch gap-1">
+                        <Input.TextArea
+                          aria-label={`${contentLabel}课外作业`}
+                          autoSize={{ maxRows: 6, minRows: 2 }}
+                          maxLength={2000}
+                          placeholder="填写课外作业"
+                          value={contentRow?.homework ?? ''}
+                          variant="borderless"
+                          onChange={(event) =>
+                            updateContentRowAtIndex(index, { homework: event.target.value })
+                          }
+                          onFocus={() => ensureContentRowAtIndex(index)}
+                        />
+                        <div className="flex w-8 shrink-0 flex-col items-center justify-center gap-1 border-l border-border pl-1">
+                          {contentRow ? (
+                            <>
+                              <Tooltip title="拖动章节与作业到其他位置">
+                                <Button
+                                  aria-label={`拖动第${index + 1}行章节与作业`}
+                                  aria-pressed={draggedContentRowId === contentRow.id}
+                                  draggable
+                                  icon={<DragOutlined />}
+                                  size="small"
+                                  type="text"
+                                  onDragEnd={clearDragState}
+                                  onDragStart={(event) => {
+                                    event.dataTransfer.effectAllowed = 'move';
+                                    event.dataTransfer.setData('text/plain', contentRow.id);
+                                    dragPreviewRef.current?.remove();
+                                    const preview = createContentRowDragPreview(contentRow, index);
+                                    dragPreviewRef.current = preview;
+                                    event.dataTransfer.setDragImage(preview, 24, 24);
+                                    setDraggedContentRowId(contentRow.id);
+                                  }}
+                                />
+                              </Tooltip>
+                              <Tooltip title="删除这一行章节与作业">
+                                <Button
+                                  aria-label={`删除第${index + 1}行章节与作业`}
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  size="small"
+                                  type="text"
+                                  onClick={() => removeContentRow(contentRow, index)}
+                                />
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <Tooltip title="补齐到这一行">
+                              <Button
+                                aria-label={`创建第${index + 1}行章节与作业`}
+                                icon={<PlusOutlined />}
+                                size="small"
+                                type="text"
+                                onClick={() => ensureContentRowAtIndex(index)}
+                              />
+                            </Tooltip>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td className="border-b border-r border-border px-3 py-3 text-center font-medium text-text">
-                    {row.teachingHours}
-                  </td>
-                  <td className="border-b border-r border-border px-3 py-3 text-center font-medium text-text">
-                    {row.periodsText}
-                  </td>
-                  <td className="border-b border-r border-border px-2 py-2">
-                    <Select<TeachingPlanDeliveryMode>
-                      aria-label={`${row.teachingDate}第${row.periodsText}节授课方式`}
-                      options={DELIVERY_MODE_OPTIONS}
-                      size="small"
-                      value={row.deliveryMode}
-                      variant="borderless"
-                      style={{ width: '100%' }}
-                      onChange={(deliveryMode) => updateRow(row.rowKey, { deliveryMode })}
-                    />
-                  </td>
-                  <td className="border-b border-border px-2 py-2">
-                    <Input
-                      aria-label={`${row.teachingDate}第${row.periodsText}节授课地点`}
-                      disabled={isSavingClassroomName}
-                      maxLength={64}
-                      placeholder="填写授课地点"
-                      size="small"
-                      value={row.location}
-                      variant="borderless"
-                      onBlur={(event) =>
-                        void commitRowLocation(row.rowKey, event.currentTarget.value)
-                      }
-                      onChange={(event) =>
-                        updateRow(row.rowKey, { locationOverride: event.target.value })
-                      }
-                      onPressEnter={(event) => event.currentTarget.blur()}
-                    />
-                  </td>
-                  <td className="border-b border-l border-border px-2 py-2">
-                    <Input.TextArea
-                      aria-label={`${row.teachingDate}第${row.periodsText}节授课章节与内容`}
-                      autoSize={{ maxRows: 6, minRows: 2 }}
-                      maxLength={2000}
-                      placeholder="填写授课章节与内容"
-                      value={row.chapterAndContent}
-                      variant="borderless"
-                      onChange={(event) =>
-                        updateRow(row.rowKey, { chapterAndContent: event.target.value })
-                      }
-                    />
-                  </td>
-                  <td className="border-b border-l border-border px-2 py-2">
-                    <Input.TextArea
-                      aria-label={`${row.teachingDate}第${row.periodsText}节课外作业`}
-                      autoSize={{ maxRows: 6, minRows: 2 }}
-                      maxLength={2000}
-                      placeholder="填写课外作业"
-                      value={row.homework}
-                      variant="borderless"
-                      onChange={(event) => updateRow(row.rowKey, { homework: event.target.value })}
-                    />
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -666,14 +991,15 @@ export function TeachingPlanSheet({
           <SheetMeta label="教学班" value={course.teachingClassName} />
           <SheetMeta label="教师" value={teacherName} />
           <SheetMeta label="学期" value={semesterName} />
-          <SheetMeta label="计划行" value={`${rows.length} 行`} />
+          <SheetMeta label="正式课次" value={`${formalRows.length} 行`} />
+          <SheetMeta label="章节与作业" value={`${contentRowCount} 行`} />
         </div>
 
         <div className="flex items-start gap-2 border-t border-border bg-bg-layout p-3 text-xs text-text-secondary">
           <LaptopOutlined className="mt-0.5" />
           <span>
-            每次打开页面都会根据当前真源重新生成 A–C；本地草稿只匹配当前仍存在的课次行。
-            F“授课章节与内容”和 G“课外作业”可手工编辑，也可选择历史计划按课次顺序补充空白项。
+            每次打开页面都会根据当前真源重新生成 A–E。F“授课章节与内容”和
+            G“课外作业”作为固定内容组，可拖动、删除或补行；只有内容组数量与正式课次数一致时才能导出。
           </span>
         </div>
       </div>
@@ -703,7 +1029,7 @@ export function TeachingPlanSheet({
       <Modal
         destroyOnHidden
         okButtonProps={{ disabled: selectedHistoryPlanId === null }}
-        okText="填充空白项"
+        okText="替换当前内容"
         open={historyModalOpen}
         title={`选择“${course.courseName}”的历史教学计划`}
         onCancel={() => setHistoryModalOpen(false)}
@@ -711,9 +1037,15 @@ export function TeachingPlanSheet({
       >
         <div className="flex flex-col gap-3">
           <Typography.Text type="secondary">
-            候选来自近 6 学期，优先同名且总课时相近的计划。应用时按课次顺序对应，只填当前空白的
-            F/G。
+            候选来自近 6 学期，优先同名且总课时相近的计划。选中后会按历史计划的完整行序替换
+            F/G；历史行更多时，表格会自动向下扩展，新增行的 A–E 保持空白。
           </Typography.Text>
+          <Alert
+            description="下一步仍会显示替换前后的行数供确认；确认后当前 F/G 的手工内容与排序会被覆盖。"
+            showIcon
+            title="这是整组替换操作"
+            type="warning"
+          />
           {historyWarnings.length ? (
             <Alert showIcon title="部分历史计划明细读取失败，已自动忽略" type="warning" />
           ) : null}
@@ -758,6 +1090,40 @@ export function TeachingPlanSheet({
 
 function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : '暂时无法保存统一授课地点。';
+}
+
+function createContentRowDragPreview(contentRow: TeachingPlanContentRowDraft, index: number) {
+  const preview = document.createElement('div');
+  preview.setAttribute('aria-hidden', 'true');
+  preview.className =
+    'grid w-[520px] grid-cols-2 overflow-hidden rounded-[var(--radius-surface)] border border-primary bg-bg-container shadow-card';
+  preview.style.left = '0';
+  preview.style.position = 'absolute';
+  preview.style.top = '-9999px';
+
+  const chapter = document.createElement('div');
+  chapter.className = 'flex min-w-0 flex-col gap-1 border-r border-border px-3 py-2';
+  const chapterLabel = document.createElement('span');
+  chapterLabel.className = 'text-xs font-medium text-primary';
+  chapterLabel.textContent = `第 ${index + 1} 行 · 授课章节与内容`;
+  const chapterValue = document.createElement('span');
+  chapterValue.className = 'truncate text-sm text-text';
+  chapterValue.textContent = contentRow.chapterAndContent || '（空）';
+  chapter.append(chapterLabel, chapterValue);
+
+  const homework = document.createElement('div');
+  homework.className = 'flex min-w-0 flex-col gap-1 px-3 py-2';
+  const homeworkLabel = document.createElement('span');
+  homeworkLabel.className = 'text-xs font-medium text-primary';
+  homeworkLabel.textContent = '课外作业';
+  const homeworkValue = document.createElement('span');
+  homeworkValue.className = 'truncate text-sm text-text';
+  homeworkValue.textContent = contentRow.homework || '（空）';
+  homework.append(homeworkLabel, homeworkValue);
+
+  preview.append(chapter, homework);
+  document.body.append(preview);
+  return preview;
 }
 
 function SheetMeta({ label, value }: { label: string; value: string }) {
