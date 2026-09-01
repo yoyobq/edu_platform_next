@@ -4,6 +4,7 @@ import {
   hasAcademicCurriculumPlanHomepageAccess,
   hasAcademicIntegratedPlanCorrectionsAccess,
   hasAcademicTeachingLogAccess,
+  hasAcademicTeachingPlanAccess,
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
@@ -175,6 +176,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: 'My 计划首页',
             navMode: 'rail' as const,
             path: '/academic-affairs/my-curriculum-plan-homepage',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasAcademicTeachingPlanAccess({
+      accessGroup: filter.accessGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            badgeLabel: '试运行',
+            iconKey: 'CalendarOutlined',
+            key: '/academic-affairs/my-teaching-plan',
+            label: 'My 授课计划',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/my-teaching-plan',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

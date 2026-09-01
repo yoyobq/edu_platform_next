@@ -1,3 +1,5 @@
+// e2e/specs/routing/my-teaching-plan.spec.ts
+
 import type { Page } from '@playwright/test';
 
 import { routes } from '../../fixtures/routes';
@@ -246,11 +248,12 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
     await route.fallback();
   });
 
-  await page.goto(routes.labsMyTeachingPlan);
+  await page.goto(routes.myTeachingPlan);
 
-  await expect(page.getByRole('heading', { name: 'My 教学计划' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My 授课计划' })).toBeVisible();
+  await expect(page.getByText('Product Lab', { exact: true })).toHaveCount(0);
   await expect(page.getByText('数据库原理', { exact: true }).first()).toBeVisible();
-  await expect(page.getByRole('table', { name: '数据库原理课程教学计划' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '数据库原理课程授课计划' })).toBeVisible();
   await expect(page.getByText('1,2', { exact: true })).toBeVisible();
   await expect(page.getByText('3,4', { exact: true })).toBeVisible();
   await expect(page.getByText('2026-09-08', { exact: true })).toHaveCount(2);
@@ -266,7 +269,7 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   const firstChapter = page.getByLabel('2026-09-08第1,2节授课章节与内容');
   await firstChapter.fill('教师已填写内容');
   await page.getByRole('button', { name: '参考历史计划' }).click();
-  const historyDialog = page.getByRole('dialog', { name: /选择“数据库原理”的历史教学计划/ });
+  const historyDialog = page.getByRole('dialog', { name: /选择“数据库原理”的历史授课计划/ });
   await expect(historyDialog.getByText('2025 学年第 2 学期')).toBeVisible();
   await historyDialog.getByRole('button', { name: '替换当前内容' }).click();
   const replaceDialog = page.getByRole('dialog', { name: '替换当前章节与作业？' });
@@ -350,12 +353,12 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   const nextCourseButton = page.getByRole('button', { name: '下一门课程' });
   await expect(previousCourseButton).toBeDisabled();
   await nextCourseButton.click();
-  await expect(page.getByText('一体化课程使用另一种教学计划表')).toBeVisible();
-  await expect(page.getByRole('table', { name: '操作系统课程教学计划' })).toHaveCount(0);
+  await expect(page.getByText('一体化课程使用另一种授课计划表')).toBeVisible();
+  await expect(page.getByRole('table', { name: '操作系统课程授课计划' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '导出 Excel' })).toHaveCount(0);
   await expect(nextCourseButton).toBeDisabled();
   await previousCourseButton.click();
-  await expect(page.getByRole('table', { name: '数据库原理课程教学计划' })).toBeVisible();
+  await expect(page.getByRole('table', { name: '数据库原理课程授课计划' })).toBeVisible();
 
   const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
   const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');
@@ -389,13 +392,13 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出 Excel' }).click();
   const download = await downloadPromise;
-  expect(download.suggestedFilename()).toBe('软件 2401-数据库原理-教学计划.xls');
+  expect(download.suggestedFilename()).toBe('软件 2401-数据库原理-授课计划.xls');
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
 
   const { default: XLSX } = await import('xlsx');
   const workbook = XLSX.readFile(downloadPath!);
-  const worksheet = workbook.Sheets['教学计划'];
+  const worksheet = workbook.Sheets['授课计划'];
   expect(worksheet).toBeDefined();
   const exportedRows = XLSX.utils.sheet_to_json<unknown[]>(worksheet!, {
     defval: '',
@@ -490,7 +493,7 @@ test('教务管理人员可切换受管教师并读取受管真源查询', async
     await route.fallback();
   });
 
-  await page.goto(routes.labsMyTeachingPlan);
+  await page.goto(routes.myTeachingPlan);
 
   await expect(page.getByText('教师', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox')).toHaveCount(2);
@@ -550,7 +553,7 @@ test('后端无授课地点时，首次填写应保存并成为本课程统一�
     await route.fallback();
   });
 
-  await page.goto(routes.labsMyTeachingPlan);
+  await page.goto(routes.myTeachingPlan);
 
   const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
   const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');
@@ -568,4 +571,12 @@ test('后端无授课地点时，首次填写应保存并成为本课程统一�
   await expect(firstLocation).toHaveValue('实验楼 101');
   await expect(secondLocation).toHaveValue('实验楼 101');
   await expect(page.getByRole('button', { name: '统一修改授课地点' })).toBeVisible();
+});
+
+test('转正后旧 Lab 路径不再提供兼容入口', async ({ page }) => {
+  await seedStaff(page);
+
+  await page.goto('/labs/my-teaching-plan');
+
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });

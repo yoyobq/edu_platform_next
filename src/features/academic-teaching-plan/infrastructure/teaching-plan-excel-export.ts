@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/infrastructure/teaching-plan-excel-export.ts
+
 import type {
   TeachingPlanContentRowDraft,
   TeachingPlanFormalRow,
@@ -47,7 +49,7 @@ export function buildTeachingPlanExcelFileName(input: {
   courseName: string;
   teachingClassName: string;
 }) {
-  const baseName = `${input.teachingClassName}-${input.courseName}-教学计划`;
+  const baseName = `${input.teachingClassName}-${input.courseName}-授课计划`;
   const sanitized = Array.from(baseName)
     .map((character) =>
       '<>:"/\\|?*'.includes(character) || character.charCodeAt(0) < 32 ? ' ' : character,
@@ -56,7 +58,7 @@ export function buildTeachingPlanExcelFileName(input: {
     .replace(/\s+/gu, ' ')
     .trim();
 
-  return `${sanitized || '教学计划'}.xls`;
+  return `${sanitized || '授课计划'}.xls`;
 }
 
 type TeachingPlanExcelExportInput = {
@@ -80,7 +82,7 @@ export async function buildTeachingPlanXlsBuffer(input: TeachingPlanExcelExportI
   }));
   worksheet['!autofilter'] = { ref: `A1:G${input.formalRows.length + 1}` };
   workbook.Props = { Author: 'Edu Mate' };
-  XLSX.utils.book_append_sheet(workbook, worksheet, '教学计划');
+  XLSX.utils.book_append_sheet(workbook, worksheet, '授课计划');
 
   return XLSX.write(workbook, {
     bookType: 'xls',
@@ -111,7 +113,7 @@ function assertTeachingPlanExportRowCount(input: {
     contentRowCount !== input.formalRows.length
   ) {
     throw new Error(
-      `教学计划内容行数（${contentRowCount}）必须与正式课次数（${input.formalRows.length}）一致，且中间不能留有空位`,
+      `授课计划内容行数（${contentRowCount}）必须与正式课次数（${input.formalRows.length}）一致，且中间不能留有空位`,
     );
   }
 }

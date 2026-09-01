@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/ui/my-teaching-plan-workspace.tsx
+
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { LeftOutlined, ReloadOutlined, RightOutlined, UserOutlined } from '@ant-design/icons';
 import {
@@ -35,7 +37,7 @@ import {
   requestMyTeachingPlanAcademicSemesters,
 } from '../infrastructure/api';
 import type {
-  MyTeachingPlanLabLoaderData,
+  AcademicTeachingPlanPageLoaderData,
   TeachingPlanOccurrenceEnvelope,
   TeachingPlanTeacherOption,
 } from '../types';
@@ -87,9 +89,8 @@ const CATEGORY_STYLES = {
 export function MyTeachingPlanWorkspace({
   canManage,
   currentAccount,
-  currentAccountId,
   currentStaff,
-}: MyTeachingPlanLabLoaderData) {
+}: AcademicTeachingPlanPageLoaderData) {
   const workspaceRef = useRef<HTMLDivElement | null>(null);
   const { band } = useWidthBand(workspaceRef, [...WORKSPACE_WIDTH_RULES], 'regular');
   const isCompact = band === 'compact';
@@ -372,7 +373,7 @@ export function MyTeachingPlanWorkspace({
         <Alert
           description={planState.data.invalidReason ?? '当前学期尚未形成可用的计划课次真源。'}
           showIcon
-          title="教学计划暂不可用"
+          title="授课计划暂不可用"
           type="error"
         />
       ) : planState.data ? (
@@ -394,7 +395,7 @@ export function MyTeachingPlanWorkspace({
                   <Tag color="blue">计划真源</Tag>
                 </Space>
               }
-              title="课程教学计划"
+              title="课程授课计划"
             >
               {selectedCourse ? (
                 <TeachingPlanSheet
@@ -457,7 +458,7 @@ export function MyTeachingPlanWorkspace({
                     />
                   }
                   currentAccount={currentAccount}
-                  currentAccountId={currentAccountId}
+                  currentAccountId={currentAccount.accountId}
                   isCompact={isCompact}
                   key={`${selectedSemesterId}:${draftStaffId}:${selectedCourse.scheduleId}`}
                   semesterId={selectedSemesterId}
@@ -522,7 +523,7 @@ function CourseTabLabel({
 
 function mergeTeacherOptions(
   options: readonly TeachingPlanTeacherOption[],
-  currentStaff: MyTeachingPlanLabLoaderData['currentStaff'],
+  currentStaff: AcademicTeachingPlanPageLoaderData['currentStaff'],
   selectedTeacher?: TeachingPlanTeacherOption,
 ) {
   const merged = new Map(options.map((option) => [option.staffId, option]));
@@ -542,7 +543,7 @@ function mergeTeacherOptions(
 }
 
 function resolveSelectedTeacher(input: {
-  currentStaff: MyTeachingPlanLabLoaderData['currentStaff'];
+  currentStaff: AcademicTeachingPlanPageLoaderData['currentStaff'];
   options: readonly TeachingPlanTeacherOption[];
   selectedStaffId: string | null;
 }) {

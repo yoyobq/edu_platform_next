@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/application/historical-plan-fill.spec.ts
+
 import { describe, expect, it } from 'vitest';
 
 import type { CurriculumPlanDetailReferenceCandidate } from '../types';

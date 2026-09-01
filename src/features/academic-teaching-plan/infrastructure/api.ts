@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/infrastructure/api.ts
+
 import type { OperationVariables } from '@apollo/client';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
@@ -218,7 +220,7 @@ export async function requestMyTeachingPlan(semesterId: number) {
     MY_TEACHING_PLAN_QUERY,
     { semesterId },
     (response: MyTeachingPlanResponse) => response.listMyAcademicSemesterPlannedTimetable,
-    '暂时无法加载本人教学计划。',
+    '暂时无法加载本人授课计划。',
   );
 }
 
@@ -227,7 +229,7 @@ export async function requestManagedTeachingPlan(input: { semesterId: number; st
     MANAGED_TEACHING_PLAN_QUERY,
     input,
     (response: ManagedTeachingPlanResponse) => response.listManagedAcademicSemesterPlannedTimetable,
-    '暂时无法加载该教师的教学计划。',
+    '暂时无法加载该教师的授课计划。',
   );
 }
 

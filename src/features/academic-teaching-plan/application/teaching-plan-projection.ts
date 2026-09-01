@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/application/teaching-plan-projection.ts
+
 import type { TeachingPlanCalcEffect, TeachingPlanOccurrence } from '../types';
 
 export type TeachingPlanDateGroup = {

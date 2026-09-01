@@ -1,11 +1,12 @@
-export type MyTeachingPlanLabLoaderData = {
+// src/features/academic-teaching-plan/types.ts
+
+export type AcademicTeachingPlanPageLoaderData = {
   canManage: boolean;
   currentAccount: {
     accountId: number;
     displayName: string;
     lockedUpstreamLoginUserId: string | null;
   };
-  currentAccountId: number;
   currentStaff: {
     displayName: string;
     staffId: string;

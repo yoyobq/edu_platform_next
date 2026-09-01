@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/infrastructure/api.spec.ts
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { executeGraphQLMock, executeUpstreamSessionGraphQLMock } = vi.hoisted(() => ({
@@ -80,7 +82,7 @@ describe('my teaching plan lab api', () => {
     });
   });
 
-  it('管理者查询历史教学计划明细时携带目标教师和当前课程上下文', async () => {
+  it('管理者查询历史授课计划明细时携带目标教师和当前课程上下文', async () => {
     const result = { items: [], upstreamSessionToken: 'token-2', warnings: [] };
     executeUpstreamSessionGraphQLMock.mockResolvedValue({
       listAcademicCurriculumPlanDetailReferenceCandidates: result,

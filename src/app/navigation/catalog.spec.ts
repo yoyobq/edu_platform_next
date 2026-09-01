@@ -62,12 +62,21 @@ describe('navigation catalog', () => {
         (item) => item.key === '/calendar-schedule/semester-timetable',
       )?.iconKey,
     ).toBe('TableOutlined');
-    expect(findGroup(items, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
+    const academicAssistant = findGroup(items, 'academic-assistant');
+
+    expect(academicAssistant?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
+    expect(
+      academicAssistant?.children.find((item) => item.key === '/academic-affairs/my-teaching-plan'),
+    ).toMatchObject({
+      badgeLabel: '试运行',
+      label: 'My 授课计划',
+    });
     expect(findGroup(items, 'class-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/student-roster-membership-reconciliation',
       '/class-affairs/student-profile-filing',
@@ -84,7 +93,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -138,6 +146,7 @@ describe('navigation catalog', () => {
     ).toEqual([
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
@@ -152,7 +161,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -186,6 +194,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
@@ -193,7 +202,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -282,7 +290,6 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -358,6 +365,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
@@ -365,7 +373,6 @@ describe('navigation catalog', () => {
       '/academic-affairs/student-roster-membership-reconciliation',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -415,6 +422,7 @@ describe('navigation catalog', () => {
     expect(findGroup(staffItems, 'academic-assistant')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
     ]);
@@ -424,7 +432,6 @@ describe('navigation catalog', () => {
       '/class-affairs/student-conduct-alignment',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',
@@ -496,7 +503,20 @@ describe('navigation catalog', () => {
     expect(canAccessNavigationPath('/labs/zquiz-practice-activities', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/student-evaluation-comment', studentFilter)).toBe(true);
     expect(canAccessNavigationPath('/labs/student-evaluation-comment', buildFilter())).toBe(true);
-    expect(canAccessNavigationPath('/labs/my-teaching-plan', buildFilter())).toBe(true);
+    expect(canAccessNavigationPath('/academic-affairs/my-teaching-plan', buildFilter())).toBe(true);
+    expect(
+      canAccessNavigationPath(
+        '/academic-affairs/my-teaching-plan',
+        buildFilter({
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+        }),
+      ),
+    ).toBe(true);
+    expect(canAccessNavigationPath('/academic-affairs/my-teaching-plan', studentFilter)).toBe(
+      false,
+    );
+    expect(canAccessNavigationPath('/labs/my-teaching-plan', buildFilter())).toBe(false);
     expect(canAccessNavigationPath('/labs/my-teaching-plan', studentFilter)).toBe(false);
     expect(
       canAccessNavigationPath('/labs/student-evaluation-comment-workbench', studentFilter),
@@ -808,6 +828,7 @@ describe('navigation catalog', () => {
       '/calendar-schedule/semester-timetable',
       '/academic-affairs/my-teaching-logs',
       '/academic-affairs/my-curriculum-plan-homepage',
+      '/academic-affairs/my-teaching-plan',
       '/academic-affairs/integrated-plan-corrections',
       '/academic-assistant/academic-workload',
       '/academic-affairs/student-roster-membership-reconciliation',
@@ -827,7 +848,6 @@ describe('navigation catalog', () => {
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
-      '/labs/my-teaching-plan',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
       '/labs/student-evaluation-comment',

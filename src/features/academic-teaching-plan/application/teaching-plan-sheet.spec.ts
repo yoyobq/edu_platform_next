@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/application/teaching-plan-sheet.spec.ts
+
 import { describe, expect, it } from 'vitest';
 
 import type { TeachingPlanOccurrence } from '../types';

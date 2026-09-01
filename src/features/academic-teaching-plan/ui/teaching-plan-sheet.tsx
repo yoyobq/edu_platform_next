@@ -1,10 +1,12 @@
+// src/features/academic-teaching-plan/ui/teaching-plan-sheet.tsx
+
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ArrowRightOutlined,
   DeleteOutlined,
   DownloadOutlined,
   DragOutlined,
   EditOutlined,
-  FormOutlined,
   HistoryOutlined,
   LaptopOutlined,
   PlusOutlined,
@@ -73,8 +75,8 @@ import {
 } from '../infrastructure/draft-storage';
 import { exportTeachingPlanExcel } from '../infrastructure/teaching-plan-excel-export';
 import type {
+  AcademicTeachingPlanPageLoaderData,
   CurriculumPlanDetailReferenceCandidate,
-  MyTeachingPlanLabLoaderData,
   TeachingPlanOccurrence,
 } from '../types';
 
@@ -101,7 +103,7 @@ export function TeachingPlanSheet({
   course: TeachingPlanCourseProjection;
   courseNavigation: React.ReactNode;
   canManage: boolean;
-  currentAccount: MyTeachingPlanLabLoaderData['currentAccount'];
+  currentAccount: AcademicTeachingPlanPageLoaderData['currentAccount'];
   currentAccountId: number;
   isCompact: boolean;
   semesterId: number;
@@ -361,7 +363,7 @@ export function TeachingPlanSheet({
           });
         } else {
           setHistoryError(
-            resolveUpstreamErrorMessage(error, '暂时无法加载历史教学计划，请稍后重试。'),
+            resolveUpstreamErrorMessage(error, '暂时无法加载历史授课计划，请稍后重试。'),
           );
         }
       } finally {
@@ -559,9 +561,9 @@ export function TeachingPlanSheet({
         <div className="border-b border-border px-4">{courseNavigation}</div>
         <div className="p-4">
           <Alert
-            description="当前 A–G 教学计划模板不适用于一体化课程，因此不会生成填写表格或提供本模板的 Excel 导出。"
+            description="当前 A–G 授课计划模板不适用于一体化课程，因此不会生成填写表格或提供本模板的 Excel 导出。"
             showIcon
-            title="一体化课程使用另一种教学计划表"
+            title="一体化课程使用另一种授课计划表"
             type="info"
           />
         </div>
@@ -573,19 +575,20 @@ export function TeachingPlanSheet({
     <div className="flex min-w-0 flex-col gap-4">
       <div className="overflow-hidden rounded-[var(--radius-surface)] border border-border bg-bg-container shadow-card">
         <div className="flex flex-col gap-4 border-b border-border p-4">
-          <Flex gap="middle" justify="space-between" vertical={isCompact}>
-            <div className="flex min-w-0 flex-col gap-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <Tag color="blue">Excel A–G</Tag>
-                <Tag icon={<FormOutlined />}>本地草稿</Tag>
-                <Tag color={canExport ? 'green' : 'orange'}>
-                  正式 {formalRows.length} / 内容 {contentRowCount}
-                </Tag>
-              </div>
-              <Typography.Text type="secondary">
-                A–E 来自正式课次；F/G 是可独立增删和排序的章节与作业内容组。
-              </Typography.Text>
-            </div>
+          <div>
+            <Alert
+              description={`统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。需要长期保留完整计划时，请以导出的 Excel 文件为准。`}
+              showIcon
+              title="逐课次内容仍是限时本地草稿，请及时导出"
+              type="warning"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <Typography.Text type="secondary">
+              首次填写时，可先参考历史计划带入章节与作业，再按本学期调整。
+              <ArrowRightOutlined className="ml-2" />
+            </Typography.Text>
             <Space wrap>
               <Button
                 disabled={formalRows.length === 0}
@@ -615,15 +618,6 @@ export function TeachingPlanSheet({
                 </span>
               </Tooltip>
             </Space>
-          </Flex>
-
-          <div>
-            <Alert
-              description={`统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。需要长期保留完整计划时，请以导出的 Excel 文件为准。`}
-              showIcon
-              title="逐课次内容仍是限时本地草稿，请及时导出"
-              type="warning"
-            />
           </div>
           {historyError ? <Alert closable showIcon title={historyError} type="error" /> : null}
           {!canExport && formalRows.length > 0 ? (
@@ -640,7 +634,7 @@ export function TeachingPlanSheet({
 
         <div className="overflow-x-auto">
           <table
-            aria-label={`${course.courseName}课程教学计划`}
+            aria-label={`${course.courseName}课程授课计划`}
             className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm"
           >
             <colgroup>
@@ -1031,7 +1025,7 @@ export function TeachingPlanSheet({
         okButtonProps={{ disabled: selectedHistoryPlanId === null }}
         okText="替换当前内容"
         open={historyModalOpen}
-        title={`选择“${course.courseName}”的历史教学计划`}
+        title={`选择“${course.courseName}”的历史授课计划`}
         onCancel={() => setHistoryModalOpen(false)}
         onOk={applySelectedHistory}
       >

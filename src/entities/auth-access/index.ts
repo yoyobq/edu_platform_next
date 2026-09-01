@@ -152,6 +152,19 @@ export function hasAcademicCurriculumPlanHomepageManagerAccess(input: {
   return hasAcademicStaffManagerAccess(input);
 }
 
+export function hasAcademicTeachingPlanAccess(input: { accessGroup?: readonly AuthAccessGroup[] }) {
+  const accessGroup = input.accessGroup ?? [];
+
+  return accessGroup.includes('ADMIN') || accessGroup.includes('STAFF');
+}
+
+export function hasAcademicTeachingPlanManagerAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasAcademicStaffManagerAccess(input);
+}
+
 export function hasStaffSemesterProfilesAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

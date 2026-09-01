@@ -43,7 +43,7 @@
 - `student`：纯 `STUDENT` 账号的独立业务入口，当前贡献 `/calendar-schedule/semester-calendar`；首页仍由 `home` provider 贡献
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
-  - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
+  - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/my-teaching-plan`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
   - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
   - `学工管理`：`/student-affairs/class-adviser-governance`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`

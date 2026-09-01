@@ -11,7 +11,6 @@ export const routes = {
   labsAcademicAdjustedWorkloadReport: '/labs/academic-adjusted-workload-report',
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
-  labsMyTeachingPlan: '/labs/my-teaching-plan',
   labsPayloadCrypto: '/labs/payload-crypto',
   labsStaffSemesterProfiles: '/labs/staff-semester-profiles',
   labsStudentEvaluationComment: '/labs/student-evaluation-comment',
@@ -20,6 +19,7 @@ export const routes = {
   login: '/login',
   magicLink: (verificationCode = 'magic-link-001') => `/magic-link/${verificationCode}`,
   myCurriculumPlanHomepage: '/academic-affairs/my-curriculum-plan-homepage',
+  myTeachingPlan: '/academic-affairs/my-teaching-plan',
   profile: '/profile',
   resetPassword: (verificationCode = 'reset-password-001') => `/reset-password/${verificationCode}`,
   resetPasswordWithTokenQuery: (verificationCode = 'reset-password-001') =>

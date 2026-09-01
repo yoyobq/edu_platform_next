@@ -14,6 +14,8 @@ import {
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
+  hasAcademicTeachingPlanAccess,
+  hasAcademicTeachingPlanManagerAccess,
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
@@ -166,6 +168,26 @@ describe('auth access policy', () => {
       }),
     ).toBe(true);
     expect(hasAcademicCurriculumPlanHomepageManagerAccess({ accessGroup: ['STAFF'] })).toBe(false);
+  });
+
+  it('allows teaching plan self-service and manager selection with academic staff slots', () => {
+    expect(hasAcademicTeachingPlanAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(hasAcademicTeachingPlanAccess({ accessGroup: ['STAFF'] })).toBe(true);
+    expect(hasAcademicTeachingPlanAccess({ accessGroup: ['STUDENT'] })).toBe(false);
+    expect(hasAcademicTeachingPlanManagerAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasAcademicTeachingPlanManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasAcademicTeachingPlanManagerAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['TEACHING_GROUP_LEADER'],
+      }),
+    ).toBe(true);
+    expect(hasAcademicTeachingPlanManagerAccess({ accessGroup: ['STAFF'] })).toBe(false);
   });
 
   it('allows staff semester profiles to admins and academic officers', () => {

@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/infrastructure/teaching-plan-excel-export.spec.ts
+
 import { describe, expect, it } from 'vitest';
 
 import { buildTeachingPlanProjection } from '../application/teaching-plan-projection';
@@ -34,7 +36,7 @@ describe('teaching plan excel export', () => {
         courseName: '网页设计/制作',
         teachingClassName: '信息 2301 班',
       }),
-    ).toBe('信息 2301 班-网页设计 制作-教学计划.xls');
+    ).toBe('信息 2301 班-网页设计 制作-授课计划.xls');
   });
 
   it('生成真实的 OLE/BIFF xls，而不是只修改文件后缀', async () => {
@@ -69,7 +71,7 @@ describe('teaching plan excel export', () => {
     const formalRows = buildTeachingPlanFormalRows(course, createEmptyTeachingPlanCourseDraft());
 
     expect(() => buildTeachingPlanExcelRows({ contentRows: [], formalRows })).toThrow(
-      '教学计划内容行数（0）必须与正式课次数（1）一致',
+      '授课计划内容行数（0）必须与正式课次数（1）一致',
     );
   });
 });

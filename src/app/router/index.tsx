@@ -17,6 +17,7 @@ import { canAccessNavigationPath } from '@/app/navigation';
 
 import { HomePage } from '@/pages/home';
 import { loadPayloadCryptoRouteModule } from '@/pages/payload-crypto';
+import type { AcademicTeachingPlanPageLoaderData } from '@/features/academic-teaching-plan';
 import {
   type AuthSessionSnapshot,
   buildWelcomeRedirectTarget,
@@ -47,6 +48,8 @@ import {
   hasAcademicIntegratedPlanCorrectionsManagerAccess,
   hasAcademicTeachingLogAccess,
   hasAcademicTeachingLogManagerAccess,
+  hasAcademicTeachingPlanAccess,
+  hasAcademicTeachingPlanManagerAccess,
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
@@ -66,11 +69,6 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
-import {
-  loadMyTeachingPlanLabRouteModule,
-  myTeachingPlanLabAccess,
-  type MyTeachingPlanLabLoaderData,
-} from '@/labs/my-teaching-plan';
 import {
   loadStudentEvaluationCommentLabRouteModule,
   studentEvaluationCommentLabAccess,
@@ -262,6 +260,10 @@ const loadMyTeachingLogsRouteModule = loadPageRouteModule(
 const loadMyCurriculumPlanHomepageRouteModule = loadPageRouteModule(
   () => import('@/pages/my-curriculum-plan-homepage'),
   'MyCurriculumPlanHomepagePage',
+);
+const loadMyTeachingPlanRouteModule = loadPageRouteModule(
+  () => import('@/pages/my-teaching-plan'),
+  'MyTeachingPlanPage',
 );
 const loadIntegratedPlanCorrectionsRouteModule = loadPageRouteModule(
   () => import('@/pages/integrated-plan-corrections'),
@@ -704,11 +706,13 @@ async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   });
 }
 
-function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeachingPlanLabLoaderData {
+function resolveAcademicTeachingPlanPageData(
+  snapshot: AuthSessionSnapshot,
+): AcademicTeachingPlanPageLoaderData {
   const staffIdentity = snapshot.identity?.kind === 'STAFF' ? snapshot.identity : null;
 
   return {
-    canManage: hasAcademicTimetableManagerAccess({
+    canManage: hasAcademicTeachingPlanManagerAccess({
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
     }),
@@ -722,7 +726,6 @@ function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeaching
         staffId: staffIdentity?.id ?? null,
       }),
     },
-    currentAccountId: snapshot.accountId,
     currentStaff: staffIdentity
       ? {
           displayName: snapshot.displayName,
@@ -732,12 +735,27 @@ function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeaching
   };
 }
 
-async function myTeachingPlanLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: myTeachingPlanLabAccess,
-    getData: resolveMyTeachingPlanLabData,
-    request,
-  });
+async function myTeachingPlanPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasAcademicTeachingPlanAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+    })
+  ) {
+    throw new Response('Forbidden', { status: 403 });
+  }
+
+  return resolveAcademicTeachingPlanPageData(snapshot);
 }
 
 async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
@@ -1616,6 +1634,11 @@ const router = createBrowserRouter([
         lazy: loadMyCurriculumPlanHomepageRouteModule,
       },
       {
+        path: '/academic-affairs/my-teaching-plan',
+        loader: myTeachingPlanPageLoader,
+        lazy: loadMyTeachingPlanRouteModule,
+      },
+      {
         path: '/academic-affairs/integrated-plan-corrections',
         loader: integratedPlanCorrectionsPageLoader,
         lazy: loadIntegratedPlanCorrectionsRouteModule,
@@ -1679,11 +1702,6 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
-          },
-          {
-            path: 'my-teaching-plan',
-            loader: myTeachingPlanLabLoader,
-            lazy: loadMyTeachingPlanLabRouteModule,
           },
           {
             path: 'upstream-session-demo',

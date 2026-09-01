@@ -99,16 +99,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
       ? [
           {
             allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'CalendarOutlined',
-            key: '/labs/my-teaching-plan',
-            label: 'My 教学计划',
-            navMode: 'rail' as const,
-            path: '/labs/my-teaching-plan',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
             iconKey: 'FormOutlined',
             key: '/labs/zquiz-activity-builder',
             label: 'Zquiz 组卷',

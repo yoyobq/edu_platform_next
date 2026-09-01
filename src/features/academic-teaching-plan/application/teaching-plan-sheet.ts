@@ -1,3 +1,5 @@
+// src/features/academic-teaching-plan/application/teaching-plan-sheet.ts
+
 import type { TeachingPlanOccurrence } from '../types';
 
 import type { TeachingPlanCourseProjection } from './teaching-plan-projection';
