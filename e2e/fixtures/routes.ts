@@ -11,6 +11,7 @@ export const routes = {
   labsAcademicAdjustedWorkloadReport: '/labs/academic-adjusted-workload-report',
   labsDemo: '/labs/demo',
   labsInviteIssuer: '/labs/invite-issuer',
+  labsMyTeachingPlan: '/labs/my-teaching-plan',
   labsPayloadCrypto: '/labs/payload-crypto',
   labsStaffSemesterProfiles: '/labs/staff-semester-profiles',
   labsStudentEvaluationComment: '/labs/student-evaluation-comment',

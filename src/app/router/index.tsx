@@ -67,6 +67,11 @@ import { sanitizeRedirectTarget } from '@/shared/navigation';
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
 import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
+  loadMyTeachingPlanLabRouteModule,
+  myTeachingPlanLabAccess,
+  type MyTeachingPlanLabLoaderData,
+} from '@/labs/my-teaching-plan';
+import {
   loadStudentEvaluationCommentLabRouteModule,
   studentEvaluationCommentLabAccess,
   type StudentEvaluationCommentLabLoaderData,
@@ -695,6 +700,31 @@ async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
 async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: inviteIssuerLabAccess,
+    request,
+  });
+}
+
+function resolveMyTeachingPlanLabData(snapshot: AuthSessionSnapshot): MyTeachingPlanLabLoaderData {
+  const staffIdentity = snapshot.identity?.kind === 'STAFF' ? snapshot.identity : null;
+
+  return {
+    canManage: hasAcademicTimetableManagerAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    }),
+    currentStaff: staffIdentity
+      ? {
+          displayName: snapshot.displayName,
+          staffId: staffIdentity.id,
+        }
+      : null,
+  };
+}
+
+async function myTeachingPlanLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: myTeachingPlanLabAccess,
+    getData: resolveMyTeachingPlanLabData,
     request,
   });
 }
@@ -1638,6 +1668,11 @@ const router = createBrowserRouter([
             path: 'invite-issuer',
             loader: inviteIssuerLabLoader,
             lazy: loadInviteIssuerLabRouteModule,
+          },
+          {
+            path: 'my-teaching-plan',
+            loader: myTeachingPlanLabLoader,
+            lazy: loadMyTeachingPlanLabRouteModule,
           },
           {
             path: 'upstream-session-demo',

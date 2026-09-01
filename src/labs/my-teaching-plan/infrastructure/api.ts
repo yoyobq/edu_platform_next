@@ -1,0 +1,188 @@
+import type { OperationVariables } from '@apollo/client';
+
+import type { AcademicSemesterRecord } from '@/entities/academic-semester';
+
+import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
+
+import type { TeachingPlanOccurrenceEnvelope, TeachingPlanTeacherOption } from '../types';
+
+type AcademicSemestersResponse = {
+  academicSemesters: AcademicSemesterRecord[];
+};
+
+type MyTeachingPlanResponse = {
+  listMyAcademicSemesterPlannedTimetable: TeachingPlanOccurrenceEnvelope;
+};
+
+type ManagedTeachingPlanResponse = {
+  listManagedAcademicSemesterPlannedTimetable: TeachingPlanOccurrenceEnvelope;
+};
+
+type ManagedTeachingPlanTeacherOptionsResponse = {
+  listManagedAcademicSemesterPlannedTimetableTeacherOptions: {
+    items: TeachingPlanTeacherOption[];
+  };
+};
+
+const TEACHING_PLAN_OCCURRENCE_FIELDS = `
+  calcEffect
+  classroomName
+  coefficient
+  courseCategory
+  courseName
+  date
+  isEffective
+  logicalDayOfWeek
+  periodEnd
+  periodStart
+  physicalDayOfWeek
+  scheduleId
+  semesterId
+  slotId
+  staffId
+  staffName
+  teachingClassName
+  weekIndex
+`;
+
+const ACADEMIC_SEMESTERS_QUERY = `
+  query MyTeachingPlanAcademicSemesters($isVisible: Boolean, $limit: Int) {
+    academicSemesters(isVisible: $isVisible, limit: $limit) {
+      createdAt
+      endDate
+      examStartDate
+      firstTeachingDate
+      id
+      isCurrent
+      isVisible
+      name
+      schoolYear
+      sortOrder
+      startDate
+      termNumber
+      updatedAt
+    }
+  }
+`;
+
+const MY_TEACHING_PLAN_QUERY = `
+  query MyTeachingPlan($semesterId: Int!) {
+    listMyAcademicSemesterPlannedTimetable(semesterId: $semesterId) {
+      invalidReason
+      isComplete
+      isValid
+      items {
+        ${TEACHING_PLAN_OCCURRENCE_FIELDS}
+      }
+      truncationReason
+    }
+  }
+`;
+
+const MANAGED_TEACHING_PLAN_QUERY = `
+  query ManagedTeachingPlan($semesterId: Int!, $staffId: String!) {
+    listManagedAcademicSemesterPlannedTimetable(
+      semesterId: $semesterId
+      staffId: $staffId
+    ) {
+      invalidReason
+      isComplete
+      isValid
+      items {
+        ${TEACHING_PLAN_OCCURRENCE_FIELDS}
+      }
+      truncationReason
+    }
+  }
+`;
+
+const MANAGED_TEACHING_PLAN_TEACHER_OPTIONS_QUERY = `
+  query ManagedTeachingPlanTeacherOptions(
+    $semesterId: Int!
+    $keyword: String
+    $limit: Int
+  ) {
+    listManagedAcademicSemesterPlannedTimetableTeacherOptions(
+      semesterId: $semesterId
+      keyword: $keyword
+      limit: $limit
+    ) {
+      items {
+        staffId
+        staffName
+      }
+    }
+  }
+`;
+
+export async function requestMyTeachingPlanAcademicSemesters() {
+  return requestWithMessage(
+    ACADEMIC_SEMESTERS_QUERY,
+    { isVisible: true, limit: 500 },
+    (response: AcademicSemestersResponse) => response.academicSemesters,
+    '暂时无法加载学期列表。',
+  );
+}
+
+export async function requestMyTeachingPlan(semesterId: number) {
+  return requestWithMessage(
+    MY_TEACHING_PLAN_QUERY,
+    { semesterId },
+    (response: MyTeachingPlanResponse) => response.listMyAcademicSemesterPlannedTimetable,
+    '暂时无法加载本人教学计划。',
+  );
+}
+
+export async function requestManagedTeachingPlan(input: { semesterId: number; staffId: string }) {
+  return requestWithMessage(
+    MANAGED_TEACHING_PLAN_QUERY,
+    input,
+    (response: ManagedTeachingPlanResponse) => response.listManagedAcademicSemesterPlannedTimetable,
+    '暂时无法加载该教师的教学计划。',
+  );
+}
+
+export async function requestManagedTeachingPlanTeacherOptions(input: {
+  keyword?: string;
+  limit?: number;
+  semesterId: number;
+}) {
+  const variables = {
+    semesterId: input.semesterId,
+    keyword: normalizeOptionalText(input.keyword),
+    limit: input.limit ?? 20,
+  };
+
+  return requestWithMessage(
+    MANAGED_TEACHING_PLAN_TEACHER_OPTIONS_QUERY,
+    variables,
+    (response: ManagedTeachingPlanTeacherOptionsResponse) =>
+      response.listManagedAcademicSemesterPlannedTimetableTeacherOptions.items,
+    '暂时无法加载可查看的教师。',
+  );
+}
+
+async function requestWithMessage<TData, TVariables extends OperationVariables, TResult>(
+  query: string,
+  variables: TVariables,
+  select: (response: TData) => TResult,
+  fallback: string,
+) {
+  try {
+    return select(await executeGraphQL<TData, TVariables>(query, variables));
+  } catch (error) {
+    throw new Error(resolveTeachingPlanErrorMessage(error, fallback));
+  }
+}
+
+function normalizeOptionalText(value: string | undefined) {
+  return value?.trim() || undefined;
+}
+
+function resolveTeachingPlanErrorMessage(error: unknown, fallback: string) {
+  if (isGraphQLIngressError(error)) {
+    return error.userMessage;
+  }
+
+  return error instanceof Error ? error.message : fallback;
+}
