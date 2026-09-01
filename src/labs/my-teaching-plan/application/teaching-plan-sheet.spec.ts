@@ -5,8 +5,8 @@ import type { TeachingPlanOccurrence } from '../types';
 import { buildTeachingPlanProjection } from './teaching-plan-projection';
 import {
   buildTeachingPlanSheetRows,
+  clearTeachingPlanLocationOverrides,
   createEmptyTeachingPlanCourseDraft,
-  fillEmptyTeachingPlanLocations,
   updateTeachingPlanRowDraft,
 } from './teaching-plan-sheet';
 
@@ -29,7 +29,7 @@ describe('teaching plan sheet', () => {
   });
 
   it('授课方式默认线下且保留未来 Excel F/G 空列模型', () => {
-    const course = buildTeachingPlanProjection([occurrence()]).courses[0]!;
+    const course = buildTeachingPlanProjection([occurrence({ classroomName: null })]).courses[0]!;
     const [row] = buildTeachingPlanSheetRows(course, createEmptyTeachingPlanCourseDraft());
 
     expect(row).toMatchObject({
@@ -40,26 +40,30 @@ describe('teaching plan sheet', () => {
     });
   });
 
-  it('首次地点只填充空行，不覆盖已有地点', () => {
-    const base = updateTeachingPlanRowDraft({
+  it('后端统一地点应作为默认值，修改授课方式不应把它覆盖为空', () => {
+    const course = buildTeachingPlanProjection([occurrence()]).courses[0]!;
+    const draft = updateTeachingPlanRowDraft({
       draft: createEmptyTeachingPlanCourseDraft(),
-      rowKey: 'row-2',
-      patch: { location: '实训楼 201' },
+      rowKey: '2026-03-02:10:NORMAL',
+      patch: { deliveryMode: 'ONLINE' },
     });
-    const result = fillEmptyTeachingPlanLocations({
-      draft: base,
-      location: '机房 5102',
-      markInitialApplied: true,
-      rowKeys: ['row-1', 'row-2', 'row-3'],
+    const [row] = buildTeachingPlanSheetRows(course, draft);
+
+    expect(row).toMatchObject({ deliveryMode: 'ONLINE', location: '课表教室' });
+  });
+
+  it('逐行地点覆盖后端默认值，整体修改时可一次清除全部覆盖', () => {
+    const course = buildTeachingPlanProjection([occurrence()]).courses[0]!;
+    const draft = updateTeachingPlanRowDraft({
+      draft: createEmptyTeachingPlanCourseDraft(),
+      rowKey: '2026-03-02:10:NORMAL',
+      patch: { locationOverride: '实训楼 201' },
     });
 
-    expect(result.filledCount).toBe(2);
-    expect(result.draft.initialLocationApplied).toBe(true);
-    expect(result.draft.rows).toMatchObject({
-      'row-1': { location: '机房 5102' },
-      'row-2': { location: '实训楼 201' },
-      'row-3': { location: '机房 5102' },
-    });
+    expect(buildTeachingPlanSheetRows(course, draft)[0]?.location).toBe('实训楼 201');
+    expect(
+      buildTeachingPlanSheetRows(course, clearTeachingPlanLocationOverrides(draft))[0]?.location,
+    ).toBe('课表教室');
   });
 });
 

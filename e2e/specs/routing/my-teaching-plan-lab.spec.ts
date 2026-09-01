@@ -43,21 +43,27 @@ function buildOccurrence(staffId: string, staffName: string) {
   };
 }
 
-function buildEnvelope(staffId: string, staffName: string) {
+function buildEnvelope(
+  staffId: string,
+  staffName: string,
+  classroomName: string | null = '知行楼 302',
+) {
   return {
     invalidReason: null,
     isComplete: true,
     isValid: true,
     items: [
-      buildOccurrence(staffId, staffName),
+      { ...buildOccurrence(staffId, staffName), classroomName },
       {
         ...buildOccurrence(staffId, staffName),
+        classroomName,
         periodEnd: 4,
         periodStart: 3,
         slotId: 9002,
       },
       {
         ...buildOccurrence(staffId, staffName),
+        classroomName,
         courseCategory: 'INTEGRATED',
         courseName: '操作系统',
         date: '2026-09-09',
@@ -91,10 +97,17 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await seedStaff(page);
   let requestedSemesterId: number | null = null;
   let managedQueryCount = 0;
+  let updatedClassroomInput: { classroomName: string; scheduleId: number } | null = null;
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
-      | { query?: string; variables?: { semesterId?: number } }
+      | {
+          query?: string;
+          variables?: {
+            input?: { classroomName: string; scheduleId: number };
+            semesterId?: number;
+          };
+        }
       | undefined;
     const query = payload?.query ?? '';
 
@@ -121,6 +134,19 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
       managedQueryCount += 1;
     }
 
+    if (query.includes('mutation UpdateAcademicCourseScheduleClassroomName')) {
+      updatedClassroomInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            updateAcademicCourseScheduleClassroomName: updatedClassroomInput,
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
     await route.fallback();
   });
 
@@ -137,8 +163,8 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await expect(page.getByRole('columnheader', { name: '课外作业' })).toBeVisible();
   await expect(page.getByText('待填写', { exact: true })).toHaveCount(4);
   await expect(page.getByText('输入姓名或工号选择教师', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('这是限时本地草稿，请及时导出')).toBeVisible();
-  await expect(page.getByText(/最后一次编辑 24 小时后自动清除，服务器不会保存/)).toBeVisible();
+  await expect(page.getByText('逐课次内容仍是限时本地草稿，请及时导出')).toBeVisible();
+  await expect(page.getByText(/统一授课地点会保存到服务器/)).toBeVisible();
 
   const previousCourseButton = page.getByRole('button', { name: '上一门课程' });
   const nextCourseButton = page.getByRole('button', { name: '下一门课程' });
@@ -153,10 +179,28 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
 
   const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
   const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');
-  await firstLocation.fill('机房 5102');
+  await expect(firstLocation).toHaveValue('知行楼 302');
+  await expect(secondLocation).toHaveValue('知行楼 302');
+
+  await firstLocation.fill('临时教室 201');
   await firstLocation.press('Tab');
+  await expect(firstLocation).toHaveValue('临时教室 201');
+  await expect(secondLocation).toHaveValue('知行楼 302');
+
+  await page.getByRole('button', { name: '统一修改授课地点' }).click();
+  const unifiedClassroomInput = page.getByLabel('统一授课地点');
+  await expect(unifiedClassroomInput).toHaveValue('知行楼 302');
+  await unifiedClassroomInput.fill('机房 5102');
+  await page.getByRole('button', { name: '应用并保存' }).click();
+
+  await expect
+    .poll(() => updatedClassroomInput)
+    .toEqual({
+      classroomName: '机房 5102',
+      scheduleId: 901,
+    });
+  await expect(firstLocation).toHaveValue('机房 5102');
   await expect(secondLocation).toHaveValue('机房 5102');
-  await expect(page.getByText(/已将“机房 5102”填入本课程其余 1 个空白课次/)).toBeVisible();
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: '导出 Excel' }).click();
@@ -271,4 +315,71 @@ test('教务管理人员可切换受管教师并读取受管真源查询', async
   await expect(
     page.locator('.ant-card-extra .ant-tag').filter({ hasText: '李老师' }),
   ).toBeVisible();
+});
+
+test('后端无授课地点时，首次填写应保存并成为本课程统一地点', async ({ page }) => {
+  await seedStaff(page);
+  let updatedClassroomInput: { classroomName: string; scheduleId: number } | null = null;
+
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as
+      | {
+          query?: string;
+          variables?: { input?: { classroomName: string; scheduleId: number } };
+        }
+      | undefined;
+    const query = payload?.query ?? '';
+
+    if (query.includes('query MyTeachingPlanAcademicSemesters')) {
+      await route.fulfill({
+        body: JSON.stringify({ data: { academicSemesters: [CURRENT_SEMESTER] } }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('query MyTeachingPlan(')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            listMyAcademicSemesterPlannedTimetable: buildEnvelope('staff-1001', '王老师', null),
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    if (query.includes('mutation UpdateAcademicCourseScheduleClassroomName')) {
+      updatedClassroomInput = payload?.variables?.input ?? null;
+      await route.fulfill({
+        body: JSON.stringify({
+          data: { updateAcademicCourseScheduleClassroomName: updatedClassroomInput },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
+    await route.fallback();
+  });
+
+  await page.goto(routes.labsMyTeachingPlan);
+
+  const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
+  const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');
+  await expect(page.getByRole('button', { name: '统一修改授课地点' })).toHaveCount(0);
+
+  await firstLocation.fill('实验楼 101');
+  await firstLocation.press('Tab');
+
+  await expect
+    .poll(() => updatedClassroomInput)
+    .toEqual({
+      classroomName: '实验楼 101',
+      scheduleId: 901,
+    });
+  await expect(firstLocation).toHaveValue('实验楼 101');
+  await expect(secondLocation).toHaveValue('实验楼 101');
+  await expect(page.getByRole('button', { name: '统一修改授课地点' })).toBeVisible();
 });

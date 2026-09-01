@@ -37,6 +37,14 @@ describe('teaching plan excel export', () => {
       }),
     ).toBe('信息 2301 班-网页设计 制作-教学计划.xlsx');
   });
+
+  it('导出时应使用后端统一地点', () => {
+    const course = buildTeachingPlanProjection([occurrence({ classroomName: '知行楼 302' })])
+      .courses[0]!;
+    const rows = buildTeachingPlanSheetRows(course, createEmptyTeachingPlanCourseDraft());
+
+    expect(buildTeachingPlanExcelRows(rows)[0]?.[4]).toBe('知行楼 302');
+  });
 });
 
 function occurrence(overrides: Partial<TeachingPlanOccurrence>): TeachingPlanOccurrence {

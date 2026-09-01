@@ -218,6 +218,24 @@ export function MyTeachingPlanWorkspace({
     [planState.data?.items],
   );
 
+  const updateClassroomNameInPlan = (scheduleId: number, classroomName: string) => {
+    setPlanState((current) => {
+      if (!current.data) {
+        return current;
+      }
+
+      return {
+        ...current,
+        data: {
+          ...current.data,
+          items: current.data.items.map((item) =>
+            item.scheduleId === scheduleId ? { ...item, classroomName } : item,
+          ),
+        },
+      };
+    });
+  };
+
   useEffect(() => {
     setSelectedScheduleId((current) => {
       if (current !== null && projection.courses.some((course) => course.scheduleId === current)) {
@@ -443,6 +461,7 @@ export function MyTeachingPlanWorkspace({
                   semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
                   targetStaffId={draftStaffId}
                   teacherName={draftTeacherName}
+                  onClassroomNameUpdated={updateClassroomNameInPlan}
                 />
               ) : null}
             </Card>

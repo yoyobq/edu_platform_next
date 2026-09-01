@@ -6,13 +6,12 @@ export type TeachingPlanDeliveryMode = 'OFFLINE' | 'ONLINE';
 
 export type TeachingPlanRowDraft = {
   deliveryMode: TeachingPlanDeliveryMode;
-  location: string;
+  locationOverride?: string;
 };
 
 export type TeachingPlanCourseDraft = {
-  initialLocationApplied: boolean;
   rows: Record<string, TeachingPlanRowDraft>;
-  version: 2;
+  version: 3;
 };
 
 export type TeachingPlanSheetRow = {
@@ -23,16 +22,14 @@ export type TeachingPlanSheetRow = {
   occurrence: TeachingPlanOccurrence;
   periodsText: string;
   rowKey: string;
-  sourceClassroomName: string | null;
   teachingDate: string;
   teachingHours: number;
 };
 
 export function createEmptyTeachingPlanCourseDraft(): TeachingPlanCourseDraft {
   return {
-    initialLocationApplied: false,
     rows: {},
-    version: 2,
+    version: 3,
   };
 }
 
@@ -44,17 +41,16 @@ export function buildTeachingPlanSheetRows(
     month.dates.flatMap((dateGroup) =>
       dateGroup.occurrences.map((occurrence) => {
         const rowKey = buildTeachingPlanOccurrenceRowKey(occurrence);
-        const rowDraft = draft.rows[rowKey] ?? createDefaultRowDraft();
+        const rowDraft = draft.rows[rowKey];
 
         return {
           chapterAndContent: '',
-          deliveryMode: rowDraft.deliveryMode,
+          deliveryMode: rowDraft?.deliveryMode ?? 'OFFLINE',
           homework: '',
-          location: rowDraft.location,
+          location: rowDraft?.locationOverride ?? course.classroomName ?? '',
           occurrence,
           periodsText: formatOccurrencePeriods(occurrence),
           rowKey,
-          sourceClassroomName: occurrence.classroomName,
           teachingDate: occurrence.date,
           teachingHours: occurrence.periodEnd - occurrence.periodStart + 1,
         };
@@ -84,47 +80,44 @@ export function updateTeachingPlanRowDraft(input: {
   };
 }
 
-export function fillEmptyTeachingPlanLocations(input: {
+export function setTeachingPlanRowLocationOverride(input: {
   draft: TeachingPlanCourseDraft;
-  location: string;
-  markInitialApplied?: boolean;
-  rowKeys: readonly string[];
-}): { draft: TeachingPlanCourseDraft; filledCount: number } {
-  const location = input.location.trim();
-  if (!location) {
-    return { draft: input.draft, filledCount: 0 };
-  }
-
-  let filledCount = 0;
-  const rows = { ...input.draft.rows };
-
-  for (const rowKey of input.rowKeys) {
-    const row = rows[rowKey] ?? createDefaultRowDraft();
-    if (row.location.trim()) {
-      continue;
-    }
-
-    rows[rowKey] = { ...row, location };
-    filledCount += 1;
+  locationOverride?: string;
+  rowKey: string;
+}): TeachingPlanCourseDraft {
+  const current = input.draft.rows[input.rowKey] ?? createDefaultRowDraft();
+  const next = { ...current };
+  if (typeof input.locationOverride === 'string') {
+    next.locationOverride = input.locationOverride;
+  } else {
+    delete next.locationOverride;
   }
 
   return {
-    draft: {
-      ...input.draft,
-      initialLocationApplied:
-        input.markInitialApplied === true || input.draft.initialLocationApplied,
-      rows,
+    ...input.draft,
+    rows: {
+      ...input.draft.rows,
+      [input.rowKey]: next,
     },
-    filledCount,
   };
 }
 
+export function clearTeachingPlanLocationOverrides(
+  draft: TeachingPlanCourseDraft,
+): TeachingPlanCourseDraft {
+  const rows = Object.fromEntries(
+    Object.entries(draft.rows).map(([rowKey, row]) => {
+      const next = { ...row };
+      delete next.locationOverride;
+      return [rowKey, next];
+    }),
+  );
+
+  return { ...draft, rows };
+}
+
 export function isTeachingPlanCourseDraft(value: unknown): value is TeachingPlanCourseDraft {
-  if (
-    !isRecord(value) ||
-    value.version !== 2 ||
-    typeof value.initialLocationApplied !== 'boolean'
-  ) {
+  if (!isRecord(value) || value.version !== 3) {
     return false;
   }
   if (!isRecord(value.rows)) {
@@ -135,12 +128,12 @@ export function isTeachingPlanCourseDraft(value: unknown): value is TeachingPlan
     (row) =>
       isRecord(row) &&
       (row.deliveryMode === 'ONLINE' || row.deliveryMode === 'OFFLINE') &&
-      typeof row.location === 'string',
+      (typeof row.locationOverride === 'undefined' || typeof row.locationOverride === 'string'),
   );
 }
 
 function createDefaultRowDraft(): TeachingPlanRowDraft {
-  return { deliveryMode: 'OFFLINE', location: '' };
+  return { deliveryMode: 'OFFLINE' };
 }
 
 function formatOccurrencePeriods(occurrence: TeachingPlanOccurrence) {

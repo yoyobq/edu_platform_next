@@ -27,17 +27,16 @@ describe('teaching plan draft storage', () => {
 
   it('只在最后编辑后的 24 小时内恢复本地草稿', () => {
     writeTeachingPlanCourseDraft(STORAGE_KEY, {
-      initialLocationApplied: true,
       rows: {
-        row1: { deliveryMode: 'OFFLINE', location: '机房 5102' },
+        row1: { deliveryMode: 'OFFLINE', locationOverride: '机房 5102' },
       },
-      version: 2,
+      version: 3,
     });
 
     expect(TEACHING_PLAN_DRAFT_TTL_HOURS).toBe(24);
     expect(readTeachingPlanCourseDraft(STORAGE_KEY).rows.row1).toEqual({
       deliveryMode: 'OFFLINE',
-      location: '机房 5102',
+      locationOverride: '机房 5102',
     });
 
     vi.mocked(Date.now).mockReturnValue(1_800_000_000_000 + 24 * 60 * 60 * 1_000);
@@ -56,6 +55,37 @@ describe('teaching plan draft storage', () => {
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
   });
 
+  it('把有期限的 v2 地点草稿迁移为逐行例外且不延长原期限', () => {
+    const expiresAt = 1_800_000_000_000 + 60_000;
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({
+        draft: {
+          initialLocationApplied: true,
+          rows: {
+            row1: { deliveryMode: 'ONLINE', location: '旧草稿机房' },
+            row2: { deliveryMode: 'OFFLINE', location: '' },
+          },
+          version: 2,
+        },
+        expiresAt,
+        version: 2,
+      }),
+    );
+
+    expect(readTeachingPlanCourseDraft(STORAGE_KEY)).toEqual({
+      rows: {
+        row1: { deliveryMode: 'ONLINE', locationOverride: '旧草稿机房' },
+        row2: { deliveryMode: 'OFFLINE' },
+      },
+      version: 3,
+    });
+    expect(JSON.parse(window.localStorage.getItem(STORAGE_KEY) ?? '{}')).toMatchObject({
+      expiresAt,
+      version: 3,
+    });
+  });
+
   it('同一目标教师的草稿按当前登录账号隔离', () => {
     const otherAccountStorageKey = buildTeachingPlanDraftStorageKey({
       currentAccountId: 1002,
@@ -65,11 +95,10 @@ describe('teaching plan draft storage', () => {
     });
 
     writeTeachingPlanCourseDraft(STORAGE_KEY, {
-      initialLocationApplied: false,
       rows: {
-        row1: { deliveryMode: 'OFFLINE', location: '管理员一的机房' },
+        row1: { deliveryMode: 'OFFLINE', locationOverride: '管理员一的机房' },
       },
-      version: 2,
+      version: 3,
     });
 
     expect(readTeachingPlanCourseDraft(otherAccountStorageKey).rows).toEqual({});

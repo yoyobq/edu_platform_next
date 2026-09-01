@@ -1,10 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  DownloadOutlined,
-  EnvironmentOutlined,
-  FormOutlined,
-  LaptopOutlined,
-} from '@ant-design/icons';
+import { DownloadOutlined, EditOutlined, FormOutlined, LaptopOutlined } from '@ant-design/icons';
 import {
   Alert,
   App as AntApp,
@@ -13,9 +8,11 @@ import {
   Collapse,
   Flex,
   Input,
+  Popover,
   Select,
   Space,
   Tag,
+  Tooltip,
   Typography,
 } from 'antd';
 
@@ -28,11 +25,13 @@ import {
 } from '../application/teaching-plan-projection';
 import {
   buildTeachingPlanSheetRows,
-  fillEmptyTeachingPlanLocations,
+  clearTeachingPlanLocationOverrides,
+  setTeachingPlanRowLocationOverride,
   type TeachingPlanCourseDraft,
   type TeachingPlanDeliveryMode,
   updateTeachingPlanRowDraft,
 } from '../application/teaching-plan-sheet';
+import { requestUpdateAcademicCourseScheduleClassroomName } from '../infrastructure/api';
 import {
   buildTeachingPlanDraftStorageKey,
   readTeachingPlanCourseDraft,
@@ -56,6 +55,7 @@ export function TeachingPlanSheet({
   semesterName,
   targetStaffId,
   teacherName,
+  onClassroomNameUpdated,
 }: {
   course: TeachingPlanCourseProjection;
   courseNavigation: React.ReactNode;
@@ -65,6 +65,7 @@ export function TeachingPlanSheet({
   semesterName: string;
   targetStaffId: string;
   teacherName: string;
+  onClassroomNameUpdated: (scheduleId: number, classroomName: string) => void;
 }) {
   const { message } = AntApp.useApp();
   const storageKey = useMemo(
@@ -81,6 +82,10 @@ export function TeachingPlanSheet({
     readTeachingPlanCourseDraft(storageKey),
   );
   const [isExporting, setIsExporting] = useState(false);
+  const [isSavingClassroomName, setIsSavingClassroomName] = useState(false);
+  const [classroomEditorOpen, setClassroomEditorOpen] = useState(false);
+  const [classroomEditorValue, setClassroomEditorValue] = useState(course.classroomName ?? '');
+  const [classroomEditorError, setClassroomEditorError] = useState<string | null>(null);
   const draftRef = useRef(draft);
 
   useEffect(() => {
@@ -90,9 +95,6 @@ export function TeachingPlanSheet({
   }, [storageKey]);
 
   const rows = useMemo(() => buildTeachingPlanSheetRows(course, draft), [course, draft]);
-  const rowKeys = useMemo(() => rows.map((row) => row.rowKey), [rows]);
-  const firstLocation = rows.find((row) => row.location.trim())?.location.trim() ?? '';
-  const emptyLocationCount = rows.filter((row) => !row.location.trim()).length;
 
   const applyDraft = (nextDraft: TeachingPlanCourseDraft) => {
     draftRef.current = nextDraft;
@@ -113,39 +115,93 @@ export function TeachingPlanSheet({
     );
   };
 
-  const commitInitialLocation = (location: string) => {
-    const current = draftRef.current;
-    if (current.initialLocationApplied || !location.trim()) {
+  const commitRowLocation = async (rowKey: string, rawLocation: string) => {
+    const location = rawLocation.trim();
+    if (course.classroomName) {
+      applyDraft(
+        setTeachingPlanRowLocationOverride({
+          draft: draftRef.current,
+          locationOverride: location && location !== course.classroomName ? location : undefined,
+          rowKey,
+        }),
+      );
       return;
     }
 
-    const result = fillEmptyTeachingPlanLocations({
-      draft: current,
-      location,
-      markInitialApplied: true,
-      rowKeys,
-    });
-    applyDraft(result.draft);
-
-    if (result.filledCount > 0) {
-      void message.success(
-        `已将“${location.trim()}”填入本课程其余 ${result.filledCount} 个空白课次`,
+    if (!location) {
+      applyDraft(
+        setTeachingPlanRowLocationOverride({
+          draft: draftRef.current,
+          rowKey,
+        }),
       );
+      return;
+    }
+    if (isSavingClassroomName) {
+      return;
+    }
+
+    setIsSavingClassroomName(true);
+    try {
+      const saved = await requestUpdateAcademicCourseScheduleClassroomName({
+        classroomName: location,
+        scheduleId: course.scheduleId,
+      });
+      applyDraft(
+        setTeachingPlanRowLocationOverride({
+          draft: draftRef.current,
+          rowKey,
+        }),
+      );
+      onClassroomNameUpdated(saved.scheduleId, saved.classroomName);
+      void message.success(`已将“${saved.classroomName}”保存为本课程统一授课地点`);
+    } catch (error: unknown) {
+      applyDraft(
+        setTeachingPlanRowLocationOverride({
+          draft: draftRef.current,
+          locationOverride: location,
+          rowKey,
+        }),
+      );
+      void message.error(`${getErrorMessage(error)} 当前输入仍保留在本地草稿中。`);
+    } finally {
+      setIsSavingClassroomName(false);
     }
   };
 
-  const fillRemainingLocations = () => {
-    if (!firstLocation) {
+  const openClassroomEditor = () => {
+    setClassroomEditorValue(course.classroomName ?? '');
+    setClassroomEditorError(null);
+    setClassroomEditorOpen(true);
+  };
+
+  const saveUnifiedClassroomName = async () => {
+    const classroomName = classroomEditorValue.trim();
+    if (!classroomName) {
+      setClassroomEditorError('请输入授课地点');
       return;
     }
 
-    const result = fillEmptyTeachingPlanLocations({
-      draft: draftRef.current,
-      location: firstLocation,
-      rowKeys,
-    });
-    applyDraft(result.draft);
-    void message.success(`已填充 ${result.filledCount} 个空白授课地点`);
+    setClassroomEditorError(null);
+    setIsSavingClassroomName(true);
+    try {
+      const saved =
+        classroomName === course.classroomName
+          ? { classroomName, scheduleId: course.scheduleId }
+          : await requestUpdateAcademicCourseScheduleClassroomName({
+              classroomName,
+              scheduleId: course.scheduleId,
+            });
+      applyDraft(clearTeachingPlanLocationOverrides(draftRef.current));
+      onClassroomNameUpdated(saved.scheduleId, saved.classroomName);
+      setClassroomEditorValue(saved.classroomName);
+      setClassroomEditorOpen(false);
+      void message.success(`已将本课程全部课次统一修改为“${saved.classroomName}”`);
+    } catch (error: unknown) {
+      setClassroomEditorError(getErrorMessage(error));
+    } finally {
+      setIsSavingClassroomName(false);
+    }
   };
 
   const handleExport = async () => {
@@ -199,11 +255,6 @@ export function TeachingPlanSheet({
               </Typography.Text>
             </div>
             <Space wrap>
-              {firstLocation && emptyLocationCount > 0 ? (
-                <Button icon={<EnvironmentOutlined />} onClick={fillRemainingLocations}>
-                  填充 {emptyLocationCount} 个空白地点
-                </Button>
-              ) : null}
               <Button
                 disabled={rows.length === 0}
                 icon={<DownloadOutlined />}
@@ -218,9 +269,9 @@ export function TeachingPlanSheet({
 
           <div>
             <Alert
-              description={`授课方式和地点只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除，服务器不会保存。需要长期保留时，请以导出的 Excel 文件为准。`}
+              description={`统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。需要长期保留完整计划时，请以导出的 Excel 文件为准。`}
               showIcon
-              title="这是限时本地草稿，请及时导出"
+              title="逐课次内容仍是限时本地草稿，请及时导出"
               type="warning"
             />
           </div>
@@ -275,7 +326,71 @@ export function TeachingPlanSheet({
                   授课方式
                 </th>
                 <th className="border-b border-border px-3 py-3" scope="col">
-                  授课地点
+                  <div className="flex items-center justify-between gap-2">
+                    <span>授课地点</span>
+                    {course.classroomName ? (
+                      <Popover
+                        content={
+                          <div className="flex w-72 flex-col gap-3">
+                            <span className="text-sm text-text-secondary">
+                              将应用到本课程全部课次并保存到服务器。
+                            </span>
+                            <Input
+                              aria-label="统一授课地点"
+                              maxLength={64}
+                              showCount
+                              value={classroomEditorValue}
+                              onChange={(event) => setClassroomEditorValue(event.target.value)}
+                              onPressEnter={() => void saveUnifiedClassroomName()}
+                            />
+                            {classroomEditorError ? (
+                              <Typography.Text type="danger">
+                                {classroomEditorError}
+                              </Typography.Text>
+                            ) : null}
+                            <div className="flex justify-end gap-2">
+                              <Button
+                                disabled={isSavingClassroomName}
+                                size="small"
+                                onClick={() => setClassroomEditorOpen(false)}
+                              >
+                                取消
+                              </Button>
+                              <Button
+                                loading={isSavingClassroomName}
+                                size="small"
+                                type="primary"
+                                onClick={() => void saveUnifiedClassroomName()}
+                              >
+                                应用并保存
+                              </Button>
+                            </div>
+                          </div>
+                        }
+                        open={classroomEditorOpen}
+                        placement="bottomRight"
+                        title="统一修改授课地点"
+                        trigger="click"
+                        onOpenChange={(open) => {
+                          if (open) {
+                            openClassroomEditor();
+                          } else if (!isSavingClassroomName) {
+                            setClassroomEditorOpen(false);
+                          }
+                        }}
+                      >
+                        <Tooltip title="统一修改授课地点">
+                          <Button
+                            aria-label="统一修改授课地点"
+                            icon={<EditOutlined />}
+                            loading={isSavingClassroomName}
+                            size="small"
+                            type="text"
+                          />
+                        </Tooltip>
+                      </Popover>
+                    ) : null}
+                  </div>
                 </th>
                 <th className="border-b border-l border-border px-3 py-3" scope="col">
                   授课章节与内容
@@ -328,16 +443,18 @@ export function TeachingPlanSheet({
                   <td className="border-b border-border px-2 py-2">
                     <Input
                       aria-label={`${row.teachingDate}第${row.periodsText}节授课地点`}
-                      placeholder={
-                        row.sourceClassroomName
-                          ? `填写地点（课表参考：${row.sourceClassroomName}）`
-                          : '填写授课地点'
-                      }
+                      disabled={isSavingClassroomName && !course.classroomName}
+                      maxLength={64}
+                      placeholder="填写授课地点"
                       size="small"
                       value={row.location}
                       variant="borderless"
-                      onBlur={(event) => commitInitialLocation(event.currentTarget.value)}
-                      onChange={(event) => updateRow(row.rowKey, { location: event.target.value })}
+                      onBlur={(event) =>
+                        void commitRowLocation(row.rowKey, event.currentTarget.value)
+                      }
+                      onChange={(event) =>
+                        updateRow(row.rowKey, { locationOverride: event.target.value })
+                      }
                       onPressEnter={(event) => event.currentTarget.blur()}
                     />
                   </td>
@@ -396,6 +513,10 @@ export function TeachingPlanSheet({
       ) : null}
     </div>
   );
+}
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '暂时无法保存统一授课地点。';
 }
 
 function SheetMeta({ label, value }: { label: string; value: string }) {

@@ -24,6 +24,13 @@ type ManagedTeachingPlanTeacherOptionsResponse = {
   };
 };
 
+type UpdateCourseScheduleClassroomNameResponse = {
+  updateAcademicCourseScheduleClassroomName: {
+    classroomName: string;
+    scheduleId: number;
+  };
+};
+
 const TEACHING_PLAN_OCCURRENCE_FIELDS = `
   calcEffect
   classroomName
@@ -115,6 +122,17 @@ const MANAGED_TEACHING_PLAN_TEACHER_OPTIONS_QUERY = `
   }
 `;
 
+const UPDATE_COURSE_SCHEDULE_CLASSROOM_NAME_MUTATION = `
+  mutation UpdateAcademicCourseScheduleClassroomName(
+    $input: UpdateAcademicCourseScheduleClassroomNameInput!
+  ) {
+    updateAcademicCourseScheduleClassroomName(input: $input) {
+      classroomName
+      scheduleId
+    }
+  }
+`;
+
 export async function requestMyTeachingPlanAcademicSemesters() {
   return requestWithMessage(
     ACADEMIC_SEMESTERS_QUERY,
@@ -159,6 +177,19 @@ export async function requestManagedTeachingPlanTeacherOptions(input: {
     (response: ManagedTeachingPlanTeacherOptionsResponse) =>
       response.listManagedAcademicSemesterPlannedTimetableTeacherOptions.items,
     '暂时无法加载可查看的教师。',
+  );
+}
+
+export async function requestUpdateAcademicCourseScheduleClassroomName(input: {
+  classroomName: string;
+  scheduleId: number;
+}) {
+  return requestWithMessage(
+    UPDATE_COURSE_SCHEDULE_CLASSROOM_NAME_MUTATION,
+    { input },
+    (response: UpdateCourseScheduleClassroomNameResponse) =>
+      response.updateAcademicCourseScheduleClassroomName,
+    '暂时无法保存统一授课地点。',
   );
 }
 

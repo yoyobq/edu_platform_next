@@ -16,6 +16,7 @@ export type TeachingPlanMonthGroup = {
 
 export type TeachingPlanCourseProjection = {
   readonly adjustmentOccurrences: readonly TeachingPlanOccurrence[];
+  readonly classroomName: string | null;
   readonly courseCategory: string | null;
   readonly courseName: string;
   readonly dateCount: number;
@@ -125,6 +126,7 @@ function buildCourseProjection(
 
   return {
     adjustmentOccurrences,
+    classroomName: first?.classroomName?.trim() || null,
     courseCategory: first?.courseCategory ?? null,
     courseName: first?.courseName?.trim() || '未命名课程',
     dateCount: dateGroups.length,

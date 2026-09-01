@@ -17,6 +17,7 @@ describe('teaching plan projection', () => {
 
     expect(projection.courses).toHaveLength(2);
     expect(projection.courses.map((course) => course.scheduleId).sort()).toEqual([1, 2]);
+    expect(projection.courses[0]?.classroomName).toBe('教一 101');
   });
 
   it('只把有效 occurrence 放入主日期线并把停课调出旁列', () => {
