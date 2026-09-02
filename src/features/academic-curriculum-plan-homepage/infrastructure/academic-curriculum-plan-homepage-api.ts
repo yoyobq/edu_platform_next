@@ -43,12 +43,39 @@ type CurriculumPlanHomepageListResponse = {
   fetchCurriculumPlanHomepageList: CurriculumPlanHomepageListResult;
 };
 
+type AcademicCurriculumPlanHomepageListResponse = {
+  listManagedAcademicCurriculumPlanHomepages: CurriculumPlanHomepageListResult;
+};
+
+type MyAcademicCurriculumPlanHomepageListResponse = {
+  listMyAcademicCurriculumPlanHomepages: CurriculumPlanHomepageListResult;
+};
+
+export type AcademicCurriculumPlanHomepageTeacherOption = {
+  staffId: string;
+  staffName: string;
+};
+
+type AcademicCurriculumPlanHomepageTeacherOptionsResponse = {
+  listManagedAcademicSemesterPlannedTimetableTeacherOptions: {
+    items: AcademicCurriculumPlanHomepageTeacherOption[];
+  };
+};
+
 type CurriculumPlanHomepageDetailResponse = {
   fetchCurriculumPlanHomepageDetail: CurriculumPlanHomepageDetailResult;
 };
 
 type SaveCurriculumPlanHomepageResponse = {
   saveCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
+};
+
+type SaveAcademicCurriculumPlanHomepageResponse = {
+  saveManagedAcademicCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
+};
+
+type SaveMyAcademicCurriculumPlanHomepageResponse = {
+  saveMyAcademicCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
 };
 
 type CurriculumPlanHomepagePrefillResponse = {
@@ -126,6 +153,78 @@ const FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY = `
   }
 `;
 
+const ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_LIST_FIELDS = `
+  upstreamSessionToken
+  expiresAt
+  count
+  items {
+    planId
+    teachingClassId
+    staffId
+    sstsCourseId
+    sstsTeachingClassId
+    courseName
+    className
+    schoolYear
+    semester
+    courseCategory
+    weeklyHours
+    weekCount
+    weekNumberText
+    reviewStatus
+    rawPlan
+  }
+`;
+
+const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGES_QUERY = `
+  query ListAcademicCurriculumPlanHomepages(
+    $semesterId: Int!
+    $staffId: String!
+    $upstreamSessionToken: String!
+  ) {
+    listManagedAcademicCurriculumPlanHomepages(
+      semesterId: $semesterId
+      staffId: $staffId
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      ${ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_LIST_FIELDS}
+    }
+  }
+`;
+
+const LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGES_QUERY = `
+  query ListMyAcademicCurriculumPlanHomepages(
+    $semesterId: Int!
+    $upstreamSessionToken: String!
+  ) {
+    listMyAcademicCurriculumPlanHomepages(
+      semesterId: $semesterId
+      upstreamSessionToken: $upstreamSessionToken
+    ) {
+      ${ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_LIST_FIELDS}
+    }
+  }
+`;
+
+const LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHER_OPTIONS_QUERY = `
+  query AcademicCurriculumPlanHomepageTeacherOptions(
+    $semesterId: Int!
+    $keyword: String
+    $limit: Int
+  ) {
+    listManagedAcademicSemesterPlannedTimetableTeacherOptions(
+      semesterId: $semesterId
+      keyword: $keyword
+      limit: $limit
+    ) {
+      items {
+        staffId
+        staffName
+      }
+    }
+  }
+`;
+
 const FETCH_CURRICULUM_PLAN_HOMEPAGE_DETAIL_QUERY = `
   query FetchCurriculumPlanHomepageDetail($sessionToken: String!, $planId: String!) {
     fetchCurriculumPlanHomepageDetail(sessionToken: $sessionToken, planId: $planId) {
@@ -158,6 +257,36 @@ const SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
       msg
       data
       planId
+    }
+  }
+`;
+
+const SAVE_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_RESULT_FIELDS = `
+  upstreamSessionToken
+  expiresAt
+  code
+  success
+  msg
+  data
+  planId
+`;
+
+const SAVE_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
+  mutation SaveAcademicCurriculumPlanHomepage(
+    $input: AcademicCurriculumPlanHomepageSaveInput!
+  ) {
+    saveManagedAcademicCurriculumPlanHomepage(input: $input) {
+      ${SAVE_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_RESULT_FIELDS}
+    }
+  }
+`;
+
+const SAVE_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
+  mutation SaveMyAcademicCurriculumPlanHomepage(
+    $input: MyAcademicCurriculumPlanHomepageSaveInput!
+  ) {
+    saveMyAcademicCurriculumPlanHomepage(input: $input) {
+      ${SAVE_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_RESULT_FIELDS}
     }
   }
 `;
@@ -513,6 +642,53 @@ export async function fetchCurriculumPlanHomepageList(input: {
   return response.fetchCurriculumPlanHomepageList;
 }
 
+export async function listAcademicCurriculumPlanHomepages(input: {
+  mode: CurriculumPlanHomepagePrefillMode;
+  semesterId: number;
+  staffId: string;
+  upstreamSessionToken: string;
+}) {
+  const commonVariables = {
+    semesterId: input.semesterId,
+    upstreamSessionToken: input.upstreamSessionToken,
+  };
+
+  if (input.mode === 'managed') {
+    const response = await executeUpstreamSessionGraphQL<
+      AcademicCurriculumPlanHomepageListResponse,
+      typeof commonVariables & { staffId: string }
+    >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGES_QUERY, {
+      ...commonVariables,
+      staffId: normalizeRequiredString(input.staffId, '教师工号'),
+    });
+
+    return response.listManagedAcademicCurriculumPlanHomepages;
+  }
+
+  const response = await executeUpstreamSessionGraphQL<
+    MyAcademicCurriculumPlanHomepageListResponse,
+    typeof commonVariables
+  >(LIST_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGES_QUERY, commonVariables);
+
+  return response.listMyAcademicCurriculumPlanHomepages;
+}
+
+export async function listAcademicCurriculumPlanHomepageTeacherOptions(input: {
+  keyword?: string;
+  semesterId: number;
+}) {
+  const response = await requestGraphQL<
+    AcademicCurriculumPlanHomepageTeacherOptionsResponse,
+    { keyword: string | null; limit: number; semesterId: number }
+  >(LIST_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_TEACHER_OPTIONS_QUERY, {
+    keyword: normalizeOptionalString(input.keyword),
+    limit: 20,
+    semesterId: input.semesterId,
+  });
+
+  return response.listManagedAcademicSemesterPlannedTimetableTeacherOptions.items;
+}
+
 export async function fetchCurriculumPlanHomepageDepartmentOptions() {
   try {
     const response = await requestGraphQL<DepartmentsResponse, { limit: number }>(
@@ -573,6 +749,45 @@ export async function saveCurriculumPlanHomepage(input: {
   });
 
   return response.saveCurriculumPlanHomepage;
+}
+
+export async function saveAcademicCurriculumPlanHomepage(input: {
+  homepage: Record<string, unknown>;
+  mode: CurriculumPlanHomepagePrefillMode;
+  planId: string | null;
+  semesterId: number;
+  staffId: string;
+  teachingClassId: string;
+  upstreamSessionToken: string;
+}) {
+  const commonInput = {
+    homepage: input.homepage,
+    planId: normalizeOptionalString(input.planId),
+    semesterId: input.semesterId,
+    teachingClassId: normalizeRequiredString(input.teachingClassId, '教学班 ID'),
+    upstreamSessionToken: input.upstreamSessionToken,
+  };
+
+  if (input.mode === 'managed') {
+    const response = await executeUpstreamSessionGraphQL<
+      SaveAcademicCurriculumPlanHomepageResponse,
+      { input: typeof commonInput & { staffId: string } }
+    >(SAVE_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_MUTATION, {
+      input: {
+        ...commonInput,
+        staffId: normalizeRequiredString(input.staffId, '教师工号'),
+      },
+    });
+
+    return response.saveManagedAcademicCurriculumPlanHomepage;
+  }
+
+  const response = await executeUpstreamSessionGraphQL<
+    SaveMyAcademicCurriculumPlanHomepageResponse,
+    { input: typeof commonInput }
+  >(SAVE_MY_ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_MUTATION, { input: commonInput });
+
+  return response.saveMyAcademicCurriculumPlanHomepage;
 }
 
 export async function previewCurriculumPlanHomepagePrefill(input: {

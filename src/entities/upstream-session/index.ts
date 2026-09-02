@@ -23,6 +23,8 @@ export type {
   RollingUpstreamSessionResult,
 } from './application/upstream-session-rolling';
 export { hasRollingUpstreamSessionResult } from './application/upstream-session-rolling';
+export type { VerifiedUpstreamIdentityState } from './application/verified-upstream-identity-hook';
+export { useVerifiedUpstreamIdentity } from './application/verified-upstream-identity-hook';
 export type {
   PersistStaffDirectoryCacheSessionFromResult,
   PopulateStaffDirectoryResult,
@@ -58,6 +60,7 @@ export { executeUpstreamSessionGraphQL } from './infrastructure/upstream-session
 export type { StoredUpstreamSession } from './infrastructure/upstream-session-storage';
 export type { StaffDirectoryTeacherAutoCompleteProps } from './ui/staff-directory-teacher-autocomplete';
 export { StaffDirectoryTeacherAutoComplete } from './ui/staff-directory-teacher-autocomplete';
+export { UpstreamIdentityBar } from './ui/upstream-identity-bar';
 export { type UpstreamLoginFormValues, UpstreamLoginModal } from './ui/upstream-login-modal';
 export type {
   OpenExpiredUpstreamLoginModalInput,

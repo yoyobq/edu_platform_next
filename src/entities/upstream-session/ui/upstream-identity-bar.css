@@ -1,0 +1,23 @@
+/* src/entities/upstream-session/ui/upstream-identity-bar.css */
+
+.upstream-identity-bar {
+  align-items: center;
+  color: var(--ant-color-text-secondary);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 13px;
+  gap: 8px;
+  justify-content: flex-end;
+  line-height: 20px;
+  min-height: 24px;
+}
+
+.upstream-identity-bar-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+}
+
+.upstream-identity-bar .ant-btn {
+  padding: 0;
+}

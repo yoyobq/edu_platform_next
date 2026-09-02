@@ -7,7 +7,6 @@ import {
   FlagOutlined,
   SaveOutlined,
   SearchOutlined,
-  SwapOutlined,
 } from '@ant-design/icons';
 import {
   Alert,
@@ -30,30 +29,32 @@ import {
 } from 'antd';
 
 import {
-  AcademicSemesterPeriodFormItems,
   type AcademicSemesterRecord,
-  buildAcademicSemesterPeriodOptions,
-  buildAcademicSemesterSchoolYearOptions,
-  resolveAcademicSemesterPeriodValues,
+  AcademicSemesterSelect,
+  pickAcademicSemesterId,
+  sortAcademicSemestersForDisplay,
 } from '@/entities/academic-semester';
 import { hasAcademicCurriculumPlanHomepageManagerAccess } from '@/entities/auth-access';
-import {
-  buildDepartmentSelectOptions,
-  DepartmentFormItem,
-  type DepartmentSelectOption,
-  ensureDepartmentSelectOption,
-  resolveDepartmentDefaultId,
-} from '@/entities/department';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
   canUseStoredUpstreamSessionForLockedUser,
+  resolveStaffDirectoryTeacherStaffId,
+  StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
+  UpstreamIdentityBar,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
   useUpstreamSession,
+  useVerifiedUpstreamIdentity,
 } from '@/entities/upstream-session';
 
+import {
+  CompactQueryBar,
+  CompactQueryBarAction,
+  CompactQueryBarField,
+  CompactQueryBarSeparator,
+} from '@/shared/ui/compact-query-bar';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
@@ -85,24 +86,24 @@ import {
   type CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
 } from '../domain/curriculum-plan-homepage-types';
 import {
-  fetchCurriculumPlanHomepageDepartmentOptions,
+  type AcademicCurriculumPlanHomepageTeacherOption,
   fetchCurriculumPlanHomepageDetail,
-  fetchCurriculumPlanHomepageList,
   isCurriculumPlanHomepagePrefillTimeWindowClosedError,
   isExpiredUpstreamSessionError,
+  listAcademicCurriculumPlanHomepages,
+  listAcademicCurriculumPlanHomepageTeacherOptions,
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
   requestAcademicSemesters,
   resolveCurriculumPlanHomepagePrefillErrorMessage,
   resolveUpstreamErrorMessage,
-  saveCurriculumPlanHomepage,
+  saveAcademicCurriculumPlanHomepage,
 } from '../infrastructure/academic-curriculum-plan-homepage-api';
 
 type SearchFormValues = {
-  departmentId?: string | null;
-  schoolYear: string;
-  semester: string;
+  semesterId: number | null;
+  staffId: string;
 };
 
 type PendingAction =
@@ -177,7 +178,6 @@ type InitialLessonDistributionStrategyOption = {
   update: CurriculumPlanHomepageDraftUpdate | null;
 };
 
-const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 const COMPACT_VIEWPORT_QUERY = '(max-width: 1120px)';
 const DAY_MS = 24 * 60 * 60 * 1000;
 const PLAN_TAB_COURSE_NAME_MAX_LENGTH = 6;
@@ -218,18 +218,6 @@ function useCompactViewport() {
   }, []);
 
   return isCompactViewport;
-}
-
-function getDefaultAcademicTerm(): SearchFormValues {
-  const now = new Date();
-  const month = now.getMonth() + 1;
-  const schoolYear = month >= 8 ? now.getFullYear() : now.getFullYear() - 1;
-
-  return {
-    departmentId: DEFAULT_DEPARTMENT_ID,
-    schoolYear: String(schoolYear),
-    semester: month >= 8 ? '1' : '2',
-  };
 }
 
 function resolvePrefillMode(account: CurrentCurriculumPlanHomepageAccount | null) {
@@ -769,14 +757,6 @@ function formatPlanTabCourseName(courseName: string | null) {
   }
 
   return `${chars.slice(0, PLAN_TAB_COURSE_NAME_MAX_LENGTH).join('')}...`;
-}
-
-function formatUpstreamSessionLoginUser(session: StoredUpstreamSession | null) {
-  if (!session) {
-    return '未连接';
-  }
-
-  return session.upstreamLoginId?.trim() || '已连接';
 }
 
 function renderReferenceCandidateDescription(
@@ -1668,7 +1648,6 @@ export function AcademicCurriculumPlanHomepagePageContent({
 }: AcademicCurriculumPlanHomepagePageContentProps) {
   const { token } = theme.useToken();
   const isCompactViewport = useCompactViewport();
-  const defaultSearchValues = useMemo(() => getDefaultAcademicTerm(), []);
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [searchForm] = Form.useForm<SearchFormValues>();
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
@@ -1679,21 +1658,16 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const [isPreviewingPrefill, setIsPreviewingPrefill] = useState(false);
   const [loadingReferenceKey, setLoadingReferenceKey] = useState<string | null>(null);
   const [loadingEndChapterKey, setLoadingEndChapterKey] = useState<string | null>(null);
-  const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isLoadingAcademicSemesters, setIsLoadingAcademicSemesters] = useState(false);
   const [academicSemesters, setAcademicSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [academicSemestersError, setAcademicSemestersError] = useState<string | null>(null);
-  const academicSemesterPeriodOptions = useMemo(
-    () => buildAcademicSemesterPeriodOptions(academicSemesters),
-    [academicSemesters],
-  );
-  const schoolYearOptions = useMemo(
-    () => buildAcademicSemesterSchoolYearOptions(academicSemesterPeriodOptions),
-    [academicSemesterPeriodOptions],
-  );
+  const [teacherOptions, setTeacherOptions] = useState<
+    AcademicCurriculumPlanHomepageTeacherOption[]
+  >([]);
+  const [teacherOptionsError, setTeacherOptionsError] = useState<string | null>(null);
+  const [teacherKeyword, setTeacherKeyword] = useState('');
+  const [isLoadingTeacherOptions, setIsLoadingTeacherOptions] = useState(false);
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
-  const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
-  const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<ActionError | null>(null);
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
@@ -1737,7 +1711,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
   const [suggestedFieldsByPlan, setSuggestedFieldsByPlan] = useState<SuggestedFieldsByPlan>({});
   const isAdminAccount = currentAccount?.accessGroup.includes('ADMIN') === true;
   const prefillMode = resolvePrefillMode(currentAccount);
-  const canSelectDepartment = prefillMode === 'managed';
+  const canManage = prefillMode === 'managed';
   const lockedUpstreamLoginUserId = currentAccount?.lockedUpstreamLoginUserId ?? null;
   const {
     clear,
@@ -1753,6 +1727,117 @@ export function AcademicCurriculumPlanHomepagePageContent({
     keepAlive: true,
     lockedUserId: lockedUpstreamLoginUserId,
   });
+  const {
+    error: upstreamIdentityError,
+    identity: upstreamIdentity,
+    loading: isLoadingUpstreamIdentity,
+  } = useVerifiedUpstreamIdentity({
+    onExpiredSession: clear,
+    persistSessionFromResult,
+    session: storedSession,
+  });
+  const toolbarTeachers = useMemo(() => {
+    if (!canManage) {
+      return currentAccount.staffId
+        ? [{ name: currentAccount.displayName, staffId: currentAccount.staffId }]
+        : [];
+    }
+
+    const teachers = new Map(
+      teacherOptions.map((teacher) => [
+        teacher.staffId,
+        { name: teacher.staffName, staffId: teacher.staffId },
+      ]),
+    );
+    if (currentAccount.staffId) {
+      teachers.set(currentAccount.staffId, {
+        name: currentAccount.displayName,
+        staffId: currentAccount.staffId,
+      });
+    }
+    return Array.from(teachers.values());
+  }, [canManage, currentAccount.displayName, currentAccount.staffId, teacherOptions]);
+  const watchedSemesterId = Form.useWatch('semesterId', searchForm) ?? null;
+  const watchedStaffId = Form.useWatch('staffId', searchForm) ?? '';
+  const resolvedWatchedStaffId = resolveStaffDirectoryTeacherStaffId(
+    watchedStaffId,
+    toolbarTeachers,
+  );
+  const searchConditionsChanged = Boolean(
+    loadedSearchValues &&
+    (loadedSearchValues.semesterId !== watchedSemesterId ||
+      loadedSearchValues.staffId !== resolvedWatchedStaffId),
+  );
+  const upstreamIdentityMismatchMessage =
+    canManage &&
+    upstreamIdentity?.personId.trim() &&
+    resolvedWatchedStaffId &&
+    upstreamIdentity.personId.trim() !== resolvedWatchedStaffId
+      ? `当前校园网身份 ${upstreamIdentity.personId} ${upstreamIdentity.personName} 与所选教师 ${resolvedWatchedStaffId} 不同；可继续查询，最终由后端校验权限。`
+      : null;
+
+  useEffect(() => {
+    if (!canManage || watchedSemesterId === null) {
+      setTeacherOptions([]);
+      setTeacherOptionsError(null);
+      setIsLoadingTeacherOptions(false);
+      return undefined;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      setIsLoadingTeacherOptions(true);
+      setTeacherOptionsError(null);
+      void listAcademicCurriculumPlanHomepageTeacherOptions({
+        keyword: teacherKeyword,
+        semesterId: watchedSemesterId,
+      })
+        .then((items) => {
+          if (cancelled) {
+            return;
+          }
+
+          setTeacherOptions((current) => {
+            const merged = new Map(items.map((item) => [item.staffId, item]));
+            const selectedOption = current.find((item) => item.staffId === resolvedWatchedStaffId);
+            if (selectedOption) {
+              merged.set(selectedOption.staffId, selectedOption);
+            }
+            if (currentAccount.staffId) {
+              merged.set(currentAccount.staffId, {
+                staffId: currentAccount.staffId,
+                staffName: currentAccount.displayName,
+              });
+            }
+            return Array.from(merged.values());
+          });
+        })
+        .catch((error: unknown) => {
+          if (!cancelled) {
+            setTeacherOptionsError(
+              error instanceof Error ? error.message : '暂时无法加载教师列表。',
+            );
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsLoadingTeacherOptions(false);
+          }
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [
+    canManage,
+    currentAccount.displayName,
+    currentAccount.staffId,
+    resolvedWatchedStaffId,
+    teacherKeyword,
+    watchedSemesterId,
+  ]);
   const canUseRememberedCredentials = canUseRememberedUpstreamLoginCredentials({
     lockedUserId: lockedUpstreamLoginUserId,
     rememberedCredentials,
@@ -1834,8 +1919,14 @@ export function AcademicCurriculumPlanHomepagePageContent({
           setLoadingReferenceHomepagePlanId(null);
           setSaveSuccessMessage(null);
 
-          const result = await fetchCurriculumPlanHomepageList({
-            ...action.values,
+          if (action.values.semesterId === null) {
+            throw new Error('请选择学期。');
+          }
+
+          const result = await listAcademicCurriculumPlanHomepages({
+            mode: prefillMode,
+            semesterId: action.values.semesterId,
+            staffId: action.values.staffId,
             upstreamSessionToken: currentSession.upstreamSessionToken,
           });
 
@@ -1855,15 +1946,17 @@ export function AcademicCurriculumPlanHomepagePageContent({
             throw new Error('当前记录缺少教学班 ID，无法保存授课计划首页。');
           }
 
-          const result = await saveCurriculumPlanHomepage({
+          if (action.values.semesterId === null) {
+            throw new Error('当前列表缺少学期，请重新查询后保存。');
+          }
+
+          const result = await saveAcademicCurriculumPlanHomepage({
             homepage: action.homepage,
-            target: {
-              departmentId: action.values.departmentId ?? null,
-              planId: action.item.planId,
-              schoolYear: action.values.schoolYear,
-              semester: action.values.semester,
-              teachingClassId,
-            },
+            mode: prefillMode,
+            planId: action.item.planId,
+            semesterId: action.values.semesterId,
+            staffId: action.values.staffId,
+            teachingClassId,
             upstreamSessionToken: currentSession.upstreamSessionToken,
           });
 
@@ -1879,8 +1972,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
           setSaveSuccessMessage(result.msg?.trim() || '授课计划首页已保存。');
 
           try {
-            const refreshedList = await fetchCurriculumPlanHomepageList({
-              ...action.values,
+            const refreshedList = await listAcademicCurriculumPlanHomepages({
+              mode: prefillMode,
+              semesterId: action.values.semesterId,
+              staffId: action.values.staffId,
               upstreamSessionToken: savedSession.upstreamSessionToken,
             });
             const refreshedSession = persistSessionFromResult(savedSession, refreshedList);
@@ -2167,6 +2262,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
       if (!storedSession) {
         openLoginModal({
           action,
+          fallbackUserId:
+            action.type === 'list' || action.type === 'save'
+              ? action.values.staffId
+              : action.item.staffId,
         });
         return;
       }
@@ -3087,15 +3186,15 @@ export function AcademicCurriculumPlanHomepagePageContent({
           return;
         }
 
-        setAcademicSemesters(nextSemesters);
-        searchForm.setFieldsValue(
-          resolveAcademicSemesterPeriodValues({
-            currentValues: searchForm.isFieldsTouched(['schoolYear', 'semester'])
-              ? searchForm.getFieldsValue(['schoolYear', 'semester'])
-              : {},
-            options: buildAcademicSemesterPeriodOptions(nextSemesters),
-          }),
-        );
+        const sortedSemesters = sortAcademicSemestersForDisplay(nextSemesters);
+        setAcademicSemesters(sortedSemesters);
+        searchForm.setFieldsValue({
+          semesterId: pickAcademicSemesterId(
+            sortedSemesters,
+            searchForm.getFieldValue('semesterId'),
+          ),
+          staffId: searchForm.getFieldValue('staffId') || currentAccount.staffId || '',
+        });
       } catch (error) {
         if (isCancelled) {
           return;
@@ -3117,79 +3216,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
     return () => {
       isCancelled = true;
     };
-  }, [searchForm]);
-
-  useEffect(() => {
-    let isCancelled = false;
-
-    async function loadDepartmentOptions() {
-      if (!canSelectDepartment) {
-        setIsLoadingDepartments(false);
-        setDepartmentOptions([]);
-        setDepartmentOptionsError(null);
-        searchForm.setFieldsValue({
-          departmentId: null,
-        });
-        return;
-      }
-
-      setIsLoadingDepartments(true);
-      setDepartmentOptionsError(null);
-
-      try {
-        const departments = await fetchCurriculumPlanHomepageDepartmentOptions();
-        const nextOptions = ensureDepartmentSelectOption(
-          buildDepartmentSelectOptions(departments),
-          {
-            id: DEFAULT_DEPARTMENT_ID,
-          },
-        );
-
-        if (isCancelled) {
-          return;
-        }
-
-        setDepartmentOptions(nextOptions);
-        searchForm.setFieldsValue({
-          departmentId: resolveDepartmentDefaultId({
-            currentDepartmentId: searchForm.getFieldValue('departmentId') as string | undefined,
-            defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
-            options: nextOptions,
-          }),
-        });
-      } catch (error) {
-        const fallbackOptions = ensureDepartmentSelectOption([], {
-          id: DEFAULT_DEPARTMENT_ID,
-        });
-
-        if (isCancelled) {
-          return;
-        }
-
-        setDepartmentOptions(fallbackOptions);
-        setDepartmentOptionsError(
-          error instanceof Error ? error.message : '暂时无法加载可选系部。',
-        );
-        searchForm.setFieldsValue({
-          departmentId: resolveDepartmentDefaultId({
-            currentDepartmentId: searchForm.getFieldValue('departmentId') as string | undefined,
-            defaultDepartmentId: DEFAULT_DEPARTMENT_ID,
-            options: fallbackOptions,
-          }),
-        });
-      } finally {
-        if (!isCancelled) {
-          setIsLoadingDepartments(false);
-        }
-      }
-    }
-
-    void loadDepartmentOptions();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [canSelectDepartment, searchForm]);
+  }, [currentAccount.staffId, searchForm]);
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -3250,7 +3277,10 @@ export function AcademicCurriculumPlanHomepagePageContent({
   async function handleFetchList(values: SearchFormValues) {
     await ensureSessionAndRun({
       type: 'list',
-      values: canSelectDepartment ? values : { ...values, departmentId: null },
+      values: {
+        ...values,
+        staffId: resolveStaffDirectoryTeacherStaffId(values.staffId, toolbarTeachers),
+      },
     });
   }
 
@@ -3316,86 +3346,95 @@ export function AcademicCurriculumPlanHomepagePageContent({
       ) : null}
 
       <Card size="small">
-        <Flex align="center" gap={token.marginSM} justify="space-between" wrap>
+        <div className="flex flex-col items-end gap-2">
+          <UpstreamIdentityBar
+            connected={Boolean(storedSession)}
+            error={upstreamIdentityError}
+            identity={upstreamIdentity}
+            loading={isLoadingUpstreamIdentity}
+            mismatchMessage={upstreamIdentityMismatchMessage}
+            upstreamLoginId={storedSession?.upstreamLoginId}
+            onConnect={() => {
+              setPendingAction(null);
+              setLoginError(null);
+              openLoginModal({ fallbackUserId: resolvedWatchedStaffId });
+            }}
+          />
+
           <Form<SearchFormValues>
             form={searchForm}
-            initialValues={defaultSearchValues}
-            layout="inline"
+            initialValues={{ semesterId: null, staffId: currentAccount.staffId ?? '' }}
             requiredMark={false}
             size="small"
-            style={{ flex: '1 1 auto', rowGap: token.marginXS }}
+            style={{ flex: '0 1 auto' }}
             onFinish={(values) => {
               void handleFetchList(values);
             }}
           >
-            <AcademicSemesterPeriodFormItems
-              loading={isLoadingAcademicSemesters}
-              schoolYearHelp={academicSemestersError ? '学年依赖学期列表。' : undefined}
-              schoolYearOptions={schoolYearOptions}
-              schoolYearSelectProps={{
-                style: { width: 124 },
-              }}
-              schoolYearValidateStatus={academicSemestersError ? 'warning' : undefined}
-              semesterHelp={academicSemestersError ? '学期依赖学期列表。' : undefined}
-              semesterSelectProps={{
-                style: { width: 108 },
-              }}
-              semesterValidateStatus={academicSemestersError ? 'warning' : undefined}
-            />
-            {canSelectDepartment ? (
-              <DepartmentFormItem
-                label="系部"
-                loading={isLoadingDepartments}
-                options={departmentOptions}
-                required
-                selectProps={{
-                  size: 'small',
-                  style: { width: 200 },
-                }}
-                validateStatus={departmentOptionsError ? 'warning' : undefined}
-              />
-            ) : null}
-            <Form.Item>
-              <Button
-                disabled={canSelectDepartment && isLoadingDepartments}
-                htmlType="submit"
-                icon={<SearchOutlined />}
-                loading={isLoadingList}
-                size="small"
-                type="primary"
-              >
-                读取计划列表
-              </Button>
-            </Form.Item>
-          </Form>
+            <CompactQueryBar>
+              <CompactQueryBarField label="学期" variant="control" width={240}>
+                <Form.Item
+                  name="semesterId"
+                  noStyle
+                  rules={[{ required: true, message: '请选择学期' }]}
+                >
+                  <AcademicSemesterSelect
+                    allowClear={false}
+                    disabled={isLoadingAcademicSemesters || academicSemesters.length === 0}
+                    loading={isLoadingAcademicSemesters}
+                    records={academicSemesters}
+                    placeholder="选择学期"
+                    showSearch
+                    status={academicSemestersError ? 'warning' : undefined}
+                    variant="borderless"
+                  />
+                </Form.Item>
+              </CompactQueryBarField>
 
-          {isAdminAccount ? (
-            <Flex align="center" gap={token.marginXS} style={{ flex: '0 0 auto' }} wrap>
-              <Typography.Text
-                style={{
-                  color: token.colorTextSecondary,
-                  fontSize: token.fontSizeSM,
-                  lineHeight: token.lineHeightSM,
-                }}
-              >
-                智慧校园账号：{formatUpstreamSessionLoginUser(storedSession)}
-              </Typography.Text>
-              <Button
-                icon={<SwapOutlined />}
-                size="small"
-                onClick={() => {
-                  setPendingAction(null);
-                  setLoginError(null);
-                  openLoginModal();
-                }}
-              >
-                {storedSession ? '切换账号' : '连接账号'}
-              </Button>
-            </Flex>
+              <CompactQueryBarSeparator />
+
+              <CompactQueryBarField label="教师" variant="control" width={200}>
+                <Form.Item
+                  name="staffId"
+                  noStyle
+                  rules={[{ required: true, message: '请选择教师' }]}
+                >
+                  <StaffDirectoryTeacherAutoComplete
+                    allowClear={canManage}
+                    directoryUnavailableContent={
+                      teacherOptionsError ? '教师列表加载失败' : '没有匹配的教师'
+                    }
+                    disabled={!canManage}
+                    loading={isLoadingTeacherOptions}
+                    placeholder="工号或姓名"
+                    popupMatchSelectWidth={240}
+                    teachers={toolbarTeachers}
+                    variant="borderless"
+                    onSearch={setTeacherKeyword}
+                  />
+                </Form.Item>
+              </CompactQueryBarField>
+
+              <CompactQueryBarAction>
+                <Button
+                  htmlType="submit"
+                  icon={<SearchOutlined />}
+                  loading={isLoadingList}
+                  type="primary"
+                >
+                  读取计划列表
+                </Button>
+              </CompactQueryBarAction>
+            </CompactQueryBar>
+          </Form>
+          {searchConditionsChanged ? (
+            <span className="compact-query-bar-dirty-hint">条件已变更，点击查询应用</span>
           ) : null}
-        </Flex>
-        {canSelectDepartment && departmentOptionsError ? (
-          <Alert showIcon title={departmentOptionsError} type="warning" />
+        </div>
+        {teacherOptionsError ? (
+          <div className="mt-4">
+            <Alert showIcon title={teacherOptionsError} type="warning" />
+          </div>
         ) : null}
       </Card>
 
@@ -3443,7 +3482,6 @@ export function AcademicCurriculumPlanHomepagePageContent({
         lockedUserId={lockedUpstreamLoginUserId}
         loginError={loginError}
         open={isLoginModalOpen}
-        title="登录智慧校园"
         onCancel={() => {
           setIsLoginModalOpen(false);
           setPendingAction(null);

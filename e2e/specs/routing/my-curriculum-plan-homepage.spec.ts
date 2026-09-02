@@ -64,7 +64,14 @@ test('具备 staff 权限的已登录会话，应允许进入 My 计划首页', 
   await page.goto(routes.myCurriculumPlanHomepage);
 
   await expect(page.getByRole('heading', { name: 'My 计划首页' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '读取计划列表' })).toBeVisible();
+  const queryBar = page.locator('.compact-query-bar');
+  await expect(queryBar.getByText('学期', { exact: true })).toBeVisible();
+  await expect(queryBar.getByText('教师', { exact: true })).toBeVisible();
+  await expect(queryBar.getByText('staff-1001 staff-user', { exact: true })).toBeVisible();
+  await expect(queryBar.getByRole('button', { name: '读取计划列表' })).toBeVisible();
+  await expect(queryBar.getByText('学年', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('校园网当前身份：未连接')).toBeVisible();
+  await expect(page.getByRole('button', { name: '连接账号' })).toBeVisible();
   await expect(page.getByText('系部')).toHaveCount(0);
   await expect.poll(() => academicSemestersQueryCount).toBeGreaterThan(0);
   expect(departmentQueryCount).toBe(0);

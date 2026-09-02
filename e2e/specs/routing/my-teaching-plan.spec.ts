@@ -151,6 +151,27 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
       return;
     }
 
+    if (query.includes('query FetchVerifiedStaffIdentity')) {
+      await route.fulfill({
+        body: JSON.stringify({
+          data: {
+            fetchVerifiedStaffIdentity: {
+              departmentName: '信息工程系',
+              expiresAt: '2027-01-01T01:00:00.000Z',
+              identityKind: 'STAFF',
+              orgId: 'ORG0302',
+              personId: 'staff-1001',
+              personName: '王老师',
+              upstreamLoginId: 'staff-1001',
+              upstreamSessionToken: 'upstream-token-1',
+            },
+          },
+        }),
+        contentType: 'application/json',
+      });
+      return;
+    }
+
     if (query.includes('query MyTeachingPlan(')) {
       requestedSemesterId = payload?.variables?.semesterId ?? null;
       await route.fulfill({
@@ -251,6 +272,13 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await page.goto(routes.myTeachingPlan);
 
   await expect(page.getByRole('heading', { name: 'My 授课计划' })).toBeVisible();
+  const queryBar = page.locator('.compact-query-bar');
+  await expect(queryBar.getByText('学期', { exact: true })).toBeVisible();
+  await expect(queryBar.getByText('教师', { exact: true })).toBeVisible();
+  await expect(queryBar.getByRole('combobox').nth(1)).toHaveValue('staff-1001 王老师');
+  await expect(queryBar.getByRole('button', { name: '查询' })).toBeVisible();
+  expect(requestedSemesterId).toBeNull();
+  await queryBar.getByRole('button', { name: '查询' }).click();
   await expect(page.getByText('Product Lab', { exact: true })).toHaveCount(0);
   await expect(page.getByText('数据库原理', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('table', { name: '数据库原理课程授课计划' })).toBeVisible();
@@ -498,7 +526,8 @@ test('教务管理人员可切换受管教师并读取受管真源查询', async
   await expect(page.getByText('教师', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox')).toHaveCount(2);
   await page.getByRole('combobox').nth(1).click();
-  await page.getByText('李老师', { exact: true }).click();
+  await page.getByText('staff-2002 李老师', { exact: true }).click();
+  await page.getByRole('button', { name: '查询' }).click();
 
   await expect.poll(() => requestedStaffId).toBe('staff-2002');
   await expect(
@@ -554,6 +583,8 @@ test('后端无授课地点时，首次填写应保存并成为本课程统一�
   });
 
   await page.goto(routes.myTeachingPlan);
+
+  await page.getByRole('button', { name: '查询' }).click();
 
   const firstLocation = page.getByLabel('2026-09-08第1,2节授课地点');
   const secondLocation = page.getByLabel('2026-09-08第3,4节授课地点');

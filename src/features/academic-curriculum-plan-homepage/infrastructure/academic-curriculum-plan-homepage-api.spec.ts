@@ -11,10 +11,13 @@ import {
   fetchCurriculumPlanHomepageDetail,
   fetchCurriculumPlanHomepageList,
   isCurriculumPlanHomepagePrefillTimeWindowClosedError,
+  listAcademicCurriculumPlanHomepages,
+  listAcademicCurriculumPlanHomepageTeacherOptions,
   listCurriculumPlanHomepageReferenceCandidates,
   listCurriculumPlanHomepageTeachingEndChapterCandidates,
   previewCurriculumPlanHomepagePrefill,
   resolveCurriculumPlanHomepagePrefillErrorMessage,
+  saveAcademicCurriculumPlanHomepage,
   saveCurriculumPlanHomepage,
 } from './academic-curriculum-plan-homepage-api';
 
@@ -104,6 +107,82 @@ describe('academic curriculum plan homepage api', () => {
       schoolYear: '2025',
       semester: '2',
       sessionToken: 'upstream-token-000',
+    });
+  });
+
+  it('lists the current teacher homepage by one semester record', async () => {
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
+      listMyAcademicCurriculumPlanHomepages: {
+        count: 0,
+        expiresAt: '2026-06-01T08:00:00.000Z',
+        items: [],
+        upstreamSessionToken: 'rolled-token',
+      },
+    });
+
+    await expect(
+      listAcademicCurriculumPlanHomepages({
+        mode: 'my',
+        semesterId: 7,
+        staffId: 'ignored-for-self',
+        upstreamSessionToken: 'session-token',
+      }),
+    ).resolves.toMatchObject({ upstreamSessionToken: 'rolled-token' });
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
+      'query ListMyAcademicCurriculumPlanHomepages',
+    );
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
+      semesterId: 7,
+      upstreamSessionToken: 'session-token',
+    });
+  });
+
+  it('lists a managed teacher homepage by semesterId and staffId', async () => {
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
+      listManagedAcademicCurriculumPlanHomepages: {
+        count: 0,
+        expiresAt: '2026-06-01T08:00:00.000Z',
+        items: [],
+        upstreamSessionToken: 'rolled-token',
+      },
+    });
+
+    await listAcademicCurriculumPlanHomepages({
+      mode: 'managed',
+      semesterId: 7,
+      staffId: ' S001 ',
+      upstreamSessionToken: 'session-token',
+    });
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
+      'query ListAcademicCurriculumPlanHomepages',
+    );
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
+      semesterId: 7,
+      staffId: 'S001',
+      upstreamSessionToken: 'session-token',
+    });
+  });
+
+  it('loads semester-scoped teacher options for the shared teacher control', async () => {
+    mockedExecuteGraphQL.mockResolvedValueOnce({
+      listManagedAcademicSemesterPlannedTimetableTeacherOptions: {
+        items: [{ staffId: 'S001', staffName: '王老师' }],
+      },
+    });
+
+    await expect(
+      listAcademicCurriculumPlanHomepageTeacherOptions({
+        keyword: ' 王 ',
+        semesterId: 7,
+      }),
+    ).resolves.toEqual([{ staffId: 'S001', staffName: '王老师' }]);
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[0]).toContain(
+      'query AcademicCurriculumPlanHomepageTeacherOptions',
+    );
+    expect(mockedExecuteGraphQL.mock.calls[0]?.[1]).toEqual({
+      keyword: '王',
+      limit: 20,
+      semesterId: 7,
     });
   });
 
@@ -224,6 +303,43 @@ describe('academic curriculum plan homepage api', () => {
           semester: '2',
           teachingClassId: 'CLASS-001',
         },
+      },
+    });
+  });
+
+  it('saves my homepage with semesterId and without a client-supplied staffId', async () => {
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
+      saveMyAcademicCurriculumPlanHomepage: {
+        code: 200,
+        data: null,
+        expiresAt: '2026-06-01T09:00:00.000Z',
+        msg: 'ok',
+        planId: 'plan-001',
+        success: true,
+        upstreamSessionToken: 'rolled-token',
+      },
+    });
+
+    const homepage = { textbook_name: '教材' };
+    await saveAcademicCurriculumPlanHomepage({
+      homepage,
+      mode: 'my',
+      planId: null,
+      semesterId: 7,
+      staffId: 'ignored-for-self',
+      teachingClassId: ' CLASS-001 ',
+      upstreamSessionToken: 'session-token',
+    });
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
+      'mutation SaveMyAcademicCurriculumPlanHomepage',
+    );
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
+      input: {
+        homepage,
+        planId: null,
+        semesterId: 7,
+        teachingClassId: 'CLASS-001',
+        upstreamSessionToken: 'session-token',
       },
     });
   });

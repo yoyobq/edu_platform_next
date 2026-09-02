@@ -1,0 +1,96 @@
+/* src/shared/ui/compact-query-bar/compact-query-bar.css */
+
+.compact-query-bar {
+  align-items: center;
+  background: var(--ant-color-bg-container);
+  border: 1px solid var(--ant-color-border-secondary);
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  padding: 3px;
+}
+
+.compact-query-bar-field {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.compact-query-bar-field-label {
+  color: var(--ant-color-text-secondary);
+  flex: 0 0 auto;
+  font-size: 13px;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.compact-query-bar-field-content {
+  min-width: 0;
+}
+
+.compact-query-bar-field-content-value {
+  color: var(--ant-color-text);
+  display: inline-block;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 24px;
+  white-space: nowrap;
+}
+
+.compact-query-bar-field-content-truncated {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.compact-query-bar-field-content-control {
+  display: inline-flex;
+  margin-inline-end: -10px;
+}
+
+.compact-query-bar-field-content-control .ant-select {
+  width: 100%;
+}
+
+.compact-query-bar-field-content-control .ant-select-selector {
+  font-weight: 500;
+}
+
+.compact-query-bar-field-content-loading {
+  display: inline-block;
+}
+
+.compact-query-bar-field-content-loading .ant-skeleton-button {
+  width: 100% !important;
+}
+
+.compact-query-bar-separator {
+  background: var(--ant-color-border-secondary);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 16px;
+  width: 1px;
+}
+
+.compact-query-bar-action {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.compact-query-bar-action .ant-btn {
+  align-items: center;
+  border-radius: 8px;
+  display: inline-flex;
+  height: 32px;
+  justify-content: center;
+  min-width: 76px;
+}
+
+.compact-query-bar-dirty-hint {
+  color: var(--ant-color-text-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}

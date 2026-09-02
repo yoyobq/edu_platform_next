@@ -32,10 +32,9 @@ import {
 
 import {
   isExpiredUpstreamSessionError,
+  type PersistUpstreamSessionFromResult,
   resolveUpstreamErrorMessage,
   type StoredUpstreamSession,
-  UpstreamLoginModal,
-  useUpstreamLoginModalController,
 } from '@/entities/upstream-session';
 
 import { replaceTeachingPlanContentRowsFromHistory } from '../application/historical-plan-fill';
@@ -74,11 +73,7 @@ import {
   writeTeachingPlanCourseDraft,
 } from '../infrastructure/draft-storage';
 import { exportTeachingPlanExcel } from '../infrastructure/teaching-plan-excel-export';
-import type {
-  AcademicTeachingPlanPageLoaderData,
-  CurriculumPlanDetailReferenceCandidate,
-  TeachingPlanOccurrence,
-} from '../types';
+import type { CurriculumPlanDetailReferenceCandidate, TeachingPlanOccurrence } from '../types';
 
 const DELIVERY_MODE_OPTIONS = [
   { label: '线下', value: 'OFFLINE' },
@@ -89,7 +84,6 @@ export function TeachingPlanSheet({
   course,
   courseNavigation,
   canManage,
-  currentAccount,
   currentAccountId,
   isCompact,
   semesterId,
@@ -98,12 +92,14 @@ export function TeachingPlanSheet({
   schoolYear,
   targetStaffId,
   teacherName,
+  persistUpstreamSessionFromResult,
+  recoverExpiredUpstreamSession,
+  requestUpstreamSession,
   onClassroomNameUpdated,
 }: {
   course: TeachingPlanCourseProjection;
   courseNavigation: React.ReactNode;
   canManage: boolean;
-  currentAccount: AcademicTeachingPlanPageLoaderData['currentAccount'];
   currentAccountId: number;
   isCompact: boolean;
   semesterId: number;
@@ -112,6 +108,15 @@ export function TeachingPlanSheet({
   schoolYear: string;
   targetStaffId: string;
   teacherName: string;
+  persistUpstreamSessionFromResult: PersistUpstreamSessionFromResult;
+  recoverExpiredUpstreamSession: (
+    session: StoredUpstreamSession,
+    action: (nextSession: StoredUpstreamSession) => void,
+  ) => void;
+  requestUpstreamSession: (
+    action: (session: StoredUpstreamSession) => void,
+    fallbackUserId?: string | null,
+  ) => void;
   onClassroomNameUpdated: (scheduleId: number, classroomName: string) => void;
 }) {
   const { message, modal, notification } = AntApp.useApp();
@@ -140,9 +145,6 @@ export function TeachingPlanSheet({
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [historyWarnings, setHistoryWarnings] = useState<string[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [queuedHistorySession, setQueuedHistorySession] = useState<StoredUpstreamSession | null>(
-    null,
-  );
   const [selectedHistoryPlanId, setSelectedHistoryPlanId] = useState<string | null>(null);
   const [draggedContentRowId, setDraggedContentRowId] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<{
@@ -316,27 +318,8 @@ export function TeachingPlanSheet({
     clearDragState();
   };
 
-  const {
-    modalProps: upstreamLoginModalProps,
-    openLoginModal,
-    openLoginModalForExpiredSession,
-    persistSessionFromResult,
-    session: upstreamSession,
-  } = useUpstreamLoginModalController<'load-history'>({
-    account: currentAccount,
-    keepAlive: true,
-    lockedUserId: currentAccount.lockedUpstreamLoginUserId,
-    resolveLoginErrorMessage: (error) =>
-      resolveUpstreamErrorMessage(error, '校园网登录失败，请检查账号或密码。'),
-    onLoginSuccess: ({ pendingAction, session }) => {
-      if (pendingAction === 'load-history') {
-        setQueuedHistorySession(session);
-      }
-    },
-  });
-
   const loadHistoryCandidates = useCallback(
-    async (activeSession: StoredUpstreamSession) => {
+    async function loadHistoryCandidatesWithSession(activeSession: StoredUpstreamSession) {
       setIsLoadingHistory(true);
       setHistoryError(null);
       try {
@@ -349,17 +332,15 @@ export function TeachingPlanSheet({
           staffId: targetStaffId,
           upstreamSessionToken: activeSession.upstreamSessionToken,
         });
-        persistSessionFromResult(activeSession, result);
+        persistUpstreamSessionFromResult(activeSession, result);
         setHistoryCandidates(result.items);
         setHistoryWarnings(result.warnings);
         setSelectedHistoryPlanId(result.items[0]?.sourcePlanId ?? null);
         setHistoryModalOpen(true);
       } catch (error) {
         if (isExpiredUpstreamSessionError(error)) {
-          openLoginModalForExpiredSession({
-            loginError: 'upstream 会话已失效，请重新登录后继续。',
-            pendingAction: 'load-history',
-            session: activeSession,
+          recoverExpiredUpstreamSession(activeSession, (nextSession) => {
+            void loadHistoryCandidatesWithSession(nextSession);
           });
         } else {
           setHistoryError(
@@ -373,33 +354,19 @@ export function TeachingPlanSheet({
     [
       canManage,
       course.courseName,
-      openLoginModalForExpiredSession,
-      persistSessionFromResult,
+      persistUpstreamSessionFromResult,
       plannedLessons,
+      recoverExpiredUpstreamSession,
       schoolYear,
       semesterNumber,
       targetStaffId,
     ],
   );
 
-  useEffect(() => {
-    if (!queuedHistorySession) {
-      return;
-    }
-    const session = queuedHistorySession;
-    setQueuedHistorySession(null);
-    void loadHistoryCandidates(session);
-  }, [loadHistoryCandidates, queuedHistorySession]);
-
   const openHistoryReference = () => {
-    if (upstreamSession) {
-      void loadHistoryCandidates(upstreamSession);
-      return;
-    }
-    openLoginModal({
-      fallbackUserId: targetStaffId,
-      pendingAction: 'load-history',
-    });
+    requestUpstreamSession((session) => {
+      void loadHistoryCandidates(session);
+    }, targetStaffId);
   };
 
   const applySelectedHistory = () => {
@@ -1077,7 +1044,6 @@ export function TeachingPlanSheet({
           )}
         </div>
       </Modal>
-      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }

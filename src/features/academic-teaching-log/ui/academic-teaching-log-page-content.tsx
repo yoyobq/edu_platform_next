@@ -8,14 +8,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  BookOutlined,
-  CheckOutlined,
-  FormOutlined,
-  SearchOutlined,
-  SwapOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import { BookOutlined, CheckOutlined, FormOutlined, SearchOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -50,13 +43,21 @@ import {
   type StaffDirectoryResult,
   StaffDirectoryTeacherAutoComplete,
   type StoredUpstreamSession,
+  UpstreamIdentityBar,
   type UpstreamLoginFormValues,
   UpstreamLoginModal,
   useUpstreamSession,
+  useVerifiedUpstreamIdentity,
   type VerifiedStaffIdentityResult,
 } from '@/entities/upstream-session';
 
 import { normalizeOptionalTextValue } from '@/shared/form-normalization';
+import {
+  CompactQueryBar,
+  CompactQueryBarAction,
+  CompactQueryBarField,
+  CompactQueryBarSeparator,
+} from '@/shared/ui/compact-query-bar';
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
@@ -1493,9 +1494,6 @@ export function AcademicTeachingLogPageContent({
         storedSession.upstreamSessionToken,
       ].join(':')
     : 'none';
-  const storedSessionIdentityKey = storedSession
-    ? [storedSession.accountId, storedSession.upstreamLoginId || 'unknown'].join(':')
-    : 'none';
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
   const [staffId, setStaffId] = useState(liveDefaultStaffId ?? '');
@@ -1506,6 +1504,10 @@ export function AcademicTeachingLogPageContent({
     lectureJournalQueryReducer,
     initialLectureJournalQueryState,
   );
+  const [appliedQuery, setAppliedQuery] = useState<{
+    semesterId: number;
+    staffId: string;
+  } | null>(null);
   const { isLoadingReconciliation, prefillResult, queryError } = queryState;
   const reconciliationResult = prefillResult?.reconciliation ?? null;
   const [resultViewScope, setResultViewScope] = useState<ResultViewScope>('missing');
@@ -1518,9 +1520,6 @@ export function AcademicTeachingLogPageContent({
   const [isSubmittingLogin, setIsSubmittingLogin] = useState(false);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [staffDirectoryError, setStaffDirectoryError] = useState<string | null>(null);
-  const [upstreamIdentity, setUpstreamIdentity] = useState<VerifiedStaffIdentityResult | null>(
-    null,
-  );
   const [upstreamIdentityWarning, setUpstreamIdentityWarning] = useState<string | null>(null);
   const [
     hasAcknowledgedSessionStaffMismatchWarning,
@@ -1548,27 +1547,30 @@ export function AcademicTeachingLogPageContent({
     clear();
   }, [clear]);
 
-  const openLoginModal = useCallback(() => {
-    if (!liveUpstreamAccount) {
-      return;
-    }
+  const openLoginModal = useCallback(
+    (fallbackUserId?: string | null) => {
+      if (!liveUpstreamAccount) {
+        return;
+      }
 
-    setLoginError(null);
-    loginForm.setFieldsValue(
-      buildUpstreamLoginCredentialsInitialValues({
-        fallbackUserId: storedSession?.upstreamLoginId,
-        lockedUserId: lockedUpstreamLoginUserId,
-        rememberedCredentials,
-      }),
-    );
-    setIsLoginModalOpen(true);
-  }, [
-    liveUpstreamAccount,
-    lockedUpstreamLoginUserId,
-    loginForm,
-    rememberedCredentials,
-    storedSession?.upstreamLoginId,
-  ]);
+      setLoginError(null);
+      loginForm.setFieldsValue(
+        buildUpstreamLoginCredentialsInitialValues({
+          fallbackUserId: fallbackUserId ?? storedSession?.upstreamLoginId,
+          lockedUserId: lockedUpstreamLoginUserId,
+          rememberedCredentials,
+        }),
+      );
+      setIsLoginModalOpen(true);
+    },
+    [
+      liveUpstreamAccount,
+      lockedUpstreamLoginUserId,
+      loginForm,
+      rememberedCredentials,
+      storedSession?.upstreamLoginId,
+    ],
+  );
 
   useEffect(() => {
     storedSessionRef.current = storedSession;
@@ -1580,53 +1582,15 @@ export function AcademicTeachingLogPageContent({
     },
     [persistSessionFromResult],
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    setUpstreamIdentity(null);
-
-    const session = storedSessionRef.current;
-
-    if (!session) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    const activeSession = session;
-
-    async function loadUpstreamIdentity() {
-      try {
-        const identity = await readVerifiedStaffIdentity({
-          upstreamSessionToken: activeSession.upstreamSessionToken,
-        });
-
-        if (cancelled) {
-          return;
-        }
-
-        setUpstreamIdentity(identity);
-        persistSessionFromVerifiedIdentity(activeSession, identity);
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setUpstreamIdentity(null);
-
-        if (isExpiredUpstreamSessionError(error)) {
-          clearCurrentSession();
-        }
-      }
-    }
-
-    void loadUpstreamIdentity();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [clearCurrentSession, persistSessionFromVerifiedIdentity, storedSessionIdentityKey]);
+  const {
+    error: upstreamIdentityError,
+    identity: upstreamIdentity,
+    loading: isLoadingUpstreamIdentity,
+  } = useVerifiedUpstreamIdentity({
+    onExpiredSession: clearCurrentSession,
+    persistSessionFromResult,
+    session: storedSession,
+  });
 
   useEffect(() => {
     if (!keepAliveFailure) {
@@ -1730,7 +1694,7 @@ export function AcademicTeachingLogPageContent({
         setSemesters(nextSemesters);
         setSelectedSemesterId((currentSelection) =>
           pickNextSemesterId(nextSemesters, currentSelection, {
-            canKeepCurrentSelection: isAdminViewer,
+            canKeepCurrentSelection: true,
           }),
         );
       } catch (error) {
@@ -1749,7 +1713,7 @@ export function AcademicTeachingLogPageContent({
     return () => {
       cancelled = true;
     };
-  }, [isAdminViewer]);
+  }, []);
 
   useEffect(() => {
     if (isStaffViewer) {
@@ -1837,7 +1801,6 @@ export function AcademicTeachingLogPageContent({
       const identity = await readVerifiedStaffIdentity({
         upstreamSessionToken: session.upstreamSessionToken,
       });
-      setUpstreamIdentity(identity);
       const nextSession = persistSessionFromVerifiedIdentity(session, identity);
       const upstreamStaffId = identity.personId.trim();
 
@@ -1891,17 +1854,31 @@ export function AcademicTeachingLogPageContent({
 
   const selectedSemester = semesters.find((record) => record.id === selectedSemesterId) ?? null;
   const staffDirectoryTeachers = useMemo(
-    () => staffDirectoryResult?.teachers ?? [],
-    [staffDirectoryResult?.teachers],
+    () =>
+      isAdminViewer
+        ? (staffDirectoryResult?.teachers ?? [])
+        : liveDefaultStaffId
+          ? [
+              {
+                name: liveUpstreamAccount?.displayName ?? liveDefaultStaffId,
+                staffId: liveDefaultStaffId,
+              },
+            ]
+          : [],
+    [
+      isAdminViewer,
+      liveDefaultStaffId,
+      liveUpstreamAccount?.displayName,
+      staffDirectoryResult?.teachers,
+    ],
   );
   const normalizedStaffId = resolveStaffDirectoryTeacherStaffId(staffId, staffDirectoryTeachers);
+  const queryConditionsChanged = Boolean(
+    appliedQuery &&
+    (appliedQuery.semesterId !== selectedSemesterId || appliedQuery.staffId !== normalizedStaffId),
+  );
   const hasMissingStaffFilter = !normalizedStaffId;
   const isLocalAccountReady = Boolean(liveUpstreamAccount);
-  const upstreamIdentityLabel = upstreamIdentity
-    ? upstreamIdentity.personName || '未命名'
-    : storedSession
-      ? '正在确认校园网身份'
-      : '未连接校园网';
   const prefillIntegratedItems = useMemo(
     () =>
       (prefillResult?.integratedPreviews ?? []).map((item) =>
@@ -2254,7 +2231,7 @@ export function AcademicTeachingLogPageContent({
     if (!session) {
       setPendingAction('query');
       setLoginError(null);
-      openLoginModal();
+      openLoginModal(normalizedStaffId);
       return;
     }
 
@@ -2328,6 +2305,7 @@ export function AcademicTeachingLogPageContent({
         prefillResult: result.prefillResult,
         type: 'succeeded',
       });
+      setAppliedQuery({ semesterId: selectedSemester.id, staffId: normalizedStaffId });
     } catch (error) {
       if (activeQueryRequestIdRef.current !== requestId) {
         return;
@@ -2446,104 +2424,74 @@ export function AcademicTeachingLogPageContent({
 
       <div className="lecture-journal-query-shell">
         <div className="lecture-journal-query-area">
-          {storedSession ? (
-            <div className="lecture-journal-current-identity">
-              <UserOutlined />
-              <span>校园网当前身份：{upstreamIdentityLabel}</span>
-              {isAdminViewer ? (
-                <>
-                  <span className="lecture-journal-inline-separator" aria-hidden />
-                  <div className="lecture-journal-current-identity-actions">
-                    <Button
-                      icon={<SwapOutlined />}
-                      size="small"
-                      type="link"
-                      disabled={!isLocalAccountReady}
-                      style={{ padding: 0 }}
-                      onClick={() => {
-                        setPendingAction(null);
-                        openLoginModal();
-                      }}
-                    >
-                      切换账号
-                    </Button>
-                  </div>
-                </>
-              ) : null}
-            </div>
-          ) : null}
+          <UpstreamIdentityBar
+            connected={Boolean(storedSession)}
+            disabled={!isLocalAccountReady}
+            error={upstreamIdentityError}
+            identity={upstreamIdentity}
+            loading={isLoadingUpstreamIdentity}
+            mismatchMessage={upstreamIdentityWarning}
+            upstreamLoginId={storedSession?.upstreamLoginId}
+            onConnect={() => {
+              setPendingAction(null);
+              openLoginModal(normalizedStaffId);
+            }}
+          />
 
-          <div className="lecture-journal-filter-bar">
-            <div className="lecture-journal-filter-item">
-              <span className="lecture-journal-filter-label">学期</span>
-              {isLoadingSemesters ? (
-                <span className="lecture-journal-filter-skeleton">
-                  <Skeleton.Button active size="small" />
-                </span>
-              ) : !isAdminViewer ? (
-                <span className="lecture-journal-filter-value">
-                  {selectedSemester?.name ?? '待加载'}
-                </span>
-              ) : (
-                <span className="lecture-journal-filter-control lecture-journal-filter-control-semester">
-                  <AcademicSemesterSelect
-                    variant="borderless"
-                    records={semesters}
-                    value={selectedSemesterId ?? undefined}
-                    onChange={(value) => setSelectedSemesterId(value)}
-                  />
-                </span>
-              )}
-            </div>
+          <CompactQueryBar>
+            <CompactQueryBarField label="学期" variant="control" width={240}>
+              <AcademicSemesterSelect
+                allowClear={false}
+                disabled={isLoadingSemesters}
+                loading={isLoadingSemesters}
+                records={semesters}
+                value={selectedSemesterId ?? undefined}
+                variant="borderless"
+                onChange={(value) => setSelectedSemesterId(value)}
+              />
+            </CompactQueryBarField>
 
-            <span className="lecture-journal-filter-separator" aria-hidden />
+            <CompactQueryBarSeparator />
 
-            <div className="lecture-journal-filter-item">
-              <span className="lecture-journal-filter-label">教师</span>
-              {isAdminViewer ? (
-                <span className="lecture-journal-filter-control lecture-journal-filter-control-teacher">
-                  <StaffDirectoryTeacherAutoComplete
-                    classNames={{
-                      popup: {
-                        root: 'lecture-journal-teacher-autocomplete-popup',
-                      },
-                    }}
-                    loading={isLoadingStaffDirectory}
-                    popupMatchSelectWidth={220}
-                    placeholder={liveDefaultStaffId || 'ID 或姓名'}
-                    teachers={staffDirectoryTeachers}
-                    value={staffId}
-                    variant="borderless"
-                    onChange={setStaffId}
-                  />
-                </span>
-              ) : (
-                <span
-                  className="lecture-journal-filter-value lecture-journal-filter-value-truncated"
-                  title={staffId || '未绑定 ID'}
-                >
-                  {staffId || '未绑定教师 ID'}
-                </span>
-              )}
-            </div>
+            <CompactQueryBarField label="教师" variant="control" width={200}>
+              <StaffDirectoryTeacherAutoComplete
+                allowClear={isAdminViewer}
+                classNames={{
+                  popup: {
+                    root: 'lecture-journal-teacher-autocomplete-popup',
+                  },
+                }}
+                disabled={!isAdminViewer}
+                loading={isLoadingStaffDirectory}
+                popupMatchSelectWidth={240}
+                placeholder={liveDefaultStaffId || '工号或姓名'}
+                teachers={staffDirectoryTeachers}
+                value={staffId}
+                variant="borderless"
+                onChange={setStaffId}
+              />
+            </CompactQueryBarField>
 
-            <span className="lecture-journal-primary-action">
+            <CompactQueryBarAction>
               <Button
-                type="primary"
-                icon={<SearchOutlined />}
                 disabled={
                   !selectedSemester ||
                   hasMissingStaffFilter ||
                   isLoadingReconciliation ||
                   (!storedSession && !isLocalAccountReady)
                 }
+                icon={<SearchOutlined />}
                 loading={isLoadingReconciliation}
+                type="primary"
                 onClick={() => void runQueryAction()}
               >
                 比对查询
               </Button>
-            </span>
-          </div>
+            </CompactQueryBarAction>
+          </CompactQueryBar>
+          {queryConditionsChanged ? (
+            <span className="compact-query-bar-dirty-hint">条件已变更，点击查询应用</span>
+          ) : null}
           {hasMissingStaffFilter ? (
             <div className="lecture-journal-filter-alert">
               <Alert title={missingStaffFilterMessage} showIcon type="warning" />

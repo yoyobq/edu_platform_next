@@ -58,14 +58,24 @@ export function StaffDirectoryTeacherAutoComplete({
       {...autoCompleteProps}
       allowClear={allowClear}
       defaultActiveFirstOption={defaultActiveFirstOption}
-      filterOption={(inputValue, option) =>
-        String(option?.label || '')
-          .toLowerCase()
-          .includes(inputValue.trim().toLowerCase()) ||
-        String(option?.value || '')
-          .toLowerCase()
-          .includes(inputValue.trim().toLowerCase())
-      }
+      filterOption={(inputValue, option) => {
+        const normalizedInput = inputValue.trim().toLowerCase();
+        const isCurrentSelection = teachers.some((teacher) =>
+          [teacher.staffId, teacher.name, formatStaffDirectoryTeacherLabel(teacher)]
+            .map((value) => value.toLowerCase())
+            .includes(normalizedInput),
+        );
+
+        return (
+          isCurrentSelection ||
+          String(option?.label || '')
+            .toLowerCase()
+            .includes(normalizedInput) ||
+          String(option?.value || '')
+            .toLowerCase()
+            .includes(normalizedInput)
+        );
+      }}
       notFoundContent={loading ? '读取中' : directoryUnavailableContent}
       options={options}
       value={renderedValue}

@@ -1,20 +1,8 @@
 // src/features/academic-teaching-plan/ui/my-teaching-plan-workspace.tsx
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { LeftOutlined, ReloadOutlined, RightOutlined, UserOutlined } from '@ant-design/icons';
-import {
-  Alert,
-  Button,
-  Card,
-  Empty,
-  Flex,
-  Select,
-  Skeleton,
-  Space,
-  Tabs,
-  Tag,
-  Typography,
-} from 'antd';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LeftOutlined, RightOutlined, SearchOutlined, UserOutlined } from '@ant-design/icons';
+import { Alert, Button, Card, Empty, Skeleton, Space, Tabs, Tag, Typography } from 'antd';
 
 import {
   type AcademicSemesterRecord,
@@ -22,8 +10,23 @@ import {
   pickAcademicSemesterId,
   sortAcademicSemestersForDisplay,
 } from '@/entities/academic-semester';
+import {
+  resolveUpstreamErrorMessage,
+  StaffDirectoryTeacherAutoComplete,
+  type StoredUpstreamSession,
+  UpstreamIdentityBar,
+  UpstreamLoginModal,
+  useUpstreamLoginModalController,
+  useVerifiedUpstreamIdentity,
+} from '@/entities/upstream-session';
 
-import { ResponsiveGrid, useWidthBand } from '@/shared/ui/responsive-layout';
+import {
+  CompactQueryBar,
+  CompactQueryBarAction,
+  CompactQueryBarField,
+  CompactQueryBarSeparator,
+} from '@/shared/ui/compact-query-bar';
+import { useWidthBand } from '@/shared/ui/responsive-layout';
 
 import {
   buildTeachingPlanProjection,
@@ -48,6 +51,12 @@ type AsyncState<T> = {
   data: T;
   error: string | null;
   loading: boolean;
+};
+
+type AppliedTeachingPlanQuery = {
+  semesterId: number;
+  staffId: string;
+  staffName: string;
 };
 
 const EMPTY_SEMESTERS_STATE: AsyncState<AcademicSemesterRecord[]> = {
@@ -104,10 +113,44 @@ export function MyTeachingPlanWorkspace({
   const [selectedStaffId, setSelectedStaffId] = useState<string | null>(
     canManage ? (currentStaff?.staffId ?? null) : null,
   );
+  const [appliedQuery, setAppliedQuery] = useState<AppliedTeachingPlanQuery | null>(null);
   const [planState, setPlanState] =
     useState<AsyncState<TeachingPlanOccurrenceEnvelope | null>>(EMPTY_PLAN_STATE);
   const [selectedScheduleId, setSelectedScheduleId] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const pendingUpstreamActionRef = useRef<((session: StoredUpstreamSession) => void) | null>(null);
+  const handleUpstreamLoginSuccess = useCallback(
+    ({ session }: { session: StoredUpstreamSession }) => {
+      const pendingAction = pendingUpstreamActionRef.current;
+      pendingUpstreamActionRef.current = null;
+      pendingAction?.(session);
+    },
+    [],
+  );
+  const {
+    clearSession: clearUpstreamSession,
+    modalProps: upstreamLoginModalProps,
+    openLoginModal,
+    openLoginModalForExpiredSession,
+    persistSessionFromResult,
+    session: upstreamSession,
+  } = useUpstreamLoginModalController<'run-pending'>({
+    account: currentAccount,
+    keepAlive: true,
+    lockedUserId: currentAccount.lockedUpstreamLoginUserId,
+    resolveLoginErrorMessage: (error) =>
+      resolveUpstreamErrorMessage(error, '校园网登录失败，请检查账号或密码。'),
+    onLoginSuccess: handleUpstreamLoginSuccess,
+  });
+  const {
+    error: upstreamIdentityError,
+    identity: upstreamIdentity,
+    loading: isLoadingUpstreamIdentity,
+  } = useVerifiedUpstreamIdentity({
+    onExpiredSession: clearUpstreamSession,
+    persistSessionFromResult,
+    session: upstreamSession,
+  });
 
   useEffect(() => {
     let isActive = true;
@@ -184,7 +227,7 @@ export function MyTeachingPlanWorkspace({
   }, [canManage, currentStaff, selectedSemesterId, selectedStaffId, teacherKeyword]);
 
   useEffect(() => {
-    if (selectedSemesterId === null || (canManage && !selectedStaffId)) {
+    if (!appliedQuery) {
       setPlanState(EMPTY_PLAN_STATE);
       return;
     }
@@ -193,10 +236,10 @@ export function MyTeachingPlanWorkspace({
     setPlanState({ data: null, error: null, loading: true });
     const request = canManage
       ? requestManagedTeachingPlan({
-          semesterId: selectedSemesterId,
-          staffId: selectedStaffId as string,
+          semesterId: appliedQuery.semesterId,
+          staffId: appliedQuery.staffId,
         })
-      : requestMyTeachingPlan(selectedSemesterId);
+      : requestMyTeachingPlan(appliedQuery.semesterId);
 
     void request
       .then((data) => {
@@ -213,7 +256,7 @@ export function MyTeachingPlanWorkspace({
     return () => {
       isActive = false;
     };
-  }, [canManage, reloadKey, selectedSemesterId, selectedStaffId]);
+  }, [appliedQuery, canManage, reloadKey]);
 
   const projection = useMemo(
     () => buildTeachingPlanProjection(planState.data?.items ?? []),
@@ -248,18 +291,65 @@ export function MyTeachingPlanWorkspace({
     });
   }, [projection.courses]);
 
-  const selectedSemester = semestersState.data.find(
-    (semester) => semester.id === selectedSemesterId,
+  const appliedSemester = semestersState.data.find(
+    (semester) => semester.id === appliedQuery?.semesterId,
   );
   const selectedTeacher = resolveSelectedTeacher({
     currentStaff,
     options: teacherOptionsState.data,
     selectedStaffId,
   });
-  const viewerName = canManage ? selectedTeacher?.staffName : currentStaff?.displayName;
-  const draftStaffId =
-    selectedStaffId ?? currentStaff?.staffId ?? planState.data?.items[0]?.staffId ?? 'unknown';
-  const draftTeacherName = viewerName ?? planState.data?.items[0]?.staffName ?? '教师';
+  const toolbarTeachers = useMemo(
+    () =>
+      canManage
+        ? teacherOptionsState.data.map((teacher) => ({
+            name: teacher.staffName,
+            staffId: teacher.staffId,
+          }))
+        : currentStaff
+          ? [{ name: currentStaff.displayName, staffId: currentStaff.staffId }]
+          : [],
+    [canManage, currentStaff, teacherOptionsState.data],
+  );
+  const toolbarStaffId = canManage ? selectedStaffId : (currentStaff?.staffId ?? null);
+  const queryConditionsChanged = Boolean(
+    appliedQuery &&
+    (appliedQuery.semesterId !== selectedSemesterId || appliedQuery.staffId !== toolbarStaffId),
+  );
+  const upstreamIdentityMismatchMessage =
+    canManage &&
+    upstreamIdentity?.personId.trim() &&
+    toolbarStaffId &&
+    upstreamIdentity.personId.trim() !== toolbarStaffId
+      ? `当前校园网身份 ${upstreamIdentity.personId} ${upstreamIdentity.personName} 与所选教师 ${toolbarStaffId} 不同；本次操作仍会交由后端权限校验。`
+      : null;
+  const requestUpstreamSession = useCallback(
+    (action: (session: StoredUpstreamSession) => void, fallbackUserId?: string | null) => {
+      if (upstreamSession) {
+        action(upstreamSession);
+        return;
+      }
+      pendingUpstreamActionRef.current = action;
+      openLoginModal({
+        fallbackUserId,
+        pendingAction: 'run-pending',
+      });
+    },
+    [openLoginModal, upstreamSession],
+  );
+  const recoverExpiredUpstreamSession = useCallback(
+    (session: StoredUpstreamSession, action: (nextSession: StoredUpstreamSession) => void) => {
+      pendingUpstreamActionRef.current = action;
+      openLoginModalForExpiredSession({
+        loginError: '校园网会话已失效，请重新登录后继续。',
+        pendingAction: 'run-pending',
+        session,
+      });
+    },
+    [openLoginModalForExpiredSession],
+  );
+  const draftStaffId = appliedQuery?.staffId ?? planState.data?.items[0]?.staffId ?? 'unknown';
+  const draftTeacherName = appliedQuery?.staffName ?? planState.data?.items[0]?.staffName ?? '教师';
   const selectedCourse =
     projection.courses.find((course) => course.scheduleId === selectedScheduleId) ??
     projection.courses[0];
@@ -268,70 +358,93 @@ export function MyTeachingPlanWorkspace({
 
   return (
     <div ref={workspaceRef} className="flex flex-col gap-4">
-      <Card>
-        <Flex gap="middle" justify="space-between" vertical={isCompact}>
-          <ResponsiveGrid
-            className="min-w-0 flex-1 gap-4"
-            columns={{ compact: 1, regular: canManage ? 2 : 1 }}
-          >
-            <FilterField label="学期">
+      <Card size="small">
+        <div className="flex flex-col items-end gap-2">
+          <UpstreamIdentityBar
+            connected={Boolean(upstreamSession)}
+            error={upstreamIdentityError}
+            identity={upstreamIdentity}
+            loading={isLoadingUpstreamIdentity}
+            mismatchMessage={upstreamIdentityMismatchMessage}
+            upstreamLoginId={upstreamSession?.upstreamLoginId}
+            onConnect={() => {
+              pendingUpstreamActionRef.current = null;
+              openLoginModal({ fallbackUserId: toolbarStaffId });
+            }}
+          />
+
+          <CompactQueryBar>
+            <CompactQueryBarField label="学期" variant="control" width={240}>
               <AcademicSemesterSelect
                 allowClear={false}
                 disabled={semestersState.loading}
                 loading={semestersState.loading}
                 records={semestersState.data}
                 value={selectedSemesterId ?? undefined}
+                variant="borderless"
                 onChange={(semesterId) => {
                   setSelectedSemesterId(semesterId);
-                  setSelectedScheduleId(null);
                   setSelectedStaffId(canManage ? (currentStaff?.staffId ?? null) : null);
                   setTeacherKeyword('');
                 }}
               />
-            </FilterField>
+            </CompactQueryBarField>
 
-            {canManage ? (
-              <FilterField label="教师">
-                <Select
-                  allowClear
-                  filterOption={false}
-                  loading={teacherOptionsState.loading}
-                  notFoundContent={
-                    teacherOptionsState.loading
-                      ? '正在查找教师…'
-                      : teacherOptionsState.error
-                        ? '教师列表加载失败'
-                        : '没有匹配的教师'
+            <CompactQueryBarSeparator />
+
+            <CompactQueryBarField label="教师" variant="control" width={200}>
+              <StaffDirectoryTeacherAutoComplete
+                allowClear={canManage}
+                directoryUnavailableContent={
+                  teacherOptionsState.error ? '教师列表加载失败' : '没有匹配的教师'
+                }
+                disabled={!canManage}
+                loading={teacherOptionsState.loading}
+                placeholder="工号或姓名"
+                popupMatchSelectWidth={240}
+                teachers={toolbarTeachers}
+                value={toolbarStaffId ?? ''}
+                variant="borderless"
+                onChange={(staffId) => setSelectedStaffId(staffId || null)}
+                onSearch={setTeacherKeyword}
+              />
+            </CompactQueryBarField>
+
+            <CompactQueryBarAction>
+              <Button
+                disabled={selectedSemesterId === null || (canManage && !selectedStaffId)}
+                icon={<SearchOutlined />}
+                loading={planState.loading}
+                type="primary"
+                onClick={() => {
+                  if (selectedSemesterId === null || !toolbarStaffId) {
+                    return;
                   }
-                  options={teacherOptionsState.data.map((teacher) => ({
-                    label: teacher.staffName,
-                    title: `${teacher.staffName}（${teacher.staffId}）`,
-                    value: teacher.staffId,
-                  }))}
-                  optionFilterProp="label"
-                  placeholder="输入姓名或工号选择教师"
-                  popupMatchSelectWidth={false}
-                  showSearch
-                  value={selectedStaffId ?? undefined}
-                  onChange={(staffId) => {
-                    setSelectedStaffId(staffId ?? null);
-                    setSelectedScheduleId(null);
-                  }}
-                  onSearch={setTeacherKeyword}
-                />
-              </FilterField>
-            ) : null}
-          </ResponsiveGrid>
-
-          <Button
-            disabled={selectedSemesterId === null || (canManage && !selectedStaffId)}
-            icon={<ReloadOutlined />}
-            loading={planState.loading}
-            onClick={() => setReloadKey((current) => current + 1)}
-          >
-            刷新
-          </Button>
-        </Flex>
+                  const nextQuery = {
+                    semesterId: selectedSemesterId,
+                    staffId: toolbarStaffId,
+                    staffName:
+                      selectedTeacher?.staffName ?? currentStaff?.displayName ?? toolbarStaffId,
+                  };
+                  setSelectedScheduleId(null);
+                  if (
+                    appliedQuery?.semesterId === nextQuery.semesterId &&
+                    appliedQuery.staffId === nextQuery.staffId
+                  ) {
+                    setReloadKey((current) => current + 1);
+                  } else {
+                    setAppliedQuery(nextQuery);
+                  }
+                }}
+              >
+                查询
+              </Button>
+            </CompactQueryBarAction>
+          </CompactQueryBar>
+          {queryConditionsChanged ? (
+            <span className="compact-query-bar-dirty-hint">条件已变更，点击查询应用</span>
+          ) : null}
+        </div>
 
         {semestersState.error ? (
           <div className="mt-4">
@@ -345,13 +458,17 @@ export function MyTeachingPlanWorkspace({
         ) : null}
       </Card>
 
-      {selectedSemesterId === null ? (
+      {!appliedQuery ? (
         <Card>
-          <Empty description={semestersState.loading ? '正在加载当前学期…' : '没有可查看的学期'} />
-        </Card>
-      ) : canManage && !selectedStaffId ? (
-        <Card>
-          <Empty description="先选择一位教师，再查看该教师的课程与具体上课日期" />
+          <Empty
+            description={
+              semestersState.loading
+                ? '正在加载学期…'
+                : semestersState.data.length
+                  ? '选择学期和教师后点击查询'
+                  : '没有可查看的学期'
+            }
+          />
         </Card>
       ) : planState.loading ? (
         <Card>
@@ -391,7 +508,7 @@ export function MyTeachingPlanWorkspace({
             <Card
               extra={
                 <Space wrap size="small">
-                  {viewerName ? <Tag icon={<UserOutlined />}>{viewerName}</Tag> : null}
+                  {draftTeacherName ? <Tag icon={<UserOutlined />}>{draftTeacherName}</Tag> : null}
                   <Tag color="blue">计划真源</Tag>
                 </Space>
               }
@@ -457,16 +574,18 @@ export function MyTeachingPlanWorkspace({
                       onChange={(key) => setSelectedScheduleId(Number(key))}
                     />
                   }
-                  currentAccount={currentAccount}
                   currentAccountId={currentAccount.accountId}
                   isCompact={isCompact}
-                  key={`${selectedSemesterId}:${draftStaffId}:${selectedCourse.scheduleId}`}
-                  semesterId={selectedSemesterId}
-                  semesterName={selectedSemester?.name ?? `学期 ${selectedSemesterId}`}
-                  semesterNumber={selectedSemester?.termNumber ?? 1}
-                  schoolYear={String(selectedSemester?.schoolYear ?? '')}
+                  key={`${appliedQuery.semesterId}:${draftStaffId}:${selectedCourse.scheduleId}`}
+                  semesterId={appliedQuery.semesterId}
+                  semesterName={appliedSemester?.name ?? `学期 ${appliedQuery.semesterId}`}
+                  semesterNumber={appliedSemester?.termNumber ?? 1}
+                  schoolYear={String(appliedSemester?.schoolYear ?? '')}
                   targetStaffId={draftStaffId}
                   teacherName={draftTeacherName}
+                  persistUpstreamSessionFromResult={persistSessionFromResult}
+                  recoverExpiredUpstreamSession={recoverExpiredUpstreamSession}
+                  requestUpstreamSession={requestUpstreamSession}
                   onClassroomNameUpdated={updateClassroomNameInPlan}
                 />
               ) : null}
@@ -478,15 +597,7 @@ export function MyTeachingPlanWorkspace({
           )}
         </>
       ) : null}
-    </div>
-  );
-}
-
-function FilterField({ children, label }: { children: React.ReactNode; label: string }) {
-  return (
-    <div className="flex min-w-0 flex-col gap-2">
-      <Typography.Text type="secondary">{label}</Typography.Text>
-      {children}
+      <UpstreamLoginModal {...upstreamLoginModalProps} />
     </div>
   );
 }
