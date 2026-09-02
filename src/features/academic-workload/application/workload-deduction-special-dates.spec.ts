@@ -20,7 +20,7 @@ function buildEvent(
 }
 
 describe('buildAcademicWorkloadDeductionDateColumns', () => {
-  it('包含全部潜在扣课日期并与实际扣课日期合并去重排序', () => {
+  it('合并未抵消扣课日期与重复教学日期并去重排序', () => {
     const result = buildAcademicWorkloadDeductionDateColumns({
       calendarEvents: [
         buildEvent(),
@@ -43,7 +43,11 @@ describe('buildAcademicWorkloadDeductionDateColumns', () => {
       showSportsMeetDeductions: true,
     });
 
-    expect(result).toEqual(['2026-03-16', '2026-04-06', '2026-04-10']);
+    expect(result).toEqual([
+      { date: '2026-03-16', isRepeatedTeachingDate: false },
+      { date: '2026-04-06', isRepeatedTeachingDate: false },
+      { date: '2026-04-13', isRepeatedTeachingDate: true },
+    ]);
   });
 
   it('关闭运动会扣课时仅移除运动会独占日期', () => {
@@ -59,13 +63,52 @@ describe('buildAcademicWorkloadDeductionDateColumns', () => {
         deductionDates: [],
         showSportsMeetDeductions: false,
       }),
-    ).toEqual(['2026-04-21']);
+    ).toEqual([{ date: '2026-04-21', isRepeatedTeachingDate: false }]);
     expect(
       buildAcademicWorkloadDeductionDateColumns({
         calendarEvents,
         deductionDates: [],
         showSportsMeetDeductions: true,
       }),
-    ).toEqual(['2026-04-20', '2026-04-21']);
+    ).toEqual([
+      { date: '2026-04-20', isRepeatedTeachingDate: false },
+      { date: '2026-04-21', isRepeatedTeachingDate: false },
+    ]);
+  });
+
+  it('补课或调课完全抵消时不保留原停课日期，有剩余扣课时仍显示', () => {
+    const calendarEvents = [
+      buildEvent({ eventDate: '2026-04-06' }),
+      buildEvent({
+        eventDate: '2026-04-25',
+        eventType: 'HOLIDAY_MAKEUP',
+        originalDate: '2026-04-06',
+        teachingCalcEffect: 'MAKEUP',
+      }),
+      buildEvent({
+        eventDate: '2026-05-09',
+        eventType: 'WEEKDAY_SWAP',
+        originalDate: '2026-05-04',
+        teachingCalcEffect: 'SWAP',
+      }),
+    ];
+
+    expect(
+      buildAcademicWorkloadDeductionDateColumns({
+        calendarEvents,
+        deductionDates: [],
+        showSportsMeetDeductions: true,
+      }),
+    ).toEqual([]);
+    expect(
+      buildAcademicWorkloadDeductionDateColumns({
+        calendarEvents,
+        deductionDates: ['2026-04-06', '2026-05-04'],
+        showSportsMeetDeductions: true,
+      }),
+    ).toEqual([
+      { date: '2026-04-06', isRepeatedTeachingDate: false },
+      { date: '2026-05-04', isRepeatedTeachingDate: false },
+    ]);
   });
 });

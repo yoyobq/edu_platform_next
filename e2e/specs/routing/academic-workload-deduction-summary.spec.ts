@@ -31,21 +31,44 @@ const semester = {
 };
 
 const zeroDeductionItem = {
+  addedDateSummaries: [] as Array<{ addedHours: string; calcEffect: string; date: string }>,
   addedHours: '0',
-  adjustmentDates: [],
+  adjustmentDates: [] as string[],
   baselineHours: '32',
   baselineTeachingWeekCount: 16,
   baselineWeeklyHours: '2',
   courseCategory: 'THEORY',
   courseName: '语文',
   deductedHours: '0',
-  deductionReasonSummaries: [],
+  deductionReasonSummaries: [] as Array<{
+    dateSummaries: Array<{ date: string; deductedHours: string }>;
+    deductedHours: string;
+    sourceEventType: string | null;
+  }>,
   staffId: 'T-001',
   staffName: '王老师',
   teacherEngagementType: 'FULL_TIME_TEACHER',
   teachingClassName: '高一 1 班',
   workloadDepartmentId: 'ORG0302',
   workloadDepartmentName: '信息工程系',
+};
+
+const repeatedTeachingItem = {
+  ...zeroDeductionItem,
+  addedDateSummaries: [
+    { addedHours: '1', calcEffect: 'MAKEUP', date: '2026-04-25' },
+    { addedHours: '3', calcEffect: 'REPEAT', date: '2026-04-26' },
+  ],
+  addedHours: '4',
+  adjustmentDates: ['2026-04-06'],
+  deductedHours: '3',
+  deductionReasonSummaries: [
+    {
+      dateSummaries: [{ date: '2026-04-06', deductedHours: '2' }],
+      deductedHours: '2',
+      sourceEventType: 'HOLIDAY',
+    },
+  ],
 };
 
 async function fulfillGraphQL(route: Route, data: Record<string, unknown>) {
@@ -153,21 +176,21 @@ async function openDeductionSummary(page: Page, items: Array<typeof zeroDeductio
   await expect(page.getByRole('heading', { name: '教师节假日扣课时统计表' })).toBeVisible();
 }
 
-test('零扣课课程仍显示全部潜在扣课日期并同步导出 Excel', async ({ page }) => {
+test('零扣课课程保留未抵消特殊日期与重复教学日并同步导出 Excel', async ({ page }) => {
   await openDeductionSummary(page, [zeroDeductionItem]);
 
-  await expect(page.getByRole('columnheader', { name: /4月6日/ })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: /5月4日/ })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: /4月6日/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /5月4日/ })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: /4月20日/ })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /5月9日/ })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: /4月25日/ })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: /4月26日/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /4月26日/ })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /4月30日/ })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: '语文' })).toContainText('0');
 
   await page.getByRole('switch', { name: '计入运动会扣课' }).click();
   await expect(page.getByRole('columnheader', { name: /4月20日/ })).toHaveCount(0);
-  await expect(page.getByRole('columnheader', { name: /4月6日/ })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: /4月26日/ })).toBeVisible();
 
   await page.getByRole('switch', { name: '计入运动会扣课' }).click();
   const downloadPromise = page.waitForEvent('download');
@@ -185,18 +208,71 @@ test('零扣课课程仍显示全部潜在扣课日期并同步导出 Excel', as
 
   expect(headers).toEqual(
     expect.arrayContaining([
-      expect.stringContaining('4月6日'),
       expect.stringContaining('4月20日'),
-      expect.stringContaining('5月4日'),
+      expect.stringContaining('4月26日'),
     ]),
   );
+  expect(headers.some((value) => String(value).includes('4月6日'))).toBe(false);
+  expect(headers.some((value) => String(value).includes('5月4日'))).toBe(false);
+});
+
+test('重复教学显示绿色正数并按净额汇总，补课日期不单独上表', async ({ page }) => {
+  await openDeductionSummary(page, [repeatedTeachingItem]);
+
+  const repeatHeader = page.getByRole('columnheader', { name: /4月26日/ });
+  const detailRow = page.getByRole('row').filter({ hasText: '语文' });
+
+  await expect(repeatHeader).toBeVisible();
+  await expect(
+    repeatHeader.locator('.academic-workload-deduction-summary-repeat-date-column-title'),
+  ).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: /4月25日/ })).toHaveCount(0);
+  await expect(detailRow.locator('td').nth(7)).toHaveText('-2');
+  await expect(detailRow.locator('td').nth(9)).toHaveText('3');
+  await expect(
+    detailRow
+      .locator('td')
+      .nth(9)
+      .locator('.academic-workload-deduction-summary-adjustment-positive'),
+  ).toBeVisible();
+  await expect(detailRow.locator('td').nth(10)).toHaveText('1');
+  await expect(detailRow.locator('td').nth(11)).toHaveText('1');
+  await expect(detailRow).not.toContainText('+3');
+
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: '导出 Excel' }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+
+  expect(downloadPath).not.toBeNull();
+
+  const { default: XLSX } = await import('xlsx');
+  const workbook = XLSX.readFile(downloadPath!);
+  const worksheet = workbook.Sheets[workbook.SheetNames[0] ?? ''];
+  const rows = XLSX.utils.sheet_to_json<Array<number | string>>(worksheet!, { header: 1 });
+  const headers = rows[3] ?? [];
+  const detailValues = rows[4] ?? [];
+  const repeatColumnIndex = headers.findIndex((value) => String(value).includes('4月26日'));
+  const makeupColumnIndex = headers.findIndex((value) => String(value).includes('4月25日'));
+  const subtotalColumnIndex = headers.findIndex((value) => value === '小计');
+  const totalColumnIndex = headers.findIndex((value) => value === '合计');
+
+  expect(repeatColumnIndex).toBeGreaterThan(-1);
+  expect(makeupColumnIndex).toBe(-1);
+  expect(detailValues[repeatColumnIndex]).toBe(3);
+  expect(detailValues[subtotalColumnIndex]).toBe(1);
+  expect(detailValues[totalColumnIndex]).toBe(1);
 });
 
 test('无课程行时仍显示完整特殊日期表头', async ({ page }) => {
   await openDeductionSummary(page, []);
 
-  await expect(page.getByRole('columnheader', { name: /4月6日/ })).toBeVisible();
-  await expect(page.getByRole('columnheader', { name: /5月4日/ })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: /4月6日/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /5月4日/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /4月26日/ })).toBeVisible();
   await expect(page.getByText('当前条件下没有课程记录。')).toBeVisible();
   await expect(page.getByText('专任教师小计')).toBeVisible();
+
+  await page.getByRole('tab', { name: '全部教师' }).click();
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toBeVisible();
 });

@@ -32,7 +32,10 @@ import {
   sortSemesters,
   type TeachingWeekOption,
 } from '../application/workload-baseline';
-import { buildAcademicWorkloadDeductionDateColumns } from '../application/workload-deduction-special-dates';
+import {
+  type AcademicWorkloadDeductionDateColumn,
+  buildAcademicWorkloadDeductionDateColumns,
+} from '../application/workload-deduction-special-dates';
 import {
   buildAcademicWorkloadDepartmentSelectOptions,
   DEFAULT_WORKLOAD_DEPARTMENT_ID,
@@ -68,8 +71,10 @@ type EngagementTabKey = AcademicWorkloadEngagementFilter;
 type DateAdjustmentSummary = {
   date: string;
   deductedHundredths: number;
-  hasHourValue: boolean;
+  hasDeductedHourValue: boolean;
+  hasRepeatedHourValue: boolean;
   reasonLabels: string[];
+  repeatedHundredths: number;
 };
 
 type VisibleDeductionReasonDateSummary = {
@@ -83,6 +88,11 @@ type VisibleDeductionReasonSummary = {
   sourceEventType: string | null;
 };
 
+type VisibleRepeatedDateSummary = {
+  addedHundredths: number;
+  date: string;
+};
+
 type VisibleDeductionItem = {
   item: AcademicWorkloadDeductionSummaryItem;
   tableSubtotalHundredths: number;
@@ -90,6 +100,8 @@ type VisibleDeductionItem = {
   visibleBaselineHundredths: number;
   visibleDeductedHundredths: number;
   visibleReasonSummaries: VisibleDeductionReasonSummary[];
+  visibleRepeatedDateSummaries: VisibleRepeatedDateSummary[];
+  visibleRepeatedHundredths: number;
 };
 
 type AcademicWorkloadDeductionTableRow = {
@@ -110,8 +122,9 @@ export type AcademicWorkloadDeductionSummaryPageContentProps = {
   defaultWorkloadDepartmentId?: string | null;
 };
 
-const DEDUCTION_TABLE_BASE_WIDTH = 864;
+const DEDUCTION_TABLE_BASE_WIDTH = 832;
 const DEDUCTION_DATE_COLUMN_WIDTH = 76;
+const DEDUCTION_SUMMARY_COLUMN_WIDTH = 80;
 const EMPTY_TEXT = '-';
 const SPORTS_MEET_SOURCE_EVENT_TYPE = 'SPORTS_MEET';
 const DEFAULT_DEDUCTION_ENGAGEMENT_TYPE: EngagementTabKey = 'FULL_TIME_TEACHER';
@@ -239,8 +252,10 @@ function ensureDateSummary(
   summaries[date] ??= {
     date,
     deductedHundredths: 0,
-    hasHourValue: false,
+    hasDeductedHourValue: false,
+    hasRepeatedHourValue: false,
     reasonLabels: [],
+    repeatedHundredths: 0,
   };
 
   return summaries[date];
@@ -274,7 +289,22 @@ function buildVisibleReasonSummaries(
     .filter((reasonSummary) => reasonSummary.deductedHundredths !== 0);
 }
 
-function buildDateSummaries(reasonSummaries: VisibleDeductionReasonSummary[]) {
+function buildVisibleRepeatedDateSummaries(
+  item: AcademicWorkloadDeductionSummaryItem,
+): VisibleRepeatedDateSummary[] {
+  return item.addedDateSummaries
+    .filter((summary) => summary.calcEffect.trim().toUpperCase() === 'REPEAT')
+    .map((summary) => ({
+      addedHundredths: parseHourToHundredths(summary.addedHours),
+      date: summary.date,
+    }))
+    .filter((summary) => summary.date && summary.addedHundredths !== 0);
+}
+
+function buildDateSummaries(
+  reasonSummaries: VisibleDeductionReasonSummary[],
+  repeatedDateSummaries: VisibleRepeatedDateSummary[],
+) {
   const summaries: Record<string, DateAdjustmentSummary> = {};
 
   reasonSummaries.forEach((reasonSummary) => {
@@ -284,9 +314,16 @@ function buildDateSummaries(reasonSummaries: VisibleDeductionReasonSummary[]) {
       const summary = ensureDateSummary(summaries, dateSummary.date);
 
       summary.deductedHundredths += dateSummary.deductedHundredths;
-      summary.hasHourValue = true;
+      summary.hasDeductedHourValue = true;
       addReasonLabel(summary, reasonLabel);
     });
+  });
+
+  repeatedDateSummaries.forEach((dateSummary) => {
+    const summary = ensureDateSummary(summaries, dateSummary.date);
+
+    summary.repeatedHundredths += dateSummary.addedHundredths;
+    summary.hasRepeatedHourValue = true;
   });
 
   return summaries;
@@ -303,14 +340,21 @@ function buildVisibleDeductionItems(
       0,
     );
     const visibleAddedHundredths = parseHourToHundredths(item.addedHours);
+    const visibleRepeatedDateSummaries = buildVisibleRepeatedDateSummaries(item);
+    const visibleRepeatedHundredths = visibleRepeatedDateSummaries.reduce(
+      (total, summary) => total + summary.addedHundredths,
+      0,
+    );
 
     return {
       item,
-      tableSubtotalHundredths: visibleDeductedHundredths,
+      tableSubtotalHundredths: visibleRepeatedHundredths - visibleDeductedHundredths,
       visibleAddedHundredths,
       visibleBaselineHundredths: parseHourToHundredths(item.baselineHours),
       visibleDeductedHundredths,
       visibleReasonSummaries,
+      visibleRepeatedDateSummaries,
+      visibleRepeatedHundredths,
     };
   });
 }
@@ -491,7 +535,10 @@ function buildTableRows(items: VisibleDeductionItem[], options: { sortByEngageme
       const detailRowIndex = itemIndex;
 
       rows.push({
-        dateSummaries: buildDateSummaries(record.visibleReasonSummaries),
+        dateSummaries: buildDateSummaries(
+          record.visibleReasonSummaries,
+          record.visibleRepeatedDateSummaries,
+        ),
         detailRowIndex,
         item,
         key: [
@@ -522,7 +569,7 @@ function collectDeductionDates(rows: AcademicWorkloadDeductionTableRow[]) {
 
   rows.forEach((row) => {
     Object.entries(row.dateSummaries).forEach(([date, summary]) => {
-      if (summary.hasHourValue) {
+      if (summary.hasDeductedHourValue) {
         dates.add(date);
       }
     });
@@ -583,14 +630,46 @@ function renderStackedColumnTitle(firstLine: string, secondLine: string) {
   );
 }
 
-function renderDateColumnTitle(value: string, teachingWeeks: readonly TeachingWeekOption[]) {
-  const teachingWeek = findTeachingWeekByDate(value, teachingWeeks);
+function renderDateColumnTitle(
+  column: AcademicWorkloadDeductionDateColumn,
+  teachingWeeks: readonly TeachingWeekOption[],
+) {
+  const teachingWeek = findTeachingWeekByDate(column.date, teachingWeeks);
+  const className = column.isRepeatedTeachingDate
+    ? 'academic-workload-deduction-summary-date-column-title academic-workload-deduction-summary-repeat-date-column-title'
+    : 'academic-workload-deduction-summary-date-column-title';
 
   return (
-    <span className="academic-workload-deduction-summary-date-column-title">
-      <span>{formatDateColumnMonthDay(value)}</span>
+    <span className={className}>
+      <span>{formatDateColumnMonthDay(column.date)}</span>
       <span>{teachingWeek ? `第${teachingWeek.value}周` : '第-周'}</span>
-      <span>{formatDateColumnWeekday(value)}</span>
+      <span>{formatDateColumnWeekday(column.date)}</span>
+    </span>
+  );
+}
+
+function getDateAdjustmentNetHundredths(summary: DateAdjustmentSummary) {
+  return summary.repeatedHundredths - summary.deductedHundredths;
+}
+
+function getSignedHourClassName(value: number) {
+  if (value > 0) {
+    return 'academic-workload-deduction-summary-adjustment-positive';
+  }
+
+  if (value < 0) {
+    return 'academic-workload-deduction-summary-adjustment-negative';
+  }
+
+  return '';
+}
+
+function renderSignedHour(value: number) {
+  return (
+    <span
+      className={`academic-workload-deduction-summary-hour ${getSignedHourClassName(value)}`.trim()}
+    >
+      {formatHundredths(value)}
     </span>
   );
 }
@@ -600,18 +679,32 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
     return <span className="academic-workload-deduction-summary-empty">0</span>;
   }
 
-  if (!summary.hasHourValue) {
+  if (!summary.hasDeductedHourValue && !summary.hasRepeatedHourValue) {
     return <span className="academic-workload-deduction-summary-empty">0</span>;
   }
 
+  const netHundredths = getDateAdjustmentNetHundredths(summary);
+  const tooltipParts = [formatFullDate(summary.date)];
+
+  if (summary.hasRepeatedHourValue) {
+    tooltipParts.push(`重复教学 ${formatHundredths(summary.repeatedHundredths)}`);
+  }
+
+  if (summary.hasDeductedHourValue) {
+    tooltipParts.push(
+      `扣课 ${formatDeductedHundredths(summary.deductedHundredths)}`,
+      summary.reasonLabels.join('、') || '未标注原因',
+    );
+  }
+
   return (
-    <Tooltip
-      title={`${formatFullDate(summary.date)} · 扣课 ${formatDeductedHundredths(
-        summary.deductedHundredths,
-      )} · ${summary.reasonLabels.join('、') || '未标注原因'}`}
-    >
-      <span className="academic-workload-deduction-summary-date-hour academic-workload-deduction-summary-total-hour">
-        {formatDeductedHundredths(summary.deductedHundredths)}
+    <Tooltip title={tooltipParts.join(' · ')}>
+      <span
+        className={`academic-workload-deduction-summary-date-hour ${getSignedHourClassName(
+          netHundredths,
+        )}`.trim()}
+      >
+        {formatHundredths(netHundredths)}
       </span>
     </Tooltip>
   );
@@ -651,9 +744,7 @@ function renderDeductionTableSummary(input: {
           className="academic-workload-deduction-summary-total-value"
           index={input.columnCount - 1}
         >
-          <span className="academic-workload-deduction-summary-hour">
-            {formatDeductedHundredths(totalHundredths)}
-          </span>
+          {renderSignedHour(totalHundredths)}
         </Table.Summary.Cell>
       </Table.Summary.Row>
     </Table.Summary>
@@ -675,25 +766,25 @@ function formatDateColumnExportTitle(value: string, teachingWeeks: readonly Teac
 }
 
 function buildDeductionTableExcelRows(input: {
-  dateColumns: string[];
+  dateColumns: AcademicWorkloadDeductionDateColumn[];
   rows: AcademicWorkloadDeductionTableRow[];
 }): AcademicWorkloadDeductionExcelRow[] {
   return input.rows.map((row) => ({
     baselineTeachingWeekCount: row.item.baselineTeachingWeekCount,
     baselineWeeklyHours: formatHourString(row.item.baselineWeeklyHours),
     courseName: row.item.courseName || '未命名课程',
-    dateValues: input.dateColumns.map((date) => {
-      const summary = row.dateSummaries[date];
+    dateValues: input.dateColumns.map((column) => {
+      const summary = row.dateSummaries[column.date];
 
-      return summary?.hasHourValue ? formatDeductedHundredths(summary.deductedHundredths) : '0';
+      return summary ? formatHundredths(getDateAdjustmentNetHundredths(summary)) : '0';
     }),
     sequence: row.sequence,
     staffId: row.item.staffId,
     staffName: row.item.staffName,
     staffRowIndex: row.staffRowIndex,
     staffRowSpan: row.staffRowSpan,
-    staffTotal: formatDeductedHundredths(row.staffTotalHundredths),
-    subtotal: formatDeductedHundredths(row.tableSubtotalHundredths),
+    staffTotal: formatHundredths(row.staffTotalHundredths),
+    subtotal: formatHundredths(row.tableSubtotalHundredths),
     teachingClassName: formatTeachingClassExportValue(row.item.teachingClassName),
   }));
 }
@@ -703,7 +794,7 @@ function buildDeductionExcelFileName(input: { engagementLabel: string; semesterL
 }
 
 function buildDeductionColumns(
-  dateColumns: string[],
+  dateColumns: AcademicWorkloadDeductionDateColumn[],
   showTeacherTypeTag: boolean,
   teachingWeeks: readonly TeachingWeekOption[],
   getMarkableDetailCellProps: MarkableDetailCellPropsGetter<AcademicWorkloadDeductionTableRow>,
@@ -758,7 +849,7 @@ function buildDeductionColumns(
         </span>
       ),
       title: '课程',
-      width: 180,
+      width: 172,
     },
     {
       align: 'right',
@@ -776,15 +867,21 @@ function buildDeductionColumns(
       title: renderStackedColumnTitle('上课', '周数'),
       width: 68,
     },
-    ...dateColumns.map((date) => ({
+    ...dateColumns.map((column) => ({
       align: 'right' as const,
-      key: `date-${date}`,
+      key: `date-${column.date}`,
       onCell: (row: AcademicWorkloadDeductionTableRow) => getMarkableDetailCellProps(row),
       render: (_: unknown, row: AcademicWorkloadDeductionTableRow) => (
-        <DateAdjustmentCell summary={row.dateSummaries[date]} />
+        <DateAdjustmentCell summary={row.dateSummaries[column.date]} />
       ),
       title: (
-        <Tooltip title={formatFullDate(date)}>{renderDateColumnTitle(date, teachingWeeks)}</Tooltip>
+        <Tooltip
+          title={`${formatFullDate(column.date)}${
+            column.isRepeatedTeachingDate ? ' · 重复教学日' : ''
+          }`}
+        >
+          {renderDateColumnTitle(column, teachingWeeks)}
+        </Tooltip>
       ),
       width: DEDUCTION_DATE_COLUMN_WIDTH,
     })),
@@ -792,25 +889,17 @@ function buildDeductionColumns(
       align: 'right',
       key: 'subtotal',
       onCell: (row) => getMarkableDetailCellProps(row),
-      render: (_, row) => (
-        <span className="academic-workload-deduction-summary-hour">
-          {formatDeductedHundredths(row.tableSubtotalHundredths)}
-        </span>
-      ),
+      render: (_, row) => renderSignedHour(row.tableSubtotalHundredths),
       title: '小计',
-      width: 92,
+      width: DEDUCTION_SUMMARY_COLUMN_WIDTH,
     },
     {
       align: 'right',
       key: 'staffTotal',
       onCell: getMergedCellProps,
-      render: (_, row) => (
-        <span className="academic-workload-deduction-summary-hour">
-          {formatDeductedHundredths(row.staffTotalHundredths)}
-        </span>
-      ),
+      render: (_, row) => renderSignedHour(row.staffTotalHundredths),
       title: '合计',
-      width: 92,
+      width: DEDUCTION_SUMMARY_COLUMN_WIDTH,
     },
   ];
 
@@ -1180,8 +1269,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   };
 
   const activeEngagementLabel = getEngagementTabLabel(activeEngagementType);
-  const canExportDeductionExcel =
-    activeEngagementType !== 'ALL' && activeEngagementType !== 'EXTERNAL_TEACHER';
+  const canExportDeductionExcel = activeEngagementType !== 'EXTERNAL_TEACHER';
   const canLoadSummary =
     Boolean(selectedSemesterId) && (isAdminViewer || Boolean(workloadDepartmentId));
   const semesterLabel = selectedSemester?.name ?? `学期 ${selectedSemesterId}`;
@@ -1213,8 +1301,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
     try {
       await exportAcademicWorkloadDeductionExcel({
-        dateHeaders: deductionDateColumns.map((date) =>
-          formatDateColumnExportTitle(date, teachingWeeks),
+        dateHeaders: deductionDateColumns.map((column) =>
+          formatDateColumnExportTitle(column.date, teachingWeeks),
         ),
         departmentName: selectedDepartmentLabel,
         fileName: buildDeductionExcelFileName({
@@ -1228,7 +1316,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         schoolYear: selectedSemester?.schoolYear ?? null,
         sheetName: activeEngagementLabel,
         summaryLabel: deductionSummaryLabel,
-        summaryTotal: formatDeductedHundredths(getDeductionTableTotalHundredths(deductionRows)),
+        summaryTotal: formatHundredths(getDeductionTableTotalHundredths(deductionRows)),
         termNumber: selectedSemester?.termNumber ?? null,
       });
       setTemporaryExportStatus('exported');

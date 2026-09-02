@@ -22,6 +22,12 @@ export type AcademicWorkloadDeductionReasonSummary = {
   sourceEventType: string | null;
 };
 
+export type AcademicWorkloadAddedDateSummary = {
+  addedHours: string;
+  calcEffect: string;
+  date: string;
+};
+
 export type AcademicWorkloadDeductionSummaryTotal = {
   addedHours: string;
   baselineHours: string;
@@ -36,6 +42,7 @@ export type AcademicWorkloadDeductionDepartmentSummary = AcademicWorkloadDeducti
 };
 
 export type AcademicWorkloadDeductionSummaryItem = {
+  addedDateSummaries: AcademicWorkloadAddedDateSummary[];
   addedHours: string;
   adjustmentDates: string[];
   baselineHours: string;
@@ -147,6 +154,11 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
         baselineHours
         deductedHours
         addedHours
+        addedDateSummaries {
+          date
+          calcEffect
+          addedHours
+        }
         adjustmentDates
         deductionReasonSummaries {
           sourceEventType

@@ -210,7 +210,7 @@
 }
 
 .academic-workload-deduction-summary-total-value {
-  color: var(--ant-color-error);
+  color: var(--ant-color-text);
 }
 
 .academic-workload-deduction-summary-summary-heading {
@@ -282,11 +282,12 @@
 }
 
 .academic-workload-deduction-summary-metric-danger strong,
-.academic-workload-deduction-summary-total-hour {
+.academic-workload-deduction-summary-adjustment-negative {
   color: var(--ant-color-error);
 }
 
-.academic-workload-deduction-summary-metric-success strong {
+.academic-workload-deduction-summary-metric-success strong,
+.academic-workload-deduction-summary-adjustment-positive {
   color: var(--ant-color-success);
 }
 
@@ -343,8 +344,7 @@
   line-height: 1.35;
 }
 
-.academic-workload-deduction-summary-hour,
-.academic-workload-deduction-summary-total-hour {
+.academic-workload-deduction-summary-hour {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   white-space: nowrap;
