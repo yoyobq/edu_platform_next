@@ -30,6 +30,12 @@ describe('buildAcademicWorkloadDeductionDateColumns', () => {
           teachingCalcEffect: 'SWAP',
         }),
         buildEvent({ eventDate: '2026-04-12', teachingCalcEffect: 'MAKEUP' }),
+        buildEvent({
+          eventDate: '2026-04-13',
+          eventType: 'REPEATED_TEACHING_DAY',
+          originalDate: '2026-04-14',
+          teachingCalcEffect: 'REPEAT',
+        }),
         buildEvent({ eventDate: '2026-04-20', teachingCalcEffect: 'NO_CHANGE' }),
         buildEvent(),
       ],

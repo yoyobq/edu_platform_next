@@ -91,6 +91,7 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   EXAM: '考试',
   HOLIDAY: '放假',
   HOLIDAY_MAKEUP: '调休补班',
+  REPEATED_TEACHING_DAY: '重复教学日',
   SPORTS_MEET: '运动会',
   WEEKDAY_SWAP: '工作日对调',
 };
@@ -105,6 +106,7 @@ const TEACHING_CALC_EFFECT_LABELS: Record<AcademicCalendarTeachingCalcEffect, st
   CANCEL: '停课',
   MAKEUP: '补课',
   NO_CHANGE: '不影响',
+  REPEAT: '重复课表',
   SWAP: '对调',
 };
 
@@ -164,6 +166,8 @@ function renderEventTypeIcon(eventType: AcademicCalendarEventType) {
     case 'HOLIDAY_MAKEUP':
     case 'WEEKDAY_SWAP':
       return <SwapOutlined />;
+    case 'REPEATED_TEACHING_DAY':
+      return <ScheduleOutlined />;
     case 'SPORTS_MEET':
       return <TrophyOutlined />;
     case 'ACTIVITY':
@@ -181,6 +185,7 @@ function resolveDayCellBackground(day: SemesterWeekDay, events: AcademicCalendar
     (event) =>
       event.eventType === 'HOLIDAY_MAKEUP' ||
       event.eventType === 'ACTIVITY' ||
+      event.eventType === 'REPEATED_TEACHING_DAY' ||
       event.eventType === 'WEEKDAY_SWAP',
   );
   const hasHoliday =
@@ -791,7 +796,7 @@ export function SemesterCalendarPageContent({
                       },
                       {
                         key: 'originalDate',
-                        label: '原始日期',
+                        label: '课表来源日期',
                         children: event.originalDate ? formatDisplayDate(event.originalDate) : '—',
                       },
                       ...(showEventManagementMetadata

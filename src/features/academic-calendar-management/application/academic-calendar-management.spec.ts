@@ -156,6 +156,62 @@ describe('academic-calendar-management application', () => {
     });
   });
 
+  it('normalizes repeated teaching days with a required source timetable date', () => {
+    expect(
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'ALL_DAY',
+        eventDate: '2026-09-20',
+        eventType: 'REPEATED_TEACHING_DAY',
+        originalDate: '2026-09-21',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        teachingCalcEffect: 'REPEAT',
+        topic: '重复教学日',
+        version: 1,
+      }),
+    ).toEqual({
+      dayPeriod: 'ALL_DAY',
+      eventDate: '2026-09-20',
+      eventType: 'REPEATED_TEACHING_DAY',
+      originalDate: '2026-09-21',
+      recordStatus: 'ACTIVE',
+      ruleNote: undefined,
+      semesterId: 21,
+      teachingCalcEffect: 'REPEAT',
+      topic: '重复教学日',
+      version: 1,
+    });
+
+    expect(() =>
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'ALL_DAY',
+        eventDate: '2026-09-20',
+        eventType: 'REPEATED_TEACHING_DAY',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        teachingCalcEffect: 'REPEAT',
+        topic: '重复教学日',
+        version: 1,
+      }),
+    ).toThrow('请选择课表来源日期。');
+  });
+
+  it('rejects mismatched repeated teaching event semantics', () => {
+    expect(() =>
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'ALL_DAY',
+        eventDate: '2026-09-20',
+        eventType: 'REPEATED_TEACHING_DAY',
+        originalDate: '2026-09-21',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        teachingCalcEffect: 'MAKEUP',
+        topic: '重复教学日',
+        version: 1,
+      }),
+    ).toThrow('重复教学日必须使用“重复课表”教学影响。');
+  });
+
   it('builds default empty form state for create flows', () => {
     expect(buildDefaultSemesterFormValues({ getFullYear: () => 2026 })).toEqual({
       endDate: '',

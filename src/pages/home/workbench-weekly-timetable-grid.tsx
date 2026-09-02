@@ -240,6 +240,8 @@ function resolveOccurrenceStatusLabel(item: AcademicTimetableItem) {
       return '停课';
     case 'MAKEUP':
       return '调课';
+    case 'REPEAT':
+      return '重复教学';
     case 'SWAP_IN':
       return '调课补上';
     case 'SWAP_OUT':
@@ -255,7 +257,11 @@ function resolveOccurrenceStatusClassName(item: AcademicTimetableItem) {
     return 'workbench-weekly-timetable-entry-status workbench-weekly-timetable-entry-status-inactive';
   }
 
-  if (item.calcEffect === 'MAKEUP' || item.calcEffect === 'SWAP_IN') {
+  if (
+    item.calcEffect === 'MAKEUP' ||
+    item.calcEffect === 'SWAP_IN' ||
+    item.calcEffect === 'REPEAT'
+  ) {
     return 'workbench-weekly-timetable-entry-status workbench-weekly-timetable-entry-status-active';
   }
 

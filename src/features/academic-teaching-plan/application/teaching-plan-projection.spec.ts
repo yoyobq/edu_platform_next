@@ -25,6 +25,7 @@ describe('teaching plan projection', () => {
   it('只把有效 occurrence 放入主日期线并把停课调出旁列', () => {
     const projection = buildTeachingPlanProjection([
       occurrence({ date: '2026-09-08', calcEffect: 'MAKEUP', isEffective: true }),
+      occurrence({ date: '2026-09-07', calcEffect: 'REPEAT', isEffective: true }),
       occurrence({ date: '2026-09-01', calcEffect: 'NORMAL', isEffective: true }),
       occurrence({ date: '2026-09-02', calcEffect: 'CANCEL', isEffective: false }),
       occurrence({ date: '2026-09-03', calcEffect: 'SWAP_OUT', isEffective: false }),
@@ -33,6 +34,7 @@ describe('teaching plan projection', () => {
 
     expect(course?.months[0]?.dates.map((group) => group.date)).toEqual([
       '2026-09-01',
+      '2026-09-07',
       '2026-09-08',
     ]);
     expect(course?.adjustmentOccurrences.map((item) => item.calcEffect)).toEqual([
@@ -41,8 +43,8 @@ describe('teaching plan projection', () => {
     ]);
     expect(projection).toMatchObject({
       adjustmentOccurrenceCount: 2,
-      dateCount: 2,
-      effectiveOccurrenceCount: 2,
+      dateCount: 3,
+      effectiveOccurrenceCount: 3,
     });
   });
 

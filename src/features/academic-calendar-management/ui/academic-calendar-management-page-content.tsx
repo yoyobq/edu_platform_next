@@ -72,6 +72,7 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   EXAM: '考试',
   HOLIDAY: '放假',
   HOLIDAY_MAKEUP: '调休补班',
+  REPEATED_TEACHING_DAY: '重复教学日',
   SPORTS_MEET: '运动会',
   WEEKDAY_SWAP: '工作日对调',
 };
@@ -95,6 +96,7 @@ const TEACHING_CALC_EFFECT_LABELS: Record<AcademicCalendarTeachingCalcEffect, st
   CANCEL: '停课',
   MAKEUP: '补课',
   NO_CHANGE: '不影响',
+  REPEAT: '重复课表',
   SWAP: '对调',
 };
 
@@ -102,6 +104,7 @@ const TEACHING_CALC_EFFECT_TAG_COLORS: Record<AcademicCalendarTeachingCalcEffect
   CANCEL: 'red',
   MAKEUP: 'blue',
   NO_CHANGE: 'default',
+  REPEAT: 'cyan',
   SWAP: 'orange',
 };
 
@@ -156,6 +159,8 @@ export function AcademicCalendarManagementPageContent({
   const [messageApi, messageContextHolder] = message.useMessage();
   const [semesterForm] = Form.useForm<SemesterFormValues>();
   const [eventForm] = Form.useForm<CalendarEventFormValues>();
+  const selectedEventType = Form.useWatch('eventType', eventForm);
+  const selectedTeachingCalcEffect = Form.useWatch('teachingCalcEffect', eventForm);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [semestersLoading, setSemestersLoading] = useState(true);
   const [semesterError, setSemesterError] = useState<string | null>(null);
@@ -467,7 +472,7 @@ export function AcademicCalendarManagementPageContent({
       dataIndex: 'originalDate',
       key: 'originalDate',
       render: (value: string | null) => value || '—',
-      title: '原始日期',
+      title: '课表来源日期',
       width: 120,
     },
     {
@@ -831,6 +836,18 @@ export function AcademicCalendarManagementPageContent({
           form={eventForm}
           layout="vertical"
           requiredMark={false}
+          onValuesChange={(changedValues) => {
+            if (changedValues.eventType === 'REPEATED_TEACHING_DAY') {
+              eventForm.setFieldValue('teachingCalcEffect', 'REPEAT');
+              return;
+            }
+            if (
+              typeof changedValues.eventType !== 'undefined' &&
+              eventForm.getFieldValue('teachingCalcEffect') === 'REPEAT'
+            ) {
+              eventForm.setFieldValue('teachingCalcEffect', 'NO_CHANGE');
+            }
+          }}
           onFinish={async (values) => {
             setEventSubmitting(true);
 
@@ -888,7 +905,19 @@ export function AcademicCalendarManagementPageContent({
             >
               <Input type="date" />
             </Form.Item>
-            <Form.Item label="原始日期" name="originalDate">
+            <Form.Item
+              label="课表来源日期"
+              name="originalDate"
+              rules={[
+                {
+                  message: '请选择课表来源日期。',
+                  required:
+                    selectedTeachingCalcEffect === 'MAKEUP' ||
+                    selectedTeachingCalcEffect === 'SWAP' ||
+                    selectedTeachingCalcEffect === 'REPEAT',
+                },
+              ]}
+            >
               <Input type="date" />
             </Form.Item>
           </ResponsiveGrid>
@@ -921,7 +950,14 @@ export function AcademicCalendarManagementPageContent({
               name="teachingCalcEffect"
               rules={[{ message: '请选择教学影响。', required: true }]}
             >
-              <Select options={TEACHING_CALC_EFFECT_OPTIONS} />
+              <Select
+                disabled={selectedEventType === 'REPEATED_TEACHING_DAY'}
+                options={
+                  selectedEventType === 'REPEATED_TEACHING_DAY'
+                    ? TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value === 'REPEAT')
+                    : TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value !== 'REPEAT')
+                }
+              />
             </Form.Item>
           </ResponsiveGrid>
           <Form.Item

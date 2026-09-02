@@ -5,6 +5,7 @@ export const ACADEMIC_CALENDAR_EVENT_TYPES = [
   'EXAM',
   'HOLIDAY',
   'HOLIDAY_MAKEUP',
+  'REPEATED_TEACHING_DAY',
   'SPORTS_MEET',
   'WEEKDAY_SWAP',
 ] as const;
@@ -12,6 +13,7 @@ export const ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS = [
   'CANCEL',
   'MAKEUP',
   'NO_CHANGE',
+  'REPEAT',
   'SWAP',
 ] as const;
 

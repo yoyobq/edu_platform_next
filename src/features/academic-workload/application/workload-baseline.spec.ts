@@ -138,16 +138,17 @@ describe('academic workload baseline helpers', () => {
         buildOccurrence({ calcEffect: 'CANCEL', isEffective: false, weekIndex: 3 }),
         buildOccurrence({ calcEffect: 'SWAP_OUT', isEffective: false, weekIndex: 4 }),
         buildOccurrence({ calcEffect: 'SWAP_IN', isEffective: true, weekIndex: 6 }),
+        buildOccurrence({ calcEffect: 'REPEAT', isEffective: true, weekIndex: 7 }),
         buildOccurrence({ calcEffect: 'MAKEUP', isEffective: true, weekIndex: 9 }),
       ],
       tableViewFilter: 'all',
     });
 
-    expect(summary.displayedOccurrences.map((item) => item.weekIndex)).toEqual([2, 3, 4, 6]);
+    expect(summary.displayedOccurrences.map((item) => item.weekIndex)).toEqual([2, 3, 4, 6, 7]);
     expect(summary.baselineRangeHours).toBe(600);
     expect(summary.ineffectiveRangeHours).toBe(400);
-    expect(summary.addedEffectiveRangeHours).toBe(200);
-    expect(summary.effectiveRangeHours).toBe(400);
+    expect(summary.addedEffectiveRangeHours).toBe(400);
+    expect(summary.effectiveRangeHours).toBe(600);
     expect(
       summary.baselineRangeHours - summary.ineffectiveRangeHours + summary.addedEffectiveRangeHours,
     ).toBe(summary.effectiveRangeHours);

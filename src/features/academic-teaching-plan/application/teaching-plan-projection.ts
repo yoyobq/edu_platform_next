@@ -44,6 +44,7 @@ const CALC_EFFECT_LABELS: Readonly<Record<TeachingPlanCalcEffect, string>> = {
   CANCEL: '停课',
   MAKEUP: '补课',
   NORMAL: '常规',
+  REPEAT: '重复教学',
   SWAP_IN: '调入',
   SWAP_OUT: '调出',
 };

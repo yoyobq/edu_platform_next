@@ -13,7 +13,13 @@ export type AcademicTeachingPlanPageLoaderData = {
   } | null;
 };
 
-export type TeachingPlanCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';
+export type TeachingPlanCalcEffect =
+  | 'CANCEL'
+  | 'MAKEUP'
+  | 'NORMAL'
+  | 'REPEAT'
+  | 'SWAP_IN'
+  | 'SWAP_OUT';
 
 export type TeachingPlanOccurrence = {
   calcEffect: TeachingPlanCalcEffect;

@@ -11,6 +11,7 @@ export type AcademicStableWorkloadCalcEffect =
   | 'CANCEL'
   | 'MAKEUP'
   | 'NORMAL'
+  | 'REPEAT'
   | 'SWAP_IN'
   | 'SWAP_OUT';
 

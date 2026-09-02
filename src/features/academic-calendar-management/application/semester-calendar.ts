@@ -107,6 +107,13 @@ export function isAdjustedTeachingEvent(event: AcademicCalendarEventRecord) {
 }
 
 export function resolveEventDisplayTopic(event: AcademicCalendarEventRecord) {
+  if (
+    event.originalDate &&
+    (event.eventType === 'REPEATED_TEACHING_DAY' || event.teachingCalcEffect === 'REPEAT')
+  ) {
+    return `重复 ${formatMonthDay(event.originalDate)} 课(${formatWeekday(event.originalDate)})`;
+  }
+
   if (isAdjustedTeachingEvent(event) && event.originalDate) {
     return `调 ${formatMonthDay(event.originalDate)} 课(${formatWeekday(event.originalDate)})`;
   }

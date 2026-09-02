@@ -30,13 +30,20 @@ type AcademicCalendarEventSeed = {
   createdAt: string;
   dayPeriod: 'AFTERNOON' | 'ALL_DAY' | 'MORNING';
   eventDate: string;
-  eventType: 'ACTIVITY' | 'EXAM' | 'HOLIDAY' | 'HOLIDAY_MAKEUP' | 'SPORTS_MEET' | 'WEEKDAY_SWAP';
+  eventType:
+    | 'ACTIVITY'
+    | 'EXAM'
+    | 'HOLIDAY'
+    | 'HOLIDAY_MAKEUP'
+    | 'REPEATED_TEACHING_DAY'
+    | 'SPORTS_MEET'
+    | 'WEEKDAY_SWAP';
   id: number;
   originalDate: string | null;
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
-  teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'SWAP';
+  teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
   updatedByAccountId: number | null;
@@ -634,10 +641,20 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
   await page.getByRole('button', { name: '新增事件' }).click();
   await page.getByLabel('事件标题').fill('校历联调事件');
   await page.getByLabel('事件日期').fill('2026-05-06');
+  await chooseDrawerSelectOption(page, '事件类型', '重复教学日');
+  await page.getByLabel('课表来源日期').fill('2026-05-07');
+  const teachingEffectField = page
+    .getByRole('dialog')
+    .last()
+    .locator('.ant-form-item')
+    .filter({ hasText: '教学影响' });
+  await expect(teachingEffectField.locator('.ant-select')).toHaveClass(/ant-select-disabled/);
+  await expect(teachingEffectField).toContainText('重复课表');
   await clickDrawerPrimaryButton(page, '创建');
 
   await expect(page.getByText('校历事件已创建。')).toBeVisible();
   await expect(page.getByText('校历联调事件')).toBeVisible();
+  await expect(page.getByText('重复教学日')).toBeVisible();
 
   const createdEventRow = page.locator('tbody tr').filter({
     hasText: '校历联调事件',

@@ -322,6 +322,7 @@ button.semester-calendar-day-cell {
 }
 
 .semester-calendar-event-line-holiday-makeup,
+.semester-calendar-event-line-repeated-teaching-day,
 .semester-calendar-event-line-weekday-swap {
   --semester-calendar-event-accent: var(--ant-geekblue-6, var(--ant-color-primary));
 }

@@ -4,7 +4,13 @@ import type { AcademicSemesterRecord } from '@/entities/academic-semester';
 
 import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
-export type AcademicTimetableCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';
+export type AcademicTimetableCalcEffect =
+  | 'CANCEL'
+  | 'MAKEUP'
+  | 'NORMAL'
+  | 'REPEAT'
+  | 'SWAP_IN'
+  | 'SWAP_OUT';
 
 export type AcademicTeacherSemesterScheduleWeekType = 'ALL' | 'EVEN' | 'ODD' | string;
 

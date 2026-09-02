@@ -5,7 +5,13 @@ import {
   sortAcademicSemestersForDisplay,
 } from '@/entities/academic-semester';
 
-export type AcademicWorkloadCalcEffect = 'CANCEL' | 'MAKEUP' | 'NORMAL' | 'SWAP_IN' | 'SWAP_OUT';
+export type AcademicWorkloadCalcEffect =
+  | 'CANCEL'
+  | 'MAKEUP'
+  | 'NORMAL'
+  | 'REPEAT'
+  | 'SWAP_IN'
+  | 'SWAP_OUT';
 
 export type AcademicWorkloadOccurrenceLike = {
   calcEffect: AcademicWorkloadCalcEffect;
@@ -224,7 +230,10 @@ export function isBaselineOccurrence(item: AcademicWorkloadOccurrenceLike) {
 }
 
 export function isAddedEffectiveOccurrence(item: AcademicWorkloadOccurrenceLike) {
-  return item.isEffective && (item.calcEffect === 'MAKEUP' || item.calcEffect === 'SWAP_IN');
+  return (
+    item.isEffective &&
+    (item.calcEffect === 'MAKEUP' || item.calcEffect === 'SWAP_IN' || item.calcEffect === 'REPEAT')
+  );
 }
 
 export function buildAcademicWorkloadRangeSummary<

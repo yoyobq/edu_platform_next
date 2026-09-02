@@ -113,6 +113,12 @@ async function mockDeductionSummaryGraphQL(page: Page, items: Array<typeof zeroD
             originalDate: null,
             teachingCalcEffect: 'NO_CHANGE',
           },
+          {
+            eventDate: '2026-04-26',
+            eventType: 'REPEATED_TEACHING_DAY',
+            originalDate: '2026-04-27',
+            teachingCalcEffect: 'REPEAT',
+          },
         ],
         getAcademicWorkloadDeductionSummary: {
           departmentSummaries: [],
@@ -155,6 +161,7 @@ test('零扣课课程仍显示全部潜在扣课日期并同步导出 Excel', as
   await expect(page.getByRole('columnheader', { name: /4月20日/ })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /5月9日/ })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: /4月25日/ })).toHaveCount(0);
+  await expect(page.getByRole('columnheader', { name: /4月26日/ })).toHaveCount(0);
   await expect(page.getByRole('columnheader', { name: /4月30日/ })).toHaveCount(0);
   await expect(page.getByRole('row').filter({ hasText: '语文' })).toContainText('0');
 

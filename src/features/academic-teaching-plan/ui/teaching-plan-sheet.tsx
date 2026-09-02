@@ -793,7 +793,9 @@ export function TeachingPlanSheet({
                                   color={
                                     formalRow.occurrence.calcEffect === 'MAKEUP'
                                       ? 'green'
-                                      : 'purple'
+                                      : formalRow.occurrence.calcEffect === 'REPEAT'
+                                        ? 'cyan'
+                                        : 'purple'
                                   }
                                 >
                                   {formatTeachingPlanCalcEffect(formalRow.occurrence.calcEffect)}

@@ -856,7 +856,7 @@ function buildDepartmentSummaryColumns() {
       dataIndex: 'addedHours',
       key: 'addedHours',
       render: (value: string) => renderHourCell(value),
-      title: '补回课时',
+      title: '增加课时',
       width: 108,
     },
   ];

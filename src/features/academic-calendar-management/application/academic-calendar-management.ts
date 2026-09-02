@@ -169,16 +169,33 @@ export function normalizeCalendarEventFormValues(
   values: CalendarEventFormValues,
 ): CreateAcademicCalendarEventInput {
   const semesterId = values.semesterId;
+  const originalDate = normalizeOptionalDate(values.originalDate);
+  const requiresSourceDate =
+    values.teachingCalcEffect === 'MAKEUP' ||
+    values.teachingCalcEffect === 'SWAP' ||
+    values.teachingCalcEffect === 'REPEAT';
 
   if (typeof semesterId !== 'number' || !Number.isInteger(semesterId) || semesterId <= 0) {
     throw new Error('请选择归属学期。');
+  }
+  if (values.eventType === 'REPEATED_TEACHING_DAY' && values.teachingCalcEffect !== 'REPEAT') {
+    throw new Error('重复教学日必须使用“重复课表”教学影响。');
+  }
+  if (values.eventType !== 'REPEATED_TEACHING_DAY' && values.teachingCalcEffect === 'REPEAT') {
+    throw new Error('只有重复教学日可以使用“重复课表”教学影响。');
+  }
+  if (requiresSourceDate && !originalDate) {
+    throw new Error('请选择课表来源日期。');
+  }
+  if (requiresSourceDate && originalDate === values.eventDate) {
+    throw new Error('课表来源日期不能与事件日期相同。');
   }
 
   return {
     dayPeriod: values.dayPeriod,
     eventDate: values.eventDate,
     eventType: values.eventType,
-    originalDate: normalizeOptionalDate(values.originalDate),
+    originalDate,
     recordStatus: values.recordStatus,
     ruleNote: normalizeOptionalText(values.ruleNote),
     semesterId,

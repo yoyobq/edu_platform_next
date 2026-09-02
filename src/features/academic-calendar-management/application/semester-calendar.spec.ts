@@ -105,6 +105,17 @@ describe('semester-calendar application', () => {
         }),
       ),
     ).toBe('调 05-01 课(周五)');
+    expect(
+      resolveEventDisplayTopic(
+        buildEvent({
+          eventDate: '2026-09-20',
+          eventType: 'REPEATED_TEACHING_DAY',
+          originalDate: '2026-09-21',
+          teachingCalcEffect: 'REPEAT',
+          topic: '重复教学日',
+        }),
+      ),
+    ).toBe('重复 09-21 课(周一)');
 
     expect(formatDisplayDate('2026-04-20')).toContain('4月20日');
     expect(resolveEventDisplayTopic(buildEvent({ topic: '春季运动会' }))).toBe('春季运动会');

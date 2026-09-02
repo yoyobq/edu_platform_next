@@ -31,13 +31,20 @@ type AcademicCalendarEventSeed = {
   createdAt: string;
   dayPeriod: 'AFTERNOON' | 'ALL_DAY' | 'MORNING';
   eventDate: string;
-  eventType: 'ACTIVITY' | 'EXAM' | 'HOLIDAY' | 'HOLIDAY_MAKEUP' | 'SPORTS_MEET' | 'WEEKDAY_SWAP';
+  eventType:
+    | 'ACTIVITY'
+    | 'EXAM'
+    | 'HOLIDAY'
+    | 'HOLIDAY_MAKEUP'
+    | 'REPEATED_TEACHING_DAY'
+    | 'SPORTS_MEET'
+    | 'WEEKDAY_SWAP';
   id: number;
   originalDate: string | null;
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
-  teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'SWAP';
+  teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
   updatedByAccountId: number | null;
@@ -146,6 +153,22 @@ function buildAcademicCalendarState() {
       teachingCalcEffect: 'NO_CHANGE',
       topic: '迎新报到',
       updatedAt: '2026-04-12T00:00:00.000Z',
+      updatedByAccountId: 9527,
+      version: 1,
+    },
+    {
+      createdAt: '2026-04-13T00:00:00.000Z',
+      dayPeriod: 'ALL_DAY',
+      eventDate: '2026-09-20',
+      eventType: 'REPEATED_TEACHING_DAY',
+      id: 205,
+      originalDate: '2026-09-21',
+      recordStatus: 'ACTIVE',
+      ruleNote: '9月21日课程照常进行',
+      semesterId: 102,
+      teachingCalcEffect: 'REPEAT',
+      topic: '重复教学日',
+      updatedAt: '2026-04-14T00:00:00.000Z',
       updatedByAccountId: 9527,
       version: 1,
     },
@@ -460,6 +483,7 @@ test('正式学期校历页应支持切换学期并刷新周视图内容', async
   await expect(page.getByText('教学开始：2026-09-07')).toBeVisible();
   await expect(page.getByText('迎新报到')).toBeVisible();
   await expect(page.getByText('开学典礼')).toBeVisible();
+  await expect(page.getByText('重复 09-21 课(周一)')).toBeVisible();
   await expect(page.getByText('春季运动会')).toHaveCount(0);
 });
 

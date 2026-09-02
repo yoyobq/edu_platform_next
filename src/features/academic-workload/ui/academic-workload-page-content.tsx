@@ -58,6 +58,7 @@ const CALC_EFFECT_LABELS: Record<AcademicStableWorkloadCalcEffect, string> = {
   CANCEL: '停课',
   MAKEUP: '补课',
   NORMAL: '正常',
+  REPEAT: '重复教学',
   SWAP_IN: '调入',
   SWAP_OUT: '调出',
 };
@@ -98,7 +99,7 @@ function resolveCalcEffectTagColor(effect: AcademicStableWorkloadCalcEffect) {
     return 'error';
   }
 
-  if (effect === 'MAKEUP' || effect === 'SWAP_IN') {
+  if (effect === 'MAKEUP' || effect === 'SWAP_IN' || effect === 'REPEAT') {
     return 'processing';
   }
 
@@ -571,8 +572,8 @@ export function AcademicWorkloadPageContent({
                   onClick={() => setTableViewFilter('added')}
                 >
                   <div className="academic-workload-metric-content">
-                    <Tooltip title="周末上课、调课调入（MAKEUP / SWAP_IN）">
-                      <Typography.Text type="secondary">补课/调入课时</Typography.Text>
+                    <Tooltip title="补课、调课调入、重复教学（MAKEUP / SWAP_IN / REPEAT）">
+                      <Typography.Text type="secondary">增加课时</Typography.Text>
                     </Tooltip>
                     <Typography.Title level={2} style={{ margin: 0 }}>
                       {formatHours(addedEffectiveRangeHours)}
