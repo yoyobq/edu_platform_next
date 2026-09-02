@@ -479,7 +479,6 @@ export function AcademicWorkloadReportPageContent({
   const reportTotalHours = reportEnvelope
     ? formatReportDecimal(reportEnvelope.total.hours, 2)
     : EMPTY_TEXT;
-  const canExportReportExcel = activeEngagementType !== 'ALL';
   const canLoadReport =
     Boolean(selectedSemesterId) && (canSelectWorkloadDepartment || Boolean(workloadDepartmentId));
   const tabItems = useMemo(
@@ -566,7 +565,7 @@ export function AcademicWorkloadReportPageContent({
   };
 
   const handleExportReportTable = useCallback(async () => {
-    if (!canExportReportExcel || !reportEnvelope || reportRows.length === 0 || exportingExcel) {
+    if (!reportEnvelope || reportRows.length === 0 || exportingExcel) {
       return;
     }
 
@@ -594,7 +593,6 @@ export function AcademicWorkloadReportPageContent({
     }
   }, [
     activeEngagementLabel,
-    canExportReportExcel,
     exportingExcel,
     reportEnvelope,
     reportRows,
@@ -799,7 +797,7 @@ export function AcademicWorkloadReportPageContent({
         activeKey={activeEngagementType}
         items={tabItems}
         tabBarExtraContent={{
-          right: canExportReportExcel ? (
+          right: (
             <Space size={8}>
               <Button
                 disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
@@ -813,7 +811,7 @@ export function AcademicWorkloadReportPageContent({
                 {exportButtonLabel}
               </Button>
             </Space>
-          ) : null,
+          ),
         }}
         onChange={handleEngagementTypeChange}
       />
