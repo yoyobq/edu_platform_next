@@ -15,12 +15,12 @@ import type {
   CurriculumPlanHomepageDepartmentOption,
   CurriculumPlanHomepageDetailResult,
   CurriculumPlanHomepageListResult,
+  CurriculumPlanHomepagePatch,
   CurriculumPlanHomepagePrefillContext,
   CurriculumPlanHomepagePrefillMode,
   CurriculumPlanHomepagePrefillPhase,
   CurriculumPlanHomepagePrefillResult,
   CurriculumPlanHomepageReferenceCandidatesResult,
-  CurriculumPlanHomepageSaveTarget,
   CurriculumPlanHomepageTeachingEndChapterCandidatesResult,
   SaveCurriculumPlanHomepageResult,
 } from '../domain/curriculum-plan-homepage-types';
@@ -64,10 +64,6 @@ type AcademicCurriculumPlanHomepageTeacherOptionsResponse = {
 
 type CurriculumPlanHomepageDetailResponse = {
   fetchCurriculumPlanHomepageDetail: CurriculumPlanHomepageDetailResult;
-};
-
-type SaveCurriculumPlanHomepageResponse = {
-  saveCurriculumPlanHomepage: SaveCurriculumPlanHomepageResult;
 };
 
 type SaveAcademicCurriculumPlanHomepageResponse = {
@@ -243,20 +239,6 @@ const DEPARTMENTS_QUERY = `
       id
       isEnabled
       shortName
-    }
-  }
-`;
-
-const SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION = `
-  mutation SaveCurriculumPlanHomepage($input: SaveCurriculumPlanHomepageInput!) {
-    saveCurriculumPlanHomepage(input: $input) {
-      upstreamSessionToken
-      expiresAt
-      code
-      success
-      msg
-      data
-      planId
     }
   }
 `;
@@ -720,39 +702,8 @@ export async function fetchCurriculumPlanHomepageDetail(input: {
   return response.fetchCurriculumPlanHomepageDetail;
 }
 
-export async function saveCurriculumPlanHomepage(input: {
-  homepage: Record<string, unknown>;
-  target: CurriculumPlanHomepageSaveTarget;
-  upstreamSessionToken: string;
-}) {
-  const response = await executeUpstreamSessionGraphQL<
-    SaveCurriculumPlanHomepageResponse,
-    {
-      input: {
-        homepage: Record<string, unknown>;
-        sessionToken: string;
-        target: CurriculumPlanHomepageSaveTarget;
-      };
-    }
-  >(SAVE_CURRICULUM_PLAN_HOMEPAGE_MUTATION, {
-    input: {
-      homepage: input.homepage,
-      sessionToken: input.upstreamSessionToken,
-      target: {
-        departmentId: normalizeOptionalString(input.target.departmentId),
-        planId: normalizeOptionalString(input.target.planId),
-        schoolYear: normalizeRequiredString(input.target.schoolYear, '学年'),
-        semester: normalizeRequiredString(input.target.semester, '学期'),
-        teachingClassId: normalizeRequiredString(input.target.teachingClassId, '教学班 ID'),
-      },
-    },
-  });
-
-  return response.saveCurriculumPlanHomepage;
-}
-
 export async function saveAcademicCurriculumPlanHomepage(input: {
-  homepage: Record<string, unknown>;
+  homepagePatch: CurriculumPlanHomepagePatch;
   mode: CurriculumPlanHomepagePrefillMode;
   planId: string | null;
   semesterId: number;
@@ -761,7 +712,7 @@ export async function saveAcademicCurriculumPlanHomepage(input: {
   upstreamSessionToken: string;
 }) {
   const commonInput = {
-    homepage: input.homepage,
+    homepagePatch: input.homepagePatch,
     planId: normalizeOptionalString(input.planId),
     semesterId: input.semesterId,
     teachingClassId: normalizeRequiredString(input.teachingClassId, '教学班 ID'),

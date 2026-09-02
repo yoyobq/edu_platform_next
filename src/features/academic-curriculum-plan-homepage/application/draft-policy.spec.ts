@@ -3,15 +3,80 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  buildCurriculumPlanHomepageEditableSnapshot,
   buildEmptyCurriculumPlanHomepageDraft,
   buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
   buildReferenceCandidateDraftUpdate,
   buildTeachingEndChapterDraftUpdate,
+  normalizeCurriculumPlanHomepageEditableDraft,
   validateCurriculumPlanHomepageBeforeSave,
 } from './draft-policy';
 
 describe('curriculum plan homepage draft policy', () => {
+  it('builds the complete typed save snapshot from canonical homepage fields', () => {
+    expect(
+      buildCurriculumPlanHomepageEditableSnapshot({
+        completed_lessons: 0,
+        compensated_lessons: '1.5',
+        extra_lessons: '2',
+        improvement_measures: '改进措施',
+        planned_lessons: '32',
+        reduced_lessons: null,
+        teaching_end_chapter_content: '最终完成至：项目发布',
+        teaching_objectives: '掌握网页制作',
+        teaching_weeks: '16',
+        textbook_name: '教材',
+      }),
+    ).toEqual({
+      compensatedLessons: 1.5,
+      completedLessons: 0,
+      extraLessons: 2,
+      flexibleLessons: null,
+      improvementMeasures: '改进措施',
+      lectureLessons: null,
+      plannedLessons: 32,
+      reducedLessons: null,
+      reviewExamLessons: null,
+      teachingEndChapterContent: '最终完成至：项目发布',
+      teachingObjectives: '掌握网页制作',
+      teachingWeeks: 16,
+      textbookName: '教材',
+      totalLessons: null,
+      trainingLessons: null,
+      weeklyLessons: null,
+    });
+  });
+
+  it('normalizes canonical values once so later edits and clears stay stable', () => {
+    const draft = normalizeCurriculumPlanHomepageEditableDraft({
+      improvement_measures: '原改进措施',
+      teaching_objectives: '原教学目标',
+      teaching_weeks: '16',
+      textbook_name: '原教材',
+    });
+
+    expect(draft).toMatchObject({
+      improvement_measures: '原改进措施',
+      teaching_objectives: '原教学目标',
+      teaching_weeks: 16,
+      textbook_name: '原教材',
+    });
+
+    expect(
+      buildCurriculumPlanHomepageEditableSnapshot({
+        ...draft,
+        improvement_measures: '用户新值',
+        teaching_objectives: '',
+        textbook_name: '',
+      }),
+    ).toMatchObject({
+      improvementMeasures: '用户新值',
+      teachingObjectives: '',
+      textbookName: '',
+    });
+  });
+
   it('merges prefill patch and appends unique teaching end lines', () => {
     const result = buildPrefillDraftUpdate({
       currentDraft: {

@@ -18,7 +18,6 @@ import {
   previewCurriculumPlanHomepagePrefill,
   resolveCurriculumPlanHomepagePrefillErrorMessage,
   saveAcademicCurriculumPlanHomepage,
-  saveCurriculumPlanHomepage,
 } from './academic-curriculum-plan-homepage-api';
 
 const { executeGraphQLMock, executeUpstreamSessionGraphQLMock, hasGraphQLDetailCodeMock } =
@@ -253,60 +252,6 @@ describe('academic curriculum plan homepage api', () => {
     });
   });
 
-  it('saves the full upstream-style homepage object without remapping keys', async () => {
-    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
-      saveCurriculumPlanHomepage: {
-        code: 200,
-        data: { saved: true },
-        expiresAt: '2026-06-01T09:00:00.000Z',
-        msg: 'ok',
-        planId: 'plan-001',
-        success: true,
-        upstreamSessionToken: 'upstream-token-003',
-      },
-    });
-
-    const homepage = {
-      lecture_plan_id: 'plan-001',
-      course_name: '网页设计与制作',
-      textbook_name: 'HTML5+CSS3网页设计与制作',
-      untouched_upstream_field: 'keep-me',
-    };
-
-    await expect(
-      saveCurriculumPlanHomepage({
-        homepage,
-        target: {
-          departmentId: ' ORG0302 ',
-          planId: ' plan-001 ',
-          schoolYear: ' 2025 ',
-          semester: ' 2 ',
-          teachingClassId: ' CLASS-001 ',
-        },
-        upstreamSessionToken: 'upstream-token-002',
-      }),
-    ).resolves.toMatchObject({
-      success: true,
-      upstreamSessionToken: 'upstream-token-003',
-    });
-    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
-      'mutation SaveCurriculumPlanHomepage',
-    );
-    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
-      input: {
-        homepage,
-        sessionToken: 'upstream-token-002',
-        target: {
-          departmentId: 'ORG0302',
-          planId: 'plan-001',
-          schoolYear: '2025',
-          semester: '2',
-          teachingClassId: 'CLASS-001',
-        },
-      },
-    });
-  });
-
   it('saves my homepage with semesterId and without a client-supplied staffId', async () => {
     mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
       saveMyAcademicCurriculumPlanHomepage: {
@@ -320,9 +265,26 @@ describe('academic curriculum plan homepage api', () => {
       },
     });
 
-    const homepage = { textbook_name: '教材' };
+    const homepagePatch = {
+      compensatedLessons: null,
+      completedLessons: null,
+      extraLessons: null,
+      flexibleLessons: null,
+      improvementMeasures: '',
+      lectureLessons: null,
+      plannedLessons: null,
+      reducedLessons: null,
+      reviewExamLessons: null,
+      teachingEndChapterContent: '',
+      teachingObjectives: '',
+      teachingWeeks: 16,
+      textbookName: '教材',
+      totalLessons: null,
+      trainingLessons: null,
+      weeklyLessons: null,
+    };
     await saveAcademicCurriculumPlanHomepage({
-      homepage,
+      homepagePatch,
       mode: 'my',
       planId: null,
       semesterId: 7,
@@ -335,9 +297,65 @@ describe('academic curriculum plan homepage api', () => {
     );
     expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       input: {
-        homepage,
+        homepagePatch,
         planId: null,
         semesterId: 7,
+        teachingClassId: 'CLASS-001',
+        upstreamSessionToken: 'session-token',
+      },
+    });
+  });
+
+  it('saves a managed homepage with the same typed patch plus staffId', async () => {
+    mockedExecuteUpstreamSessionGraphQL.mockResolvedValueOnce({
+      saveManagedAcademicCurriculumPlanHomepage: {
+        code: 200,
+        data: null,
+        expiresAt: '2026-06-01T09:00:00.000Z',
+        msg: 'ok',
+        planId: 'plan-001',
+        success: true,
+        upstreamSessionToken: 'rolled-token',
+      },
+    });
+
+    const homepagePatch = {
+      compensatedLessons: 0,
+      completedLessons: 32,
+      extraLessons: 0,
+      flexibleLessons: 2,
+      improvementMeasures: '继续改进',
+      lectureLessons: 18,
+      plannedLessons: 32,
+      reducedLessons: 0,
+      reviewExamLessons: 2,
+      teachingEndChapterContent: '最终完成至：项目发布',
+      teachingObjectives: '掌握网页制作',
+      teachingWeeks: 16,
+      textbookName: '教材',
+      totalLessons: 32,
+      trainingLessons: 10,
+      weeklyLessons: 2,
+    };
+    await saveAcademicCurriculumPlanHomepage({
+      homepagePatch,
+      mode: 'managed',
+      planId: ' plan-001 ',
+      semesterId: 7,
+      staffId: ' S001 ',
+      teachingClassId: ' CLASS-001 ',
+      upstreamSessionToken: 'session-token',
+    });
+
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
+      'mutation SaveAcademicCurriculumPlanHomepage',
+    );
+    expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
+      input: {
+        homepagePatch,
+        planId: 'plan-001',
+        semesterId: 7,
+        staffId: 'S001',
         teachingClassId: 'CLASS-001',
         upstreamSessionToken: 'session-token',
       },

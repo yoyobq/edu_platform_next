@@ -58,6 +58,7 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import {
+  buildCurriculumPlanHomepageEditableSnapshot,
   buildEmptyCurriculumPlanHomepageDraft,
   buildInitialReferenceLessonDistributionDraftUpdate,
   buildPrefillDraftUpdate,
@@ -66,6 +67,9 @@ import {
   type CurriculumPlanHomepageDraftChange,
   type CurriculumPlanHomepageDraftUpdate,
   type InitialReferenceLessonDistributionStrategy,
+  normalizeCurriculumPlanHomepageEditableDraft,
+  readCurriculumPlanHomepageNumber,
+  readCurriculumPlanHomepageText,
   validateCurriculumPlanHomepageBeforeSave,
 } from '../application/draft-policy';
 import {
@@ -77,6 +81,7 @@ import {
   type CurriculumPlanHomepageDetailResult,
   type CurriculumPlanHomepageListItem,
   type CurriculumPlanHomepageListResult,
+  type CurriculumPlanHomepagePatch,
   type CurriculumPlanHomepagePrefillFieldWriteRule,
   type CurriculumPlanHomepagePrefillMode,
   type CurriculumPlanHomepagePrefillPhase,
@@ -116,7 +121,7 @@ type PendingAction =
       values: SearchFormValues;
     }
   | {
-      homepage: Record<string, unknown>;
+      homepagePatch: CurriculumPlanHomepagePatch;
       item: CurriculumPlanHomepageListItem;
       type: 'save';
       values: SearchFormValues;
@@ -463,59 +468,12 @@ function resolveUpstreamRefreshFailureMessage(error: unknown) {
   return resolveUpstreamErrorMessage(error, 'upstream 会话刷新失败，请重新登录后继续。');
 }
 
-function readHomepageValue(
-  homepage: Record<string, unknown> | null,
-  candidates: readonly string[],
-) {
-  if (!homepage) {
-    return null;
-  }
-
-  for (const key of candidates) {
-    const value = homepage[key];
-
-    if (value !== null && value !== undefined && value !== '') {
-      return value;
-    }
-  }
-
-  return null;
-}
-
-function readHomepageText(homepage: Record<string, unknown> | null, candidates: readonly string[]) {
-  const value = readHomepageValue(homepage, candidates);
-
-  if (value === null) {
-    return '';
-  }
-
-  return String(value);
-}
-
-function readHomepageNumber(
-  homepage: Record<string, unknown> | null,
-  candidates: readonly string[],
-) {
-  const value = readHomepageValue(homepage, candidates);
-
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-
-  if (typeof value === 'string' && value.trim()) {
-    const parsed = Number(value.trim());
-
-    return Number.isFinite(parsed) ? parsed : null;
-  }
-
-  return null;
-}
-
 function buildHomepageDraftFromDetail(result: CurriculumPlanHomepageDetailResult) {
-  const homepage =
+  const homepage = normalizeCurriculumPlanHomepageEditableDraft(
     result.homepage && typeof result.homepage === 'object' && !Array.isArray(result.homepage)
       ? { ...result.homepage }
-      : {};
+      : {},
+  );
 
   if (!homepage.lecture_plan_id) {
     homepage.lecture_plan_id = result.planId;
@@ -1406,7 +1364,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'textbook_name',
                   renderDraftInput(
-                    readHomepageText(homepage, ['textbook_name', 'textbookName']),
+                    readCurriculumPlanHomepageText(homepage, 'textbookName'),
                     (value) => onUpdateField('textbook_name', value),
                   ),
                 )}
@@ -1418,7 +1376,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'teaching_objectives',
                   renderDraftTextarea(
-                    readHomepageText(homepage, ['teaching_objectives', 'teachingObjectives']),
+                    readCurriculumPlanHomepageText(homepage, 'teachingObjectives'),
                     (value) => onUpdateField('teaching_objectives', value),
                     textareaRows,
                   ),
@@ -1431,13 +1389,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'improvement_measures',
                   renderDraftTextarea(
-                    readHomepageText(homepage, [
-                      'teaching_improvement_measures',
-                      'improve_teaching_measures',
-                      'teaching_measures',
-                      'improvement_measures',
-                      'teachingMethods',
-                    ]),
+                    readCurriculumPlanHomepageText(homepage, 'improvementMeasures'),
                     (value) => onUpdateField('improvement_measures', value),
                     textareaRows,
                   ),
@@ -1478,40 +1430,45 @@ function CurriculumPlanHomepageFormPreview({
               <td style={cellStyle}>
                 {renderField(
                   'teaching_weeks',
-                  renderDraftNumber(readHomepageNumber(homepage, ['teaching_weeks']), (value) =>
-                    onUpdateField('teaching_weeks', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'teachingWeeks'),
+                    (value) => onUpdateField('teaching_weeks', value),
                   ),
                 )}
               </td>
               <td style={cellStyle}>
                 {renderField(
                   'weekly_lessons',
-                  renderDraftNumber(readHomepageNumber(homepage, ['weekly_lessons']), (value) =>
-                    onUpdateField('weekly_lessons', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'weeklyLessons'),
+                    (value) => onUpdateField('weekly_lessons', value),
                   ),
                 )}
               </td>
               <td style={cellStyle}>
                 {renderField(
                   'total_lessons',
-                  renderDraftNumber(readHomepageNumber(homepage, ['total_lessons']), (value) =>
-                    onUpdateField('total_lessons', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'totalLessons'),
+                    (value) => onUpdateField('total_lessons', value),
                   ),
                 )}
               </td>
               <td style={cellStyle}>
                 {renderField(
                   'lecture_lessons',
-                  renderDraftNumber(readHomepageNumber(homepage, ['lecture_lessons']), (value) =>
-                    onUpdateField('lecture_lessons', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'lectureLessons'),
+                    (value) => onUpdateField('lecture_lessons', value),
                   ),
                 )}
               </td>
               <td style={cellStyle}>
                 {renderField(
                   'training_lessons',
-                  renderDraftNumber(readHomepageNumber(homepage, ['training_lessons']), (value) =>
-                    onUpdateField('training_lessons', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'trainingLessons'),
+                    (value) => onUpdateField('training_lessons', value),
                   ),
                 )}
               </td>
@@ -1519,7 +1476,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'review_exam_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, ['review_exam_lessons']),
+                    readCurriculumPlanHomepageNumber(homepage, 'reviewExamLessons'),
                     (value) => onUpdateField('review_exam_lessons', value),
                   ),
                 )}
@@ -1527,8 +1484,9 @@ function CurriculumPlanHomepageFormPreview({
               <td style={cellStyle}>
                 {renderField(
                   'flexible_lessons',
-                  renderDraftNumber(readHomepageNumber(homepage, ['flexible_lessons']), (value) =>
-                    onUpdateField('flexible_lessons', value),
+                  renderDraftNumber(
+                    readCurriculumPlanHomepageNumber(homepage, 'flexibleLessons'),
+                    (value) => onUpdateField('flexible_lessons', value),
                   ),
                 )}
               </td>
@@ -1564,7 +1522,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'planned_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, ['planned_lessons', 'plan_lessons']),
+                    readCurriculumPlanHomepageNumber(homepage, 'plannedLessons'),
                     (value) => onUpdateField('planned_lessons', value),
                   ),
                 )}
@@ -1573,7 +1531,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'completed_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, ['completed_lessons', 'finished_lessons']),
+                    readCurriculumPlanHomepageNumber(homepage, 'completedLessons'),
                     (value) => onUpdateField('completed_lessons', value),
                   ),
                 )}
@@ -1582,11 +1540,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'extra_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, [
-                      'extra_lessons',
-                      'exceeded_lessons',
-                      'exceed_lessons',
-                    ]),
+                    readCurriculumPlanHomepageNumber(homepage, 'extraLessons'),
                     (value) => onUpdateField('extra_lessons', value),
                   ),
                 )}
@@ -1595,7 +1549,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'reduced_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, ['reduced_lessons', 'reduce_lessons']),
+                    readCurriculumPlanHomepageNumber(homepage, 'reducedLessons'),
                     (value) => onUpdateField('reduced_lessons', value),
                   ),
                 )}
@@ -1604,11 +1558,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'compensated_lessons',
                   renderDraftNumber(
-                    readHomepageNumber(homepage, [
-                      'compensated_lessons',
-                      'makeup_lessons',
-                      'make_up_lessons',
-                    ]),
+                    readCurriculumPlanHomepageNumber(homepage, 'compensatedLessons'),
                     (value) => onUpdateField('compensated_lessons', value),
                   ),
                 )}
@@ -1620,10 +1570,7 @@ function CurriculumPlanHomepageFormPreview({
                 {renderField(
                   'teaching_end_chapter_content',
                   renderDraftTextarea(
-                    readHomepageText(homepage, [
-                      'teaching_end_chapter_content',
-                      'teachingEndChapterContent',
-                    ]),
+                    readCurriculumPlanHomepageText(homepage, 'teachingEndChapterContent'),
                     (value) => onUpdateField('teaching_end_chapter_content', value),
                     textareaRows,
                   ),
@@ -1951,7 +1898,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
           }
 
           const result = await saveAcademicCurriculumPlanHomepage({
-            homepage: action.homepage,
+            homepagePatch: action.homepagePatch,
             mode: prefillMode,
             planId: action.item.planId,
             semesterId: action.values.semesterId,
@@ -2384,7 +2331,7 @@ export function AcademicCurriculumPlanHomepagePageContent({
       });
 
       await ensureSessionAndRun({
-        homepage: draft,
+        homepagePatch: buildCurriculumPlanHomepageEditableSnapshot(draft),
         item,
         type: 'save',
         values: loadedSearchValues,

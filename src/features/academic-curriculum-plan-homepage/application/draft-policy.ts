@@ -1,6 +1,7 @@
 // src/features/academic-curriculum-plan-homepage/application/draft-policy.ts
 
 import type {
+  CurriculumPlanHomepagePatch,
   CurriculumPlanHomepagePrefillFieldWriteRule,
   CurriculumPlanHomepageReferenceCandidateGroup,
   CurriculumPlanHomepageReferenceCandidateItem,
@@ -59,6 +60,182 @@ const HOMEPAGE_TEXT_FIELDS = new Set<string>([
   'teaching_end_chapter_content',
 ]);
 
+type CurriculumPlanHomepageTextField =
+  | 'improvementMeasures'
+  | 'teachingEndChapterContent'
+  | 'teachingObjectives'
+  | 'textbookName';
+
+type CurriculumPlanHomepageNumberField = Exclude<
+  keyof CurriculumPlanHomepagePatch,
+  CurriculumPlanHomepageTextField
+>;
+
+type CurriculumPlanHomepageFieldDefinition = {
+  readonly canonicalField: string;
+  readonly kind: 'number' | 'text';
+};
+
+const HOMEPAGE_FIELD_DEFINITIONS = {
+  compensatedLessons: {
+    canonicalField: 'compensated_lessons',
+    kind: 'number',
+  },
+  completedLessons: {
+    canonicalField: 'completed_lessons',
+    kind: 'number',
+  },
+  extraLessons: {
+    canonicalField: 'extra_lessons',
+    kind: 'number',
+  },
+  flexibleLessons: {
+    canonicalField: 'flexible_lessons',
+    kind: 'number',
+  },
+  improvementMeasures: {
+    canonicalField: 'improvement_measures',
+    kind: 'text',
+  },
+  lectureLessons: {
+    canonicalField: 'lecture_lessons',
+    kind: 'number',
+  },
+  plannedLessons: {
+    canonicalField: 'planned_lessons',
+    kind: 'number',
+  },
+  reducedLessons: {
+    canonicalField: 'reduced_lessons',
+    kind: 'number',
+  },
+  reviewExamLessons: {
+    canonicalField: 'review_exam_lessons',
+    kind: 'number',
+  },
+  teachingEndChapterContent: {
+    canonicalField: 'teaching_end_chapter_content',
+    kind: 'text',
+  },
+  teachingObjectives: {
+    canonicalField: 'teaching_objectives',
+    kind: 'text',
+  },
+  teachingWeeks: {
+    canonicalField: 'teaching_weeks',
+    kind: 'number',
+  },
+  textbookName: {
+    canonicalField: 'textbook_name',
+    kind: 'text',
+  },
+  totalLessons: {
+    canonicalField: 'total_lessons',
+    kind: 'number',
+  },
+  trainingLessons: {
+    canonicalField: 'training_lessons',
+    kind: 'number',
+  },
+  weeklyLessons: {
+    canonicalField: 'weekly_lessons',
+    kind: 'number',
+  },
+} as const satisfies Record<
+  keyof CurriculumPlanHomepagePatch,
+  CurriculumPlanHomepageFieldDefinition
+>;
+
+const HOMEPAGE_PATCH_FIELDS = Object.keys(HOMEPAGE_FIELD_DEFINITIONS) as Array<
+  keyof CurriculumPlanHomepagePatch
+>;
+
+function readHomepageValue(homepage: Record<string, unknown> | null, field: string) {
+  if (!homepage) {
+    return null;
+  }
+
+  const value = homepage[field];
+
+  if (value !== null && value !== undefined && value !== '') {
+    return value;
+  }
+
+  return null;
+}
+
+export function readCurriculumPlanHomepageText(
+  homepage: Record<string, unknown> | null,
+  field: CurriculumPlanHomepageTextField,
+) {
+  const value = readHomepageValue(homepage, HOMEPAGE_FIELD_DEFINITIONS[field].canonicalField);
+  return readHomepageTextValue(value);
+}
+
+export function readCurriculumPlanHomepageNumber(
+  homepage: Record<string, unknown> | null,
+  field: CurriculumPlanHomepageNumberField,
+) {
+  const value = readHomepageValue(homepage, HOMEPAGE_FIELD_DEFINITIONS[field].canonicalField);
+  return readHomepageNumberValue(value);
+}
+
+function readHomepageNumberValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function readHomepageTextValue(value: unknown): string {
+  return value === null ? '' : String(value);
+}
+
+export function normalizeCurriculumPlanHomepageEditableDraft(
+  homepage: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized: Record<string, unknown> = { ...homepage };
+
+  for (const field of HOMEPAGE_PATCH_FIELDS) {
+    const definition = HOMEPAGE_FIELD_DEFINITIONS[field];
+    const value = readHomepageValue(homepage, definition.canonicalField);
+    normalized[definition.canonicalField] =
+      definition.kind === 'text' ? readHomepageTextValue(value) : readHomepageNumberValue(value);
+  }
+
+  return normalized;
+}
+
+export function buildCurriculumPlanHomepageEditableSnapshot(
+  homepage: Record<string, unknown>,
+): CurriculumPlanHomepagePatch {
+  return {
+    compensatedLessons: readCurriculumPlanHomepageNumber(homepage, 'compensatedLessons'),
+    completedLessons: readCurriculumPlanHomepageNumber(homepage, 'completedLessons'),
+    extraLessons: readCurriculumPlanHomepageNumber(homepage, 'extraLessons'),
+    flexibleLessons: readCurriculumPlanHomepageNumber(homepage, 'flexibleLessons'),
+    improvementMeasures: readCurriculumPlanHomepageText(homepage, 'improvementMeasures'),
+    lectureLessons: readCurriculumPlanHomepageNumber(homepage, 'lectureLessons'),
+    plannedLessons: readCurriculumPlanHomepageNumber(homepage, 'plannedLessons'),
+    reducedLessons: readCurriculumPlanHomepageNumber(homepage, 'reducedLessons'),
+    reviewExamLessons: readCurriculumPlanHomepageNumber(homepage, 'reviewExamLessons'),
+    teachingEndChapterContent: readCurriculumPlanHomepageText(
+      homepage,
+      'teachingEndChapterContent',
+    ),
+    teachingObjectives: readCurriculumPlanHomepageText(homepage, 'teachingObjectives'),
+    teachingWeeks: readCurriculumPlanHomepageNumber(homepage, 'teachingWeeks'),
+    textbookName: readCurriculumPlanHomepageText(homepage, 'textbookName'),
+    totalLessons: readCurriculumPlanHomepageNumber(homepage, 'totalLessons'),
+    trainingLessons: readCurriculumPlanHomepageNumber(homepage, 'trainingLessons'),
+    weeklyLessons: readCurriculumPlanHomepageNumber(homepage, 'weeklyLessons'),
+  };
+}
+
 const FIELD_LABELS: Record<string, string> = {
   compensated_lessons: '弥补',
   completed_lessons: '完成课时',
@@ -88,19 +265,19 @@ const REFERENCE_VALUE_FIELDS: Record<
 };
 
 const LESSON_DISTRIBUTION_FIELDS = [
-  ['total_lessons'],
-  ['lecture_lessons'],
-  ['training_lessons'],
-  ['review_exam_lessons'],
-  ['flexible_lessons'],
+  'total_lessons',
+  'lecture_lessons',
+  'training_lessons',
+  'review_exam_lessons',
+  'flexible_lessons',
 ] as const;
 
 const FINAL_COMPLETION_FIELDS = [
-  ['planned_lessons', 'plan_lessons'],
-  ['completed_lessons', 'finished_lessons'],
-  ['extra_lessons', 'exceeded_lessons', 'exceed_lessons'],
-  ['reduced_lessons', 'reduce_lessons'],
-  ['compensated_lessons', 'makeup_lessons', 'make_up_lessons'],
+  'planned_lessons',
+  'completed_lessons',
+  'extra_lessons',
+  'reduced_lessons',
+  'compensated_lessons',
 ] as const;
 
 type DraftNumberState = {
@@ -157,51 +334,42 @@ function readNumberValue(source: Record<string, unknown>, field: string) {
   return null;
 }
 
-function readDraftNumberState(
-  source: Record<string, unknown>,
-  candidates: readonly string[],
-): DraftNumberState {
-  const field = candidates[0] ?? '';
+function readDraftNumberState(source: Record<string, unknown>, field: string): DraftNumberState {
   const label = getFieldLabel(field);
+  const value = source[field];
 
-  for (const candidate of candidates) {
-    const value = source[candidate];
-
-    if (value === null || value === undefined || value === '') {
-      continue;
-    }
-
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return {
-        field,
-        isEmpty: false,
-        label,
-        value,
-      };
-    }
-
-    if (typeof value === 'string' && value.trim()) {
-      const parsed = Number(value.trim());
-
-      return {
-        field,
-        isEmpty: false,
-        label,
-        value: Number.isFinite(parsed) ? parsed : null,
-      };
-    }
-
+  if (value === null || value === undefined || value === '') {
     return {
       field,
-      isEmpty: false,
+      isEmpty: true,
       label,
       value: null,
     };
   }
 
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return {
+      field,
+      isEmpty: false,
+      label,
+      value,
+    };
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value.trim());
+
+    return {
+      field,
+      isEmpty: false,
+      label,
+      value: Number.isFinite(parsed) ? parsed : null,
+    };
+  }
+
   return {
     field,
-    isEmpty: true,
+    isEmpty: false,
     label,
     value: null,
   };
@@ -224,8 +392,8 @@ function getFieldLabel(field: string) {
 }
 
 function validateLessonDistribution(draft: Record<string, unknown>) {
-  const [total, lecture, training, reviewExam, flexible] = LESSON_DISTRIBUTION_FIELDS.map(
-    (fields) => readDraftNumberState(draft, fields),
+  const [total, lecture, training, reviewExam, flexible] = LESSON_DISTRIBUTION_FIELDS.map((field) =>
+    readDraftNumberState(draft, field),
   );
   const values = [total, lecture, training, reviewExam, flexible];
 
@@ -262,8 +430,8 @@ function validateLessonDistribution(draft: Record<string, unknown>) {
 }
 
 function validateFinalCompletion(draft: Record<string, unknown>) {
-  const [planned, completed, extra, reduced, compensated] = FINAL_COMPLETION_FIELDS.map((fields) =>
-    readDraftNumberState(draft, fields),
+  const [planned, completed, extra, reduced, compensated] = FINAL_COMPLETION_FIELDS.map((field) =>
+    readDraftNumberState(draft, field),
   );
   const values = [planned, completed, extra, reduced, compensated];
 

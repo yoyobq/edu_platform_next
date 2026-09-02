@@ -53,12 +53,23 @@ export type SaveCurriculumPlanHomepageResult = {
   upstreamSessionToken: string;
 };
 
-export type CurriculumPlanHomepageSaveTarget = {
-  departmentId: string | null;
-  planId: string | null;
-  schoolYear: string;
-  semester: string;
-  teachingClassId: string;
+export type CurriculumPlanHomepagePatch = {
+  compensatedLessons: number | null;
+  completedLessons: number | null;
+  extraLessons: number | null;
+  flexibleLessons: number | null;
+  improvementMeasures: string;
+  lectureLessons: number | null;
+  plannedLessons: number | null;
+  reducedLessons: number | null;
+  reviewExamLessons: number | null;
+  teachingEndChapterContent: string;
+  teachingObjectives: string;
+  teachingWeeks: number | null;
+  textbookName: string;
+  totalLessons: number | null;
+  trainingLessons: number | null;
+  weeklyLessons: number | null;
 };
 
 export type CurriculumPlanHomepageDepartmentOption = {
