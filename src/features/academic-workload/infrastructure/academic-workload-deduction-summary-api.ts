@@ -63,6 +63,18 @@ export type AcademicWorkloadDeductionSummaryEnvelope = {
   truncationReason: string | null;
 };
 
+export type AcademicWorkloadDeductionCalendarEvent = {
+  eventDate: string;
+  eventType: string;
+  originalDate: string | null;
+  teachingCalcEffect: string;
+};
+
+export type AcademicWorkloadDeductionSummaryQueryResult = {
+  calendarEvents: AcademicWorkloadDeductionCalendarEvent[];
+  summary: AcademicWorkloadDeductionSummaryEnvelope;
+};
+
 export type RequestAcademicWorkloadDeductionSummaryInput = {
   endDate?: string;
   semesterId: number;
@@ -72,6 +84,7 @@ export type RequestAcademicWorkloadDeductionSummaryInput = {
 };
 
 type AcademicWorkloadDeductionSummaryResponse = {
+  academicCalendarEvents: AcademicWorkloadDeductionCalendarEvent[];
   getAcademicWorkloadDeductionSummary: AcademicWorkloadDeductionSummaryEnvelope;
 };
 
@@ -83,6 +96,16 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
     $startDate: String
     $endDate: String
   ) {
+    academicCalendarEvents(
+      limit: 500
+      recordStatus: ACTIVE
+      semesterId: $semesterId
+    ) {
+      eventDate
+      eventType
+      originalDate
+      teachingCalcEffect
+    }
     getAcademicWorkloadDeductionSummary(
       semesterId: $semesterId
       workloadDepartmentId: $workloadDepartmentId
@@ -181,7 +204,10 @@ export async function requestAcademicWorkloadDeductionSummary(
       OperationVariables & RequestAcademicWorkloadDeductionSummaryInput
     >(GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY, normalizeRequestInput(input));
 
-    return response.getAcademicWorkloadDeductionSummary;
+    return {
+      calendarEvents: response.academicCalendarEvents,
+      summary: response.getAcademicWorkloadDeductionSummary,
+    } satisfies AcademicWorkloadDeductionSummaryQueryResult;
   } catch (error) {
     throw new Error(
       resolveAcademicWorkloadDeductionSummaryErrorMessage(error, '暂时无法加载教师扣课汇总。'),

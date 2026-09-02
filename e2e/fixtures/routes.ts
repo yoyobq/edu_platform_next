@@ -1,5 +1,6 @@
 export const routes = {
   academicCalendar: '/academic-affairs/academic-calendar',
+  academicWorkloadDeductionSummary: '/academic-affairs/academic-workload-deduction-summary',
   externalTeacherCompensation: '/academic-affairs/external-teacher-compensation',
   semesterCalendar: '/calendar-schedule/semester-calendar',
   adminVerificationIssuance: '/admin/verification-issuance',

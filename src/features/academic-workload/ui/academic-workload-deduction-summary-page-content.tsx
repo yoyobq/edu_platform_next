@@ -32,6 +32,7 @@ import {
   sortSemesters,
   type TeachingWeekOption,
 } from '../application/workload-baseline';
+import { buildAcademicWorkloadDeductionDateColumns } from '../application/workload-deduction-special-dates';
 import {
   buildAcademicWorkloadDepartmentSelectOptions,
   DEFAULT_WORKLOAD_DEPARTMENT_ID,
@@ -39,6 +40,7 @@ import {
 } from '../application/workload-department-options';
 import { requestAcademicSemesters } from '../infrastructure/academic-workload-api';
 import {
+  type AcademicWorkloadDeductionCalendarEvent,
   type AcademicWorkloadDeductionDepartmentSummary,
   type AcademicWorkloadDeductionSummaryEnvelope,
   type AcademicWorkloadDeductionSummaryItem,
@@ -515,7 +517,7 @@ function buildTableRows(items: VisibleDeductionItem[], options: { sortByEngageme
   return rows;
 }
 
-function collectDateColumns(rows: AcademicWorkloadDeductionTableRow[]) {
+function collectDeductionDates(rows: AcademicWorkloadDeductionTableRow[]) {
   const dates = new Set<string>();
 
   rows.forEach((row) => {
@@ -912,6 +914,9 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryEnvelope, setSummaryEnvelope] =
     useState<AcademicWorkloadDeductionSummaryEnvelope | null>(null);
+  const [calendarEvents, setCalendarEvents] = useState<AcademicWorkloadDeductionCalendarEvent[]>(
+    [],
+  );
   const { clearMarkedDetailRows, getMarkableDetailCellProps } =
     useMarkableDetailCells<AcademicWorkloadDeductionTableRow>(
       ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES,
@@ -920,6 +925,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const invalidateSummary = useCallback(() => {
     latestRequestIdRef.current += 1;
     clearMarkedDetailRows();
+    setCalendarEvents([]);
     setSummaryEnvelope(null);
     setSummaryError(null);
     setLoadingSummary(false);
@@ -1070,7 +1076,16 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       }),
     [deferredActiveEngagementType, deferredVisibleDeductionItems],
   );
-  const deductionDateColumns = useMemo(() => collectDateColumns(deductionRows), [deductionRows]);
+  const deductionDates = useMemo(() => collectDeductionDates(deductionRows), [deductionRows]);
+  const deductionDateColumns = useMemo(
+    () =>
+      buildAcademicWorkloadDeductionDateColumns({
+        calendarEvents,
+        deductionDates,
+        showSportsMeetDeductions,
+      }),
+    [calendarEvents, deductionDates, showSportsMeetDeductions],
+  );
   const deductionColumns = useMemo(
     () =>
       buildDeductionColumns(
@@ -1114,6 +1129,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       latestRequestIdRef.current = requestId;
       setLoadingSummary(true);
       setSummaryError(null);
+      setCalendarEvents([]);
       setSummaryEnvelope(null);
 
       try {
@@ -1131,7 +1147,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         });
 
         if (latestRequestIdRef.current === requestId) {
-          setSummaryEnvelope(result);
+          setCalendarEvents(result.calendarEvents);
+          setSummaryEnvelope(result.summary);
         }
       } catch (error) {
         if (latestRequestIdRef.current === requestId) {
@@ -1413,13 +1430,19 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
           {isDeductionRenderPending ? (
             <Skeleton active paragraph={{ rows: 6 }} />
-          ) : deferredVisibleDeductionItems.length === 0 ? (
-            <Empty description="当前条件下没有课程记录。" image={Empty.PRESENTED_IMAGE_SIMPLE} />
           ) : (
             <div className="academic-workload-deduction-summary-table-shell">
               <Table<AcademicWorkloadDeductionTableRow>
                 columns={deductionColumns}
                 dataSource={deductionRows}
+                locale={{
+                  emptyText: (
+                    <Empty
+                      description="当前条件下没有课程记录。"
+                      image={Empty.PRESENTED_IMAGE_SIMPLE}
+                    />
+                  ),
+                }}
                 pagination={false}
                 rowKey={(row) => row.key}
                 scroll={{

@@ -109,6 +109,14 @@ describe('academic-workload api', () => {
   });
 
   it('requests academic workload deduction summary with normalized filters', async () => {
+    const calendarEvents = [
+      {
+        eventDate: '2026-04-06',
+        eventType: 'HOLIDAY',
+        originalDate: null,
+        teachingCalcEffect: 'CANCEL',
+      },
+    ];
     const summary = {
       departmentSummaries: [
         {
@@ -160,6 +168,7 @@ describe('academic-workload api', () => {
     };
 
     executeGraphQLMock.mockResolvedValueOnce({
+      academicCalendarEvents: calendarEvents,
       getAcademicWorkloadDeductionSummary: summary,
     });
 
@@ -171,7 +180,7 @@ describe('academic-workload api', () => {
         teacherEngagementType: 'FULL_TIME_TEACHER',
         workloadDepartmentId: ' D-01 ',
       }),
-    ).resolves.toEqual(summary);
+    ).resolves.toEqual({ calendarEvents, summary });
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('query AcademicWorkloadDeductionSummary'),
@@ -184,6 +193,8 @@ describe('academic-workload api', () => {
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('getAcademicWorkloadDeductionSummary');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('academicCalendarEvents');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('recordStatus: ACTIVE');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('deductionReasonSummaries');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('departmentSummaries');
   });
