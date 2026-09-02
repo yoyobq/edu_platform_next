@@ -384,7 +384,26 @@ test('普通教师默认按当前学期查看本人的课程日期真源投影',
   await expect(page.getByText('一体化课程使用另一种授课计划表')).toBeVisible();
   await expect(page.getByRole('table', { name: '操作系统课程授课计划' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '导出 Excel' })).toHaveCount(0);
+  await page.getByRole('button', { name: '仍然显示时间表' }).click();
+  const integratedTable = page.getByRole('table', { name: '操作系统课程授课计划' });
+  await expect(integratedTable).toBeVisible();
+  for (const column of ['A', 'B', 'C', 'D', 'E']) {
+    await expect(integratedTable.getByRole('columnheader', { name: column })).toBeVisible();
+  }
+  await expect(integratedTable.getByRole('columnheader', { name: 'F' })).toHaveCount(0);
+  await expect(integratedTable.getByRole('columnheader', { name: 'G' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '参考历史计划' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '导出 Excel' })).toHaveCount(0);
+  await expect(page.getByPlaceholder('填写授课章节与内容')).toHaveCount(0);
+  await expect(page.getByPlaceholder('填写课外作业')).toHaveCount(0);
+  await expect(page.getByLabel('2026-09-09第1,2节授课方式')).toBeVisible();
+  await expect(page.getByLabel('2026-09-09第1,2节授课地点')).toBeVisible();
   await expect(nextCourseButton).toBeDisabled();
+  await previousCourseButton.click();
+  await expect(page.getByRole('table', { name: '数据库原理课程授课计划' })).toBeVisible();
+  await nextCourseButton.click();
+  await expect(page.getByText('一体化课程使用另一种授课计划表')).toBeVisible();
+  await expect(page.getByRole('table', { name: '操作系统课程授课计划' })).toHaveCount(0);
   await previousCourseButton.click();
   await expect(page.getByRole('table', { name: '数据库原理课程授课计划' })).toBeVisible();
 

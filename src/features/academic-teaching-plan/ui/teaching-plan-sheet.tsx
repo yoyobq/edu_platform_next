@@ -120,6 +120,9 @@ export function TeachingPlanSheet({
   onClassroomNameUpdated: (scheduleId: number, classroomName: string) => void;
 }) {
   const { message, modal, notification } = AntApp.useApp();
+  const isIntegratedCourse =
+    resolveCourseCategoryPresentation(course.courseCategory).kind === 'integrated';
+  const [showIntegratedSchedule, setShowIntegratedSchedule] = useState(false);
   const storageKey = useMemo(
     () =>
       buildTeachingPlanDraftStorageKey({
@@ -172,6 +175,9 @@ export function TeachingPlanSheet({
     () => buildTeachingPlanDisplayRows({ contentRows: draft.contentRows, formalRows }),
     [draft.contentRows, formalRows],
   );
+  const visibleRows = isIntegratedCourse
+    ? displayRows.filter((displayRow) => displayRow.formalRow !== null)
+    : displayRows;
   const contentRowCount = useMemo(
     () => draft.contentRows.filter((contentRow) => contentRow !== null).length,
     [draft.contentRows],
@@ -522,13 +528,18 @@ export function TeachingPlanSheet({
     }
   };
 
-  if (resolveCourseCategoryPresentation(course.courseCategory).kind === 'integrated') {
+  if (isIntegratedCourse && !showIntegratedSchedule) {
     return (
       <div className="overflow-hidden rounded-[var(--radius-surface)] border border-border bg-bg-container shadow-card">
         <div className="border-b border-border px-4">{courseNavigation}</div>
         <div className="p-4">
           <Alert
-            description="当前 A–G 授课计划模板不适用于一体化课程，因此不会生成填写表格或提供本模板的 Excel 导出。"
+            action={
+              <Button type="primary" onClick={() => setShowIntegratedSchedule(true)}>
+                仍然显示时间表
+              </Button>
+            }
+            description="当前 A–G 授课计划模板不适用于一体化课程。如只需核对课次时间，可显示 A–E 时间表；F/G 和 Excel 导出仍不会提供。"
             showIcon
             title="一体化课程使用另一种授课计划表"
             type="info"
@@ -541,68 +552,81 @@ export function TeachingPlanSheet({
   return (
     <div className="flex min-w-0 flex-col gap-4">
       <div className="overflow-hidden rounded-[var(--radius-surface)] border border-border bg-bg-container shadow-card">
-        <div className="flex flex-col gap-4 border-b border-border p-4">
-          <div>
+        {isIntegratedCourse ? (
+          <div className="border-b border-border p-4">
             <Alert
-              description={`统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。需要长期保留完整计划时，请以导出的 Excel 文件为准。`}
+              description={`A–E 根据当前计划真源生成。统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。`}
               showIcon
-              title="逐课次内容仍是限时本地草稿，请及时导出"
-              type="warning"
-            />
-          </div>
-
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <Typography.Text type="secondary">
-              首次填写时，可先参考历史计划带入章节与作业，再按本学期调整。
-              <ArrowRightOutlined className="ml-2" />
-            </Typography.Text>
-            <Space wrap>
-              <Button
-                disabled={formalRows.length === 0}
-                icon={<HistoryOutlined />}
-                loading={isLoadingHistory}
-                onClick={openHistoryReference}
-              >
-                参考历史计划
-              </Button>
-              <Tooltip
-                title={
-                  canExport
-                    ? undefined
-                    : `内容行数（${contentRowCount}）需与正式课次数（${formalRows.length}）一致，且不能留有空位`
-                }
-              >
-                <span>
-                  <Button
-                    disabled={!canExport}
-                    icon={<DownloadOutlined />}
-                    loading={isExporting}
-                    type="primary"
-                    onClick={() => void handleExport()}
-                  >
-                    导出 Excel
-                  </Button>
-                </span>
-              </Tooltip>
-            </Space>
-          </div>
-          {historyError ? <Alert closable showIcon title={historyError} type="error" /> : null}
-          {!canExport && formalRows.length > 0 ? (
-            <Alert
-              description={`当前有 ${contentRowCount} 个 F/G 内容组、${formalRows.length} 个正式课次。请补齐所有空位并增删至数量一致；内容单元格可以留空。`}
-              showIcon
-              title="当前不可导出"
+              title="当前仅显示 A–E 时间表"
               type="info"
             />
-          ) : null}
-        </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-4 border-b border-border p-4">
+            <div>
+              <Alert
+                description={`统一授课地点会保存到服务器；授课方式和逐课次地点例外只保存在当前浏览器，最后一次编辑 ${TEACHING_PLAN_DRAFT_TTL_HOURS} 小时后自动清除。需要长期保留完整计划时，请以导出的 Excel 文件为准。`}
+                showIcon
+                title="逐课次内容仍是限时本地草稿，请及时导出"
+                type="warning"
+              />
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <Typography.Text type="secondary">
+                首次填写时，可先参考历史计划带入章节与作业，再按本学期调整。
+                <ArrowRightOutlined className="ml-2" />
+              </Typography.Text>
+              <Space wrap>
+                <Button
+                  disabled={formalRows.length === 0}
+                  icon={<HistoryOutlined />}
+                  loading={isLoadingHistory}
+                  onClick={openHistoryReference}
+                >
+                  参考历史计划
+                </Button>
+                <Tooltip
+                  title={
+                    canExport
+                      ? undefined
+                      : `内容行数（${contentRowCount}）需与正式课次数（${formalRows.length}）一致，且不能留有空位`
+                  }
+                >
+                  <span>
+                    <Button
+                      disabled={!canExport}
+                      icon={<DownloadOutlined />}
+                      loading={isExporting}
+                      type="primary"
+                      onClick={() => void handleExport()}
+                    >
+                      导出 Excel
+                    </Button>
+                  </span>
+                </Tooltip>
+              </Space>
+            </div>
+            {historyError ? <Alert closable showIcon title={historyError} type="error" /> : null}
+            {!canExport && formalRows.length > 0 ? (
+              <Alert
+                description={`当前有 ${contentRowCount} 个 F/G 内容组、${formalRows.length} 个正式课次。请补齐所有空位并增删至数量一致；内容单元格可以留空。`}
+                showIcon
+                title="当前不可导出"
+                type="info"
+              />
+            ) : null}
+          </div>
+        )}
 
         <div className="border-b border-border px-4">{courseNavigation}</div>
 
         <div className="overflow-x-auto">
           <table
             aria-label={`${course.courseName}课程授课计划`}
-            className="w-full min-w-[1280px] border-separate border-spacing-0 text-sm"
+            className={`w-full border-separate border-spacing-0 text-sm ${
+              isIntegratedCourse ? 'min-w-[800px]' : 'min-w-[1280px]'
+            }`}
           >
             <colgroup>
               <col className="w-12" />
@@ -611,15 +635,22 @@ export function TeachingPlanSheet({
               <col className="w-28" />
               <col className="w-32" />
               <col className="w-56" />
-              <col className="w-72" />
-              <col className="w-56" />
+              {isIntegratedCourse ? null : (
+                <>
+                  <col className="w-72" />
+                  <col className="w-56" />
+                </>
+              )}
             </colgroup>
             <thead>
               <tr className="bg-bg-layout text-xs text-text-tertiary">
                 <th className="border-b border-r border-border px-3 py-2" scope="col">
                   #
                 </th>
-                {['A', 'B', 'C', 'D', 'E', 'F', 'G'].map((letter) => (
+                {(isIntegratedCourse
+                  ? ['A', 'B', 'C', 'D', 'E']
+                  : ['A', 'B', 'C', 'D', 'E', 'F', 'G']
+                ).map((letter) => (
                   <th
                     className="border-b border-r border-border px-3 py-2 font-medium last:border-r-0"
                     key={letter}
@@ -712,27 +743,31 @@ export function TeachingPlanSheet({
                     ) : null}
                   </div>
                 </th>
-                <th className="border-b border-l border-border px-3 py-3" scope="col">
-                  授课章节与内容
-                </th>
-                <th className="border-b border-l border-border px-3 py-3" scope="col">
-                  <div className="flex items-center justify-between gap-2">
-                    <span>课外作业</span>
-                    <Tooltip title="在末尾新增一个章节与作业内容组">
-                      <Button
-                        aria-label="新增内容行"
-                        icon={<PlusOutlined />}
-                        size="small"
-                        type="text"
-                        onClick={appendContentRow}
-                      />
-                    </Tooltip>
-                  </div>
-                </th>
+                {isIntegratedCourse ? null : (
+                  <>
+                    <th className="border-b border-l border-border px-3 py-3" scope="col">
+                      授课章节与内容
+                    </th>
+                    <th className="border-b border-l border-border px-3 py-3" scope="col">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>课外作业</span>
+                        <Tooltip title="在末尾新增一个章节与作业内容组">
+                          <Button
+                            aria-label="新增内容行"
+                            icon={<PlusOutlined />}
+                            size="small"
+                            type="text"
+                            onClick={appendContentRow}
+                          />
+                        </Tooltip>
+                      </div>
+                    </th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody>
-              {displayRows.map(({ contentRow, formalRow, rowKey }, index) => {
+              {visibleRows.map(({ contentRow, formalRow, rowKey }, index) => {
                 const contentLabel = formalRow
                   ? `${formalRow.teachingDate}第${formalRow.periodsText}节`
                   : `第${index + 1}行`;
@@ -857,88 +892,95 @@ export function TeachingPlanSheet({
                         ))}
                       </>
                     )}
-                    <td
-                      className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
-                    >
-                      <Input.TextArea
-                        aria-label={`${contentLabel}授课章节与内容`}
-                        autoSize={{ maxRows: 6, minRows: 2 }}
-                        maxLength={2000}
-                        placeholder="填写授课章节与内容"
-                        value={contentRow?.chapterAndContent ?? ''}
-                        variant="borderless"
-                        onChange={(event) =>
-                          updateContentRowAtIndex(index, {
-                            chapterAndContent: event.target.value,
-                          })
-                        }
-                        onFocus={() => ensureContentRowAtIndex(index)}
-                      />
-                    </td>
-                    <td
-                      className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
-                    >
-                      <div className="flex items-stretch gap-1">
-                        <Input.TextArea
-                          aria-label={`${contentLabel}课外作业`}
-                          autoSize={{ maxRows: 6, minRows: 2 }}
-                          maxLength={2000}
-                          placeholder="填写课外作业"
-                          value={contentRow?.homework ?? ''}
-                          variant="borderless"
-                          onChange={(event) =>
-                            updateContentRowAtIndex(index, { homework: event.target.value })
-                          }
-                          onFocus={() => ensureContentRowAtIndex(index)}
-                        />
-                        <div className="flex w-8 shrink-0 flex-col items-center justify-center gap-1 border-l border-border pl-1">
-                          {contentRow ? (
-                            <>
-                              <Tooltip title="拖动章节与作业到其他位置">
-                                <Button
-                                  aria-label={`拖动第${index + 1}行章节与作业`}
-                                  aria-pressed={draggedContentRowId === contentRow.id}
-                                  draggable
-                                  icon={<DragOutlined />}
-                                  size="small"
-                                  type="text"
-                                  onDragEnd={clearDragState}
-                                  onDragStart={(event) => {
-                                    event.dataTransfer.effectAllowed = 'move';
-                                    event.dataTransfer.setData('text/plain', contentRow.id);
-                                    dragPreviewRef.current?.remove();
-                                    const preview = createContentRowDragPreview(contentRow, index);
-                                    dragPreviewRef.current = preview;
-                                    event.dataTransfer.setDragImage(preview, 24, 24);
-                                    setDraggedContentRowId(contentRow.id);
-                                  }}
-                                />
-                              </Tooltip>
-                              <Tooltip title="删除这一行章节与作业">
-                                <Button
-                                  aria-label={`删除第${index + 1}行章节与作业`}
-                                  danger
-                                  icon={<DeleteOutlined />}
-                                  size="small"
-                                  type="text"
-                                  onClick={() => removeContentRow(contentRow, index)}
-                                />
-                              </Tooltip>
-                            </>
-                          ) : (
-                            <Tooltip title="补齐到这一行">
-                              <Button
-                                aria-label={`创建第${index + 1}行章节与作业`}
-                                icon={<PlusOutlined />}
-                                size="small"
-                                type="text"
-                                onClick={() => ensureContentRowAtIndex(index)}
-                              />
-                            </Tooltip>
-                          )}
-                        </div>
-                      </div>
-                    </td>
+                    {isIntegratedCourse ? null : (
+                      <>
+                        <td
+                          className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
+                        >
+                          <Input.TextArea
+                            aria-label={`${contentLabel}授课章节与内容`}
+                            autoSize={{ maxRows: 6, minRows: 2 }}
+                            maxLength={2000}
+                            placeholder="填写授课章节与内容"
+                            value={contentRow?.chapterAndContent ?? ''}
+                            variant="borderless"
+                            onChange={(event) =>
+                              updateContentRowAtIndex(index, {
+                                chapterAndContent: event.target.value,
+                              })
+                            }
+                            onFocus={() => ensureContentRowAtIndex(index)}
+                          />
+                        </td>
+                        <td
+                          className={`border-b border-l border-border px-2 py-2 ${dropIndicatorClass}`}
+                        >
+                          <div className="flex items-stretch gap-1">
+                            <Input.TextArea
+                              aria-label={`${contentLabel}课外作业`}
+                              autoSize={{ maxRows: 6, minRows: 2 }}
+                              maxLength={2000}
+                              placeholder="填写课外作业"
+                              value={contentRow?.homework ?? ''}
+                              variant="borderless"
+                              onChange={(event) =>
+                                updateContentRowAtIndex(index, { homework: event.target.value })
+                              }
+                              onFocus={() => ensureContentRowAtIndex(index)}
+                            />
+                            <div className="flex w-8 shrink-0 flex-col items-center justify-center gap-1 border-l border-border pl-1">
+                              {contentRow ? (
+                                <>
+                                  <Tooltip title="拖动章节与作业到其他位置">
+                                    <Button
+                                      aria-label={`拖动第${index + 1}行章节与作业`}
+                                      aria-pressed={draggedContentRowId === contentRow.id}
+                                      draggable
+                                      icon={<DragOutlined />}
+                                      size="small"
+                                      type="text"
+                                      onDragEnd={clearDragState}
+                                      onDragStart={(event) => {
+                                        event.dataTransfer.effectAllowed = 'move';
+                                        event.dataTransfer.setData('text/plain', contentRow.id);
+                                        dragPreviewRef.current?.remove();
+                                        const preview = createContentRowDragPreview(
+                                          contentRow,
+                                          index,
+                                        );
+                                        dragPreviewRef.current = preview;
+                                        event.dataTransfer.setDragImage(preview, 24, 24);
+                                        setDraggedContentRowId(contentRow.id);
+                                      }}
+                                    />
+                                  </Tooltip>
+                                  <Tooltip title="删除这一行章节与作业">
+                                    <Button
+                                      aria-label={`删除第${index + 1}行章节与作业`}
+                                      danger
+                                      icon={<DeleteOutlined />}
+                                      size="small"
+                                      type="text"
+                                      onClick={() => removeContentRow(contentRow, index)}
+                                    />
+                                  </Tooltip>
+                                </>
+                              ) : (
+                                <Tooltip title="补齐到这一行">
+                                  <Button
+                                    aria-label={`创建第${index + 1}行章节与作业`}
+                                    icon={<PlusOutlined />}
+                                    size="small"
+                                    type="text"
+                                    onClick={() => ensureContentRowAtIndex(index)}
+                                  />
+                                </Tooltip>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                      </>
+                    )}
                   </tr>
                 );
               })}
@@ -955,14 +997,17 @@ export function TeachingPlanSheet({
           <SheetMeta label="教师" value={teacherName} />
           <SheetMeta label="学期" value={semesterName} />
           <SheetMeta label="正式课次" value={`${formalRows.length} 行`} />
-          <SheetMeta label="章节与作业" value={`${contentRowCount} 行`} />
+          {isIntegratedCourse ? null : (
+            <SheetMeta label="章节与作业" value={`${contentRowCount} 行`} />
+          )}
         </div>
 
         <div className="flex items-start gap-2 border-t border-border bg-bg-layout p-3 text-xs text-text-secondary">
           <LaptopOutlined className="mt-0.5" />
           <span>
-            每次打开页面都会根据当前真源重新生成 A–E。F“授课章节与内容”和
-            G“课外作业”作为固定内容组，可拖动、删除或补行；只有内容组数量与正式课次数一致时才能导出。
+            {isIntegratedCourse
+              ? '每次打开页面都会根据当前真源重新生成 A–E；当前视图不提供 F/G 内容编辑或 Excel 导出。'
+              : '每次打开页面都会根据当前真源重新生成 A–E。F“授课章节与内容”和 G“课外作业”作为固定内容组，可拖动、删除或补行；只有内容组数量与正式课次数一致时才能导出。'}
           </span>
         </div>
       </div>
