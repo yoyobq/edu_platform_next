@@ -31,20 +31,21 @@ const semester = {
 };
 
 const zeroDeductionItem = {
-  addedDateSummaries: [] as Array<{ addedHours: string; calcEffect: string; date: string }>,
-  addedHours: '0',
-  adjustmentDates: [] as string[],
   baselineHours: '32',
   baselineTeachingWeekCount: 16,
   baselineWeeklyHours: '2',
   courseCategory: 'THEORY',
   courseName: '语文',
-  deductedHours: '0',
-  deductionReasonSummaries: [] as Array<{
-    dateSummaries: Array<{ date: string; deductedHours: string }>;
-    deductedHours: string;
-    sourceEventType: string | null;
+  dateAdjustments: [] as Array<{
+    date: string;
+    deductionSourceEventTypes: Array<string | null>;
+    netAdjustmentHours: string;
+    repeatedHours: string;
+    residualDeductedHours: string;
   }>,
+  netAdjustmentHours: '0',
+  repeatedHours: '0',
+  residualDeductedHours: '0',
   staffId: 'T-001',
   staffName: '王老师',
   teacherEngagementType: 'FULL_TIME_TEACHER',
@@ -55,20 +56,25 @@ const zeroDeductionItem = {
 
 const repeatedTeachingItem = {
   ...zeroDeductionItem,
-  addedDateSummaries: [
-    { addedHours: '1', calcEffect: 'MAKEUP', date: '2026-04-25' },
-    { addedHours: '3', calcEffect: 'REPEAT', date: '2026-04-26' },
-  ],
-  addedHours: '4',
-  adjustmentDates: ['2026-04-06'],
-  deductedHours: '3',
-  deductionReasonSummaries: [
+  dateAdjustments: [
     {
-      dateSummaries: [{ date: '2026-04-06', deductedHours: '2' }],
-      deductedHours: '2',
-      sourceEventType: 'HOLIDAY',
+      date: '2026-04-06',
+      deductionSourceEventTypes: ['HOLIDAY'],
+      netAdjustmentHours: '-2',
+      repeatedHours: '0',
+      residualDeductedHours: '2',
+    },
+    {
+      date: '2026-04-26',
+      deductionSourceEventTypes: [],
+      netAdjustmentHours: '3',
+      repeatedHours: '3',
+      residualDeductedHours: '0',
     },
   ],
+  netAdjustmentHours: '1',
+  repeatedHours: '3',
+  residualDeductedHours: '2',
 };
 
 async function fulfillGraphQL(route: Route, data: Record<string, unknown>) {
@@ -81,7 +87,9 @@ async function fulfillGraphQL(route: Route, data: Record<string, unknown>) {
 
 async function mockDeductionSummaryGraphQL(page: Page, items: Array<typeof zeroDeductionItem>) {
   await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as { query?: string } | undefined;
+    const payload = route.request().postDataJSON() as
+      | { query?: string; variables?: { includeSportsMeetDeductions?: boolean } }
+      | undefined;
     const query = typeof payload?.query === 'string' ? payload.query : '';
 
     if (query.includes('query AcademicSemesters')) {
@@ -104,56 +112,53 @@ async function mockDeductionSummaryGraphQL(page: Page, items: Array<typeof zeroD
     }
 
     if (query.includes('query AcademicWorkloadDeductionSummary')) {
+      const includeSportsMeetDeductions = payload?.variables?.includeSportsMeetDeductions !== false;
+      const hasResidualHoliday = items.some((item) =>
+        item.dateAdjustments.some(
+          (adjustment) =>
+            adjustment.date === '2026-04-06' && Number(adjustment.residualDeductedHours) > 0,
+        ),
+      );
+      const dateColumns = [
+        ...(hasResidualHoliday ? [{ date: '2026-04-06', isRepeatedTeachingDate: false }] : []),
+        ...(includeSportsMeetDeductions
+          ? [{ date: '2026-04-20', isRepeatedTeachingDate: false }]
+          : []),
+        { date: '2026-04-26', isRepeatedTeachingDate: true },
+      ];
+      const firstItem = items[0];
+      const residualDeductedHours = firstItem?.residualDeductedHours ?? '0';
+      const repeatedHours = firstItem?.repeatedHours ?? '0';
+      const netAdjustmentHours = firstItem?.netAdjustmentHours ?? '0';
       await fulfillGraphQL(route, {
-        academicCalendarEvents: [
-          {
-            eventDate: '2026-04-06',
-            eventType: 'HOLIDAY',
-            originalDate: null,
-            teachingCalcEffect: 'CANCEL',
-          },
-          {
-            eventDate: '2026-05-09',
-            eventType: 'WEEKDAY_SWAP',
-            originalDate: '2026-05-04',
-            teachingCalcEffect: 'SWAP',
-          },
-          {
-            eventDate: '2026-04-20',
-            eventType: 'SPORTS_MEET',
-            originalDate: null,
-            teachingCalcEffect: 'CANCEL',
-          },
-          {
-            eventDate: '2026-04-25',
-            eventType: 'HOLIDAY_MAKEUP',
-            originalDate: '2026-04-06',
-            teachingCalcEffect: 'MAKEUP',
-          },
-          {
-            eventDate: '2026-04-30',
-            eventType: 'ACTIVITY',
-            originalDate: null,
-            teachingCalcEffect: 'NO_CHANGE',
-          },
-          {
-            eventDate: '2026-04-26',
-            eventType: 'REPEATED_TEACHING_DAY',
-            originalDate: '2026-04-27',
-            teachingCalcEffect: 'REPEAT',
-          },
-        ],
         getAcademicWorkloadDeductionSummary: {
+          dateColumns,
           departmentSummaries: [],
           invalidReason: null,
           isComplete: true,
           isValid: true,
           items,
+          staffSummaries:
+            firstItem === undefined
+              ? []
+              : [
+                  {
+                    itemCount: items.length,
+                    netAdjustmentHours,
+                    repeatedHours,
+                    residualDeductedHours,
+                    staffId: firstItem.staffId,
+                    workloadDepartmentId: firstItem.workloadDepartmentId,
+                  },
+                ],
           total: {
             addedHours: '0',
             baselineHours: items.length > 0 ? '32' : '0',
             deductedHours: '0',
             itemCount: items.length,
+            netAdjustmentHours,
+            repeatedHours,
+            residualDeductedHours,
             staffCount: items.length > 0 ? 1 : 0,
           },
           truncationReason: null,

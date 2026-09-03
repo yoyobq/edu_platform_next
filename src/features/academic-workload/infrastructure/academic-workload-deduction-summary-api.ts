@@ -11,21 +11,17 @@ export type {
 } from './academic-workload-api';
 export { requestAcademicWorkloadDepartmentOptions } from './academic-workload-api';
 
-export type AcademicWorkloadDeductionReasonDateSummary = {
+export type AcademicWorkloadDeductionDateColumn = {
   date: string;
-  deductedHours: string;
+  isRepeatedTeachingDate: boolean;
 };
 
-export type AcademicWorkloadDeductionReasonSummary = {
-  dateSummaries: AcademicWorkloadDeductionReasonDateSummary[];
-  deductedHours: string;
-  sourceEventType: string | null;
-};
-
-export type AcademicWorkloadAddedDateSummary = {
-  addedHours: string;
-  calcEffect: string;
+export type AcademicWorkloadDeductionDateAdjustment = {
   date: string;
+  deductionSourceEventTypes: Array<string | null>;
+  netAdjustmentHours: string;
+  repeatedHours: string;
+  residualDeductedHours: string;
 };
 
 export type AcademicWorkloadDeductionSummaryTotal = {
@@ -33,6 +29,9 @@ export type AcademicWorkloadDeductionSummaryTotal = {
   baselineHours: string;
   deductedHours: string;
   itemCount: number;
+  netAdjustmentHours: string;
+  repeatedHours: string;
+  residualDeductedHours: string;
   staffCount: number;
 };
 
@@ -42,16 +41,15 @@ export type AcademicWorkloadDeductionDepartmentSummary = AcademicWorkloadDeducti
 };
 
 export type AcademicWorkloadDeductionSummaryItem = {
-  addedDateSummaries: AcademicWorkloadAddedDateSummary[];
-  addedHours: string;
-  adjustmentDates: string[];
   baselineHours: string;
   baselineTeachingWeekCount: number;
   baselineWeeklyHours: string;
   courseCategory: string | null;
   courseName: string | null;
-  deductedHours: string;
-  deductionReasonSummaries: AcademicWorkloadDeductionReasonSummary[];
+  dateAdjustments: AcademicWorkloadDeductionDateAdjustment[];
+  netAdjustmentHours: string;
+  repeatedHours: string;
+  residualDeductedHours: string;
   staffId: string;
   staffName: string;
   teacherEngagementType: AcademicTeacherEngagementType;
@@ -60,30 +58,34 @@ export type AcademicWorkloadDeductionSummaryItem = {
   workloadDepartmentName: string;
 };
 
+export type AcademicWorkloadDeductionStaffSummary = {
+  itemCount: number;
+  netAdjustmentHours: string;
+  repeatedHours: string;
+  residualDeductedHours: string;
+  staffId: string;
+  workloadDepartmentId: string;
+};
+
 export type AcademicWorkloadDeductionSummaryEnvelope = {
+  dateColumns: AcademicWorkloadDeductionDateColumn[];
   departmentSummaries: AcademicWorkloadDeductionDepartmentSummary[];
   invalidReason: string | null;
   isComplete: boolean;
   isValid: boolean;
   items: AcademicWorkloadDeductionSummaryItem[];
+  staffSummaries: AcademicWorkloadDeductionStaffSummary[];
   total: AcademicWorkloadDeductionSummaryTotal;
   truncationReason: string | null;
 };
 
-export type AcademicWorkloadDeductionCalendarEvent = {
-  eventDate: string;
-  eventType: string;
-  originalDate: string | null;
-  teachingCalcEffect: string;
-};
-
 export type AcademicWorkloadDeductionSummaryQueryResult = {
-  calendarEvents: AcademicWorkloadDeductionCalendarEvent[];
   summary: AcademicWorkloadDeductionSummaryEnvelope;
 };
 
 export type RequestAcademicWorkloadDeductionSummaryInput = {
   endDate?: string;
+  includeSportsMeetDeductions?: boolean;
   semesterId: number;
   startDate?: string;
   teacherEngagementType?: AcademicTeacherEngagementType;
@@ -91,7 +93,6 @@ export type RequestAcademicWorkloadDeductionSummaryInput = {
 };
 
 type AcademicWorkloadDeductionSummaryResponse = {
-  academicCalendarEvents: AcademicWorkloadDeductionCalendarEvent[];
   getAcademicWorkloadDeductionSummary: AcademicWorkloadDeductionSummaryEnvelope;
 };
 
@@ -102,34 +103,33 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
     $teacherEngagementType: AcademicTeacherEngagementType
     $startDate: String
     $endDate: String
+    $includeSportsMeetDeductions: Boolean
   ) {
-    academicCalendarEvents(
-      limit: 500
-      recordStatus: ACTIVE
-      semesterId: $semesterId
-    ) {
-      eventDate
-      eventType
-      originalDate
-      teachingCalcEffect
-    }
     getAcademicWorkloadDeductionSummary(
       semesterId: $semesterId
       workloadDepartmentId: $workloadDepartmentId
       teacherEngagementType: $teacherEngagementType
       startDate: $startDate
       endDate: $endDate
+      includeSportsMeetDeductions: $includeSportsMeetDeductions
     ) {
       isValid
       invalidReason
       isComplete
       truncationReason
+      dateColumns {
+        date
+        isRepeatedTeachingDate
+      }
       total {
         itemCount
         staffCount
         baselineHours
         deductedHours
         addedHours
+        residualDeductedHours
+        repeatedHours
+        netAdjustmentHours
       }
       departmentSummaries {
         workloadDepartmentId
@@ -139,6 +139,17 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
         baselineHours
         deductedHours
         addedHours
+        residualDeductedHours
+        repeatedHours
+        netAdjustmentHours
+      }
+      staffSummaries {
+        workloadDepartmentId
+        staffId
+        itemCount
+        residualDeductedHours
+        repeatedHours
+        netAdjustmentHours
       }
       items {
         workloadDepartmentId
@@ -152,21 +163,15 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
         baselineTeachingWeekCount
         baselineWeeklyHours
         baselineHours
-        deductedHours
-        addedHours
-        addedDateSummaries {
+        residualDeductedHours
+        repeatedHours
+        netAdjustmentHours
+        dateAdjustments {
           date
-          calcEffect
-          addedHours
-        }
-        adjustmentDates
-        deductionReasonSummaries {
-          sourceEventType
-          deductedHours
-          dateSummaries {
-            date
-            deductedHours
-          }
+          residualDeductedHours
+          repeatedHours
+          netAdjustmentHours
+          deductionSourceEventTypes
         }
       }
     }
@@ -182,6 +187,7 @@ function normalizeStringFilter(value?: string) {
 function normalizeRequestInput(input: RequestAcademicWorkloadDeductionSummaryInput) {
   return {
     endDate: normalizeStringFilter(input.endDate),
+    includeSportsMeetDeductions: input.includeSportsMeetDeductions,
     semesterId: input.semesterId,
     startDate: normalizeStringFilter(input.startDate),
     teacherEngagementType: input.teacherEngagementType,
@@ -217,7 +223,6 @@ export async function requestAcademicWorkloadDeductionSummary(
     >(GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY, normalizeRequestInput(input));
 
     return {
-      calendarEvents: response.academicCalendarEvents,
       summary: response.getAcademicWorkloadDeductionSummary,
     } satisfies AcademicWorkloadDeductionSummaryQueryResult;
   } catch (error) {

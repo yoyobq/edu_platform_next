@@ -33,21 +33,17 @@ import {
   type TeachingWeekOption,
 } from '../application/workload-baseline';
 import {
-  type AcademicWorkloadDeductionDateColumn,
-  buildAcademicWorkloadDeductionDateColumns,
-} from '../application/workload-deduction-special-dates';
-import {
   buildAcademicWorkloadDepartmentSelectOptions,
   DEFAULT_WORKLOAD_DEPARTMENT_ID,
   ensureSelectedAcademicWorkloadDepartmentOption,
 } from '../application/workload-department-options';
 import { requestAcademicSemesters } from '../infrastructure/academic-workload-api';
 import {
-  type AcademicWorkloadDeductionCalendarEvent,
+  type AcademicWorkloadDeductionDateColumn,
   type AcademicWorkloadDeductionDepartmentSummary,
+  type AcademicWorkloadDeductionStaffSummary,
   type AcademicWorkloadDeductionSummaryEnvelope,
   type AcademicWorkloadDeductionSummaryItem,
-  type AcademicWorkloadDeductionSummaryTotal,
   type AcademicWorkloadDepartmentOption,
   requestAcademicWorkloadDeductionSummary,
   requestAcademicWorkloadDepartmentOptions,
@@ -71,37 +67,9 @@ type EngagementTabKey = AcademicWorkloadEngagementFilter;
 type DateAdjustmentSummary = {
   date: string;
   deductedHundredths: number;
-  hasDeductedHourValue: boolean;
-  hasRepeatedHourValue: boolean;
+  netHundredths: number;
   reasonLabels: string[];
   repeatedHundredths: number;
-};
-
-type VisibleDeductionReasonDateSummary = {
-  date: string;
-  deductedHundredths: number;
-};
-
-type VisibleDeductionReasonSummary = {
-  dateSummaries: VisibleDeductionReasonDateSummary[];
-  deductedHundredths: number;
-  sourceEventType: string | null;
-};
-
-type VisibleRepeatedDateSummary = {
-  addedHundredths: number;
-  date: string;
-};
-
-type VisibleDeductionItem = {
-  item: AcademicWorkloadDeductionSummaryItem;
-  tableSubtotalHundredths: number;
-  visibleAddedHundredths: number;
-  visibleBaselineHundredths: number;
-  visibleDeductedHundredths: number;
-  visibleReasonSummaries: VisibleDeductionReasonSummary[];
-  visibleRepeatedDateSummaries: VisibleRepeatedDateSummary[];
-  visibleRepeatedHundredths: number;
 };
 
 type AcademicWorkloadDeductionTableRow = {
@@ -126,7 +94,6 @@ const DEDUCTION_TABLE_BASE_WIDTH = 832;
 const DEDUCTION_DATE_COLUMN_WIDTH = 76;
 const DEDUCTION_SUMMARY_COLUMN_WIDTH = 80;
 const EMPTY_TEXT = '-';
-const SPORTS_MEET_SOURCE_EVENT_TYPE = 'SPORTS_MEET';
 const DEFAULT_DEDUCTION_ENGAGEMENT_TYPE: EngagementTabKey = 'FULL_TIME_TEACHER';
 const ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
   evenCell: 'academic-workload-deduction-summary-detail-row-even',
@@ -201,10 +168,6 @@ function normalizeSourceEventType(value: string | null | undefined) {
   return normalizedValue || null;
 }
 
-function isSportsMeetSource(value: string | null | undefined) {
-  return normalizeSourceEventType(value) === SPORTS_MEET_SOURCE_EVENT_TYPE;
-}
-
 function formatDeductionReason(value: string | null | undefined) {
   const normalizedValue = normalizeSourceEventType(value);
 
@@ -245,194 +208,19 @@ function formatFullDate(value: string) {
   return `${year}年${Number(month)}月${Number(day)}日`;
 }
 
-function ensureDateSummary(
-  summaries: Record<string, DateAdjustmentSummary>,
-  date: string,
-): DateAdjustmentSummary {
-  summaries[date] ??= {
-    date,
-    deductedHundredths: 0,
-    hasDeductedHourValue: false,
-    hasRepeatedHourValue: false,
-    reasonLabels: [],
-    repeatedHundredths: 0,
-  };
-
-  return summaries[date];
-}
-
-function addReasonLabel(summary: DateAdjustmentSummary, reasonLabel: string) {
-  if (!summary.reasonLabels.includes(reasonLabel)) {
-    summary.reasonLabels.push(reasonLabel);
-  }
-}
-
-function buildVisibleReasonSummaries(
-  item: AcademicWorkloadDeductionSummaryItem,
-  options: { showSportsMeetDeductions: boolean },
-) {
-  return item.deductionReasonSummaries
-    .filter(
-      (reasonSummary) =>
-        options.showSportsMeetDeductions || !isSportsMeetSource(reasonSummary.sourceEventType),
-    )
-    .map<VisibleDeductionReasonSummary>((reasonSummary) => ({
-      dateSummaries: reasonSummary.dateSummaries
-        .map((dateSummary) => ({
-          date: dateSummary.date,
-          deductedHundredths: parseHourToHundredths(dateSummary.deductedHours),
-        }))
-        .filter((dateSummary) => dateSummary.date && dateSummary.deductedHundredths !== 0),
-      deductedHundredths: parseHourToHundredths(reasonSummary.deductedHours),
-      sourceEventType: reasonSummary.sourceEventType,
-    }))
-    .filter((reasonSummary) => reasonSummary.deductedHundredths !== 0);
-}
-
-function buildVisibleRepeatedDateSummaries(
-  item: AcademicWorkloadDeductionSummaryItem,
-): VisibleRepeatedDateSummary[] {
-  return item.addedDateSummaries
-    .filter((summary) => summary.calcEffect.trim().toUpperCase() === 'REPEAT')
-    .map((summary) => ({
-      addedHundredths: parseHourToHundredths(summary.addedHours),
-      date: summary.date,
-    }))
-    .filter((summary) => summary.date && summary.addedHundredths !== 0);
-}
-
-function buildDateSummaries(
-  reasonSummaries: VisibleDeductionReasonSummary[],
-  repeatedDateSummaries: VisibleRepeatedDateSummary[],
-) {
-  const summaries: Record<string, DateAdjustmentSummary> = {};
-
-  reasonSummaries.forEach((reasonSummary) => {
-    const reasonLabel = formatDeductionReason(reasonSummary.sourceEventType);
-
-    reasonSummary.dateSummaries.forEach((dateSummary) => {
-      const summary = ensureDateSummary(summaries, dateSummary.date);
-
-      summary.deductedHundredths += dateSummary.deductedHundredths;
-      summary.hasDeductedHourValue = true;
-      addReasonLabel(summary, reasonLabel);
-    });
-  });
-
-  repeatedDateSummaries.forEach((dateSummary) => {
-    const summary = ensureDateSummary(summaries, dateSummary.date);
-
-    summary.repeatedHundredths += dateSummary.addedHundredths;
-    summary.hasRepeatedHourValue = true;
-  });
-
-  return summaries;
-}
-
-function buildVisibleDeductionItems(
-  items: AcademicWorkloadDeductionSummaryItem[],
-  options: { showSportsMeetDeductions: boolean },
-): VisibleDeductionItem[] {
-  return items.map((item) => {
-    const visibleReasonSummaries = buildVisibleReasonSummaries(item, options);
-    const visibleDeductedHundredths = visibleReasonSummaries.reduce(
-      (total, reasonSummary) => total + reasonSummary.deductedHundredths,
-      0,
-    );
-    const visibleAddedHundredths = parseHourToHundredths(item.addedHours);
-    const visibleRepeatedDateSummaries = buildVisibleRepeatedDateSummaries(item);
-    const visibleRepeatedHundredths = visibleRepeatedDateSummaries.reduce(
-      (total, summary) => total + summary.addedHundredths,
-      0,
-    );
-
-    return {
-      item,
-      tableSubtotalHundredths: visibleRepeatedHundredths - visibleDeductedHundredths,
-      visibleAddedHundredths,
-      visibleBaselineHundredths: parseHourToHundredths(item.baselineHours),
-      visibleDeductedHundredths,
-      visibleReasonSummaries,
-      visibleRepeatedDateSummaries,
-      visibleRepeatedHundredths,
-    };
-  });
-}
-
-function buildVisibleTotal(records: VisibleDeductionItem[]): AcademicWorkloadDeductionSummaryTotal {
-  const staffKeys = new Set<string>();
-  const totals = records.reduce(
-    (summary, record) => {
-      staffKeys.add(`${record.item.workloadDepartmentId}::${record.item.staffId}`);
-      summary.addedHundredths += record.visibleAddedHundredths;
-      summary.baselineHundredths += record.visibleBaselineHundredths;
-      summary.deductedHundredths += record.visibleDeductedHundredths;
-      return summary;
-    },
-    {
-      addedHundredths: 0,
-      baselineHundredths: 0,
-      deductedHundredths: 0,
-    },
+function buildDateSummaries(item: AcademicWorkloadDeductionSummaryItem) {
+  return Object.fromEntries(
+    item.dateAdjustments.map((adjustment) => [
+      adjustment.date,
+      {
+        date: adjustment.date,
+        deductedHundredths: parseHourToHundredths(adjustment.residualDeductedHours),
+        netHundredths: parseHourToHundredths(adjustment.netAdjustmentHours),
+        reasonLabels: adjustment.deductionSourceEventTypes.map(formatDeductionReason),
+        repeatedHundredths: parseHourToHundredths(adjustment.repeatedHours),
+      } satisfies DateAdjustmentSummary,
+    ]),
   );
-
-  return {
-    addedHours: formatHundredths(totals.addedHundredths),
-    baselineHours: formatHundredths(totals.baselineHundredths),
-    deductedHours: formatHundredths(totals.deductedHundredths),
-    itemCount: records.length,
-    staffCount: staffKeys.size,
-  };
-}
-
-function buildVisibleDepartmentSummaries(
-  records: VisibleDeductionItem[],
-): AcademicWorkloadDeductionDepartmentSummary[] {
-  type DepartmentSummaryAccumulator = {
-    addedHundredths: number;
-    baselineHundredths: number;
-    deductedHundredths: number;
-    itemCount: number;
-    staffKeys: Set<string>;
-    workloadDepartmentId: string;
-    workloadDepartmentName: string;
-  };
-
-  const summariesByDepartment = new Map<string, DepartmentSummaryAccumulator>();
-
-  records.forEach((record) => {
-    const departmentId = record.item.workloadDepartmentId;
-    const summary = summariesByDepartment.get(departmentId) ?? {
-      addedHundredths: 0,
-      baselineHundredths: 0,
-      deductedHundredths: 0,
-      itemCount: 0,
-      staffKeys: new Set<string>(),
-      workloadDepartmentId: departmentId,
-      workloadDepartmentName: record.item.workloadDepartmentName,
-    };
-
-    summary.addedHundredths += record.visibleAddedHundredths;
-    summary.baselineHundredths += record.visibleBaselineHundredths;
-    summary.deductedHundredths += record.visibleDeductedHundredths;
-    summary.itemCount += 1;
-    summary.staffKeys.add(`${record.item.workloadDepartmentId}::${record.item.staffId}`);
-    summariesByDepartment.set(departmentId, summary);
-  });
-
-  return Array.from(summariesByDepartment.values())
-    .map((summary) => ({
-      addedHours: formatHundredths(summary.addedHundredths),
-      baselineHours: formatHundredths(summary.baselineHundredths),
-      deductedHours: formatHundredths(summary.deductedHundredths),
-      itemCount: summary.itemCount,
-      staffCount: summary.staffKeys.size,
-      workloadDepartmentId: summary.workloadDepartmentId,
-      workloadDepartmentName: summary.workloadDepartmentName,
-    }))
-    .sort((first, second) =>
-      compareText(first.workloadDepartmentName, second.workloadDepartmentName),
-    );
 }
 
 function sortDeductionItems(
@@ -487,58 +275,46 @@ function sortDeductionItems(
   });
 }
 
-function sortVisibleDeductionItems(
-  records: VisibleDeductionItem[],
+function buildTableRows(
+  items: AcademicWorkloadDeductionSummaryItem[],
+  staffSummaries: AcademicWorkloadDeductionStaffSummary[],
   options: { sortByEngagementType: boolean },
 ) {
-  const sortedItems = sortDeductionItems(
-    records.map((record) => record.item),
-    options,
+  const sortedItems = sortDeductionItems(items, options);
+  const staffSummariesByKey = new Map(
+    staffSummaries.map((summary) => [
+      `${summary.workloadDepartmentId}::${summary.staffId}`,
+      summary,
+    ]),
   );
-  const recordsByItem = new Map(records.map((record) => [record.item, record]));
-
-  return sortedItems
-    .map((item) => recordsByItem.get(item))
-    .filter((record): record is VisibleDeductionItem => Boolean(record));
-}
-
-function buildTableRows(items: VisibleDeductionItem[], options: { sortByEngagementType: boolean }) {
-  const sortedItems = sortVisibleDeductionItems(items, options);
   const rows: AcademicWorkloadDeductionTableRow[] = [];
   let sequence = 0;
   let itemIndex = 0;
 
   for (let startIndex = 0; startIndex < sortedItems.length; ) {
-    const firstRecord = sortedItems[startIndex];
-    const firstItem = firstRecord.item;
+    const firstItem = sortedItems[startIndex];
     const staffKey = `${firstItem.workloadDepartmentId}::${firstItem.staffId}`;
-    const staffItems: VisibleDeductionItem[] = [];
+    const staffItems: AcademicWorkloadDeductionSummaryItem[] = [];
     let cursor = startIndex;
 
     while (
       cursor < sortedItems.length &&
-      `${sortedItems[cursor].item.workloadDepartmentId}::${sortedItems[cursor].item.staffId}` ===
-        staffKey
+      `${sortedItems[cursor].workloadDepartmentId}::${sortedItems[cursor].staffId}` === staffKey
     ) {
       staffItems.push(sortedItems[cursor]);
       cursor += 1;
     }
 
     sequence += 1;
-    const staffTotalHundredths = staffItems.reduce(
-      (total, record) => total + record.tableSubtotalHundredths,
-      0,
+    const staffTotalHundredths = parseHourToHundredths(
+      staffSummariesByKey.get(staffKey)?.netAdjustmentHours,
     );
 
-    staffItems.forEach((record, staffRowIndex) => {
-      const { item } = record;
+    staffItems.forEach((item, staffRowIndex) => {
       const detailRowIndex = itemIndex;
 
       rows.push({
-        dateSummaries: buildDateSummaries(
-          record.visibleReasonSummaries,
-          record.visibleRepeatedDateSummaries,
-        ),
+        dateSummaries: buildDateSummaries(item),
         detailRowIndex,
         item,
         key: [
@@ -553,7 +329,7 @@ function buildTableRows(items: VisibleDeductionItem[], options: { sortByEngageme
         staffRowIndex,
         staffRowSpan: staffItems.length,
         staffTotalHundredths,
-        tableSubtotalHundredths: record.tableSubtotalHundredths,
+        tableSubtotalHundredths: parseHourToHundredths(item.netAdjustmentHours),
       });
       itemIndex += 1;
     });
@@ -562,20 +338,6 @@ function buildTableRows(items: VisibleDeductionItem[], options: { sortByEngageme
   }
 
   return rows;
-}
-
-function collectDeductionDates(rows: AcademicWorkloadDeductionTableRow[]) {
-  const dates = new Set<string>();
-
-  rows.forEach((row) => {
-    Object.entries(row.dateSummaries).forEach(([date, summary]) => {
-      if (summary.hasDeductedHourValue) {
-        dates.add(date);
-      }
-    });
-  });
-
-  return Array.from(dates).sort();
 }
 
 function getMergedCellProps(row: AcademicWorkloadDeductionTableRow) {
@@ -649,7 +411,7 @@ function renderDateColumnTitle(
 }
 
 function getDateAdjustmentNetHundredths(summary: DateAdjustmentSummary) {
-  return summary.repeatedHundredths - summary.deductedHundredths;
+  return summary.netHundredths;
 }
 
 function getSignedHourClassName(value: number) {
@@ -679,18 +441,14 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
     return <span className="academic-workload-deduction-summary-empty">0</span>;
   }
 
-  if (!summary.hasDeductedHourValue && !summary.hasRepeatedHourValue) {
-    return <span className="academic-workload-deduction-summary-empty">0</span>;
-  }
-
   const netHundredths = getDateAdjustmentNetHundredths(summary);
   const tooltipParts = [formatFullDate(summary.date)];
 
-  if (summary.hasRepeatedHourValue) {
+  if (summary.repeatedHundredths !== 0) {
     tooltipParts.push(`重复教学 ${formatHundredths(summary.repeatedHundredths)}`);
   }
 
-  if (summary.hasDeductedHourValue) {
+  if (summary.deductedHundredths !== 0) {
     tooltipParts.push(
       `扣课 ${formatDeductedHundredths(summary.deductedHundredths)}`,
       summary.reasonLabels.join('、') || '未标注原因',
@@ -714,19 +472,12 @@ function getEngagementTabLabel(key: EngagementTabKey) {
   return getAcademicWorkloadEngagementLabel(key);
 }
 
-function getDeductionTableTotalHundredths(rows: AcademicWorkloadDeductionTableRow[]) {
-  return rows.reduce(
-    (total, row) => (row.staffRowIndex === 0 ? total + row.staffTotalHundredths : total),
-    0,
-  );
-}
-
 function renderDeductionTableSummary(input: {
   columnCount: number;
   label: string;
-  rows: AcademicWorkloadDeductionTableRow[];
+  totalHours: string;
 }) {
-  const totalHundredths = getDeductionTableTotalHundredths(input.rows);
+  const totalHundredths = parseHourToHundredths(input.totalHours);
 
   return (
     <Table.Summary>
@@ -934,16 +685,16 @@ function buildDepartmentSummaryColumns() {
     },
     {
       align: 'right',
-      dataIndex: 'deductedHours',
-      key: 'deductedHours',
+      dataIndex: 'residualDeductedHours',
+      key: 'residualDeductedHours',
       render: (value: string) => renderDeductedHourCell(value),
       title: '扣课',
       width: 108,
     },
     {
       align: 'right',
-      dataIndex: 'addedHours',
-      key: 'addedHours',
+      dataIndex: 'repeatedHours',
+      key: 'repeatedHours',
       render: (value: string) => renderHourCell(value),
       title: '增加课时',
       width: 108,
@@ -1003,9 +754,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [summaryError, setSummaryError] = useState<string | null>(null);
   const [summaryEnvelope, setSummaryEnvelope] =
     useState<AcademicWorkloadDeductionSummaryEnvelope | null>(null);
-  const [calendarEvents, setCalendarEvents] = useState<AcademicWorkloadDeductionCalendarEvent[]>(
-    [],
-  );
   const { clearMarkedDetailRows, getMarkableDetailCellProps } =
     useMarkableDetailCells<AcademicWorkloadDeductionTableRow>(
       ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES,
@@ -1014,7 +762,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const invalidateSummary = useCallback(() => {
     latestRequestIdRef.current += 1;
     clearMarkedDetailRows();
-    setCalendarEvents([]);
     setSummaryEnvelope(null);
     setSummaryError(null);
     setLoadingSummary(false);
@@ -1138,43 +885,28 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   });
   const isExternalTeacherRangeMode = activeEngagementType === 'EXTERNAL_TEACHER';
 
-  const visibleDeductionItems = useMemo(
-    () =>
-      buildVisibleDeductionItems(summaryEnvelope?.items ?? [], {
-        showSportsMeetDeductions,
-      }),
-    [showSportsMeetDeductions, summaryEnvelope],
-  );
-  const visibleSummary = useMemo(
-    () => buildVisibleTotal(visibleDeductionItems),
-    [visibleDeductionItems],
-  );
   const deferredActiveEngagementType = useDeferredValue(activeEngagementType);
-  const deferredVisibleDeductionItems = useDeferredValue(visibleDeductionItems);
+  const deferredSummaryEnvelope = useDeferredValue(summaryEnvelope);
   const isDeductionRenderPending =
     deferredActiveEngagementType !== activeEngagementType ||
-    deferredVisibleDeductionItems !== visibleDeductionItems;
-  const visibleDepartmentSummaries = useMemo(
-    () => buildVisibleDepartmentSummaries(deferredVisibleDeductionItems),
-    [deferredVisibleDeductionItems],
-  );
+    deferredSummaryEnvelope !== summaryEnvelope;
+  const visibleDepartmentSummaries = deferredSummaryEnvelope?.departmentSummaries ?? [];
   const deductionRows = useMemo(
     () =>
-      buildTableRows(deferredVisibleDeductionItems, {
-        sortByEngagementType: deferredActiveEngagementType === 'ALL',
-      }),
-    [deferredActiveEngagementType, deferredVisibleDeductionItems],
+      buildTableRows(
+        deferredSummaryEnvelope?.items ?? [],
+        deferredSummaryEnvelope?.staffSummaries ?? [],
+        {
+          sortByEngagementType: deferredActiveEngagementType === 'ALL',
+        },
+      ),
+    [deferredActiveEngagementType, deferredSummaryEnvelope],
   );
-  const deductionDates = useMemo(() => collectDeductionDates(deductionRows), [deductionRows]);
   const deductionDateColumns = useMemo(
-    () =>
-      buildAcademicWorkloadDeductionDateColumns({
-        calendarEvents,
-        deductionDates,
-        showSportsMeetDeductions,
-      }),
-    [calendarEvents, deductionDates, showSportsMeetDeductions],
+    () => deferredSummaryEnvelope?.dateColumns ?? [],
+    [deferredSummaryEnvelope],
   );
+  const deductionTotalHours = deferredSummaryEnvelope?.total.netAdjustmentHours ?? '0';
   const deductionColumns = useMemo(
     () =>
       buildDeductionColumns(
@@ -1209,7 +941,10 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   );
 
   const loadSummary = useCallback(
-    async (nextEngagementType: EngagementTabKey = activeEngagementType) => {
+    async (
+      nextEngagementType: EngagementTabKey = activeEngagementType,
+      includeSportsMeetDeductions = showSportsMeetDeductions,
+    ) => {
       if (!selectedSemesterId) {
         return;
       }
@@ -1218,7 +953,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
       latestRequestIdRef.current = requestId;
       setLoadingSummary(true);
       setSummaryError(null);
-      setCalendarEvents([]);
       setSummaryEnvelope(null);
 
       try {
@@ -1227,6 +961,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
           endDate: shouldUseTeachingWeekRange
             ? teachingWeekRange.selectedEndWeek?.endDate
             : undefined,
+          includeSportsMeetDeductions,
           semesterId: selectedSemesterId,
           startDate: shouldUseTeachingWeekRange
             ? teachingWeekRange.selectedStartWeek?.startDate
@@ -1236,7 +971,6 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         });
 
         if (latestRequestIdRef.current === requestId) {
-          setCalendarEvents(result.calendarEvents);
           setSummaryEnvelope(result.summary);
         }
       } catch (error) {
@@ -1252,6 +986,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     [
       activeEngagementType,
       selectedSemesterId,
+      showSportsMeetDeductions,
       teachingWeekRange.selectedEndWeek,
       teachingWeekRange.selectedStartWeek,
       workloadDepartmentId,
@@ -1316,7 +1051,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
         schoolYear: selectedSemester?.schoolYear ?? null,
         sheetName: activeEngagementLabel,
         summaryLabel: deductionSummaryLabel,
-        summaryTotal: formatHundredths(getDeductionTableTotalHundredths(deductionRows)),
+        summaryTotal: formatHourString(deductionTotalHours),
         termNumber: selectedSemester?.termNumber ?? null,
       });
       setTemporaryExportStatus('exported');
@@ -1331,6 +1066,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     deductionDateColumns,
     deductionRows,
     deductionSummaryLabel,
+    deductionTotalHours,
     exportingExcel,
     selectedDepartmentLabel,
     selectedSemester,
@@ -1369,18 +1105,21 @@ export function AcademicWorkloadDeductionSummaryPageContent({
                     <Switch
                       checked={showSportsMeetDeductions}
                       size="small"
-                      onChange={setShowSportsMeetDeductions}
+                      onChange={(checked) => {
+                        setShowSportsMeetDeductions(checked);
+                        void loadSummary(activeEngagementType, checked);
+                      }}
                     />
                   </label>
                 </div>
 
                 <div className="academic-workload-deduction-summary-metrics academic-workload-deduction-summary-query-metrics">
-                  <SummaryMetric label="教师数" value={String(visibleSummary.staffCount)} />
-                  <SummaryMetric label="课程数" value={String(visibleSummary.itemCount)} />
+                  <SummaryMetric label="教师数" value={String(summaryEnvelope.total.staffCount)} />
+                  <SummaryMetric label="课程数" value={String(summaryEnvelope.total.itemCount)} />
                   <SummaryMetric
                     label="扣课"
                     tone="danger"
-                    value={formatDeductedHourString(visibleSummary.deductedHours)}
+                    value={formatDeductedHourString(summaryEnvelope.total.residualDeductedHours)}
                   />
                 </div>
               </section>
@@ -1544,7 +1283,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
                   renderDeductionTableSummary({
                     columnCount: deductionColumns.length,
                     label: deductionSummaryLabel,
-                    rows: deductionRows,
+                    totalHours: deductionTotalHours,
                   })
                 }
               />

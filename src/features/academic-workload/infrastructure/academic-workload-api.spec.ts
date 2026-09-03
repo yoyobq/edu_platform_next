@@ -109,21 +109,17 @@ describe('academic-workload api', () => {
   });
 
   it('requests academic workload deduction summary with normalized filters', async () => {
-    const calendarEvents = [
-      {
-        eventDate: '2026-04-06',
-        eventType: 'HOLIDAY',
-        originalDate: null,
-        teachingCalcEffect: 'CANCEL',
-      },
-    ];
     const summary = {
+      dateColumns: [{ date: '2026-04-06', isRepeatedTeachingDate: false }],
       departmentSummaries: [
         {
           addedHours: '0',
           baselineHours: '32',
           deductedHours: '4',
           itemCount: 1,
+          netAdjustmentHours: '-2',
+          repeatedHours: '0',
+          residualDeductedHours: '2',
           staffCount: 1,
           workloadDepartmentId: 'D-01',
           workloadDepartmentName: '计算机系',
@@ -134,21 +130,23 @@ describe('academic-workload api', () => {
       isValid: true,
       items: [
         {
-          addedHours: '0',
-          adjustmentDates: ['2026-04-06'],
           baselineHours: '32',
           baselineTeachingWeekCount: 16,
           baselineWeeklyHours: '2',
           courseCategory: '必修',
           courseName: '语文',
-          deductedHours: '4',
-          deductionReasonSummaries: [
+          dateAdjustments: [
             {
-              dateSummaries: [{ date: '2026-04-06', deductedHours: '2' }],
-              deductedHours: '2',
-              sourceEventType: 'HOLIDAY',
+              date: '2026-04-06',
+              deductionSourceEventTypes: ['HOLIDAY'],
+              netAdjustmentHours: '-2',
+              repeatedHours: '0',
+              residualDeductedHours: '2',
             },
           ],
+          netAdjustmentHours: '-2',
+          repeatedHours: '0',
+          residualDeductedHours: '2',
           staffId: 'T-001',
           staffName: '王老师',
           teacherEngagementType: 'FULL_TIME_TEACHER',
@@ -157,35 +155,49 @@ describe('academic-workload api', () => {
           workloadDepartmentName: '计算机系',
         },
       ],
+      staffSummaries: [
+        {
+          itemCount: 1,
+          netAdjustmentHours: '-2',
+          repeatedHours: '0',
+          residualDeductedHours: '2',
+          staffId: 'T-001',
+          workloadDepartmentId: 'D-01',
+        },
+      ],
       total: {
         addedHours: '0',
         baselineHours: '32',
         deductedHours: '4',
         itemCount: 1,
+        netAdjustmentHours: '-2',
+        repeatedHours: '0',
+        residualDeductedHours: '2',
         staffCount: 1,
       },
       truncationReason: null,
     };
 
     executeGraphQLMock.mockResolvedValueOnce({
-      academicCalendarEvents: calendarEvents,
       getAcademicWorkloadDeductionSummary: summary,
     });
 
     await expect(
       requestAcademicWorkloadDeductionSummary({
         endDate: ' 2026-06-21 ',
+        includeSportsMeetDeductions: false,
         semesterId: 202602,
         startDate: ' 2026-03-02 ',
         teacherEngagementType: 'FULL_TIME_TEACHER',
         workloadDepartmentId: ' D-01 ',
       }),
-    ).resolves.toEqual({ calendarEvents, summary });
+    ).resolves.toEqual({ summary });
 
     expect(executeGraphQLMock).toHaveBeenCalledWith(
       expect.stringContaining('query AcademicWorkloadDeductionSummary'),
       {
         endDate: '2026-06-21',
+        includeSportsMeetDeductions: false,
         semesterId: 202602,
         startDate: '2026-03-02',
         teacherEngagementType: 'FULL_TIME_TEACHER',
@@ -193,9 +205,9 @@ describe('academic-workload api', () => {
       },
     );
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('getAcademicWorkloadDeductionSummary');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('academicCalendarEvents');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('recordStatus: ACTIVE');
-    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('deductionReasonSummaries');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).not.toContain('academicCalendarEvents');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('includeSportsMeetDeductions');
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('dateAdjustments');
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('departmentSummaries');
   });
 
