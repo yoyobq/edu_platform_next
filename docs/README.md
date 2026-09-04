@@ -40,6 +40,8 @@ This directory contains project documentation.
   先看 [课程计划首页文档](./project-convention/academic-curriculum-plan-homepage.md)
 - 想确认 `My 授课计划` 的课次投影、历史计划填充、拖拽编排、草稿与 `.xls` 导出边界时，
   先看 [授课计划文档](./project-convention/academic-teaching-plan.md)
+- 想确认“拆分合班确认”页面的准入、确认边界与下游消费口径时，先看
+  [拆分合班确认文档](./project-convention/academic-split-joint-teaching.md)
 - 想确认前端 `staff invite` 当前的页面流程、字段展示和登录回跳约定时，先看 [project-convention/public-auth-staff-invite.md](./project-convention/public-auth-staff-invite.md)
 - 想确认学生注册链接注册、初始登录邮箱验证和重发验证邮件约定时，先看 [project-convention/public-auth-student-registration.md](./project-convention/public-auth-student-registration.md)
 - 想确认 public auth 一次性入口当前由谁承接、哪些已是真实流程、哪些仍是 shell 时，先看 [project-convention/public-auth-verification-intents.md](./project-convention/public-auth-verification-intents.md)
@@ -91,6 +93,7 @@ This directory contains project documentation.
 
 - [academic-curriculum-plan-homepage.md](./project-convention/academic-curriculum-plan-homepage.md)
 - [academic-teaching-plan.md](./project-convention/academic-teaching-plan.md)
+- [academic-split-joint-teaching.md](./project-convention/academic-split-joint-teaching.md)
 - [project-convention/academic-teaching-log.md](./project-convention/academic-teaching-log.md)
 - [project-convention/admin-user-list.md](./project-convention/admin-user-list.md)
 - [project-convention/course-category-visual-semantics.md](./project-convention/course-category-visual-semantics.md)

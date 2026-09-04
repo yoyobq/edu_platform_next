@@ -321,13 +321,7 @@ function buildReportRows(items: AcademicAdjustedWorkloadReportItem[]) {
       rows.push({
         detailRowIndex,
         item,
-        key: [
-          item.teacherEngagementType,
-          item.staffId,
-          item.sstsTeachingClassId || 'class',
-          item.sstsCourseId || 'course',
-          index,
-        ].join('::'),
+        key: item.rowKey,
         sequence,
         staffRowIndex: index - cursor,
         staffRowSpan: nextCursor - cursor,

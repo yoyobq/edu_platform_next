@@ -44,6 +44,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
+      '/academic-affairs/split-joint-teaching-confirmation',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
@@ -118,6 +119,7 @@ describe('navigation catalog', () => {
     expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
       [
         '/academic-affairs/academic-calendar',
+        '/academic-affairs/split-joint-teaching-confirmation',
         '/academic-affairs/staff-semester-profiles',
         '/academic-affairs/academic-workload-report',
         '/academic-affairs/academic-workload-deduction-summary',
@@ -406,6 +408,7 @@ describe('navigation catalog', () => {
     ]);
     expect(findGroup(staffItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
       '/academic-affairs/academic-calendar',
+      '/academic-affairs/split-joint-teaching-confirmation',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',
@@ -837,6 +840,7 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
       '/student-affairs/class-adviser-governance',
       '/academic-affairs/academic-calendar',
+      '/academic-affairs/split-joint-teaching-confirmation',
       '/academic-affairs/staff-semester-profiles',
       '/academic-affairs/academic-workload-report',
       '/academic-affairs/academic-workload-deduction-summary',

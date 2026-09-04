@@ -17,6 +17,11 @@ export type AcademicTeacherSemesterScheduleWeekType = 'ALL' | 'EVEN' | 'ODD' | s
 type AcademicPlannedTimetableProjectionInvalidReasonCode = string;
 type AcademicPlannedTimetableProjectionTruncationReasonCode = string;
 
+type AcademicTeachingDeliveryClassDTO = {
+  sstsTeachingClassId: string | null;
+  teachingClassName: string;
+};
+
 type AcademicSemesterPlannedTimetableItemDTO = {
   calcEffect: string;
   classroomName: string | null;
@@ -24,42 +29,39 @@ type AcademicSemesterPlannedTimetableItemDTO = {
   courseCategory: string | null;
   courseName: string | null;
   date: string;
+  deliveryKey: string;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
   periodStart: number;
   physicalDayOfWeek: number;
-  scheduleId: number;
   semesterId: number;
-  slotId: number;
   staffId: string;
   staffName: string;
+  sstsCourseId: string | null;
   teachingClassName: string;
+  teachingClasses: AcademicTeachingDeliveryClassDTO[];
   weekIndex: number;
 };
 
 type AcademicWeeklyPlannedTimetableItemDTO = AcademicSemesterPlannedTimetableItemDTO;
 
 type AcademicTeacherSemesterScheduleItemDTO = {
-  classroomId: number | null;
   classroomName: string | null;
   coefficient: string;
   courseCategory: string | null;
   courseName: string | null;
   dayOfWeek: number;
+  deliveryPatternKey: string;
   periodEnd: number;
   periodStart: number;
-  scheduleId: number;
   semesterId: number;
-  slotId: number;
   staffId: string;
   staffName: string;
   sstsCourseId: string | null;
-  sstsTeachingClassId: string | null;
   teachingClassName: string;
-  weekRanges: string | null;
-  weekPattern: string;
-  weekType: AcademicTeacherSemesterScheduleWeekType;
+  teachingClasses: AcademicTeachingDeliveryClassDTO[];
+  weekRanges: string;
 };
 
 type AcademicTeachingClassOptionDTO = {
@@ -79,6 +81,8 @@ type AcademicPlannedTimetableResultDTO<TItem> = {
 };
 
 type AcademicTeacherSemesterScheduleResultDTO = {
+  invalidReason: string | null;
+  isValid: boolean;
   items: AcademicTeacherSemesterScheduleItemDTO[];
 };
 
@@ -124,9 +128,9 @@ export type AcademicTeacherSemesterScheduleItem = {
   dayOfWeek: number;
   periodEnd: number;
   periodStart: number;
-  scheduleId: number;
+  scheduleId: number | string;
   semesterId: number;
-  slotId: number;
+  slotId: number | string;
   staffId: string;
   staffName: string;
   sstsCourseId: string | null;
@@ -175,23 +179,23 @@ export type AcademicTeachingClassOptionsQueryFilters = {
 };
 
 type AcademicSemesterTimetableItemsResponse = {
-  listAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
+  listAcademicSemesterTeachingDeliveries: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
 };
 
 type MyAcademicSemesterTimetableItemsResponse = {
-  listMyAcademicSemesterPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
+  listMyAcademicSemesterTeachingDeliveries: AcademicPlannedTimetableResultDTO<AcademicSemesterPlannedTimetableItemDTO>;
 };
 
 type AcademicWeeklyTimetableItemsResponse = {
-  listAcademicWeeklyPlannedTimetable: AcademicPlannedTimetableResultDTO<AcademicWeeklyPlannedTimetableItemDTO>;
+  listAcademicWeeklyTeachingDeliveries: AcademicPlannedTimetableResultDTO<AcademicWeeklyPlannedTimetableItemDTO>;
 };
 
 type AcademicTeacherSemesterScheduleItemsResponse = {
-  listAcademicTeacherSemesterScheduleItems: AcademicTeacherSemesterScheduleResultDTO;
+  listAcademicTeacherSemesterDeliveryPatterns: AcademicTeacherSemesterScheduleResultDTO;
 };
 
 type MyAcademicTeacherSemesterScheduleItemsResponse = {
-  listMyAcademicTeacherSemesterScheduleItems: AcademicTeacherSemesterScheduleResultDTO;
+  listMyAcademicTeacherSemesterDeliveryPatterns: AcademicTeacherSemesterScheduleResultDTO;
 };
 
 type AcademicTeachingClassOptionsResponse = {
@@ -205,28 +209,32 @@ const ACADEMIC_TIMETABLE_ITEM_FIELDS = `
   courseCategory
   courseName
   date
+  deliveryKey
   isEffective
   logicalDayOfWeek
   periodStart
   periodEnd
   physicalDayOfWeek
-  scheduleId
   semesterId
-  slotId
   staffId
   staffName
+  sstsCourseId
   teachingClassName
+  teachingClasses {
+    sstsTeachingClassId
+    teachingClassName
+  }
   weekIndex
 `;
 
 const LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
-  query ListAcademicSemesterPlannedTimetable(
+  query ListAcademicSemesterTeachingDeliveries(
     $semesterId: Int!
     $staffId: String
     $sstsCourseId: String
     $sstsTeachingClassId: String
   ) {
-    listAcademicSemesterPlannedTimetable(
+    listAcademicSemesterTeachingDeliveries(
       semesterId: $semesterId
       staffId: $staffId
       sstsCourseId: $sstsCourseId
@@ -244,12 +252,12 @@ const LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
 `;
 
 const LIST_MY_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
-  query ListMyAcademicSemesterPlannedTimetable(
+  query ListMyAcademicSemesterTeachingDeliveries(
     $semesterId: Int!
     $sstsCourseId: String
     $sstsTeachingClassId: String
   ) {
-    listMyAcademicSemesterPlannedTimetable(
+    listMyAcademicSemesterTeachingDeliveries(
       semesterId: $semesterId
       sstsCourseId: $sstsCourseId
       sstsTeachingClassId: $sstsTeachingClassId
@@ -266,14 +274,14 @@ const LIST_MY_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY = `
 `;
 
 const LIST_ACADEMIC_WEEKLY_TIMETABLE_ITEMS_QUERY = `
-  query ListAcademicWeeklyPlannedTimetable(
+  query ListAcademicWeeklyTeachingDeliveries(
     $semesterId: Int!
     $staffId: String
     $sstsCourseId: String
     $sstsTeachingClassId: String
     $weekIndex: Int!
   ) {
-    listAcademicWeeklyPlannedTimetable(
+    listAcademicWeeklyTeachingDeliveries(
       semesterId: $semesterId
       staffId: $staffId
       sstsCourseId: $sstsCourseId
@@ -292,56 +300,58 @@ const LIST_ACADEMIC_WEEKLY_TIMETABLE_ITEMS_QUERY = `
 `;
 
 const LIST_ACADEMIC_TEACHER_SEMESTER_SCHEDULE_ITEMS_QUERY = `
-  query ListAcademicTeacherSemesterScheduleItems($semesterId: Int!, $staffId: String!) {
-    listAcademicTeacherSemesterScheduleItems(semesterId: $semesterId, staffId: $staffId) {
+  query ListAcademicTeacherSemesterDeliveryPatterns($semesterId: Int!, $staffId: String!) {
+    listAcademicTeacherSemesterDeliveryPatterns(semesterId: $semesterId, staffId: $staffId) {
+      invalidReason
+      isValid
       items {
-        classroomId
         classroomName
         coefficient
         courseCategory
         courseName
         dayOfWeek
+        deliveryPatternKey
         periodEnd
         periodStart
-        scheduleId
         semesterId
-        slotId
         staffId
         staffName
         sstsCourseId
-        sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
         weekRanges
-        weekPattern
-        weekType
       }
     }
   }
 `;
 
 const LIST_MY_ACADEMIC_TEACHER_SEMESTER_SCHEDULE_ITEMS_QUERY = `
-  query ListMyAcademicTeacherSemesterScheduleItems($semesterId: Int!) {
-    listMyAcademicTeacherSemesterScheduleItems(semesterId: $semesterId) {
+  query ListMyAcademicTeacherSemesterDeliveryPatterns($semesterId: Int!) {
+    listMyAcademicTeacherSemesterDeliveryPatterns(semesterId: $semesterId) {
+      invalidReason
+      isValid
       items {
-        classroomId
         classroomName
         coefficient
         courseCategory
         courseName
         dayOfWeek
+        deliveryPatternKey
         periodEnd
         periodStart
-        scheduleId
         semesterId
-        slotId
         staffId
         staffName
         sstsCourseId
-        sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
         weekRanges
-        weekPattern
-        weekType
       }
     }
   }
@@ -453,13 +463,16 @@ function mapAcademicTimetableItem(
     isEffective: item.isEffective,
     periodEnd: item.periodEnd,
     periodStart: item.periodStart,
-    scheduleId: item.scheduleId,
+    scheduleId: item.deliveryKey,
     semesterId: item.semesterId,
-    slotId: item.slotId,
+    slotId: item.deliveryKey,
     staffId: item.staffId,
     staffName: item.staffName,
-    sstsCourseId: null,
-    sstsTeachingClassId: null,
+    sstsCourseId: item.sstsCourseId,
+    sstsTeachingClassId:
+      item.teachingClasses.length === 1
+        ? (item.teachingClasses[0]?.sstsTeachingClassId ?? null)
+        : null,
     teachingClassName: item.teachingClassName,
     weekIndex: item.weekIndex,
   };
@@ -469,7 +482,7 @@ function mapAcademicTeacherSemesterScheduleItem(
   item: AcademicTeacherSemesterScheduleItemDTO,
 ): AcademicTeacherSemesterScheduleItem {
   return {
-    classroomId: item.classroomId,
+    classroomId: null,
     classroomName: item.classroomName,
     coefficient: mapCoefficient(item.coefficient),
     courseCategory: item.courseCategory,
@@ -477,17 +490,20 @@ function mapAcademicTeacherSemesterScheduleItem(
     dayOfWeek: item.dayOfWeek,
     periodEnd: item.periodEnd,
     periodStart: item.periodStart,
-    scheduleId: item.scheduleId,
+    scheduleId: item.deliveryPatternKey,
     semesterId: item.semesterId,
-    slotId: item.slotId,
+    slotId: item.deliveryPatternKey,
     staffId: item.staffId,
     staffName: item.staffName,
     sstsCourseId: item.sstsCourseId,
-    sstsTeachingClassId: item.sstsTeachingClassId,
+    sstsTeachingClassId:
+      item.teachingClasses.length === 1
+        ? (item.teachingClasses[0]?.sstsTeachingClassId ?? null)
+        : null,
     teachingClassName: item.teachingClassName,
     weekRanges: item.weekRanges,
-    weekPattern: item.weekPattern,
-    weekType: item.weekType,
+    weekPattern: item.weekRanges,
+    weekType: 'ALL',
   };
 }
 
@@ -542,7 +558,7 @@ export async function requestAcademicSemesterTimetableItems(input: AcademicTimet
       AcademicTimetableQueryFilters
     >(LIST_ACADEMIC_SEMESTER_TIMETABLE_ITEMS_QUERY, normalizeSharedFilters(input));
 
-    return resolvePlannedTimetableItems(response.listAcademicSemesterPlannedTimetable);
+    return resolvePlannedTimetableItems(response.listAcademicSemesterTeachingDeliveries);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载学期课表。'));
   }
@@ -561,7 +577,7 @@ export async function requestMyAcademicSemesterTimetableItems(
       sstsTeachingClassId: normalizeStringFilter(input.sstsTeachingClassId),
     });
 
-    return resolvePlannedTimetableItems(response.listMyAcademicSemesterPlannedTimetable);
+    return resolvePlannedTimetableItems(response.listMyAcademicSemesterTeachingDeliveries);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载本人学期课表。'));
   }
@@ -592,7 +608,7 @@ export async function requestAcademicWeeklyTimetableItems(
       weekIndex: input.weekIndex,
     });
 
-    return resolvePlannedTimetableItems(response.listAcademicWeeklyPlannedTimetable);
+    return resolvePlannedTimetableItems(response.listAcademicWeeklyTeachingDeliveries);
   } catch (error) {
     throw new Error(resolveAcademicTimetableErrorMessage(error, '暂时无法加载单周课表。'));
   }
@@ -631,7 +647,13 @@ export async function requestAcademicTeacherSemesterScheduleItems(
       staffId: input.staffId.trim(),
     });
 
-    return response.listAcademicTeacherSemesterScheduleItems.items.map(
+    if (!response.listAcademicTeacherSemesterDeliveryPatterns.isValid) {
+      throw new Error(
+        `课表投影无效：${response.listAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN'}`,
+      );
+    }
+
+    return response.listAcademicTeacherSemesterDeliveryPatterns.items.map(
       mapAcademicTeacherSemesterScheduleItem,
     );
   } catch (error) {
@@ -650,7 +672,13 @@ export async function requestMyAcademicTeacherSemesterScheduleItems(
       semesterId: input.semesterId,
     });
 
-    return response.listMyAcademicTeacherSemesterScheduleItems.items.map(
+    if (!response.listMyAcademicTeacherSemesterDeliveryPatterns.isValid) {
+      throw new Error(
+        `课表投影无效：${response.listMyAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN'}`,
+      );
+    }
+
+    return response.listMyAcademicTeacherSemesterDeliveryPatterns.items.map(
       mapAcademicTeacherSemesterScheduleItem,
     );
   } catch (error) {

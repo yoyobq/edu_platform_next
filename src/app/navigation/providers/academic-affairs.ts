@@ -40,6 +40,16 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             primaryAccessGroup: 'ADMIN' as const,
             slotGroup: null,
           },
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'ReconciliationOutlined',
+            key: '/academic-affairs/split-joint-teaching-confirmation',
+            label: '拆分合班确认',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/split-joint-teaching-confirmation',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
         ]
       : []),
     ...(hasStaffSemesterProfilesAccess({

@@ -43,9 +43,9 @@ export type AcademicStableWorkloadOccurrence = {
   periodEnd: number;
   periodStart: number;
   physicalDayOfWeek: number;
-  scheduleId: number;
+  scheduleId: number | string;
   semesterId: number;
-  slotId: number;
+  slotId: number | string;
   staffId: string;
   staffName: string;
   sstsCourseId: string | null;
@@ -66,14 +66,44 @@ export type AcademicWorkloadReportItem = {
   coefficient: string;
   courseName: string | null;
   hours: string;
+  rowKey: string;
   staffId: string;
   staffName: string;
   sstsCourseId: string | null;
   sstsTeachingClassId: string | null;
   teacherEngagementType: AcademicTeacherEngagementType;
   teachingClassName: string;
+  teachingClasses: AcademicTeachingDeliveryClass[];
   weekCount: number;
+  weekIndexes: number[];
   weeklyHours: string;
+};
+
+export type AcademicTeachingDeliveryClass = {
+  sstsTeachingClassId: string | null;
+  teachingClassName: string;
+};
+
+type AcademicTeachingDeliveryDTO = {
+  calcEffect: AcademicStableWorkloadCalcEffect;
+  classroomName: string | null;
+  coefficient: string;
+  courseCategory: string | null;
+  courseName: string | null;
+  date: string;
+  deliveryKey: string;
+  isEffective: boolean;
+  logicalDayOfWeek: number;
+  periodEnd: number;
+  periodStart: number;
+  physicalDayOfWeek: number;
+  semesterId: number;
+  staffId: string;
+  staffName: string;
+  sstsCourseId: string | null;
+  teachingClassName: string;
+  teachingClasses: AcademicTeachingDeliveryClass[];
+  weekIndex: number;
 };
 
 export type AcademicWorkloadReportTotal = {
@@ -121,11 +151,15 @@ export type AcademicWorkloadDepartmentOption = {
 };
 
 type AcademicStableWorkloadResponse = {
-  listAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
+  listAcademicStableWorkloadTeachingDeliveries: Omit<AcademicStableWorkloadEnvelope, 'items'> & {
+    items: AcademicTeachingDeliveryDTO[];
+  };
 };
 
 type MyAcademicStableWorkloadResponse = {
-  listMyAcademicStableWorkloadOccurrences: AcademicStableWorkloadEnvelope;
+  listMyAcademicStableWorkloadTeachingDeliveries: Omit<AcademicStableWorkloadEnvelope, 'items'> & {
+    items: AcademicTeachingDeliveryDTO[];
+  };
 };
 
 type AcademicWorkloadReportResponse = {
@@ -137,7 +171,7 @@ type AcademicWorkloadDepartmentOptionsResponse = {
 };
 
 const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
-  query ListAcademicStableWorkloadOccurrences(
+  query ListAcademicStableWorkloadTeachingDeliveries(
     $endDate: String
     $semesterId: Int!
     $staffId: String!
@@ -145,7 +179,7 @@ const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
     $sstsCourseId: String
     $sstsTeachingClassId: String
   ) {
-    listAcademicStableWorkloadOccurrences(
+    listAcademicStableWorkloadTeachingDeliveries(
       endDate: $endDate
       semesterId: $semesterId
       staffId: $staffId
@@ -169,14 +203,16 @@ const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
         periodEnd
         periodStart
         physicalDayOfWeek
-        scheduleId
+        deliveryKey
         semesterId
-        slotId
         staffId
         staffName
         sstsCourseId
-        sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
         weekIndex
       }
     }
@@ -184,14 +220,14 @@ const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
 `;
 
 const LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
-  query ListMyAcademicStableWorkloadOccurrences(
+  query ListMyAcademicStableWorkloadTeachingDeliveries(
     $endDate: String
     $semesterId: Int!
     $startDate: String
     $sstsCourseId: String
     $sstsTeachingClassId: String
   ) {
-    listMyAcademicStableWorkloadOccurrences(
+    listMyAcademicStableWorkloadTeachingDeliveries(
       endDate: $endDate
       semesterId: $semesterId
       startDate: $startDate
@@ -214,14 +250,16 @@ const LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
         periodEnd
         periodStart
         physicalDayOfWeek
-        scheduleId
+        deliveryKey
         semesterId
-        slotId
         staffId
         staffName
         sstsCourseId
-        sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
         weekIndex
       }
     }
@@ -248,11 +286,17 @@ const GET_ACADEMIC_WORKLOAD_REPORT_QUERY = `
       isComplete
       truncationReason
       items {
+        rowKey
         staffId
         staffName
         teacherEngagementType
         sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
+        weekIndexes
         sstsCourseId
         courseName
         weeklyHours
@@ -339,6 +383,20 @@ function normalizeMyRequestInput(input: RequestMyAcademicStableWorkloadInput) {
   };
 }
 
+function mapAcademicTeachingDelivery(
+  item: AcademicTeachingDeliveryDTO,
+): AcademicStableWorkloadOccurrence {
+  return {
+    ...item,
+    scheduleId: item.deliveryKey,
+    slotId: item.deliveryKey,
+    sstsTeachingClassId:
+      item.teachingClasses.length === 1
+        ? (item.teachingClasses[0]?.sstsTeachingClassId ?? null)
+        : null,
+  };
+}
+
 function normalizeReportRequestInput(input: RequestAcademicWorkloadReportInput) {
   return {
     endDate: normalizeStringFilter(input.endDate),
@@ -373,7 +431,12 @@ export async function requestAcademicStableWorkloadOccurrences(
       OperationVariables & RequestAcademicStableWorkloadInput
     >(LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY, normalizeRequestInput(input));
 
-    return response.listAcademicStableWorkloadOccurrences;
+    return {
+      ...response.listAcademicStableWorkloadTeachingDeliveries,
+      items: response.listAcademicStableWorkloadTeachingDeliveries.items.map(
+        mapAcademicTeachingDelivery,
+      ),
+    };
   } catch (error) {
     throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载教师工作量。'));
   }
@@ -401,7 +464,12 @@ export async function requestMyAcademicStableWorkloadOccurrences(
       OperationVariables & RequestMyAcademicStableWorkloadInput
     >(LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY, normalizeMyRequestInput(input));
 
-    return response.listMyAcademicStableWorkloadOccurrences;
+    return {
+      ...response.listMyAcademicStableWorkloadTeachingDeliveries,
+      items: response.listMyAcademicStableWorkloadTeachingDeliveries.items.map(
+        mapAcademicTeachingDelivery,
+      ),
+    };
   } catch (error) {
     throw new Error(resolveAcademicWorkloadErrorMessage(error, '暂时无法加载本人教师工作量。'));
   }

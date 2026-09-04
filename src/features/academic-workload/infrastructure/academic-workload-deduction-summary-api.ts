@@ -48,12 +48,18 @@ export type AcademicWorkloadDeductionSummaryItem = {
   courseName: string | null;
   dateAdjustments: AcademicWorkloadDeductionDateAdjustment[];
   netAdjustmentHours: string;
+  rowKey: string;
   repeatedHours: string;
   residualDeductedHours: string;
   staffId: string;
   staffName: string;
   teacherEngagementType: AcademicTeacherEngagementType;
   teachingClassName: string;
+  teachingClasses: Array<{
+    sstsTeachingClassId: string | null;
+    teachingClassName: string;
+  }>;
+  weekIndexes: number[];
   workloadDepartmentId: string;
   workloadDepartmentName: string;
 };
@@ -152,12 +158,18 @@ const GET_ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_QUERY = `
         netAdjustmentHours
       }
       items {
+        rowKey
         workloadDepartmentId
         workloadDepartmentName
         staffId
         staffName
         teacherEngagementType
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
+        weekIndexes
         courseName
         courseCategory
         baselineTeachingWeekCount

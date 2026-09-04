@@ -213,6 +213,10 @@ const loadAcademicCalendarRouteModule = loadPageRouteModule(
   () => import('@/pages/academic-calendar'),
   'AcademicCalendarPage',
 );
+const loadSplitJointTeachingConfirmationRouteModule = loadPageRouteModule(
+  () => import('@/pages/split-joint-teaching-confirmation'),
+  'SplitJointTeachingConfirmationPage',
+);
 const loadSemesterCalendarRouteModule = loadPageRouteModule(
   () => import('@/pages/semester-calendar'),
   'SemesterCalendarPage',
@@ -565,6 +569,10 @@ async function errorPreviewLoader(args: LoaderFunctionArgs) {
 
 async function academicCalendarPageLoader(args: LoaderFunctionArgs) {
   return navigationPageLoader(args, '/academic-affairs/academic-calendar');
+}
+
+async function splitJointTeachingConfirmationPageLoader(args: LoaderFunctionArgs) {
+  return navigationPageLoader(args, '/academic-affairs/split-joint-teaching-confirmation');
 }
 
 async function semesterCalendarPageLoader(args: LoaderFunctionArgs) {
@@ -1568,6 +1576,11 @@ const router = createBrowserRouter([
         path: '/academic-affairs/academic-calendar',
         loader: academicCalendarPageLoader,
         lazy: loadAcademicCalendarRouteModule,
+      },
+      {
+        path: '/academic-affairs/split-joint-teaching-confirmation',
+        loader: splitJointTeachingConfirmationPageLoader,
+        lazy: loadSplitJointTeachingConfirmationRouteModule,
       },
       {
         path: '/academic-affairs/semester-calendar',

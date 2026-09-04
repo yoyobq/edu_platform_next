@@ -20,6 +20,7 @@ export type AcademicAdjustedWorkloadReportItem = {
   courseCategory: string | null;
   courseName: string | null;
   deductedHours: string;
+  rowKey: string;
   semesterId: number;
   sstsCourseId: string | null;
   sstsTeachingClassId: string | null;
@@ -27,7 +28,12 @@ export type AcademicAdjustedWorkloadReportItem = {
   staffName: string;
   teacherEngagementType: AcademicTeacherEngagementType;
   teachingClassName: string;
+  teachingClasses: Array<{
+    sstsTeachingClassId: string | null;
+    teachingClassName: string;
+  }>;
   weekCount: number;
+  weekIndexes: number[];
   weeklyHours: string;
   workloadDepartmentId: string;
   workloadDepartmentName: string;
@@ -84,6 +90,7 @@ const GET_ACADEMIC_ADJUSTED_WORKLOAD_REPORT_QUERY = `
       isComplete
       truncationReason
       items {
+        rowKey
         semesterId
         workloadDepartmentId
         workloadDepartmentName
@@ -92,6 +99,11 @@ const GET_ACADEMIC_ADJUSTED_WORKLOAD_REPORT_QUERY = `
         teacherEngagementType
         sstsTeachingClassId
         teachingClassName
+        teachingClasses {
+          sstsTeachingClassId
+          teachingClassName
+        }
+        weekIndexes
         sstsCourseId
         courseName
         courseCategory
