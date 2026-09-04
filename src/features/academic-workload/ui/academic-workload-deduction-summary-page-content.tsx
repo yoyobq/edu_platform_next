@@ -1,8 +1,25 @@
 // src/features/academic-workload/ui/academic-workload-deduction-summary-page-content.tsx
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, DownloadOutlined, ScheduleOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Select, Skeleton, Switch, Table, Tabs, Tag, Tooltip } from 'antd';
+import {
+  BarChartOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  ScheduleOutlined,
+} from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Empty,
+  Select,
+  Skeleton,
+  Space,
+  Switch,
+  Table,
+  Tabs,
+  Tag,
+  Tooltip,
+} from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -52,6 +69,10 @@ import {
   type AcademicWorkloadDeductionExcelRow,
   exportAcademicWorkloadDeductionExcel,
 } from '../infrastructure/academic-workload-deduction-summary-excel-export';
+import {
+  buildAcademicWorkloadTeacherTotalsClipboardText,
+  copyAcademicWorkloadTeacherTotals,
+} from '../infrastructure/academic-workload-teacher-total-clipboard';
 
 import {
   type MarkableDetailCellPropsGetter,
@@ -725,6 +746,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const scopedDepartmentId = defaultWorkloadDepartmentId?.trim() || '';
   const latestRequestIdRef = useRef(0);
   const hasAutoLoadedSummaryRef = useRef(false);
+  const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
@@ -741,6 +763,7 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const [loadingSemesters, setLoadingSemesters] = useState(true);
   const [loadingDepartments, setLoadingDepartments] = useState(true);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | 'idle'>('idle');
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
   const [semesterError, setSemesterError] = useState<string | null>(null);
@@ -761,6 +784,18 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     setLoadingSummary(false);
   }, [clearMarkedDetailRows]);
 
+  const setTemporaryCopyStatus = useCallback((status: 'copied' | 'failed') => {
+    setCopyStatus(status);
+
+    if (copyStatusTimerRef.current) {
+      clearTimeout(copyStatusTimerRef.current);
+    }
+
+    copyStatusTimerRef.current = setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, 1600);
+  }, []);
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
 
@@ -776,6 +811,10 @@ export function AcademicWorkloadDeductionSummaryPageContent({
 
   useEffect(
     () => () => {
+      if (copyStatusTimerRef.current) {
+        clearTimeout(copyStatusTimerRef.current);
+      }
+
       if (exportStatusTimerRef.current) {
         clearTimeout(exportStatusTimerRef.current);
       }
@@ -990,6 +1029,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
   const handleEngagementTypeChange = (nextKey: string) => {
     const nextEngagementType = nextKey as EngagementTabKey;
 
+    setCopyStatus('idle');
+    setExportStatus('idle');
     setActiveEngagementType(nextEngagementType);
 
     if (selectedSemesterId && (summaryEnvelope || loadingSummary)) {
@@ -1020,6 +1061,32 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     hasAutoLoadedSummaryRef.current = true;
     void loadSummary();
   }, [canLoadSummary, loadSummary, loadingSemesters]);
+
+  const handleCopyDeductionTotals = useCallback(async () => {
+    const teacherTotalRows = deductionRows
+      .filter((row) => row.staffRowIndex === 0)
+      .map((row) => ({
+        sequence: row.sequence,
+        staffName: row.item.staffName.trim(),
+        totalHours: formatHundredths(row.staffTotalHundredths),
+      }));
+
+    if (teacherTotalRows.length === 0) {
+      return;
+    }
+
+    try {
+      await copyAcademicWorkloadTeacherTotals(
+        buildAcademicWorkloadTeacherTotalsClipboardText({
+          rows: teacherTotalRows,
+          totalHeader: '扣课合计',
+        }),
+      );
+      setTemporaryCopyStatus('copied');
+    } catch {
+      setTemporaryCopyStatus('failed');
+    }
+  }, [deductionRows, setTemporaryCopyStatus]);
 
   const handleExportDeductionTable = useCallback(async () => {
     if (!canExportDeductionExcel || deductionRows.length === 0 || exportingExcel) {
@@ -1068,6 +1135,8 @@ export function AcademicWorkloadDeductionSummaryPageContent({
     setTemporaryExportStatus,
     teachingWeeks,
   ]);
+  const copyButtonLabel =
+    copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制扣课合计';
   const exportButtonLabel =
     exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
@@ -1181,19 +1250,33 @@ export function AcademicWorkloadDeductionSummaryPageContent({
           canExportDeductionExcel
             ? {
                 right: (
-                  <Button
-                    disabled={
-                      !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
-                    }
-                    icon={<DownloadOutlined />}
-                    loading={exportingExcel}
-                    size="small"
-                    onClick={() => {
-                      void handleExportDeductionTable();
-                    }}
-                  >
-                    {exportButtonLabel}
-                  </Button>
+                  <Space size={8}>
+                    <Button
+                      disabled={
+                        !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
+                      }
+                      icon={<CopyOutlined />}
+                      size="small"
+                      onClick={() => {
+                        void handleCopyDeductionTotals();
+                      }}
+                    >
+                      {copyButtonLabel}
+                    </Button>
+                    <Button
+                      disabled={
+                        !summaryEnvelope || isDeductionRenderPending || deductionRows.length === 0
+                      }
+                      icon={<DownloadOutlined />}
+                      loading={exportingExcel}
+                      size="small"
+                      onClick={() => {
+                        void handleExportDeductionTable();
+                      }}
+                    >
+                      {exportButtonLabel}
+                    </Button>
+                  </Space>
                 ),
               }
             : undefined

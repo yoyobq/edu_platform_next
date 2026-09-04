@@ -1,6 +1,11 @@
 // src/features/academic-workload/ui/academic-workload-report-page-content.tsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
+import {
+  BarChartOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons';
 import { Alert, Button, Empty, Select, Skeleton, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
@@ -44,6 +49,10 @@ import {
   type AcademicWorkloadReportExcelRow,
   exportAcademicWorkloadReportExcel,
 } from '../infrastructure/academic-workload-report-excel-export';
+import {
+  buildAcademicWorkloadTeacherTotalsClipboardText,
+  copyAcademicWorkloadTeacherTotals,
+} from '../infrastructure/academic-workload-teacher-total-clipboard';
 
 import { useMarkableDetailCells } from './markable-detail-cells';
 import { TeachingWeekRangeControl } from './teaching-week-range-control';
@@ -314,7 +323,9 @@ export function AcademicWorkloadReportPageContent({
   const [departmentError, setDepartmentError] = useState<string | null>(null);
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportEnvelope, setReportEnvelope] = useState<AcademicWorkloadReportEnvelope | null>(null);
+  const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | 'idle'>('idle');
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
   const { clearMarkedDetailRows, getMarkableDetailCellProps } =
@@ -330,6 +341,18 @@ export function AcademicWorkloadReportPageContent({
     setLoadingReport(false);
   }, [clearMarkedDetailRows]);
 
+  const setTemporaryCopyStatus = useCallback((status: 'copied' | 'failed') => {
+    setCopyStatus(status);
+
+    if (copyStatusTimerRef.current) {
+      clearTimeout(copyStatusTimerRef.current);
+    }
+
+    copyStatusTimerRef.current = setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, 1800);
+  }, []);
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
 
@@ -345,6 +368,10 @@ export function AcademicWorkloadReportPageContent({
 
   useEffect(
     () => () => {
+      if (copyStatusTimerRef.current) {
+        clearTimeout(copyStatusTimerRef.current);
+      }
+
       if (exportStatusTimerRef.current) {
         clearTimeout(exportStatusTimerRef.current);
       }
@@ -550,6 +577,7 @@ export function AcademicWorkloadReportPageContent({
   const handleEngagementTypeChange = (nextKey: string) => {
     const nextEngagementType = nextKey as AcademicWorkloadEngagementFilter;
 
+    setCopyStatus('idle');
     setExportStatus('idle');
     setActiveEngagementType(nextEngagementType);
 
@@ -557,6 +585,32 @@ export function AcademicWorkloadReportPageContent({
       void loadReport(nextEngagementType);
     }
   };
+
+  const handleCopyTeacherTotals = useCallback(async () => {
+    const teacherTotalRows = reportRows
+      .filter((row) => row.staffRowIndex === 0)
+      .map((row) => ({
+        sequence: row.sequence,
+        staffName: formatReportExcelText(row.item.staffName),
+        totalHours: formatReportDecimal(row.staffTotalHours, 2),
+      }));
+
+    if (teacherTotalRows.length === 0) {
+      return;
+    }
+
+    try {
+      await copyAcademicWorkloadTeacherTotals(
+        buildAcademicWorkloadTeacherTotalsClipboardText({
+          rows: teacherTotalRows,
+          totalHeader: '总课时',
+        }),
+      );
+      setTemporaryCopyStatus('copied');
+    } catch {
+      setTemporaryCopyStatus('failed');
+    }
+  }, [reportRows, setTemporaryCopyStatus]);
 
   const handleExportReportTable = useCallback(async () => {
     if (!reportEnvelope || reportRows.length === 0 || exportingExcel) {
@@ -596,6 +650,8 @@ export function AcademicWorkloadReportPageContent({
     semesterLabel,
     setTemporaryExportStatus,
   ]);
+  const copyButtonLabel =
+    copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制总课时';
   const exportButtonLabel =
     exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
@@ -793,6 +849,16 @@ export function AcademicWorkloadReportPageContent({
         tabBarExtraContent={{
           right: (
             <Space size={8}>
+              <Button
+                disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                icon={<CopyOutlined />}
+                size="small"
+                onClick={() => {
+                  void handleCopyTeacherTotals();
+                }}
+              >
+                {copyButtonLabel}
+              </Button>
               <Button
                 disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
                 icon={<DownloadOutlined />}

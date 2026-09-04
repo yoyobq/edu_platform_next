@@ -1,8 +1,13 @@
 // src/features/academic-workload/ui/external-teacher-compensation-page-content.tsx
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BarChartOutlined, DownloadOutlined, FileTextOutlined } from '@ant-design/icons';
-import { Alert, Button, Empty, Select, Skeleton, Table, Tabs, Tooltip } from 'antd';
+import {
+  BarChartOutlined,
+  CopyOutlined,
+  DownloadOutlined,
+  FileTextOutlined,
+} from '@ant-design/icons';
+import { Alert, Button, Empty, Select, Skeleton, Space, Table, Tabs, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
 import {
@@ -28,6 +33,10 @@ import {
   ensureSelectedAcademicWorkloadDepartmentOption,
 } from '../application/workload-department-options';
 import { requestAcademicSemesters } from '../infrastructure/academic-workload-api';
+import {
+  buildAcademicWorkloadTeacherTotalsClipboardText,
+  copyAcademicWorkloadTeacherTotals,
+} from '../infrastructure/academic-workload-teacher-total-clipboard';
 import {
   type AcademicAdjustedWorkloadReportEnvelope,
   type AcademicAdjustedWorkloadReportItem,
@@ -81,7 +90,7 @@ type CompensationWeekRequestRange = {
 
 const EMPTY_TEXT = '-';
 const REPORT_TABLE_BASE_WIDTH = 976;
-const EXPORT_STATUS_RESET_DELAY_MS = 1800;
+const ACTION_STATUS_RESET_DELAY_MS = 1800;
 const EXPORT_ACTUAL_HOURS_VALIDATION_PREVIEW_COUNT = 3;
 const FULL_SEMESTER_TAB_KEY = 'semester';
 const CUSTOM_RANGE_TAB_KEY = 'custom';
@@ -500,6 +509,7 @@ export function ExternalTeacherCompensationPageContent({
     : defaultScopedWorkloadDepartmentId;
   const latestRequestIdRef = useRef(0);
   const hasAutoLoadedReportRef = useRef(false);
+  const copyStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exportStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
@@ -515,6 +525,7 @@ export function ExternalTeacherCompensationPageContent({
   const [reportError, setReportError] = useState<string | null>(null);
   const [reportEnvelope, setReportEnvelope] =
     useState<AcademicAdjustedWorkloadReportEnvelope | null>(null);
+  const [copyStatus, setCopyStatus] = useState<'copied' | 'failed' | 'idle'>('idle');
   const [exportingExcel, setExportingExcel] = useState(false);
   const [exportStatus, setExportStatus] = useState<'exported' | 'failed' | 'idle'>('idle');
   const [rangeInitializedSemesterId, setRangeInitializedSemesterId] = useState<number | null>(null);
@@ -525,6 +536,7 @@ export function ExternalTeacherCompensationPageContent({
 
   const invalidateReport = useCallback(() => {
     latestRequestIdRef.current += 1;
+    setCopyStatus('idle');
     setExportStatus('idle');
     clearMarkedDetailRows();
     setReportEnvelope(null);
@@ -532,6 +544,18 @@ export function ExternalTeacherCompensationPageContent({
     setLoadingReport(false);
   }, [clearMarkedDetailRows]);
 
+  const setTemporaryCopyStatus = useCallback((status: 'copied' | 'failed') => {
+    setCopyStatus(status);
+
+    if (copyStatusTimerRef.current) {
+      clearTimeout(copyStatusTimerRef.current);
+    }
+
+    copyStatusTimerRef.current = setTimeout(() => {
+      setCopyStatus('idle');
+      copyStatusTimerRef.current = null;
+    }, ACTION_STATUS_RESET_DELAY_MS);
+  }, []);
   const setTemporaryExportStatus = useCallback((status: 'exported' | 'failed') => {
     setExportStatus(status);
 
@@ -542,11 +566,15 @@ export function ExternalTeacherCompensationPageContent({
     exportStatusTimerRef.current = setTimeout(() => {
       setExportStatus('idle');
       exportStatusTimerRef.current = null;
-    }, EXPORT_STATUS_RESET_DELAY_MS);
+    }, ACTION_STATUS_RESET_DELAY_MS);
   }, []);
 
   useEffect(
     () => () => {
+      if (copyStatusTimerRef.current) {
+        clearTimeout(copyStatusTimerRef.current);
+      }
+
       if (exportStatusTimerRef.current) {
         clearTimeout(exportStatusTimerRef.current);
       }
@@ -873,6 +901,32 @@ export function ExternalTeacherCompensationPageContent({
     void loadReport(nextRange);
   };
 
+  const handleCopyActualHourTotals = useCallback(async () => {
+    const teacherTotalRows = reportRows
+      .filter((row) => row.staffRowIndex === 0)
+      .map((row) => ({
+        sequence: row.sequence,
+        staffName: formatReportExcelText(row.item.staffName),
+        totalHours: formatCompactDecimal(row.staffTotalActualHours),
+      }));
+
+    if (teacherTotalRows.length === 0) {
+      return;
+    }
+
+    try {
+      await copyAcademicWorkloadTeacherTotals(
+        buildAcademicWorkloadTeacherTotalsClipboardText({
+          rows: teacherTotalRows,
+          totalHeader: '总实际课时',
+        }),
+      );
+      setTemporaryCopyStatus('copied');
+    } catch {
+      setTemporaryCopyStatus('failed');
+    }
+  }, [reportRows, setTemporaryCopyStatus]);
+
   const handleExportReportTable = useCallback(async () => {
     if (!reportEnvelope || reportRows.length === 0 || exportingExcel) {
       return;
@@ -930,6 +984,8 @@ export function ExternalTeacherCompensationPageContent({
     teachingWeekRange.selectedStartWeek,
     weekScopeLabel,
   ]);
+  const copyButtonLabel =
+    copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制总实际课时';
   const exportButtonLabel =
     exportStatus === 'exported' ? '已导出' : exportStatus === 'failed' ? '导出失败' : '导出 Excel';
 
@@ -1165,17 +1221,29 @@ export function ExternalTeacherCompensationPageContent({
             items={rangeTabItems}
             tabBarExtraContent={{
               right: (
-                <Button
-                  disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
-                  icon={<DownloadOutlined />}
-                  loading={exportingExcel}
-                  size="small"
-                  onClick={() => {
-                    void handleExportReportTable();
-                  }}
-                >
-                  {exportButtonLabel}
-                </Button>
+                <Space size={8}>
+                  <Button
+                    disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                    icon={<CopyOutlined />}
+                    size="small"
+                    onClick={() => {
+                      void handleCopyActualHourTotals();
+                    }}
+                  >
+                    {copyButtonLabel}
+                  </Button>
+                  <Button
+                    disabled={!reportEnvelope || loadingReport || reportRows.length === 0}
+                    icon={<DownloadOutlined />}
+                    loading={exportingExcel}
+                    size="small"
+                    onClick={() => {
+                      void handleExportReportTable();
+                    }}
+                  >
+                    {exportButtonLabel}
+                  </Button>
+                </Space>
               ),
             }}
             onChange={handleRangeTabChange}
