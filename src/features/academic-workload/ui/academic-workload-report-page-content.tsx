@@ -50,7 +50,7 @@ import {
   exportAcademicWorkloadReportExcel,
 } from '../infrastructure/academic-workload-report-excel-export';
 import {
-  buildAcademicWorkloadTeacherTotalsClipboardText,
+  buildAcademicWorkloadTeacherTotalsWithStaffIdClipboardText,
   copyAcademicWorkloadTeacherTotals,
 } from '../infrastructure/academic-workload-teacher-total-clipboard';
 
@@ -591,6 +591,7 @@ export function AcademicWorkloadReportPageContent({
       .filter((row) => row.staffRowIndex === 0)
       .map((row) => ({
         sequence: row.sequence,
+        staffId: formatReportExcelText(row.item.staffId),
         staffName: formatReportExcelText(row.item.staffName),
         totalHours: formatReportDecimal(row.staffTotalHours, 2),
       }));
@@ -601,7 +602,7 @@ export function AcademicWorkloadReportPageContent({
 
     try {
       await copyAcademicWorkloadTeacherTotals(
-        buildAcademicWorkloadTeacherTotalsClipboardText({
+        buildAcademicWorkloadTeacherTotalsWithStaffIdClipboardText({
           rows: teacherTotalRows,
           totalHeader: '总课时',
         }),

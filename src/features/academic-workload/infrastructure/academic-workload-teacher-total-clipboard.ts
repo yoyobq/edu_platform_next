@@ -5,6 +5,11 @@ export type AcademicWorkloadTeacherTotalClipboardRow = {
   totalHours: string;
 };
 
+export type AcademicWorkloadTeacherTotalWithStaffIdClipboardRow =
+  AcademicWorkloadTeacherTotalClipboardRow & {
+    staffId: string;
+  };
+
 function formatClipboardCell(value: number | string) {
   return String(value).replace(/[\t\r\n]+/gu, ' ');
 }
@@ -16,6 +21,18 @@ export function buildAcademicWorkloadTeacherTotalsClipboardText(input: {
   return [
     ['序号', '姓名', input.totalHeader],
     ...input.rows.map((row) => [row.sequence, row.staffName, row.totalHours]),
+  ]
+    .map((row) => row.map(formatClipboardCell).join('\t'))
+    .join('\n');
+}
+
+export function buildAcademicWorkloadTeacherTotalsWithStaffIdClipboardText(input: {
+  rows: readonly AcademicWorkloadTeacherTotalWithStaffIdClipboardRow[];
+  totalHeader: string;
+}) {
+  return [
+    ['序号', '工号', '姓名', input.totalHeader],
+    ...input.rows.map((row) => [row.sequence, row.staffId, row.staffName, row.totalHours]),
   ]
     .map((row) => row.map(formatClipboardCell).join('\t'))
     .join('\n');
