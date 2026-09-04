@@ -93,9 +93,8 @@
 - `/welcome-back/reset-password?token=...` 同样允许 query token
 - 若后端 preview 返回 `legacy-user-password-reset`，页面按 welcome-back copy 展示
 
-## 当前联调补充
+## 当前签发入口
 
-- staff invite 与学生注册链接当前继续通过 `/labs/invite-issuer` 生成联调链接
-- 该页只作为联调工具，不承担正式管理后台职责
+- staff invite 与学生班级共享注册链接统一由正式管理页 `/admin/verification-issuance` 签发
 - 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/invite/student-registration/<token>`；旧 `inviteStudent` / `registerByInvite` 已移除
-- 它不进入正式导航，只保留直链使用
+- 正式页面仅签发班级共享链接，不提供按单个学生签发的表单

@@ -3,11 +3,12 @@ import type { FormInstance } from 'antd';
 import { Alert, Flex, Form, Input, Typography } from 'antd';
 
 import { validateAccountPassword } from '../application/account-password-validation';
+import { validateStaffInviteLoginName } from '../application/staff-invite-login-name-validation';
 import type { StaffInviteIdentity } from '../application/types';
 
 type StaffInviteRegisterFormValues = {
   confirmPassword: string;
-  loginName: string;
+  loginName?: string;
   loginPassword: string;
   nickname?: string;
 };
@@ -108,7 +109,20 @@ export function StaffInviteRegisterForm({
           <Input placeholder="可选填写昵称" autoComplete="nickname" />
         </Form.Item>
 
-        <Form.Item label="登录名（可选）" name="loginName" extra="留空时可直接使用邀请邮箱登录。">
+        <Form.Item
+          label="登录名（可选）"
+          name="loginName"
+          extra="留空时可直接使用邀请邮箱登录。"
+          validateTrigger={['onChange', 'onBlur']}
+          rules={[
+            {
+              validator(_, value: string | undefined) {
+                const message = validateStaffInviteLoginName(value);
+                return message ? Promise.reject(new Error(message)) : Promise.resolve();
+              },
+            },
+          ]}
+        >
           <Input placeholder="可选填写一个单独的登录名" autoComplete="username" />
         </Form.Item>
 

@@ -51,7 +51,7 @@
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：
-  - admin：`/labs/invite-issuer`、`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
+  - admin：`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
   - student：`/labs/zquiz-exam-activities`、`/labs/zquiz-practice-activities`
   - admin / staff / student：`/labs/student-evaluation-comment`

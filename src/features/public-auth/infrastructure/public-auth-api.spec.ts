@@ -26,7 +26,7 @@ vi.mock('@/shared/graphql', () => ({
 
 import { publicAuthApi } from './public-auth-api';
 
-describe('public auth api student registration', () => {
+describe('public auth api', () => {
   beforeEach(() => {
     executeGraphQLMock.mockReset();
     executeUpstreamSessionGraphQLMock.mockReset();
@@ -262,6 +262,31 @@ describe('public auth api student registration', () => {
     });
   });
 
+  it('maps student registration identity rate limits as a retry-later failure', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      verifyStudentRegistrationIdentity: {
+        success: false,
+        canProceed: false,
+        reason: 'TOO_MANY_ATTEMPTS',
+        message: '身份核对尝试次数过多',
+      },
+    });
+
+    await expect(
+      publicAuthApi.verifyStudentRegistrationIdentity({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+      }),
+    ).resolves.toEqual({
+      canProceed: false,
+      reason: 'TOO_MANY_ATTEMPTS',
+      message: '身份核对尝试次数过多，请稍后再试。',
+      status: 'failure',
+    });
+  });
+
   it('maps student registration identity top-level link errors as link failures', async () => {
     const error = new Error('学生注册链接已过期');
 
@@ -397,7 +422,10 @@ describe('public auth api student registration', () => {
   it('maps student registration identity mismatch as a form failure result', async () => {
     const error = new Error('身份信息不匹配');
 
-    hasGraphQLDetailCodeMock.mockReturnValue(true);
+    hasGraphQLDetailCodeMock.mockImplementation(
+      (_error: unknown, code: string) =>
+        code === 'STUDENT_REGISTRATION_IDENTITY_MISMATCH' || code === 'IDENTITY_MISMATCH',
+    );
     executeGraphQLMock.mockRejectedValueOnce(error);
 
     await expect(
@@ -412,6 +440,27 @@ describe('public auth api student registration', () => {
     ).resolves.toEqual({
       status: 'identity-mismatch',
       message: '身份信息不匹配，请核对后重试。',
+    });
+  });
+
+  it('maps final student registration rate limits as a form failure result', async () => {
+    hasGraphQLDetailCodeMock.mockImplementation(
+      (_error: unknown, code: string) => code === 'STUDENT_REGISTRATION_IDENTITY_RATE_LIMITED',
+    );
+    executeGraphQLMock.mockRejectedValueOnce(new Error('尝试次数过多'));
+
+    await expect(
+      publicAuthApi.consumeStudentRegistrationLink({
+        token: 'token-001',
+        studentId: 'S001',
+        name: '张三',
+        idCardLastSix: 'A12345',
+        loginEmail: 'student@example.com',
+        loginPassword: 'abc12345!',
+      }),
+    ).resolves.toEqual({
+      status: 'failure',
+      message: '身份核对尝试次数过多，请稍后再试。',
     });
   });
 
@@ -506,5 +555,66 @@ describe('public auth api student registration', () => {
         authMode: 'none',
       },
     );
+  });
+
+  it('submits a staff invite registration without a nickname', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      consumeVerificationFlowPublic: {
+        accountId: 42,
+        message: '邀请注册成功',
+        success: true,
+      },
+    });
+
+    await expect(
+      publicAuthApi.consumeStaffInvite({
+        verificationCode: 'invite-token',
+        upstreamSessionToken: 'upstream-token',
+        loginPassword: 'StrongPassword#1',
+        staffName: '张老师',
+        staffDepartmentId: 'D001',
+      }),
+    ).resolves.toEqual({
+      accountId: 42,
+      status: 'success',
+    });
+
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('ConsumeStaffInvite'),
+      {
+        input: {
+          expectedType: 'INVITE_STAFF',
+          loginName: undefined,
+          loginPassword: 'StrongPassword#1',
+          nickname: undefined,
+          staffDepartmentId: 'D001',
+          staffName: '张老师',
+          token: 'invite-token',
+          upstreamSessionToken: 'upstream-token',
+        },
+      },
+      {
+        accessToken: undefined,
+        allowAuthRetry: undefined,
+        authMode: 'none',
+      },
+    );
+  });
+
+  it('keeps the staff invite registration error message from the GraphQL error path', async () => {
+    executeGraphQLMock.mockRejectedValueOnce(new Error('登录名最多 30 个字符'));
+
+    await expect(
+      publicAuthApi.consumeStaffInvite({
+        verificationCode: 'invite-token',
+        upstreamSessionToken: 'upstream-token',
+        loginPassword: 'StrongPassword#1',
+        staffName: '张老师',
+        staffDepartmentId: null,
+      }),
+    ).resolves.toEqual({
+      message: '登录名最多 30 个字符',
+      status: 'error',
+    });
   });
 });

@@ -47,15 +47,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
     ...(hasAllowedLabExposure(['admin'], filter)
       ? [
           {
-            iconKey: 'SendOutlined',
-            key: '/labs/invite-issuer',
-            label: '邀请管理',
-            navMode: 'rail' as const,
-            path: '/labs/invite-issuer',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-          {
             allowedAccessGroups: ['ADMIN'] as const,
             iconKey: 'ApiOutlined',
             key: '/labs/upstream-session-reference',

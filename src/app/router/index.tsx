@@ -68,7 +68,6 @@ import {
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
-import { inviteIssuerLabAccess, loadInviteIssuerLabRouteModule } from '@/labs/invite-issuer';
 import {
   loadStudentEvaluationCommentLabRouteModule,
   studentEvaluationCommentLabAccess,
@@ -705,13 +704,6 @@ async function payloadCryptoPageLoader({ request }: LoaderFunctionArgs) {
     accountId: snapshot.accountId,
     isForbidden: false,
   };
-}
-
-async function inviteIssuerLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: inviteIssuerLabAccess,
-    request,
-  });
 }
 
 function resolveAcademicTeachingPlanPageData(
@@ -1710,11 +1702,6 @@ const router = createBrowserRouter([
             path: 'demo',
             loader: demoLabLoader,
             lazy: loadDemoLabRouteModule,
-          },
-          {
-            path: 'invite-issuer',
-            loader: inviteIssuerLabLoader,
-            lazy: loadInviteIssuerLabRouteModule,
           },
           {
             path: 'upstream-session-demo',

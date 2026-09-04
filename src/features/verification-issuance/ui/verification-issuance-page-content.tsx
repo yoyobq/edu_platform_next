@@ -8,6 +8,7 @@ import {
   Form,
   Input,
   Modal,
+  Select,
   Space,
   Typography,
 } from 'antd';
@@ -31,6 +32,10 @@ import {
   type TeacherSearchOption,
   useStaffInviteFlow,
 } from '../application/use-staff-invite-flow';
+import {
+  type StudentRegistrationLinkIssuanceFormValues,
+  useStudentRegistrationLinkIssuance,
+} from '../application/use-student-registration-link-issuance';
 import {
   getWelcomeBackUserIdentityTags,
   useWelcomeBackIssuance,
@@ -276,6 +281,7 @@ function StaffInvitePanel({
               rules={[
                 { required: true, message: '请输入被邀请邮箱。' },
                 { type: 'email', message: '请输入有效邮箱地址。' },
+                { max: 100, message: '邮箱长度不能超过 100 个字符。' },
               ]}
             >
               <Input autoComplete="email" placeholder="name@example.com" />
@@ -363,6 +369,99 @@ function WelcomeBackPanel({
       onSearch={searchUsers}
       onSelectionChange={selectAccountIds}
     />
+  );
+}
+
+function StudentRegistrationLinkPanel({
+  onFeedback,
+}: {
+  onFeedback: (feedback: VerificationIssuanceFeedback) => void;
+}) {
+  const [form] = Form.useForm<StudentRegistrationLinkIssuanceFormValues>();
+  const {
+    isIssuing,
+    isLoading,
+    issueLink,
+    loadClassOptions,
+    loadError,
+    result,
+    selectOptions,
+    submitError,
+  } = useStudentRegistrationLinkIssuance({ onFeedback });
+
+  return (
+    <Card title="签发学生注册链接">
+      <Flex vertical gap={16}>
+        <Alert
+          showIcon
+          type="info"
+          title="每个班级使用一条共享链接"
+          description="学生使用本人学号、姓名和证件号后 6 位核验身份；注册成功后账号保持待验证，完成邮箱验证后激活。"
+        />
+
+        {loadError ? (
+          <Alert
+            showIcon
+            type="error"
+            title={loadError}
+            action={
+              <Button size="small" onClick={() => void loadClassOptions()}>
+                重试
+              </Button>
+            }
+          />
+        ) : null}
+        {submitError ? <Alert showIcon type="error" title={submitError} /> : null}
+
+        <Form form={form} layout="vertical" requiredMark={false} size="large" onFinish={issueLink}>
+          <Form.Item
+            label="班级"
+            name="classCode"
+            rules={[{ required: true, message: '请选择班级。' }]}
+          >
+            <Select
+              allowClear
+              showSearch
+              loading={isLoading}
+              notFoundContent={isLoading ? '正在加载班级' : '暂无可用班级'}
+              optionFilterProp="label"
+              options={selectOptions}
+              placeholder="按班级名称或班级代码搜索"
+            />
+          </Form.Item>
+
+          <Flex justify="space-between" gap={12} wrap>
+            <Button loading={isLoading} onClick={() => void loadClassOptions()}>
+              刷新班级列表
+            </Button>
+            <Button htmlType="submit" loading={isIssuing} type="primary">
+              签发班级共享链接
+            </Button>
+          </Flex>
+        </Form>
+
+        {result ? (
+          <Alert
+            showIcon
+            type="success"
+            title="班级共享链接已签发"
+            description={
+              <Space orientation="vertical" size={4}>
+                <span>
+                  班级：{result.classCode}，有效期至 {formatDateTime(result.expiresAt)}
+                </span>
+                <Typography.Paragraph
+                  copyable={{ text: result.link }}
+                  style={{ marginBottom: 0, overflowWrap: 'anywhere' }}
+                >
+                  {result.link}
+                </Typography.Paragraph>
+              </Space>
+            }
+          />
+        ) : null}
+      </Flex>
+    </Card>
   );
 }
 
@@ -465,6 +564,7 @@ function ChangeLoginEmailPanel({
               rules={[
                 { required: true, message: '请输入新的登录邮箱。' },
                 { type: 'email', message: '请输入有效邮箱地址。' },
+                { max: 100, message: '邮箱长度不能超过 100 个字符。' },
               ]}
             >
               <Input autoComplete="email" placeholder="new-email@example.com" />
@@ -500,7 +600,7 @@ export function VerificationIssuancePageContent({
               认证码签发
             </Typography.Title>
             <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
-              为教职工邀请、老用户回归和登录邮箱变更签发验证邮件。
+              为教职工邀请、学生班级共享注册、老用户回归和登录邮箱变更签发验证。
             </Typography.Paragraph>
           </div>
         </Flex>
@@ -523,6 +623,7 @@ export function VerificationIssuancePageContent({
       <Card
         tabList={[
           { key: 'staff', tab: '教职工邀请' },
+          { key: 'student-registration', tab: '学生注册链接' },
           { key: 'welcome-back', tab: '老用户回归' },
           { key: 'change-login-email', tab: '登录邮箱变更' },
         ]}
@@ -537,6 +638,8 @@ export function VerificationIssuancePageContent({
             lockedUpstreamLoginUserId={lockedUpstreamLoginUserId}
             onFeedback={setFeedback}
           />
+        ) : activeTab === 'student-registration' ? (
+          <StudentRegistrationLinkPanel onFeedback={setFeedback} />
         ) : activeTab === 'welcome-back' ? (
           <WelcomeBackPanel onFeedback={setFeedback} />
         ) : (

@@ -31,6 +31,24 @@ type AdminRequestChangeLoginEmailResponse = {
   success: boolean;
 };
 
+type IssueStudentRegistrationLinkResponse = {
+  classCode: string;
+  expiresAt: string;
+  link: string;
+  recordId: number;
+  studentId?: string | null;
+  success: boolean;
+  token: string;
+};
+
+type LocalClassOptionResponse = {
+  classCode: string;
+  className: string;
+  departmentId: string;
+  gradeYear: number | null;
+  id: string;
+};
+
 export type IssueInviteResult = {
   expiresAt: string | null;
   message: string | null;
@@ -47,6 +65,16 @@ export type AdminRequestPasswordResetEmailResult = {
 export type AdminRequestChangeLoginEmailResult = {
   message: string | null;
   success: boolean;
+};
+
+export type VerificationIssuanceClassOption = LocalClassOptionResponse;
+
+export type VerificationStudentRegistrationLinkResult = {
+  classCode: string;
+  expiresAt: string;
+  link: string;
+  recordId: number;
+  token: string;
 };
 
 export type VerificationIssuanceCurrentAccount = {
@@ -107,6 +135,10 @@ type AdminUsersQueryVariables = {
   sortBy: AdminUserSortField;
   sortOrder: AdminUserSortOrder;
   status?: AdminUserAccountStatus;
+};
+
+type LocalClassOptionsResponse = {
+  listLocalClassOptions: LocalClassOptionResponse[];
 };
 
 const ADMIN_USERS_QUERY = `
@@ -174,6 +206,34 @@ const INVITE_STAFF_MUTATION = `
       success
       token
       type
+    }
+  }
+`;
+
+const LOCAL_CLASS_OPTIONS_QUERY = `
+  query VerificationIssuanceLocalClassOptions($input: ListLocalClassOptionsInput) {
+    listLocalClassOptions(input: $input) {
+      id
+      departmentId
+      classCode
+      className
+      gradeYear
+    }
+  }
+`;
+
+const ISSUE_STUDENT_REGISTRATION_LINK_MUTATION = `
+  mutation VerificationIssuanceStudentRegistrationLink(
+    $input: IssueStudentRegistrationLinkInput!
+  ) {
+    issueStudentRegistrationLink(input: $input) {
+      success
+      link
+      token
+      recordId
+      expiresAt
+      classCode
+      studentId
     }
   }
 `;
@@ -312,6 +372,51 @@ export async function issueVerificationStaffInvite(input: {
     return normalizeIssueInviteResult(response.inviteStaff);
   } catch (error) {
     throw new Error(resolveVerificationIssuanceErrorMessage(error, '暂时无法签发教职工邀请。'));
+  }
+}
+
+export async function requestVerificationIssuanceClassOptions(): Promise<
+  VerificationIssuanceClassOption[]
+> {
+  try {
+    const response = await executeGraphQL<
+      LocalClassOptionsResponse,
+      { input: Record<string, never> }
+    >(LOCAL_CLASS_OPTIONS_QUERY, { input: {} });
+
+    return response.listLocalClassOptions;
+  } catch (error) {
+    throw new Error(resolveVerificationIssuanceErrorMessage(error, '暂时无法加载班级列表。'));
+  }
+}
+
+export async function issueVerificationStudentRegistrationLink(input: {
+  classCode: string;
+}): Promise<VerificationStudentRegistrationLinkResult> {
+  try {
+    const response = await executeGraphQL<
+      { issueStudentRegistrationLink: IssueStudentRegistrationLinkResponse },
+      { input: { classCode: string } }
+    >(ISSUE_STUDENT_REGISTRATION_LINK_MUTATION, {
+      input: { classCode: input.classCode.trim() },
+    });
+    const result = response.issueStudentRegistrationLink;
+
+    if (!result.success || result.studentId) {
+      throw new Error('暂时无法签发班级共享注册链接。');
+    }
+
+    return {
+      classCode: result.classCode,
+      expiresAt: result.expiresAt,
+      link: result.link,
+      recordId: result.recordId,
+      token: result.token,
+    };
+  } catch (error) {
+    throw new Error(
+      resolveVerificationIssuanceErrorMessage(error, '暂时无法签发班级共享注册链接。'),
+    );
   }
 }
 

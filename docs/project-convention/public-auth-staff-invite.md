@@ -61,6 +61,7 @@
   - 可选 `nickname`；留空时由后端按当前账户昵称回退规则生成
   - `loginPassword`
   - 可选 `loginName`
+- `loginName` 若填写，须为 4-30 位字母、数字、下划线或短横线，不得为纯数字，也不得以下划线或短横线开头/结尾
 - 上游身份摘要当前只展示：
   - staff name
   - invited email

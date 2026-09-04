@@ -136,10 +136,6 @@ export const demoLabMeta = {
 
 - `/labs/demo`
   - 用于第三工作区跳层 demo
-- `/labs/invite-issuer`
-  - 用于临时调用 `inviteStaff` / `issueStudentRegistrationLink` 生成联调链接，或触发老用户回归改密邮件
-  - 属于实验性联调工具，不承担正式管理后台职责
-  - 若后续出现正式管理入口，应优先迁入正式区拥有者切片，而不是继续扩展该 labs 页面
 - `/labs/upstream-session-demo`
   - 用于演示“前端持有 upstream token、后端代访问 upstream”的当前标准链路
   - 当前使用教师字典、班级列表、历史班主任、教职工身份、教学计划等 upstream 代理接口作为示例数据源

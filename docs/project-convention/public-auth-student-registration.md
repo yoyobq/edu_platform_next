@@ -13,9 +13,9 @@
 
 ## 签发
 
-- `/labs/invite-issuer` 可临时调用 `issueStudentRegistrationLink`
-- 只传 `classCode` 时签发班级共享注册链接
-- 传 `classCode + studentId` 时签发指定学生注册链接
+- 正式管理入口为 `/admin/verification-issuance`
+- 页面从本地可用班级中选择 `classCode`，签发班级共享注册链接
+- 后端 contract 仍支持 `classCode + studentId` 的指定学生链接，正式前端不暴露该能力
 - 签发结果优先展示并复制后端返回的 `link`，前端不自行拼接注册 URL
 - 签发结果 ID 使用后端返回的 `recordId`，不再使用旧 `campaignId`
 
@@ -25,6 +25,7 @@
 - 只有 `success=true && info.canProceed=true` 展示注册表单
 - `LINK_NOT_FOUND` 时 `info=null`，页面展示失效态
 - 身份核对步骤填写 `studentId + name + idCardLastSix`
+- 身份核对失败受后端分布式频率限制；达到上限时页面展示稍后重试，不继续提交
 - `scope=STUDENT` 时锁定 `studentId`，提交后端返回值
 - `scope=CLASS` 时由学生填写 `studentId`，学号示例从班级名推导并脱敏尾号：
   `1301 -> 3130101XX`，`13大2 -> 3130202XX`

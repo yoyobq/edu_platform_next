@@ -348,7 +348,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
   const [upstreamForm] = Form.useForm<{ password: string; userId: string }>();
   const [registerForm] = Form.useForm<{
     confirmPassword: string;
-    loginName: string;
+    loginName?: string;
     loginPassword: string;
     nickname?: string;
   }>();

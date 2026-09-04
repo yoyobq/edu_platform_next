@@ -694,6 +694,10 @@ function resolveStudentRegistrationIdentityVerificationFailureMessage(
     return '身份信息不匹配，请核对后重试。';
   }
 
+  if (reason === 'TOO_MANY_ATTEMPTS') {
+    return '身份核对尝试次数过多，请稍后再试。';
+  }
+
   if (reason === 'AVAILABLE') {
     return fallback || '暂时无法确认身份信息，请稍后再试。';
   }
@@ -801,6 +805,10 @@ function isStudentRegistrationIdentityMismatchError(error: unknown): boolean {
     hasGraphQLDetailCode(error, 'STUDENT_REGISTRATION_IDENTITY_MISMATCH') ||
     hasGraphQLDetailCode(error, 'IDENTITY_MISMATCH')
   );
+}
+
+function isStudentRegistrationIdentityRateLimitedError(error: unknown): boolean {
+  return hasGraphQLDetailCode(error, 'STUDENT_REGISTRATION_IDENTITY_RATE_LIMITED');
 }
 
 async function findStaffInviteIntent(verificationCode: string): Promise<StaffInviteIntentResult> {
@@ -1202,6 +1210,15 @@ export const publicAuthApi: PublicAuthApiPort = {
         status: 'failure',
       };
     } catch (error) {
+      if (isStudentRegistrationIdentityRateLimitedError(error)) {
+        return {
+          canProceed: false,
+          message: '身份核对尝试次数过多，请稍后再试。',
+          reason: 'TOO_MANY_ATTEMPTS',
+          status: 'failure',
+        };
+      }
+
       const linkFailureReason = resolveStudentRegistrationLinkFailureReasonFromError(error);
 
       if (linkFailureReason) {
@@ -1342,6 +1359,13 @@ export const publicAuthApi: PublicAuthApiPort = {
         status: 'success',
       };
     } catch (error) {
+      if (isStudentRegistrationIdentityRateLimitedError(error)) {
+        return {
+          status: 'failure',
+          message: '身份核对尝试次数过多，请稍后再试。',
+        };
+      }
+
       if (isStudentRegistrationIdentityMismatchError(error)) {
         return {
           status: 'identity-mismatch',

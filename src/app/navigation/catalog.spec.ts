@@ -90,7 +90,6 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
@@ -159,7 +158,6 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
@@ -848,7 +846,6 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/major-sync',
       '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
-      '/labs/invite-issuer',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',

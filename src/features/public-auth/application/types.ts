@@ -171,7 +171,8 @@ export type StudentRegistrationIdentityVerificationReason =
   | 'LINK_EXPIRED'
   | 'LINK_NOT_ACTIVE'
   | 'LINK_NOT_FOUND'
-  | 'LINK_REVOKED';
+  | 'LINK_REVOKED'
+  | 'TOO_MANY_ATTEMPTS';
 
 export type StudentRegistrationIdentityVerificationResult =
   | { canProceed: true; message: string | null; status: 'success' }
