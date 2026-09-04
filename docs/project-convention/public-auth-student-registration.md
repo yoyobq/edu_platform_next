@@ -33,6 +33,7 @@
 - 身份预校验失败统一展示“身份信息不匹配，请核对后重试。”
 - 从账号信息进入登录邮箱前，调用 `verifyStudentRegistrationAccount`
 - `verifyStudentRegistrationAccount` 只做只读校验，不创建账号、不绑定学生档案、不签发邮箱验证
+- 登录密码的页面校验与后端当前密码策略保持一致，包括长度、字符类型、首尾空格、常见弱密码片段和连续重复字符
 - 预校验或最终提交返回链接级 reason（`LINK_NOT_FOUND` / `LINK_EXPIRED` / `LINK_REVOKED` /
   `LINK_NOT_ACTIVE` / `CLASS_NOT_FOUND`）时，重新读取 `publicStudentRegistrationLinkInfo`
   并进入整页失效态

@@ -2,13 +2,14 @@ import { UserOutlined } from '@ant-design/icons';
 import type { FormInstance } from 'antd';
 import { Alert, Flex, Form, Input, Typography } from 'antd';
 
+import { validateAccountPassword } from '../application/account-password-validation';
 import type { StaffInviteIdentity } from '../application/types';
 
 type StaffInviteRegisterFormValues = {
   confirmPassword: string;
   loginName: string;
   loginPassword: string;
-  nickname: string;
+  nickname?: string;
 };
 
 type StaffInviteRegisterFormProps = {
@@ -20,20 +21,6 @@ type StaffInviteRegisterFormProps = {
   inviteStaffId: string;
   onSubmit: (values: StaffInviteRegisterFormValues) => Promise<void>;
 };
-
-const passwordValidationMessage = '密码至少 8 位，且需包含字母、数字、符号中的至少两种。';
-
-function getPasswordRuleState(password: string) {
-  const hasLetter = /\p{L}/u.test(password);
-  const hasNumber = /\p{N}/u.test(password);
-  const hasSymbol = /[\p{P}\p{S}]/u.test(password);
-  const satisfiedCategoryCount = [hasLetter, hasNumber, hasSymbol].filter(Boolean).length;
-
-  return {
-    hasMinLength: password.length >= 8,
-    hasRequiredCharacterMix: satisfiedCategoryCount >= 2,
-  };
-}
 
 function IdentityBlock({
   identity,
@@ -117,12 +104,8 @@ export function StaffInviteRegisterForm({
           </Form.Item>
         ) : null}
 
-        <Form.Item
-          label="昵称"
-          name="nickname"
-          rules={[{ required: true, message: '请输入昵称。', whitespace: true }]}
-        >
-          <Input placeholder="请输入昵称" autoComplete="nickname" />
+        <Form.Item label="昵称（可选）" name="nickname" extra="留空时系统会自动生成昵称。">
+          <Input placeholder="可选填写昵称" autoComplete="nickname" />
         </Form.Item>
 
         <Form.Item label="登录名（可选）" name="loginName" extra="留空时可直接使用邀请邮箱登录。">
@@ -142,13 +125,12 @@ export function StaffInviteRegisterForm({
                   return Promise.resolve();
                 }
 
-                const { hasMinLength, hasRequiredCharacterMix } = getPasswordRuleState(value);
-
-                if (hasMinLength && hasRequiredCharacterMix) {
+                const validationMessage = validateAccountPassword(value);
+                if (!validationMessage) {
                   return Promise.resolve();
                 }
 
-                return Promise.reject(new Error(passwordValidationMessage));
+                return Promise.reject(new Error(validationMessage));
               },
             },
           ]}

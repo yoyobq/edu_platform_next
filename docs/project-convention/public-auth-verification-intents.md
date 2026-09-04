@@ -86,6 +86,7 @@
 
 ## Reset Password 场景
 
+- 新密码页面校验与注册入口共用当前账户密码策略
 - `/reset-password/:verificationCode` 是默认密码重置入口
 - `/reset-password?token=...` 是兼容入口，仍由同一 page 读取 `token`
 - `/welcome-back/reset-password/:verificationCode` 是 welcome-back 文案场景，底层仍复用 reset password panel
@@ -96,5 +97,5 @@
 
 - staff invite 与学生注册链接当前继续通过 `/labs/invite-issuer` 生成联调链接
 - 该页只作为联调工具，不承担正式管理后台职责
-- 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/invite/student-registration/<token>`，不再走旧 `inviteStudent` / 学生 `registerByInvite`
+- 学生注册链接由后端按 `STUDENT_REGISTRATION_FRONTEND_URL` 拼接 `/invite/student-registration/<token>`；旧 `inviteStudent` / `registerByInvite` 已移除
 - 它不进入正式导航，只保留直链使用

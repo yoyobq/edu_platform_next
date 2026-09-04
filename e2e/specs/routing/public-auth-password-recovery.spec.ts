@@ -447,8 +447,8 @@ test('reset code 有效时，应允许更新密码并返回登录', async ({ pag
 
   await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
 
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByText('密码已更新')).toBeVisible();
@@ -523,8 +523,8 @@ test('reset-password 返回登录时，不应触发 restore -> me', async ({ pag
   });
 
   await page.goto(routes.resetPassword('reset-token-active'));
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
   await page.getByRole('button', { name: '前往登录' }).click();
 
@@ -606,8 +606,8 @@ test('query token 形式的 reset link 也应进入重置页面', async ({ page 
   await expect(page.getByText('验证代码')).toHaveCount(0);
   await expect(page.getByText('reset-token-query-active')).toHaveCount(0);
 
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByText('密码已更新')).toBeVisible();
@@ -658,9 +658,7 @@ test('reset password 页面应在首次输入时给出字段级密码校验', as
 
   await page.getByLabel('新密码', { exact: true }).fill('abcdefgh');
 
-  await expect(
-    page.getByText('密码至少 8 位，且需包含字母、数字、符号中的至少两种。'),
-  ).toBeVisible();
+  await expect(page.getByText('密码至少需要包含字母、数字、符号中的 2 种字符。')).toBeVisible();
 });
 
 test('reset code 提交时若已过期，应切换到失败态', async ({ page }) => {
@@ -672,8 +670,8 @@ test('reset code 提交时若已过期，应切换到失败态', async ({ page }
 
   await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
 
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByText('重置链接已过期')).toBeVisible();
@@ -687,8 +685,8 @@ test('reset password 提交遇到 transport error 时，应停留表单态并展
 
   await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
 
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByRole('alert')).toContainText('请求处理失败，请稍后重试。');
@@ -704,8 +702,8 @@ test('reset password 提交遇到 http transport error 时，应停留表单态�
 
   await expect(page.getByRole('heading', { name: '设置新密码' })).toBeVisible();
 
-  await page.getByLabel('新密码', { exact: true }).fill('password-1234');
-  await page.getByLabel('确认新密码').fill('password-1234');
+  await page.getByLabel('新密码', { exact: true }).fill('Reset!2026');
+  await page.getByLabel('确认新密码').fill('Reset!2026');
   await page.getByRole('button', { name: '更新密码' }).click();
 
   await expect(page.getByRole('alert')).toContainText('服务暂时不可用，请稍后重试。');

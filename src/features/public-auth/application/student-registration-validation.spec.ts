@@ -3,7 +3,6 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  getStudentRegistrationPasswordRuleState,
   isValidStudentRegistrationIdCardLastSix,
   isValidStudentRegistrationLoginName,
 } from './student-registration-validation';
@@ -21,20 +20,5 @@ describe('student registration validation', () => {
     expect(isValidStudentRegistrationLoginName('stu_001-A')).toBe(true);
     expect(isValidStudentRegistrationLoginName('abc')).toBe(false);
     expect(isValidStudentRegistrationLoginName('student.name')).toBe(false);
-  });
-
-  it('requires password length and at least two character categories', () => {
-    expect(getStudentRegistrationPasswordRuleState('abc12345')).toEqual({
-      hasMinLength: true,
-      hasRequiredCharacterMix: true,
-    });
-    expect(getStudentRegistrationPasswordRuleState('abcdefgh')).toEqual({
-      hasMinLength: true,
-      hasRequiredCharacterMix: false,
-    });
-    expect(getStudentRegistrationPasswordRuleState('a1!')).toEqual({
-      hasMinLength: false,
-      hasRequiredCharacterMix: true,
-    });
   });
 });

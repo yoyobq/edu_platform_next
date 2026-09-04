@@ -350,7 +350,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
     confirmPassword: string;
     loginName: string;
     loginPassword: string;
-    nickname: string;
+    nickname?: string;
   }>();
   const [phase, setPhase] = useState<StaffInvitePhase>('loading');
   const [invite, setInvite] = useState<StaffInviteInfo | null>(null);
@@ -599,7 +599,7 @@ export function StaffInviteIntentPanel({ verificationCode }: { verificationCode:
                   upstreamSessionToken: identity.upstreamSessionToken,
                   loginPassword: values.loginPassword,
                   loginName: values.loginName?.trim() || undefined,
-                  nickname: values.nickname?.trim() || '',
+                  nickname: values.nickname,
                   staffName: identity.personName,
                   staffDepartmentId: identity.orgId,
                 });

@@ -5,11 +5,10 @@ import { MailOutlined, ReloadOutlined, RightOutlined, TeamOutlined } from '@ant-
 import { Alert, Button, Flex, Form, Input, Skeleton, Steps, Typography } from 'antd';
 import { useNavigate } from 'react-router';
 
+import { validateAccountPassword } from '../application/account-password-validation';
 import {
-  getStudentRegistrationPasswordRuleState,
   isValidStudentRegistrationIdCardLastSix,
   isValidStudentRegistrationLoginName,
-  studentRegistrationPasswordValidationMessage,
 } from '../application/student-registration-validation';
 import type {
   StudentRegistrationConsumptionResult,
@@ -449,14 +448,12 @@ function StudentRegistrationForm({
                   return Promise.resolve();
                 }
 
-                const { hasMinLength, hasRequiredCharacterMix } =
-                  getStudentRegistrationPasswordRuleState(value);
-
-                if (hasMinLength && hasRequiredCharacterMix) {
+                const validationMessage = validateAccountPassword(value);
+                if (!validationMessage) {
                   return Promise.resolve();
                 }
 
-                return Promise.reject(new Error(studentRegistrationPasswordValidationMessage));
+                return Promise.reject(new Error(validationMessage));
               },
             },
           ]}

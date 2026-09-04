@@ -137,6 +137,7 @@ function buildJourneyStudentMe() {
 }
 
 test('学生完成注册、验证邮箱、登录后应可从学生导航进入学期校历并退出账户', async ({ page }) => {
+  let accountVerificationRequests = 0;
   let academicCalendarEventRequests = 0;
   let academicSemesterRequests = 0;
   let consumeInput: Record<string, unknown> | null = null;
@@ -188,6 +189,7 @@ test('学生完成注册、验证邮箱、登录后应可从学生导航进入�
     }
 
     if (query.includes('mutation VerifyStudentRegistrationAccount')) {
+      accountVerificationRequests += 1;
       await fulfillGraphQL(route, {
         data: {
           verifyStudentRegistrationAccount: {
@@ -344,6 +346,11 @@ test('学生完成注册、验证邮箱、登录后应可从学生导航进入�
   await page.getByLabel('身份证后 6 位').fill('A12345');
   await page.getByRole('button', { name: '下一步' }).click();
   await page.getByLabel('登录名（可选）').fill('stu001');
+  await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Password123!');
+  await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Password123!');
+  await page.getByRole('button', { name: '下一步' }).click();
+  await expect(page.getByText('密码包含常见的弱密码片段，请更换更复杂的密码。')).toBeVisible();
+  expect(accountVerificationRequests).toBe(0);
   await page.getByRole('textbox', { exact: true, name: '登录密码' }).fill('Abc12345!');
   await page.getByRole('textbox', { exact: true, name: '确认登录密码' }).fill('Abc12345!');
   await page.getByRole('button', { name: '下一步' }).click();
@@ -413,6 +420,7 @@ test('学生完成注册、验证邮箱、登录后应可从学生导航进入�
   expect(academicCalendarEventRequests).toBe(0);
   expect(mySemesterPlannedTimetableRequests).toBe(0);
   expect(weeklyPlannedTimetableRequests).toBe(0);
+  expect(accountVerificationRequests).toBe(1);
 });
 
 test('学生注册链接注册成功后应进入待验证登录邮箱状态并支持泛化重发', async ({ page }) => {

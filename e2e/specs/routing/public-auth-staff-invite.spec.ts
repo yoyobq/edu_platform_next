@@ -171,6 +171,7 @@ async function mockStaffInviteFlow(
   page: Page,
   options?: {
     consumeFailureMessage?: string;
+    consumeInputValidationMessage?: string;
     consumeTransportFailure?: {
       kind: TransportFailureKind;
       message: string;
@@ -276,6 +277,21 @@ async function mockStaffInviteFlow(
     }
 
     if (query.includes('mutation ConsumeStaffInvite')) {
+      if (options?.consumeInputValidationMessage) {
+        await fulfillGraphQL(route, {
+          errors: [
+            {
+              message: options.consumeInputValidationMessage,
+              extensions: {
+                code: 'BAD_USER_INPUT',
+                httpStatus: 400,
+              },
+            },
+          ],
+        });
+        return;
+      }
+
       if (options?.consumeTransportFailure) {
         await fulfillTransportFailure(
           route,
@@ -434,6 +450,47 @@ test('有效 staff invite 应可完成预览、上游核对与注册消费，且
 
   await page.getByRole('button', { name: '前往登录' }).click();
   await expect(page).toHaveURL(routes.login + '?skipRestore=1');
+});
+
+test('有效 staff invite 只填写登录密码时，也应可完成激活', async ({ page }) => {
+  let consumeInput: Record<string, unknown> | null = null;
+
+  await mockStaffInviteFlow(page);
+  await page.route('**/graphql', async (route) => {
+    const payload = getGraphQLPayload(route);
+    const query = typeof payload?.query === 'string' ? payload.query : '';
+
+    if (!query.includes('mutation ConsumeStaffInvite')) {
+      await route.fallback();
+      return;
+    }
+
+    consumeInput = payload?.variables?.input ?? null;
+    await fulfillGraphQL(route, {
+      data: {
+        consumeVerificationFlowPublic: {
+          accountId: 9527,
+          message: '邀请注册成功',
+          success: true,
+        },
+      },
+    });
+  });
+
+  await page.goto(routes.invite('staff', 'staff-invite-password-only-001'));
+  await page.getByRole('button', { name: '下一步：身份核对' }).click();
+  await page.getByLabel('校园网工号').fill('teacher.alice');
+  await page.getByLabel('校园网密码').fill('Password!123');
+  await page.getByRole('button', { name: '核对身份并继续' }).click();
+
+  await expect(page.getByLabel('昵称（可选）')).toBeVisible();
+  await page.locator('input#loginPassword').fill('Invite!234');
+  await page.locator('input#confirmPassword').fill('Invite!234');
+  await page.getByRole('button', { name: '完成激活' }).click();
+
+  await expect(page.getByText('账号已准备就绪')).toBeVisible();
+  expect(consumeInput).not.toBeNull();
+  expect(consumeInput).not.toHaveProperty('nickname');
 });
 
 test('有效 staff invite 设置登录名后，应可使用登录名完成登录', async ({ page }) => {
@@ -756,6 +813,26 @@ test('最终提交返回身份不匹配时应进入明确失败态', async ({ pa
 
   await expect(page.getByText('邀请注册未完成')).toBeVisible();
   await expect(page.getByText('当前教职工身份与邀请不一致，该邀请已不可继续使用。')).toBeVisible();
+});
+
+test('最终提交输入校验失败时应展示可修正的具体原因', async ({ page }) => {
+  const validationMessage = '密码不符合安全要求: 密码包含常见的弱密码片段，请避免使用';
+  await mockStaffInviteFlow(page, {
+    consumeInputValidationMessage: validationMessage,
+  });
+
+  await page.goto(routes.invite('staff', 'staff-invite-password-invalid'));
+  await page.getByRole('button', { name: '下一步：身份核对' }).click();
+  await page.getByLabel('校园网工号').fill('teacher.alice');
+  await page.getByLabel('校园网密码').fill('Password!123');
+  await page.getByRole('button', { name: '核对身份并继续' }).click();
+  await page.locator('input#loginPassword').fill('Invite!234');
+  await page.locator('input#confirmPassword').fill('Invite!234');
+  await page.getByRole('button', { name: '完成激活' }).click();
+
+  await expect(page.getByText(validationMessage)).toBeVisible();
+  await expect(page.getByText('请求失败', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '完成激活' })).toBeVisible();
 });
 
 test('最终提交出现 transport 失败时应停留在表单阶段并显示统一错误', async ({ page }) => {

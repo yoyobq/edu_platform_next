@@ -1,5 +1,7 @@
 import { Alert, Button, Form, Input } from 'antd';
 
+import { validateAccountPassword } from '../application/account-password-validation';
+
 type ResetPasswordFormValues = {
   confirmPassword: string;
   newPassword: string;
@@ -10,20 +12,6 @@ type ResetPasswordFormProps = {
   onSubmit: (values: ResetPasswordFormValues) => Promise<void>;
   submitting: boolean;
 };
-
-const passwordValidationMessage = '密码至少 8 位，且需包含字母、数字、符号中的至少两种。';
-
-function getPasswordRuleState(password: string) {
-  const hasLetter = /\p{L}/u.test(password);
-  const hasNumber = /\p{N}/u.test(password);
-  const hasSymbol = /[\p{P}\p{S}]/u.test(password);
-  const satisfiedCategoryCount = [hasLetter, hasNumber, hasSymbol].filter(Boolean).length;
-
-  return {
-    hasMinLength: password.length >= 8,
-    hasRequiredCharacterMix: satisfiedCategoryCount >= 2,
-  };
-}
 
 export function ResetPasswordForm({ errorMessage, onSubmit, submitting }: ResetPasswordFormProps) {
   return (
@@ -53,13 +41,12 @@ export function ResetPasswordForm({ errorMessage, onSubmit, submitting }: ResetP
                 return Promise.resolve();
               }
 
-              const { hasMinLength, hasRequiredCharacterMix } = getPasswordRuleState(value);
-
-              if (hasMinLength && hasRequiredCharacterMix) {
+              const validationMessage = validateAccountPassword(value);
+              if (!validationMessage) {
                 return Promise.resolve();
               }
 
-              return Promise.reject(new Error(passwordValidationMessage));
+              return Promise.reject(new Error(validationMessage));
             },
           },
         ]}
