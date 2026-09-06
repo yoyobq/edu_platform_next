@@ -18,7 +18,6 @@ function createItem(input: {
     courseCategory: '专业课',
     courseName: '网页设计',
     planId: input.planId,
-    rawPlan: null,
     reviewStatus: null,
     schoolYear: '2026',
     semester: '1',
@@ -43,13 +42,30 @@ describe('curriculum plan homepage item policy', () => {
     );
   });
 
-  it('falls back to raw upstream teaching class identity', () => {
+  it('falls back to the typed SSTS teaching class identity', () => {
     const item = {
       ...createItem({ planId: null }),
-      rawPlan: { TEACHING_CLASS_ID: ' RAW-CLASS-001 ' },
+      sstsTeachingClassId: ' SSTS-CLASS-001 ',
     };
 
-    expect(resolveCurriculumPlanHomepageTeachingClassId(item)).toBe('RAW-CLASS-001');
-    expect(resolveCurriculumPlanHomepageItemKey(item)).toBe('teaching-class:RAW-CLASS-001');
+    expect(resolveCurriculumPlanHomepageTeachingClassId(item)).toBe('SSTS-CLASS-001');
+    expect(resolveCurriculumPlanHomepageItemKey(item)).toBe('teaching-class:SSTS-CLASS-001');
+  });
+
+  it('prefers the canonical teaching class identity over the SSTS identity', () => {
+    const item = {
+      ...createItem({ planId: 'PLAN-001', teachingClassId: ' CLASS-001 ' }),
+      sstsTeachingClassId: 'SSTS-CLASS-001',
+    };
+
+    expect(resolveCurriculumPlanHomepageTeachingClassId(item)).toBe('CLASS-001');
+    expect(resolveCurriculumPlanHomepageItemKey(item)).toBe('teaching-class:CLASS-001');
+  });
+
+  it('uses the plan identity when both typed teaching class identities are missing', () => {
+    const item = createItem({ planId: 'PLAN-001', teachingClassId: ' ' });
+
+    expect(resolveCurriculumPlanHomepageTeachingClassId(item)).toBeNull();
+    expect(resolveCurriculumPlanHomepageItemKey(item)).toBe('plan:PLAN-001');
   });
 });

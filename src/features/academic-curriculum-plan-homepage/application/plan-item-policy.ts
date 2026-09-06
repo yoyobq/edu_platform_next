@@ -9,9 +9,7 @@ function readOptionalItemKeyPart(value: unknown) {
 export function resolveCurriculumPlanHomepageTeachingClassId(item: CurriculumPlanHomepageListItem) {
   return (
     readOptionalItemKeyPart(item.teachingClassId) ??
-    readOptionalItemKeyPart(item.sstsTeachingClassId) ??
-    readOptionalItemKeyPart(item.rawPlan?.TEACHING_CLASS_ID) ??
-    readOptionalItemKeyPart(item.rawPlan?.SELECTEDKEY)
+    readOptionalItemKeyPart(item.sstsTeachingClassId)
   );
 }
 

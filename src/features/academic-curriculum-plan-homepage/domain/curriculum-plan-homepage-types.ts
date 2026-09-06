@@ -16,7 +16,6 @@ export type CurriculumPlanHomepageListItem = {
   courseCategory: string | null;
   courseName: string | null;
   planId: string | null;
-  rawPlan: Record<string, unknown> | null;
   reviewStatus: string | null;
   schoolYear: string | null;
   semester: string | null;

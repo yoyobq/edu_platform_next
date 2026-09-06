@@ -143,7 +143,6 @@ const FETCH_CURRICULUM_PLAN_HOMEPAGE_LIST_QUERY = `
         weekCount
         weekNumberText
         reviewStatus
-        rawPlan
       }
     }
   }
@@ -168,7 +167,6 @@ const ACADEMIC_CURRICULUM_PLAN_HOMEPAGE_LIST_FIELDS = `
     weekCount
     weekNumberText
     reviewStatus
-    rawPlan
   }
 `;
 

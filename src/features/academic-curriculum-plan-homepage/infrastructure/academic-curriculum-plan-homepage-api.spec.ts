@@ -62,7 +62,6 @@ describe('academic curriculum plan homepage api', () => {
             courseCategory: '专业课',
             courseName: '网页设计与制作',
             planId: 'plan-001',
-            rawPlan: { LECTURE_PLAN_ID: 'plan-001' },
             reviewStatus: '待提交',
             schoolYear: '2025',
             semester: '2',
@@ -130,6 +129,11 @@ describe('academic curriculum plan homepage api', () => {
     expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query ListMyAcademicCurriculumPlanHomepages',
     );
+    const query = mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0];
+    expect(query).toContain('listMyAcademicCurriculumPlanHomepages(');
+    expect(query).toContain('teachingClassId');
+    expect(query).toContain('sstsTeachingClassId');
+    expect(query).not.toContain('rawPlan');
     expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       semesterId: 7,
       upstreamSessionToken: 'session-token',
@@ -155,6 +159,11 @@ describe('academic curriculum plan homepage api', () => {
     expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0]).toContain(
       'query ListAcademicCurriculumPlanHomepages',
     );
+    const query = mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[0];
+    expect(query).toContain('listManagedAcademicCurriculumPlanHomepages(');
+    expect(query).toContain('teachingClassId');
+    expect(query).toContain('sstsTeachingClassId');
+    expect(query).not.toContain('rawPlan');
     expect(mockedExecuteUpstreamSessionGraphQL.mock.calls[0]?.[1]).toEqual({
       semesterId: 7,
       staffId: 'S001',
