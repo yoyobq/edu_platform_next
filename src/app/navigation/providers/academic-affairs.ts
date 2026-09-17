@@ -276,23 +276,6 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
           },
         ]
       : []),
-    ...(hasStudentEvaluationCommentAccess({
-      accessGroup: filter.accessGroup,
-      slotGroup: filter.slotGroup,
-    })
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'FileSearchOutlined',
-            key: '/class-affairs/student-evaluation-comments',
-            label: '班级评语治理',
-            navMode: 'rail' as const,
-            path: '/class-affairs/student-evaluation-comments',
-            primaryAccessGroup: 'STAFF' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasStudentConductAlignmentAccess({
       accessGroup: filter.accessGroup,
       slotGroup: filter.slotGroup,
@@ -322,6 +305,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '成绩汇总',
             navMode: 'rail' as const,
             path: '/class-affairs/course-results-summary',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStudentEvaluationCommentAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/class-affairs/student-evaluation-comments',
+            label: '评语治理',
+            navMode: 'rail' as const,
+            path: '/class-affairs/student-evaluation-comments',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },
