@@ -1,4 +1,4 @@
-// src/labs/student-evaluation-comment-workbench/application/workbench-model.ts
+// src/features/student-evaluation-comment/application/workbench-model.ts
 
 import type {
   StudentEvaluationCommentAiScenario,

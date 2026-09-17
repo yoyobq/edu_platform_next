@@ -1,4 +1,4 @@
-// src/labs/student-evaluation-comment-workbench/infrastructure/api.spec.ts
+// src/features/student-evaluation-comment/infrastructure/api.spec.ts
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 

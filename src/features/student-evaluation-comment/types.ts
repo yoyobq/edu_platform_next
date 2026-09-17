@@ -1,4 +1,4 @@
-// src/labs/student-evaluation-comment-workbench/types.ts
+// src/features/student-evaluation-comment/types.ts
 
 export type StudentEvaluationCommentRevision = {
   payloadHash: string;

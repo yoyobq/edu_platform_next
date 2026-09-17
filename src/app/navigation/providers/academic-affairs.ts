@@ -12,6 +12,7 @@ import {
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
+  hasStudentEvaluationCommentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
 } from '@/entities/auth-access';
@@ -270,6 +271,23 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
             label: '学生建档',
             navMode: 'rail' as const,
             path: '/class-affairs/student-profile-filing',
+            primaryAccessGroup: 'STAFF' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
+    ...(hasStudentEvaluationCommentAccess({
+      accessGroup: filter.accessGroup,
+      slotGroup: filter.slotGroup,
+    })
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/class-affairs/student-evaluation-comments',
+            label: '班级评语治理',
+            navMode: 'rail' as const,
+            path: '/class-affairs/student-evaluation-comments',
             primaryAccessGroup: 'STAFF' as const,
             slotGroup: null,
           },

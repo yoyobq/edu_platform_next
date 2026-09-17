@@ -91,6 +91,8 @@ This directory contains project documentation.
 
 ## Project Convention Docs
 
+- [班级评语治理](./project-convention/student-evaluation-comments.md)
+
 - [academic-curriculum-plan-homepage.md](./project-convention/academic-curriculum-plan-homepage.md)
 - [academic-teaching-plan.md](./project-convention/academic-teaching-plan.md)
 - [academic-split-joint-teaching.md](./project-convention/academic-split-joint-teaching.md)

@@ -241,6 +241,20 @@ export function hasStudentProfileFilingAccess(input: {
   );
 }
 
+export function hasStudentEvaluationCommentAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+  const slotGroup = input.slotGroup ?? [];
+
+  return (
+    accessGroup.includes('ADMIN') ||
+    (accessGroup.includes('STAFF') &&
+      (slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) || slotGroup.includes(COUNSELOR_SLOT_GROUP)))
+  );
+}
+
 export function hasStudentConductAlignmentAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

@@ -1,4 +1,4 @@
-// src/labs/student-evaluation-comment-workbench/infrastructure/api.ts
+// src/features/student-evaluation-comment/infrastructure/api.ts
 
 import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 

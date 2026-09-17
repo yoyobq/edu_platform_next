@@ -1,4 +1,4 @@
-// e2e/specs/routing/student-evaluation-comment-workbench-lab.spec.ts
+// e2e/specs/routing/student-evaluation-comments.spec.ts
 
 import type { Page } from '@playwright/test';
 
@@ -190,7 +190,7 @@ test('产品工作台以学期和状态筛选统一组织生成与审阅', async
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
 
   await expect(page.getByRole('heading', { name: '班级评语治理' })).toBeVisible();
   await expect(page.getByText('2025-2026 第一学期', { exact: true })).toBeVisible();
@@ -274,7 +274,7 @@ test('AI 依据不足在生成后保留，手动刷新后允许服务端重新�
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByText('待处理 1', { exact: true }).click();
   await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
   await page.getByRole('button', { name: 'AI 生成 1' }).click();
@@ -386,7 +386,7 @@ test('旧范围的依据同步完成后不应把工作台切回旧班级', async
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByRole('button', { name: '更新生成依据' }).click();
   await conductSyncStarted.promise;
 
@@ -489,7 +489,7 @@ test('最后学期跳过操行预检并按下厂实习场景生成', async ({ pa
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await expect(page.getByText('最后学期按下厂/校外实习场景治理')).toBeVisible();
   await expect(page.getByRole('button', { name: '更新生成依据' })).toHaveCount(0);
   expect(conductPreflightCalls).toBe(0);
@@ -593,7 +593,7 @@ test('Excel 导入先进入统一列表审阅，再批量保存正式评语', as
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByRole('button', { name: 'Excel 导入' }).click();
   await page.locator('.ant-modal input[type="file"]').setInputFiles({
     buffer: Buffer.from('xlsx'),
@@ -687,7 +687,7 @@ test('第三学期只从第二学期正式评语选择语气参考', async ({ pa
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByText('待处理 1', { exact: true }).click();
   await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
   await page.getByRole('button', { name: 'AI 生成 1' }).click();
@@ -752,7 +752,7 @@ test('可批量删除已经写入的正式评语', async ({ page }) => {
     await route.fallback();
   });
 
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByText('已完成 1', { exact: true }).click();
   await page.getByRole('row', { name: /张三/ }).getByRole('checkbox').check();
   await page.getByRole('button', { name: '删除正式评语 1' }).click();
@@ -819,7 +819,7 @@ test('取消生成提交冻结版本，刷新页面仍展示后端取消终态',
     }
     await route.fallback();
   });
-  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.goto(routes.studentEvaluationComments);
   await page.getByText('生成中 1', { exact: true }).click();
   await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
   await page.getByRole('button', { name: '取消生成 1' }).click();
@@ -840,4 +840,150 @@ test('取消生成提交冻结版本，刷新页面仍展示后端取消终态',
   await page.reload();
   await page.getByText('问题 1', { exact: true }).click();
   await expect(page.getByText('本次生成已取消，可在允许时重新生成')).toBeVisible();
+});
+
+for (const role of [
+  { primaryAccessGroup: 'STAFF', slotGroup: [], allowed: false },
+  { primaryAccessGroup: 'STAFF', slotGroup: ['ACADEMIC_OFFICER'], allowed: false },
+  { primaryAccessGroup: 'STUDENT', slotGroup: [], allowed: false },
+  { primaryAccessGroup: 'STAFF', slotGroup: ['CLASS_ADVISER'], allowed: true },
+  { primaryAccessGroup: 'STAFF', slotGroup: ['COUNSELOR'], allowed: true },
+] as const) {
+  test(`正式评语入口按身份与岗位准入：${role.primaryAccessGroup}/${role.slotGroup.join(',')}`, async ({
+    page,
+  }) => {
+    await mockApiHealth(page);
+    const session = {
+      ...role,
+      accessGroup: [role.primaryAccessGroup],
+      displayName: 'evaluation-user',
+    };
+    await mockAuthGraphQL(page, { currentSession: session });
+    await seedAuthSession(page, session);
+    let workspaceRequests = 0;
+    await page.route('**/graphql', async (route) => {
+      const payload = route.request().postDataJSON() as { query?: string };
+      if (payload.query?.includes('query StudentEvaluationCommentProductWorkbench')) {
+        workspaceRequests += 1;
+        await route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: buildWorkspace() } }),
+        });
+        return;
+      }
+      await route.fallback();
+    });
+    await page.goto(routes.studentEvaluationComments);
+    await expect(
+      page.getByRole('heading', { name: role.allowed ? '班级评语治理' : '访问被拒绝' }),
+    ).toBeVisible();
+    if (role.allowed) {
+      await expect(page.getByText('Product Lab', { exact: true })).toHaveCount(0);
+      await expect.poll(() => workspaceRequests).toBeGreaterThan(0);
+    } else {
+      expect(workspaceRequests).toBe(0);
+    }
+  });
+}
+
+test('已移除的学生评语实验地址应返回 404', async ({ page }) => {
+  await seedAdmin(page);
+  await page.goto('/labs/student-evaluation-comment');
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+  await page.goto('/labs/student-evaluation-comment-workbench');
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
+});
+
+test('毕业范围在 AI 不可用时仍可人工保存正式鉴定', async ({ page }) => {
+  await seedAdmin(page);
+  let writeInput: Record<string, unknown> | null = null;
+  let saved = false;
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as {
+      query?: string;
+      variables?: { input?: Record<string, unknown> };
+    };
+    if (payload.query?.includes('query StudentEvaluationCommentProductWorkbench')) {
+      const workspace = buildWorkspace();
+      const graduation = payload.variables?.input?.commentKind === 'GRADUATION';
+      const response = graduation
+        ? {
+            ...workspace,
+            commentKind: 'GRADUATION',
+            selectedTerm: null,
+            termOptions: [],
+            actions: [
+              workspace.actions[0],
+              {
+                action: 'GENERATE_AI_DRAFTS',
+                allowed: false,
+                reasonCode: 'AI_UNAVAILABLE',
+                reasonMessage: 'AI 暂不可用',
+              },
+            ],
+            view: {
+              ...workspace.view,
+              scope: { commentKind: 'GRADUATION', scopeKey: 'GRADUATION', semesterId: null },
+              students: workspace.view.students
+                .filter((student) => student.studentName === '王五')
+                .map((student) => ({
+                  ...student,
+                  comment: saved
+                    ? {
+                        content: '人工填写的毕业鉴定。',
+                        revision: { payloadHash: 'd'.repeat(64), payloadVersion: 1 },
+                        source: 'MANUAL',
+                        updatedAt: '2026-09-17T01:00:00Z',
+                      }
+                    : null,
+                })),
+            },
+          }
+        : workspace;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: response } }),
+      });
+      return;
+    }
+    if (payload.query?.includes('mutation WriteStudentEvaluationCommentProductComments')) {
+      writeInput = payload.variables?.input ?? null;
+      saved = true;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            batchWriteStudentEvaluationComments: {
+              status: 'UPDATED',
+              counts: { created: 1, updated: 0, unchanged: 0, deleted: 0 },
+            },
+          },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto(routes.studentEvaluationComments);
+  await page.getByRole('tab', { name: '毕业鉴定' }).click();
+  await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
+  await expect(page.getByRole('button', { name: 'AI 生成 1' })).toBeDisabled();
+  await page.getByRole('row', { name: /王五/ }).getByRole('button', { name: '填写' }).click();
+  await page.locator('.ant-drawer textarea').fill('人工填写的毕业鉴定。');
+  await page.getByRole('button', { name: '保存正式毕业鉴定' }).click();
+  await expect
+    .poll(() => writeInput)
+    .toMatchObject({
+      commentKind: 'GRADUATION',
+      semesterId: null,
+      items: [
+        {
+          studentId: '324010103',
+          action: 'UPSERT',
+          expectedRevision: null,
+          content: '人工填写的毕业鉴定。',
+        },
+      ],
+    });
+  await expect(page.getByText('已完成 1', { exact: true })).toBeVisible();
 });

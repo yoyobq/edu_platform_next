@@ -44,7 +44,7 @@
 - `academic-affairs`：
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/my-teaching-plan`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
-  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
+  - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-evaluation-comments`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
   - `学工管理`：`/student-affairs/class-adviser-governance`
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/split-joint-teaching-confirmation`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
@@ -54,7 +54,6 @@
   - admin：`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
   - student：`/labs/zquiz-exam-activities`、`/labs/zquiz-practice-activities`
-  - admin / staff / student：`/labs/student-evaluation-comment`
 - `sandbox`：`/sandbox/playground`；provider 复用结构分组 key `labs`，因此 dev / test 下合并进 Labs 分组，不单独生成顶层 Sandbox 分组
 
 补充约束：

@@ -1,4 +1,4 @@
-// src/labs/student-evaluation-comment-workbench/application/workbench-model.spec.ts
+// src/features/student-evaluation-comment/application/workbench-model.spec.ts
 
 import { describe, expect, it } from 'vitest';
 

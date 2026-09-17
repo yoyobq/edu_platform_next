@@ -59,6 +59,7 @@ import {
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
+  hasStudentEvaluationCommentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveClassAdviserGovernanceDepartmentScope,
@@ -68,16 +69,6 @@ import {
 import { sanitizeRedirectTarget } from '@/shared/navigation';
 
 import { demoLabAccess, loadDemoLabRouteModule } from '@/labs/demo';
-import {
-  loadStudentEvaluationCommentLabRouteModule,
-  studentEvaluationCommentLabAccess,
-  type StudentEvaluationCommentLabLoaderData,
-} from '@/labs/student-evaluation-comment';
-import {
-  loadStudentEvaluationCommentWorkbenchLabRouteModule,
-  studentEvaluationCommentWorkbenchLabAccess,
-  type StudentEvaluationCommentWorkbenchLoaderData,
-} from '@/labs/student-evaluation-comment-workbench';
 import {
   loadStudentPrivateProfileLabRouteModule,
   studentPrivateProfileLabAccess,
@@ -284,6 +275,11 @@ const loadStudentProfileFilingRouteModule = loadPageRouteModule(
   () => import('@/pages/student-profile-filing'),
   'StudentProfileFilingPage',
 );
+const loadStudentEvaluationCommentsRouteModule = loadPageRouteModule(
+  () => import('@/pages/student-evaluation-comments'),
+  'StudentEvaluationCommentsPage',
+);
+
 const loadStudentConductAlignmentRouteModule = loadPageRouteModule(
   () => import('@/pages/student-conduct-alignment'),
   'StudentConductAlignmentPage',
@@ -778,17 +774,30 @@ async function upstreamSessionReferenceLabLoader({ request }: LoaderFunctionArgs
   });
 }
 
-function resolveStudentEvaluationCommentLabData(
-  snapshot: AuthSessionSnapshot,
-): StudentEvaluationCommentLabLoaderData {
-  const isAdmin = snapshot.userInfo.accessGroup.includes('ADMIN');
-  const isStaff = snapshot.userInfo.accessGroup.includes('STAFF');
-  const isClassAdviser = isStaff && snapshot.slotGroup.includes(CLASS_ADVISER_SLOT_GROUP);
-  const isCounselor = isStaff && snapshot.slotGroup.includes(COUNSELOR_SLOT_GROUP);
-  const canEditClassScope = isAdmin || isClassAdviser || isCounselor;
+async function studentEvaluationCommentsPageLoader({ request }: LoaderFunctionArgs) {
+  await restoreSession({ waitForPending: true });
+  const snapshot = getAuthSessionSnapshot();
+
+  if (!snapshot) {
+    throw redirect(buildLoginRedirectURL(request));
+  }
+
+  if (snapshot.needsProfileCompletion) {
+    throw redirect(buildWelcomeRedirectURL(request));
+  }
+
+  if (
+    !hasStudentEvaluationCommentAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    })
+  ) {
+    return {
+      isForbidden: true,
+    };
+  }
 
   return {
-    canEditClassScope,
     currentAccount: {
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
@@ -798,32 +807,8 @@ function resolveStudentEvaluationCommentLabData(
         staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
       }),
     },
-    defaultView: canEditClassScope ? 'class-scope' : 'mine',
+    isForbidden: false,
   };
-}
-
-async function studentEvaluationCommentLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: studentEvaluationCommentLabAccess,
-    getData: resolveStudentEvaluationCommentLabData,
-    request,
-  });
-}
-
-function resolveStudentEvaluationCommentWorkbenchLabData(
-  snapshot: AuthSessionSnapshot,
-): StudentEvaluationCommentWorkbenchLoaderData {
-  return {
-    currentAccount: resolveStudentEvaluationCommentLabData(snapshot).currentAccount,
-  };
-}
-
-async function studentEvaluationCommentWorkbenchLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: studentEvaluationCommentWorkbenchLabAccess,
-    getData: resolveStudentEvaluationCommentWorkbenchLabData,
-    request,
-  });
 }
 
 function resolveStudentPrivateProfileLockedUpstreamLoginUserId(snapshot: AuthSessionSnapshot) {
@@ -1664,6 +1649,11 @@ const router = createBrowserRouter([
         lazy: loadStudentProfileFilingRouteModule,
       },
       {
+        path: '/class-affairs/student-evaluation-comments',
+        loader: studentEvaluationCommentsPageLoader,
+        lazy: loadStudentEvaluationCommentsRouteModule,
+      },
+      {
         path: '/class-affairs/student-conduct-alignment',
         loader: studentConductAlignmentPageLoader,
         lazy: loadStudentConductAlignmentRouteModule,
@@ -1712,16 +1702,6 @@ const router = createBrowserRouter([
             path: 'upstream-session-reference',
             loader: upstreamSessionReferenceLabLoader,
             lazy: loadUpstreamSessionReferenceLabRouteModule,
-          },
-          {
-            path: 'student-evaluation-comment',
-            loader: studentEvaluationCommentLabLoader,
-            lazy: loadStudentEvaluationCommentLabRouteModule,
-          },
-          {
-            path: 'student-evaluation-comment-workbench',
-            loader: studentEvaluationCommentWorkbenchLabLoader,
-            lazy: loadStudentEvaluationCommentWorkbenchLabRouteModule,
           },
           {
             path: 'student-private-profile',

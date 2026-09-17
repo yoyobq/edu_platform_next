@@ -114,34 +114,6 @@ export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
           },
         ]
       : []),
-    ...(hasAllowedLabExposure(['admin', 'staff', 'student'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF', 'STUDENT'] as const,
-            iconKey: 'FileTextOutlined',
-            key: '/labs/student-evaluation-comment',
-            label: '学生评语',
-            navMode: 'rail' as const,
-            path: '/labs/student-evaluation-comment',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
-    ...(hasAllowedLabExposure(['admin', 'staff'], filter)
-      ? [
-          {
-            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
-            iconKey: 'FileTextOutlined',
-            key: '/labs/student-evaluation-comment-workbench',
-            label: '班级评语治理',
-            navMode: 'rail' as const,
-            path: '/labs/student-evaluation-comment-workbench',
-            primaryAccessGroup: 'ADMIN' as const,
-            slotGroup: null,
-          },
-        ]
-      : []),
     ...(hasAllowedLabExposure(['student'], filter)
       ? [
           {
