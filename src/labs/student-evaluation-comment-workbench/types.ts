@@ -24,6 +24,20 @@ export type StudentEvaluationCommentFormalComment = {
 
 export type StudentEvaluationCommentWorkbenchStudent = {
   aiDraft: StudentEvaluationCommentAiDraft | null;
+  aiGeneration: {
+    status: 'IDLE' | 'GENERATING' | 'DRAFT_READY' | 'FAILED';
+    reasonCode:
+      | 'GENERATION_FAILED'
+      | 'OUTPUT_INVALID'
+      | 'ROSTER_CHANGED'
+      | 'BASIS_CHANGED'
+      | 'TIMED_OUT'
+      | 'CANCELLED'
+      | null;
+    retryAllowed: boolean;
+    updatedAt: string | null;
+    generationVersion: string | null;
+  };
   comment: StudentEvaluationCommentFormalComment | null;
   isAiDraftGenerating: boolean;
   studentId: string;

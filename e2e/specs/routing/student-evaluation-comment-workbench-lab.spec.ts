@@ -80,6 +80,13 @@ function buildWorkspace(generating = false, excelSaved = false, formalDeleted = 
                 source: 'MANUAL',
                 updatedAt: '2026-08-25T01:00:00.000Z',
               },
+          aiGeneration: {
+            status: 'IDLE',
+            reasonCode: null as string | null,
+            retryAllowed: false,
+            updatedAt: null,
+            generationVersion: null,
+          },
           isAiDraftGenerating: false,
           studentId: '324010101',
           studentName: '张三',
@@ -94,6 +101,13 @@ function buildWorkspace(generating = false, excelSaved = false, formalDeleted = 
             updatedAt: '2026-08-25T01:00:00.000Z',
           },
           comment: null,
+          aiGeneration: {
+            status: 'DRAFT_READY',
+            reasonCode: null,
+            retryAllowed: false,
+            updatedAt: '2026-08-25T01:00:00Z',
+            generationVersion: null,
+          },
           isAiDraftGenerating: false,
           studentId: '324010102',
           studentName: '李四',
@@ -109,6 +123,13 @@ function buildWorkspace(generating = false, excelSaved = false, formalDeleted = 
                 updatedAt: '2026-08-25T02:00:00.000Z',
               }
             : null,
+          aiGeneration: {
+            status: generating ? 'GENERATING' : 'IDLE',
+            reasonCode: null as string | null,
+            retryAllowed: false,
+            updatedAt: null as string | null,
+            generationVersion: generating ? '11111111-1111-4111-8111-111111111111' : null,
+          },
           isAiDraftGenerating: generating,
           studentId: '324010103',
           studentName: '王五',
@@ -752,4 +773,71 @@ test('可批量删除已经写入的正式评语', async ({ page }) => {
   });
   await expect(page.getByText('已完成 0', { exact: true })).toBeVisible();
   await expect(page.getByText('待处理 2', { exact: true })).toBeVisible();
+});
+
+test('取消生成提交冻结版本，刷新页面仍展示后端取消终态', async ({ page }) => {
+  await seedAdmin(page);
+  let cancelled = false;
+  let cancellationInput: Record<string, unknown> | null = null;
+  await page.route('**/graphql', async (route) => {
+    const payload = route.request().postDataJSON() as {
+      query?: string;
+      variables?: { input?: Record<string, unknown> };
+    };
+    if (payload.query?.includes('query StudentEvaluationCommentProductWorkbench')) {
+      const workspace = buildWorkspace(true);
+      if (cancelled) {
+        workspace.view.students[2].isAiDraftGenerating = false;
+        workspace.view.students[2].aiGeneration = {
+          status: 'FAILED',
+          reasonCode: 'CANCELLED',
+          retryAllowed: true,
+          updatedAt: '2026-09-01T00:00:00Z',
+          generationVersion: null,
+        };
+      }
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { studentEvaluationCommentWorkspace: workspace } }),
+      });
+      return;
+    }
+    if (payload.query?.includes('mutation CancelStudentEvaluationCommentProductGenerations')) {
+      cancellationInput = payload.variables?.input ?? null;
+      cancelled = true;
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            cancelStudentEvaluationCommentAiGenerations: {
+              items: [{ studentId: '324010103', disposition: 'CANCELLED' }],
+            },
+          },
+        }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+  await page.goto(routes.labsStudentEvaluationCommentWorkbench);
+  await page.getByText('生成中 1', { exact: true }).click();
+  await page.getByRole('row', { name: /王五/ }).getByRole('checkbox').check();
+  await page.getByRole('button', { name: '取消生成 1' }).click();
+  await page.getByRole('button', { name: '确认取消生成' }).click();
+  await expect
+    .poll(() => cancellationInput)
+    .toMatchObject({
+      classId: '1021904',
+      commentKind: 'TERM',
+      semesterId: 3,
+      items: [
+        {
+          studentId: '324010103',
+          expectedGenerationVersion: '11111111-1111-4111-8111-111111111111',
+        },
+      ],
+    });
+  await page.reload();
+  await page.getByText('问题 1', { exact: true }).click();
+  await expect(page.getByText('本次生成已取消，可在允许时重新生成')).toBeVisible();
 });

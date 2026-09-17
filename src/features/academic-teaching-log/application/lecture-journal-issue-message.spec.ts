@@ -17,6 +17,25 @@ function buildGraphQLError(extensions: Record<string, unknown>): GraphQLFormatte
 }
 
 describe('lecture journal issue message', () => {
+  it.each([
+    'PLANNED_OCCURRENCE_PROJECTION_INVALID',
+    'STAFF_ID_MISMATCH',
+    'IDENTITY_COLLISION',
+    'CALENDAR_EVENT_DATE_OUT_OF_SEMESTER',
+    'SCHEDULE_OCCURRENCE_DATE_OUT_OF_SEMESTER',
+    'CALENDAR_EVENT_CALC_CONFLICT',
+  ])('shows source failure %s instead of hiding it or reporting insufficient hours', (issue) => {
+    expect(resolveLectureJournalIssueMessage(issue)).toBe(
+      '本地课表或教学周历数据异常，无法可靠生成计划课次，请检查后重试。',
+    );
+  });
+
+  it('shows a missing semester source as a configuration issue', () => {
+    expect(resolveLectureJournalIssueMessage('ACADEMIC_SEMESTER_TARGET_NOT_FOUND')).toBe(
+      '无法确定教学计划对应的本地学期，请检查学期配置后重试。',
+    );
+  });
+
   it('maps integrated occurrence hour shortage issue strings to actionable guidance', () => {
     expect(resolveLectureJournalIssueMessage('INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT')).toBe(
       '一体化计划明细需要的课时数超过当前本地课表中可顺序分配的有效课时数，请检查本地学期课表、教学周历或计划明细课时后再重试。',

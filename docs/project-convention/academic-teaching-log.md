@@ -15,6 +15,7 @@
 
 - 查询只通过 `query-workflow` 编排；页面只处理 UI 状态与反馈
 - 对账结果来自同一次 prefill 读取中的 `prefill.reconciliation`
+- 预填或核对的计划课次来源无效、学期来源缺失时，展示对应中文阻塞原因；与有效课时不足分开提示，填写资格继续使用后端 `canFill / blockingIssue`。
 - 一体化预填来自 `prefill.integratedPreviews`
 - 保存只通过 `save-workflow` 编排；页面保留保存反馈、登录弹窗、折叠状态与本地展示 patch
 

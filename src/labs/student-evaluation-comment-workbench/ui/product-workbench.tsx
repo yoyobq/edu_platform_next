@@ -57,6 +57,7 @@ import {
   type StudentEvaluationCommentWorkflowStatus,
 } from '../application/workbench-model';
 import {
+  cancelStudentEvaluationCommentProductGenerations,
   clearStudentEvaluationCommentProductComments,
   clearStudentGraduationEvaluationCommentProductComments,
   confirmStudentEvaluationCommentProductDrafts,
@@ -386,7 +387,7 @@ export function StudentEvaluationCommentProductWorkbench({
   );
 
   useEffect(() => {
-    if (!students.some((student) => student.isAiDraftGenerating)) return;
+    if (!students.some((student) => student.aiGeneration.status === 'GENERATING')) return;
     const scopeVersion = scopeVersionRef.current;
     const timerId = window.setTimeout(
       () =>
@@ -471,7 +472,7 @@ export function StudentEvaluationCommentProductWorkbench({
         issue &&
         !student.comment &&
         !student.aiDraft &&
-        !student.isAiDraftGenerating &&
+        !(student.aiGeneration.status === 'GENERATING') &&
         !importedDraftStudentIds.has(student.studentId)
       ) {
         issues[student.studentId] = issue;
@@ -481,8 +482,18 @@ export function StudentEvaluationCommentProductWorkbench({
     return issues;
   }, [conductIssuesByStudentId, importedDraftStudentIds, students]);
   const issuesByStudentId = useMemo(
-    () => ({ ...generationIssuesByStudentId, ...actionableConductIssuesByStudentId }),
-    [actionableConductIssuesByStudentId, generationIssuesByStudentId],
+    () => ({
+      ...generationIssuesByStudentId,
+      ...actionableConductIssuesByStudentId,
+      ...Object.fromEntries(
+        students.flatMap((student) =>
+          student.aiGeneration.status === 'FAILED' && student.aiGeneration.reasonCode
+            ? [[student.studentId, student.aiGeneration.reasonCode]]
+            : [],
+        ),
+      ),
+    }),
+    [actionableConductIssuesByStudentId, generationIssuesByStudentId, students],
   );
   const counts = useMemo(
     () =>
@@ -519,8 +530,48 @@ export function StudentEvaluationCommentProductWorkbench({
         hasWorkingDraft: importedDraftStudentIds.has(student.studentId),
         issueCode: issuesByStudentId[student.studentId],
         student,
-      }) === 'TODO',
+      }) === 'TODO' ||
+      (student.aiGeneration.retryAllowed && !importedDraftStudentIds.has(student.studentId)),
   );
+  const cancellationCandidates = selectedStudents.flatMap((student) =>
+    student.aiGeneration.status === 'GENERATING' && student.aiGeneration.generationVersion
+      ? [
+          {
+            studentId: student.studentId,
+            expectedGenerationVersion: student.aiGeneration.generationVersion,
+          },
+        ]
+      : [],
+  );
+  const handleCancelGeneration = async () => {
+    if (isBatchRunning || cancellationCandidates.length === 0) return;
+    const scopeVersion = scopeVersionRef.current;
+    const input = {
+      classId,
+      commentKind: activeCommentKind,
+      semesterId: isGraduation ? null : semesterId,
+      items: cancellationCandidates,
+    };
+    const confirmed = await requestConfirmation(modal, {
+      title: '取消所选学生的生成？',
+      content: '只取消本次结果接收，不保证停止外部生成请求。已生成的草稿和未选中的学生不受影响。',
+      okText: '确认取消生成',
+    });
+    if (!confirmed || scopeVersionRef.current !== scopeVersion) return;
+    setIsBatchRunning(true);
+    try {
+      const result = await cancelStudentEvaluationCommentProductGenerations(input);
+      if (scopeVersionRef.current !== scopeVersion) return;
+      const count = result.items.filter((item) => item.disposition === 'CANCELLED').length;
+      message.info(`已取消 ${count} 名学生的生成；已完成或版本已变化的任务保持不变。`);
+      await reloadCurrentWorkspace({ generationIssuePolicy: 'preserve', scopeVersion });
+    } catch (error) {
+      if (scopeVersionRef.current === scopeVersion)
+        message.error(resolveProductErrorMessage(error));
+    } finally {
+      setIsBatchRunning(false);
+    }
+  };
   const selectedConductBlockedCount = selectedStudents.filter((student) =>
     Boolean(actionableConductIssuesByStudentId[student.studentId]),
   ).length;
@@ -1463,6 +1514,12 @@ export function StudentEvaluationCommentProductWorkbench({
                   </Button>
                 </Tooltip>
                 <Button
+                  disabled={cancellationCandidates.length === 0 || isBatchRunning}
+                  onClick={() => void handleCancelGeneration()}
+                >
+                  取消生成 {cancellationCandidates.length || ''}
+                </Button>
+                <Button
                   disabled={confirmCandidates.length === 0}
                   icon={<CheckOutlined />}
                   loading={isBatchRunning}
@@ -1840,6 +1897,15 @@ function WorkflowStatusTag(input: {
 }
 
 function resolveStudentEvaluationCommentIssueMessage(issueCode: string) {
+  const generationMessages: Record<string, string> = {
+    GENERATION_FAILED: 'AI 生成未完成，可在允许时重试或人工填写',
+    OUTPUT_INVALID: 'AI 返回缺行或无效内容，可在允许时重试或人工填写',
+    ROSTER_CHANGED: '名单已变化，本次结果未写入，请刷新名单',
+    BASIS_CHANGED: '毕业鉴定依据已变化，本次结果未写入，请检查后重试',
+    TIMED_OUT: '后端已确认生成超时，可在允许时重试',
+    CANCELLED: '本次生成已取消，可在允许时重新生成',
+  };
+  if (generationMessages[issueCode]) return generationMessages[issueCode];
   if (issueCode === 'CONDUCT_GRADE_MISSING') {
     return '缺少已确认的操行等第，暂不能 AI 生成';
   }

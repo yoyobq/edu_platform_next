@@ -22,6 +22,23 @@ export function resolveLectureJournalIssueMessage(value: string | null | undefin
     return null;
   }
 
+  if (
+    [
+      'PLANNED_OCCURRENCE_PROJECTION_INVALID',
+      'STAFF_ID_MISMATCH',
+      'IDENTITY_COLLISION',
+      'CALENDAR_EVENT_DATE_OUT_OF_SEMESTER',
+      'SCHEDULE_OCCURRENCE_DATE_OUT_OF_SEMESTER',
+      'CALENDAR_EVENT_CALC_CONFLICT',
+    ].includes(value)
+  ) {
+    return '本地课表或教学周历数据异常，无法可靠生成计划课次，请检查后重试。';
+  }
+
+  if (value === 'ACADEMIC_SEMESTER_TARGET_NOT_FOUND') {
+    return '无法确定教学计划对应的本地学期，请检查学期配置后重试。';
+  }
+
   if (value === UPSTREAM_STAFF_SCOPE_MISMATCH) {
     return '当前上游会话无法获取该教师的教学计划，或上游返回的计划负责人不匹配。';
   }

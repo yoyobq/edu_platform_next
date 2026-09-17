@@ -72,13 +72,9 @@ export function resolveStudentEvaluationCommentWorkflowStatus(input: {
 }): Exclude<StudentEvaluationCommentWorkflowStatus, 'ALL'> {
   if (input.hasWorkingDraft) return 'REVIEW';
   if (input.student.comment) return 'COMPLETED';
-  if (input.issueCode) return 'ISSUE';
-  if (input.student.aiDraft) {
-    const expiresAt = new Date(input.student.aiDraft.expiresAt).getTime();
-    if (Number.isNaN(expiresAt) || expiresAt <= (input.now ?? Date.now())) return 'ISSUE';
-    return 'REVIEW';
-  }
-  if (input.student.isAiDraftGenerating) return 'GENERATING';
+  if (input.student.aiGeneration.status === 'DRAFT_READY') return 'REVIEW';
+  if (input.student.aiGeneration.status === 'GENERATING') return 'GENERATING';
+  if (input.student.aiGeneration.status === 'FAILED' || input.issueCode) return 'ISSUE';
   return 'TODO';
 }
 

@@ -119,6 +119,7 @@ const WORKSPACE_QUERY = `
             expiresAt
             updatedAt
           }
+          aiGeneration { status reasonCode retryAllowed updatedAt generationVersion }
           isAiDraftGenerating
         }
       }
@@ -1011,4 +1012,30 @@ function toRevisionInput(revision: StudentEvaluationCommentRevision) {
     payloadHash: revision.payloadHash,
     payloadVersion: revision.payloadVersion,
   };
+}
+
+export function cancelStudentEvaluationCommentProductGenerations(input: {
+  classId: string;
+  commentKind: 'TERM' | 'GRADUATION';
+  semesterId: number | null;
+  items: Array<{ studentId: string; expectedGenerationVersion: string }>;
+}) {
+  return executeGraphQL<
+    {
+      cancelStudentEvaluationCommentAiGenerations: {
+        items: Array<{
+          studentId: string;
+          disposition: 'CANCELLED' | 'ALREADY_COMPLETED' | 'NOT_GENERATING' | 'GENERATION_CHANGED';
+        }>;
+      };
+    },
+    { input: typeof input }
+  >(
+    `
+    mutation CancelStudentEvaluationCommentProductGenerations($input: CancelStudentEvaluationCommentAiGenerationsInput!) {
+      cancelStudentEvaluationCommentAiGenerations(input: $input) { items { studentId disposition } }
+    }
+  `,
+    { input },
+  ).then((response) => response.cancelStudentEvaluationCommentAiGenerations);
 }

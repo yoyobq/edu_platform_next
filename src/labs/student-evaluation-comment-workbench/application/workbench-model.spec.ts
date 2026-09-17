@@ -86,13 +86,13 @@ describe('student evaluation comment workbench model', () => {
     ).toEqual({ ALL: 5, TODO: 1, GENERATING: 1, REVIEW: 1, COMPLETED: 1, ISSUE: 1 });
   });
 
-  it('treats an expired draft as an actionable issue', () => {
+  it('does not override backend draft status using the browser clock', () => {
     expect(
       resolveStudentEvaluationCommentWorkflowStatus({
         now: Date.parse('2026-08-25T00:00:00.000Z'),
         student: student({ aiDraft: draft({ expiresAt: '2026-08-24T23:59:59.999Z' }) }),
       }),
-    ).toBe('ISSUE');
+    ).toBe('REVIEW');
   });
 
   it('treats an imported working draft as review even when a formal comment exists', () => {
@@ -166,6 +166,17 @@ function student(
   overrides: Partial<StudentEvaluationCommentWorkbenchStudent> = {},
 ): StudentEvaluationCommentWorkbenchStudent {
   return {
+    aiGeneration: {
+      status: overrides.aiDraft
+        ? 'DRAFT_READY'
+        : overrides.isAiDraftGenerating
+          ? 'GENERATING'
+          : 'IDLE',
+      reasonCode: null,
+      retryAllowed: false,
+      updatedAt: null,
+      generationVersion: null,
+    },
     aiDraft: null,
     comment: null,
     isAiDraftGenerating: false,
@@ -197,3 +208,35 @@ function comment(): NonNullable<StudentEvaluationCommentWorkbenchStudent['commen
     updatedAt: '2026-08-25T00:00:00.000Z',
   };
 }
+
+it.each([
+  'GENERATION_FAILED',
+  'OUTPUT_INVALID',
+  'ROSTER_CHANGED',
+  'BASIS_CHANGED',
+  'TIMED_OUT',
+  'CANCELLED',
+] as const)('projects retained %s after a fresh load', (reasonCode) => {
+  const row = student({
+    aiGeneration: {
+      status: 'FAILED',
+      reasonCode,
+      retryAllowed: true,
+      updatedAt: '2026-09-01T00:00:00Z',
+      generationVersion: null,
+    },
+  });
+  expect(resolveStudentEvaluationCommentWorkflowStatus({ student: row })).toBe('ISSUE');
+});
+it('keeps backend GENERATING despite an old timestamp', () => {
+  const row = student({
+    aiGeneration: {
+      status: 'GENERATING',
+      reasonCode: null,
+      retryAllowed: false,
+      updatedAt: '2000-01-01T00:00:00Z',
+      generationVersion: 'opaque',
+    },
+  });
+  expect(resolveStudentEvaluationCommentWorkflowStatus({ student: row })).toBe('GENERATING');
+});

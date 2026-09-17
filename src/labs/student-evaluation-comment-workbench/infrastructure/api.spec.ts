@@ -27,6 +27,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  cancelStudentEvaluationCommentProductGenerations,
   clearStudentEvaluationCommentProductComments,
   clearStudentGraduationEvaluationCommentProductComments,
   confirmStudentGraduationEvaluationCommentProductDrafts,
@@ -466,3 +467,23 @@ function buildMaterialImportResult(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+it('sends only scope and frozen cancellation versions', async () => {
+  executeGraphQLMock.mockResolvedValue({
+    cancelStudentEvaluationCommentAiGenerations: {
+      items: [{ studentId: 'S1', disposition: 'GENERATION_CHANGED' }],
+    },
+  });
+  const input = {
+    classId: 'C1',
+    commentKind: 'GRADUATION' as const,
+    semesterId: null,
+    items: [{ studentId: 'S1', expectedGenerationVersion: 'opaque-version' }],
+  };
+  const result = await cancelStudentEvaluationCommentProductGenerations(input);
+  expect(executeGraphQLMock).toHaveBeenCalledWith(
+    expect.stringContaining('cancelStudentEvaluationCommentAiGenerations'),
+    { input },
+  );
+  expect(result.items[0].disposition).toBe('GENERATION_CHANGED');
+});
