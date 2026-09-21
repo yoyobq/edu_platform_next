@@ -1,6 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { SyncOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Descriptions, Form, Input, Popconfirm, Select, Spin } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Descriptions,
+  Form,
+  Input,
+  Popconfirm,
+  Select,
+  Spin,
+  Table,
+  Tag,
+} from 'antd';
 
 import {
   AcademicSemesterPeriodFormItems,
@@ -49,6 +61,7 @@ type SyncRunMode = 'dryRun' | 'sync';
 
 type PendingSyncRequest = {
   mode: SyncRunMode;
+  relatedClassSyncFingerprint?: string;
   values: SyncFormValues;
 };
 
@@ -78,6 +91,17 @@ const DEFAULT_DEPARTMENT_ID = 'ORG0302';
 
 function formatOptionalCount(value: number | undefined) {
   return typeof value === 'number' ? value : '未返回';
+}
+
+function formatReferencedClassSyncAction(action: string) {
+  const labels: Record<string, string> = {
+    CREATE: '待新增',
+    CREATED: '已新增',
+    EXISTS: '已存在',
+    UPDATE: '待更新',
+    UPDATED: '已更新',
+  };
+  return labels[action] ?? action;
 }
 
 function resolveResultSemanticMessage(result: CourseScheduleSyncResult) {
@@ -122,7 +146,12 @@ export function SemesterCourseScheduleSyncPageContent({
         return;
       }
 
-      await performSync(session, pendingAction.values, pendingAction.mode);
+      await performSync(
+        session,
+        pendingAction.values,
+        pendingAction.mode,
+        pendingAction.relatedClassSyncFingerprint,
+      );
     },
   });
   const selectedDepartmentId = Form.useWatch('departmentId', syncForm);
@@ -132,7 +161,12 @@ export function SemesterCourseScheduleSyncPageContent({
   );
 
   const performSync = useCallback(
-    async (session: StoredUpstreamSession, values: SyncFormValues, mode: SyncRunMode) => {
+    async (
+      session: StoredUpstreamSession,
+      values: SyncFormValues,
+      mode: SyncRunMode,
+      relatedClassSyncFingerprint?: string,
+    ) => {
       const isDryRun = mode === 'dryRun';
 
       if (isDryRun) {
@@ -152,6 +186,7 @@ export function SemesterCourseScheduleSyncPageContent({
           semester: values.semester,
           teacherId: values.teacherId,
           upstreamSessionToken: session.upstreamSessionToken,
+          relatedClassSyncFingerprint: isDryRun ? undefined : relatedClassSyncFingerprint,
         };
         const syncResult = isDryRun
           ? await dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input)
@@ -165,7 +200,7 @@ export function SemesterCourseScheduleSyncPageContent({
             loginError: isDryRun
               ? 'upstream 会话已失效，请重新登录后继续预览。'
               : 'upstream 会话已失效，请重新登录后继续落库。',
-            pendingAction: { mode, values },
+            pendingAction: { mode, relatedClassSyncFingerprint, values },
             session,
           });
           return;
@@ -190,6 +225,11 @@ export function SemesterCourseScheduleSyncPageContent({
 
       setSyncError(null);
 
+      if (mode === 'sync' && (!result?.dryRun || !result.relatedClassSyncFingerprint)) {
+        setSyncError('请先预览当前同步参数，确认涉及的跨系部班级后再执行落库。');
+        return;
+      }
+
       if (!currentAccount) {
         setSyncError('当前登录会话尚未恢复，请稍后重试。');
         return;
@@ -197,14 +237,18 @@ export function SemesterCourseScheduleSyncPageContent({
 
       if (!storedSession) {
         openLoginModal({
-          pendingAction: { mode, values },
+          pendingAction: {
+            mode,
+            relatedClassSyncFingerprint: result?.relatedClassSyncFingerprint,
+            values,
+          },
         });
         return;
       }
 
-      await performSync(storedSession, values, mode);
+      await performSync(storedSession, values, mode, result?.relatedClassSyncFingerprint);
     },
-    [currentAccount, openLoginModal, performSync, storedSession, syncForm],
+    [currentAccount, openLoginModal, performSync, result, storedSession, syncForm],
   );
 
   useEffect(() => {
@@ -328,7 +372,7 @@ export function SemesterCourseScheduleSyncPageContent({
           </div>
         ) : null}
 
-        <Form form={syncForm} layout="vertical">
+        <Form form={syncForm} layout="vertical" onValuesChange={() => setResult(null)}>
           <ResponsiveGrid className="gap-4" columns={{ compact: 1, wide: 3 }}>
             <AcademicSemesterPeriodFormItems
               loading={isLoadingOptions}
@@ -379,13 +423,22 @@ export function SemesterCourseScheduleSyncPageContent({
             </Button>
             <Popconfirm
               cancelText="取消"
-              description="后端会重新拉取 upstream 教学计划，并创建或更新本地课程表。"
+              description="后端会重新拉取 upstream 数据，自动补齐预览中列出的相关班级，再创建或更新本地课程表。"
               okButtonProps={{ loading: isSyncing }}
               okText="确认落库"
               title="确认执行学期课表同步？"
               onConfirm={() => void handleRunSync('sync')}
             >
-              <Button danger disabled={isLoadingOptions || isPreviewing} loading={isSyncing}>
+              <Button
+                danger
+                disabled={
+                  isLoadingOptions ||
+                  isPreviewing ||
+                  !result?.dryRun ||
+                  !result.relatedClassSyncFingerprint
+                }
+                loading={isSyncing}
+              >
                 执行落库
               </Button>
             </Popconfirm>
@@ -426,6 +479,47 @@ export function SemesterCourseScheduleSyncPageContent({
               type={result.dryRun ? 'info' : result.failedCount > 0 ? 'warning' : 'success'}
               title={resolveResultSemanticMessage(result)}
             />
+
+            <Card size="small" title="本次课程涉及的行政班级">
+              <Descriptions size="small" column={4}>
+                <Descriptions.Item label="涉及班级">
+                  {result.relatedClassSync.referencedCount}
+                </Descriptions.Item>
+                <Descriptions.Item label="新增">
+                  {result.relatedClassSync.createdCount}
+                </Descriptions.Item>
+                <Descriptions.Item label="更新">
+                  {result.relatedClassSync.updatedCount}
+                </Descriptions.Item>
+                <Descriptions.Item label="已存在">
+                  {result.relatedClassSync.existsCount}
+                </Descriptions.Item>
+              </Descriptions>
+              <Table
+                pagination={false}
+                rowKey="classId"
+                size="small"
+                dataSource={result.relatedClassSync.departmentGroups.flatMap(
+                  (group) => group.items,
+                )}
+                columns={[
+                  { title: '所属系部', dataIndex: 'departmentName' },
+                  { title: '班级', dataIndex: 'className' },
+                  { title: '年级', dataIndex: 'gradeYear' },
+                  {
+                    title: '范围',
+                    dataIndex: 'isExternalDepartment',
+                    render: (external: boolean) =>
+                      external ? <Tag color="blue">跨系部</Tag> : <Tag>本系部</Tag>,
+                  },
+                  {
+                    title: '同步动作',
+                    dataIndex: 'action',
+                    render: (action: string) => formatReferencedClassSyncAction(action),
+                  },
+                ]}
+              />
+            </Card>
 
             <div className="flex flex-col gap-3">
               <pre className="overflow-x-auto rounded-xl border border-line-default bg-bg-layout p-4 text-sm leading-6 text-text">

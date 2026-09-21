@@ -40,6 +40,31 @@ export type CourseScheduleSyncFailure = {
   sstsTeachingClassId: string | null;
 };
 
+export type ReferencedClassSyncItem = {
+  action: string;
+  classId: string;
+  classCode: string | null;
+  className: string;
+  departmentId: string;
+  departmentName: string;
+  isExternalDepartment: boolean;
+  gradeYear: number;
+  admissionCategory: 'JUNIOR_HIGH_ORIGIN' | 'HIGH_SCHOOL_ORIGIN' | null;
+};
+
+export type ReferencedClassSyncSummary = {
+  referencedCount: number;
+  createdCount: number;
+  updatedCount: number;
+  existsCount: number;
+  departmentGroups: Array<{
+    departmentId: string;
+    departmentName: string;
+    isExternalDepartment: boolean;
+    items: ReferencedClassSyncItem[];
+  }>;
+};
+
 export type CourseScheduleSyncResult = {
   createdCount: number;
   dryRun?: boolean;
@@ -53,6 +78,8 @@ export type CourseScheduleSyncResult = {
   semesterId: number;
   upstreamSessionToken?: string | null;
   updatedCount: number;
+  relatedClassSync: ReferencedClassSyncSummary;
+  relatedClassSyncFingerprint?: string;
 };
 
 export type CourseScheduleSyncInput = {
@@ -62,6 +89,7 @@ export type CourseScheduleSyncInput = {
   semester: string;
   teacherId?: string;
   upstreamSessionToken: string;
+  relatedClassSyncFingerprint?: string;
 };
 
 export type CourseScheduleSyncSemesterOption = {
@@ -127,6 +155,13 @@ const SYNC_COURSE_SCHEDULES_MUTATION = `
         sstsCourseId
         sstsTeachingClassId
       }
+      relatedClassSync {
+        referencedCount createdCount updatedCount existsCount
+        departmentGroups {
+          departmentId departmentName isExternalDepartment
+          items { action classId classCode className departmentId departmentName isExternalDepartment gradeYear admissionCategory }
+        }
+      }
     }
   }
 `;
@@ -137,6 +172,8 @@ const DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION = `
   ) {
     dryRunSyncCourseSchedulesFromUpstreamDepartmentCurriculumPlans(input: $input) {
       dryRun
+      upstreamSessionToken
+      expiresAt
       semesterId
       fetchedCount
       previewedCount
@@ -155,6 +192,14 @@ const DRY_RUN_SYNC_COURSE_SCHEDULES_MUTATION = `
         details
         sstsCourseId
         sstsTeachingClassId
+      }
+      relatedClassSyncFingerprint
+      relatedClassSync {
+        referencedCount createdCount updatedCount existsCount
+        departmentGroups {
+          departmentId departmentName isExternalDepartment
+          items { action classId classCode className departmentId departmentName isExternalDepartment gradeYear admissionCategory }
+        }
       }
     }
   }
@@ -198,6 +243,7 @@ function normalizeCourseScheduleSyncInput(input: CourseScheduleSyncInput) {
     semester: normalizeRequiredTextValue(String(input.semester || ''), { label: '学期' }),
     teacherId: normalizeOptionalTextValue(input.teacherId, 'to_undefined'),
     upstreamSessionToken: input.upstreamSessionToken,
+    relatedClassSyncFingerprint: input.relatedClassSyncFingerprint,
   };
 }
 
@@ -286,6 +332,14 @@ export function resolveCourseScheduleSyncErrorMessage(
 ) {
   if (isAcademicSemesterNotFoundError(error)) {
     return '当前学年与学期在本地 academic semester 中不存在，请先补齐学期数据后再同步。';
+  }
+
+  const detail = readUpstreamGraphQLErrorDetail(error);
+  if (
+    detail?.code === 'ACADEMIC_COURSE_SCHEDULE_SYNC_PREVIEW_STALE' ||
+    detail?.errorCode === 'ACADEMIC_COURSE_SCHEDULE_SYNC_PREVIEW_STALE'
+  ) {
+    return '课程或相关班级数据已变化，请重新预览后再执行落库。';
   }
 
   return resolveUpstreamErrorMessage(
