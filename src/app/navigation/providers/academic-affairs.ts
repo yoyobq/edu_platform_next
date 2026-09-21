@@ -8,7 +8,7 @@ import {
   hasAcademicTimetableAccess,
   hasAcademicTimetableManagerAccess,
   hasAcademicWorkloadAccess,
-  hasClassAdviserGovernanceAccess,
+  hasClassAdviserGovernanceNavigationAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
@@ -330,7 +330,7 @@ export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filte
   ];
 
   const studentAffairsChildren: NavigationLeafItem[] = [
-    ...(hasClassAdviserGovernanceAccess({
+    ...(hasClassAdviserGovernanceNavigationAccess({
       accessGroup: filter.accessGroup,
       slotGroup: filter.slotGroup,
     })

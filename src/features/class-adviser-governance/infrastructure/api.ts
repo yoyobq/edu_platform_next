@@ -6,14 +6,18 @@ import { executeGraphQL, isGraphQLIngressError } from '@/shared/graphql';
 
 import {
   normalizeAssignClassAdviserByStaffIdInput,
+  normalizeEndClassAdviserGovernancePostInput,
   normalizeListClassAdviserGovernanceClassesInput,
 } from '../application/input-normalization';
 import type {
   AssignClassAdviserByStaffIdInput,
   AssignClassAdviserByStaffIdResult,
   ClassAdviserGovernanceClass,
+  EndClassAdviserGovernancePostInput,
+  EndClassAdviserGovernancePostResult,
   ListClassAdviserGovernanceClassesInput,
   LocalDepartmentOption,
+  ManagedDepartmentOption,
 } from '../application/types';
 
 type ListClassAdviserGovernanceClassesResponse = {
@@ -24,8 +28,16 @@ type AssignClassAdviserByStaffIdResponse = {
   assignClassAdviserByStaffId: AssignClassAdviserByStaffIdResult;
 };
 
+type EndClassAdviserGovernancePostResponse = {
+  endClassAdviserGovernancePost: EndClassAdviserGovernancePostResult;
+};
+
 type DepartmentsResponse = {
   departments: LocalDepartmentOption[];
+};
+
+type MyManagedDepartmentsResponse = {
+  myManagedDepartments: ManagedDepartmentOption[];
 };
 
 const DEPARTMENTS_QUERY = `
@@ -35,6 +47,18 @@ const DEPARTMENTS_QUERY = `
       departmentName
       isEnabled
       shortName
+    }
+  }
+`;
+
+const MY_MANAGED_DEPARTMENTS_QUERY = `
+  query ClassAdviserGovernanceManagedDepartments {
+    myManagedDepartments {
+      id
+      departmentCode
+      departmentName
+      shortName
+      slotGroups
     }
   }
 `;
@@ -49,6 +73,7 @@ const LIST_CLASS_ADVISER_GOVERNANCE_CLASSES_QUERY = `
       gradeYear
       studentCount
       lastObservedAt
+      canManage
       canAssign
       activeAdvisers {
         postId
@@ -60,6 +85,22 @@ const LIST_CLASS_ADVISER_GOVERNANCE_CLASSES_QUERY = `
         endAt
         remarks
       }
+    }
+  }
+`;
+
+const END_CLASS_ADVISER_GOVERNANCE_POST_MUTATION = `
+  mutation EndClassAdviserGovernancePost($input: EndClassAdviserGovernancePostInput!) {
+    endClassAdviserGovernancePost(input: $input) {
+      changed
+      classId
+      classCode
+      className
+      postId
+      staffId
+      staffName
+      endedAt
+      bindingStatus
     }
   }
 `;
@@ -116,6 +157,19 @@ export async function listLocalDepartmentOptions() {
   }
 }
 
+export async function listMyManagedDepartmentOptions() {
+  try {
+    const response = await requestGraphQL<MyManagedDepartmentsResponse, Record<string, never>>(
+      MY_MANAGED_DEPARTMENTS_QUERY,
+      {},
+    );
+
+    return response.myManagedDepartments;
+  } catch (error) {
+    throw new Error(resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载任职系部。'));
+  }
+}
+
 export async function listClassAdviserGovernanceClasses(
   input: ListClassAdviserGovernanceClassesInput = {},
 ) {
@@ -142,4 +196,15 @@ export async function assignClassAdviserByStaffId(input: AssignClassAdviserBySta
   });
 
   return response.assignClassAdviserByStaffId;
+}
+
+export async function endClassAdviserGovernancePost(input: EndClassAdviserGovernancePostInput) {
+  const response = await requestGraphQL<
+    EndClassAdviserGovernancePostResponse,
+    { input: ReturnType<typeof normalizeEndClassAdviserGovernancePostInput> }
+  >(END_CLASS_ADVISER_GOVERNANCE_POST_MUTATION, {
+    input: normalizeEndClassAdviserGovernancePostInput(input),
+  });
+
+  return response.endClassAdviserGovernancePost;
 }

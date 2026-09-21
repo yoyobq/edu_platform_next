@@ -6,6 +6,7 @@ import {
   LoginOutlined,
   ReloadOutlined,
   SearchOutlined,
+  StopOutlined,
   TeamOutlined,
   UserAddOutlined,
 } from '@ant-design/icons';
@@ -48,6 +49,7 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
+import { resolveClassAdviserGovernanceRowAction } from '../application/row-action-policy';
 import { resolveClassAdviserGovernanceStaffDirectory } from '../application/staff-directory-cache-workflow';
 import {
   resolveAssignableClassAdviserStaffId,
@@ -58,11 +60,14 @@ import type {
   AssignClassAdviserByStaffIdResult,
   ClassAdviserGovernanceActiveAdviser,
   ClassAdviserGovernanceClass,
+  EndClassAdviserGovernancePostResult,
 } from '../application/types';
 import {
   assignClassAdviserByStaffId,
+  endClassAdviserGovernancePost,
   listClassAdviserGovernanceClasses,
   listLocalDepartmentOptions,
+  listMyManagedDepartmentOptions,
   resolveClassAdviserGovernanceErrorMessage,
 } from '../infrastructure/api';
 
@@ -70,6 +75,7 @@ export type ClassAdviserGovernancePageContentProps = {
   canSelectDepartment?: boolean;
   currentAccount: UpstreamAccountIdentity | null;
   defaultDepartmentId?: string | null;
+  isAdmin?: boolean;
   lockedUpstreamLoginUserId?: string | null;
 };
 
@@ -84,6 +90,10 @@ type AssignFormValues = {
   remarks?: string;
   staffId: string;
   staffName?: string;
+};
+
+type EndFormValues = {
+  reason: string;
 };
 
 function formatOptionalValue(value: number | string | null | undefined) {
@@ -155,13 +165,17 @@ function renderLocalStaffTag(hasLocalStaff: boolean) {
   return hasLocalStaff ? <Tag color="green">本地 staff</Tag> : <Tag>预写 staffId</Tag>;
 }
 
-function renderBindingStatus(result: AssignClassAdviserByStaffIdResult) {
+function renderBindingStatus(result: {
+  bindingStatus: AssignClassAdviserByStaffIdResult['bindingStatus'];
+}) {
   if (!result.bindingStatus) {
     return <Tag>未收敛 binding</Tag>;
   }
 
   return result.bindingStatus === 'ACTIVE' ? (
     <Tag color="green">ACTIVE</Tag>
+  ) : result.bindingStatus === 'ENDED' ? (
+    <Tag>ENDED</Tag>
   ) : (
     <Tag color="orange">INACTIVE</Tag>
   );
@@ -197,8 +211,12 @@ function renderClassTitle(record: ClassAdviserGovernanceClass) {
 
 function buildColumns(input: {
   departmentLabelById: ReadonlyMap<string, string>;
-  isAssigning: boolean;
+  isMutating: boolean;
   onOpenAssign: (record: ClassAdviserGovernanceClass) => void;
+  onOpenEnd: (
+    record: ClassAdviserGovernanceClass,
+    adviser: ClassAdviserGovernanceActiveAdviser,
+  ) => void;
 }): ColumnsType<ClassAdviserGovernanceClass> {
   return [
     {
@@ -265,20 +283,45 @@ function buildColumns(input: {
       width: 96,
     },
     {
-      dataIndex: 'canAssign',
-      key: 'canAssign',
-      render: (canAssign: boolean) =>
-        canAssign ? <Tag color="gold">可指派</Tag> : <Tag color="green">已配置</Tag>,
+      dataIndex: 'activeAdvisers',
+      key: 'status',
+      render: (activeAdvisers: ClassAdviserGovernanceActiveAdviser[]) =>
+        activeAdvisers.length === 0 ? (
+          <Tag color="gold">缺失</Tag>
+        ) : (
+          <Tag color="green">已配置</Tag>
+        ),
       title: '状态',
       width: 110,
     },
     {
       fixed: 'right',
       key: 'action',
-      render: (_value: unknown, record) =>
-        record.canAssign ? (
+      render: (_value: unknown, record) => {
+        const activeAdviser = record.activeAdvisers[0];
+        const action = resolveClassAdviserGovernanceRowAction(record);
+
+        if (action === 'READ_ONLY') {
+          return <span className="text-sm text-text-secondary">只读</span>;
+        }
+
+        if (action === 'END' && activeAdviser) {
+          return (
+            <Button
+              danger
+              disabled={input.isMutating}
+              icon={<StopOutlined />}
+              size="small"
+              onClick={() => input.onOpenEnd(record, activeAdviser)}
+            >
+              结束任职
+            </Button>
+          );
+        }
+
+        return action === 'ASSIGN' ? (
           <Button
-            disabled={input.isAssigning}
+            disabled={input.isMutating}
             icon={<UserAddOutlined />}
             size="small"
             type="primary"
@@ -292,7 +335,8 @@ function buildColumns(input: {
               不可追加
             </Button>
           </Tooltip>
-        ),
+        );
+      },
       title: '操作',
       width: 140,
     },
@@ -331,6 +375,7 @@ export function ClassAdviserGovernancePageContent({
   canSelectDepartment: rawCanSelectDepartment = false,
   currentAccount,
   defaultDepartmentId = null,
+  isAdmin = false,
   lockedUpstreamLoginUserId = null,
 }: ClassAdviserGovernancePageContentProps) {
   const { message } = AntApp.useApp();
@@ -341,15 +386,22 @@ export function ClassAdviserGovernancePageContent({
   const [filterForm] = Form.useForm<FilterFormValues>();
   const selectedGradeYear = Form.useWatch('gradeYear', filterForm);
   const [assignForm] = Form.useForm<AssignFormValues>();
+  const [endForm] = Form.useForm<EndFormValues>();
   const [classes, setClasses] = useState<ClassAdviserGovernanceClass[]>([]);
   const [departmentOptions, setDepartmentOptions] = useState<DepartmentSelectOption[]>([]);
   const [departmentOptionsError, setDepartmentOptionsError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [assignResult, setAssignResult] = useState<AssignClassAdviserByStaffIdResult | null>(null);
+  const [endResult, setEndResult] = useState<EndClassAdviserGovernancePostResult | null>(null);
   const [selectedClass, setSelectedClass] = useState<ClassAdviserGovernanceClass | null>(null);
+  const [endingSelection, setEndingSelection] = useState<{
+    adviser: ClassAdviserGovernanceActiveAdviser;
+    classRecord: ClassAdviserGovernanceClass;
+  } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingDepartments, setIsLoadingDepartments] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
+  const [isEnding, setIsEnding] = useState(false);
   const [staffDirectoryResult, setStaffDirectoryResult] = useState<StaffDirectoryResult | null>(
     null,
   );
@@ -360,6 +412,7 @@ export function ClassAdviserGovernancePageContent({
     [staffDirectoryResult],
   );
   const isAssignModalOpen = selectedClass !== null;
+  const isEndModalOpen = endingSelection !== null;
   const departmentLabelById = useMemo(
     () => new Map(departmentOptions.map((option) => [option.value, option.label])),
     [departmentOptions],
@@ -381,38 +434,29 @@ export function ClassAdviserGovernancePageContent({
     ? `${upstreamSession.accountId}:${upstreamSession.upstreamSessionToken}`
     : 'none';
 
-  const loadClasses = useCallback(
-    async (values: FilterFormValues) => {
-      const departmentId = canSelectDepartment ? values.departmentId : scopedDepartmentId;
+  const loadClasses = useCallback(async (values: FilterFormValues) => {
+    const departmentId = values.departmentId;
 
-      if (!canSelectDepartment && !departmentId) {
-        setClasses([]);
-        setListError('当前账号缺少归口系，暂时无法加载班主任任职列表');
-        return;
-      }
+    setIsLoading(true);
+    setListError(null);
 
-      setIsLoading(true);
-      setListError(null);
+    try {
+      const nextClasses = await listClassAdviserGovernanceClasses({
+        departmentId,
+        keyword: values.keyword,
+        onlyMissing: values.onlyMissing,
+      });
 
-      try {
-        const nextClasses = await listClassAdviserGovernanceClasses({
-          departmentId,
-          keyword: values.keyword,
-          onlyMissing: values.onlyMissing,
-        });
-
-        setClasses(nextClasses);
-      } catch (error) {
-        setClasses([]);
-        setListError(
-          resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载班主任任职列表。'),
-        );
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [canSelectDepartment, scopedDepartmentId],
-  );
+      setClasses(nextClasses);
+    } catch (error) {
+      setClasses([]);
+      setListError(
+        resolveClassAdviserGovernanceErrorMessage(error, '暂时无法加载班主任任职列表。'),
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
 
   const loadDepartments = useCallback(async () => {
     setIsLoadingDepartments(true);
@@ -433,7 +477,14 @@ export function ClassAdviserGovernancePageContent({
     };
 
     try {
-      const departments = await listLocalDepartmentOptions();
+      const departments = isAdmin
+        ? await listLocalDepartmentOptions()
+        : (await listMyManagedDepartmentOptions()).filter((department) =>
+            department.slotGroups.some(
+              (slotGroup) =>
+                slotGroup === 'ACADEMIC_OFFICER' || slotGroup === 'STUDENT_AFFAIRS_OFFICER',
+            ),
+          );
       const nextOptions = initialDepartmentId
         ? ensureDepartmentSelectOption(buildDepartmentSelectOptions(departments), {
             id: initialDepartmentId,
@@ -463,7 +514,7 @@ export function ClassAdviserGovernancePageContent({
     } finally {
       setIsLoadingDepartments(false);
     }
-  }, [canSelectDepartment, fallbackDepartmentLabel, filterForm, initialDepartmentId]);
+  }, [canSelectDepartment, fallbackDepartmentLabel, filterForm, initialDepartmentId, isAdmin]);
 
   const loadStaffDirectory = useCallback(
     async (input: { forceRefresh?: boolean; session?: StoredUpstreamSession | null } = {}) => {
@@ -563,14 +614,60 @@ export function ClassAdviserGovernancePageContent({
     }
   }, [assignForm, message, refreshCurrentList, selectedClass, staffDirectoryTeachers]);
 
+  const handleOpenEnd = useCallback(
+    (classRecord: ClassAdviserGovernanceClass, adviser: ClassAdviserGovernanceActiveAdviser) => {
+      setEndResult(null);
+      endForm.resetFields();
+      setEndingSelection({ adviser, classRecord });
+    },
+    [endForm],
+  );
+
+  const handleCloseEnd = useCallback(() => {
+    if (isEnding) {
+      return;
+    }
+
+    setEndingSelection(null);
+    endForm.resetFields();
+  }, [endForm, isEnding]);
+
+  const handleEnd = useCallback(async () => {
+    if (!endingSelection) {
+      return;
+    }
+
+    const values = await endForm.validateFields();
+    setIsEnding(true);
+
+    try {
+      const result = await endClassAdviserGovernancePost({
+        classId: endingSelection.classRecord.classId,
+        postId: endingSelection.adviser.postId,
+        reason: values.reason,
+      });
+      setEndResult(result);
+      message.success(result.changed ? '已结束班主任任职。' : '该任职此前已经结束。');
+      setEndingSelection(null);
+      endForm.resetFields();
+      await refreshCurrentList();
+    } catch (error) {
+      message.error(resolveClassAdviserGovernanceErrorMessage(error, '暂时无法结束班主任任职。'));
+      await refreshCurrentList();
+    } finally {
+      setIsEnding(false);
+    }
+  }, [endForm, endingSelection, message, refreshCurrentList]);
+
   const columns = useMemo(
     () =>
       buildColumns({
         departmentLabelById,
-        isAssigning,
+        isMutating: isAssigning || isEnding,
         onOpenAssign: handleOpenAssign,
+        onOpenEnd: handleOpenEnd,
       }),
-    [departmentLabelById, handleOpenAssign, isAssigning],
+    [departmentLabelById, handleOpenAssign, handleOpenEnd, isAssigning, isEnding],
   );
 
   useEffect(() => {
@@ -613,7 +710,7 @@ export function ClassAdviserGovernancePageContent({
         .sort(compareClassesByGradeDesc),
     [classes, selectedGradeYear],
   );
-  const missingCount = visibleClasses.filter((item) => item.canAssign).length;
+  const missingCount = visibleClasses.filter((item) => item.activeAdvisers.length === 0).length;
   const configuredCount = visibleClasses.length - missingCount;
 
   return (
@@ -654,7 +751,9 @@ export function ClassAdviserGovernancePageContent({
                 loading={isLoadingDepartments}
                 name="departmentId"
                 options={departmentOptions}
-                placeholder={canSelectDepartment ? '选择系部，清空可查全院' : '当前账号归口系'}
+                placeholder={
+                  isAdmin ? '选择系部，清空可查全部系部' : '选择任职系部，清空可查全部授权系部'
+                }
                 selectProps={{
                   allowClear: canSelectDepartment,
                 }}
@@ -859,6 +958,58 @@ export function ClassAdviserGovernancePageContent({
         ) : null}
       </Modal>
 
+      <Modal
+        confirmLoading={isEnding}
+        okButtonProps={{ danger: true }}
+        okText="确认结束"
+        open={isEndModalOpen}
+        title="结束班主任任职"
+        onCancel={handleCloseEnd}
+        onOk={() => {
+          void handleEnd();
+        }}
+      >
+        {endingSelection ? (
+          <div className="flex flex-col gap-4">
+            <Descriptions bordered column={1} size="small">
+              <Descriptions.Item label="班级">
+                {endingSelection.classRecord.className}（{endingSelection.classRecord.classCode}）
+              </Descriptions.Item>
+              <Descriptions.Item label="现任班主任">
+                {buildAdviserDisplayName(endingSelection.adviser)}（
+                {endingSelection.adviser.staffId}）
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Alert
+              showIcon
+              description="结束后班级会暂时缺失班主任，需要由新教师通过学生归属核对页自助认定，或由管理员/本系学工重新人工指定。"
+              title="系统不会自动判断或替换新班主任"
+              type="warning"
+            />
+
+            <Form<EndFormValues> form={endForm} layout="vertical" requiredMark>
+              <Form.Item
+                label="结束原因"
+                name="reason"
+                rules={[
+                  { required: true, whitespace: true, message: '请输入结束原因' },
+                  { max: 500, message: '结束原因不能超过 500 个字符' },
+                ]}
+              >
+                <Input.TextArea
+                  autoFocus
+                  autoSize={{ maxRows: 6, minRows: 3 }}
+                  maxLength={500}
+                  placeholder="请说明结束本次任职的原因"
+                  showCount
+                />
+              </Form.Item>
+            </Form>
+          </div>
+        ) : null}
+      </Modal>
+
       {assignResult ? (
         <Card title="最近一次指派结果">
           <Descriptions bordered column={{ md: 3, sm: 1, xs: 1 }} size="small">
@@ -884,6 +1035,27 @@ export function ClassAdviserGovernancePageContent({
             </Descriptions.Item>
             <Descriptions.Item label="postId">
               {formatOptionalValue(assignResult.postId)}
+            </Descriptions.Item>
+          </Descriptions>
+        </Card>
+      ) : null}
+
+      {endResult ? (
+        <Card title="最近一次结束结果">
+          <Descriptions bordered column={{ md: 3, sm: 1, xs: 1 }} size="small">
+            <Descriptions.Item label="结果">
+              {endResult.changed ? <Tag color="green">已结束</Tag> : <Tag>此前已结束</Tag>}
+            </Descriptions.Item>
+            <Descriptions.Item label="班级">{endResult.className}</Descriptions.Item>
+            <Descriptions.Item label="原班主任">
+              {formatOptionalValue(endResult.staffName)}（{endResult.staffId}）
+            </Descriptions.Item>
+            <Descriptions.Item label="结束时间">
+              {formatDateTime(endResult.endedAt)}
+            </Descriptions.Item>
+            <Descriptions.Item label="binding">{renderBindingStatus(endResult)}</Descriptions.Item>
+            <Descriptions.Item label="postId">
+              {formatOptionalValue(endResult.postId)}
             </Descriptions.Item>
           </Descriptions>
         </Card>

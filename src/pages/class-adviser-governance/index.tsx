@@ -13,6 +13,7 @@ type ClassAdviserGovernancePageLoaderData = {
   currentAccount?: UpstreamAccountIdentity;
   defaultDepartmentId?: string | null;
   identityStaffId?: string | null;
+  isAdmin?: boolean;
   isForbidden?: boolean;
   slotGroup?: readonly string[];
   userAccessGroup?: readonly AuthAccessGroup[];
@@ -30,6 +31,7 @@ export function ClassAdviserGovernancePage() {
       canSelectDepartment={loaderData.canSelectDepartment}
       currentAccount={loaderData.currentAccount}
       defaultDepartmentId={loaderData.defaultDepartmentId}
+      isAdmin={loaderData.isAdmin}
       lockedUpstreamLoginUserId={resolveUpstreamLoginLockedUserId({
         accessGroup: loaderData.userAccessGroup,
         slotGroup: loaderData.slotGroup,

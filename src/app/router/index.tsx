@@ -988,7 +988,6 @@ async function classAdviserGovernancePageLoader({ request }: LoaderFunctionArgs)
 
   const departmentScope = resolveClassAdviserGovernanceDepartmentScope({
     accessGroup: snapshot.userInfo.accessGroup,
-    staffDepartmentId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.departmentId : null,
   });
 
   if (departmentScope.isForbidden) {
@@ -1004,6 +1003,7 @@ async function classAdviserGovernancePageLoader({ request }: LoaderFunctionArgs)
       displayName: snapshot.displayName,
     },
     defaultDepartmentId: departmentScope.defaultDepartmentId,
+    isAdmin: snapshot.userInfo.accessGroup.includes('ADMIN'),
     identityStaffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     isForbidden: false,
     slotGroup: snapshot.slotGroup,

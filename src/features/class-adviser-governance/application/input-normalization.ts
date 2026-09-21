@@ -7,6 +7,7 @@ import {
 
 import type {
   AssignClassAdviserByStaffIdInput,
+  EndClassAdviserGovernancePostInput,
   ListClassAdviserGovernanceClassesInput,
 } from './types';
 
@@ -14,6 +15,22 @@ function compactInput<TValue extends Record<string, unknown>>(input: TValue) {
   return Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
   ) as Partial<TValue>;
+}
+
+export function normalizeEndClassAdviserGovernancePostInput(
+  input: EndClassAdviserGovernancePostInput,
+) {
+  const classId = normalizeRequiredTextValue(input.classId, { label: '班级 ID' });
+  const reason = normalizeRequiredTextValue(input.reason, { label: '结束原因' });
+  const postId = typeof input.postId === 'string' ? Number(input.postId) : input.postId;
+
+  assertMaxLength(classId, 8, '班级 ID');
+  assertMaxLength(reason, 500, '结束原因');
+  if (!Number.isInteger(postId) || postId <= 0) {
+    throw new Error('任职 ID 必须是正整数。');
+  }
+
+  return { classId, postId, reason };
 }
 
 function assertMaxLength(value: string | undefined, maxLength: number, label: string) {

@@ -190,9 +190,24 @@ export function hasClassAdviserGovernanceAccess(input: {
   );
 }
 
+export function hasClassAdviserGovernanceNavigationAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  const accessGroup = input.accessGroup ?? [];
+
+  if (accessGroup.includes('ADMIN')) {
+    return true;
+  }
+
+  return (
+    accessGroup.includes('STAFF') &&
+    (input.slotGroup ?? []).includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP)
+  );
+}
+
 export function resolveClassAdviserGovernanceDepartmentScope(input: {
   accessGroup?: readonly AuthAccessGroup[];
-  staffDepartmentId?: string | null;
 }) {
   const accessGroup = input.accessGroup ?? [];
 
@@ -204,12 +219,10 @@ export function resolveClassAdviserGovernanceDepartmentScope(input: {
     };
   }
 
-  const staffDepartmentId = input.staffDepartmentId?.trim() || null;
-
   return {
-    canSelectDepartment: false,
-    defaultDepartmentId: staffDepartmentId,
-    isForbidden: !staffDepartmentId,
+    canSelectDepartment: true,
+    defaultDepartmentId: null,
+    isForbidden: false,
   };
 }
 

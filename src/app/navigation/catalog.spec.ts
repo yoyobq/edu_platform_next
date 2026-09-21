@@ -394,7 +394,6 @@ describe('navigation catalog', () => {
       'calendar-schedule',
       'academic-assistant',
       'class-affairs',
-      'student-affairs',
       'academic-affairs',
       'labs',
     ]);
@@ -406,9 +405,7 @@ describe('navigation catalog', () => {
       '/academic-affairs/academic-workload-deduction-summary',
       '/academic-affairs/external-teacher-compensation',
     ]);
-    expect(findGroup(staffItems, 'student-affairs')?.children.map((item) => item.key)).toEqual([
-      '/student-affairs/class-adviser-governance',
-    ]);
+    expect(findGroup(staffItems, 'student-affairs')).toBeUndefined();
     expect(findGroup(staffItems, 'calendar-schedule')?.children.map((item) => item.key)).toEqual([
       '/calendar-schedule/semester-calendar',
       '/calendar-schedule/weekly-timetable',
@@ -474,7 +471,7 @@ describe('navigation catalog', () => {
         slotGroup: ['ACADEMIC_OFFICER'],
         appEnv: 'dev',
       }),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it('keeps route guard access checks aligned with filtered navigation results', () => {

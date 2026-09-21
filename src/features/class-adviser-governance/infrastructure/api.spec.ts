@@ -14,13 +14,16 @@ vi.mock('@/shared/graphql', () => ({
 
 import {
   normalizeAssignClassAdviserByStaffIdInput,
+  normalizeEndClassAdviserGovernancePostInput,
   normalizeListClassAdviserGovernanceClassesInput,
 } from '../application/input-normalization';
 
 import {
   assignClassAdviserByStaffId,
+  endClassAdviserGovernancePost,
   listClassAdviserGovernanceClasses,
   listLocalDepartmentOptions,
+  listMyManagedDepartmentOptions,
   resolveClassAdviserGovernanceErrorMessage,
 } from './api';
 
@@ -101,11 +104,36 @@ describe('class-adviser-governance api', () => {
     ).toThrow('教职工 ID 不能包含空白或单引号。');
   });
 
+  it('normalizes end input and validates reason and post id', () => {
+    expect(
+      normalizeEndClassAdviserGovernancePostInput({
+        classId: ' C001 ',
+        postId: '21',
+        reason: ' 岗位调整 ',
+      }),
+    ).toEqual({ classId: 'C001', postId: 21, reason: '岗位调整' });
+    expect(() =>
+      normalizeEndClassAdviserGovernancePostInput({
+        classId: 'C001',
+        postId: 0,
+        reason: '岗位调整',
+      }),
+    ).toThrow('任职 ID 必须是正整数。');
+    expect(() =>
+      normalizeEndClassAdviserGovernancePostInput({
+        classId: 'C001',
+        postId: 21,
+        reason: ' ',
+      }),
+    ).toThrow('请输入结束原因。');
+  });
+
   it('requests governance classes with normalized input', async () => {
     const payload = [
       {
         activeAdvisers: [],
         canAssign: true,
+        canManage: true,
         classCode: '1021904',
         classId: 'C001',
         className: '19机电一体化4班',
@@ -163,6 +191,25 @@ describe('class-adviser-governance api', () => {
     );
   });
 
+  it('loads active managed departments for scoped staff', async () => {
+    const payload = [
+      {
+        departmentCode: '0301',
+        departmentName: '智能制造学院',
+        id: 'ORG0301',
+        shortName: '智造',
+        slotGroups: ['ACADEMIC_OFFICER'],
+      },
+    ];
+    executeGraphQLMock.mockResolvedValueOnce({ myManagedDepartments: payload });
+
+    await expect(listMyManagedDepartmentOptions()).resolves.toEqual(payload);
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('ClassAdviserGovernanceManagedDepartments'),
+      {},
+    );
+  });
+
   it('assigns class adviser by staff id with normalized input', async () => {
     const payload = {
       bindingStatus: null,
@@ -199,6 +246,33 @@ describe('class-adviser-governance api', () => {
           staffName: '张老师',
         },
       },
+    );
+  });
+
+  it('ends class adviser post with normalized reason', async () => {
+    const payload = {
+      bindingStatus: 'ENDED',
+      changed: true,
+      classCode: '1021904',
+      classId: 'C001',
+      className: '19机电一体化4班',
+      endedAt: '2026-09-21T08:00:00.000Z',
+      postId: 10,
+      staffId: 'T1001',
+      staffName: '张老师',
+    };
+    executeGraphQLMock.mockResolvedValueOnce({ endClassAdviserGovernancePost: payload });
+
+    await expect(
+      endClassAdviserGovernancePost({
+        classId: ' C001 ',
+        postId: '10',
+        reason: ' 岗位调整 ',
+      }),
+    ).resolves.toEqual(payload);
+    expect(executeGraphQLMock).toHaveBeenCalledWith(
+      expect.stringContaining('EndClassAdviserGovernancePost'),
+      { input: { classId: 'C001', postId: 10, reason: '岗位调整' } },
     );
   });
 

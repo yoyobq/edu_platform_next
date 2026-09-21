@@ -22,6 +22,7 @@ import {
   hasAcademicWorkloadManagerAccess,
   hasAdminAccess,
   hasClassAdviserGovernanceAccess,
+  hasClassAdviserGovernanceNavigationAccess,
   hasClassAffairsCourseResultsAccess,
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
@@ -237,6 +238,22 @@ describe('auth access policy', () => {
     expect(hasClassAdviserGovernanceAccess({ accessGroup: ['STUDENT'] })).toBe(false);
   });
 
+  it('hides class adviser governance navigation from academic officers', () => {
+    expect(hasClassAdviserGovernanceNavigationAccess({ accessGroup: ['ADMIN'] })).toBe(true);
+    expect(
+      hasClassAdviserGovernanceNavigationAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['STUDENT_AFFAIRS_OFFICER'],
+      }),
+    ).toBe(true);
+    expect(
+      hasClassAdviserGovernanceNavigationAccess({
+        accessGroup: ['STAFF'],
+        slotGroup: ['ACADEMIC_OFFICER'],
+      }),
+    ).toBe(false);
+  });
+
   it('resolves class adviser governance department scope from the current account', () => {
     expect(resolveClassAdviserGovernanceDepartmentScope({ accessGroup: ['ADMIN'] })).toEqual({
       canSelectDepartment: true,
@@ -246,22 +263,20 @@ describe('auth access policy', () => {
     expect(
       resolveClassAdviserGovernanceDepartmentScope({
         accessGroup: ['STAFF'],
-        staffDepartmentId: ' ORG0306 ',
       }),
     ).toEqual({
-      canSelectDepartment: false,
-      defaultDepartmentId: 'ORG0306',
+      canSelectDepartment: true,
+      defaultDepartmentId: null,
       isForbidden: false,
     });
     expect(
       resolveClassAdviserGovernanceDepartmentScope({
         accessGroup: ['STAFF'],
-        staffDepartmentId: null,
       }),
     ).toEqual({
-      canSelectDepartment: false,
+      canSelectDepartment: true,
       defaultDepartmentId: null,
-      isForbidden: true,
+      isForbidden: false,
     });
   });
 

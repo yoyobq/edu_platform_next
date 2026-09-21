@@ -45,7 +45,8 @@
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/my-teaching-plan`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
   - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-evaluation-comments`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
-  - `学工管理`：`/student-affairs/class-adviser-governance`
+  - `学工管理`：`/student-affairs/class-adviser-governance`；当前菜单只向 `ADMIN` 与
+    `STUDENT_AFFAIRS_OFFICER` 显示，`ACADEMIC_OFFICER` 仅可通过合法直达链接进入只读视图
   - `教务管理`：`/academic-affairs/academic-calendar`、`/academic-affairs/split-joint-teaching-confirmation`、`/academic-affairs/staff-semester-profiles`、`/academic-affairs/academic-workload-report`、`/academic-affairs/academic-workload-deduction-summary`、`/academic-affairs/external-teacher-compensation`
 - `upstream-data-sync`：贡献一级分组 `上游数据同步`，当前包含 `/upstream-data-sync/major-sync`、`/upstream-data-sync/class-sync`、`/upstream-data-sync/semester-course-schedule-sync`
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
@@ -84,7 +85,10 @@
 
 - 菜单里写一套 slot 判断，router loader 再写另一套不同判断
 - 页面组件内硬编码 slot 字符串来决定全局入口权限
-- 只隐藏菜单但允许同一身份手输 URL 进入
+- 除已在具体功能契约中声明的只读直达例外外，只隐藏菜单但允许同一身份手输 URL 进入
+
+当前只读直达例外：`ACADEMIC_OFFICER` 不显示“班主任任职”菜单，但 route loader 允许其进入，
+页面与后端按 ACTIVE 任职系部限制范围并保持只读。
 
 导航层允许的 `accessGroup` / `slotGroup` 直接读取只限于：
 
