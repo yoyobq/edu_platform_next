@@ -862,6 +862,7 @@ export function AcademicCalendarManagementPageContent({
             if (changedValues.eventType === 'MILITARY_TRAINING') {
               eventForm.setFieldsValue({
                 originalDate: null,
+                targetAdmissionCategory: 'ALL_FRESHMEN',
                 teachingCalcEffect: 'CANCEL',
               });
               return;
