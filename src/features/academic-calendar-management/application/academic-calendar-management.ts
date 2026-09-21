@@ -142,6 +142,7 @@ export function buildDefaultEventFormValues(
     recordStatus: 'ACTIVE',
     ruleNote: undefined,
     semesterId: selectedSemesterId ?? undefined,
+    targetAdmissionCategory: null,
     teachingCalcEffect: 'NO_CHANGE',
     topic: '',
     version: 1,
@@ -169,7 +170,11 @@ export function normalizeCalendarEventFormValues(
   values: CalendarEventFormValues,
 ): CreateAcademicCalendarEventInput {
   const semesterId = values.semesterId;
-  const originalDate = normalizeOptionalDate(values.originalDate);
+  const isMilitaryTraining = values.eventType === 'MILITARY_TRAINING';
+  const originalDate = isMilitaryTraining ? null : normalizeOptionalDate(values.originalDate);
+  const targetAdmissionCategory = isMilitaryTraining
+    ? (values.targetAdmissionCategory ?? null)
+    : null;
   const requiresSourceDate =
     values.teachingCalcEffect === 'MAKEUP' ||
     values.teachingCalcEffect === 'SWAP' ||
@@ -183,6 +188,12 @@ export function normalizeCalendarEventFormValues(
   }
   if (values.eventType !== 'REPEATED_TEACHING_DAY' && values.teachingCalcEffect === 'REPEAT') {
     throw new Error('只有重复教学日可以使用“重复课表”教学影响。');
+  }
+  if (isMilitaryTraining && values.teachingCalcEffect !== 'CANCEL') {
+    throw new Error('军训事件必须使用“停课”教学影响。');
+  }
+  if (isMilitaryTraining && !targetAdmissionCategory) {
+    throw new Error('请选择招生起点。');
   }
   if (requiresSourceDate && !originalDate) {
     throw new Error('请选择课表来源日期。');
@@ -199,6 +210,7 @@ export function normalizeCalendarEventFormValues(
     recordStatus: values.recordStatus,
     ruleNote: normalizeOptionalText(values.ruleNote),
     semesterId,
+    targetAdmissionCategory,
     teachingCalcEffect: values.teachingCalcEffect,
     topic: normalizeRequiredText(values.topic, '事件标题'),
     version: values.version,

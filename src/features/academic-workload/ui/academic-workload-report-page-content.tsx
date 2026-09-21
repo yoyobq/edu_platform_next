@@ -17,6 +17,7 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import { formatAcademicProjectionInvalidReason } from '../application/projection-invalid-reason';
 import {
   ACADEMIC_WORKLOAD_ENGAGEMENT_ORDER,
   ACADEMIC_WORKLOAD_REPORT_ENGAGEMENT_TABS,
@@ -886,7 +887,10 @@ export function AcademicWorkloadReportPageContent({
           {!reportEnvelope.isValid ? (
             <Alert
               title="预报数据异常"
-              description={reportEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'}
+              description={
+                formatAcademicProjectionInvalidReason(reportEnvelope.invalidReason) ??
+                '当前条件返回的数据未通过完整性校验。'
+              }
               showIcon
               type="error"
             />

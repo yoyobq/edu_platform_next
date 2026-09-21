@@ -5,10 +5,12 @@ export const ACADEMIC_CALENDAR_EVENT_TYPES = [
   'EXAM',
   'HOLIDAY',
   'HOLIDAY_MAKEUP',
+  'MILITARY_TRAINING',
   'REPEATED_TEACHING_DAY',
   'SPORTS_MEET',
   'WEEKDAY_SWAP',
 ] as const;
+export const CLASS_ADMISSION_CATEGORIES = ['JUNIOR_HIGH_ORIGIN', 'HIGH_SCHOOL_ORIGIN'] as const;
 export const ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS = [
   'CANCEL',
   'MAKEUP',
@@ -23,6 +25,7 @@ export type AcademicCalendarEventRecordStatus =
 export type AcademicCalendarEventType = (typeof ACADEMIC_CALENDAR_EVENT_TYPES)[number];
 export type AcademicCalendarTeachingCalcEffect =
   (typeof ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS)[number];
+export type ClassAdmissionCategory = (typeof CLASS_ADMISSION_CATEGORIES)[number];
 
 export type AcademicSemesterRecord = {
   createdAt: string;
@@ -50,6 +53,7 @@ export type AcademicCalendarEventRecord = {
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote: string | null;
   semesterId: number;
+  targetAdmissionCategory: ClassAdmissionCategory | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   updatedAt: string;
@@ -94,10 +98,11 @@ export type CreateAcademicCalendarEventInput = {
   dayPeriod: AcademicCalendarEventDayPeriod;
   eventDate: string;
   eventType: AcademicCalendarEventType;
-  originalDate?: string;
+  originalDate?: string | null;
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote?: string;
   semesterId: number;
+  targetAdmissionCategory: ClassAdmissionCategory | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   version: number;
@@ -124,10 +129,11 @@ export type CalendarEventFormValues = {
   dayPeriod: AcademicCalendarEventDayPeriod;
   eventDate: string;
   eventType: AcademicCalendarEventType;
-  originalDate?: string;
+  originalDate?: string | null;
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote?: string;
   semesterId?: number;
+  targetAdmissionCategory?: ClassAdmissionCategory | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   version: number;

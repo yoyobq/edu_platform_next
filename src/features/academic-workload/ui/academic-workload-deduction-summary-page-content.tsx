@@ -30,6 +30,8 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import { formatDeductionReason } from '../application/deduction-reason';
+import { formatAcademicProjectionInvalidReason } from '../application/projection-invalid-reason';
 import {
   ACADEMIC_WORKLOAD_DEDUCTION_SUMMARY_ENGAGEMENT_TABS as ENGAGEMENT_TABS,
   ACADEMIC_WORKLOAD_ENGAGEMENT_LABELS,
@@ -124,14 +126,6 @@ const ACADEMIC_WORKLOAD_DEDUCTION_MARKABLE_DETAIL_CELL_CLASS_NAMES = {
   oddCell: 'academic-workload-deduction-summary-detail-row-odd',
 };
 
-const DEDUCTION_REASON_LABELS: Record<string, string> = {
-  ACTIVITY: '活动',
-  EXAM: '考试',
-  HOLIDAY: '节假日',
-  SPORTS_MEET: '运动会',
-  WEEKDAY_SWAP: '调休',
-};
-
 const WEEKDAY_LABELS = ['日', '一', '二', '三', '四', '五', '六'];
 
 const TEACHER_ENGAGEMENT_TYPE_TAG_COLORS: Record<AcademicTeacherEngagementType, string> = {
@@ -181,22 +175,6 @@ function formatDeductedHundredths(value: number) {
 
 function formatDeductedHourString(value: string | null | undefined) {
   return formatDeductedHundredths(parseHourToHundredths(value));
-}
-
-function normalizeSourceEventType(value: string | null | undefined) {
-  const normalizedValue = value?.trim().toUpperCase();
-
-  return normalizedValue || null;
-}
-
-function formatDeductionReason(value: string | null | undefined) {
-  const normalizedValue = normalizeSourceEventType(value);
-
-  if (!normalizedValue) {
-    return '未标注原因';
-  }
-
-  return DEDUCTION_REASON_LABELS[normalizedValue] ?? normalizedValue;
 }
 
 function formatDateColumnMonthDay(value: string) {
@@ -470,9 +448,12 @@ function DateAdjustmentCell({ summary }: { summary: DateAdjustmentSummary | unde
     );
   }
 
+  const tooltipTitle = tooltipParts.join(' · ');
+
   return (
-    <Tooltip title={tooltipParts.join(' · ')}>
+    <Tooltip title={tooltipTitle}>
       <span
+        aria-label={tooltipTitle}
         className={`academic-workload-deduction-summary-date-hour ${getSignedHourClassName(
           netHundredths,
         )}`.trim()}
@@ -1293,7 +1274,10 @@ export function AcademicWorkloadDeductionSummaryPageContent({
           {!summaryEnvelope.isValid ? (
             <Alert
               title="结果数据异常"
-              description={summaryEnvelope.invalidReason ?? '当前条件返回的数据不可用于汇总。'}
+              description={
+                formatAcademicProjectionInvalidReason(summaryEnvelope.invalidReason) ??
+                '当前条件返回的数据不可用于汇总。'
+              }
               showIcon
               type="error"
             />

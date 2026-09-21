@@ -41,6 +41,7 @@ function buildEvent(overrides: Partial<AcademicCalendarEventRecord>): AcademicCa
     recordStatus: 'ACTIVE',
     ruleNote: '春季活动安排',
     semesterId: 101,
+    targetAdmissionCategory: null,
     teachingCalcEffect: 'NO_CHANGE',
     topic: '春季运动会',
     updatedAt: '2026-04-06T00:00:00.000Z',

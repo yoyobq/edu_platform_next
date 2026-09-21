@@ -13,6 +13,8 @@ import { executeGraphQL } from '@/shared/graphql';
 
 export { isExpiredUpstreamSessionError };
 
+export type ClassAdmissionCategory = 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN';
+
 export type ClassSyncDepartmentOption = {
   departmentName: string;
   id: string;
@@ -26,6 +28,7 @@ export type ClassSyncDryRunAction =
   | 'EXISTS'
   | 'CONFLICT'
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
+  | 'SKIPPED_INVALID_UPSTREAM_ADMISSION_CATEGORY'
   | 'SKIPPED_DUPLICATE_UPSTREAM_CODE'
   | 'SKIPPED_INVALID_UPSTREAM_GRADE';
 
@@ -35,10 +38,13 @@ export type ClassSyncCommitAction =
   | 'EXISTS'
   | 'CONFLICT'
   | 'SKIPPED_INVALID_UPSTREAM_CODE'
-  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE';
+  | 'SKIPPED_INVALID_UPSTREAM_ADMISSION_CATEGORY'
+  | 'SKIPPED_DUPLICATE_UPSTREAM_CODE'
+  | 'SKIPPED_INVALID_UPSTREAM_GRADE';
 
 export type ClassSyncItem<Action extends string> = {
   action: Action;
+  admissionCategory: ClassAdmissionCategory | null;
   classCode: string | null;
   classId: string | null;
   className: string;
@@ -131,6 +137,7 @@ const DRY_RUN_SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
       skippedCount
       items {
         action
+        admissionCategory
         departmentId
         classId
         classCode
@@ -161,6 +168,7 @@ const SYNC_CLASSES_FROM_UPSTREAM_MUTATION = `
       skippedCount
       items {
         action
+        admissionCategory
         departmentId
         classId
         classCode

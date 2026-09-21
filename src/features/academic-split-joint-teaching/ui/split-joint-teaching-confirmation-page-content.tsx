@@ -260,7 +260,7 @@ export function SplitJointTeachingConfirmationPageContent() {
       />
 
       <Alert
-        description="系统只把同一学期、同一教师、同一校园网课程，且在完全相同节次存在重叠周的多班记录列为候选。确认记录只保存选择，班级组合、周次、系数与校历影响均实时推导。"
+        description="系统只把同一学期、同一教师、同一校园网课程，且在完全相同节次存在重叠周的多班记录列为候选。确认记录只保存选择，班级组合、周次、系数与校历影响均实时推导；校历后课时包含军训排除。"
         showIcon
         title="确认不会改写校园网原始排课"
         type="info"

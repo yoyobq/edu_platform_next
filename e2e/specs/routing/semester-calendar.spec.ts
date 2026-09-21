@@ -36,6 +36,7 @@ type AcademicCalendarEventSeed = {
     | 'EXAM'
     | 'HOLIDAY'
     | 'HOLIDAY_MAKEUP'
+    | 'MILITARY_TRAINING'
     | 'REPEATED_TEACHING_DAY'
     | 'SPORTS_MEET'
     | 'WEEKDAY_SWAP';
@@ -44,6 +45,7 @@ type AcademicCalendarEventSeed = {
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
+  targetAdmissionCategory?: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | null;
   teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
@@ -105,6 +107,23 @@ function buildAcademicCalendarState() {
       teachingCalcEffect: 'NO_CHANGE',
       topic: '春季运动会',
       updatedAt: '2026-04-06T00:00:00.000Z',
+      updatedByAccountId: 9527,
+      version: 1,
+    },
+    {
+      createdAt: '2026-04-06T00:00:00.000Z',
+      dayPeriod: 'MORNING',
+      eventDate: '2026-04-22',
+      eventType: 'MILITARY_TRAINING',
+      id: 206,
+      originalDate: null,
+      recordStatus: 'ACTIVE',
+      ruleNote: '初中新生军训安排',
+      semesterId: 101,
+      targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+      teachingCalcEffect: 'CANCEL',
+      topic: '新生军训',
+      updatedAt: '2026-04-07T00:00:00.000Z',
       updatedByAccountId: 9527,
       version: 1,
     },
@@ -200,6 +219,7 @@ function toStudentAcademicCalendarEvents(events: readonly AcademicCalendarEventS
     originalDate: event.originalDate,
     ruleNote: event.ruleNote,
     semesterId: event.semesterId,
+    targetAdmissionCategory: event.targetAdmissionCategory ?? null,
     teachingCalcEffect: event.teachingCalcEffect,
     topic: event.topic,
   }));
@@ -426,6 +446,7 @@ test('student 访问正式学期校历页时应成功，并使用独立学生导
   await expect(page).toHaveURL(routes.semesterCalendar);
   await expect(page.getByRole('heading', { name: '学期校历' })).toBeVisible();
   await expect(page.getByText('春季运动会')).toBeVisible();
+  await expect(page.getByText('新生军训')).toBeVisible();
   await expect(page.getByText('劳动节调休预告')).toHaveCount(0);
 
   await page.getByText('春季运动会').click();
@@ -436,6 +457,11 @@ test('student 访问正式学期校历页时应成功，并使用独立学生导
   await expect(page.getByText('暂定', { exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await expect(page.getByText('规则说明')).toHaveCount(0);
+
+  await page.getByText('新生军训').click();
+  await expect(page.getByText('作用范围')).toBeVisible();
+  await expect(page.getByText('初中起点')).toBeVisible();
+  await page.keyboard.press('Escape');
 
   await ensureFullNavigation(page);
   await expect(page.getByRole('menuitem', { name: '学期校历' })).toBeVisible();

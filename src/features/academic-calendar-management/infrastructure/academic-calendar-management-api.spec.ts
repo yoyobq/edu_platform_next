@@ -58,6 +58,7 @@ describe('academic-calendar-management api', () => {
             recordStatus: 'ACTIVE',
             ruleNote: '劳动节',
             semesterId: 3,
+            targetAdmissionCategory: null,
             teachingCalcEffect: 'CANCEL',
             topic: '五一劳动节',
             updatedAt: '2026-04-02T00:00:00.000Z',
@@ -132,6 +133,7 @@ describe('academic-calendar-management api', () => {
             originalDate: null,
             ruleNote: '劳动节',
             semesterId: 3,
+            targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
             teachingCalcEffect: 'CANCEL',
             topic: '五一劳动节',
           },
@@ -169,6 +171,7 @@ describe('academic-calendar-management api', () => {
     expect(studentSemesterQuery).not.toContain('createdAt');
     expect(studentSemesterQuery).not.toContain('updatedAt');
     expect(studentCalendarEventQuery).toContain('studentAcademicCalendarEvents');
+    expect(studentCalendarEventQuery).toContain('targetAdmissionCategory');
     expect(studentCalendarEventQuery).not.toContain('recordStatus');
     expect(studentCalendarEventQuery).not.toContain('version');
     expect(studentCalendarEventQuery).not.toContain('createdAt');

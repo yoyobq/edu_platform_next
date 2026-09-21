@@ -35,6 +35,7 @@ type AcademicCalendarEventSeed = {
     | 'EXAM'
     | 'HOLIDAY'
     | 'HOLIDAY_MAKEUP'
+    | 'MILITARY_TRAINING'
     | 'REPEATED_TEACHING_DAY'
     | 'SPORTS_MEET'
     | 'WEEKDAY_SWAP';
@@ -43,6 +44,7 @@ type AcademicCalendarEventSeed = {
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
+  targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | null;
   teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
@@ -102,6 +104,7 @@ function buildAcademicCalendarState() {
       recordStatus: 'ACTIVE',
       ruleNote: '春季活动安排',
       semesterId: 101,
+      targetAdmissionCategory: null,
       teachingCalcEffect: 'NO_CHANGE',
       topic: '春季运动会',
       updatedAt: '2026-04-06T00:00:00.000Z',
@@ -118,6 +121,7 @@ function buildAcademicCalendarState() {
       recordStatus: 'ACTIVE',
       ruleNote: null,
       semesterId: 102,
+      targetAdmissionCategory: null,
       teachingCalcEffect: 'NO_CHANGE',
       topic: '开学典礼',
       updatedAt: '2026-04-08T00:00:00.000Z',
@@ -170,6 +174,7 @@ async function overrideStoredAccessToken(page: Page, accessToken: string) {
 
 async function mockAcademicCalendarGraphQL(page: Page) {
   const state = buildAcademicCalendarState();
+  const submittedEventInputs: Record<string, unknown>[] = [];
 
   await page.route('**/graphql', async (route) => {
     const payload = route.request().postDataJSON() as
@@ -338,6 +343,7 @@ async function mockAcademicCalendarGraphQL(page: Page) {
     }
 
     if (query.includes('mutation CreateAcademicCalendarEvent')) {
+      submittedEventInputs.push({ ...input });
       const nextId = Math.max(...state.events.map((item) => item.id)) + 1;
       const now = '2026-04-22T00:00:00.000Z';
       const nextRecord: AcademicCalendarEventSeed = {
@@ -350,6 +356,9 @@ async function mockAcademicCalendarGraphQL(page: Page) {
         recordStatus: (input.recordStatus as AcademicCalendarEventSeed['recordStatus']) ?? 'ACTIVE',
         ruleNote: typeof input.ruleNote === 'string' ? input.ruleNote : null,
         semesterId: Number(input.semesterId ?? 0),
+        targetAdmissionCategory:
+          (input.targetAdmissionCategory as AcademicCalendarEventSeed['targetAdmissionCategory']) ??
+          null,
         teachingCalcEffect:
           (input.teachingCalcEffect as AcademicCalendarEventSeed['teachingCalcEffect']) ??
           'NO_CHANGE',
@@ -374,6 +383,7 @@ async function mockAcademicCalendarGraphQL(page: Page) {
     }
 
     if (query.includes('mutation UpdateAcademicCalendarEvent')) {
+      submittedEventInputs.push({ ...input });
       const targetId = Number(input.id ?? 0);
       const currentRecord = state.events.find((item) => item.id === targetId);
 
@@ -406,6 +416,12 @@ async function mockAcademicCalendarGraphQL(page: Page) {
               : currentRecord.ruleNote,
         semesterId:
           typeof input.semesterId === 'number' ? input.semesterId : currentRecord.semesterId,
+        targetAdmissionCategory:
+          typeof input.targetAdmissionCategory === 'string'
+            ? (input.targetAdmissionCategory as AcademicCalendarEventSeed['targetAdmissionCategory'])
+            : input.targetAdmissionCategory === null
+              ? null
+              : currentRecord.targetAdmissionCategory,
         teachingCalcEffect:
           (input.teachingCalcEffect as AcademicCalendarEventSeed['teachingCalcEffect']) ??
           currentRecord.teachingCalcEffect,
@@ -449,6 +465,8 @@ async function mockAcademicCalendarGraphQL(page: Page) {
 
     await route.fallback();
   });
+
+  return { state, submittedEventInputs };
 }
 
 async function fillSemesterForm(
@@ -676,4 +694,47 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
 
   await expect(page.getByText('校历事件已删除。')).toBeVisible();
   await expect(page.getByText('校历联调事件（跨学期）')).toHaveCount(0);
+});
+
+test('创建军训并切换为普通事件时，应固定停课并显式清空军训范围', async ({ page }) => {
+  await seedProtectedSession(page, {
+    accessGroup: ['ADMIN'],
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+  const { submittedEventInputs } = await mockAcademicCalendarGraphQL(page);
+
+  await page.goto(routes.academicCalendar);
+  await page.getByRole('button', { name: '新增事件' }).click();
+  await page.getByLabel('事件标题').fill('高中新生军训');
+  await page.getByLabel('事件日期').fill('2026-09-08');
+  await chooseDrawerSelectOption(page, '事件类型', '军训');
+  await chooseDrawerSelectOption(page, '招生起点', '高中起点');
+
+  const drawer = page.getByRole('dialog').last();
+  const teachingEffectField = drawer.locator('.ant-form-item').filter({ hasText: '教学影响' });
+
+  await expect(page.getByLabel('课表来源日期')).toBeDisabled();
+  await expect(teachingEffectField.locator('.ant-select')).toHaveClass(/ant-select-disabled/);
+  await expect(teachingEffectField).toContainText('停课');
+  await clickDrawerPrimaryButton(page, '创建');
+
+  expect(submittedEventInputs.at(-1)).toMatchObject({
+    eventType: 'MILITARY_TRAINING',
+    originalDate: null,
+    targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN',
+    teachingCalcEffect: 'CANCEL',
+  });
+  const militaryTrainingRow = page.locator('tbody tr').filter({ hasText: '高中新生军训' });
+  await expect(militaryTrainingRow).toContainText('军训');
+  await expect(militaryTrainingRow).toContainText('高中起点');
+
+  await clickRowActionButton(militaryTrainingRow, '编辑');
+  await chooseDrawerSelectOption(page, '事件类型', '活动');
+  await clickDrawerPrimaryButton(page, '保存');
+
+  expect(submittedEventInputs.at(-1)).toMatchObject({
+    eventType: 'ACTIVITY',
+    targetAdmissionCategory: null,
+  });
 });

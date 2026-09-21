@@ -12,9 +12,30 @@ export type AcademicTimetableCalcEffect =
   | 'SWAP_IN'
   | 'SWAP_OUT';
 
+export type AcademicCalendarEventType =
+  | 'ACTIVITY'
+  | 'EXAM'
+  | 'HOLIDAY'
+  | 'HOLIDAY_MAKEUP'
+  | 'MILITARY_TRAINING'
+  | 'REPEATED_TEACHING_DAY'
+  | 'SPORTS_MEET'
+  | 'WEEKDAY_SWAP';
+export type AcademicPlannedOccurrenceExclusionReason = 'MILITARY_TRAINING';
+export type ClassAdmissionCategory = 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN';
+
 export type AcademicTeacherSemesterScheduleWeekType = 'ALL' | 'EVEN' | 'ODD' | string;
 
-type AcademicPlannedTimetableProjectionInvalidReasonCode = string;
+export type AcademicPlannedTimetableProjectionInvalidReasonCode =
+  | 'CALENDAR_EVENT_CALC_CONFLICT'
+  | 'CALENDAR_EVENT_DATE_OUT_OF_SEMESTER'
+  | 'IDENTITY_COLLISION'
+  | 'MILITARY_TRAINING_CLASS_SCOPE_CONFLICT'
+  | 'SCHEDULE_OCCURRENCE_DATE_OUT_OF_SEMESTER'
+  | 'STAFF_ID_MISMATCH'
+  | 'TEACHING_CLASS_LOCAL_CLASS_UNRESOLVED'
+  | 'TEACHING_DELIVERY_SOURCE_CONFLICT'
+  | 'TEACHING_DELIVERY_TIME_CONFLICT';
 type AcademicPlannedTimetableProjectionTruncationReasonCode = string;
 
 type AcademicTeachingDeliveryClassDTO = {
@@ -30,6 +51,10 @@ type AcademicSemesterPlannedTimetableItemDTO = {
   courseName: string | null;
   date: string;
   deliveryKey: string;
+  exclusionEventId: number | null;
+  exclusionEventType: AcademicCalendarEventType | null;
+  exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
+  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
@@ -105,6 +130,10 @@ export type AcademicTimetableItem = {
   courseName: string;
   date: string;
   dayOfWeek: number;
+  exclusionEventId: number | null;
+  exclusionEventType: AcademicCalendarEventType | null;
+  exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
+  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
   isEffective: boolean;
   periodEnd: number;
   periodStart: number;
@@ -210,6 +239,10 @@ const ACADEMIC_TIMETABLE_ITEM_FIELDS = `
   courseName
   date
   deliveryKey
+  exclusionEventId
+  exclusionEventType
+  exclusionReason
+  exclusionTargetAdmissionCategory
   isEffective
   logicalDayOfWeek
   periodStart
@@ -460,6 +493,10 @@ function mapAcademicTimetableItem(
     courseName: item.courseName?.trim() || '未命名课程',
     date: item.date,
     dayOfWeek: item.physicalDayOfWeek,
+    exclusionEventId: item.exclusionEventId,
+    exclusionEventType: item.exclusionEventType,
+    exclusionReason: item.exclusionReason,
+    exclusionTargetAdmissionCategory: item.exclusionTargetAdmissionCategory,
     isEffective: item.isEffective,
     periodEnd: item.periodEnd,
     periodStart: item.periodStart,
@@ -523,10 +560,22 @@ function resolvePlannedTimetableItems<TItem extends AcademicSemesterPlannedTimet
   result: AcademicPlannedTimetableResultDTO<TItem>,
 ) {
   if (!result.isValid && result.invalidReason) {
-    throw new Error(`课表投影无效：${result.invalidReason}`);
+    throw new Error(`课表投影无效：${formatAcademicTimetableInvalidReason(result.invalidReason)}`);
   }
 
   return result.items.map(mapAcademicTimetableItem);
+}
+
+export function formatAcademicTimetableInvalidReason(reason: string) {
+  if (reason === 'TEACHING_CLASS_LOCAL_CLASS_UNRESOLVED') {
+    return '课表中的教学班无法唯一匹配本地班级，请先同步班级。';
+  }
+
+  if (reason === 'MILITARY_TRAINING_CLASS_SCOPE_CONFLICT') {
+    return '军训作用范围冲突，请检查班级招生起点或排课数据。';
+  }
+
+  return reason;
 }
 
 async function requestGraphQL<TData, TVariables extends OperationVariables>(
@@ -649,7 +698,7 @@ export async function requestAcademicTeacherSemesterScheduleItems(
 
     if (!response.listAcademicTeacherSemesterDeliveryPatterns.isValid) {
       throw new Error(
-        `课表投影无效：${response.listAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN'}`,
+        `课表投影无效：${formatAcademicTimetableInvalidReason(response.listAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN')}`,
       );
     }
 
@@ -674,7 +723,7 @@ export async function requestMyAcademicTeacherSemesterScheduleItems(
 
     if (!response.listMyAcademicTeacherSemesterDeliveryPatterns.isValid) {
       throw new Error(
-        `课表投影无效：${response.listMyAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN'}`,
+        `课表投影无效：${formatAcademicTimetableInvalidReason(response.listMyAcademicTeacherSemesterDeliveryPatterns.invalidReason ?? 'UNKNOWN')}`,
       );
     }
 

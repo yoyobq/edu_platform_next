@@ -22,6 +22,7 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
+import { formatAcademicProjectionInvalidReason } from '../application/projection-invalid-reason';
 import {
   type AcademicWorkloadTableViewFilter,
   buildAcademicWorkloadRangeSummary,
@@ -33,6 +34,10 @@ import {
   resolvePeriodCount,
   sortSemesters,
 } from '../application/workload-baseline';
+import {
+  formatOccurrenceExclusionReason,
+  resolveOccurrenceStatusLabel,
+} from '../application/workload-trace';
 import {
   type AcademicStableWorkloadCalcEffect,
   type AcademicStableWorkloadEnvelope,
@@ -104,10 +109,6 @@ function resolveCalcEffectTagColor(effect: AcademicStableWorkloadCalcEffect) {
   }
 
   return 'default';
-}
-
-function resolveOccurrenceStatusLabel(item: AcademicStableWorkloadOccurrence) {
-  return item.isEffective ? '计入' : '扣减';
 }
 
 function formatLogicalWeekdayNotice(item: AcademicStableWorkloadOccurrence) {
@@ -412,6 +413,11 @@ export function AcademicWorkloadPageContent({
         key: 'status',
         render: (_, record) => (
           <div className="flex min-w-32 flex-col gap-2">
+            {(() => {
+              const exclusionReason = formatOccurrenceExclusionReason(record);
+
+              return exclusionReason ? <Tag color="warning">{exclusionReason}</Tag> : null;
+            })()}
             <Tag color={record.isEffective ? 'success' : 'default'}>
               {resolveOccurrenceStatusLabel(record)}
             </Tag>
@@ -506,7 +512,8 @@ export function AcademicWorkloadPageContent({
             <Alert
               title="结果数据异常"
               description={
-                occurrenceEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'
+                formatAcademicProjectionInvalidReason(occurrenceEnvelope.invalidReason) ??
+                '当前条件返回的数据未通过完整性校验。'
               }
               showIcon
               type="error"

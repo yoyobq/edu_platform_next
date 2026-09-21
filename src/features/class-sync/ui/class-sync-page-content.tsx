@@ -34,7 +34,9 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
+import { formatClassAdmissionCategory } from '../application/class-sync-presentation';
 import {
+  type ClassAdmissionCategory,
   type ClassSyncCommitAction,
   type ClassSyncCommitItem,
   type ClassSyncCommitResult,
@@ -84,6 +86,7 @@ const ACTION_LABELS: Record<ClassSyncResultAction, string> = {
   CREATED: '已新增',
   EXISTS: '已存在',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: '上游重复',
+  SKIPPED_INVALID_UPSTREAM_ADMISSION_CATEGORY: '无效招生起点',
   SKIPPED_INVALID_UPSTREAM_CODE: '无效 code',
   SKIPPED_INVALID_UPSTREAM_GRADE: '无效年级',
   UPDATE: '待更新',
@@ -96,6 +99,7 @@ const ACTION_COLORS: Record<ClassSyncResultAction, string> = {
   CREATED: 'green',
   EXISTS: 'blue',
   SKIPPED_DUPLICATE_UPSTREAM_CODE: 'orange',
+  SKIPPED_INVALID_UPSTREAM_ADMISSION_CATEGORY: 'orange',
   SKIPPED_INVALID_UPSTREAM_CODE: 'orange',
   SKIPPED_INVALID_UPSTREAM_GRADE: 'orange',
   UPDATE: 'gold',
@@ -157,7 +161,7 @@ function resolveResultMessage(result: ClassSyncResult, mode: ClassSyncRunMode) {
     return '本次落库已完成；冲突和跳过项未写入。';
   }
 
-  return '本次已完成落库；更新只覆盖 className、gradeYear 和 sortOrder。';
+  return '本次已完成落库；专业、年度专业、班级标识、名称、入学年份、招生起点和排序均可能同步。';
 }
 
 function formatNullableValue(value: number | string | null | undefined) {
@@ -227,6 +231,13 @@ const baseResultColumns: ColumnsType<ClassSyncResultItem> = [
     key: 'gradeYear',
     render: (gradeYear: number | null) => formatNullableValue(gradeYear),
     title: '入学年份',
+    width: 120,
+  },
+  {
+    dataIndex: 'admissionCategory',
+    key: 'admissionCategory',
+    render: (value: ClassAdmissionCategory | null) => formatClassAdmissionCategory(value),
+    title: '招生起点',
     width: 120,
   },
   {

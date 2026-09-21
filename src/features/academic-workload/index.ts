@@ -1,5 +1,8 @@
 // src/features/academic-workload/index.ts
+export type { AcademicProjectionInvalidReason } from './application/projection-invalid-reason';
 export type {
+  AcademicCalendarEventType,
+  AcademicPlannedOccurrenceExclusionReason,
   AcademicStableWorkloadCalcEffect,
   AcademicStableWorkloadEnvelope,
   AcademicStableWorkloadOccurrence,
@@ -8,6 +11,7 @@ export type {
   AcademicWorkloadReportEnvelope,
   AcademicWorkloadReportItem,
   AcademicWorkloadReportTotal,
+  ClassAdmissionCategory,
   ListAcademicSemestersInput,
   RequestAcademicStableWorkloadInput,
   RequestAcademicWorkloadReportInput,

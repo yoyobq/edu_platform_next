@@ -91,10 +91,16 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   EXAM: '考试',
   HOLIDAY: '放假',
   HOLIDAY_MAKEUP: '调休补班',
+  MILITARY_TRAINING: '军训',
   REPEATED_TEACHING_DAY: '重复教学日',
   SPORTS_MEET: '运动会',
   WEEKDAY_SWAP: '工作日对调',
 };
+
+const ADMISSION_CATEGORY_LABELS = {
+  HIGH_SCHOOL_ORIGIN: '高中起点',
+  JUNIOR_HIGH_ORIGIN: '初中起点',
+} as const;
 
 const RECORD_STATUS_LABELS: Record<AcademicCalendarEventRecordStatus, string> = {
   ACTIVE: '生效',
@@ -168,6 +174,8 @@ function renderEventTypeIcon(eventType: AcademicCalendarEventType) {
       return <SwapOutlined />;
     case 'REPEATED_TEACHING_DAY':
       return <ScheduleOutlined />;
+    case 'MILITARY_TRAINING':
+      return <FlagOutlined />;
     case 'SPORTS_MEET':
       return <TrophyOutlined />;
     case 'ACTIVITY':
@@ -793,6 +801,13 @@ export function SemesterCalendarPageContent({
                         key: 'teachingCalcEffect',
                         label: '教学影响',
                         children: TEACHING_CALC_EFFECT_LABELS[event.teachingCalcEffect],
+                      },
+                      {
+                        key: 'targetAdmissionCategory',
+                        label: '作用范围',
+                        children: event.targetAdmissionCategory
+                          ? ADMISSION_CATEGORY_LABELS[event.targetAdmissionCategory]
+                          : '—',
                       },
                       {
                         key: 'originalDate',

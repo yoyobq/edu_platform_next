@@ -236,6 +236,10 @@ export function isAddedEffectiveOccurrence(item: AcademicWorkloadOccurrenceLike)
   );
 }
 
+export function isDeductedOccurrence(item: AcademicWorkloadOccurrenceLike) {
+  return !item.isEffective && isBaselineOccurrence(item);
+}
+
 export function buildAcademicWorkloadRangeSummary<
   TItem extends AcademicWorkloadOccurrenceLike,
 >(input: {
@@ -256,7 +260,7 @@ export function buildAcademicWorkloadRangeSummary<
     }),
   );
   const effectiveRangeOccurrences = displayedOccurrences.filter((item) => item.isEffective);
-  const ineffectiveRangeOccurrences = displayedOccurrences.filter((item) => !item.isEffective);
+  const ineffectiveRangeOccurrences = displayedOccurrences.filter(isDeductedOccurrence);
   const addedEffectiveRangeOccurrences = displayedOccurrences.filter(isAddedEffectiveOccurrence);
   const baselineRangeOccurrences = displayedOccurrences.filter(isBaselineOccurrence);
   const tableOccurrences =

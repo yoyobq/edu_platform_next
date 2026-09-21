@@ -153,4 +153,23 @@ describe('academic workload baseline helpers', () => {
       summary.baselineRangeHours - summary.ineffectiveRangeHours + summary.addedEffectiveRangeHours,
     ).toBe(summary.effectiveRangeHours);
   });
+
+  it('does not reinterpret military-suppressed added occurrences as deductions', () => {
+    const summary = buildAcademicWorkloadRangeSummary({
+      effectiveRangeEnd: 8,
+      effectiveRangeStart: 1,
+      items: [
+        buildOccurrence({ calcEffect: 'NORMAL', isEffective: true, weekIndex: 2 }),
+        buildOccurrence({ calcEffect: 'CANCEL', isEffective: false, weekIndex: 3 }),
+        buildOccurrence({ calcEffect: 'MAKEUP', isEffective: false, weekIndex: 4 }),
+        buildOccurrence({ calcEffect: 'SWAP_IN', isEffective: false, weekIndex: 5 }),
+        buildOccurrence({ calcEffect: 'REPEAT', isEffective: false, weekIndex: 6 }),
+      ],
+      tableViewFilter: 'deducted',
+    });
+
+    expect(summary.ineffectiveRangeOccurrences.map((item) => item.calcEffect)).toEqual(['CANCEL']);
+    expect(summary.addedEffectiveRangeOccurrences).toEqual([]);
+    expect(summary.tableOccurrences.map((item) => item.calcEffect)).toEqual(['CANCEL']);
+  });
 });

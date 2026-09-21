@@ -1,6 +1,7 @@
 // src/features/class-sync/index.ts
 
 export type {
+  ClassAdmissionCategory,
   ClassSyncCommitAction,
   ClassSyncCommitItem,
   ClassSyncCommitResult,

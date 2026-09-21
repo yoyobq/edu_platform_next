@@ -44,6 +44,7 @@ function buildEvent(overrides: Partial<AcademicCalendarEventRecord>): AcademicCa
     recordStatus: 'ACTIVE',
     ruleNote: null,
     semesterId: 1,
+    targetAdmissionCategory: null,
     teachingCalcEffect: 'NO_CHANGE',
     topic: '默认事件',
     updatedAt: '2026-04-02T00:00:00.000Z',
@@ -136,6 +137,7 @@ describe('academic-calendar-management application', () => {
       recordStatus: 'ACTIVE',
       ruleNote: '五一放假',
       semesterId: 7,
+      targetAdmissionCategory: null,
       teachingCalcEffect: 'CANCEL',
       topic: '五一劳动节',
       version: 3,
@@ -177,6 +179,7 @@ describe('academic-calendar-management application', () => {
       recordStatus: 'ACTIVE',
       ruleNote: undefined,
       semesterId: 21,
+      targetAdmissionCategory: null,
       teachingCalcEffect: 'REPEAT',
       topic: '重复教学日',
       version: 1,
@@ -212,6 +215,65 @@ describe('academic-calendar-management application', () => {
     ).toThrow('重复教学日必须使用“重复课表”教学影响。');
   });
 
+  it('normalizes military training to its backend-owned scope contract', () => {
+    expect(
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'MORNING',
+        eventDate: '2026-09-07',
+        eventType: 'MILITARY_TRAINING',
+        originalDate: '2026-09-01',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+        teachingCalcEffect: 'CANCEL',
+        topic: '新生军训',
+        version: 1,
+      }),
+    ).toEqual({
+      dayPeriod: 'MORNING',
+      eventDate: '2026-09-07',
+      eventType: 'MILITARY_TRAINING',
+      originalDate: null,
+      recordStatus: 'ACTIVE',
+      ruleNote: undefined,
+      semesterId: 21,
+      targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+      teachingCalcEffect: 'CANCEL',
+      topic: '新生军训',
+      version: 1,
+    });
+
+    expect(() =>
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'ALL_DAY',
+        eventDate: '2026-09-07',
+        eventType: 'MILITARY_TRAINING',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        targetAdmissionCategory: null,
+        teachingCalcEffect: 'CANCEL',
+        topic: '新生军训',
+        version: 1,
+      }),
+    ).toThrow('请选择招生起点。');
+  });
+
+  it('clears a stale military training scope for ordinary events', () => {
+    expect(
+      normalizeCalendarEventFormValues({
+        dayPeriod: 'ALL_DAY',
+        eventDate: '2026-09-08',
+        eventType: 'ACTIVITY',
+        recordStatus: 'ACTIVE',
+        semesterId: 21,
+        targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN',
+        teachingCalcEffect: 'NO_CHANGE',
+        topic: '开学活动',
+        version: 1,
+      }),
+    ).toEqual(expect.objectContaining({ targetAdmissionCategory: null }));
+  });
+
   it('builds default empty form state for create flows', () => {
     expect(buildDefaultSemesterFormValues({ getFullYear: () => 2026 })).toEqual({
       endDate: '',
@@ -234,6 +296,7 @@ describe('academic-calendar-management application', () => {
       recordStatus: 'ACTIVE',
       ruleNote: undefined,
       semesterId: 9,
+      targetAdmissionCategory: null,
       teachingCalcEffect: 'NO_CHANGE',
       topic: '',
       version: 1,

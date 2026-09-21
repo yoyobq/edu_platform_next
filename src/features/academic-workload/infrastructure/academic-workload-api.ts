@@ -15,6 +15,18 @@ export type AcademicStableWorkloadCalcEffect =
   | 'SWAP_IN'
   | 'SWAP_OUT';
 
+export type AcademicCalendarEventType =
+  | 'ACTIVITY'
+  | 'EXAM'
+  | 'HOLIDAY'
+  | 'HOLIDAY_MAKEUP'
+  | 'MILITARY_TRAINING'
+  | 'REPEATED_TEACHING_DAY'
+  | 'SPORTS_MEET'
+  | 'WEEKDAY_SWAP';
+export type AcademicPlannedOccurrenceExclusionReason = 'MILITARY_TRAINING';
+export type ClassAdmissionCategory = 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN';
+
 export type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
 
 export type ListAcademicSemestersInput = {
@@ -38,6 +50,10 @@ export type AcademicStableWorkloadOccurrence = {
   courseCategory: string | null;
   courseName: string | null;
   date: string;
+  exclusionEventId: number | null;
+  exclusionEventType: AcademicCalendarEventType | null;
+  exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
+  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
@@ -92,6 +108,10 @@ type AcademicTeachingDeliveryDTO = {
   courseName: string | null;
   date: string;
   deliveryKey: string;
+  exclusionEventId: number | null;
+  exclusionEventType: AcademicCalendarEventType | null;
+  exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
+  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
@@ -198,6 +218,10 @@ const LIST_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
         courseCategory
         courseName
         date
+        exclusionEventId
+        exclusionEventType
+        exclusionReason
+        exclusionTargetAdmissionCategory
         isEffective
         logicalDayOfWeek
         periodEnd
@@ -245,6 +269,10 @@ const LIST_MY_ACADEMIC_STABLE_WORKLOAD_OCCURRENCES_QUERY = `
         courseCategory
         courseName
         date
+        exclusionEventId
+        exclusionEventType
+        exclusionReason
+        exclusionTargetAdmissionCategory
         isEffective
         logicalDayOfWeek
         periodEnd

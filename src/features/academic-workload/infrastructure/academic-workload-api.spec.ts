@@ -12,6 +12,7 @@ vi.mock('@/shared/graphql', () => ({
 }));
 
 import {
+  requestAcademicStableWorkloadOccurrences,
   requestAcademicWorkloadDepartmentOptions,
   requestAcademicWorkloadReport,
 } from './academic-workload-api';
@@ -22,6 +23,65 @@ describe('academic-workload api', () => {
     executeGraphQLMock.mockReset();
     isGraphQLIngressErrorMock.mockReset();
     isGraphQLIngressErrorMock.mockReturnValue(false);
+  });
+
+  it('requests and maps military training exclusion trace for stable workload', async () => {
+    executeGraphQLMock.mockResolvedValueOnce({
+      listAcademicStableWorkloadTeachingDeliveries: {
+        invalidReason: null,
+        isComplete: true,
+        isValid: true,
+        items: [
+          {
+            calcEffect: 'MAKEUP',
+            classroomName: 'A101',
+            coefficient: '1.00',
+            courseCategory: 'THEORY',
+            courseName: '数学',
+            date: '2026-09-08',
+            deliveryKey: 'delivery:1',
+            exclusionEventId: 91,
+            exclusionEventType: 'MILITARY_TRAINING',
+            exclusionReason: 'MILITARY_TRAINING',
+            exclusionTargetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN',
+            isEffective: false,
+            logicalDayOfWeek: 2,
+            periodEnd: 2,
+            periodStart: 1,
+            physicalDayOfWeek: 2,
+            semesterId: 202601,
+            staffId: 'T-001',
+            staffName: '王老师',
+            sstsCourseId: 'C-001',
+            teachingClassName: '高一 1 班',
+            teachingClasses: [{ sstsTeachingClassId: 'TC-001', teachingClassName: '高一 1 班' }],
+            weekIndex: 1,
+          },
+        ],
+        truncationReason: null,
+      },
+    });
+
+    await expect(
+      requestAcademicStableWorkloadOccurrences({ semesterId: 202601, staffId: 'T-001' }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({
+            exclusionReason: 'MILITARY_TRAINING',
+            exclusionTargetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN',
+            isEffective: false,
+          }),
+        ],
+      }),
+    );
+
+    const query = executeGraphQLMock.mock.calls[0]?.[0] as string;
+
+    expect(query).toContain('exclusionReason');
+    expect(query).toContain('exclusionEventId');
+    expect(query).toContain('exclusionEventType');
+    expect(query).toContain('exclusionTargetAdmissionCategory');
   });
 
   it('requests academic workload report with normalized filters and backend totals', async () => {

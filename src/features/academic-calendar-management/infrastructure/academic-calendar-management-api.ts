@@ -39,6 +39,7 @@ const ACADEMIC_CALENDAR_EVENT_FIELDS = `
   recordStatus
   ruleNote
   semesterId
+  targetAdmissionCategory
   teachingCalcEffect
   topic
   updatedAt
@@ -153,6 +154,7 @@ type StudentAcademicCalendarEventDTO = {
   originalDate: string | null;
   ruleNote: string | null;
   semesterId: number;
+  targetAdmissionCategory: AcademicCalendarEventRecord['targetAdmissionCategory'];
   teachingCalcEffect: AcademicCalendarEventRecord['teachingCalcEffect'];
   topic: string;
 };
@@ -205,6 +207,7 @@ const LIST_STUDENT_ACADEMIC_CALENDAR_EVENTS_QUERY = `
       teachingCalcEffect
       ruleNote
       originalDate
+      targetAdmissionCategory
     }
   }
 `;
@@ -247,6 +250,7 @@ function mapAcademicCalendarEventRecord(
     recordStatus: record.recordStatus,
     ruleNote: record.ruleNote,
     semesterId: record.semesterId,
+    targetAdmissionCategory: record.targetAdmissionCategory,
     teachingCalcEffect: record.teachingCalcEffect,
     topic: record.topic,
     updatedAt: record.updatedAt,
@@ -288,6 +292,7 @@ function mapStudentAcademicCalendarEventRecord(
     recordStatus: 'ACTIVE',
     ruleNote: record.ruleNote,
     semesterId: record.semesterId,
+    targetAdmissionCategory: record.targetAdmissionCategory,
     teachingCalcEffect: record.teachingCalcEffect,
     topic: record.topic,
     updatedAt: '',

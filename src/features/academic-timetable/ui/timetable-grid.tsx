@@ -44,6 +44,10 @@ function formatHeaderDate(value: string) {
 }
 
 function resolveOccurrenceStatusLabel(item: AcademicTimetableItem) {
+  if (item.exclusionReason === 'MILITARY_TRAINING') {
+    return '军训停课';
+  }
+
   switch (item.calcEffect) {
     case 'CANCEL':
       return '停课';

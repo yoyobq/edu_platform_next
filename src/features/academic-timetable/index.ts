@@ -12,6 +12,9 @@ export {
   resolveTimetablePeriodCount,
 } from './application/timetable-grid';
 export type {
+  AcademicCalendarEventType,
+  AcademicPlannedOccurrenceExclusionReason,
+  AcademicPlannedTimetableProjectionInvalidReasonCode,
   AcademicTeacherSemesterScheduleItem,
   AcademicTeacherSemesterScheduleQueryFilters,
   AcademicTeachingClassOption,
@@ -20,6 +23,7 @@ export type {
   AcademicTimetableItem,
   AcademicTimetableQueryFilters,
   AcademicWeeklyTimetableQueryFilters,
+  ClassAdmissionCategory,
   ListAcademicSemestersInput,
   MyAcademicTeacherSemesterScheduleQueryFilters,
   MyAcademicTimetableQueryFilters,

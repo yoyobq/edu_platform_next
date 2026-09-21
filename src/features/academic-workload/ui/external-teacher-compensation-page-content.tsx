@@ -19,6 +19,7 @@ import {
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 import { compareExternalTeacherCompensationActualHours } from '../application/external-teacher-compensation';
+import { formatAcademicProjectionInvalidReason } from '../application/projection-invalid-reason';
 import { splitAcademicWorkloadTeachingClassNames } from '../application/teaching-class-format';
 import {
   buildTeachingWeekOptions,
@@ -1260,7 +1261,10 @@ export function ExternalTeacherCompensationPageContent({
           {!reportEnvelope.isValid ? (
             <Alert
               title="报表数据异常"
-              description={reportEnvelope.invalidReason ?? '当前条件返回的数据未通过完整性校验。'}
+              description={
+                formatAcademicProjectionInvalidReason(reportEnvelope.invalidReason) ??
+                '当前条件返回的数据未通过完整性校验。'
+              }
               showIcon
               type="error"
             />

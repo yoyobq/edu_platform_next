@@ -48,11 +48,11 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
       return;
     }
 
-    if (query.includes('query ListAcademicWeeklyPlannedTimetable')) {
+    if (query.includes('query ListAcademicWeeklyTeachingDeliveries')) {
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            listAcademicWeeklyPlannedTimetable: {
+            listAcademicWeeklyTeachingDeliveries: {
               invalidReason: null,
               isComplete: true,
               isValid: true,
@@ -64,17 +64,24 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
                   courseCategory: 'THEORY',
                   courseName: '测试课程',
                   date: '2026-05-04',
-                  isEffective: true,
+                  deliveryKey: 'delivery:9001',
+                  exclusionEventId: 301,
+                  exclusionEventType: 'MILITARY_TRAINING',
+                  exclusionReason: 'MILITARY_TRAINING',
+                  exclusionTargetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+                  isEffective: false,
                   logicalDayOfWeek: 1,
                   periodEnd: 1,
                   periodStart: 1,
                   physicalDayOfWeek: 1,
-                  scheduleId: 9001,
                   semesterId: 101,
-                  slotId: 9101,
                   staffId: 'staff-1001',
                   staffName: '测试老师',
+                  sstsCourseId: 'course-1',
                   teachingClassName: '测试班级',
+                  teachingClasses: [
+                    { sstsTeachingClassId: 'class-1', teachingClassName: '测试班级' },
+                  ],
                   weekIndex: 1,
                 },
               ],
@@ -88,11 +95,11 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
       return;
     }
 
-    if (query.includes('query ListMyAcademicSemesterPlannedTimetable')) {
+    if (query.includes('query ListMyAcademicSemesterTeachingDeliveries')) {
       await route.fulfill({
         body: JSON.stringify({
           data: {
-            listMyAcademicSemesterPlannedTimetable: {
+            listMyAcademicSemesterTeachingDeliveries: {
               invalidReason: null,
               isComplete: true,
               isValid: true,
@@ -104,17 +111,24 @@ async function mockHomeWorkbenchTimetableGraphQL(page: Page) {
                   courseCategory: 'THEORY',
                   courseName: '测试课程',
                   date: '2026-05-04',
-                  isEffective: true,
+                  deliveryKey: 'delivery:9001',
+                  exclusionEventId: 301,
+                  exclusionEventType: 'MILITARY_TRAINING',
+                  exclusionReason: 'MILITARY_TRAINING',
+                  exclusionTargetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+                  isEffective: false,
                   logicalDayOfWeek: 1,
                   periodEnd: 1,
                   periodStart: 1,
                   physicalDayOfWeek: 1,
-                  scheduleId: 9001,
                   semesterId: 101,
-                  slotId: 9101,
                   staffId: 'staff-1001',
                   staffName: '测试老师',
+                  sstsCourseId: 'course-1',
                   teachingClassName: '测试班级',
+                  teachingClasses: [
+                    { sstsTeachingClassId: 'class-1', teachingClassName: '测试班级' },
+                  ],
                   weekIndex: 1,
                 },
               ],
@@ -210,6 +224,7 @@ test('其他待办可以拖拽到周课表空格，并同步本地存储', async
 
   await expect(page.getByRole('heading', { name: '我的工作台' })).toBeVisible();
   await expect(page.getByText('测试课程')).toBeVisible();
+  await expect(page.getByText('军训停课')).toBeVisible();
   await expect(page.getByText('5月04日 - 5月10日')).toBeVisible();
   await expect(page.getByRole('link', { name: /教务助手 My 教学日志/ })).toHaveAttribute(
     'href',

@@ -77,6 +77,7 @@ describe('class-sync api', () => {
       items: [
         {
           action: 'CREATE',
+          admissionCategory: 'JUNIOR_HIGH_ORIGIN',
           classCode: 'upstream-class-code-1031501',
           classId: '1031501',
           className: '信息1501班',
@@ -89,6 +90,7 @@ describe('class-sync api', () => {
         },
         {
           action: 'SKIPPED_INVALID_UPSTREAM_GRADE',
+          admissionCategory: null,
           classCode: 'upstream-class-code-103AB01',
           classId: '103AB01',
           className: '信息AB01班',
@@ -125,6 +127,7 @@ describe('class-sync api', () => {
     expect(query).toContain('conflictCount');
     expect(query).toContain('classId');
     expect(query).toContain('classCode');
+    expect(query).toContain('admissionCategory');
     expect(query).toContain('majorId');
     expect(query).toContain('majorName');
     expect(query).toContain('gradeYear');
@@ -156,6 +159,7 @@ describe('class-sync api', () => {
       items: [
         {
           action: 'CREATED',
+          admissionCategory: 'HIGH_SCHOOL_ORIGIN',
           classCode: 'upstream-class-code-1031501',
           classId: '1031501',
           className: '信息1501班',
@@ -167,6 +171,7 @@ describe('class-sync api', () => {
         },
         {
           action: 'CONFLICT',
+          admissionCategory: 'HIGH_SCHOOL_ORIGIN',
           classCode: 'upstream-class-code-1031502',
           classId: '1031502',
           className: '信息1502班',
@@ -202,6 +207,7 @@ describe('class-sync api', () => {
     expect(query).toContain('conflictCount');
     expect(query).toContain('classId');
     expect(query).toContain('classCode');
+    expect(query).toContain('admissionCategory');
     expect(query).toContain('gradeYear');
     expect(query).toContain('sortOrder');
     expect(query).toContain('conflictReason');

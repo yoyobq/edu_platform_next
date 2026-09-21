@@ -51,6 +51,8 @@ import {
   type AcademicCalendarTeachingCalcEffect,
   type AcademicSemesterRecord,
   type CalendarEventFormValues,
+  CLASS_ADMISSION_CATEGORIES,
+  type ClassAdmissionCategory,
   type CreateAcademicCalendarEventInput,
   type CreateAcademicSemesterInput,
   type EventFilters,
@@ -72,9 +74,15 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   EXAM: '考试',
   HOLIDAY: '放假',
   HOLIDAY_MAKEUP: '调休补班',
+  MILITARY_TRAINING: '军训',
   REPEATED_TEACHING_DAY: '重复教学日',
   SPORTS_MEET: '运动会',
   WEEKDAY_SWAP: '工作日对调',
+};
+
+const ADMISSION_CATEGORY_LABELS: Record<ClassAdmissionCategory, string> = {
+  HIGH_SCHOOL_ORIGIN: '高中起点',
+  JUNIOR_HIGH_ORIGIN: '初中起点',
 };
 
 const RECORD_STATUS_LABELS: Record<AcademicCalendarEventRecordStatus, string> = {
@@ -122,6 +130,10 @@ const RECORD_STATUS_OPTIONS = ACADEMIC_CALENDAR_EVENT_RECORD_STATUSES.map((value
 }));
 const TEACHING_CALC_EFFECT_OPTIONS = ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS.map((value) => ({
   label: TEACHING_CALC_EFFECT_LABELS[value],
+  value,
+}));
+const ADMISSION_CATEGORY_OPTIONS = CLASS_ADMISSION_CATEGORIES.map((value) => ({
+  label: ADMISSION_CATEGORY_LABELS[value],
   value,
 }));
 const TERM_NUMBER_OPTIONS = [
@@ -289,6 +301,7 @@ export function AcademicCalendarManagementPageContent({
       recordStatus: record.recordStatus,
       ruleNote: record.ruleNote || undefined,
       semesterId: record.semesterId,
+      targetAdmissionCategory: record.targetAdmissionCategory,
       teachingCalcEffect: record.teachingCalcEffect,
       topic: record.topic,
       version: record.version,
@@ -467,6 +480,14 @@ export function AcademicCalendarManagementPageContent({
       ),
       title: '教学影响',
       width: 100,
+    },
+    {
+      dataIndex: 'targetAdmissionCategory',
+      key: 'targetAdmissionCategory',
+      render: (value: ClassAdmissionCategory | null) =>
+        value ? ADMISSION_CATEGORY_LABELS[value] : '—',
+      title: '招生起点',
+      width: 112,
     },
     {
       dataIndex: 'originalDate',
@@ -837,15 +858,31 @@ export function AcademicCalendarManagementPageContent({
           layout="vertical"
           requiredMark={false}
           onValuesChange={(changedValues) => {
+            if (changedValues.eventType === 'MILITARY_TRAINING') {
+              eventForm.setFieldsValue({
+                originalDate: null,
+                teachingCalcEffect: 'CANCEL',
+              });
+              return;
+            }
             if (changedValues.eventType === 'REPEATED_TEACHING_DAY') {
-              eventForm.setFieldValue('teachingCalcEffect', 'REPEAT');
+              eventForm.setFieldsValue({
+                targetAdmissionCategory: null,
+                teachingCalcEffect: 'REPEAT',
+              });
               return;
             }
             if (
               typeof changedValues.eventType !== 'undefined' &&
-              eventForm.getFieldValue('teachingCalcEffect') === 'REPEAT'
+              (eventForm.getFieldValue('teachingCalcEffect') === 'REPEAT' ||
+                selectedEventType === 'MILITARY_TRAINING')
             ) {
-              eventForm.setFieldValue('teachingCalcEffect', 'NO_CHANGE');
+              eventForm.setFieldsValue({
+                targetAdmissionCategory: null,
+                teachingCalcEffect: 'NO_CHANGE',
+              });
+            } else if (typeof changedValues.eventType !== 'undefined') {
+              eventForm.setFieldValue('targetAdmissionCategory', null);
             }
           }}
           onFinish={async (values) => {
@@ -918,9 +955,18 @@ export function AcademicCalendarManagementPageContent({
                 },
               ]}
             >
-              <Input type="date" />
+              <Input disabled={selectedEventType === 'MILITARY_TRAINING'} type="date" />
             </Form.Item>
           </ResponsiveGrid>
+          {selectedEventType === 'MILITARY_TRAINING' ? (
+            <Form.Item
+              label="招生起点"
+              name="targetAdmissionCategory"
+              rules={[{ message: '请选择招生起点。', required: true }]}
+            >
+              <Select placeholder="请选择招生起点" options={ADMISSION_CATEGORY_OPTIONS} />
+            </Form.Item>
+          ) : null}
           <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
             <Form.Item
               label="时间段"
@@ -951,11 +997,16 @@ export function AcademicCalendarManagementPageContent({
               rules={[{ message: '请选择教学影响。', required: true }]}
             >
               <Select
-                disabled={selectedEventType === 'REPEATED_TEACHING_DAY'}
-                options={
+                disabled={
+                  selectedEventType === 'MILITARY_TRAINING' ||
                   selectedEventType === 'REPEATED_TEACHING_DAY'
-                    ? TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value === 'REPEAT')
-                    : TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value !== 'REPEAT')
+                }
+                options={
+                  selectedEventType === 'MILITARY_TRAINING'
+                    ? TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value === 'CANCEL')
+                    : selectedEventType === 'REPEATED_TEACHING_DAY'
+                      ? TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value === 'REPEAT')
+                      : TEACHING_CALC_EFFECT_OPTIONS.filter((option) => option.value !== 'REPEAT')
                 }
               />
             </Form.Item>

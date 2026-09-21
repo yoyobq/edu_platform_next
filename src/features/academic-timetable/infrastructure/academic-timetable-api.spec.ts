@@ -39,6 +39,10 @@ describe('academic timetable api', () => {
             courseName: '信息技术1',
             date: '2026-03-02',
             deliveryKey: 'delivery:semantic:1',
+            exclusionEventId: 91,
+            exclusionEventType: 'MILITARY_TRAINING',
+            exclusionReason: 'MILITARY_TRAINING',
+            exclusionTargetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
             isEffective: true,
             logicalDayOfWeek: 1,
             periodEnd: 6,
@@ -71,11 +75,15 @@ describe('academic timetable api', () => {
         teachingClassName: '机电2601，机电2602',
         sstsTeachingClassId: null,
         coefficient: 1.6,
+        exclusionEventId: 91,
+        exclusionReason: 'MILITARY_TRAINING',
+        exclusionTargetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
       }),
     ]);
     expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain(
       'listAcademicSemesterTeachingDeliveries',
     );
+    expect(executeGraphQLMock.mock.calls[0]?.[0]).toContain('exclusionReason');
   });
 
   it('loads semester grid patterns from the same delivery semantics', async () => {

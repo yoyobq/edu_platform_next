@@ -46,10 +46,13 @@ const zeroDeductionItem = {
   netAdjustmentHours: '0',
   repeatedHours: '0',
   residualDeductedHours: '0',
+  rowKey: 'T-001:COURSE-001:CLASS-001',
   staffId: 'T-001',
   staffName: '王老师',
   teacherEngagementType: 'FULL_TIME_TEACHER',
   teachingClassName: '高一 1 班',
+  teachingClasses: [{ sstsTeachingClassId: 'CLASS-001', teachingClassName: '高一 1 班' }],
+  weekIndexes: [1, 2, 3, 4],
   workloadDepartmentId: 'ORG0302',
   workloadDepartmentName: '信息工程系',
 };
@@ -59,7 +62,7 @@ const repeatedTeachingItem = {
   dateAdjustments: [
     {
       date: '2026-04-06',
-      deductionSourceEventTypes: ['HOLIDAY'],
+      deductionSourceEventTypes: ['MILITARY_TRAINING'],
       netAdjustmentHours: '-2',
       repeatedHours: '0',
       residualDeductedHours: '2',
@@ -233,6 +236,9 @@ test('重复教学显示绿色正数并按净额汇总，补课日期不单独�
   ).toBeVisible();
   await expect(page.getByRole('columnheader', { name: /4月25日/ })).toHaveCount(0);
   await expect(detailRow.locator('td').nth(7)).toHaveText('-2');
+  await expect(
+    detailRow.locator('td').nth(7).locator('.academic-workload-deduction-summary-date-hour'),
+  ).toHaveAttribute('aria-label', /军训/);
   await expect(detailRow.locator('td').nth(9)).toHaveText('3');
   await expect(
     detailRow
