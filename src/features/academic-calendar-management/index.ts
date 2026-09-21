@@ -1,4 +1,8 @@
-export type { AcademicCalendarEventType, ClassAdmissionCategory } from './application/types';
+export type {
+  AcademicCalendarEventType,
+  AcademicMilitaryTrainingTarget,
+  ClassAdmissionCategory,
+} from './application/types';
 export {
   requestAcademicCalendarEventCreate,
   requestAcademicCalendarEventDelete,

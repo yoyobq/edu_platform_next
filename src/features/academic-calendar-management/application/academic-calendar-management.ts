@@ -193,7 +193,7 @@ export function normalizeCalendarEventFormValues(
     throw new Error('军训事件必须使用“停课”教学影响。');
   }
   if (isMilitaryTraining && !targetAdmissionCategory) {
-    throw new Error('请选择招生起点。');
+    throw new Error('请选择作用范围。');
   }
   if (requiresSourceDate && !originalDate) {
     throw new Error('请选择课表来源日期。');

@@ -23,6 +23,7 @@ export type AcademicCalendarEventType =
   | 'WEEKDAY_SWAP';
 export type AcademicPlannedOccurrenceExclusionReason = 'MILITARY_TRAINING';
 export type ClassAdmissionCategory = 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN';
+export type AcademicMilitaryTrainingTarget = ClassAdmissionCategory | 'ALL_FRESHMEN';
 
 export type AcademicTeacherSemesterScheduleWeekType = 'ALL' | 'EVEN' | 'ODD' | string;
 
@@ -54,7 +55,7 @@ type AcademicSemesterPlannedTimetableItemDTO = {
   exclusionEventId: number | null;
   exclusionEventType: AcademicCalendarEventType | null;
   exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
-  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
+  exclusionTargetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
@@ -133,7 +134,7 @@ export type AcademicTimetableItem = {
   exclusionEventId: number | null;
   exclusionEventType: AcademicCalendarEventType | null;
   exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
-  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
+  exclusionTargetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   isEffective: boolean;
   periodEnd: number;
   periodStart: number;

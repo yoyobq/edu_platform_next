@@ -98,6 +98,7 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
 };
 
 const ADMISSION_CATEGORY_LABELS = {
+  ALL_FRESHMEN: '全部新生',
   HIGH_SCHOOL_ORIGIN: '高中起点',
   JUNIOR_HIGH_ORIGIN: '初中起点',
 } as const;

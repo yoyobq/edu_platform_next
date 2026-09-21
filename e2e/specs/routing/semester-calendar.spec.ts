@@ -45,7 +45,7 @@ type AcademicCalendarEventSeed = {
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
-  targetAdmissionCategory?: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | null;
+  targetAdmissionCategory?: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | 'ALL_FRESHMEN' | null;
   teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
@@ -118,9 +118,9 @@ function buildAcademicCalendarState() {
       id: 206,
       originalDate: null,
       recordStatus: 'ACTIVE',
-      ruleNote: '初中新生军训安排',
+      ruleNote: '全部新生军训安排',
       semesterId: 101,
-      targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+      targetAdmissionCategory: 'ALL_FRESHMEN',
       teachingCalcEffect: 'CANCEL',
       topic: '新生军训',
       updatedAt: '2026-04-07T00:00:00.000Z',
@@ -460,7 +460,7 @@ test('student 访问正式学期校历页时应成功，并使用独立学生导
 
   await page.getByText('新生军训').click();
   await expect(page.getByText('作用范围')).toBeVisible();
-  await expect(page.getByText('初中起点')).toBeVisible();
+  await expect(page.getByText('全部新生', { exact: true })).toBeVisible();
   await page.keyboard.press('Escape');
 
   await ensureFullNavigation(page);

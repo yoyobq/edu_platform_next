@@ -2,11 +2,16 @@
 
 type WorkloadOccurrenceTrace = {
   exclusionReason: string | null;
-  exclusionTargetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | null;
+  exclusionTargetAdmissionCategory:
+    | 'HIGH_SCHOOL_ORIGIN'
+    | 'JUNIOR_HIGH_ORIGIN'
+    | 'ALL_FRESHMEN'
+    | null;
   isEffective: boolean;
 };
 
 const ADMISSION_CATEGORY_LABELS = {
+  ALL_FRESHMEN: '全部新生',
   HIGH_SCHOOL_ORIGIN: '高中起点',
   JUNIOR_HIGH_ORIGIN: '初中起点',
 } as const;

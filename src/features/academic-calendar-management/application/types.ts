@@ -10,7 +10,11 @@ export const ACADEMIC_CALENDAR_EVENT_TYPES = [
   'SPORTS_MEET',
   'WEEKDAY_SWAP',
 ] as const;
-export const CLASS_ADMISSION_CATEGORIES = ['JUNIOR_HIGH_ORIGIN', 'HIGH_SCHOOL_ORIGIN'] as const;
+export const ACADEMIC_MILITARY_TRAINING_TARGETS = [
+  'JUNIOR_HIGH_ORIGIN',
+  'HIGH_SCHOOL_ORIGIN',
+  'ALL_FRESHMEN',
+] as const;
 export const ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS = [
   'CANCEL',
   'MAKEUP',
@@ -25,7 +29,7 @@ export type AcademicCalendarEventRecordStatus =
 export type AcademicCalendarEventType = (typeof ACADEMIC_CALENDAR_EVENT_TYPES)[number];
 export type AcademicCalendarTeachingCalcEffect =
   (typeof ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS)[number];
-export type ClassAdmissionCategory = (typeof CLASS_ADMISSION_CATEGORIES)[number];
+export type AcademicMilitaryTrainingTarget = (typeof ACADEMIC_MILITARY_TRAINING_TARGETS)[number];
 
 export type AcademicSemesterRecord = {
   createdAt: string;
@@ -53,7 +57,7 @@ export type AcademicCalendarEventRecord = {
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote: string | null;
   semesterId: number;
-  targetAdmissionCategory: ClassAdmissionCategory | null;
+  targetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   updatedAt: string;
@@ -102,7 +106,7 @@ export type CreateAcademicCalendarEventInput = {
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote?: string;
   semesterId: number;
-  targetAdmissionCategory: ClassAdmissionCategory | null;
+  targetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   version: number;
@@ -133,7 +137,7 @@ export type CalendarEventFormValues = {
   recordStatus: AcademicCalendarEventRecordStatus;
   ruleNote?: string;
   semesterId?: number;
-  targetAdmissionCategory?: ClassAdmissionCategory | null;
+  targetAdmissionCategory?: AcademicMilitaryTrainingTarget | null;
   teachingCalcEffect: AcademicCalendarTeachingCalcEffect;
   topic: string;
   version: number;
@@ -144,3 +148,5 @@ export type EventFilters = {
   eventType?: AcademicCalendarEventType;
   recordStatus?: AcademicCalendarEventRecordStatus;
 };
+
+export type ClassAdmissionCategory = Exclude<AcademicMilitaryTrainingTarget, 'ALL_FRESHMEN'>;

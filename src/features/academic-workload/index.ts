@@ -2,6 +2,7 @@
 export type { AcademicProjectionInvalidReason } from './application/projection-invalid-reason';
 export type {
   AcademicCalendarEventType,
+  AcademicMilitaryTrainingTarget,
   AcademicPlannedOccurrenceExclusionReason,
   AcademicStableWorkloadCalcEffect,
   AcademicStableWorkloadEnvelope,

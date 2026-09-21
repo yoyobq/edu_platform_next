@@ -13,6 +13,7 @@ export {
 } from './application/timetable-grid';
 export type {
   AcademicCalendarEventType,
+  AcademicMilitaryTrainingTarget,
   AcademicPlannedOccurrenceExclusionReason,
   AcademicPlannedTimetableProjectionInvalidReasonCode,
   AcademicTeacherSemesterScheduleItem,

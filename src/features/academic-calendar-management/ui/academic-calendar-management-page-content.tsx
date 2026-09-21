@@ -44,15 +44,15 @@ import {
   ACADEMIC_CALENDAR_EVENT_RECORD_STATUSES,
   ACADEMIC_CALENDAR_EVENT_TYPES,
   ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS,
+  ACADEMIC_MILITARY_TRAINING_TARGETS,
   type AcademicCalendarEventDayPeriod,
   type AcademicCalendarEventRecord,
   type AcademicCalendarEventRecordStatus,
   type AcademicCalendarEventType,
   type AcademicCalendarTeachingCalcEffect,
+  type AcademicMilitaryTrainingTarget,
   type AcademicSemesterRecord,
   type CalendarEventFormValues,
-  CLASS_ADMISSION_CATEGORIES,
-  type ClassAdmissionCategory,
   type CreateAcademicCalendarEventInput,
   type CreateAcademicSemesterInput,
   type EventFilters,
@@ -80,7 +80,8 @@ const EVENT_TYPE_LABELS: Record<AcademicCalendarEventType, string> = {
   WEEKDAY_SWAP: '工作日对调',
 };
 
-const ADMISSION_CATEGORY_LABELS: Record<ClassAdmissionCategory, string> = {
+const ADMISSION_CATEGORY_LABELS: Record<AcademicMilitaryTrainingTarget, string> = {
+  ALL_FRESHMEN: '全部新生',
   HIGH_SCHOOL_ORIGIN: '高中起点',
   JUNIOR_HIGH_ORIGIN: '初中起点',
 };
@@ -132,7 +133,7 @@ const TEACHING_CALC_EFFECT_OPTIONS = ACADEMIC_CALENDAR_TEACHING_CALC_EFFECTS.map
   label: TEACHING_CALC_EFFECT_LABELS[value],
   value,
 }));
-const ADMISSION_CATEGORY_OPTIONS = CLASS_ADMISSION_CATEGORIES.map((value) => ({
+const ADMISSION_CATEGORY_OPTIONS = ACADEMIC_MILITARY_TRAINING_TARGETS.map((value) => ({
   label: ADMISSION_CATEGORY_LABELS[value],
   value,
 }));
@@ -484,9 +485,9 @@ export function AcademicCalendarManagementPageContent({
     {
       dataIndex: 'targetAdmissionCategory',
       key: 'targetAdmissionCategory',
-      render: (value: ClassAdmissionCategory | null) =>
+      render: (value: AcademicMilitaryTrainingTarget | null) =>
         value ? ADMISSION_CATEGORY_LABELS[value] : '—',
-      title: '招生起点',
+      title: '作用范围',
       width: 112,
     },
     {
@@ -960,11 +961,11 @@ export function AcademicCalendarManagementPageContent({
           </ResponsiveGrid>
           {selectedEventType === 'MILITARY_TRAINING' ? (
             <Form.Item
-              label="招生起点"
+              label="作用范围"
               name="targetAdmissionCategory"
-              rules={[{ message: '请选择招生起点。', required: true }]}
+              rules={[{ message: '请选择作用范围。', required: true }]}
             >
-              <Select placeholder="请选择招生起点" options={ADMISSION_CATEGORY_OPTIONS} />
+              <Select placeholder="请选择作用范围" options={ADMISSION_CATEGORY_OPTIONS} />
             </Form.Item>
           ) : null}
           <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>

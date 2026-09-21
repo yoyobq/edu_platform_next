@@ -215,48 +215,51 @@ describe('academic-calendar-management application', () => {
     ).toThrow('重复教学日必须使用“重复课表”教学影响。');
   });
 
-  it('normalizes military training to its backend-owned scope contract', () => {
-    expect(
-      normalizeCalendarEventFormValues({
+  it.each(['JUNIOR_HIGH_ORIGIN', 'HIGH_SCHOOL_ORIGIN', 'ALL_FRESHMEN'] as const)(
+    'normalizes military training scope %s',
+    (targetAdmissionCategory) => {
+      expect(
+        normalizeCalendarEventFormValues({
+          dayPeriod: 'MORNING',
+          eventDate: '2026-09-07',
+          eventType: 'MILITARY_TRAINING',
+          originalDate: '2026-09-01',
+          recordStatus: 'ACTIVE',
+          semesterId: 21,
+          targetAdmissionCategory,
+          teachingCalcEffect: 'CANCEL',
+          topic: '新生军训',
+          version: 1,
+        }),
+      ).toEqual({
         dayPeriod: 'MORNING',
         eventDate: '2026-09-07',
         eventType: 'MILITARY_TRAINING',
-        originalDate: '2026-09-01',
+        originalDate: null,
         recordStatus: 'ACTIVE',
+        ruleNote: undefined,
         semesterId: 21,
-        targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
+        targetAdmissionCategory,
         teachingCalcEffect: 'CANCEL',
         topic: '新生军训',
         version: 1,
-      }),
-    ).toEqual({
-      dayPeriod: 'MORNING',
-      eventDate: '2026-09-07',
-      eventType: 'MILITARY_TRAINING',
-      originalDate: null,
-      recordStatus: 'ACTIVE',
-      ruleNote: undefined,
-      semesterId: 21,
-      targetAdmissionCategory: 'JUNIOR_HIGH_ORIGIN',
-      teachingCalcEffect: 'CANCEL',
-      topic: '新生军训',
-      version: 1,
-    });
+      });
 
-    expect(() =>
-      normalizeCalendarEventFormValues({
-        dayPeriod: 'ALL_DAY',
-        eventDate: '2026-09-07',
-        eventType: 'MILITARY_TRAINING',
-        recordStatus: 'ACTIVE',
-        semesterId: 21,
-        targetAdmissionCategory: null,
-        teachingCalcEffect: 'CANCEL',
-        topic: '新生军训',
-        version: 1,
-      }),
-    ).toThrow('请选择招生起点。');
-  });
+      expect(() =>
+        normalizeCalendarEventFormValues({
+          dayPeriod: 'ALL_DAY',
+          eventDate: '2026-09-07',
+          eventType: 'MILITARY_TRAINING',
+          recordStatus: 'ACTIVE',
+          semesterId: 21,
+          targetAdmissionCategory: null,
+          teachingCalcEffect: 'CANCEL',
+          topic: '新生军训',
+          version: 1,
+        }),
+      ).toThrow('请选择作用范围。');
+    },
+  );
 
   it('clears a stale military training scope for ordinary events', () => {
     expect(

@@ -50,4 +50,12 @@ describe('academic workload occurrence trace labels', () => {
       expect(occurrence.calcEffect).toBe(calcEffect);
     },
   );
+  it('shows all freshmen as the exclusion scope', () => {
+    expect(
+      formatOccurrenceExclusionReason({
+        ...militaryOccurrence('NORMAL'),
+        exclusionTargetAdmissionCategory: 'ALL_FRESHMEN',
+      }),
+    ).toBe('军训 · 全部新生');
+  });
 });

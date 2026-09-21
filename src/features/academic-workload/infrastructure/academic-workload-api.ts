@@ -26,6 +26,7 @@ export type AcademicCalendarEventType =
   | 'WEEKDAY_SWAP';
 export type AcademicPlannedOccurrenceExclusionReason = 'MILITARY_TRAINING';
 export type ClassAdmissionCategory = 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN';
+export type AcademicMilitaryTrainingTarget = ClassAdmissionCategory | 'ALL_FRESHMEN';
 
 export type { AcademicTeacherEngagementType } from '../application/teacher-engagement';
 
@@ -53,7 +54,7 @@ export type AcademicStableWorkloadOccurrence = {
   exclusionEventId: number | null;
   exclusionEventType: AcademicCalendarEventType | null;
   exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
-  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
+  exclusionTargetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;
@@ -111,7 +112,7 @@ type AcademicTeachingDeliveryDTO = {
   exclusionEventId: number | null;
   exclusionEventType: AcademicCalendarEventType | null;
   exclusionReason: AcademicPlannedOccurrenceExclusionReason | null;
-  exclusionTargetAdmissionCategory: ClassAdmissionCategory | null;
+  exclusionTargetAdmissionCategory: AcademicMilitaryTrainingTarget | null;
   isEffective: boolean;
   logicalDayOfWeek: number;
   periodEnd: number;

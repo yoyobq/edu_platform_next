@@ -44,7 +44,7 @@ type AcademicCalendarEventSeed = {
   recordStatus: 'ACTIVE' | 'EXPIRED' | 'TENTATIVE';
   ruleNote: string | null;
   semesterId: number;
-  targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | null;
+  targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN' | 'JUNIOR_HIGH_ORIGIN' | 'ALL_FRESHMEN' | null;
   teachingCalcEffect: 'CANCEL' | 'MAKEUP' | 'NO_CHANGE' | 'REPEAT' | 'SWAP';
   topic: string;
   updatedAt: string;
@@ -696,7 +696,7 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
   await expect(page.getByText('校历联调事件（跨学期）')).toHaveCount(0);
 });
 
-test('创建军训并切换为普通事件时，应固定停课并显式清空军训范围', async ({ page }) => {
+test('全部新生军训只创建一条记录，支持修改范围、清空与删除', async ({ page }) => {
   await seedProtectedSession(page, {
     accessGroup: ['ADMIN'],
     displayName: 'admin-user',
@@ -706,10 +706,10 @@ test('创建军训并切换为普通事件时，应固定停课并显式清空�
 
   await page.goto(routes.academicCalendar);
   await page.getByRole('button', { name: '新增事件' }).click();
-  await page.getByLabel('事件标题').fill('高中新生军训');
+  await page.getByLabel('事件标题').fill('全体新生军训');
   await page.getByLabel('事件日期').fill('2026-09-08');
   await chooseDrawerSelectOption(page, '事件类型', '军训');
-  await chooseDrawerSelectOption(page, '招生起点', '高中起点');
+  await chooseDrawerSelectOption(page, '作用范围', '全部新生');
 
   const drawer = page.getByRole('dialog').last();
   const teachingEffectField = drawer.locator('.ant-form-item').filter({ hasText: '教学影响' });
@@ -722,13 +722,19 @@ test('创建军训并切换为普通事件时，应固定停课并显式清空�
   expect(submittedEventInputs.at(-1)).toMatchObject({
     eventType: 'MILITARY_TRAINING',
     originalDate: null,
-    targetAdmissionCategory: 'HIGH_SCHOOL_ORIGIN',
+    targetAdmissionCategory: 'ALL_FRESHMEN',
     teachingCalcEffect: 'CANCEL',
   });
-  const militaryTrainingRow = page.locator('tbody tr').filter({ hasText: '高中新生军训' });
+  expect(submittedEventInputs).toHaveLength(1);
+  const militaryTrainingRow = page.locator('tbody tr').filter({ hasText: '全体新生军训' });
   await expect(militaryTrainingRow).toContainText('军训');
-  await expect(militaryTrainingRow).toContainText('高中起点');
+  await expect(militaryTrainingRow).toContainText('全部新生');
 
+  await clickRowActionButton(militaryTrainingRow, '编辑');
+  await chooseDrawerSelectOption(page, '作用范围', '高中起点');
+  await clickDrawerPrimaryButton(page, '保存');
+  await expect(militaryTrainingRow).toContainText('高中起点');
+  await expect(militaryTrainingRow).toHaveCount(1);
   await clickRowActionButton(militaryTrainingRow, '编辑');
   await chooseDrawerSelectOption(page, '事件类型', '活动');
   await clickDrawerPrimaryButton(page, '保存');
@@ -737,4 +743,7 @@ test('创建军训并切换为普通事件时，应固定停课并显式清空�
     eventType: 'ACTIVITY',
     targetAdmissionCategory: null,
   });
+  await clickRowActionButton(militaryTrainingRow, '删除');
+  await confirmDelete(page);
+  await expect(militaryTrainingRow).toHaveCount(0);
 });
