@@ -59,6 +59,14 @@ npm run test:e2e
 - `PLAYWRIGHT_HOST`
 - `PLAYWRIGHT_NO_PROXY_APPEND`
 
+## 测试证据维护
+
+- E2E 使用真实组件动画生命周期，不全局注入 `disable-motion`：强制动画时长为零可能使弹窗退出事件丢失，留下遮挡页面的遮罩。使用可操作性检查和状态断言等待关闭，不使用 DOM 直接点击绕过遮挡。
+- 有固定 `expiresAt` 的有效会话 fixture 必须配套固定测试时钟；续期与过期另设场景，不依赖测试执行当天的日期。
+- 路由退役依据 `11078da`：`/labs/invite-issuer` 对已登录 admin / staff 均返回 404；签发承诺由 `/admin/verification-issuance` 的教师邀请与班级共享链接用例承接。正式前端不再暴露指定学生链接签发，见 [学生注册链接约定](./project-convention/public-auth-student-registration.md)。
+- 教职工邀请用例同时验证非法登录名不消费邀请，以及合法登录名完成激活、登录和首页课表加载。登录名约束见 [教职工邀请约定](./project-convention/public-auth-staff-invite.md)；首页 mock 对齐当前 `TeachingDeliveries` 查询，保留登录后课程可见断言。
+- 这里的 Playwright 用例通过 GraphQL mock 验证前端入口、交互及请求契约，不替代后端持久化 E2E 或真实上游联调。
+
 ## E2E 命名与文案约定
 
 - E2E 文件名继续使用英文 `kebab-case`，便于目录稳定、路径检索与团队协作

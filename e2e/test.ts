@@ -1,23 +1,5 @@
-import { expect, test as base } from '@playwright/test';
+// e2e/test.ts
 
-export { expect };
-
-export const test = base.extend({
-  page: async ({ page }, runPage) => {
-    await page.addInitScript(() => {
-      if (document.documentElement) {
-        document.documentElement.classList.add('disable-motion');
-      } else {
-        document.addEventListener(
-          'DOMContentLoaded',
-          () => {
-            document.documentElement.classList.add('disable-motion');
-          },
-          { once: true },
-        );
-      }
-    });
-
-    await runPage(page);
-  },
-});
+// 保留真实动画生命周期：强制 0s 会导致弹窗退出阶段丢失结束事件、遮罩残留。
+// 使用 Playwright 的可操作性检查和状态断言等待界面稳定。
+export { expect, test } from '@playwright/test';

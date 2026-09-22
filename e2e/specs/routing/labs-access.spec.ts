@@ -48,9 +48,7 @@ async function replaceStoredAccessToken(page: Page, accessToken: string) {
 }
 
 async function activateTab(page: Page, name: string) {
-  await page.getByRole('tab', { name }).evaluate((element) => {
-    (element as HTMLElement).click();
-  });
+  await page.getByRole('tab', { name, exact: true }).click();
 }
 
 test('已登录但不具备 admin 权限时，应继续拦截 labs 示例页', async ({ page }) => {
@@ -107,7 +105,7 @@ test('具备 admin 权限的已登录会话，应允许进入 labs 示例页', a
   await expect(page.getByRole('heading', { name: '第三工作区跳层 Demo' })).toBeVisible();
 });
 
-test('具备 admin 权限的已登录会话，应允许进入 labs invite issuer', async ({ page }) => {
+test('已退役的邀请签发 Labs 地址对 admin 返回 404', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -122,8 +120,7 @@ test('具备 admin 权限的已登录会话，应允许进入 labs invite issuer
 
   await page.goto(routes.labsInviteIssuer);
 
-  await expect(page.getByRole('heading', { name: '临时邀请签发页' })).toBeVisible();
-  await expect(page.getByRole('button', { name: '签发邀请' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });
 
 test('具备 admin 权限的已登录会话，应允许进入 admin 认证码签发', async ({ page }) => {
@@ -264,9 +261,7 @@ test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 la
   await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
 });
 
-test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 labs invite issuer', async ({
-  page,
-}) => {
+test('已退役的邀请签发 Labs 地址对 staff 同样返回 404', async ({ page }) => {
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -281,12 +276,14 @@ test('具备 staff 权限的已登录会话，不应继续访问 admin 专属 la
 
   await page.goto(routes.labsInviteIssuer);
 
-  await expect(page.getByRole('heading', { name: '访问被拒绝' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '路由不存在' })).toBeVisible();
 });
 
 test('labs upstream session demo 可登录 upstream、读取教师字典并滚动更新本地 token', async ({
   page,
 }) => {
+  // 固定有效会话时间，避免历史 expiresAt 随现实日期推进触发非本场景的保活续期。
+  await page.clock.setFixedTime(new Date('2026-05-01T07:00:00.000Z'));
   await mockApiHealth(page);
   await mockAuthGraphQL(page, {
     currentSession: {
@@ -431,6 +428,7 @@ test('labs upstream session demo 可登录 upstream、读取教师字典并滚�
   await page.getByPlaceholder('校园网登录密码').fill('secret-password');
   await page.getByRole('button', { name: '授权并继续' }).click();
 
+  await expect(page.getByRole('dialog')).toBeHidden();
   await expect(page.getByText('"value": "teacher-001"')).toBeVisible();
   await expect(page.getByText('预览条数：1')).toBeVisible();
 
@@ -519,62 +517,8 @@ test('labs upstream session demo 遇到跨账号残留 token 时，应清空旧 
     .toBeNull();
 });
 
-test('labs invite issuer 可签发 staff invite 并展示生成链接', async ({ page }) => {
-  await mockApiHealth(page);
-  await mockAuthGraphQL(page, {
-    currentSession: {
-      displayName: 'admin-user',
-      primaryAccessGroup: 'ADMIN',
-    },
-  });
-  await seedAuthSession(page, {
-    displayName: 'admin-user',
-    primaryAccessGroup: 'ADMIN',
-  });
-
-  await page.route('**/graphql', async (route) => {
-    const payload = route.request().postDataJSON() as
-      | {
-          query?: string;
-        }
-      | undefined;
-    const query = typeof payload?.query === 'string' ? payload.query : '';
-
-    if (query.includes('mutation InviteStaff')) {
-      await route.fulfill({
-        body: JSON.stringify({
-          data: {
-            inviteStaff: {
-              expiresAt: '2026-04-30T03:00:00.000Z',
-              message: '邀请签发成功',
-              recordId: 9527,
-              success: true,
-              token: 'staff-token-001',
-              type: 'INVITE_STAFF',
-            },
-          },
-        }),
-        contentType: 'application/json',
-        status: 200,
-      });
-      return;
-    }
-
-    await route.fallback();
-  });
-
-  await page.goto(routes.labsInviteIssuer);
-
-  await page.getByLabel('被邀请邮箱').fill('invitee@example.com');
-  await page.getByLabel('教职工 ID').fill('staff-001');
-  await page.getByRole('button', { name: '签发邀请' }).click();
-
-  await expect(page.getByText('教职工邀请已签发')).toBeVisible();
-  await expect(page.locator('text=staff-token-001').first()).toBeVisible();
-  await expect(page.getByText('/invite/staff/staff-token-001')).toBeVisible();
-});
-
-test('labs invite issuer 可签发学生注册链接并展示后端返回链接', async ({ page }) => {
+// 11078da 已退役旧 Lab；教师邀请由下方正式认证码签发用例覆盖。
+test('admin 认证码签发应创建班级共享注册链接并展示后端链接', async ({ page }) => {
   let requestInput: { classCode?: string; studentId?: string } | null = null;
 
   await mockApiHealth(page);
@@ -600,7 +544,25 @@ test('labs invite issuer 可签发学生注册链接并展示后端返回链接'
       | undefined;
     const query = typeof payload?.query === 'string' ? payload.query : '';
 
-    if (query.includes('mutation IssueStudentRegistrationLink')) {
+    if (query.includes('query VerificationIssuanceLocalClassOptions')) {
+      await route.fulfill({
+        json: {
+          data: {
+            listLocalClassOptions: [
+              {
+                id: 'class-001',
+                classCode: '7020002',
+                className: '计算机一班',
+                departmentId: 'department-001',
+                gradeYear: 2026,
+              },
+            ],
+          },
+        },
+      });
+      return;
+    }
+    if (query.includes('mutation VerificationIssuanceStudentRegistrationLink')) {
       requestInput = payload?.variables?.input ?? null;
       await route.fulfill({
         body: JSON.stringify({
@@ -612,7 +574,7 @@ test('labs invite issuer 可签发学生注册链接并展示后端返回链接'
               recordId: 7001,
               expiresAt: '2026-06-30T03:00:00.000Z',
               classCode: '7020002',
-              studentId: 'SRL000002',
+              studentId: null,
             },
           },
         }),
@@ -625,24 +587,21 @@ test('labs invite issuer 可签发学生注册链接并展示后端返回链接'
     await route.fallback();
   });
 
-  await page.goto(routes.labsInviteIssuer);
+  await page.goto(routes.adminVerificationIssuance);
 
   await page.getByText('学生注册链接', { exact: true }).click();
-  await page.getByLabel('班级代码').fill('7020002');
-  await page.getByLabel('学生编号（可选）').fill('SRL000002');
-  await page.getByRole('button', { name: '签发学生注册链接' }).click();
+  await page.getByLabel('班级', { exact: true }).click();
+  await page.getByText('计算机一班（7020002）', { exact: true }).click();
+  await page.getByRole('button', { name: '签发班级共享链接' }).click();
 
   await expect(page.getByText('学生注册链接已签发')).toBeVisible();
-  await expect(page.getByText('student-register-token-001', { exact: true })).toBeVisible();
   await expect(
     page.getByText(
       'https://frontend.example/invite/student-registration/student-register-token-001',
+      { exact: true },
     ),
   ).toBeVisible();
-  expect(requestInput).toEqual({
-    classCode: '7020002',
-    studentId: 'SRL000002',
-  });
+  expect(requestInput).toEqual({ classCode: '7020002' });
 });
 
 test('admin 认证码签发可从教师字典选择教师并发送邀请', async ({ page }) => {

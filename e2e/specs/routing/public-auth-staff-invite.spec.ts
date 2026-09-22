@@ -82,10 +82,10 @@ async function mockStaffHomeGraphQL(page: Page) {
       return;
     }
 
-    if (query.includes('query ListMyAcademicSemesterPlannedTimetable')) {
+    if (query.includes('query ListMyAcademicSemesterTeachingDeliveries')) {
       await fulfillGraphQL(route, {
         data: {
-          listMyAcademicSemesterPlannedTimetable: {
+          listMyAcademicSemesterTeachingDeliveries: {
             invalidReason: null,
             isComplete: true,
             isValid: true,
@@ -97,17 +97,24 @@ async function mockStaffHomeGraphQL(page: Page) {
                 courseCategory: 'THEORY',
                 courseName: '测试课程',
                 date: '2026-05-04',
+                deliveryKey: 'delivery:9001',
+                exclusionEventId: null,
+                exclusionEventType: null,
+                exclusionReason: null,
+                exclusionTargetAdmissionCategory: null,
                 isEffective: true,
                 logicalDayOfWeek: 1,
                 periodEnd: 1,
                 periodStart: 1,
                 physicalDayOfWeek: 1,
-                scheduleId: 9001,
                 semesterId: 101,
-                slotId: 9101,
+                sstsCourseId: 'course-1',
                 staffId: 'staff-001',
                 staffName: 'Alice Teacher',
                 teachingClassName: '测试班级',
+                teachingClasses: [
+                  { sstsTeachingClassId: 'class-1', teachingClassName: '测试班级' },
+                ],
                 weekIndex: 1,
               },
             ],
@@ -647,10 +654,16 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
   await page.locator('input#confirmPassword').fill('Invite!234');
   await page.getByRole('button', { name: '完成激活' }).click();
 
-  expect(consumeInput).not.toBeNull();
+  // 当前登录名契约禁止点号；先证明非法输入不会消费邀请，再完成合法路径。
+  await expect(page.getByText('登录名只允许字母、数字、下划线和短横线。')).toBeVisible();
+  expect(consumeInput).toBeNull();
+  await page.getByLabel('登录名（可选）').fill('alice-teacher');
+  await page.getByRole('button', { name: '完成激活' }).click();
+  await expect(page.getByText('账号已准备就绪')).toBeVisible();
+  await expect.poll(() => consumeInput).not.toBeNull();
   expect(consumeInput).toMatchObject({
     expectedType: 'INVITE_STAFF',
-    loginName: 'alice.teacher',
+    loginName: 'alice-teacher',
     loginPassword: 'Invite!234',
     nickname: 'Alice',
     staffDepartmentId: 'staff-department-001',
@@ -663,14 +676,14 @@ test('有效 staff invite 设置登录名后，应可使用登录名完成登录
   await page.getByRole('button', { name: '前往登录' }).click();
   await expect(page).toHaveURL(routes.login + '?skipRestore=1');
 
-  await page.getByLabel('登录名或邮箱').fill('alice.teacher');
+  await page.getByLabel('登录名或邮箱').fill('alice-teacher');
   await page.getByLabel('密码').fill('Invite!234');
   await page.getByRole('button', { name: /登\s*录/ }).click();
 
-  expect(loginInput).not.toBeNull();
+  await expect.poll(() => loginInput).not.toBeNull();
   expect(loginInput).toMatchObject({
     audience: 'DESKTOP',
-    loginName: 'alice.teacher',
+    loginName: 'alice-teacher',
     loginPassword: 'Invite!234',
     type: 'PASSWORD',
   });
