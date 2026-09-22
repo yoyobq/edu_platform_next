@@ -5,7 +5,17 @@ export { expect };
 export const test = base.extend({
   page: async ({ page }, runPage) => {
     await page.addInitScript(() => {
-      document.documentElement.classList.add('disable-motion');
+      if (document.documentElement) {
+        document.documentElement.classList.add('disable-motion');
+      } else {
+        document.addEventListener(
+          'DOMContentLoaded',
+          () => {
+            document.documentElement.classList.add('disable-motion');
+          },
+          { once: true },
+        );
+      }
     });
 
     await runPage(page);

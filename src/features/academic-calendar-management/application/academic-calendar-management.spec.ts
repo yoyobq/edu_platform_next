@@ -5,6 +5,7 @@ import {
   buildDefaultEventFormValues,
   buildDefaultSemesterFormValues,
   buildEventMutationRefreshPlan,
+  changeCalendarEventType,
   createEmptyEventFilters,
   normalizeCalendarEventFormValues,
   normalizeSemesterFormValues,
@@ -55,6 +56,32 @@ function buildEvent(overrides: Partial<AcademicCalendarEventRecord>): AcademicCa
 }
 
 describe('academic-calendar-management application', () => {
+  it('applies military and sports rules and clears them when leaving the event type', () => {
+    const initial = buildDefaultEventFormValues(1);
+    const military = { ...initial, ...changeCalendarEventType(initial, 'MILITARY_TRAINING') };
+    expect(military).toMatchObject({
+      teachingCalcEffect: 'CANCEL',
+      targetAdmissionCategory: 'ALL_FRESHMEN',
+      originalDate: null,
+    });
+    expect(changeCalendarEventType(military, 'ACTIVITY')).toMatchObject({
+      teachingCalcEffect: 'NO_CHANGE',
+      targetAdmissionCategory: null,
+    });
+    expect(
+      changeCalendarEventType({ ...initial, dayPeriod: 'MORNING' }, 'SPORTS_MEET'),
+    ).toMatchObject({ dayPeriod: 'ALL_DAY', teachingCalcEffect: 'CANCEL', originalDate: null });
+  });
+
+  it('validates dates against the chosen semester, including after moving an event', () => {
+    const values = { ...buildDefaultEventFormValues(1), topic: '活动', eventDate: '2026-09-08' };
+    expect(() =>
+      normalizeCalendarEventFormValues(values, { startDate: '2026-02-01', endDate: '2026-07-01' }),
+    ).toThrow('事件日期必须位于所属学期');
+    expect(
+      normalizeCalendarEventFormValues(values, { startDate: '2026-09-01', endDate: '2026-12-31' }),
+    ).toMatchObject({ eventDate: '2026-09-08' });
+  });
   it('sorts semesters by display order before academic time', () => {
     const sorted = sortSemesters([
       buildSemester({ id: 3, schoolYear: 2024, sortOrder: 20, termNumber: 1 }),
@@ -133,7 +160,7 @@ describe('academic-calendar-management application', () => {
       dayPeriod: 'ALL_DAY',
       eventDate: '2026-05-01',
       eventType: 'HOLIDAY',
-      originalDate: undefined,
+      originalDate: null,
       recordStatus: 'ACTIVE',
       ruleNote: '五一放假',
       semesterId: 7,

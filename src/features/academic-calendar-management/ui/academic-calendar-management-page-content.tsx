@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 import { CalendarOutlined } from '@ant-design/icons';
 import {
   Alert,
   Badge,
   Button,
   Card,
+  Collapse,
   Drawer,
   Form,
   Input,
@@ -15,30 +16,36 @@ import {
   Space,
   Switch,
   Table,
+  Tabs,
   Tag,
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 
-import { AcademicSemesterFormItem } from '@/entities/academic-semester';
+import { AcademicSemesterFormItem, AcademicSemesterSelect } from '@/entities/academic-semester';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
+import { ResponsiveGrid, useWidthBand } from '@/shared/ui/responsive-layout';
 
 import {
   buildAcademicCalendarEventQueryInput,
   buildDefaultEventFormValues,
   buildDefaultSemesterFormValues,
   buildEventMutationRefreshPlan,
+  changeCalendarEventType,
   createEmptyEventFilters,
   formatDateTime,
-  getSemesterDisplayName,
   normalizeCalendarEventFormValues,
   normalizeSemesterFormValues,
   pickNextSemesterId,
+  requiresCalendarSourceDate,
   sortCalendarEvents,
   sortSemesters,
 } from '../application/academic-calendar-management';
+import {
+  calendarEventQueryReducer,
+  initialCalendarEventQueryState,
+} from '../application/calendar-event-query-state';
 import {
   ACADEMIC_CALENDAR_EVENT_DAY_PERIODS,
   ACADEMIC_CALENDAR_EVENT_RECORD_STATUSES,
@@ -159,6 +166,22 @@ type AcademicCalendarManagementPageContentProps = {
   updateAcademicSemester: (input: UpdateAcademicSemesterInput) => Promise<AcademicSemesterRecord>;
 };
 
+function CalendarFormGrid({ children }: { children: ReactNode }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const { band } = useWidthBand(ref, [{ max: 439, value: 'single' }], 'double');
+  return (
+    <div
+      ref={ref}
+      className="grid gap-x-4"
+      style={{
+        gridTemplateColumns: band === 'single' ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function AcademicCalendarManagementPageContent({
   createAcademicCalendarEvent,
   createAcademicSemester,
@@ -174,13 +197,20 @@ export function AcademicCalendarManagementPageContent({
   const [eventForm] = Form.useForm<CalendarEventFormValues>();
   const selectedEventType = Form.useWatch('eventType', eventForm);
   const selectedTeachingCalcEffect = Form.useWatch('teachingCalcEffect', eventForm);
+  const formSemesterId = Form.useWatch('semesterId', eventForm);
+  const [activeTab, setActiveTab] = useState('events');
+  const eventRequestId = useRef(0);
   const [semesters, setSemesters] = useState<AcademicSemesterRecord[]>([]);
   const [semestersLoading, setSemestersLoading] = useState(true);
   const [semesterError, setSemesterError] = useState<string | null>(null);
   const [selectedSemesterId, setSelectedSemesterId] = useState<number | null>(null);
-  const [events, setEvents] = useState<AcademicCalendarEventRecord[]>([]);
-  const [eventsLoading, setEventsLoading] = useState(false);
-  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [eventQuery, dispatchEventQuery] = useReducer(
+    calendarEventQueryReducer,
+    initialCalendarEventQueryState,
+  );
+  const events = eventQuery.records;
+  const eventsLoading = eventQuery.status === 'loading';
+  const eventsError = eventQuery.error;
   const [eventFilters, setEventFilters] = useState<EventFilters>(createEmptyEventFilters);
   const [isSemesterDrawerOpen, setIsSemesterDrawerOpen] = useState(false);
   const [semesterDrawerMode, setSemesterDrawerMode] = useState<'create' | 'edit'>('create');
@@ -195,6 +225,12 @@ export function AcademicCalendarManagementPageContent({
     selectedSemesterId === null
       ? null
       : (semesters.find((record) => record.id === selectedSemesterId) ?? null);
+  const formSemester = semesters.find((record) => record.id === formSemesterId);
+  const requiresSourceDate = requiresCalendarSourceDate(selectedTeachingCalcEffect);
+  const fixedEffect =
+    selectedEventType === 'MILITARY_TRAINING' ||
+    selectedEventType === 'SPORTS_MEET' ||
+    selectedEventType === 'REPEATED_TEACHING_DAY';
 
   const loadSemesters = useCallback(
     async (options?: { preferredSemesterId?: number | null }) => {
@@ -219,8 +255,8 @@ export function AcademicCalendarManagementPageContent({
 
   const loadEvents = useCallback(
     async (semesterId: number, filters: EventFilters) => {
-      setEventsLoading(true);
-      setEventsError(null);
+      const requestId = ++eventRequestId.current;
+      dispatchEventQuery({ type: 'start', requestId });
 
       try {
         const result = sortCalendarEvents(
@@ -229,11 +265,13 @@ export function AcademicCalendarManagementPageContent({
           ),
         );
 
-        setEvents(result);
+        dispatchEventQuery({ type: 'success', requestId, records: result });
       } catch (error) {
-        setEventsError(error instanceof Error ? error.message : '暂时无法加载校历事件列表。');
-      } finally {
-        setEventsLoading(false);
+        dispatchEventQuery({
+          type: 'failure',
+          requestId,
+          error: error instanceof Error ? error.message : '暂时无法加载校历事件列表。',
+        });
       }
     },
     [listAcademicCalendarEvents],
@@ -245,8 +283,7 @@ export function AcademicCalendarManagementPageContent({
 
   useEffect(() => {
     if (selectedSemesterId === null) {
-      setEvents([]);
-      setEventsError(null);
+      dispatchEventQuery({ type: 'clear', requestId: ++eventRequestId.current });
       return;
     }
 
@@ -449,6 +486,9 @@ export function AcademicCalendarManagementPageContent({
           <div className="mt-0.5 text-xs">
             <Typography.Text type="secondary">
               {EVENT_TYPE_LABELS[record.eventType]} · {DAY_PERIOD_LABELS[record.dayPeriod]}
+              {record.targetAdmissionCategory
+                ? ` · ${ADMISSION_CATEGORY_LABELS[record.targetAdmissionCategory]}`
+                : ''}
             </Typography.Text>
           </div>
         </div>
@@ -481,14 +521,6 @@ export function AcademicCalendarManagementPageContent({
       ),
       title: '教学影响',
       width: 100,
-    },
-    {
-      dataIndex: 'targetAdmissionCategory',
-      key: 'targetAdmissionCategory',
-      render: (value: AcademicMilitaryTrainingTarget | null) =>
-        value ? ADMISSION_CATEGORY_LABELS[value] : '—',
-      title: '作用范围',
-      width: 112,
     },
     {
       dataIndex: 'originalDate',
@@ -556,166 +588,180 @@ export function AcademicCalendarManagementPageContent({
     },
   ];
 
+  const semesterPanel = (
+    <Card
+      extra={
+        <Button type="primary" onClick={openCreateSemesterDrawer}>
+          新增学期
+        </Button>
+      }
+      title="学期管理"
+    >
+      {semesterError ? (
+        <Alert
+          action={
+            <Button size="small" type="primary" onClick={() => void loadSemesters()}>
+              重试
+            </Button>
+          }
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={semesterError}
+          type="error"
+        />
+      ) : null}
+
+      <Table<AcademicSemesterRecord>
+        columns={semesterColumns}
+        dataSource={semesters}
+        loading={semestersLoading}
+        pagination={{ pageSize: 10, showSizeChanger: false }}
+        rowKey="id"
+        scroll={{ x: 1120 }}
+        size="medium"
+      />
+    </Card>
+  );
+  const eventPanel = (
+    <Card
+      extra={
+        <Button
+          disabled={selectedSemesterId === null}
+          type="primary"
+          onClick={openCreateEventDrawer}
+        >
+          新增事件
+        </Button>
+      }
+      title={
+        <div className="flex flex-col">
+          <span>校历事件管理</span>
+        </div>
+      }
+    >
+      <div className="mb-4 flex flex-wrap items-center gap-4">
+        <AcademicSemesterSelect
+          aria-label="选择学期"
+          placeholder="请选择学期"
+          records={semesters}
+          loading={semestersLoading}
+          showHiddenState
+          style={{ width: 320, maxWidth: '100%' }}
+          value={selectedSemesterId}
+          onChange={(value) => {
+            setSelectedSemesterId(value);
+            setEventFilters(createEmptyEventFilters());
+          }}
+        />
+        {selectedSemester ? (
+          <Typography.Text type="secondary">
+            {selectedSemester.startDate} 至 {selectedSemester.endDate}
+          </Typography.Text>
+        ) : null}
+        {semesterError ? <Button onClick={() => void loadSemesters()}>重新加载学期</Button> : null}
+      </div>
+      {semesterError ? <Alert type="error" showIcon title={semesterError} /> : null}
+      <div className="mb-4 flex flex-col gap-4">
+        <ResponsiveGrid className="gap-3" columns={{ compact: 1, wide: 4 }}>
+          <Input
+            placeholder="筛选事件日期"
+            type="date"
+            value={eventFilters.eventDate || ''}
+            onChange={(event) =>
+              setEventFilters((current) => ({
+                ...current,
+                eventDate: event.target.value || undefined,
+              }))
+            }
+          />
+          <Select
+            allowClear
+            options={EVENT_TYPE_OPTIONS}
+            placeholder="筛选事件类型"
+            value={eventFilters.eventType}
+            onChange={(value) =>
+              setEventFilters((current) => ({
+                ...current,
+                eventType: value,
+              }))
+            }
+          />
+          <Select
+            allowClear
+            options={RECORD_STATUS_OPTIONS}
+            placeholder="筛选记录状态"
+            value={eventFilters.recordStatus}
+            onChange={(value) =>
+              setEventFilters((current) => ({
+                ...current,
+                recordStatus: value,
+              }))
+            }
+          />
+          <Button onClick={() => setEventFilters(createEmptyEventFilters())}>重置筛选</Button>
+        </ResponsiveGrid>
+      </div>
+
+      {eventsError ? (
+        <Alert
+          action={
+            <Button
+              disabled={selectedSemesterId === null}
+              size="small"
+              type="primary"
+              onClick={() => {
+                if (selectedSemesterId !== null) {
+                  void loadEvents(selectedSemesterId, eventFilters);
+                }
+              }}
+            >
+              重试
+            </Button>
+          }
+          showIcon
+          style={{ marginBottom: 16 }}
+          title={eventsError}
+          type="error"
+        />
+      ) : null}
+
+      <Table<AcademicCalendarEventRecord>
+        columns={eventColumns}
+        dataSource={selectedSemesterId === null ? [] : events}
+        loading={eventsLoading}
+        locale={{
+          emptyText:
+            selectedSemesterId === null
+              ? '请选择学期；如无可选学期，请先到“学期管理”新增'
+              : '当前筛选条件下暂无校历事件',
+        }}
+        pagination={{ pageSize: 12, showSizeChanger: false }}
+        rowKey="id"
+        scroll={{ x: 1180 }}
+        size="medium"
+      />
+    </Card>
+  );
   return (
     <div className="flex flex-col gap-6">
       {messageContextHolder}
-
       <DecoratedPageHeader
-        description="本页用于维护学期与校历事件。上方管理学期，下方按当前选中学期维护对应校历事件。"
         icon={<CalendarOutlined />}
         title="学期与校历事件管理"
+        description="选择学期维护校历事件，或前往学期管理设置学期日期。"
       />
-
-      <Card
-        extra={
-          <Button type="primary" onClick={openCreateSemesterDrawer}>
-            新增学期
-          </Button>
-        }
-        title="学期管理"
-      >
-        {semesterError ? (
-          <Alert
-            action={
-              <Button size="small" type="primary" onClick={() => void loadSemesters()}>
-                重试
-              </Button>
-            }
-            showIcon
-            style={{ marginBottom: 16 }}
-            title={semesterError}
-            type="error"
-          />
-        ) : null}
-
-        <Table<AcademicSemesterRecord>
-          columns={semesterColumns}
-          dataSource={semesters}
-          loading={semestersLoading}
-          pagination={{ pageSize: 10, showSizeChanger: false }}
-          rowKey="id"
-          rowSelection={{
-            onChange: (selectedRowKeys) => setSelectedSemesterId(selectedRowKeys[0] as number),
-            selectedRowKeys: selectedSemesterId !== null ? [selectedSemesterId] : [],
-            type: 'radio',
-          }}
-          scroll={{ x: 1120 }}
-          size="medium"
-          onRow={(record) => ({
-            className: 'cursor-pointer',
-            onClick: () => setSelectedSemesterId(record.id),
-          })}
-        />
-      </Card>
-
-      <Card
-        extra={
-          <Button
-            disabled={selectedSemesterId === null}
-            type="primary"
-            onClick={openCreateEventDrawer}
-          >
-            新增事件
-          </Button>
-        }
-        title={
-          <div className="flex flex-col">
-            <span>校历事件管理</span>
-            {selectedSemester ? (
-              <div className="mt-1 text-sm font-normal">
-                <Typography.Text type="secondary">
-                  当前选中学期：{getSemesterDisplayName(selectedSemester)}
-                </Typography.Text>
-              </div>
-            ) : null}
-          </div>
-        }
-      >
-        <div className="mb-4 flex flex-col gap-4">
-          <ResponsiveGrid className="gap-3" columns={{ compact: 1, wide: 4 }}>
-            <Input
-              placeholder="筛选事件日期"
-              type="date"
-              value={eventFilters.eventDate || ''}
-              onChange={(event) =>
-                setEventFilters((current) => ({
-                  ...current,
-                  eventDate: event.target.value || undefined,
-                }))
-              }
-            />
-            <Select
-              allowClear
-              options={EVENT_TYPE_OPTIONS}
-              placeholder="筛选事件类型"
-              value={eventFilters.eventType}
-              onChange={(value) =>
-                setEventFilters((current) => ({
-                  ...current,
-                  eventType: value,
-                }))
-              }
-            />
-            <Select
-              allowClear
-              options={RECORD_STATUS_OPTIONS}
-              placeholder="筛选记录状态"
-              value={eventFilters.recordStatus}
-              onChange={(value) =>
-                setEventFilters((current) => ({
-                  ...current,
-                  recordStatus: value,
-                }))
-              }
-            />
-            <Button onClick={() => setEventFilters(createEmptyEventFilters())}>重置筛选</Button>
-          </ResponsiveGrid>
-        </div>
-
-        {eventsError ? (
-          <Alert
-            action={
-              <Button
-                disabled={selectedSemesterId === null}
-                size="small"
-                type="primary"
-                onClick={() => {
-                  if (selectedSemesterId !== null) {
-                    void loadEvents(selectedSemesterId, eventFilters);
-                  }
-                }}
-              >
-                重试
-              </Button>
-            }
-            showIcon
-            style={{ marginBottom: 16 }}
-            title={eventsError}
-            type="error"
-          />
-        ) : null}
-
-        <Table<AcademicCalendarEventRecord>
-          columns={eventColumns}
-          dataSource={selectedSemesterId === null ? [] : events}
-          loading={eventsLoading}
-          locale={{
-            emptyText:
-              selectedSemesterId === null
-                ? '请在上方选择学期以查看校历事件'
-                : '当前筛选条件下暂无校历事件',
-          }}
-          pagination={{ pageSize: 12, showSizeChanger: false }}
-          rowKey="id"
-          scroll={{ x: 1180 }}
-          size="medium"
-        />
-      </Card>
-
+      <Tabs
+        activeKey={activeTab}
+        onChange={setActiveTab}
+        items={[
+          { key: 'events', label: '校历事件', children: eventPanel },
+          { key: 'semesters', label: '学期管理', children: semesterPanel },
+        ]}
+      />
       <Drawer
         destroyOnHidden
-        extra={
-          <Space>
+        footer={
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
             <Button onClick={closeSemesterDrawer}>取消</Button>
             <Button
               loading={semesterSubmitting}
@@ -729,7 +775,7 @@ export function AcademicCalendarManagementPageContent({
           </Space>
         }
         open={isSemesterDrawerOpen}
-        size={480}
+        size={600}
         title={semesterDrawerMode === 'create' ? '新增学期' : '编辑学期'}
         onClose={closeSemesterDrawer}
       >
@@ -767,7 +813,7 @@ export function AcademicCalendarManagementPageContent({
           >
             <Input placeholder="例如：2025-2026 学年第二学期" />
           </Form.Item>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <CalendarFormGrid>
             <Form.Item
               label="学年"
               name="schoolYear"
@@ -782,8 +828,8 @@ export function AcademicCalendarManagementPageContent({
             >
               <Select options={TERM_NUMBER_OPTIONS} />
             </Form.Item>
-          </ResponsiveGrid>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          </CalendarFormGrid>
+          <CalendarFormGrid>
             <Form.Item
               label="开始日期"
               name="startDate"
@@ -798,8 +844,8 @@ export function AcademicCalendarManagementPageContent({
             >
               <Input type="date" />
             </Form.Item>
-          </ResponsiveGrid>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          </CalendarFormGrid>
+          <CalendarFormGrid>
             <Form.Item
               label="教学开始日期"
               name="firstTeachingDate"
@@ -814,11 +860,11 @@ export function AcademicCalendarManagementPageContent({
             >
               <Input type="date" />
             </Form.Item>
-          </ResponsiveGrid>
+          </CalendarFormGrid>
           <Form.Item label="当前学期" name="isCurrent" valuePropName="checked">
             <Switch checkedChildren="是" unCheckedChildren="否" />
           </Form.Item>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <CalendarFormGrid>
             <Form.Item label="普通选择器展示" name="isVisible" valuePropName="checked">
               <Switch checkedChildren="展示" unCheckedChildren="隐藏" />
             </Form.Item>
@@ -829,15 +875,17 @@ export function AcademicCalendarManagementPageContent({
             >
               <InputNumber precision={0} style={{ width: '100%' }} />
             </Form.Item>
-          </ResponsiveGrid>
+          </CalendarFormGrid>
         </Form>
       </Drawer>
 
       <Drawer
         destroyOnHidden
-        extra={
-          <Space>
-            <Button onClick={closeEventDrawer}>取消</Button>
+        footer={
+          <Space style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button disabled={eventSubmitting} onClick={closeEventDrawer}>
+              取消
+            </Button>
             <Button
               loading={eventSubmitting}
               type="primary"
@@ -850,48 +898,40 @@ export function AcademicCalendarManagementPageContent({
           </Space>
         }
         open={isEventDrawerOpen}
-        size={480}
+        size={600}
         title={eventDrawerMode === 'create' ? '新增校历事件' : '编辑校历事件'}
-        onClose={closeEventDrawer}
+        mask={{ closable: false }}
+        keyboard={!eventSubmitting}
+        onClose={() => {
+          if (!eventSubmitting) closeEventDrawer();
+        }}
       >
         <Form<CalendarEventFormValues>
           form={eventForm}
           layout="vertical"
+          scrollToFirstError
+          disabled={eventSubmitting}
           requiredMark={false}
           onValuesChange={(changedValues) => {
-            if (changedValues.eventType === 'MILITARY_TRAINING') {
-              eventForm.setFieldsValue({
-                originalDate: null,
-                targetAdmissionCategory: 'ALL_FRESHMEN',
-                teachingCalcEffect: 'CANCEL',
-              });
-              return;
-            }
-            if (changedValues.eventType === 'REPEATED_TEACHING_DAY') {
-              eventForm.setFieldsValue({
-                targetAdmissionCategory: null,
-                teachingCalcEffect: 'REPEAT',
-              });
-              return;
-            }
-            if (
-              typeof changedValues.eventType !== 'undefined' &&
-              (eventForm.getFieldValue('teachingCalcEffect') === 'REPEAT' ||
-                selectedEventType === 'MILITARY_TRAINING')
+            if (changedValues.eventType) {
+              eventForm.setFieldsValue(
+                changeCalendarEventType(
+                  { ...eventForm.getFieldsValue(true), eventType: selectedEventType },
+                  changedValues.eventType,
+                ),
+              );
+            } else if (
+              changedValues.teachingCalcEffect &&
+              !requiresCalendarSourceDate(changedValues.teachingCalcEffect)
             ) {
-              eventForm.setFieldsValue({
-                targetAdmissionCategory: null,
-                teachingCalcEffect: 'NO_CHANGE',
-              });
-            } else if (typeof changedValues.eventType !== 'undefined') {
-              eventForm.setFieldValue('targetAdmissionCategory', null);
+              eventForm.setFieldValue('originalDate', null);
             }
           }}
           onFinish={async (values) => {
             setEventSubmitting(true);
 
             try {
-              const normalizedValues = normalizeCalendarEventFormValues(values);
+              const normalizedValues = normalizeCalendarEventFormValues(values, formSemester);
               const result =
                 eventDrawerMode === 'create'
                   ? await createAcademicCalendarEvent(normalizedValues)
@@ -930,36 +970,40 @@ export function AcademicCalendarManagementPageContent({
             selectProps={{ showHiddenState: true }}
           />
           <Form.Item
+            label="事件类型"
+            name="eventType"
+            rules={[{ message: '请选择事件类型。', required: true }]}
+          >
+            <Select options={EVENT_TYPE_OPTIONS} />
+          </Form.Item>
+          <Form.Item
             label="事件标题"
             name="topic"
             rules={[{ message: '请输入事件标题。', required: true }]}
           >
-            <Input placeholder="请输入事件标题" />
+            <Input
+              maxLength={100}
+              placeholder={
+                selectedEventType === 'MILITARY_TRAINING' ? '例如：新生军训' : '例如：国庆节放假'
+              }
+            />
           </Form.Item>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <CalendarFormGrid>
             <Form.Item
               label="事件日期"
               name="eventDate"
               rules={[{ message: '请选择事件日期。', required: true }]}
             >
-              <Input type="date" />
+              <Input type="date" min={formSemester?.startDate} max={formSemester?.endDate} />
             </Form.Item>
             <Form.Item
-              label="课表来源日期"
-              name="originalDate"
-              rules={[
-                {
-                  message: '请选择课表来源日期。',
-                  required:
-                    selectedTeachingCalcEffect === 'MAKEUP' ||
-                    selectedTeachingCalcEffect === 'SWAP' ||
-                    selectedTeachingCalcEffect === 'REPEAT',
-                },
-              ]}
+              label="时间段"
+              name="dayPeriod"
+              rules={[{ message: '请选择时间段。', required: true }]}
             >
-              <Input disabled={selectedEventType === 'MILITARY_TRAINING'} type="date" />
+              <Select disabled={selectedEventType === 'SPORTS_MEET'} options={DAY_PERIOD_OPTIONS} />
             </Form.Item>
-          </ResponsiveGrid>
+          </CalendarFormGrid>
           {selectedEventType === 'MILITARY_TRAINING' ? (
             <Form.Item
               label="作用范围"
@@ -969,23 +1013,7 @@ export function AcademicCalendarManagementPageContent({
               <Select placeholder="请选择作用范围" options={ADMISSION_CATEGORY_OPTIONS} />
             </Form.Item>
           ) : null}
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
-            <Form.Item
-              label="时间段"
-              name="dayPeriod"
-              rules={[{ message: '请选择时间段。', required: true }]}
-            >
-              <Select options={DAY_PERIOD_OPTIONS} />
-            </Form.Item>
-            <Form.Item
-              label="事件类型"
-              name="eventType"
-              rules={[{ message: '请选择事件类型。', required: true }]}
-            >
-              <Select options={EVENT_TYPE_OPTIONS} />
-            </Form.Item>
-          </ResponsiveGrid>
-          <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2 }}>
+          <CalendarFormGrid>
             <Form.Item
               label="记录状态"
               name="recordStatus"
@@ -996,6 +1024,7 @@ export function AcademicCalendarManagementPageContent({
             <Form.Item
               label="教学影响"
               name="teachingCalcEffect"
+              hidden={fixedEffect}
               rules={[{ message: '请选择教学影响。', required: true }]}
             >
               <Select
@@ -1012,17 +1041,54 @@ export function AcademicCalendarManagementPageContent({
                 }
               />
             </Form.Item>
-          </ResponsiveGrid>
+          </CalendarFormGrid>
+          {fixedEffect ? (
+            <div className="mb-4">
+              <Alert
+                showIcon
+                type="info"
+                title={
+                  selectedEventType === 'MILITARY_TRAINING'
+                    ? '所选范围的新生在该时段停课，其他年级不受影响。'
+                    : selectedEventType === 'SPORTS_MEET'
+                      ? '运动会当天全天停课。'
+                      : '在事件日期重复来源日期的课表，来源日期照常上课。'
+                }
+              />
+            </div>
+          ) : null}
           <Form.Item
-            label="版本号"
-            name="version"
-            rules={[{ message: '请输入版本号。', required: true }]}
+            label="课表来源日期"
+            name="originalDate"
+            hidden={!requiresSourceDate}
+            rules={[{ message: '请选择课表来源日期。', required: requiresSourceDate }]}
           >
-            <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+            <Input type="date" min={formSemester?.startDate} max={formSemester?.endDate} />
           </Form.Item>
-          <Form.Item label="规则说明" name="ruleNote">
-            <Input.TextArea placeholder="可选，填写规则说明" rows={4} />
-          </Form.Item>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: 'more',
+                label: '更多设置',
+                forceRender: true,
+                children: (
+                  <>
+                    <Form.Item
+                      label="版本号"
+                      name="version"
+                      rules={[{ message: '请输入版本号。', required: true }]}
+                    >
+                      <InputNumber min={1} precision={0} style={{ width: '100%' }} />
+                    </Form.Item>
+                    <Form.Item label="规则说明" name="ruleNote">
+                      <Input.TextArea maxLength={255} placeholder="可选，填写规则说明" rows={3} />
+                    </Form.Item>
+                  </>
+                ),
+              },
+            ]}
+          />
         </Form>
       </Drawer>
     </div>

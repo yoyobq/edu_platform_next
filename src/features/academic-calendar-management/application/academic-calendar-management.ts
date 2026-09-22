@@ -11,6 +11,7 @@ import {
 import type {
   AcademicCalendarEventDayPeriod,
   AcademicCalendarEventRecord,
+  AcademicCalendarEventType,
   AcademicSemesterRecord,
   CalendarEventFormValues,
   CreateAcademicCalendarEventInput,
@@ -149,6 +150,39 @@ export function buildDefaultEventFormValues(
   };
 }
 
+export function changeCalendarEventType(
+  values: CalendarEventFormValues,
+  eventType: AcademicCalendarEventType,
+): Partial<CalendarEventFormValues> {
+  const wasFixed = ['MILITARY_TRAINING', 'SPORTS_MEET', 'REPEATED_TEACHING_DAY'].includes(
+    values.eventType,
+  );
+  if (eventType === 'MILITARY_TRAINING' || eventType === 'SPORTS_MEET') {
+    return {
+      eventType,
+      teachingCalcEffect: 'CANCEL',
+      originalDate: null,
+      targetAdmissionCategory: eventType === 'MILITARY_TRAINING' ? 'ALL_FRESHMEN' : null,
+      ...(eventType === 'SPORTS_MEET' ? { dayPeriod: 'ALL_DAY' as const } : {}),
+    };
+  }
+  return {
+    eventType,
+    targetAdmissionCategory: null,
+    teachingCalcEffect:
+      eventType === 'REPEATED_TEACHING_DAY'
+        ? 'REPEAT'
+        : wasFixed
+          ? 'NO_CHANGE'
+          : values.teachingCalcEffect,
+    originalDate: eventType === 'REPEATED_TEACHING_DAY' || !wasFixed ? values.originalDate : null,
+  };
+}
+
+export function requiresCalendarSourceDate(effect: CalendarEventFormValues['teachingCalcEffect']) {
+  return effect === 'MAKEUP' || effect === 'SWAP' || effect === 'REPEAT';
+}
+
 export function normalizeSemesterFormValues(
   values: SemesterFormValues,
 ): CreateAcademicSemesterInput {
@@ -168,10 +202,13 @@ export function normalizeSemesterFormValues(
 
 export function normalizeCalendarEventFormValues(
   values: CalendarEventFormValues,
+  semester?: Pick<AcademicSemesterRecord, 'startDate' | 'endDate'>,
 ): CreateAcademicCalendarEventInput {
   const semesterId = values.semesterId;
   const isMilitaryTraining = values.eventType === 'MILITARY_TRAINING';
-  const originalDate = isMilitaryTraining ? null : normalizeOptionalDate(values.originalDate);
+  const originalDate = requiresCalendarSourceDate(values.teachingCalcEffect)
+    ? normalizeOptionalDate(values.originalDate)
+    : null;
   const targetAdmissionCategory = isMilitaryTraining
     ? (values.targetAdmissionCategory ?? null)
     : null;
@@ -200,6 +237,24 @@ export function normalizeCalendarEventFormValues(
   }
   if (requiresSourceDate && originalDate === values.eventDate) {
     throw new Error('课表来源日期不能与事件日期相同。');
+  }
+  if (
+    values.eventType === 'SPORTS_MEET' &&
+    (values.dayPeriod !== 'ALL_DAY' || values.teachingCalcEffect !== 'CANCEL')
+  ) {
+    throw new Error('运动会必须为全天停课。');
+  }
+  if (semester) {
+    for (const [label, date] of [
+      ['事件日期', values.eventDate],
+      ['课表来源日期', originalDate],
+    ]) {
+      if (date && (date < semester.startDate || date > semester.endDate)) {
+        throw new Error(
+          `${label}必须位于所属学期的 ${semester.startDate} 至 ${semester.endDate} 内。`,
+        );
+      }
+    }
   }
 
   return {

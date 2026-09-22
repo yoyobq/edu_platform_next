@@ -539,7 +539,7 @@ test('admin 访问正式学期与校历页面时应成功', async ({ page }) => 
 
   await expect(page).toHaveURL(routes.academicCalendar);
   await expect(page.getByRole('heading', { name: '学期与校历事件管理' })).toBeVisible();
-  await expect(page.getByText('当前选中学期：2025-2026 学年第二学期')).toBeVisible();
+  await expect(page.getByText('2025-2026 学年第二学期 · 当前', { exact: true })).toBeVisible();
 });
 
 test('academic officer 访问正式学期与校历页面时应成功', async ({ page }) => {
@@ -592,8 +592,9 @@ test('正式页应支持学期 CRUD', async ({ page }) => {
   await page.goto(routes.academicCalendar);
 
   await expect(page.getByText('春季运动会')).toBeVisible();
-  await expect(page.getByText('当前选中学期：2025-2026 学年第二学期')).toBeVisible();
+  await expect(page.getByText('2025-2026 学年第二学期 · 当前', { exact: true })).toBeVisible();
 
+  await page.getByRole('tab', { name: '学期管理' }).click();
   await page.getByRole('button', { name: '新增学期' }).click();
   await fillSemesterForm(page, {
     endDate: '2027-01-12',
@@ -611,7 +612,6 @@ test('正式页应支持学期 CRUD', async ({ page }) => {
 
   await expect(page.getByText('学期已创建。')).toBeVisible();
   await expect(createdSemesterRow).toHaveCount(1);
-  await expect(page.getByText('当前选中学期：2026-2027 学年第二学期')).toBeVisible();
 
   await clickRowActionButton(createdSemesterRow, '编辑');
   await page.getByLabel('学期名称').fill('2026-2027 学年第二学期（修订）');
@@ -628,7 +628,8 @@ test('正式页应支持学期 CRUD', async ({ page }) => {
 
   await expect(page.getByText('学期已删除。')).toBeVisible();
   await expect(page.getByText('2026-2027 学年第二学期（修订）')).toHaveCount(0);
-  await expect(page.getByText('当前选中学期：2025-2026 学年第二学期')).toBeVisible();
+  await page.getByRole('tab', { name: '校历事件', exact: true }).click();
+  await expect(page.getByText('2025-2026 学年第二学期 · 当前', { exact: true })).toBeVisible();
 });
 
 test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', async ({ page }) => {
@@ -644,7 +645,7 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
   await page.goto(routes.academicCalendar);
 
   await expect(page.getByText('春季运动会')).toBeVisible();
-  await expect(page.getByText('当前选中学期：2025-2026 学年第二学期')).toBeVisible();
+  await expect(page.getByText('2025-2026 学年第二学期 · 当前', { exact: true })).toBeVisible();
 
   await page.locator('input[type="date"]').first().fill('2026-04-20');
   await expect(page.getByText('春季运动会')).toBeVisible();
@@ -666,8 +667,8 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
     .last()
     .locator('.ant-form-item')
     .filter({ hasText: '教学影响' });
-  await expect(teachingEffectField.locator('.ant-select')).toHaveClass(/ant-select-disabled/);
-  await expect(teachingEffectField).toContainText('重复课表');
+  await expect(teachingEffectField).toBeHidden();
+  await expect(page.getByText('在事件日期重复来源日期的课表，来源日期照常上课。')).toBeVisible();
   await clickDrawerPrimaryButton(page, '创建');
 
   await expect(page.getByText('校历事件已创建。')).toBeVisible();
@@ -680,10 +681,12 @@ test('正式页应支持校历事件 CRUD、筛选清空与跨学期切换', asy
   await clickRowActionButton(createdEventRow, '编辑');
   await page.getByLabel('事件标题').fill('校历联调事件（跨学期）');
   await chooseDrawerSelectOption(page, '归属学期', '2026-2027 学年第一学期');
+  await page.getByLabel('事件日期', { exact: true }).fill('2026-09-08');
+  await page.getByLabel('课表来源日期').fill('2026-09-09');
   await clickDrawerPrimaryButton(page, '保存');
 
   await expect(page.getByText('校历事件已更新。')).toBeVisible();
-  await expect(page.getByText('当前选中学期：2026-2027 学年第一学期')).toBeVisible();
+  await expect(page.getByText('2026-2027 学年第一学期', { exact: true })).toBeVisible();
   await expect(page.getByText('校历联调事件（跨学期）')).toBeVisible();
 
   const movedEventRow = page.locator('tbody tr').filter({
@@ -707,16 +710,18 @@ test('全部新生军训只创建一条记录，支持修改范围、清空与�
   await page.goto(routes.academicCalendar);
   await page.getByRole('button', { name: '新增事件' }).click();
   await page.getByLabel('事件标题').fill('全体新生军训');
-  await page.getByLabel('事件日期').fill('2026-09-08');
+  await page.getByLabel('事件日期').fill('2026-05-08');
   await chooseDrawerSelectOption(page, '事件类型', '军训');
-  await chooseDrawerSelectOption(page, '作用范围', '全部新生');
+  await expect(
+    page.getByRole('dialog').last().locator('.ant-form-item').filter({ hasText: '作用范围' }),
+  ).toContainText('全部新生');
 
   const drawer = page.getByRole('dialog').last();
   const teachingEffectField = drawer.locator('.ant-form-item').filter({ hasText: '教学影响' });
 
-  await expect(page.getByLabel('课表来源日期')).toBeDisabled();
-  await expect(teachingEffectField.locator('.ant-select')).toHaveClass(/ant-select-disabled/);
-  await expect(teachingEffectField).toContainText('停课');
+  await expect(page.getByLabel('课表来源日期')).toBeHidden();
+  await expect(teachingEffectField).toBeHidden();
+  await expect(drawer.getByText('所选范围的新生在该时段停课，其他年级不受影响。')).toBeVisible();
   await clickDrawerPrimaryButton(page, '创建');
 
   expect(submittedEventInputs.at(-1)).toMatchObject({
@@ -746,4 +751,76 @@ test('全部新生军训只创建一条记录，支持修改范围、清空与�
   await clickRowActionButton(militaryTrainingRow, '删除');
   await confirmDelete(page);
   await expect(militaryTrainingRow).toHaveCount(0);
+});
+
+test('切换学期清空旧筛选，新增事件继承所选学期，运动会固定全天停课', async ({ page }) => {
+  await seedProtectedSession(page, {
+    accessGroup: ['ADMIN'],
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+  const { submittedEventInputs } = await mockAcademicCalendarGraphQL(page);
+  await page.goto(routes.academicCalendar);
+  await expect(page.getByText('春季运动会')).toBeVisible();
+  await page.getByPlaceholder('筛选事件日期').fill('2026-04-21');
+  await expect(page.getByText('当前筛选条件下暂无校历事件')).toBeVisible();
+  await page.getByRole('combobox', { name: '选择学期' }).click();
+  await page
+    .locator('.ant-select-dropdown')
+    .getByText('2026-2027 学年第一学期', { exact: true })
+    .click();
+  await expect(page.getByText('开学典礼')).toBeVisible();
+  await expect(page.getByPlaceholder('筛选事件日期')).toHaveValue('');
+  await page.screenshot({ path: '/tmp/calendar-management-desktop.png' });
+  await page.getByRole('button', { name: '新增事件' }).click();
+  const drawer = page.getByRole('dialog').last();
+  await expect(drawer).toContainText('2026-2027 学年第一学期');
+  await page.getByLabel('事件标题').fill('秋季运动会');
+  await page.getByLabel('事件日期', { exact: true }).fill('2026-10-10');
+  await chooseDrawerSelectOption(page, '事件类型', '运动会');
+  await expect(drawer.getByText('运动会当天全天停课。')).toBeVisible();
+  await expect(page.getByLabel('课表来源日期')).toBeHidden();
+  await clickDrawerPrimaryButton(page, '创建');
+  await expect(page.getByText('校历事件已创建。')).toBeVisible();
+  expect(submittedEventInputs.at(-1)).toMatchObject({
+    semesterId: 102,
+    dayPeriod: 'ALL_DAY',
+    teachingCalcEffect: 'CANCEL',
+    originalDate: null,
+  });
+});
+
+test('军训抽屉在桌面和窄屏均可填写，底部操作保持可见', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.stack ?? error.message));
+  page.on('console', (entry) => {
+    if (entry.type() === 'error' && entry.text().includes('[antd')) errors.push(entry.text());
+  });
+  await seedProtectedSession(page, {
+    accessGroup: ['ADMIN'],
+    displayName: 'admin-user',
+    primaryAccessGroup: 'ADMIN',
+  });
+  await mockAcademicCalendarGraphQL(page);
+  await page.goto(routes.academicCalendar);
+  await expect(page.getByText('春季运动会')).toBeVisible();
+  await page.getByRole('button', { name: '新增事件' }).click();
+  await chooseDrawerSelectOption(page, '事件类型', '军训');
+  await page.getByLabel('事件标题').fill('新生军训');
+  await page.getByLabel('事件日期', { exact: true }).fill('2026-05-08');
+  const drawer = page.getByRole('dialog').last();
+  await drawer.getByText('新增校历事件', { exact: true }).click();
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
+  await expect(drawer.getByText('所选范围的新生在该时段停课，其他年级不受影响。')).toBeVisible();
+  await page.screenshot({ path: '/tmp/calendar-event-desktop.png' });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(drawer.getByRole('button', { name: /创\s*建/ })).toBeInViewport();
+  await expect(page.getByLabel('事件标题')).toBeInViewport();
+  await expect
+    .poll(() => drawer.evaluate((element) => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
+  await page.screenshot({ path: '/tmp/calendar-event-mobile.png' });
+  await clickDrawerPrimaryButton(page, '创建');
+  await expect(page.getByText('校历事件已创建。')).toBeVisible();
+  expect(errors).toEqual([]);
 });
