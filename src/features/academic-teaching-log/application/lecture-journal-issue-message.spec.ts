@@ -17,6 +17,12 @@ function buildGraphQLError(extensions: Record<string, unknown>): GraphQLFormatte
 }
 
 describe('lecture journal issue message', () => {
+  it('explains military training without requiring a blocking action', () => {
+    expect(resolveLectureJournalIssueMessage('MILITARY_TRAINING_WITH_UPSTREAM_PLAN')).toBe(
+      '该日期涉及新生军训，按本地教学周历应扣减课时，但校园网教学计划中仍安排了上课，请按计划照常填写，与结算课时无关。',
+    );
+  });
+
   it.each([
     'PLANNED_OCCURRENCE_PROJECTION_INVALID',
     'STAFF_ID_MISMATCH',

@@ -843,6 +843,14 @@ const JournalDraftCard = memo(function JournalDraftCard({
         </div>
       </div>
 
+      {!isIntegratedCard && item.warnings.includes('MILITARY_TRAINING_WITH_UPSTREAM_PLAN') ? (
+        <Alert
+          title={resolveLectureJournalIssueMessage('MILITARY_TRAINING_WITH_UPSTREAM_PLAN')}
+          showIcon
+          type="warning"
+        />
+      ) : null}
+
       {isIntegratedCard &&
       (visibleBlockingIssue ||
         visibleWarnings.length > 0 ||

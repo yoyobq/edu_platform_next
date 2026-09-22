@@ -7,6 +7,7 @@ import { includesAnyPattern } from '@/shared/string';
 
 export const INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH = 'INTEGRATED_JOURNAL_OCCURRENCE_MISMATCH';
 export const UPSTREAM_SESSION_STAFF_MISMATCH = 'UPSTREAM_SESSION_STAFF_MISMATCH';
+export const MILITARY_TRAINING_WITH_UPSTREAM_PLAN = 'MILITARY_TRAINING_WITH_UPSTREAM_PLAN';
 
 const UPSTREAM_STAFF_SCOPE_MISMATCH = 'UPSTREAM_STAFF_SCOPE_MISMATCH';
 const INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT = 'INTEGRATED_OCCURRENCE_HOURS_INSUFFICIENT';
@@ -20,6 +21,10 @@ export function isUpstreamSessionStaffMismatchIssue(value: string | null | undef
 export function resolveLectureJournalIssueMessage(value: string | null | undefined): string | null {
   if (!value) {
     return null;
+  }
+
+  if (value === MILITARY_TRAINING_WITH_UPSTREAM_PLAN) {
+    return '该日期涉及新生军训，按本地教学周历应扣减课时，但校园网教学计划中仍安排了上课，请按计划照常填写，与结算课时无关。';
   }
 
   if (
