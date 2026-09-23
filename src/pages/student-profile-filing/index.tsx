@@ -8,6 +8,7 @@ import { StudentProfileFilingPageContent } from '@/features/student-profile-fili
 export function StudentProfileFilingPage() {
   const loaderData = useLoaderData() as {
     currentAccount?: {
+      canGovernGraduationInfo?: boolean;
       accountId: number;
       displayName: string;
       lockedUpstreamLoginUserId: string | null;

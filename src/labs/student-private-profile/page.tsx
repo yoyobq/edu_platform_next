@@ -3962,6 +3962,15 @@ export function StudentPrivateProfileLabPage() {
                           )}
                         </Descriptions.Item>
                         <Descriptions.Item label="学期材料齐备性" span={3}>
+                          {registrationCardPreflight.scoreOverflows?.map((overflow) => (
+                            <Alert
+                              key={overflow.sequence}
+                              showIcon
+                              type="warning"
+                              title={`第 ${overflow.sequence} 学期：可展示课程 ${overflow.availableCount} 门，选取 ${overflow.displayedCount} 门，省略 ${overflow.omittedCount} 门`}
+                              description="按最终展示分数优先选取高分课程，入选课程仍按原顺序展示。"
+                            />
+                          ))}
                           <Space direction="vertical" size="small" style={{ width: '100%' }}>
                             <Space wrap>
                               {renderRegistrationCardTermStatusTag(

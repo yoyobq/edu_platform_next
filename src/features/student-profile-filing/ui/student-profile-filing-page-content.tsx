@@ -75,9 +75,12 @@ import {
   writeStudentProfileFilingFamilySupplement,
 } from '../infrastructure/student-profile-filing-api';
 
+import { StudentGraduationInfoForm } from './student-graduation-info-form';
+
 import './student-profile-filing-page-content.css';
 
 type CurrentAccount = {
+  canGovernGraduationInfo?: boolean;
   accountId: number;
   displayName: string;
   lockedUpstreamLoginUserId: string | null;
@@ -701,7 +704,12 @@ function formatFilingDateTimeParts(value: string | null | undefined) {
 export function StudentProfileFilingPageContent({
   currentAccount,
 }: StudentProfileFilingPageContentProps) {
-  const { message } = AntApp.useApp();
+  const { message, modal } = AntApp.useApp();
+  const [graduationStudent, setGraduationStudent] = useState<StudentProfileFilingStudent | null>(
+    null,
+  );
+  const [graduationDirty, setGraduationDirty] = useState(false);
+  const [graduationSaving, setGraduationSaving] = useState(false);
   const [familySupplementForm] = Form.useForm<FamilySupplementFormValues>();
   const [educationSupplementForm] = Form.useForm<EducationSupplementFormValues>();
   const [classOptions, setClassOptions] = useState<StudentProfileFilingClassOption[]>([]);
@@ -1377,12 +1385,24 @@ export function StudentProfileFilingPageContent({
   );
 
   const closeSupplementDrawer = useCallback(() => {
+    if (graduationSaving) return;
+    if (graduationDirty) {
+      modal.confirm({
+        title: '放弃未保存的毕业信息？',
+        onOk: () => {
+          setGraduationStudent(null);
+          setGraduationDirty(false);
+        },
+      });
+      return;
+    }
+    setGraduationStudent(null);
     setSupplementDrawerState(null);
     setSupplementFeedback(null);
     educationDefaultsAppliedRef.current = null;
     familySupplementForm.resetFields();
     educationSupplementForm.resetFields();
-  }, [educationSupplementForm, familySupplementForm]);
+  }, [educationSupplementForm, familySupplementForm, graduationDirty, graduationSaving, modal]);
 
   const handleSupplementSectionChange = useCallback(
     (section: StudentProfileFilingSupplementSection) => {
@@ -1723,6 +1743,18 @@ export function StudentProfileFilingPageContent({
                   {formatStudentProfileFilingSupplementActionLabel(supplementSections)}
                 </Button>
               ) : null}
+              {currentAccount.canGovernGraduationInfo ? (
+                <Button
+                  size="small"
+                  onClick={() => {
+                    setSupplementDrawerState(null);
+                    setGraduationDirty(false);
+                    setGraduationStudent(record);
+                  }}
+                >
+                  毕业信息
+                </Button>
+              ) : null}
             </Space>
           );
         },
@@ -1732,6 +1764,7 @@ export function StudentProfileFilingPageContent({
     ],
     [
       filingStudentId,
+      currentAccount.canGovernGraduationInfo,
       isClassFiling,
       isLoadingSupplementSummary,
       isSubmittingSupplement,
@@ -1749,7 +1782,7 @@ export function StudentProfileFilingPageContent({
       value: section,
     })) ?? [];
   const activeSupplementSection = supplementDrawerState?.activeSection ?? 'family';
-  const activeSupplementStudent = supplementDrawerState?.student ?? null;
+  const activeSupplementStudent = graduationStudent ?? supplementDrawerState?.student ?? null;
   const activeEducationResumeItems = activeSupplementStudent
     ? listEducationResumeDisplayItems({
         classOption: selectedClassOption,
@@ -1947,13 +1980,13 @@ export function StudentProfileFilingPageContent({
 
       <Drawer
         destroyOnHidden
-        open={Boolean(supplementDrawerState)}
+        open={Boolean(supplementDrawerState || graduationStudent)}
         size={480}
         title={
           activeSupplementStudent ? (
             <span className="student-profile-filing-supplement-drawer-title">
               <span className="student-profile-filing-supplement-drawer-title-context">
-                补充资料
+                {graduationStudent ? '毕业信息' : '补充资料'}
               </span>
               <span className="student-profile-filing-supplement-drawer-title-student">
                 {activeSupplementStudent.studentName}
@@ -1968,6 +2001,14 @@ export function StudentProfileFilingPageContent({
         }
         onClose={closeSupplementDrawer}
       >
+        {graduationStudent ? (
+          <StudentGraduationInfoForm
+            key={graduationStudent.studentId}
+            studentId={graduationStudent.studentId}
+            onDirtyChange={setGraduationDirty}
+            onBusyChange={setGraduationSaving}
+          />
+        ) : null}
         {supplementDrawerState ? (
           <Spin spinning={isLoadingSupplementSummary}>
             <div className="student-profile-filing-supplement-drawer-content">

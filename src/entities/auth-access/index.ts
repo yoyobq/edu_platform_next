@@ -238,6 +238,17 @@ export function hasStudentProfileFilingAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {
+  return (
+    hasStudentRegistrationCardReadinessAccess(input) ||
+    ((input.accessGroup ?? []).includes('STAFF') &&
+      (input.slotGroup ?? []).includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP))
+  );
+}
+
+export function hasStudentRegistrationCardReadinessAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
   const accessGroup = input.accessGroup ?? [];
   const slotGroup = input.slotGroup ?? [];
 
@@ -248,13 +259,19 @@ export function hasStudentProfileFilingAccess(input: {
   return (
     accessGroup.includes('STAFF') &&
     (slotGroup.includes(ACADEMIC_OFFICER_SLOT_GROUP) ||
-      slotGroup.includes(STUDENT_AFFAIRS_OFFICER_SLOT_GROUP) ||
       slotGroup.includes(CLASS_ADVISER_SLOT_GROUP) ||
       slotGroup.includes(COUNSELOR_SLOT_GROUP))
   );
 }
 
 export function hasStudentEvaluationCommentAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return hasStudentGraduationInfoGovernanceAccess(input);
+}
+
+export function hasStudentGraduationInfoGovernanceAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];
 }) {

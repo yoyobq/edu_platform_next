@@ -60,7 +60,9 @@ import {
   hasStaffSemesterProfilesAccess,
   hasStudentConductAlignmentAccess,
   hasStudentEvaluationCommentAccess,
+  hasStudentGraduationInfoGovernanceAccess,
   hasStudentProfileFilingAccess,
+  hasStudentRegistrationCardReadinessAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveClassAdviserGovernanceDepartmentScope,
   resolveUpstreamLoginLockedUserId,
@@ -73,6 +75,10 @@ import {
   loadStudentPrivateProfileLabRouteModule,
   studentPrivateProfileLabAccess,
 } from '@/labs/student-private-profile';
+import {
+  loadStudentRegistrationCardsLabRouteModule,
+  studentRegistrationCardsLabAccess,
+} from '@/labs/student-registration-cards';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -859,6 +865,18 @@ async function studentPrivateProfileLabLoader({ request }: LoaderFunctionArgs) {
   });
 }
 
+async function studentRegistrationCardsLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: studentRegistrationCardsLabAccess,
+    canAccess: (snapshot) =>
+      hasStudentRegistrationCardReadinessAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
+    request,
+  });
+}
+
 async function zquizPracticeActivitiesLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: zquizPracticeActivitiesLabAccess,
@@ -1072,6 +1090,10 @@ async function studentProfileFilingPageLoader({ request }: LoaderFunctionArgs) {
 
   return {
     currentAccount: {
+      canGovernGraduationInfo: hasStudentGraduationInfoGovernanceAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
       accountId: snapshot.accountId,
       displayName: snapshot.displayName,
       lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
@@ -1707,6 +1729,11 @@ const router = createBrowserRouter([
             path: 'student-private-profile',
             loader: studentPrivateProfileLabLoader,
             lazy: loadStudentPrivateProfileLabRouteModule,
+          },
+          {
+            path: 'student-registration-cards',
+            loader: studentRegistrationCardsLabLoader,
+            lazy: loadStudentRegistrationCardsLabRouteModule,
           },
           {
             path: 'zquiz-activity-builder',

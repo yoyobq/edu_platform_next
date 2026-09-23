@@ -307,6 +307,12 @@ export type StudentRegistrationCardTermMaterialReadiness = {
 };
 
 export type StudentRegistrationCardGenerationPreflight = {
+  scoreOverflows?: {
+    sequence: number;
+    availableCount: number;
+    displayedCount: number;
+    omittedCount: number;
+  }[];
   issueCodes: string[];
   missingSections: string[];
   status: StudentRegistrationCardGenerationStatus;
@@ -951,6 +957,7 @@ const STUDENT_PRIVATE_PROFILE_PREVIEW_QUERY = `
 `;
 
 const STUDENT_REGISTRATION_CARD_GENERATION_PREFLIGHT_FIELDS = `
+  scoreOverflows { sequence availableCount displayedCount omittedCount }
   studentId
   templateCode
   templateVersion
