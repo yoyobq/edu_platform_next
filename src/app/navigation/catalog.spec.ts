@@ -28,6 +28,41 @@ function findGroup(items: NavigationMetaItem[], key: string): NavigationGroupIte
 }
 
 describe('navigation catalog', () => {
+  it('学籍卡 Labs 菜单保持路由权限范围', () => {
+    for (const appEnv of ['dev', 'test', 'prod'] as const) {
+      const path = '/labs/student-registration-cards';
+      expect(canAccessNavigationPath(path, buildFilter({ appEnv }))).toBe(true);
+      for (const slot of [
+        'ACADEMIC_OFFICER',
+        'CLASS_ADVISER',
+        'COUNSELOR',
+        'STUDENT_AFFAIRS_OFFICER',
+        'TEACHING_GROUP_LEADER',
+        '',
+      ]) {
+        const filter = buildFilter({
+          appEnv,
+          primaryAccessGroup: 'STAFF',
+          accessGroup: ['STAFF'],
+          slotGroup: [slot],
+        });
+        const allowed = ['ACADEMIC_OFFICER', 'CLASS_ADVISER', 'COUNSELOR'].includes(slot);
+        expect(canAccessNavigationPath(path, filter)).toBe(allowed);
+        expect(
+          findGroup(getNavigationItems(filter), 'labs')?.children.some(
+            (item) => item.path === path,
+          ),
+        ).toBe(allowed);
+      }
+      expect(
+        canAccessNavigationPath(
+          path,
+          buildFilter({ appEnv, primaryAccessGroup: 'STUDENT', accessGroup: ['STUDENT'] }),
+        ),
+      ).toBe(false);
+    }
+  });
+
   it('merges domain providers into the current admin navigation tree', () => {
     const items = getNavigationItems(buildFilter());
 
@@ -91,6 +126,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
@@ -158,6 +194,7 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',
@@ -424,6 +461,7 @@ describe('navigation catalog', () => {
       '/class-affairs/student-conduct-alignment',
     ]);
     expect(findGroup(staffItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/student-registration-cards',
       '/labs/zquiz-activity-builder',
       '/labs/zquiz-exam-teacher-gradebook',
     ]);
@@ -833,6 +871,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/major-sync',
       '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
+      '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
       '/labs/student-private-profile',

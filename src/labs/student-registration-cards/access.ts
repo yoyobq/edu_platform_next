@@ -2,5 +2,5 @@
 export const studentRegistrationCardsLabAccess = {
   env: ['dev', 'prod'],
   allowedAccessLevels: ['admin', 'staff'],
-  menu: false,
+  menu: true,
 } as const;
