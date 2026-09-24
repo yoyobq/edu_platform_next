@@ -85,6 +85,7 @@ export type StudentStatus =
 export type UpstreamRosterPresence = 'RETURNED' | 'MISSING' | 'UNKNOWN';
 
 export type StudentRosterMembershipReconciliationItem = {
+  statusChangeEvidence?: RosterStatusChangeEvidence | null;
   action: string;
   activeDecisionId: string | null;
   activeDecisionEffectiveSemesterId: number | null;
@@ -166,3 +167,21 @@ export type CommitUpstreamStudentRosterReconciliationInput =
     confirmations?: StudentRosterMembershipConfirmationInput[];
     endDecisions?: StudentRosterMembershipEndDecisionInput[];
   };
+
+export type RosterStatusChangeEvent = {
+  logId: string;
+  changeTime: string | null;
+  typeCode: string | null;
+  grade: string | null;
+  classCode: string | null;
+  className: string | null;
+};
+export type RosterStatusChangeEvidence = {
+  studentId: string;
+  state: 'NOT_FETCHED' | 'FETCHED_EMPTY' | 'HAS_EVENTS' | 'UNAVAILABLE';
+  sourceStatus: string | null;
+  observedAt: string | null;
+  sourceTotal: number | null;
+  complete: boolean;
+  events: RosterStatusChangeEvent[];
+};

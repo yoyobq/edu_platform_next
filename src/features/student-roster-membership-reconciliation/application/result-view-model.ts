@@ -140,7 +140,11 @@ function buildActiveIncludeDecisionSummary(item: StudentRosterMembershipReconcil
     ? REASON_CODE_LABELS[item.activeDecisionReasonCode]
     : null;
 
-  return reasonLabel ? `已裁定为：${reasonLabel}。` : '已裁定为当前班归属。';
+  return reasonLabel
+    ? `已裁定为：${reasonLabel}。`
+    : item.activeDecisionOutcome === 'EXCLUDE'
+      ? '已裁定不在本班就读。'
+      : '已裁定为当前班归属。';
 }
 
 function buildBusinessSummary(

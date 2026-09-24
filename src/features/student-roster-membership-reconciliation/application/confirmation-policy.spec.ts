@@ -61,6 +61,23 @@ function buildItem(
 }
 
 describe('student roster membership confirmation policy', () => {
+  it('preserves the existing reason and semester when revising a historical inclusion', () => {
+    const item = buildItem({
+      key: 'retained',
+      action: 'SUPPRESSED_BY_INCLUDE_DECISION',
+      activeDecisionId: 'old',
+      activeDecisionOutcome: 'INCLUDE',
+      activeDecisionReasonCode: 'RETAINED_GRADE_CONFIRMED',
+      activeDecisionEffectiveSemesterId: 12,
+    });
+    expect(buildDefaultReplacementDecisionDrafts([item]).retained).toMatchObject({
+      decisionOutcome: 'INCLUDE',
+      reasonCode: 'RETAINED_GRADE_CONFIRMED',
+      effectiveSemesterId: 12,
+      selected: false,
+    });
+  });
+
   it('constrains transfer-in confirmations to the product-approved options', () => {
     const options = getConfirmationDecisionOptions('TRANSFER_IN_REQUIRES_CONFIRMATION');
 
@@ -272,8 +289,9 @@ describe('student roster membership confirmation policy', () => {
 
     expect(canEndDecision(includeEndableItem)).toBe(true);
     expect(canEndDecision(excludeEndableItem)).toBe(true);
-    expect(canEndDecision(suppressedItem)).toBe(false);
+    expect(canEndDecision(suppressedItem)).toBe(true);
     expect(drafts).toEqual({
+      suppressed: expect.objectContaining({ selected: false }),
       'include-endable': expect.objectContaining({
         decisionOutcome: 'EXCLUDE',
         reasonCode: 'TRANSFERRED_OUT_CONFIRMED',

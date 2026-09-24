@@ -1,21 +1,21 @@
 // src/features/student-roster-membership-reconciliation/ui/student-roster-membership-reconciliation-page-content.tsx
-
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ReconciliationOutlined, ReloadOutlined, SwapOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
   Card,
-  Descriptions,
+  Drawer,
   Form,
   Input,
-  Popconfirm,
+  Modal,
   Radio,
   Select,
   Spin,
   Table,
   Tabs,
   Tag,
+  Timeline,
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
@@ -48,14 +48,10 @@ import {
   buildPreRegisteredReviewCommitPayload,
   buildReplacementDecisionCommitPayload,
   canEndDecision,
-  CATEGORY_COLORS,
-  CATEGORY_LABELS,
   type ConfirmationDraft,
   DECISION_OUTCOME_COLORS,
   DECISION_OUTCOME_LABELS,
-  getActionLabel,
   getConfirmationDecisionOptions,
-  getEffectiveSemesterHelpText,
   getEffectiveSemesterLabel,
   getReplacementDecisionOptions,
   mergeCommitEndDecisions,
@@ -74,7 +70,6 @@ import {
   buildRosterReviewItems,
   countRosterReviewItemsByKind,
   filterRosterReviewItems,
-  ROSTER_REVIEW_KIND_COLORS,
   ROSTER_REVIEW_KIND_LABELS,
   ROSTER_REVIEW_KIND_ORDER,
   type RosterReviewItem,
@@ -84,6 +79,12 @@ import {
   hasRosterMembershipLocalClassOptionsAccess,
   resolveRosterSyncPermissionStrategy,
 } from '../application/roster-sync-permission';
+import {
+  formatDecisionSemester,
+  missingDecisionSemester,
+  STATUS_CHANGE_LABELS,
+  suggestStatusChangeDecision,
+} from '../application/status-change-evidence';
 import type {
   ClaimClassAdviserForRosterSyncResult,
   CurrentRosterMembershipAccount,
@@ -105,6 +106,7 @@ import {
   fetchRosterMembershipDepartmentOptions,
   isExpiredUpstreamSessionError,
   listLocalClassOptions,
+  refreshRosterStatusChange,
   requestAcademicSemesters,
   resolveStudentRosterMembershipErrorMessage,
 } from '../infrastructure/api';
@@ -112,6 +114,7 @@ import { isRosterMembershipPermissionError } from '../infrastructure/api-errors'
 
 type PendingRosterAction =
   | { type: 'load-class-list' }
+  | { type: 'refresh-status'; classCode: string; studentId: string }
   | { classCode: string; type: 'dry-run' }
   | {
       classCode: string;
@@ -120,7 +123,7 @@ type PendingRosterAction =
       type: 'commit';
     };
 
-type ResultFilterKey = 'focus' | 'all' | RosterReviewKind;
+type ResultFilterKey = 'missing-semester' | 'status-events' | 'focus' | 'all' | RosterReviewKind;
 
 type StudentRosterMembershipReconciliationPageContentProps = {
   accessGroup?: readonly AuthAccessGroup[];
@@ -202,52 +205,6 @@ function resolveClassAdviserClaimNotice(
 
 function formatNullableValue(value: number | string | null | undefined) {
   return value ?? <span className="text-text-secondary">-</span>;
-}
-
-function renderCategoryTag(category: StudentRosterMembershipReconciliationItem['category']) {
-  return <Tag color={CATEGORY_COLORS[category]}>{CATEGORY_LABELS[category]}</Tag>;
-}
-
-function renderActionTag(action: string) {
-  return <Tag>{getActionLabel(action)}</Tag>;
-}
-
-function getCommitImpactTagColor(reviewItem: RosterReviewItem) {
-  if (reviewItem.kind === 'required-confirmation') {
-    return 'gold';
-  }
-
-  if (reviewItem.kind === 'enrollment-review') {
-    return 'warning';
-  }
-
-  if (reviewItem.kind === 'local-decision' && canEndDecision(reviewItem.item)) {
-    return 'blue';
-  }
-
-  if (reviewItem.kind === 'automatic' && reviewItem.item.action !== 'NO_CHANGE') {
-    return 'green';
-  }
-
-  return 'default';
-}
-
-function renderDefaultOperationTag(reviewItem: RosterReviewItem) {
-  if (reviewItem.kind === 'enrollment-review') {
-    return null;
-  }
-
-  return (
-    <Tag color={ROSTER_REVIEW_KIND_COLORS[reviewItem.kind]}>{reviewItem.defaultOperationLabel}</Tag>
-  );
-}
-
-function renderCommitImpactTag(reviewItem: RosterReviewItem) {
-  if (reviewItem.kind === 'enrollment-review') {
-    return null;
-  }
-
-  return <Tag color={getCommitImpactTagColor(reviewItem)}>{reviewItem.commitImpactLabel}</Tag>;
 }
 
 function getStudentDisplayName(item: StudentRosterMembershipReconciliationItem) {
@@ -354,12 +311,6 @@ function renderMetadataLine(label: string, value: number | string | null | undef
   );
 }
 
-function renderDecisionOutcome(
-  outcome: StudentRosterMembershipReconciliationItem['recommendedDecisionOutcome'],
-) {
-  return outcome ? renderDecisionOutcomeTag(outcome) : '-';
-}
-
 function renderDecisionOutcomeTag(
   outcome: NonNullable<StudentRosterMembershipReconciliationItem['recommendedDecisionOutcome']>,
   prefix?: string,
@@ -407,6 +358,10 @@ export function StudentRosterMembershipReconciliationPageContent({
   const [loginError, setLoginError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<PendingRosterAction | null>(null);
   const [hasAutoLoadedClassList, setHasAutoLoadedClassList] = useState(false);
+  const [isCommitReviewOpen, setIsCommitReviewOpen] = useState(false);
+  const [detailKey, setDetailKey] = useState<string | null>(null);
+  const [studentSearch, setStudentSearch] = useState('');
+  const [isRefreshingStatus, setIsRefreshingStatus] = useState(false);
   const [resultFilter, setResultFilter] = useState<ResultFilterKey>('focus');
   const [resultTablePage, setResultTablePage] = useState(1);
   const [resultTablePageSize, setResultTablePageSize] = useState(RESULT_TABLE_DEFAULT_PAGE_SIZE);
@@ -508,21 +463,40 @@ export function StudentRosterMembershipReconciliationPageContent({
     const selectedReplacementDecisionItems = reviewItems.filter(
       (item) =>
         item.kind === 'local-decision' &&
-        pendingReplacementDecisionKeys.has(item.item.key) &&
+        (pendingReplacementDecisionKeys.has(item.item.key) || missingDecisionSemester(item.item)) &&
         !focusedRowKeys.has(item.rowKey),
     );
 
     return [...focusedItems, ...selectedReplacementDecisionItems];
   }, [pendingReplacementDecisionKeys, reviewItems]);
-  const visibleReviewItems = useMemo(
-    () =>
+  const visibleReviewItems = useMemo(() => {
+    const filtered =
       resultFilter === 'focus'
         ? focusReviewItems
-        : filterRosterReviewItems(reviewItems, resultFilter),
-    [focusReviewItems, resultFilter, reviewItems],
-  );
+        : resultFilter === 'missing-semester'
+          ? reviewItems.filter((row) => missingDecisionSemester(row.item))
+          : resultFilter === 'status-events'
+            ? reviewItems.filter((row) => row.item.statusChangeEvidence?.events.length)
+            : filterRosterReviewItems(reviewItems, resultFilter);
+    const keyword = studentSearch.trim();
+    return filtered.filter(
+      (row) =>
+        !keyword ||
+        row.item.studentId?.includes(keyword) ||
+        row.item.studentName?.includes(keyword),
+    );
+  }, [focusReviewItems, resultFilter, reviewItems, studentSearch]);
+  const detailItem = reviewItems.find((row) => row.item.key === detailKey) ?? null;
   const resultFilterOptions = useMemo(() => {
     return [
+      {
+        label: `缺少生效学期 ${reviewItems.filter((row) => missingDecisionSemester(row.item)).length}`,
+        value: 'missing-semester',
+      },
+      {
+        label: `有学籍变动 ${reviewItems.filter((row) => row.item.statusChangeEvidence?.events.length).length}`,
+        value: 'status-events',
+      },
       {
         label: `人工复核项 ${focusReviewItems.length}`,
         value: 'focus',
@@ -536,7 +510,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         value: 'all',
       },
     ];
-  }, [focusReviewItems.length, reviewCounts, reviewItems.length]);
+  }, [focusReviewItems.length, reviewCounts, reviewItems]);
   const commitConfirmations = useMemo(
     () => buildCommitConfirmations(reconciliationResult?.items ?? [], confirmationDrafts),
     [confirmationDrafts, reconciliationResult],
@@ -591,7 +565,8 @@ export function StudentRosterMembershipReconciliationPageContent({
     hasAutomaticRosterCommitWork(reconciliationResult?.items ?? []);
   const isLoadingClassSelection =
     isLoadingClassList || isLoadingDepartments || isLoadingLocalClassOptions;
-  const isRunningAction = isLoadingClassSelection || isPreviewing || isCommitting;
+  const isRunningAction =
+    isLoadingClassSelection || isPreviewing || isCommitting || isRefreshingStatus;
   const canCommit =
     Boolean(reconciliationResult) &&
     hasCommitWork &&
@@ -648,7 +623,8 @@ export function StudentRosterMembershipReconciliationPageContent({
       message: string;
       session?: StoredUpstreamSession | null;
     }) => {
-      clearCurrentSession();
+      if (input.action.type === 'refresh-status') clear();
+      else clearCurrentSession();
       setPendingAction(input.action);
       setLoginError(input.message);
       setIsLoginModalOpen(true);
@@ -660,7 +636,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         }),
       );
     },
-    [clearCurrentSession, lockedUpstreamLoginUserId, loginForm, rememberedCredentials],
+    [clear, clearCurrentSession, lockedUpstreamLoginUserId, loginForm, rememberedCredentials],
   );
 
   const handleActionError = useCallback((action: PendingRosterAction, error: unknown) => {
@@ -672,6 +648,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         setSelectedClassCode(undefined);
         setClassListError(message);
         return;
+      case 'refresh-status':
       case 'dry-run':
       case 'commit':
         setReconciliationError(message);
@@ -683,6 +660,29 @@ export function StudentRosterMembershipReconciliationPageContent({
     async (session: StoredUpstreamSession, action: PendingRosterAction) => {
       const runActionWithSession = async (currentSession: StoredUpstreamSession) => {
         switch (action.type) {
+          case 'refresh-status': {
+            setIsRefreshingStatus(true);
+            setReconciliationError(null);
+            const result = await refreshRosterStatusChange({
+              classCode: action.classCode,
+              studentId: action.studentId,
+              upstreamSessionToken: currentSession.upstreamSessionToken,
+            });
+            persistSessionFromResult(currentSession, result);
+            setReconciliationResult((current) =>
+              current?.classCode === action.classCode
+                ? {
+                    ...current,
+                    items: current.items.map((item) =>
+                      item.studentId === action.studentId
+                        ? { ...item, statusChangeEvidence: result.evidence }
+                        : item,
+                    ),
+                  }
+                : current,
+            );
+            return;
+          }
           case 'load-class-list': {
             setIsLoadingClassList(true);
             setClassListError(null);
@@ -895,6 +895,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         setIsLoadingClassList(false);
         setIsPreviewing(false);
         setIsCommitting(false);
+        setIsRefreshingStatus(false);
       }
     },
     [
@@ -1299,8 +1300,6 @@ export function StudentRosterMembershipReconciliationPageContent({
     reasonCode: StudentRosterMembershipReconciliationItem['recommendedReasonCode'];
     value?: number | null;
   }) {
-    const helpText = getEffectiveSemesterHelpText(input.reasonCode);
-
     return (
       <div className="flex flex-col gap-1">
         <span className="text-text-secondary">{getEffectiveSemesterLabel(input.reasonCode)}</span>
@@ -1308,7 +1307,6 @@ export function StudentRosterMembershipReconciliationPageContent({
           value: input.value,
           onChange: input.onChange,
         })}
-        {helpText ? <span className="text-text-secondary">{helpText}</span> : null}
       </div>
     );
   }
@@ -1319,41 +1317,36 @@ export function StudentRosterMembershipReconciliationPageContent({
     options: ReturnType<typeof getConfirmationDecisionOptions>;
   }) {
     const { draft, onChange, options } = input;
-    const selectedOption = options.find(
-      (option) => option.decisionOutcome === draft.decisionOutcome,
+    const choices = options.flatMap((option) =>
+      option.reasonOptions.map((reasonCode) => ({
+        value: `${option.decisionOutcome}:${reasonCode}`,
+        label:
+          reasonCode === 'CLASS_MEMBERSHIP_CORRECTION' ||
+          reasonCode === 'UPSTREAM_ROSTER_ERROR_CONFIRMED'
+            ? `${reasonCode === 'CLASS_MEMBERSHIP_CORRECTION' ? '班级归属修正' : '校园网名单有误'}（${DECISION_OUTCOME_LABELS[option.decisionOutcome]}）`
+            : REASON_CODE_LABELS[reasonCode],
+        option,
+        reasonCode,
+      })),
     );
 
     return (
-      <div className="flex min-w-[320px] flex-col gap-2">
-        <Radio.Group
-          optionType="button"
-          value={draft.decisionOutcome}
-          onChange={(event) => {
-            const nextOption = options.find(
-              (option) => option.decisionOutcome === event.target.value,
-            );
-
-            if (nextOption) {
-              onChange(switchConfirmationDraftDecisionOutcome(draft, nextOption));
-            }
-          }}
-        >
-          {options.map((option) => (
-            <Radio.Button key={option.decisionOutcome} value={option.decisionOutcome}>
-              {option.label}
-            </Radio.Button>
-          ))}
-        </Radio.Group>
-        <Select
-          value={draft.reasonCode}
-          options={(selectedOption?.reasonOptions ?? []).map((reasonCode) => ({
-            label: REASON_CODE_LABELS[reasonCode],
-            value: reasonCode,
-          }))}
-          onChange={(reasonCode) => {
-            onChange(updateConfirmationDraftReasonCode(draft, reasonCode));
-          }}
-        />
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-1">
+          <span>实际情况</span>
+          <Select
+            aria-label="实际情况"
+            value={`${draft.decisionOutcome}:${draft.reasonCode}`}
+            options={choices.map(({ value, label }) => ({ value, label }))}
+            onChange={(value) => {
+              const choice = choices.find((entry) => entry.value === value);
+              if (choice) {
+                const switched = switchConfirmationDraftDecisionOutcome(draft, choice.option);
+                onChange(updateConfirmationDraftReasonCode(switched, choice.reasonCode));
+              }
+            }}
+          />
+        </div>
         {requiresEffectiveSemester(draft.reasonCode)
           ? renderEffectiveSemesterField({
               reasonCode: draft.reasonCode,
@@ -1363,10 +1356,17 @@ export function StudentRosterMembershipReconciliationPageContent({
               },
             })
           : null}
+        <Alert
+          type="info"
+          showIcon
+          title="提交后的名单影响"
+          description={describeDecisionImpact(draft)}
+        />
         <Input.TextArea
           autoSize={{ maxRows: 4, minRows: 2 }}
           maxLength={255}
-          placeholder="可选备注"
+          aria-label="裁定依据或备注"
+          placeholder="裁定依据或备注（可选）"
           showCount
           value={draft.reasonText}
           onChange={(event) => {
@@ -1398,72 +1398,39 @@ export function StudentRosterMembershipReconciliationPageContent({
     });
   }
 
-  function renderReplacementDecisionEditor(
-    item: StudentRosterMembershipReconciliationItem,
-    mode: 'focus' | 'local-decision',
-  ) {
-    if (!canEndDecision(item)) {
-      return null;
-    }
-
+  function renderReplacementDecisionEditor(item: StudentRosterMembershipReconciliationItem) {
+    if (!canEndDecision(item)) return null;
     const options = getReplacementDecisionOptions(item.action);
     const draft = replacementDecisionDrafts[item.key];
-
-    if (!item.studentId || options.length === 0 || !draft) {
-      return (
-        <Alert type="warning" showIcon title="该本地裁定缺少可人工复核的学生编号或确认策略。" />
-      );
+    if (!item.studentId || !options.length || !draft) {
+      return <Alert type="warning" showIcon title="该裁定缺少可修订的学生编号或处理选项。" />;
     }
-
-    const confirmationEditor = draft.selected
-      ? renderConfirmationDraftEditor({
-          draft,
-          options,
-          onChange: (nextDraft) => {
-            updateReplacementDecisionDraft(item, (current) => ({
-              ...nextDraft,
-              selected: current?.selected ?? true,
-            }));
-          },
-        })
-      : null;
-
-    if (mode === 'focus' && draft.selected) {
-      return (
-        <div className="flex min-w-[320px] flex-col gap-2">
-          <Alert type="info" showIcon title="提交时会结束当前本地裁定，并记录以下新裁定。" />
-          {confirmationEditor}
-        </div>
-      );
-    }
-
     return (
-      <div className="flex min-w-[320px] flex-col gap-2">
-        <div className="self-start">
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          {draft.selected ? <Tag color="processing">待提交</Tag> : null}
           <Button
-            icon={<SwapOutlined />}
-            type={draft.selected ? 'primary' : 'default'}
+            disabled={isRunningAction}
             onClick={() => {
-              const nextSelected = !draft.selected;
-
-              updateReplacementDecisionDraft(item, (current) => ({
-                ...(current ?? draft),
-                selected: nextSelected,
-              }));
-
-              if (nextSelected) {
-                setResultFilter('focus');
-                setResultTablePage(1);
+              if (draft.selected) {
+                const original = buildDefaultReplacementDecisionDrafts([item])[item.key];
+                if (original) updateReplacementDecisionDraft(item, () => original);
+              } else {
+                updateReplacementDecisionDraft(item, () => ({ ...draft, selected: true }));
               }
             }}
           >
-            {draft.selected ? '取消人工复核' : '撤销并人工复核'}
+            {draft.selected ? '撤销修改' : '修改裁定'}
           </Button>
         </div>
-        {draft.selected ? (
-          <Alert type="info" showIcon title="提交时会结束当前本地裁定，并记录下面的新裁定。" />
-        ) : null}
-        {confirmationEditor}
+        {draft.selected
+          ? renderConfirmationDraftEditor({
+              draft,
+              options,
+              onChange: (nextDraft) =>
+                updateReplacementDecisionDraft(item, () => ({ ...nextDraft, selected: true })),
+            })
+          : null}
       </div>
     );
   }
@@ -1567,6 +1534,8 @@ export function StudentRosterMembershipReconciliationPageContent({
         <span className="text-text-secondary">
           {renderReasonCode(item.activeDecisionReasonCode)}
         </span>
+        <span>{formatDecisionSemester(item, academicSemesters)}</span>
+        {missingDecisionSemester(item) ? <Tag color="warning">需补齐时间</Tag> : null}
       </div>
     );
   }
@@ -1679,95 +1648,16 @@ export function StudentRosterMembershipReconciliationPageContent({
 
   function renderOperationCell(reviewItem: RosterReviewItem) {
     const item = reviewItem.item;
-    const isReplacementFocusItem =
-      resultFilter === 'focus' &&
-      reviewItem.kind === 'local-decision' &&
-      Boolean(replacementDecisionDrafts[item.key]?.selected);
     const editor =
       renderConfirmationEditor(item) ??
       renderPreRegisteredReviewEditor(item) ??
-      renderReplacementDecisionEditor(item, isReplacementFocusItem ? 'focus' : 'local-decision');
+      renderReplacementDecisionEditor(item);
 
     return (
       <div className="flex flex-col gap-3">
         {renderReviewSummaryCell(reviewItem)}
         {editor}
       </div>
-    );
-  }
-
-  function renderExpandedObservationDetails(reviewItem: RosterReviewItem) {
-    const item = reviewItem.item;
-
-    return (
-      <Descriptions bordered size="small" column={3}>
-        <Descriptions.Item label="业务分组">
-          {ROSTER_REVIEW_KIND_LABELS[reviewItem.kind]}
-        </Descriptions.Item>
-        <Descriptions.Item label="默认处理">
-          {renderDefaultOperationTag(reviewItem)}
-        </Descriptions.Item>
-        <Descriptions.Item label="提交影响">{renderCommitImpactTag(reviewItem)}</Descriptions.Item>
-        <Descriptions.Item label="key">{item.key}</Descriptions.Item>
-        <Descriptions.Item label="上游行号">{formatNullableValue(item.rowIndex)}</Descriptions.Item>
-        <Descriptions.Item label="分类">{renderCategoryTag(item.category)}</Descriptions.Item>
-        <Descriptions.Item label="动作">{renderActionTag(item.action)}</Descriptions.Item>
-        <Descriptions.Item label="校园网返回">
-          {renderCampusNetworkReturnTag(item.upstreamPresence) ?? '已返回'}
-        </Descriptions.Item>
-        <Descriptions.Item label="upstreamStudentId">
-          {formatNullableValue(item.upstreamStudentId)}
-        </Descriptions.Item>
-        <Descriptions.Item label="报到状态">
-          {getReportedStatusLabel(item.isEnrolled)}
-        </Descriptions.Item>
-        <Descriptions.Item label="在校状态">
-          {getInSchoolStatusLabel(item.isInSchool)}
-        </Descriptions.Item>
-        <Descriptions.Item label="本地学生状态">
-          {renderStudentStatusTag(item.studentStatus) ?? '-'}
-        </Descriptions.Item>
-        <Descriptions.Item label="IS_ENROLLED">
-          {formatNullableValue(item.isEnrolled)}
-        </Descriptions.Item>
-        <Descriptions.Item label="IS_IN_SCHOOL">
-          {formatNullableValue(item.isInSchool)}
-        </Descriptions.Item>
-        <Descriptions.Item label="当前 membership">
-          {formatNullableValue(item.currentMembershipId)}
-        </Descriptions.Item>
-        <Descriptions.Item label="当前归属班级">
-          {formatNullableValue(item.currentClassName ?? item.currentClassCode)}
-        </Descriptions.Item>
-        <Descriptions.Item label="当前裁定">
-          {renderDecisionOutcome(item.activeDecisionOutcome)}
-        </Descriptions.Item>
-        <Descriptions.Item label="active decision">
-          {formatNullableValue(item.activeDecisionId)}
-        </Descriptions.Item>
-        <Descriptions.Item label={getEffectiveSemesterLabel(item.activeDecisionReasonCode)}>
-          {formatNullableValue(item.activeDecisionEffectiveSemesterId)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推断入学年">
-          {formatNullableValue(item.inferredAdmissionYear)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推断原班序号">
-          {formatNullableValue(item.inferredOriginalClassSeq)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推断目标班序号">
-          {formatNullableValue(item.inferredTargetClassSeq)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推断原班级">
-          {formatNullableValue(item.inferredOriginalClassCode)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推荐裁定">
-          {renderDecisionOutcome(item.recommendedDecisionOutcome)}
-        </Descriptions.Item>
-        <Descriptions.Item label="推荐原因码">
-          {renderReasonCode(item.recommendedReasonCode)}
-        </Descriptions.Item>
-        <Descriptions.Item label="后端说明">{formatNullableValue(item.reason)}</Descriptions.Item>
-      </Descriptions>
     );
   }
 
@@ -1794,18 +1684,56 @@ export function StudentRosterMembershipReconciliationPageContent({
     {
       key: 'active-decision',
       render: (_, item) => renderActiveDecisionCell(item.item),
-      title: '当前裁定',
-      width: 180,
+      title: '当前裁定与生效时间',
+      width: 250,
+    },
+    {
+      key: 'status-change',
+      title: '学籍变动',
+      width: 230,
+      render: (_, row) => {
+        const evidence = row.item.statusChangeEvidence;
+        const event = evidence?.events
+          .slice()
+          .sort((a, b) => (b.changeTime ?? '').localeCompare(a.changeTime ?? ''))[0];
+        return event ? (
+          <div className="flex flex-col gap-1">
+            <span>
+              {STATUS_CHANGE_LABELS[event.typeCode ?? ''] ??
+                `其他变动（${event.typeCode ?? '未知'}）`}
+            </span>
+            <span>{event.changeTime ?? '日期缺失'}</span>
+            {!evidence?.complete ? <Tag color="warning">证据不完整</Tag> : null}
+          </div>
+        ) : (
+          <span>
+            {evidence?.state === 'FETCHED_EMPTY'
+              ? '校园网无变动记录'
+              : evidence?.state === 'UNAVAILABLE'
+                ? '暂不可用'
+                : '尚未获取'}
+          </span>
+        );
+      },
     },
     {
       key: 'operation',
-      render: (_, item) => renderOperationCell(item),
-      title: '处理方式',
-      width: 460,
+      render: (_, row) => (
+        <div className="flex flex-col items-start gap-2">
+          {replacementDecisionDrafts[row.item.key]?.selected ? (
+            <Tag color="processing">有待提交修改</Tag>
+          ) : null}
+          <Button onClick={() => setDetailKey(row.item.key)}>查看证据与处理</Button>
+        </div>
+      ),
+      title: '处理',
+      width: 170,
     },
   ];
 
   function clearReconciliationViewState() {
+    setDetailKey(null);
+    setStudentSearch('');
     setReconciliationResult(null);
     setClassAdviserClaimNotice(null);
     setPostCommitRefreshNotice(null);
@@ -1827,17 +1755,14 @@ export function StudentRosterMembershipReconciliationPageContent({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-80 flex-1">{renderResultStatusAlert()}</div>
           <div className="flex flex-wrap justify-end gap-2">
-            <Popconfirm
-              cancelText="取消"
-              okButtonProps={{ loading: isCommitting }}
-              okText="提交"
-              title="确认提交核对结果？"
-              onConfirm={() => void handleCommit()}
+            <Button
+              type={hasCommitWork ? 'primary' : 'default'}
+              loading={isCommitting}
+              disabled={!canCommit}
+              onClick={() => setIsCommitReviewOpen(true)}
             >
-              <Button danger={hasCommitWork} loading={isCommitting} disabled={!canCommit}>
-                {hasCommitWork ? '提交核对结果' : '无需提交'}
-              </Button>
-            </Popconfirm>
+              {hasCommitWork ? '检查并提交变更' : '无需提交'}
+            </Button>
             <Button
               icon={<ReloadOutlined />}
               disabled={!selectedClassCode || isRunningAction}
@@ -2023,6 +1948,297 @@ export function StudentRosterMembershipReconciliationPageContent({
       : renderPreviousClassAdviserClassListCard();
   }
 
+  function describeDecisionImpact(
+    draft: Pick<ConfirmationDraft, 'decisionOutcome' | 'reasonCode' | 'effectiveSemesterId'>,
+  ) {
+    if (draft.reasonCode === 'NOT_CHECKED_IN_CONFIRMED') return '所有学期均不纳入本班名单。';
+    const semester = academicSemesters.find((entry) => entry.id === draft.effectiveSemesterId);
+    if (!semester) return '请先选择生效学期，再确认名单影响。';
+    const label = `${semester.schoolYear}—${semester.schoolYear + 1} 学年第 ${semester.termNumber} 学期`;
+    return draft.decisionOutcome === 'EXCLUDE'
+      ? `从 ${label}起（含该学期），不再纳入本班名单。`
+      : `从 ${label}起（含该学期），纳入本班名单。`;
+  }
+
+  function renderCommitReview() {
+    const automaticItems = reviewItems.filter(
+      (row) =>
+        row.item.category === 'AUTO_APPLY' &&
+        row.item.action !== 'NO_CHANGE' &&
+        !commitConfirmationsPayload.some((draft) => draft.studentId === row.item.studentId),
+    );
+    return (
+      <Modal
+        title="确认本班待提交变更"
+        open={isCommitReviewOpen}
+        onCancel={() => setIsCommitReviewOpen(false)}
+        okText="确认提交"
+        cancelText="继续核对"
+        width={720}
+        okButtonProps={{ disabled: !canCommit }}
+        onOk={() => {
+          setIsCommitReviewOpen(false);
+          void handleCommit();
+        }}
+      >
+        <div className="flex flex-col gap-4">
+          <p>{selectedClassLabel} · 本次提交包含全班待处理项，不受列表搜索和筛选影响。</p>
+          {commitConfirmationsPayload.map((draft) => {
+            const item = reconciliationResult?.items.find(
+              (entry) => entry.studentId === draft.studentId,
+            );
+            return (
+              <Card
+                key={draft.studentId}
+                size="small"
+                title={`${item?.studentName ?? '学生'} · ${draft.studentId}`}
+              >
+                <div className="flex flex-col gap-2">
+                  <span className="text-text-secondary">
+                    已保存：
+                    {item?.activeDecisionReasonCode
+                      ? REASON_CODE_LABELS[item.activeDecisionReasonCode]
+                      : '暂无裁定'}
+                    {item?.activeDecisionId
+                      ? ` · ${formatDecisionSemester(item, academicSemesters)}`
+                      : ''}
+                  </span>
+                  <strong>提交后：{REASON_CODE_LABELS[draft.reasonCode]}</strong>
+                  <span>{describeDecisionImpact(draft)}</span>
+                  {draft.reasonText ? <span>依据或备注：{draft.reasonText}</span> : null}
+                </div>
+              </Card>
+            );
+          })}
+          {automaticItems.length ? (
+            <div>
+              <strong>同时按核对结果更新班级归属（{automaticItems.length} 项）</strong>
+              <ul>
+                {automaticItems.map((row) => (
+                  <li key={row.rowKey}>
+                    {getStudentDisplayName(row.item)} · {row.item.studentId} · {row.businessSummary}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <span className="text-text-secondary">
+            确认后保存本地裁定及班级归属；校园网原始记录不会被改写。
+          </span>
+        </div>
+      </Modal>
+    );
+  }
+
+  function renderCurrentDecision(item: StudentRosterMembershipReconciliationItem) {
+    const labels: Partial<Record<NonNullable<typeof item.activeDecisionReasonCode>, string>> = {
+      DROPPED_CONFIRMED: '已退学',
+      NOT_CHECKED_IN_CONFIRMED: '未报到',
+      TRANSFERRED_IN_CONFIRMED: '已转入本班',
+      TRANSFERRED_OUT_CONFIRMED: '已转出本班',
+      REENROLLED_CONFIRMED: '复学至本班',
+      RETAINED_GRADE_CONFIRMED: '留级至本班',
+    };
+    const label = item.activeDecisionReasonCode ? labels[item.activeDecisionReasonCode] : null;
+    return (
+      <div className="flex flex-col gap-2">
+        <strong>
+          {label ??
+            (item.activeDecisionOutcome
+              ? DECISION_OUTCOME_LABELS[item.activeDecisionOutcome]
+              : '尚未裁定')}
+        </strong>
+        {item.activeDecisionOutcome && item.activeDecisionReasonCode ? (
+          <span className="text-text-secondary">
+            {missingDecisionSemester(item)
+              ? '尚未设置起始学期'
+              : describeDecisionImpact({
+                  decisionOutcome: item.activeDecisionOutcome,
+                  reasonCode: item.activeDecisionReasonCode,
+                  effectiveSemesterId: item.activeDecisionEffectiveSemesterId,
+                })}
+          </span>
+        ) : null}
+      </div>
+    );
+  }
+
+  function renderEvidenceDrawer() {
+    const item = detailItem?.item;
+    const evidence = item?.statusChangeEvidence;
+    const suggestion = item ? suggestStatusChangeDecision(item, academicSemesters) : null;
+    const options = item
+      ? item.activeDecisionId
+        ? getReplacementDecisionOptions(item.action)
+        : getConfirmationDecisionOptions(item.action)
+      : [];
+    const canPrefill =
+      suggestion &&
+      ((requiresPreRegisteredLocalReview(item!) && suggestion.reasonCode === 'DROPPED_CONFIRMED') ||
+        options.some(
+          (option) =>
+            option.decisionOutcome === suggestion.decisionOutcome &&
+            option.reasonOptions.includes(suggestion.reasonCode),
+        ));
+    return (
+      <Drawer
+        title={item ? `${item.studentName ?? '学生'} · ${item.studentId ?? ''}` : '学生核对'}
+        open={Boolean(detailItem)}
+        onClose={() => setDetailKey(null)}
+        size="large"
+        footer={
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-text-secondary">{hasCommitWork ? '有待提交变更' : ''}</span>
+            <div className="flex gap-2">
+              <Button onClick={() => setDetailKey(null)}>返回名单</Button>
+              <Button
+                type="primary"
+                disabled={!canCommit}
+                onClick={() => setIsCommitReviewOpen(true)}
+              >
+                检查并提交变更
+              </Button>
+            </div>
+          </div>
+        }
+      >
+        {item && detailItem ? (
+          <div className="flex flex-col gap-5">
+            <section aria-label="当前结果">
+              <div className="flex items-start justify-between gap-4">
+                {renderCurrentDecision(item)}
+                {!replacementDecisionDrafts[item.key]?.selected
+                  ? renderReplacementDecisionEditor(item)
+                  : null}
+              </div>
+            </section>
+            <section aria-label="校园网记录">
+              <h3>校园网记录</h3>
+              {reconciliationError ? (
+                <Alert type="error" showIcon title={reconciliationError} />
+              ) : null}
+              <div className="flex flex-wrap items-center gap-2">
+                <span>
+                  花名册：
+                  {item.upstreamPresence === 'RETURNED'
+                    ? '仍列在本班'
+                    : item.upstreamPresence === 'MISSING'
+                      ? '未列在本班'
+                      : '未确认'}
+                </span>
+                {renderEnrollmentStatusTags(item)}
+              </div>
+              {!evidence?.complete && evidence?.events.length ? (
+                <Alert type="warning" showIcon title="记录不完整，请核实后手工裁定。" />
+              ) : null}
+              {evidence?.events.length ? (
+                <Timeline
+                  items={[...evidence.events].reverse().map((event) => ({
+                    key: event.logId,
+                    title: event.changeTime ?? '日期缺失',
+                    content: (
+                      <div>
+                        {STATUS_CHANGE_LABELS[event.typeCode ?? ''] ??
+                          `其他变动（${event.typeCode ?? '未知'}）`}{' '}
+                        · {event.className ?? event.classCode ?? '班级缺失'} ·{' '}
+                        {event.grade ?? '年级缺失'}级
+                      </div>
+                    ),
+                  }))}
+                />
+              ) : (
+                <p>
+                  {evidence?.state === 'FETCHED_EMPTY'
+                    ? '学籍变动：未查到记录'
+                    : evidence?.state === 'UNAVAILABLE'
+                      ? '学籍变动：暂时无法查询'
+                      : '学籍变动：尚未查询'}
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-3">
+                <Button
+                  size="small"
+                  loading={isRefreshingStatus}
+                  disabled={
+                    isRunningAction ||
+                    !item.studentId ||
+                    (!item.currentMembershipId && !item.activeDecisionId)
+                  }
+                  onClick={() =>
+                    item.studentId &&
+                    void ensureSessionAndRun({
+                      type: 'refresh-status',
+                      studentId: item.studentId,
+                      classCode: item.classCode,
+                    })
+                  }
+                >
+                  刷新学籍变动
+                </Button>
+                {evidence?.observedAt ? (
+                  <span className="text-xs text-text-secondary">
+                    查询于{' '}
+                    {new Date(evidence.observedAt).toLocaleString('zh-CN', {
+                      year: 'numeric',
+                      month: 'numeric',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })}
+                  </span>
+                ) : null}
+              </div>
+              {!item.currentMembershipId && !item.activeDecisionId ? (
+                <p>请先建立本地班级归属，再获取学籍变动。</p>
+              ) : null}
+            </section>
+            {canPrefill && suggestion ? (
+              <Card size="small" title="建议裁定">
+                <div className="flex flex-col gap-3">
+                  <strong>{REASON_CODE_LABELS[suggestion.reasonCode]}</strong>
+                  <span>{describeDecisionImpact(suggestion)}</span>
+                  <span className="text-text-secondary">请核实起始学期。</span>
+                  {item.activeDecisionOutcome === suggestion.decisionOutcome &&
+                  item.activeDecisionReasonCode === suggestion.reasonCode &&
+                  item.activeDecisionEffectiveSemesterId === suggestion.effectiveSemesterId ? (
+                    <Tag color="success">与当前裁定一致</Tag>
+                  ) : (
+                    <Button
+                      disabled={isRunningAction}
+                      onClick={() => {
+                        if (item.activeDecisionId)
+                          updateReplacementDecisionDraft(item, () => ({
+                            ...suggestion,
+                            selected: true,
+                          }));
+                        else if (requiresPreRegisteredLocalReview(item))
+                          updatePreRegisteredReviewDraft(item, () => ({
+                            outcome: 'DROPPED',
+                            effectiveSemesterId: suggestion.effectiveSemesterId,
+                            note: suggestion.reasonText,
+                          }));
+                        else updateConfirmationDraft(item, () => suggestion);
+                      }}
+                    >
+                      采用建议
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ) : null}
+            {!item.activeDecisionId || replacementDecisionDrafts[item.key]?.selected ? (
+              <section aria-label="修改裁定">
+                <h3>修改裁定</h3>
+                {renderOperationCell(detailItem)}
+              </section>
+            ) : null}
+          </div>
+        ) : null}
+      </Drawer>
+    );
+  }
+
   function renderObservationTable() {
     if (!reconciliationResult) {
       return null;
@@ -2030,6 +2246,16 @@ export function StudentRosterMembershipReconciliationPageContent({
 
     return (
       <div className="flex flex-col gap-3">
+        <Input.Search
+          placeholder="按姓名或学号查找"
+          allowClear
+          value={studentSearch}
+          onChange={(event) => {
+            setStudentSearch(event.target.value);
+            setResultTablePage(1);
+          }}
+        />
+        {renderEvidenceDrawer()}
         <Tabs
           activeKey={resultFilter}
           items={resultFilterOptions.map((option) => ({
@@ -2045,9 +2271,6 @@ export function StudentRosterMembershipReconciliationPageContent({
           <Table<RosterReviewItem>
             columns={resultColumns}
             dataSource={visibleReviewItems}
-            expandable={{
-              expandedRowRender: renderExpandedObservationDetails,
-            }}
             pagination={{
               current: resultTablePage,
               pageSize: resultTablePageSize,
@@ -2085,8 +2308,8 @@ export function StudentRosterMembershipReconciliationPageContent({
         <Alert
           type="warning"
           showIcon
-          title="本次 commit 未写库"
-          description="后端重新计算后发现 roster 或本地事实已变化。当前页面已替换为最新结果，请重新确认后再提交。"
+          title="本次提交未保存"
+          description="重新核对发现校园网名单或本地记录已变化。当前页面已替换为最新结果，请重新确认后再提交。"
         />
       );
     }
@@ -2136,7 +2359,7 @@ export function StudentRosterMembershipReconciliationPageContent({
     }
 
     if (reconciliationResult.committed) {
-      return <Alert type="success" showIcon title="本次核对已提交并写库。" />;
+      return <Alert type="success" showIcon title="本次核对已保存。" />;
     }
 
     if (postCommitRefreshNotice) {
@@ -2158,18 +2381,18 @@ export function StudentRosterMembershipReconciliationPageContent({
           title={classAdviserClaimNotice.title}
           description={
             hasCommitWork
-              ? `${classAdviserClaimNotice.description} 预读结果不会写库，确认差异后可提交核对结果。`
-              : `${classAdviserClaimNotice.description} 当前没有需要写库的变更，无需提交核对结果。`
+              ? `${classAdviserClaimNotice.description} 预读结果不会写库，确认差异后可检查并提交变更。`
+              : `${classAdviserClaimNotice.description} 当前没有需要写库的变更，无需检查并提交变更。`
           }
         />
       );
     }
 
     if (!hasCommitWork) {
-      return <Alert type="info" showIcon title="当前没有需要写库的变更。无需提交核对结果。" />;
+      return <Alert type="info" showIcon title="当前没有需要保存的变更。无需检查并提交变更。" />;
     }
 
-    return <Alert type="info" showIcon title="预读结果不会写库。确认差异后可提交核对结果。" />;
+    return <Alert type="info" showIcon title="核对结果尚未保存。确认差异后可检查并提交变更。" />;
   }
 
   function renderReconciliationResultSection() {
@@ -2192,7 +2415,7 @@ export function StudentRosterMembershipReconciliationPageContent({
               title="还没有核对结果"
               description={
                 selectedClassCode
-                  ? `已选择 ${selectedClassLabel}，点击 Dry-run 核对后展示差异。`
+                  ? `已选择 ${selectedClassLabel}，点击“预读校园网学生花名册并核对”后展示差异。`
                   : canUseLocalClassOptions
                     ? '请先选择一个本地班级。'
                     : '请先读取班级列表并选择班级。'
@@ -2233,6 +2456,7 @@ export function StudentRosterMembershipReconciliationPageContent({
         title="班级名册归属对齐"
       />
       {pageError ? <Alert type="error" showIcon title={pageError} /> : null}
+      {renderCommitReview()}
       {renderClassListCard()}
       {renderReconciliationResultSection()}
 

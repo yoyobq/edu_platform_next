@@ -170,23 +170,30 @@ export function getConfirmationDecisionOptions(action: string): ConfirmationDeci
 }
 
 export function getReplacementDecisionOptions(action: string): ConfirmationDecisionOption[] {
-  if (action === 'END_INCLUDE_DECISION_AVAILABLE') {
-    return MISSING_CONFIRMATION_OPTIONS;
-  }
-
-  if (action === 'END_EXCLUDE_DECISION_AVAILABLE') {
-    return TRANSFER_IN_CONFIRMATION_OPTIONS;
-  }
-
-  return [];
+  const defaults =
+    action === 'END_INCLUDE_DECISION_AVAILABLE' || action === 'SUPPRESSED_BY_INCLUDE_DECISION'
+      ? MISSING_CONFIRMATION_OPTIONS
+      : action === 'END_EXCLUDE_DECISION_AVAILABLE' || action === 'SUPPRESSED_BY_EXCLUDE_DECISION'
+        ? TRANSFER_IN_CONFIRMATION_OPTIONS
+        : [];
+  return defaults.map((option) => ({
+    ...option,
+    reasonOptions: [
+      ...new Set([
+        ...option.reasonOptions,
+        ...MISSING_CONFIRMATION_OPTIONS.filter(
+          (entry) => entry.decisionOutcome === option.decisionOutcome,
+        ).flatMap((entry) => entry.reasonOptions),
+        ...TRANSFER_IN_CONFIRMATION_OPTIONS.filter(
+          (entry) => entry.decisionOutcome === option.decisionOutcome,
+        ).flatMap((entry) => entry.reasonOptions),
+      ]),
+    ],
+  }));
 }
 
 export function canEndDecision(item: StudentRosterMembershipReconciliationItem) {
-  return (
-    (item.action === 'END_INCLUDE_DECISION_AVAILABLE' ||
-      item.action === 'END_EXCLUDE_DECISION_AVAILABLE') &&
-    Boolean(item.activeDecisionId)
-  );
+  return Boolean(item.activeDecisionId) && getReplacementDecisionOptions(item.action).length > 0;
 }
 
 export function requiresEffectiveSemester(
@@ -282,11 +289,16 @@ export function buildDefaultReplacementDecisionDraft(
     return null;
   }
 
-  const confirmationDraft = buildConfirmationDraftFromOptions(options, item);
+  const confirmationDraft = buildConfirmationDraftFromOptions(options, {
+    recommendedDecisionOutcome: item.activeDecisionOutcome ?? item.recommendedDecisionOutcome,
+    recommendedReasonCode: item.activeDecisionReasonCode ?? item.recommendedReasonCode,
+  });
 
   return confirmationDraft
     ? {
         ...confirmationDraft,
+        effectiveSemesterId: item.activeDecisionEffectiveSemesterId,
+        outcomeDrafts: undefined,
         selected: false,
       }
     : null;

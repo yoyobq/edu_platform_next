@@ -315,7 +315,7 @@ describe('student roster membership result view model', () => {
         rowKey: 'exclude-endable',
       }),
       expect.objectContaining({
-        businessSummary: '已有本地裁定，上游返回不会自动覆盖；本次不重复提醒。',
+        businessSummary: '已裁定不在本班就读。',
         rowKey: 'suppressed',
       }),
     ]);

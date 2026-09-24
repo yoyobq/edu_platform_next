@@ -1,5 +1,4 @@
 // src/features/student-roster-membership-reconciliation/infrastructure/api.ts
-
 import type { OperationVariables } from '@apollo/client';
 
 import type { AcademicSemesterRecord } from '@/entities/academic-semester';
@@ -15,6 +14,7 @@ import {
 } from '@/shared/form-normalization';
 import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 
+import type { RosterStatusChangeEvidence } from '../application/types';
 import type {
   ClaimClassAdviserForRosterSyncInput,
   ClaimClassAdviserForRosterSyncResult,
@@ -181,6 +181,10 @@ const UPSTREAM_STUDENT_ROSTER_RECONCILIATION_RESULT_FIELDS = `
       currentMembershipId
       currentClassCode
       currentClassName
+      statusChangeEvidence {
+        studentId state sourceStatus observedAt sourceTotal complete
+        events { logId changeTime typeCode grade classCode className }
+      }
       activeDecisionId
       activeDecisionEffectiveSemesterId
       activeDecisionOutcome
@@ -413,4 +417,33 @@ export async function commitUpstreamStudentRosterReconciliation(
 
 export function resolveStudentRosterMembershipErrorMessage(error: unknown) {
   return resolveUpstreamErrorMessage(error, '暂时无法执行学生名册归属核对。');
+}
+
+export async function refreshRosterStatusChange(input: {
+  classCode: string;
+  studentId: string;
+  upstreamSessionToken: string;
+}) {
+  const response = await executeUpstreamSessionGraphQL<
+    {
+      refreshStudentRosterStatusChange: {
+        evidence: RosterStatusChangeEvidence;
+        upstreamSessionToken: string;
+        expiresAt: string;
+      };
+    },
+    { input: typeof input }
+  >(
+    `
+    mutation RefreshRosterStatusChange($input: RefreshStudentRosterStatusChangeInput!) {
+      refreshStudentRosterStatusChange(input: $input) {
+        upstreamSessionToken expiresAt
+        evidence { studentId state sourceStatus observedAt sourceTotal complete
+          events { logId changeTime typeCode grade classCode className } }
+      }
+    }
+  `,
+    { input },
+  );
+  return response.refreshStudentRosterStatusChange;
 }
