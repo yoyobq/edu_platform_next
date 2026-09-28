@@ -34,6 +34,7 @@ import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 import { Link, useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
+import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
 import { UpstreamLoginModal } from '@/entities/upstream-session';
 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
@@ -56,6 +57,7 @@ import type {
 
 import { StudentEvaluationCommentExcelImportDialog } from './excel-import-dialog';
 type ProductWorkbenchProps = {
+  initialScope?: ClassWorkScope;
   currentAccount: StudentEvaluationCommentWorkbenchLoaderData['currentAccount'];
 };
 
@@ -91,7 +93,10 @@ const ADDRESS_OPTIONS = [
   { label: '第三人称', value: 'THIRD_PERSON' },
 ] as const;
 
-export function StudentEvaluationCommentWorkbench({ currentAccount }: ProductWorkbenchProps) {
+export function StudentEvaluationCommentWorkbench({
+  currentAccount,
+  initialScope,
+}: ProductWorkbenchProps) {
   const { message, modal } = AntApp.useApp();
   const confirm = useCallback(
     (input: { content: string; danger?: boolean; okText: string; title: string }) =>
@@ -185,8 +190,11 @@ export function StudentEvaluationCommentWorkbench({ currentAccount }: ProductWor
     workspace,
     writeAction,
     upstreamSession,
-  } = useStudentEvaluationCommentWorkbench({ currentAccount, confirm, message });
-  useUnsavedProductWorkbenchProtection(isDirty);
+  } = useStudentEvaluationCommentWorkbench({ currentAccount, initialScope, confirm, message });
+  useUnsavedProductWorkbenchProtection(
+    isDirty,
+    isEditorSaving || isBatchRunning || isImportingMaterial || isSyncingBasis,
+  );
   const columns = useMemo<ColumnsType<StudentEvaluationCommentWorkbenchStudent>>(
     () => [
       {
@@ -302,6 +310,7 @@ export function StudentEvaluationCommentWorkbench({ currentAccount }: ProductWor
 
   return (
     <div className="flex flex-col gap-4">
+      <ClassWorkScopeNotice classId={workspace?.selectedClass?.classId} />
       <Card size="small">
         <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2, wide: 3 }}>
           <div>
@@ -895,33 +904,33 @@ function requestConfirmation(
   });
 }
 
-function useUnsavedProductWorkbenchProtection(isDirty: boolean) {
+function useUnsavedProductWorkbenchProtection(isDirty: boolean, isBusy: boolean) {
   const { modal } = AntApp.useApp();
-  const blocker = useBlocker(isDirty);
+  const blocker = useBlocker(isDirty || isBusy);
 
   useEffect(() => {
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
-      if (!isDirty) return;
+      if (!isDirty && !isBusy) return;
       event.preventDefault();
       event.returnValue = '';
     };
 
     window.addEventListener('beforeunload', handleBeforeUnload);
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [isDirty]);
+  }, [isDirty, isBusy]);
 
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
     const confirmation = modal.confirm({
       cancelText: '留在当前页',
       content: '离开后将丢失当前尚未保存的编辑或 Excel 导入草稿。',
-      okButtonProps: { danger: true },
+      okButtonProps: { danger: true, disabled: isBusy },
       okText: '离开页面',
       onCancel: () => blocker.reset(),
       onOk: () => blocker.proceed(),
-      title: '存在未保存内容',
+      title: isBusy ? '正在处理，请稍后离开' : '存在未保存内容',
     });
 
     return () => confirmation.destroy();
-  }, [blocker, modal]);
+  }, [blocker, modal, isBusy]);
 }

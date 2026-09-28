@@ -30,7 +30,9 @@ import {
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import dayjs, { type Dayjs } from 'dayjs';
+import { useBeforeUnload, useBlocker } from 'react-router';
 
+import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
 import {
   formatUpstreamSessionDateTime,
   isExpiredUpstreamSessionError,
@@ -88,6 +90,7 @@ type CurrentAccount = {
 };
 
 export type StudentProfileFilingPageContentProps = {
+  initialScope?: ClassWorkScope;
   currentAccount: CurrentAccount;
 };
 
@@ -703,12 +706,16 @@ function formatFilingDateTimeParts(value: string | null | undefined) {
 
 export function StudentProfileFilingPageContent({
   currentAccount,
+  initialScope,
 }: StudentProfileFilingPageContentProps) {
   const { message, modal } = AntApp.useApp();
   const [graduationStudent, setGraduationStudent] = useState<StudentProfileFilingStudent | null>(
     null,
   );
   const [graduationDirty, setGraduationDirty] = useState(false);
+  const [supplementDrafts, setSupplementDrafts] = useState({ family: false, education: false });
+  const supplementDirty = supplementDrafts.family || supplementDrafts.education;
+  const [focusStudentId, setFocusStudentId] = useState(initialScope?.studentId);
   const [graduationSaving, setGraduationSaving] = useState(false);
   const [familySupplementForm] = Form.useForm<FamilySupplementFormValues>();
   const [educationSupplementForm] = Form.useForm<EducationSupplementFormValues>();
@@ -738,6 +745,36 @@ export function StudentProfileFilingPageContent({
   const filingProgressStartedAtRef = useRef<number | null>(null);
   const filingProgressResetTimerRef = useRef<number | null>(null);
   const lockedUpstreamLoginUserId = currentAccount.lockedUpstreamLoginUserId;
+  const routeBusy =
+    graduationSaving || isSubmittingSupplement || isClassFiling || Boolean(filingStudentId);
+  const routeDirty = graduationDirty || supplementDirty;
+  const routeBlocker = useBlocker(routeBusy || routeDirty);
+  useBeforeUnload(
+    useCallback(
+      (event: BeforeUnloadEvent) => {
+        if (routeBusy || routeDirty) {
+          event.preventDefault();
+          event.returnValue = '';
+        }
+      },
+      [routeBusy, routeDirty],
+    ),
+  );
+  useEffect(() => {
+    if (routeBlocker.state !== 'blocked') return;
+    const dialog = modal.confirm({
+      title: routeBusy ? '正在处理，请稍后切换' : '放弃未保存的学生资料？',
+      content: routeBusy
+        ? '本次操作结束后再切换班级。'
+        : '当前输入尚未保存，切换后将丢弃这些内容。',
+      okText: '放弃并切换',
+      cancelText: '继续编辑',
+      okButtonProps: { disabled: routeBusy },
+      onOk: () => routeBlocker.proceed(),
+      onCancel: () => routeBlocker.reset(),
+    });
+    return () => dialog.destroy();
+  }, [modal, routeBlocker, routeBusy]);
 
   const clearFilingProgressResetTimer = useCallback(() => {
     if (filingProgressResetTimerRef.current) {
@@ -857,10 +894,11 @@ export function StudentProfileFilingPageContent({
             });
           },
         );
-        const nextClassId =
-          nextClassOptions.find((item) => item.id === preferredClassId)?.id ??
-          nextClassOptions[0]?.id ??
-          null;
+        const nextClassId = preferredClassId
+          ? (nextClassOptions.find((item) => item.id === preferredClassId)?.id ?? null)
+          : (nextClassOptions[0]?.id ?? null);
+        if (preferredClassId && !nextClassId)
+          message.warning('当前页面无法访问该班级，请选择其他班级。');
 
         setClassOptions(nextClassOptions);
         setSelectedClassId(nextClassId);
@@ -884,13 +922,35 @@ export function StudentProfileFilingPageContent({
 
   const handleClassChange = useCallback(
     async (classId: string) => {
+      if (graduationSaving || isSubmittingSupplement || isClassFiling) return;
+      if (
+        (graduationDirty || supplementDirty) &&
+        !(await modal.confirm({
+          title: '放弃未保存的学生资料？',
+          okText: '放弃并切换',
+          cancelText: '继续编辑',
+        }))
+      )
+        return;
+      setGraduationStudent(null);
+      setGraduationDirty(false);
+      setSupplementDrafts({ family: false, education: false });
+      setFocusStudentId(undefined);
       setSelectedClassId(classId);
       setRefreshDigest(null);
       setSupplementDrawerState(null);
       setSupplementFeedback(null);
       await loadOverview(classId);
     },
-    [loadOverview],
+    [
+      loadOverview,
+      graduationDirty,
+      supplementDirty,
+      graduationSaving,
+      isSubmittingSupplement,
+      isClassFiling,
+      modal,
+    ],
   );
 
   const {
@@ -1111,6 +1171,7 @@ export function StudentProfileFilingPageContent({
 
           if (action.type === 'education-supplement') {
             educationSupplementForm.resetFields();
+            setSupplementDrafts((current) => ({ ...current, education: false }));
 
             if (nextSummary) {
               setSupplementDrawerState((current) =>
@@ -1124,6 +1185,7 @@ export function StudentProfileFilingPageContent({
             }
           } else {
             familySupplementForm.resetFields();
+            setSupplementDrafts((current) => ({ ...current, family: false }));
 
             familySupplementForm.setFieldValue(
               'relationshipCode',
@@ -1275,8 +1337,8 @@ export function StudentProfileFilingPageContent({
   );
 
   useEffect(() => {
-    void loadClassOptions(null);
-  }, [loadClassOptions]);
+    void loadClassOptions(initialScope?.classId);
+  }, [loadClassOptions, initialScope?.classId]);
 
   useEffect(() => {
     if (!upstreamActionRequest) {
@@ -1345,6 +1407,7 @@ export function StudentProfileFilingPageContent({
         workplace: undefined,
       });
       educationSupplementForm.resetFields();
+      setSupplementDrafts({ family: false, education: false });
       educationDefaultsAppliedRef.current = null;
       setSupplementFeedback(null);
       setSupplementDrawerState({
@@ -1384,25 +1447,34 @@ export function StudentProfileFilingPageContent({
     [educationSupplementForm, familySupplementForm, message],
   );
 
-  const closeSupplementDrawer = useCallback(() => {
-    if (graduationSaving) return;
-    if (graduationDirty) {
-      modal.confirm({
-        title: '放弃未保存的毕业信息？',
-        onOk: () => {
-          setGraduationStudent(null);
-          setGraduationDirty(false);
-        },
-      });
+  const closeSupplementDrawer = useCallback(async () => {
+    if (graduationSaving || isSubmittingSupplement) return;
+    if (
+      (graduationDirty || supplementDirty) &&
+      !(await modal.confirm({
+        title: '放弃未保存的学生资料？',
+        okText: '放弃修改',
+        cancelText: '继续编辑',
+      }))
+    )
       return;
-    }
     setGraduationStudent(null);
+    setGraduationDirty(false);
     setSupplementDrawerState(null);
     setSupplementFeedback(null);
     educationDefaultsAppliedRef.current = null;
     familySupplementForm.resetFields();
     educationSupplementForm.resetFields();
-  }, [educationSupplementForm, familySupplementForm, graduationDirty, graduationSaving, modal]);
+    setSupplementDrafts({ family: false, education: false });
+  }, [
+    educationSupplementForm,
+    familySupplementForm,
+    graduationDirty,
+    graduationSaving,
+    supplementDirty,
+    isSubmittingSupplement,
+    modal,
+  ]);
 
   const handleSupplementSectionChange = useCallback(
     (section: StudentProfileFilingSupplementSection) => {
@@ -1802,6 +1874,19 @@ export function StudentProfileFilingPageContent({
 
   return (
     <div className="student-profile-filing-page">
+      <ClassWorkScopeNotice classId={selectedClassId} />
+      {focusStudentId ? (
+        <Alert
+          type="info"
+          showIcon
+          title={`已定位学生 ${focusStudentId}`}
+          action={
+            <Button size="small" onClick={() => setFocusStudentId(undefined)}>
+              显示全班
+            </Button>
+          }
+        />
+      ) : null}
       <DecoratedPageHeader
         description="同步学生基础资料快照，保证后续业务能基于本地建档数据继续流转。"
         icon={<FileDoneOutlined />}
@@ -1915,7 +2000,14 @@ export function StudentProfileFilingPageContent({
           <div className="student-profile-filing-table-pane">
             <Table<StudentProfileFilingStudent>
               columns={columns}
-              dataSource={tableStudents}
+              dataSource={
+                focusStudentId
+                  ? tableStudents.filter((student) => student.studentId === focusStudentId)
+                  : tableStudents
+              }
+              rowClassName={(student) =>
+                student.studentId === initialScope?.studentId ? 'ant-table-row-selected' : ''
+              }
               loading={isLoadingOverview}
               locale={
                 shouldShowInitialClassEmptyState
@@ -2061,6 +2153,9 @@ export function StudentProfileFilingPageContent({
 
                   <Form<FamilySupplementFormValues>
                     form={familySupplementForm}
+                    onValuesChange={() =>
+                      setSupplementDrafts((current) => ({ ...current, family: true }))
+                    }
                     layout="vertical"
                     requiredMark={false}
                     onFinish={() => {
@@ -2147,6 +2242,9 @@ export function StudentProfileFilingPageContent({
 
                   <Form<EducationSupplementFormValues>
                     form={educationSupplementForm}
+                    onValuesChange={() =>
+                      setSupplementDrafts((current) => ({ ...current, education: true }))
+                    }
                     initialValues={
                       activeSupplementStudent
                         ? buildDefaultEducationSupplementFormValues(

@@ -63,9 +63,16 @@ const ICON_MAP: Record<string, React.ComponentType> = {
   WarningOutlined,
 };
 
-function resolveIcon(iconKey: string): React.ReactNode {
+function resolveIcon(iconKey: string, accessibleName?: string): React.ReactNode {
   const IconComponent = ICON_MAP[iconKey];
-  return IconComponent ? <IconComponent /> : null;
+  if (!IconComponent) return null;
+  return accessibleName ? (
+    <span role="img" aria-label={accessibleName}>
+      <IconComponent />
+    </span>
+  ) : (
+    <IconComponent />
+  );
 }
 
 function shouldShowMenuIcon(depth: number) {
@@ -91,21 +98,38 @@ function toMenuItems(
   items: readonly NavigationMetaItem[],
   collapsed: boolean,
   depth = 0,
+  groupControls: Readonly<Record<string, ReactNode>> = {},
 ): ItemType[] {
   return items.map((item) => {
     if (isNavigationGroupItem(item)) {
       return {
         key: item.key,
-        icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
+        icon: shouldShowMenuIcon(depth)
+          ? resolveIcon(item.iconKey, collapsed ? item.label : undefined)
+          : undefined,
         label: renderNavigationLabel(item),
         title: collapsed ? item.label : undefined,
-        children: toMenuItems(item.children, collapsed, depth + 1),
+        children: [
+          ...(groupControls[item.key]
+            ? [
+                {
+                  type: 'group' as const,
+                  key: `${item.key}-control`,
+                  label: groupControls[item.key],
+                  children: [],
+                },
+              ]
+            : []),
+          ...toMenuItems(item.children, collapsed, depth + 1, groupControls),
+        ],
       };
     }
 
     return {
       key: item.key,
-      icon: shouldShowMenuIcon(depth) ? resolveIcon(item.iconKey) : undefined,
+      icon: shouldShowMenuIcon(depth)
+        ? resolveIcon(item.iconKey, collapsed ? item.label : undefined)
+        : undefined,
       label: renderNavigationLabel(item),
       title: collapsed ? item.label : undefined,
     };
@@ -146,15 +170,19 @@ type NavSidebarProps = {
   footer?: ReactNode;
   header?: ReactNode;
   items: NavigationMetaItem[];
+  groupControls?: Readonly<Record<string, ReactNode>>;
 };
 
-export function NavSidebar({ footer, header, items }: NavSidebarProps) {
+export function NavSidebar({ footer, header, items, groupControls }: NavSidebarProps) {
   const { mode } = useNavCapability();
   const location = useLocation();
   const navigate = useNavigate();
   const collapsed = mode === 'rail';
 
-  const menuItems = useMemo(() => toMenuItems(items, collapsed), [items, collapsed]);
+  const menuItems = useMemo(
+    () => toMenuItems(items, collapsed, 0, groupControls),
+    [items, collapsed, groupControls],
+  );
 
   const allLeaves = useMemo(() => flattenPaths(items), [items]);
   const leafPathByKey = useMemo(

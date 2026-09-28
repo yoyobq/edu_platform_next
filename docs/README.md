@@ -113,6 +113,7 @@ This directory contains project documentation.
 - [project-convention/route-url-semantics.md](./project-convention/route-url-semantics.md)
 - [project-convention/staff-directory-cache.md](./project-convention/staff-directory-cache.md)
 - [project-convention/student-conduct-alignment.md](./project-convention/student-conduct-alignment.md)
+- [project-convention/class-work-context.md](./project-convention/class-work-context.md)
 - [project-convention/time-display-semantics.md](./project-convention/time-display-semantics.md)
 - [project-convention/upstream-session-frontend-ownership.md](./project-convention/upstream-session-frontend-ownership.md)
 - [project-convention/welcome-profile-completion.md](./project-convention/welcome-profile-completion.md)

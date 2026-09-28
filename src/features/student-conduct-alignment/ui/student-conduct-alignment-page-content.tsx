@@ -29,8 +29,10 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
+import { ClassWorkScopeNotice } from '@/entities/class-work-context';
 import {
   type StoredUpstreamSession,
   UpstreamLoginModal,
@@ -614,6 +616,7 @@ function formatPatchResultTitle(result: PatchStudentConductGradeCorrectionsResul
 
 type StudentConductAlignmentPageContentProps = {
   currentAccount: StudentConductAlignmentCurrentAccount;
+  initialStudentId?: string;
   initialClassId?: string;
   initialSemesterId?: number;
 };
@@ -622,6 +625,7 @@ export function StudentConductAlignmentPageContent({
   currentAccount,
   initialClassId,
   initialSemesterId,
+  initialStudentId,
 }: StudentConductAlignmentPageContentProps) {
   const { message, modal } = App.useApp();
   const [classes, setClasses] = useState<StudentConductGradeWorkspaceClassOption[]>([]);
@@ -636,7 +640,7 @@ export function StudentConductAlignmentPageContent({
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [selectedTermKey, setSelectedTermKey] = useState<string | null>(null);
   const [conductView, setConductView] = useState<StudentConductGradeEffectiveView | null>(null);
-  const [studentSearch, setStudentSearch] = useState('');
+  const [studentSearch, setStudentSearch] = useState(initialStudentId ?? '');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -775,7 +779,8 @@ export function StudentConductAlignmentPageContent({
   );
   const shouldConfirmLeavingPatchMode =
     isPatchMode &&
-    (isImportingMaterial ||
+    (patchDraftCount > 0 ||
+      isImportingMaterial ||
       hasPendingMaterialImportConfirmation ||
       hasMaterialImportPatchDrafts ||
       materialImportPreviewDraftCount > 0);
@@ -851,6 +856,22 @@ export function StudentConductAlignmentPageContent({
     [],
   );
 
+  const routeBusy = isPatchingCorrections || isImportingMaterial || syncingScope !== null;
+  const routeBlocker = useBlocker(shouldConfirmLeavingPatchMode || routeBusy);
+  useEffect(() => {
+    if (routeBlocker.state !== 'blocked') return;
+    const dialog = modal.confirm({
+      title: routeBusy ? '正在处理，请稍后切换' : '放弃未保存的操行补录？',
+      content: routeBusy ? '本次操作结束后再切换班级。' : '切换后会丢弃当前尚未保存的补录内容。',
+      okText: '放弃并切换',
+      cancelText: '留在当前页',
+      okButtonProps: { disabled: routeBusy },
+      onOk: () => routeBlocker.proceed(),
+      onCancel: () => routeBlocker.reset(),
+    });
+    return () => dialog.destroy();
+  }, [modal, routeBlocker, routeBusy]);
+
   const confirmLeavingPatchMode = useCallback(
     async (leave: () => Promise<void> | void) => {
       if (!shouldConfirmLeavingPatchMode) {
@@ -860,7 +881,7 @@ export function StudentConductAlignmentPageContent({
 
       modal.confirm({
         title: '离开补录操作？',
-        content: '当前补录材料已经处理过，但尚未通过“保存补录”落库。现在离开会丢弃这些内容。',
+        content: '当前操行补录尚未保存。现在离开会丢弃这些内容。',
         okText: '确认离开',
         cancelText: '继续补录',
         onOk: async () => {
@@ -1238,7 +1259,7 @@ export function StudentConductAlignmentPageContent({
       const workspace = await fetchStudentConductGradeWorkspace(initialSelectionRef.current);
 
       applyWorkspaceResult(workspace);
-      setStudentSearch('');
+      setStudentSearch(initialStudentId ?? '');
     } catch (error) {
       setClasses([]);
       setTerms([]);
@@ -1252,7 +1273,7 @@ export function StudentConductAlignmentPageContent({
     } finally {
       setIsLoadingCatalog(false);
     }
-  }, [applyWorkspaceResult, resetPatchWorkspace]);
+  }, [applyWorkspaceResult, resetPatchWorkspace, initialStudentId]);
 
   const reloadCurrentSelection = useCallback(async () => {
     await confirmLeavingPatchMode(async () => {
@@ -1893,6 +1914,7 @@ export function StudentConductAlignmentPageContent({
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
+      <ClassWorkScopeNotice classId={selectedClassId} />
       <DecoratedPageHeader
         description="对齐校园网操行数据，补齐历史材料，处理本地补正与冲突。"
         icon={<AuditOutlined />}

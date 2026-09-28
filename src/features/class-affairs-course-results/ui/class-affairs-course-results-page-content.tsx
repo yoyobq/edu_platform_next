@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import {
   Alert,
+  App,
   Button,
   Empty,
   Form,
@@ -22,8 +23,10 @@ import {
   Tooltip,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
+import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -224,13 +227,15 @@ function matrixScrollX(matrix: ClassCourseGradeMatrix | null, special: boolean) 
 
 export function ClassAffairsCourseResultsPageContent({
   currentAccount,
+  initialScope,
 }: {
+  initialScope?: ClassWorkScope;
   currentAccount: CurrentAccount;
 }) {
   const { token } = theme.useToken();
   const [loginForm] = Form.useForm<UpstreamLoginFormValues>();
   const [workspace, setWorkspace] = useState<ClassCourseGradeWorkspace | null>(null);
-  const [studentSearch, setStudentSearch] = useState('');
+  const [studentSearch, setStudentSearch] = useState(initialScope?.studentId ?? '');
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [refreshFeedback, setRefreshFeedback] = useState<CourseGradeRefreshFeedback | null>(null);
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -291,8 +296,8 @@ export function ClassAffairsCourseResultsPageContent({
   }, []);
 
   useEffect(() => {
-    void loadWorkspace({});
-  }, [loadWorkspace]);
+    void loadWorkspace({ classId: initialScope?.classId, semesterId: initialScope?.semesterId });
+  }, [loadWorkspace, initialScope?.classId, initialScope?.semesterId]);
 
   const runRefresh = useCallback(
     async (session: StoredUpstreamSession, request: CourseGradeRefreshRequest) => {
@@ -429,9 +434,25 @@ export function ClassAffairsCourseResultsPageContent({
 
   const view = workspace?.view ?? null;
   const isBusy = isLoading || isRefreshing;
+  const { modal } = App.useApp();
+  const routeBlocker = useBlocker(isRefreshing);
+  useEffect(() => {
+    if (routeBlocker.state !== 'blocked') return;
+    const dialog = modal.confirm({
+      title: '正在同步成绩，请稍后切换',
+      content: '同步完成后可以继续切换班级。',
+      okText: '继续切换',
+      cancelText: '留在当前页',
+      okButtonProps: { disabled: isRefreshing },
+      onOk: () => routeBlocker.proceed(),
+      onCancel: () => routeBlocker.reset(),
+    });
+    return () => dialog.destroy();
+  }, [modal, routeBlocker, isRefreshing]);
 
   return (
     <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
+      <ClassWorkScopeNotice classId={workspace?.selectedClass?.classId} />
       <DecoratedPageHeader
         badge={<Tag color="blue">班务管理</Tag>}
         description="后端统一计算可操作班级、真实学期、正式名单和课程矩阵；本页只负责选择与渲染。"

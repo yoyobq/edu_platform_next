@@ -56,8 +56,9 @@ import {
   clearLocalAuthSession,
   useAuthSessionState,
 } from '@/features/auth';
+import { ClassWorkProvider, ClassWorkSelector } from '@/features/class-work-context';
 
-import { hasAdminAccess } from '@/entities/auth-access';
+import { hasAdminAccess, hasStudentRegistrationCardReadinessAccess } from '@/entities/auth-access';
 
 import { BrandLockup } from '@/shared/ui/brand';
 import { useWidthBand } from '@/shared/ui/responsive-layout';
@@ -527,7 +528,18 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
                       {sidebarOverride.content}
                     </div>
                   ) : (
-                    <NavSidebar footer={sidebarFooter} header={sidebarHeader} items={navItems} />
+                    <NavSidebar
+                      footer={sidebarFooter}
+                      header={sidebarHeader}
+                      items={navItems}
+                      groupControls={{
+                        'class-affairs':
+                          navigationFilter &&
+                          hasStudentRegistrationCardReadinessAccess(navigationFilter) ? (
+                            <ClassWorkSelector containedPopup={navMode === 'rail'} />
+                          ) : null,
+                      }}
+                    />
                   )}
                 </Layout.Sider>
                 <Layout style={{ background: 'transparent', minWidth: 0 }}>
@@ -778,15 +790,26 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
 }
 
 export function AppLayout({ currentAppEnv, children }: AppLayoutProps) {
+  const session = useAuthSessionState();
+  const snapshot = session.status === 'authenticated' ? session.snapshot : null;
+  const workClassEnabled = Boolean(
+    snapshot &&
+    hasStudentRegistrationCardReadinessAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+    }),
+  );
   return (
-    <KeyboardShortcutStackProvider>
-      <NavCapabilityProvider>
-        <SidecarStateProvider>
-          <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
-            <AppLayoutFrame currentAppEnv={currentAppEnv}>{children}</AppLayoutFrame>
-          </CollaborationSessionProvider>
-        </SidecarStateProvider>
-      </NavCapabilityProvider>
-    </KeyboardShortcutStackProvider>
+    <ClassWorkProvider accountId={snapshot?.accountId ?? null} enabled={workClassEnabled}>
+      <KeyboardShortcutStackProvider>
+        <NavCapabilityProvider>
+          <SidecarStateProvider>
+            <CollaborationSessionProvider currentAppEnv={currentAppEnv}>
+              <AppLayoutFrame currentAppEnv={currentAppEnv}>{children}</AppLayoutFrame>
+            </CollaborationSessionProvider>
+          </SidecarStateProvider>
+        </NavCapabilityProvider>
+      </KeyboardShortcutStackProvider>
+    </ClassWorkProvider>
   );
 }

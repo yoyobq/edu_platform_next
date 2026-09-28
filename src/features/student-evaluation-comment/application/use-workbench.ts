@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
+import type { ClassWorkScope } from '@/entities/class-work-context';
 import {
   isExpiredUpstreamSessionError,
   resolveUpstreamErrorMessage,
@@ -62,6 +63,7 @@ import {
 import { initialWorkspaceState, workspaceReducer } from './workspace-state';
 
 type ProductWorkbenchProps = {
+  initialScope?: ClassWorkScope;
   currentAccount: StudentEvaluationCommentWorkbenchLoaderData['currentAccount'];
 };
 
@@ -99,15 +101,18 @@ type WorkbenchFeedback = {
 
 export function useStudentEvaluationCommentWorkbench({
   currentAccount,
+  initialScope,
   confirm,
   message,
 }: ProductWorkbenchProps & WorkbenchFeedback) {
-  const [activeCommentKind, setActiveCommentKind] = useState<StudentEvaluationCommentKind>('TERM');
+  const [activeCommentKind, setActiveCommentKind] = useState<StudentEvaluationCommentKind>(
+    initialScope?.commentKind ?? 'TERM',
+  );
   const [workspaceState, dispatchWorkspace] = useReducer(workspaceReducer, initialWorkspaceState);
   const { workspace, errorMessage } = workspaceState;
   const isLoading = workspaceState.status === 'loading';
   const [filter, setFilter] = useState<StudentEvaluationCommentWorkflowStatus>('ALL');
-  const [searchText, setSearchText] = useState('');
+  const [searchText, setSearchText] = useState(initialScope?.studentId ?? '');
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [generationIssuesByStudentId, setIssuesByStudentId] = useState<Record<string, string>>({});
   const [conductIssuesByStudentId, setConductIssuesByStudentId] = useState<Record<string, string>>(
@@ -278,8 +283,12 @@ export function useStudentEvaluationCommentWorkbench({
   );
 
   useEffect(() => {
-    void loadWorkspace({ commentKind: 'TERM' });
-  }, [loadWorkspace]);
+    void loadWorkspace({
+      classId: initialScope?.classId,
+      semesterId: initialScope?.semesterId,
+      commentKind: initialScope?.commentKind ?? 'TERM',
+    });
+  }, [loadWorkspace, initialScope?.classId, initialScope?.semesterId, initialScope?.commentKind]);
 
   useEffect(() => {
     let active = true;
@@ -380,6 +389,7 @@ export function useStudentEvaluationCommentWorkbench({
       const scopeVersion = scopeVersionRef.current + 1;
       scopeVersionRef.current = scopeVersion;
       setEditor(null);
+      setSearchText('');
       setSelectedStudentIds([]);
       setIssuesByStudentId({});
       setConductIssuesByStudentId({});

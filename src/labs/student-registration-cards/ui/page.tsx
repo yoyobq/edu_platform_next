@@ -4,6 +4,13 @@ import { Alert, App, Button, Card, Empty, Select, Space, Table, Tag } from 'antd
 import { Link } from 'react-router';
 
 import {
+  ClassWorkEntry,
+  type ClassWorkScope,
+  ClassWorkScopeNotice,
+  useClassWorkContext,
+} from '@/entities/class-work-context';
+
+import {
   type CardPreflight,
   type ClassOption,
   downloadCard,
@@ -43,9 +50,18 @@ const LABELS: Record<string, string> = {
 };
 
 export function StudentRegistrationCardsLabPage() {
+  return (
+    <ClassWorkEntry>
+      {({ key, scope }) => <StudentRegistrationCardsContent key={key} initialScope={scope} />}
+    </ClassWorkEntry>
+  );
+}
+
+function StudentRegistrationCardsContent({ initialScope }: { initialScope: ClassWorkScope }) {
+  const workContext = useClassWorkContext();
   const { message } = App.useApp();
   const [classes, setClasses] = useState<ClassOption[]>([]);
-  const [classId, setClassId] = useState<string>();
+  const [classId, setClassId] = useState<string | undefined>(initialScope.classId);
   const [students, setStudents] = useState<StudentOption[]>([]);
   const [studentId, setStudentId] = useState<string>();
   const [preflight, setPreflight] = useState<CardPreflight | null>(null);
@@ -77,7 +93,14 @@ export function StudentRegistrationCardsLabPage() {
     setLoading(true);
     void listStudents(classId)
       .then((items) => {
-        if (active) setStudents(items);
+        if (active) {
+          setStudents(items);
+          if (
+            classId === initialScope.classId &&
+            items.some((item) => item.studentId === initialScope.studentId)
+          )
+            setStudentId(initialScope.studentId);
+        }
       })
       .catch(() => {
         if (active) setError('名单读取失败，请重新选择班级。');
@@ -88,12 +111,40 @@ export function StudentRegistrationCardsLabPage() {
     return () => {
       active = false;
     };
-  }, [classId]);
+  }, [classId, initialScope.classId, initialScope.studentId]);
   useEffect(() => {
     setPreflight(null);
     setGenerated(null);
     setError(null);
   }, [studentId]);
+
+  useEffect(() => {
+    if (!initialScope.inspect || !studentId || studentId !== initialScope.studentId) return;
+    let active = true;
+    setBusy(true);
+    void preflightCard(studentId)
+      .then((result) => {
+        if (active) setPreflight(result);
+      })
+      .catch(() => {
+        if (active) setError('材料预检失败，请重新检查。');
+      })
+      .finally(() => {
+        if (active) setBusy(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [initialScope.inspect, initialScope.studentId, studentId]);
+
+  const governancePath = (
+    target: 'profile' | 'conduct' | 'results' | 'comments',
+    fallback: string,
+    semesterId?: number,
+    commentKind?: 'TERM' | 'GRADUATION',
+  ) =>
+    workContext?.buildGovernancePath(target, { classId, studentId, semesterId, commentKind }) ??
+    fallback;
 
   async function inspect() {
     if (!studentId) return;
@@ -140,6 +191,7 @@ export function StudentRegistrationCardsLabPage() {
     <div className="p-4">
       <Space orientation="vertical" size="large" style={{ width: '100%' }}>
         <h1>学籍卡材料与出卡 · Lab</h1>
+        <ClassWorkScopeNotice classId={classId} />
         <Alert
           type="info"
           showIcon
@@ -148,6 +200,8 @@ export function StudentRegistrationCardsLabPage() {
         />
         <Space wrap>
           <Select
+            showSearch
+            optionFilterProp="label"
             aria-label="学籍卡班级"
             placeholder="选择班级"
             style={{ width: 260 }}
@@ -157,6 +211,8 @@ export function StudentRegistrationCardsLabPage() {
             options={classes.map((item) => ({ value: item.id, label: item.className }))}
           />
           <Select
+            showSearch
+            optionFilterProp="label"
             aria-label="学籍卡学生"
             placeholder="选择学生"
             style={{ width: 260 }}
@@ -222,24 +278,69 @@ export function StudentRegistrationCardsLabPage() {
                   {
                     title: '正式评语',
                     dataIndex: 'evaluationCommentStatus',
-                    render: (value: string) => LABELS[value] ?? value,
+                    render: (value: string, term) =>
+                      value === 'MISSING' ? (
+                        <Link
+                          to={governancePath(
+                            'comments',
+                            '/class-affairs/student-evaluation-comments',
+                            term.semesterId,
+                          )}
+                        >
+                          缺失 · 去补齐
+                        </Link>
+                      ) : (
+                        (LABELS[value] ?? value)
+                      ),
                   },
                   {
                     title: '确认操行',
                     dataIndex: 'conductGradeStatus',
-                    render: (value: string) => LABELS[value] ?? value,
+                    render: (value: string, term) =>
+                      value === 'MISSING' ? (
+                        <Link
+                          to={governancePath(
+                            'conduct',
+                            '/class-affairs/student-conduct-alignment',
+                            term.semesterId,
+                          )}
+                        >
+                          缺失 · 去补齐
+                        </Link>
+                      ) : (
+                        (LABELS[value] ?? value)
+                      ),
                   },
                 ]}
               />
               <Space wrap>
-                <Link to="/class-affairs/student-profile-filing">
+                {preflight.warningCodes.includes('GRADUATION_EVALUATION_COMMENT_MISSING') ||
+                preflight.issueCodes.includes('GRADUATION_EVALUATION_COMMENT_MISSING') ? (
+                  <Link
+                    to={governancePath(
+                      'comments',
+                      '/class-affairs/student-evaluation-comments',
+                      undefined,
+                      'GRADUATION',
+                    )}
+                  >
+                    补齐毕业鉴定
+                  </Link>
+                ) : null}
+                <Link to={governancePath('profile', '/class-affairs/student-profile-filing')}>
                   建档 / 毕业信息（班主任、辅导员）
                 </Link>
-                <Link to="/class-affairs/student-conduct-alignment">操行治理</Link>
-                <Link to="/class-affairs/student-evaluation-comments">评语治理</Link>
-                <Link to="/class-affairs/course-results-summary">成绩治理</Link>
+                <Link to={governancePath('conduct', '/class-affairs/student-conduct-alignment')}>
+                  操行治理
+                </Link>
+                <Link to={governancePath('comments', '/class-affairs/student-evaluation-comments')}>
+                  评语治理
+                </Link>
+                <Link to={governancePath('results', '/class-affairs/course-results-summary')}>
+                  成绩治理
+                </Link>
               </Space>
-              <span>治理后请返回本页重新检查；治理入口按各自权限开放。</span>
+              <span>处理后点击“返回学籍卡检查”，继续查看该学生的最新材料状态。</span>
               {preflight.canGenerate ? (
                 <Button
                   type="primary"

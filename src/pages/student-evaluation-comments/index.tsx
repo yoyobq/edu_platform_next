@@ -9,6 +9,8 @@ import {
   type StudentEvaluationCommentWorkbenchLoaderData,
 } from '@/features/student-evaluation-comment';
 
+import { ClassWorkEntry } from '@/entities/class-work-context';
+
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
 export function StudentEvaluationCommentsPage() {
@@ -21,7 +23,15 @@ export function StudentEvaluationCommentsPage() {
         icon={<FileDoneOutlined />}
         title="班级评语治理"
       />
-      <StudentEvaluationCommentWorkbench currentAccount={data.currentAccount} />
+      <ClassWorkEntry>
+        {({ key, scope }) => (
+          <StudentEvaluationCommentWorkbench
+            key={key}
+            currentAccount={data.currentAccount}
+            initialScope={scope}
+          />
+        )}
+      </ClassWorkEntry>
     </div>
   );
 }

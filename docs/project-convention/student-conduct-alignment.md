@@ -47,7 +47,7 @@
 
 ## 页面调用顺序
 
-1. 初次读取 `studentConductGradeWorkspace({})`
+1. 初次优先使用治理链接或工作班级范围读取 workspace；未指定范围时读取 `studentConductGradeWorkspace({})`。工作班级约定见 `class-work-context.md`。
 2. 直接渲染后端返回的 class/term selection、actions 与 view
 3. 切换班级时重查 `studentConductGradeWorkspace({ classId })`
 4. 切换学期时重查 `studentConductGradeWorkspace({ classId, semesterId })`

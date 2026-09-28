@@ -5,6 +5,8 @@ import { useLoaderData } from 'react-router';
 import { ClassAffairsCourseResultsPageContent } from '@/features/class-affairs-course-results';
 import { Error403 } from '@/features/error-feedback';
 
+import { ClassWorkEntry } from '@/entities/class-work-context';
+
 export function ClassAffairsCourseResultsPage() {
   const loaderData = useLoaderData() as {
     currentAccount?: {
@@ -20,5 +22,15 @@ export function ClassAffairsCourseResultsPage() {
     return <Error403 />;
   }
 
-  return <ClassAffairsCourseResultsPageContent currentAccount={loaderData.currentAccount} />;
+  return (
+    <ClassWorkEntry>
+      {({ key, scope }) => (
+        <ClassAffairsCourseResultsPageContent
+          key={key}
+          currentAccount={loaderData.currentAccount!}
+          initialScope={scope}
+        />
+      )}
+    </ClassWorkEntry>
+  );
 }

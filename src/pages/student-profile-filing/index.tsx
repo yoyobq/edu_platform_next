@@ -5,6 +5,8 @@ import { useLoaderData } from 'react-router';
 import { Error403 } from '@/features/error-feedback';
 import { StudentProfileFilingPageContent } from '@/features/student-profile-filing';
 
+import { ClassWorkEntry } from '@/entities/class-work-context';
+
 export function StudentProfileFilingPage() {
   const loaderData = useLoaderData() as {
     currentAccount?: {
@@ -21,5 +23,15 @@ export function StudentProfileFilingPage() {
     return <Error403 />;
   }
 
-  return <StudentProfileFilingPageContent currentAccount={loaderData.currentAccount} />;
+  return (
+    <ClassWorkEntry>
+      {({ key, scope }) => (
+        <StudentProfileFilingPageContent
+          key={key}
+          currentAccount={loaderData.currentAccount!}
+          initialScope={scope}
+        />
+      )}
+    </ClassWorkEntry>
+  );
 }

@@ -1,7 +1,7 @@
 // src/features/student-profile-filing/ui/student-graduation-info-form.tsx
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, App, Button, Form, Input, Select, Space, Spin, Tag } from 'antd';
-import { useBeforeUnload, useBlocker } from 'react-router';
+import { useBeforeUnload } from 'react-router';
 
 import { hasGraphQLCategory } from '@/shared/graphql';
 
@@ -41,7 +41,6 @@ export function StudentGraduationInfoForm({
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const blocker = useBlocker(dirty || saving);
   useBeforeUnload(
     useCallback(
       (event: BeforeUnloadEvent) => {
@@ -59,16 +58,6 @@ export function StudentGraduationInfoForm({
   useEffect(() => {
     onBusyChange(saving);
   }, [saving, onBusyChange]);
-  useEffect(() => {
-    if (blocker.state !== 'blocked') return;
-    const dialog = modal.confirm({
-      title: saving ? '正在保存，请稍后离开' : '放弃未保存的毕业信息？',
-      okButtonProps: { disabled: saving },
-      onOk: () => blocker.proceed(),
-      onCancel: () => blocker.reset(),
-    });
-    return () => dialog.destroy();
-  }, [blocker, modal, saving]);
 
   const accept = useCallback(
     (next: GraduationInfo) => {
