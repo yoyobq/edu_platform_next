@@ -3,24 +3,24 @@
 .student-profile-filing-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 24px;
 }
 
 .student-profile-filing-toolbar {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px;
   justify-content: space-between;
   min-width: 0;
 }
 
 .student-profile-filing-toolbar-main {
-  align-items: flex-start;
+  align-items: center;
   display: flex;
   flex: 1 1 auto;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -28,16 +28,8 @@
   display: flex;
   flex: 1 1 360px;
   flex-direction: column;
-  gap: 6px;
-  min-width: 220px;
-}
-
-.student-profile-filing-class-select {
+  gap: 8px;
   min-width: 0;
-}
-
-.student-profile-filing-class-select :where(.ant-select) {
-  width: 100%;
 }
 
 .student-profile-filing-class-context {
@@ -46,8 +38,8 @@
   display: flex;
   flex-wrap: wrap;
   font-size: 12px;
-  gap: 6px 10px;
-  line-height: 1.35;
+  gap: 4px 16px;
+  line-height: inherit;
   min-width: 0;
 }
 
@@ -60,7 +52,7 @@
 }
 
 .student-profile-filing-class-context-label {
-  color: var(--ant-color-text-tertiary);
+  color: var(--ant-color-text-secondary);
   flex: 0 0 auto;
 }
 

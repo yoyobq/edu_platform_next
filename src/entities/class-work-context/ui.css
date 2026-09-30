@@ -1,0 +1,17 @@
+/* src/entities/class-work-context/ui.css */
+.class-work-scope-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 288px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.class-work-scope-picker {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+}

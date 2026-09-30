@@ -34,7 +34,7 @@ import type { ColumnsType, TableRowSelection } from 'antd/es/table/interface';
 import { Link, useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
-import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
+import { type ClassWorkScope, ClassWorkScopeBar } from '@/entities/class-work-context';
 import { UpstreamLoginModal } from '@/entities/upstream-session';
 
 import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
@@ -57,6 +57,7 @@ import type {
 
 import { StudentEvaluationCommentExcelImportDialog } from './excel-import-dialog';
 type ProductWorkbenchProps = {
+  renderHeader?: (classScope: ReactNode) => ReactNode;
   initialScope?: ClassWorkScope;
   currentAccount: StudentEvaluationCommentWorkbenchLoaderData['currentAccount'];
 };
@@ -94,6 +95,7 @@ const ADDRESS_OPTIONS = [
 ] as const;
 
 export function StudentEvaluationCommentWorkbench({
+  renderHeader,
   currentAccount,
   initialScope,
 }: ProductWorkbenchProps) {
@@ -304,63 +306,68 @@ export function StudentEvaluationCommentWorkbench({
   );
   const completedPercent = counts.ALL ? Math.round((counts.COMPLETED / counts.ALL) * 100) : 0;
 
+  const classScope = (
+    <ClassWorkScopeBar
+      classId={workspace?.selectedClass?.classId}
+      options={(workspace?.classOptions ?? []).map((item) => ({
+        id: item.classId,
+        className: item.className,
+        classCode: item.classCode,
+      }))}
+      loading={isLoading}
+      disabled={isBatchRunning}
+      onChange={(classId) => void requestScopeChange({ classId, commentKind: activeCommentKind })}
+    />
+  );
+  const header = renderHeader ? renderHeader(classScope) : classScope;
+
   if (isLoading && !workspace) {
-    return <Card loading />;
+    return (
+      <div className="flex flex-col gap-6">
+        {header}
+        <Card loading />
+      </div>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <ClassWorkScopeNotice classId={workspace?.selectedClass?.classId} />
-      <Card size="small">
-        <ResponsiveGrid className="gap-4" columns={{ compact: 1, regular: 2, wide: 3 }}>
-          <div>
-            <div className="mb-2">班级</div>
-            <Select
-              disabled={isLoading || isBatchRunning}
-              loading={isLoading}
-              optionFilterProp="label"
-              options={(workspace?.classOptions ?? []).map((item) => ({
-                label: `${item.className} · ${item.classCode}`,
-                value: item.classId,
-              }))}
-              placeholder="选择班级"
-              showSearch
-              style={{ width: '100%' }}
-              value={workspace?.selectedClass?.classId}
-              onChange={(nextClassId) =>
-                void requestScopeChange({ classId: nextClassId, commentKind: activeCommentKind })
-              }
-            />
-          </div>
-          <div className="flex items-end">
-            <Space wrap>
-              <Button
-                icon={<ReloadOutlined />}
-                loading={isLoading}
-                onClick={() => void reloadCurrentWorkspace()}
-              >
-                刷新
-              </Button>
-              {!isGraduation && !isOffCampusInternship ? (
-                <Button
-                  icon={upstreamSession ? <CloudSyncOutlined /> : <LoginOutlined />}
-                  loading={isSyncingBasis}
-                  onClick={handleBasisSync}
-                >
-                  更新生成依据
-                </Button>
-              ) : null}
-            </Space>
-          </div>
-          <div>
-            <div className="mb-2">{isGraduation ? '毕业鉴定完成度' : '当前学期完成度'}</div>
-            <Space style={{ width: '100%' }}>
+    <div className="flex flex-col gap-6">
+      {header}
+      <section className="rounded-card bg-bg-container p-4 shadow-card">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div
+            className="flex min-w-0 max-w-full items-center gap-2"
+            role="group"
+            aria-label="评语完成度"
+          >
+            <span className="shrink-0 text-sm text-text-secondary">
+              {isGraduation ? '毕业鉴定完成度' : '当前学期完成度'}
+            </span>
+            <div className="w-32 min-w-0">
               <Progress percent={completedPercent} showInfo={false} size="small" />
-              <span>{`${counts.COMPLETED} / ${counts.ALL}`}</span>
-            </Space>
+            </div>
+            <span className="shrink-0 text-sm tabular-nums">{`${counts.COMPLETED} / ${counts.ALL}`}</span>
           </div>
-        </ResponsiveGrid>
-      </Card>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+            <Button
+              icon={<ReloadOutlined />}
+              loading={isLoading}
+              onClick={() => void reloadCurrentWorkspace()}
+            >
+              刷新
+            </Button>
+            {!isGraduation && !isOffCampusInternship ? (
+              <Button
+                icon={upstreamSession ? <CloudSyncOutlined /> : <LoginOutlined />}
+                loading={isSyncingBasis}
+                onClick={handleBasisSync}
+              >
+                更新生成依据
+              </Button>
+            ) : null}
+          </div>
+        </div>
+      </section>
 
       {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
       {!isGraduation && !isOffCampusInternship && basisSyncError ? (

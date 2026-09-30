@@ -17,18 +17,21 @@ export function StudentEvaluationCommentsPage() {
   const data = useLoaderData<StudentEvaluationCommentWorkbenchLoaderData | { isForbidden: true }>();
   if (!('currentAccount' in data)) return <Error403 />;
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
-      <DecoratedPageHeader
-        description="在学期评语与毕业鉴定两个范围内，选择学生、生成或编辑草稿、审阅并确认正式结果。"
-        icon={<FileDoneOutlined />}
-        title="班级评语治理"
-      />
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6">
       <ClassWorkEntry>
         {({ key, scope }) => (
           <StudentEvaluationCommentWorkbench
             key={key}
             currentAccount={data.currentAccount}
             initialScope={scope}
+            renderHeader={(classScope) => (
+              <DecoratedPageHeader
+                aside={classScope}
+                description="在学期评语与毕业鉴定两个范围内，选择学生、生成或编辑草稿、审阅并确认正式结果。"
+                icon={<FileDoneOutlined />}
+                title="班级评语治理"
+              />
+            )}
           />
         )}
       </ClassWorkEntry>

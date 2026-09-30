@@ -154,7 +154,13 @@ for (const scenario of ['evidence', 'manual'] as const) {
         };
         const query = body.query ?? '';
         let data: Record<string, unknown>;
-        if (query.includes('StudentRosterMembershipCurrentAccount'))
+        if (query.includes('studentPrivateProfileClassOptions'))
+          data = {
+            studentPrivateProfileClassOptions: [
+              { id: '1032001', classCode: '1032001', className: '信息2001班' },
+            ],
+          };
+        else if (query.includes('StudentRosterMembershipCurrentAccount'))
           data = { me: { accountId: 1, account: { identityHint: 'admin' } } };
         else if (query.includes('StudentRosterMembershipDepartments'))
           data = {
@@ -222,8 +228,7 @@ for (const scenario of ['evidence', 'manual'] as const) {
         await route.fulfill({ json: { data } });
       });
       await page.goto('/academic-affairs/student-roster-membership-reconciliation');
-      const selects = page.getByRole('combobox');
-      await selects.nth(1).click();
+      await page.getByRole('main').getByRole('combobox', { name: '核对班级', exact: true }).click();
       await page.getByText('信息2001班 (1032001)', { exact: true }).last().click();
       await page.getByRole('button', { name: '预读校园网学生花名册并核对' }).click();
       if (scenario === 'evidence') await expect(page.getByText('需补齐时间')).toBeVisible();

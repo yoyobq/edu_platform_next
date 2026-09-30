@@ -32,7 +32,7 @@ import type { ColumnsType } from 'antd/es/table';
 import { useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
-import { ClassWorkScopeNotice } from '@/entities/class-work-context';
+import { ClassWorkScopeBar } from '@/entities/class-work-context';
 import {
   type StoredUpstreamSession,
   UpstreamLoginModal,
@@ -1913,16 +1913,24 @@ export function StudentConductAlignmentPageContent({
   }, [runSyncWithSession, upstreamActionRequest]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
-      <ClassWorkScopeNotice classId={selectedClassId} />
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6">
       <DecoratedPageHeader
+        aside={
+          <ClassWorkScopeBar
+            classId={selectedClassId}
+            options={classes}
+            loading={isLoadingCatalog}
+            disabled={isLoadingData}
+            onChange={(id) => void handleClassChange(id)}
+          />
+        }
         description="对齐校园网操行数据，补齐历史材料，处理本地补正与冲突。"
         icon={<AuditOutlined />}
         title="操行对齐"
       />
 
       <>
-        <section className="rounded-card bg-bg-container p-5 shadow-card">
+        <section className="rounded-card bg-bg-container p-4 shadow-card">
           <div className="flex flex-col gap-4">
             {errorMessage ? <Alert showIcon title={errorMessage} type="error" /> : null}
             {termGenerationBlocked ? (
@@ -1986,7 +1994,7 @@ export function StudentConductAlignmentPageContent({
                 type="error"
                 title="操行补录校验失败"
                 description={
-                  <Space direction="vertical" size={2}>
+                  <Space orientation="vertical" size={2}>
                     {patchRowIssues.slice(0, 8).map((issue) => (
                       <span key={`${issue.rowIndex}-${issue.code}`}>
                         第 {issue.rowIndex + 1} 行{issue.studentId ? `（${issue.studentId}）` : ''}
@@ -2002,30 +2010,9 @@ export function StudentConductAlignmentPageContent({
               />
             ) : null}
 
-            <div
-              className="grid gap-4"
-              style={{
-                gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-              }}
-            >
-              <label className="flex flex-col gap-2">
-                <span className="text-sm text-text-secondary">班级</span>
-                <Select
-                  disabled={isLoadingCatalog || isLoadingData}
-                  loading={isLoadingCatalog}
-                  optionFilterProp="label"
-                  options={classes.map((option) => ({
-                    label: formatClassLabel(option),
-                    value: option.id,
-                  }))}
-                  placeholder="暂无可见班级"
-                  showSearch
-                  value={selectedClassId ?? undefined}
-                  onChange={(value) => void handleClassChange(value)}
-                />
-              </label>
-              <label className="flex flex-col gap-2">
-                <span className="text-sm text-text-secondary">学生</span>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <label className="flex w-72 max-w-full items-center gap-2">
+                <span className="shrink-0 text-sm text-text-secondary">学生</span>
                 <Input
                   allowClear
                   prefix={<SearchOutlined />}
@@ -2034,7 +2021,7 @@ export function StudentConductAlignmentPageContent({
                   onChange={(event) => setStudentSearch(event.target.value)}
                 />
               </label>
-              <div className="flex items-end gap-2">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
                 <Button
                   disabled={isLoadingCatalog || isLoadingData}
                   icon={<ReloadOutlined />}

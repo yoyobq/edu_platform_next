@@ -6,4 +6,5 @@ export type {
   ClassWorkScope,
 } from './context';
 export { ClassWorkContext, useClassWorkContext } from './context';
-export { ClassWorkEntry, ClassWorkScopeNotice } from './ui';
+export type { ClassWorkScopeBarProps } from './ui';
+export { ClassWorkEntry, ClassWorkScopeBar } from './ui';

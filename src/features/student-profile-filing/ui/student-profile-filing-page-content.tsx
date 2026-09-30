@@ -12,7 +12,6 @@ import {
   Alert,
   App as AntApp,
   Button,
-  Card,
   DatePicker,
   Drawer,
   Empty,
@@ -21,7 +20,6 @@ import {
   Progress,
   Radio,
   Segmented,
-  Select,
   Space,
   Spin,
   Table,
@@ -32,7 +30,7 @@ import type { ColumnsType } from 'antd/es/table';
 import dayjs, { type Dayjs } from 'dayjs';
 import { useBeforeUnload, useBlocker } from 'react-router';
 
-import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
+import { type ClassWorkScope, ClassWorkScopeBar } from '@/entities/class-work-context';
 import {
   formatUpstreamSessionDateTime,
   isExpiredUpstreamSessionError,
@@ -1361,14 +1359,6 @@ export function StudentProfileFilingPageContent({
   );
   const shouldShowSelectedClassContext =
     selectedClassOption !== null && hasStudentProfileFilingClassContext(selectedClassOption);
-  const selectOptions = useMemo(
-    () =>
-      classOptions.map((item) => ({
-        label: formatStudentProfileFilingClassLabel(item),
-        value: item.id,
-      })),
-    [classOptions],
-  );
 
   const handleClassFiling = useCallback(() => {
     if (!selectedClassId) {
@@ -1873,8 +1863,21 @@ export function StudentProfileFilingPageContent({
     pendingUpstreamActionKind === 'supplement' ? '授权并补充资料' : '授权并建档';
 
   return (
-    <div className="student-profile-filing-page">
-      <ClassWorkScopeNotice classId={selectedClassId} />
+    <div className="student-profile-filing-page mx-auto w-full max-w-7xl p-6">
+      <DecoratedPageHeader
+        aside={
+          <ClassWorkScopeBar
+            classId={selectedClassId}
+            options={classOptions}
+            loading={isLoadingClasses}
+            disabled={isClassFiling}
+            onChange={(id) => void handleClassChange(id)}
+          />
+        }
+        description="同步学生基础资料快照，保证后续业务能基于本地建档数据继续流转。"
+        icon={<FileDoneOutlined />}
+        title="学生建档"
+      />
       {focusStudentId ? (
         <Alert
           type="info"
@@ -1887,31 +1890,12 @@ export function StudentProfileFilingPageContent({
           }
         />
       ) : null}
-      <DecoratedPageHeader
-        description="同步学生基础资料快照，保证后续业务能基于本地建档数据继续流转。"
-        icon={<FileDoneOutlined />}
-        title="学生建档"
-      />
 
-      <Card>
+      <section className="rounded-card bg-bg-container p-4 shadow-card">
         <div className="student-profile-filing-toolbar">
           <div className="student-profile-filing-toolbar-main">
-            <div className="student-profile-filing-class-picker">
-              <div className="student-profile-filing-class-select">
-                <Select
-                  disabled={isLoadingClasses || isClassFiling}
-                  loading={isLoadingClasses}
-                  options={selectOptions}
-                  placeholder="选择班级"
-                  showSearch
-                  value={selectedClassId}
-                  optionFilterProp="label"
-                  onChange={(value) => {
-                    void handleClassChange(value);
-                  }}
-                />
-              </div>
-              {selectedClassOption && shouldShowSelectedClassContext ? (
+            {selectedClassOption && shouldShowSelectedClassContext ? (
+              <div className="student-profile-filing-class-picker">
                 <div className="student-profile-filing-class-context">
                   <span className="student-profile-filing-class-context-item">
                     <span className="student-profile-filing-class-context-label">班主任</span>
@@ -1933,8 +1917,10 @@ export function StudentProfileFilingPageContent({
                   </span>
                   {renderStudentProfileFilingClassInSchoolTag(selectedClassOption)}
                 </div>
-              ) : null}
-            </div>
+              </div>
+            ) : null}
+          </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
             <Button
               disabled={!selectedClassId || isClassFiling}
               icon={<ReloadOutlined />}
@@ -1947,18 +1933,18 @@ export function StudentProfileFilingPageContent({
             >
               刷新概览
             </Button>
+            <Button
+              disabled={!selectedClassId || isLoadingOverview || refreshableStudentIds.length === 0}
+              icon={<SolutionOutlined />}
+              loading={isClassFiling}
+              type="primary"
+              onClick={handleClassFiling}
+            >
+              {classFilingActionLabel}
+            </Button>
           </div>
-          <Button
-            disabled={!selectedClassId || isLoadingOverview || refreshableStudentIds.length === 0}
-            icon={<SolutionOutlined />}
-            loading={isClassFiling}
-            type="primary"
-            onClick={handleClassFiling}
-          >
-            {classFilingActionLabel}
-          </Button>
         </div>
-      </Card>
+      </section>
 
       {filingProgress ? (
         <Alert
@@ -1979,7 +1965,7 @@ export function StudentProfileFilingPageContent({
               </div>
             </div>
           }
-          message={
+          title={
             filingProgress.status === 'success' ? '学工系统资料读取完成' : '正在读取学工系统资料'
           }
           type={filingProgress.status === 'success' ? 'success' : 'info'}
@@ -1990,7 +1976,7 @@ export function StudentProfileFilingPageContent({
           description={`成功 ${refreshDigest.successCount}，失败 ${
             refreshDigest.failureCount
           }，会话有效期 ${formatUpstreamSessionDateTime(refreshDigest.expiresAt)}。`}
-          message={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
+          title={`${refreshDigest.scopeLabel}完成，共 ${refreshDigest.requestedCount} 人`}
           type={refreshDigest.failureCount > 0 ? 'warning' : 'success'}
         />
       ) : null}

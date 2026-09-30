@@ -1813,6 +1813,7 @@ export function StudentRosterMembershipReconciliationPageContent({
                 loading={isLoadingLocalClassOptions}
                 notFoundContent={isLoadingLocalClassOptions ? '正在加载班级' : '没有匹配班级'}
                 optionFilterProp="label"
+                aria-label="核对班级"
                 placeholder="输入班级名称或代码搜索"
                 value={selectedClassCode}
                 options={localClassSelectOptions}

@@ -7,26 +7,12 @@ import {
   ReloadOutlined,
   SearchOutlined,
 } from '@ant-design/icons';
-import {
-  Alert,
-  App,
-  Button,
-  Empty,
-  Form,
-  Input,
-  Select,
-  Space,
-  Spin,
-  Table,
-  Tag,
-  theme,
-  Tooltip,
-} from 'antd';
+import { Alert, App, Button, Empty, Form, Input, Spin, Table, Tag, theme, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useBlocker } from 'react-router';
 
 import { AcademicTermTabs } from '@/entities/academic-semester';
-import { type ClassWorkScope, ClassWorkScopeNotice } from '@/entities/class-work-context';
+import { type ClassWorkScope, ClassWorkScopeBar } from '@/entities/class-work-context';
 import {
   buildUpstreamLoginCredentialsInitialValues,
   canUseRememberedUpstreamLoginCredentials,
@@ -39,7 +25,6 @@ import {
 } from '@/entities/upstream-session';
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
-import { ResponsiveGrid } from '@/shared/ui/responsive-layout';
 
 import {
   buildCourseGradeRefreshRequest,
@@ -451,16 +436,30 @@ export function ClassAffairsCourseResultsPageContent({
   }, [modal, routeBlocker, isRefreshing]);
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-5 px-6 py-6">
-      <ClassWorkScopeNotice classId={workspace?.selectedClass?.classId} />
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-6 p-6">
       <DecoratedPageHeader
-        badge={<Tag color="blue">班务管理</Tag>}
-        description="后端统一计算可操作班级、真实学期、正式名单和课程矩阵；本页只负责选择与渲染。"
+        aside={
+          <ClassWorkScopeBar
+            classId={workspace?.selectedClass?.classId}
+            options={(workspace?.classOptions ?? []).map((item) => ({
+              id: item.classId,
+              className: item.className,
+              classCode: item.classCode,
+            }))}
+            loading={isLoading}
+            disabled={isBusy}
+            onChange={(classId) => {
+              setStudentSearch('');
+              void loadWorkspace({ classId });
+            }}
+          />
+        }
+        description="查看班级各学期成绩，同步课程成绩并核对学生材料。"
         icon={<FileSearchOutlined />}
         title="成绩汇总"
       />
 
-      <section className="rounded-card bg-bg-container p-5 shadow-card">
+      <section className="rounded-card bg-bg-container p-4 shadow-card">
         <div className="flex flex-col gap-4">
           {workspaceError ? <Alert showIcon title={workspaceError} type="error" /> : null}
           {(workspace?.warnings ?? []).map((warning) => (
@@ -493,43 +492,26 @@ export function ClassAffairsCourseResultsPageContent({
               type={refreshFeedback.type}
             />
           ) : null}
-          <ResponsiveGrid
-            className="gap-4"
-            columns={{
-              compact: 1,
-              regular: 'minmax(0, 320px) minmax(0, 260px) auto',
-            }}
-          >
-            <label className="flex flex-col gap-2">
-              <span className="text-sm text-text-secondary">负责班级</span>
-              <Select
-                disabled={isBusy}
-                loading={isLoading}
-                optionFilterProp="label"
-                options={(workspace?.classOptions ?? []).map((item) => ({
-                  label: `${item.className}（${item.classCode}）`,
-                  value: item.classId,
-                }))}
-                placeholder="暂无可操作班级"
-                showSearch
-                value={workspace?.selectedClass?.classId}
-                onChange={(classId) => {
-                  setStudentSearch('');
-                  void loadWorkspace({ classId });
-                }}
-              />
-            </label>
-            <label className="flex flex-col gap-2">
-              <span className="text-sm text-text-secondary">学生</span>
-              <Input
-                allowClear
-                placeholder="输入学号或姓名"
-                prefix={<SearchOutlined />}
-                value={studentSearch}
-                onChange={(event) => setStudentSearch(event.target.value)}
-              />
-            </label>
-            <div className="flex items-end">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex min-w-0 flex-1 flex-col gap-2">
+              <label className="flex w-72 max-w-full items-center gap-2">
+                <span className="shrink-0 text-sm text-text-secondary">学生</span>
+                <Input
+                  allowClear
+                  placeholder="输入学号或姓名"
+                  prefix={<SearchOutlined />}
+                  value={studentSearch}
+                  onChange={(event) => setStudentSearch(event.target.value)}
+                />
+              </label>{' '}
+              {view ? (
+                <span className="text-sm text-text-secondary">
+                  正式名单 {view.includedRosterCount} 人 · 普通 {view.regularStudentCount} 人 · 特殊{' '}
+                  {view.specialStudentCount} 人 · 成绩 {view.resultRowCount} 行
+                </span>
+              ) : null}
+            </div>
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               <Button
                 disabled={isBusy || !workspace?.selectedClass}
                 icon={<ReloadOutlined />}
@@ -542,34 +524,26 @@ export function ClassAffairsCourseResultsPageContent({
               >
                 重新加载
               </Button>
+              <Button
+                disabled={isBusy || !selectedRefreshAction?.allowed}
+                icon={<CloudSyncOutlined />}
+                loading={isRefreshing}
+                title={selectedRefreshAction?.reasonMessage ?? undefined}
+                type="primary"
+                onClick={() => void requestRefresh('SELECTED_TERM')}
+              >
+                同步当前所选学期
+              </Button>
+              <Button
+                disabled={isBusy || !allRefreshAction?.allowed}
+                icon={<CloudSyncOutlined />}
+                title={allRefreshAction?.reasonMessage ?? undefined}
+                onClick={() => void requestRefresh('ALL_TERMS')}
+              >
+                同步全部真实学期
+              </Button>
             </div>
-          </ResponsiveGrid>
-          <Space wrap>
-            <Button
-              disabled={isBusy || !selectedRefreshAction?.allowed}
-              icon={<CloudSyncOutlined />}
-              loading={isRefreshing}
-              title={selectedRefreshAction?.reasonMessage ?? undefined}
-              type="primary"
-              onClick={() => void requestRefresh('SELECTED_TERM')}
-            >
-              同步当前所选学期
-            </Button>
-            <Button
-              disabled={isBusy || !allRefreshAction?.allowed}
-              icon={<CloudSyncOutlined />}
-              title={allRefreshAction?.reasonMessage ?? undefined}
-              onClick={() => void requestRefresh('ALL_TERMS')}
-            >
-              同步全部真实学期
-            </Button>
-            {view ? (
-              <span className="text-sm text-text-secondary">
-                正式名单 {view.includedRosterCount} 人 · 普通 {view.regularStudentCount} 人 · 特殊{' '}
-                {view.specialStudentCount} 人 · 成绩 {view.resultRowCount} 行
-              </span>
-            ) : null}
-          </Space>
+          </div>
           {!selectedRefreshAction?.allowed && selectedRefreshAction?.reasonMessage ? (
             <Alert showIcon title={selectedRefreshAction.reasonMessage} type="warning" />
           ) : null}
@@ -599,7 +573,7 @@ export function ClassAffairsCourseResultsPageContent({
                 <Spin size="large" />
               </div>
             ) : view ? (
-              <div className="flex flex-col gap-5">
+              <div className="flex flex-col gap-4">
                 <Table<ClassCourseGradeStudentRow>
                   columns={regularColumns}
                   dataSource={regularRows}

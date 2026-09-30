@@ -218,7 +218,7 @@ test('工作班级跨页跟随，页面临时切班不改变默认，刷新后�
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('B');
   await chooseClassOption(
     page,
-    page.getByRole('combobox').filter({ visible: true }).nth(1),
+    page.getByRole('combobox', { name: '当前班级', exact: true }),
     /护理一班/,
   );
   await expect(page.getByText('临时查看', { exact: true })).toBeVisible();
@@ -333,3 +333,189 @@ test('已保存班级失效时清除旧值并提示重选', async ({ page }) => 
   await expect(page.getByText('原工作班级已不可用，请重新选择。')).toBeVisible();
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBeNull();
 });
+
+test('五个页面使用统一入口，临时切班与返回不改变工作班级', async ({ page }) => {
+  await setup(page);
+  await page.goto(COMMENTS);
+  await setWorkClass(page, '护理一班');
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+  await expect(page.getByRole('combobox', { name: '当前班级', exact: true })).toBeEnabled();
+  for (const path of [
+    COMMENTS,
+    '/class-affairs/course-results-summary',
+    '/class-affairs/student-profile-filing',
+    '/class-affairs/student-conduct-alignment',
+    CARD,
+  ]) {
+    await page.goto(path);
+    const picker = page.getByRole('combobox', { name: '当前班级', exact: true });
+    await expect(picker).toHaveCount(1);
+    await expect(picker).toBeEnabled();
+    await chooseClassOption(page, picker, /护理二班/);
+    await expect(page.getByText('临时查看', { exact: true })).toBeVisible();
+    await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+    await page.getByRole('button', { name: /返回工作班级$/ }).click();
+    await expect(page.getByText('临时查看', { exact: true })).toHaveCount(0);
+    await expect(page.locator('.class-work-scope-picker')).toContainText('护理一班');
+  }
+});
+
+test('紧凑入口在窄屏可按班级代码搜索并用键盘切换', async ({ page }) => {
+  await setup(page);
+  await page.goto(COMMENTS);
+  await setWorkClass(page, '护理一班');
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+  await expect(page.getByRole('combobox', { name: '当前班级', exact: true })).toBeEnabled();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const picker = page.getByRole('combobox', { name: '当前班级', exact: true });
+  await picker.fill('2402');
+  await expect(page.locator('.ant-select-dropdown:visible')).toContainText('护理二班');
+  await expect(page.locator('.ant-select-dropdown:visible')).not.toContainText('护理一班');
+  await picker.press('ArrowDown');
+  await picker.press('Enter');
+  await expect(page.getByText('临时查看', { exact: true })).toBeVisible();
+  const bounds = await page.locator('.class-work-scope-picker').boundingBox();
+  expect(bounds).not.toBeNull();
+  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
+  await picker.press('Escape');
+  await page.getByRole('heading', { name: '班级评语治理' }).click();
+  await page.mouse.move(380, 30);
+  await expect(page.locator('.ant-select-dropdown:visible')).toHaveCount(0);
+  await page.screenshot({ path: '/tmp/class-work-compact-mobile.png' });
+});
+
+test('页面临时切班取消后保留班级及操行草稿', async ({ page }) => {
+  await setup(page);
+  await page.goto('/class-affairs/student-conduct-alignment');
+  await setWorkClass(page, '护理一班');
+  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+  await expect(page.getByRole('combobox', { name: '当前班级', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: /补录$/, exact: false }).click();
+  const draft = page.getByRole('row').filter({ hasText: '张同学' }).getByRole('textbox');
+  await draft.fill('88');
+  await chooseClassOption(
+    page,
+    page.getByRole('combobox', { name: '当前班级', exact: true }),
+    /护理二班/,
+  );
+  await expect(page.getByRole('dialog', { name: '离开补录操作？' })).toBeVisible();
+  await page.getByRole('button', { name: '继续补录' }).click();
+  await expect(draft).toHaveValue('88');
+  await expect(page.locator('.class-work-scope-picker')).toContainText('护理一班');
+  await expect(page.getByText('临时查看', { exact: true })).toHaveCount(0);
+});
+
+for (const scenario of ['success', 'failure', 'back'] as const) {
+  test(`学籍卡生成期间拦截导航，结束后由用户决定离开（${scenario}）`, async ({ page }) => {
+    await setup(page);
+    let release: () => void = () => {};
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let generationCount = 0;
+    await page.route('**/graphql', async (route) => {
+      const payload = route.request().postDataJSON() as { query?: string };
+      if (!payload.query?.includes('mutation CardLabGenerate')) return route.fallback();
+      generationCount += 1;
+      if (generationCount === 1) await pending;
+      if (scenario === 'failure' && generationCount === 1) {
+        await route.fulfill({
+          json: {
+            errors: [
+              { message: 'generation failed', extensions: { code: 'INTERNAL_SERVER_ERROR' } },
+            ],
+          },
+        });
+        return;
+      }
+      await route.fulfill({
+        json: {
+          data: {
+            generateStudentRegistrationCardDocument: {
+              studentId: 'S1',
+              canGenerate: true,
+              status: 'READY',
+              issueCodes: [],
+              warningCodes: [],
+              missingSections: [],
+              scoreOverflows: [],
+              termMaterialReadiness: { status: 'READY', terms: [] },
+              downloadToken: 'card-token',
+              fileName: 'student-card.docx',
+              expiresAt: '2099-01-01T00:00:00Z',
+            },
+          },
+        },
+      });
+    });
+    await page.route('**/student-private-profile/registration-card-documents/card-token', (route) =>
+      route.fulfill({
+        contentType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        body: 'mock document',
+      }),
+    );
+    try {
+      await page.goto(COMMENTS);
+      await setWorkClass(page, '护理一班');
+      await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+      const labsMenu = page.getByRole('menuitem', { name: /Labs$/ });
+      if ((await labsMenu.getAttribute('aria-expanded')) !== 'true') await labsMenu.click();
+      await page.getByRole('menuitem', { name: '学籍卡材料与出卡', exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`${CARD}$`));
+      await chooseClassOption(page, page.getByRole('combobox', { name: '学籍卡学生' }), /张同学/);
+      await page.getByRole('button', { name: '检查最终材料', exact: true }).click();
+      await page.getByRole('button', { name: '生成本学生 DOCX', exact: true }).click();
+      await expect.poll(() => generationCount).toBe(1);
+      if (scenario === 'success') {
+        const unloadPrompt = page.waitForEvent('dialog');
+        await page.evaluate(() => {
+          window.setTimeout(() => window.location.reload(), 0);
+        });
+        const dialog = await unloadPrompt;
+        expect(dialog.type()).toBe('beforeunload');
+        await dialog.dismiss();
+      }
+      if (scenario === 'back') await page.evaluate(() => window.history.back());
+      else await setWorkClass(page, '护理二班');
+      const waiting = page.getByRole('dialog', { name: '正在生成，请稍后离开', exact: true });
+      await expect(waiting).toBeVisible();
+      await expect(waiting.getByRole('button', { name: '继续离开', exact: true })).toBeDisabled();
+      await expect(page).toHaveURL(new RegExp(`${CARD}$`));
+      await expect(page.locator('.class-work-scope-picker')).toContainText('护理一班');
+      await expect(page.getByRole('combobox', { name: '学籍卡学生' }).locator('..')).toContainText(
+        '张同学',
+      );
+      expect(await page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+      expect(generationCount).toBe(1);
+      release();
+      const finished = page.getByRole('dialog', {
+        name: '生成请求已结束，是否继续离开？',
+        exact: true,
+      });
+      await expect(finished).toBeVisible();
+      await expect(page).toHaveURL(new RegExp(`${CARD}$`));
+      if (scenario === 'back') {
+        await finished.getByRole('button', { name: '继续离开', exact: true }).click();
+        await expect(page).toHaveURL(new RegExp(COMMENTS));
+        expect(await page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
+        return;
+      }
+      await finished.getByRole('button', { name: '留在当前页', exact: true }).click();
+      if (scenario === 'failure') {
+        await expect(
+          page.getByText('文档生成失败，请重新预检后重试。', { exact: true }),
+        ).toBeVisible();
+        await page.getByRole('button', { name: '生成本学生 DOCX', exact: true }).click();
+        await expect.poll(() => generationCount).toBe(2);
+      }
+      const download = page.waitForEvent('download');
+      await page.getByRole('button', { name: '下载学籍卡 DOCX', exact: true }).click();
+      expect((await download).suggestedFilename()).toBe('student-card.docx');
+      await setWorkClass(page, '护理二班');
+      await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('B');
+      await expect(page.locator('.class-work-scope-picker')).toContainText('护理二班');
+    } finally {
+      release();
+    }
+  });
+}
