@@ -1453,14 +1453,17 @@ export function StudentProfileFilingPageContent({
     setSupplementDrawerState(null);
     setSupplementFeedback(null);
     educationDefaultsAppliedRef.current = null;
-    familySupplementForm.resetFields();
-    educationSupplementForm.resetFields();
+    if (!graduationStudent) {
+      familySupplementForm.resetFields();
+      educationSupplementForm.resetFields();
+    }
     setSupplementDrafts({ family: false, education: false });
   }, [
     educationSupplementForm,
     familySupplementForm,
     graduationDirty,
     graduationSaving,
+    graduationStudent,
     supplementDirty,
     isSubmittingSupplement,
     modal,

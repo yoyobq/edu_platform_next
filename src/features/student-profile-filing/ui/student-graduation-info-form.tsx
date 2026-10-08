@@ -59,18 +59,20 @@ export function StudentGraduationInfoForm({
     onBusyChange(saving);
   }, [saving, onBusyChange]);
 
-  const accept = useCallback(
-    (next: GraduationInfo) => {
-      setInfo(next);
-      form.resetFields();
-      form.setFieldsValue(
-        Object.fromEntries(next.fields.map((field) => [field.field, field.localValue ?? ''])),
-      );
-      setDirty(false);
-      setError(null);
-    },
-    [form],
-  );
+  const accept = useCallback((next: GraduationInfo) => {
+    setInfo(next);
+    setDirty(false);
+    setError(null);
+  }, []);
+
+  // Wait for the conditional Form to mount before synchronizing a newly accepted view.
+  useEffect(() => {
+    if (!info) return;
+    form.resetFields();
+    form.setFieldsValue(
+      Object.fromEntries(info.fields.map((field) => [field.field, field.localValue ?? ''])),
+    );
+  }, [form, info]);
 
   useEffect(() => {
     let active = true;
