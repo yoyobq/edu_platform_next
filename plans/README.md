@@ -82,6 +82,8 @@ plan 不负责定义稳定规则。
 
 ## 当前计划
 
+- [teaching-inspection-plan.md](./teaching-inspection-plan.md)（教学检查 Lab：文档已确认，页面待实现）
+
 - [staff-slot-management-plan.md](./staff-slot-management-plan.md)
 - [student-login-navigation-plan.md](./student-login-navigation-plan.md)
 - [ui-ux-evolution-direction.md](./ui-ux-evolution-direction.md)
