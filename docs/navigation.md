@@ -52,6 +52,7 @@
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：
+  - 全部管理员或绑定本人教职工身份的有效教研组长：`/labs/teaching-inspection`（教学检查）
   - admin，以及具备教务员／班主任／辅导员岗位的 staff：`/labs/student-registration-cards`（学籍卡材料与出卡）
   - admin：`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`
@@ -197,6 +198,7 @@ type NavigationMetaItem = NavigationGroupItem | NavigationLeafItem;
 
 type NavigationFilter = {
   accountId?: number;
+  staffId?: string | null;
   primaryAccessGroup: AuthAccessGroup;
   accessGroup: readonly AuthAccessGroup[];
   slotGroup: readonly string[];
@@ -240,6 +242,7 @@ manifest 保持纯数据，不过早内嵌渲染组件；页面归属保持单�
 当前稳定过滤输入为：
 
 - `accountId`
+- `staffId`（当前绑定的教职工身份；菜单与路由复用同一准入 helper）
 - `primaryAccessGroup`
 - `accessGroup`
 - `slotGroup`

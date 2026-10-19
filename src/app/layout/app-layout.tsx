@@ -157,6 +157,7 @@ function AppLayoutFrame({ currentAppEnv, children }: AppLayoutProps) {
       activeSnapshot
         ? {
             accountId: activeSnapshot.accountId,
+            staffId: activeSnapshot.identity?.kind === 'STAFF' ? activeSnapshot.identity.id : null,
             primaryAccessGroup: activeSnapshot.primaryAccessGroup,
             accessGroup: activeSnapshot.userInfo.accessGroup,
             slotGroup: activeSnapshot.slotGroup,

@@ -1,5 +1,4 @@
 // src/app/router/index.tsx
-
 import { type ComponentType, type ReactNode, useEffect, useRef } from 'react';
 import { Spin } from 'antd';
 import {
@@ -34,6 +33,7 @@ import {
 } from '@/features/auth';
 import { Error403, Error404, ErrorRouteCrash } from '@/features/error-feedback';
 
+import { hasTeachingInspectionAccess } from '@/entities/auth-access';
 import {
   ACADEMIC_OFFICER_SLOT_GROUP,
   type AcademicInternalViewerRole,
@@ -79,6 +79,10 @@ import {
   loadStudentRegistrationCardsLabRouteModule,
   studentRegistrationCardsLabAccess,
 } from '@/labs/student-registration-cards';
+import {
+  loadTeachingInspectionLabRouteModule,
+  teachingInspectionLabAccess,
+} from '@/labs/teaching-inspection';
 import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
@@ -548,6 +552,7 @@ async function navigationPageLoader({ request }: LoaderFunctionArgs, path: strin
   if (
     !canAccessNavigationPath(path, {
       accountId: snapshot.accountId,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
       primaryAccessGroup: snapshot.primaryAccessGroup,
       accessGroup: snapshot.userInfo.accessGroup,
       slotGroup: snapshot.slotGroup,
@@ -763,6 +768,26 @@ async function myTeachingPlanPageLoader({ request }: LoaderFunctionArgs) {
 async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: upstreamSessionDemoLabAccess,
+    request,
+  });
+}
+
+async function teachingInspectionLabLoader({ request }: LoaderFunctionArgs) {
+  return loadLabRoute({
+    access: teachingInspectionLabAccess,
+    canAccess: (snapshot) =>
+      hasTeachingInspectionAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
+    getData: (snapshot) => ({
+      currentAccount: { accountId: snapshot.accountId, displayName: snapshot.displayName },
+      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+        accessGroup: snapshot.userInfo.accessGroup,
+        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+      }),
+    }),
     request,
   });
 }
@@ -1702,6 +1727,11 @@ const router = createBrowserRouter([
       {
         path: '/labs',
         children: [
+          {
+            path: 'teaching-inspection',
+            loader: teachingInspectionLabLoader,
+            lazy: loadTeachingInspectionLabRouteModule,
+          },
           {
             path: 'academic-adjusted-workload-report',
             loader: () => redirect('/academic-affairs/external-teacher-compensation'),

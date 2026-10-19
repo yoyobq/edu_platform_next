@@ -198,6 +198,7 @@ export function CollaborationSessionProvider({
         trimmedMessage,
         getAvailableLocalEntryCards({
           accountId: activeSnapshot?.accountId,
+          staffId: activeSnapshot?.identity?.kind === 'STAFF' ? activeSnapshot.identity.id : null,
           appEnv: currentAppEnv,
           primaryAccessGroup: activeSnapshot?.primaryAccessGroup ?? ('GUEST' as AuthAccessGroup),
           accessGroup: activeSnapshot?.userInfo.accessGroup ?? ['GUEST'],

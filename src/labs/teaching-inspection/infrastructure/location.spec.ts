@@ -1,0 +1,19 @@
+// src/labs/teaching-inspection/infrastructure/location.spec.ts
+import { describe, expect, it } from 'vitest';
+
+import { readLocation, writeLocation } from './location';
+describe('教学检查链接', () => {
+  it('非法类型和分页回归缺省，移除非筛选字段', () => {
+    const value = readLocation(
+      new URLSearchParams('kind=bad&page=-2&semester=Infinity&token=secret'),
+    );
+    expect(value.type.kind).toBe('LESSON_PLAN');
+    expect(value.page).toBe(1);
+    expect(value.semesterId).toBeUndefined();
+    expect(writeLocation(value).toString()).toBe('kind=lesson-plan');
+  });
+  it('保留类型、学期、教师、关键词和页码', () => {
+    const params = new URLSearchParams('kind=assignment&semester=2&teacher=T&keyword=课程&page=3');
+    expect(readLocation(writeLocation(readLocation(params)))).toEqual(readLocation(params));
+  });
+});

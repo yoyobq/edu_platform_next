@@ -28,6 +28,45 @@ function findGroup(items: NavigationMetaItem[], key: string): NavigationGroupIte
 }
 
 describe('navigation catalog', () => {
+  it('教学检查向全部管理员及绑定教职工的教研组长显示', () => {
+    const path = '/labs/teaching-inspection';
+    for (const appEnv of ['dev', 'test', 'prod'] as const) {
+      for (const scenario of [
+        { accessGroup: ['ADMIN'] as const, slotGroup: [], staffId: 'T700', allowed: true },
+        { accessGroup: ['ADMIN'] as const, slotGroup: [], staffId: null, allowed: true },
+        {
+          accessGroup: ['STAFF'] as const,
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+          staffId: 'T700',
+          allowed: true,
+        },
+        {
+          accessGroup: ['STAFF'] as const,
+          slotGroup: ['TEACHING_GROUP_LEADER'],
+          staffId: null,
+          allowed: false,
+        },
+        {
+          accessGroup: ['STAFF'] as const,
+          slotGroup: ['ACADEMIC_OFFICER'],
+          staffId: 'T700',
+          allowed: false,
+        },
+        { accessGroup: ['STAFF'] as const, slotGroup: [], staffId: 'T700', allowed: false },
+        { accessGroup: ['STUDENT'] as const, slotGroup: [], staffId: null, allowed: false },
+      ]) {
+        const filter = buildFilter({
+          ...scenario,
+          appEnv,
+          primaryAccessGroup: scenario.accessGroup[0],
+        });
+        expect(canAccessNavigationPath(path, filter)).toBe(scenario.allowed);
+        expect(getNavigationLeafItems(filter).some((item) => item.path === path)).toBe(
+          scenario.allowed,
+        );
+      }
+    }
+  });
   it('学籍卡 Labs 菜单保持路由权限范围', () => {
     for (const appEnv of ['dev', 'test', 'prod'] as const) {
       const path = '/labs/student-registration-cards';
@@ -126,6 +165,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
@@ -194,6 +234,7 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
+      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
@@ -871,6 +912,7 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/major-sync',
       '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
+      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',

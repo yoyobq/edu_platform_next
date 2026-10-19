@@ -108,6 +108,7 @@ export function UpstreamLoginModal({
       }}
     >
       <Modal
+        forceRender
         destroyOnHidden
         footer={null}
         open={open}

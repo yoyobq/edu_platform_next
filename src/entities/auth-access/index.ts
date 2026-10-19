@@ -371,3 +371,17 @@ export function resolveUpstreamLoginLockedUserId(input: {
 
   return input.staffId?.trim() || null;
 }
+
+/** Admins may choose an upstream inspector; teaching group leaders remain bound to their staff identity. */
+export function hasTeachingInspectionAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+  staffId?: string | null;
+}) {
+  return (
+    (input.accessGroup ?? []).includes('ADMIN') ||
+    (Boolean(input.staffId?.trim()) &&
+      (input.accessGroup ?? []).includes('STAFF') &&
+      (input.slotGroup ?? []).includes(TEACHING_GROUP_LEADER_SLOT_GROUP))
+  );
+}

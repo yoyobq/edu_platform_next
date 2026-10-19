@@ -40,6 +40,7 @@ export function isNavigationLeafItem(item: NavigationMetaItem): item is Navigati
 
 export type NavigationFilter = {
   accountId?: number;
+  staffId?: string | null;
   primaryAccessGroup: AuthAccessGroup;
   accessGroup: readonly AuthAccessGroup[];
   slotGroup: readonly string[];

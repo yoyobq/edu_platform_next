@@ -4,6 +4,7 @@ import { type FetchPolicy, type OperationVariables } from '@apollo/client';
 import { executeGraphQL, type GraphQLAuthMode } from '@/shared/graphql';
 
 export type ExecuteUpstreamSessionGraphQLOptions = {
+  allowAuthRetry?: boolean;
   authMode?: GraphQLAuthMode;
   fetchPolicy?: FetchPolicy;
 };

@@ -1,6 +1,7 @@
 import {
   type AuthAccessGroup,
   hasStudentRegistrationCardReadinessAccess,
+  hasTeachingInspectionAccess,
 } from '@/entities/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
@@ -47,6 +48,20 @@ function hasAllowedLabExposure(
 
 export const getLabsNavigationItems: NavigationItemsProvider = (filter) => {
   const children = [
+    ...(hasAllowedLabExposure(['admin', 'staff'], filter) && hasTeachingInspectionAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/labs/teaching-inspection',
+            label: '教学检查',
+            navMode: 'rail' as const,
+            path: '/labs/teaching-inspection',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(hasAllowedLabExposure(['admin', 'staff'], filter) &&
     hasStudentRegistrationCardReadinessAccess(filter)
       ? [

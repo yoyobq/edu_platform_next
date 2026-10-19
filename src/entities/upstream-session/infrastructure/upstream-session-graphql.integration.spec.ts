@@ -154,4 +154,23 @@ describe('executeUpstreamSessionGraphQL integration', () => {
       }),
     );
   });
+
+  it('explicitly disables auth refresh and request replay for inspection mutations', async () => {
+    const refreshSession = vi.fn();
+    getGraphQLRuntimeConfigMock.mockReturnValue({ refreshSession });
+    getOperationASTMock.mockReturnValue(
+      createOperation(OperationTypeNode.MUTATION, 'SaveProgressInspection'),
+    );
+    const error = new GraphQLIngressError({ type: 'auth', message: 'expired' });
+    clientMutateMock.mockRejectedValue(error);
+    await expect(
+      executeUpstreamSessionGraphQL(
+        'mutation SaveProgressInspection { save }',
+        {},
+        { allowAuthRetry: false },
+      ),
+    ).rejects.toBe(error);
+    expect(clientMutateMock).toHaveBeenCalledTimes(1);
+    expect(refreshSession).not.toHaveBeenCalled();
+  });
 });
