@@ -36,6 +36,7 @@ async function setup(
     noStaff?: boolean;
     groupLeader?: boolean;
     authFailure?: boolean;
+    dispatchingAuthFailure?: 'PREPARE' | 'SAVE';
     noSession?: boolean;
     unknownSave?: boolean;
   } = {},
@@ -70,7 +71,8 @@ async function setup(
     saveAttempts = 0;
   let trusted = false,
     version = options.assigned === false ? 0 : 1,
-    saved = false;
+    coveredFloor = 0;
+  const savedRounds = new Set<number>();
   const operations = new Map<
     string,
     {
@@ -86,7 +88,18 @@ async function setup(
   >();
   const preparations = new Map<string, object>();
   const latestUnknown = () =>
-    [...operations.values()].filter((op) => op.state === 'UNKNOWN').at(-1);
+    [...operations.values()]
+      .filter((op) => op.state === 'UNKNOWN' || op.state === 'DISPATCHING')
+      .at(-1);
+  // Fixture models count-only inference around known saves; history evidence is backend-owned.
+  const coverage = () => {
+    const covered = new Set(savedRounds);
+    for (const round of [1, 2, 3]) {
+      if (covered.size >= coveredFloor) break;
+      covered.add(round);
+    }
+    return covered;
+  };
   const resource = (key: string) => ({
     resourceKey: key,
     sourceVersion: 'source-1',
@@ -104,8 +117,8 @@ async function setup(
             round: index + 1,
             date,
             operationId: null,
-            operationState: saved && index === 0 ? 'SAVED' : null,
-            savedOperationId: saved && index === 0 ? 'saved' : null,
+            operationState: savedRounds.has(index + 1) ? 'SAVED' : null,
+            savedOperationId: savedRounds.has(index + 1) ? 'saved' : null,
           }))
         : [],
     },
@@ -114,27 +127,27 @@ async function setup(
       upstreamCount: trusted ? count : null,
       observedAt: trusted ? '2026-10-18T04:00:00Z' : null,
       observationVersion: trusted ? 1 : 0,
-      effectiveCoveredCount: Math.max(count, saved ? 1 : 0),
+      effectiveCoveredCount: coverage().size,
       rounds: [1, 2, 3].map((round) => ({
         round,
-        covered: round <= count || (saved && round === 1),
-        coverageBasis: round <= count ? ['COUNT'] : saved && round === 1 ? ['SAVED'] : [],
-        canPrepare:
-          trusted && version > 0 && round > count && !(saved && round === 1) && !latestUnknown(),
+        covered: coverage().has(round),
+        coverageBasis: savedRounds.has(round) ? ['SAVED'] : coverage().has(round) ? ['COUNT'] : [],
+        canPrepare: trusted && version > 0 && !coverage().has(round) && !latestUnknown(),
         blockers: [
           ...(!trusted ? ['STATUS_UNKNOWN'] : []),
           ...(!version ? ['SCHEDULE_REQUIRED'] : []),
-          ...((saved && round === 1) || round <= count ? ['COMPLETED'] : []),
+          ...(coverage().has(round) ? ['COMPLETED'] : []),
           ...(latestUnknown()
             ? retryReady
-              ? round === 1
+              ? round === latestUnknown()?.round
                 ? ['RETRY_CONFIRMATION_REQUIRED']
                 : []
               : ['PENDING_OPERATION']
             : []),
         ],
         retryAfter: retryReady ? '2026-10-18T03:55:00Z' : null,
-        retryWarningOperationId: retryReady && round === 1 ? (latestUnknown()?.id ?? null) : null,
+        retryWarningOperationId:
+          retryReady && round === latestUnknown()?.round ? (latestUnknown()?.id ?? null) : null,
       })),
     },
   });
@@ -173,6 +186,7 @@ async function setup(
       });
     if (query.includes('RefreshTeachingInspectionStatus')) {
       trusted = true;
+      coveredFloor = Math.max(coveredFloor, Math.min(count, 3));
       return reply({
         result: {
           schedule: resource('1:a').schedule,
@@ -239,7 +253,15 @@ async function setup(
         state: 'PREPARED',
         previewId: `preview-${operations.size}`,
       };
+      if (options.dispatchingAuthFailure === 'PREPARE') operation.state = 'DISPATCHING';
       operations.set(input.clientRequestId, operation);
+      if (options.dispatchingAuthFailure === 'PREPARE')
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            errors: [{ message: '上游认证失败', extensions: { code: 'UNAUTHENTICATED' } }],
+          }),
+        });
       const result = {
         operation,
         preview: {
@@ -291,26 +313,37 @@ async function setup(
     }
     if (/mutation Save/.test(query)) {
       saveAttempts++;
+      const preparation = [...operations.values()].find(
+        (op) => op.action === 'PREPARE' && op.previewId === input.previewId,
+      );
+      if (!preparation) throw new Error('保存必须引用已准备的快照');
       const operation = {
         id: `op-${operations.size}`,
         accountId: 700,
         requestId: input.clientRequestId,
         action: 'SAVE',
-        round: 1,
-        checkDate: dates[0],
+        round: preparation.round,
+        checkDate: preparation.checkDate,
         state:
-          options.authFailure || (options.unknownSave && saveAttempts === 1) ? 'UNKNOWN' : 'SAVED',
+          options.dispatchingAuthFailure === 'SAVE'
+            ? 'DISPATCHING'
+            : options.authFailure || (options.unknownSave && saveAttempts === 1)
+              ? 'UNKNOWN'
+              : 'SAVED',
         previewId: input.previewId,
       };
       operations.set(input.clientRequestId, operation);
-      if (options.authFailure)
+      if (options.authFailure || options.dispatchingAuthFailure === 'SAVE')
         return route.fulfill({
           contentType: 'application/json',
           body: JSON.stringify({
             errors: [{ message: '请重新连接校园网', extensions: { code: 'UNAUTHENTICATED' } }],
           }),
         });
-      saved = operation.state === 'SAVED';
+      if (operation.state === 'SAVED') {
+        coveredFloor = Math.min(3, coverage().size + 1);
+        savedRounds.add(operation.round);
+      }
       version++;
       return reply({
         result: {
@@ -878,3 +911,88 @@ test('关闭未执行请求若查到 UNKNOWN，仍保留原请求并阻止直接
   ).toBe(1);
   expect(fixture.operations.get('late-save-request')?.state).toBe('UNKNOWN');
 });
+
+test('先保存第3轮时按证据覆盖，数量增长只补空轮次且下降不释放覆盖', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto(`${path}?kind=assignment&semester=1`);
+  await page.getByRole('button', { name: '查看检查' }).first().click();
+  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await page.getByRole('radio', { name: '第 3 轮', exact: true }).check();
+  await page.getByRole('button', { name: '准备材料', exact: true }).click();
+  await page.getByRole('checkbox', { name: '我已核对课程、日期及上述材料' }).check();
+  await page.getByRole('button', { name: '确认并保存本条检查' }).click();
+  await expect(page.getByText('保存成功', { exact: true })).toBeVisible();
+  expect([...fixture.operations.values()].find((op) => op.action === 'SAVE')).toMatchObject({
+    round: 3,
+    checkDate: dates[2],
+    state: 'SAVED',
+  });
+  fixture.setCount(1);
+  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await expect(page.getByText('第 3 轮：已知保存成功', { exact: true })).toBeVisible();
+  await expect(page.getByText('第 1 轮：未覆盖', { exact: true })).toBeVisible();
+  await expect(page.getByText('第 2 轮：未覆盖', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByText('有效覆盖 1 / 3 轮', { exact: true }),
+  ).toBeVisible();
+  fixture.setCount(2);
+  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await expect(page.getByText('第 1 轮：数量推定', { exact: true })).toBeVisible();
+  await expect(page.getByText('第 2 轮：未覆盖', { exact: true })).toBeVisible();
+  await expect(
+    page
+      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByText('有效覆盖 2 / 3 轮', { exact: true }),
+  ).toBeVisible();
+  fixture.setCount(0);
+  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await expect(
+    page
+      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByText('有效覆盖 2 / 3 轮', { exact: true }),
+  ).toBeVisible();
+  await page.getByRole('radio', { name: '第 1 轮', exact: true }).check();
+  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+  await page.getByRole('radio', { name: '第 2 轮', exact: true }).check();
+  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeEnabled();
+});
+
+for (const stage of ['PREPARE', 'SAVE'] as const)
+  test(`${stage} 认证失败且结果未落库时，应保留 DISPATCHING 并禁止自动重发`, async ({ page }) => {
+    const fixture = await setup(page, { dispatchingAuthFailure: stage });
+    if (stage === 'SAVE') {
+      await openAndPrepare(page, 'assignment');
+      await page.getByRole('checkbox', { name: '我已核对课程、日期及上述材料' }).check();
+      await page.getByRole('button', { name: '确认并保存本条检查' }).click();
+    } else {
+      await page.goto(`${path}?kind=progress&semester=1`);
+      await page.getByRole('button', { name: '查看检查' }).first().click();
+      await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+      await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    }
+    await expect(
+      page.getByText('会话已失效。重新连接后，请先查询操作结果；不会自动重新提交。'),
+    ).toBeVisible();
+    const sent = fixture.requests.filter((item) =>
+      /mutation (Prepare|Save)/.test(item.query),
+    ).length;
+    page.once('dialog', (dialog) => dialog.accept());
+    await page.reload();
+    await page.getByRole('button', { name: '查看检查' }).first().click();
+    await expect(
+      page.getByText(`${stage === 'SAVE' ? '保存检查' : '准备材料'} · 等待确认`),
+    ).toBeVisible();
+    await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+    await expect(
+      page.getByRole('button', { name: '核对并关闭未执行请求', exact: true }),
+    ).toHaveCount(0);
+    const pending = [...fixture.operations.values()].find((op) => op.state === 'DISPATCHING')!;
+    expect(
+      await page.evaluate(() => sessionStorage.getItem('teaching-inspection.recovery.v1.700')),
+    ).toContain(pending.requestId);
+    expect(
+      fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
+    ).toHaveLength(sent);
+  });
