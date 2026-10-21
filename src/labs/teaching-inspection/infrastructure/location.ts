@@ -8,6 +8,8 @@ export function readLocation(params: URLSearchParams) {
       : undefined;
   return {
     type,
+    section: params.get('view') === 'dates' || !params.has('kind') ? 'dates' : 'checks',
+    resourceKey: params.get('resource') || undefined,
     semesterId: positive(params.get('semester')),
     page: positive(params.get('page')) ?? 1,
     teacherId: params.get('teacher')?.trim() || undefined,
@@ -16,6 +18,8 @@ export function readLocation(params: URLSearchParams) {
 }
 export function writeLocation(value: ReturnType<typeof readLocation>) {
   const params = new URLSearchParams({ kind: value.type.key });
+  if (value.section === 'dates') params.set('view', 'dates');
+  if (value.resourceKey) params.set('resource', value.resourceKey);
   if (value.semesterId) params.set('semester', String(value.semesterId));
   if (value.teacherId) params.set('teacher', value.teacherId);
   if (value.keyword) params.set('keyword', value.keyword);

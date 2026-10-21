@@ -110,6 +110,8 @@ async function setup(
     latestDate: '2026-12-31',
     blockers: [],
     schedule: {
+      records: [],
+      historyState: 'VERIFIED',
       version,
       dates: version ? dates : [],
       rounds: version
@@ -130,6 +132,8 @@ async function setup(
       effectiveCoveredCount: coverage().size,
       rounds: [1, 2, 3].map((round) => ({
         round,
+        dateEditable: trusted && !coverage().has(round),
+        dateBlockers: [],
         covered: coverage().has(round),
         coverageBasis: savedRounds.has(round) ? ['SAVED'] : coverage().has(round) ? ['COUNT'] : [],
         canPrepare: trusted && version > 0 && !coverage().has(round) && !latestUnknown(),
@@ -186,7 +190,19 @@ async function setup(
       });
     if (query.includes('RefreshTeachingInspectionStatus')) {
       trusted = true;
-      coveredFloor = Math.max(coveredFloor, Math.min(count, 3));
+      if (count < savedRounds.size)
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            errors: [
+              {
+                message: '上游数量少于本地确定成功记录，请到上游核实',
+                extensions: { code: 'CONFLICT' },
+              },
+            ],
+          }),
+        });
+      coveredFloor = count;
       return reply({
         result: {
           schedule: resource('1:a').schedule,
@@ -391,13 +407,13 @@ for (const kind of ['lesson-plan', 'progress', 'assignment'])
     expect(fixture.requests.filter((item) => /mutation Save/.test(item.query))).toHaveLength(1);
     expect(
       fixture.requests.filter((item) => item.query.includes('RefreshTeachingInspectionStatus')),
-    ).toHaveLength(1);
+    ).toHaveLength(3);
     const recovery = await page.evaluate(() =>
       sessionStorage.getItem('teaching-inspection.recovery.v1.700'),
     );
     expect(JSON.parse(recovery!)).toEqual([]);
   });
-test('首屏不调用上游，非法类型规范化，窄屏可浏览与键盘进入检查', async ({ page }) => {
+test('未连接上游时标明本地记录，非法类型规范化，窄屏可浏览与键盘进入检查', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const fixture = await setup(page, { noSession: true });
   await page.goto(`${path}?kind=invalid&semester=1`);
@@ -448,12 +464,12 @@ test('保存认证失败时不自动重发，重载后可查询 UNKNOWN', async 
 });
 test('日期预览与保存复用相同集合、原版本和来源指纹', async ({ page }) => {
   const fixture = await setup(page, { assigned: false });
-  await page.goto(`${path}?kind=assignment&semester=1`);
+  await page.goto(`${path}?view=dates&kind=assignment&semester=1`);
   await page
     .getByRole('row', { name: /测试课程甲/ })
     .getByRole('checkbox')
     .check();
-  await page.getByRole('button', { name: '批量安排日期' }).click();
+  await page.getByRole('button', { name: '确认所选课程时间' }).click();
   await page.getByRole('button', { name: '预览日期', exact: true }).click();
   await page.getByRole('button', { name: '确认保存日期' }).click();
   await expect(page.getByRole('dialog', { name: /安排检查日期/ })).toHaveCount(0);
@@ -627,7 +643,7 @@ test('切换类型后，迟到工作区读取不覆盖当前课程', async ({ pa
   });
   await page.goto(`${path}?kind=lesson-plan&semester=1`);
   await started;
-  await page.getByRole('tab', { name: '作业检查', exact: true }).click();
+  await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page.getByText('测试课程甲')).toBeVisible();
   release();
   await expect(page.getByText('迟到旧课程')).toHaveCount(0);
@@ -652,23 +668,23 @@ test('管理员可切换校园网教职工，登录弹窗没有组件警告', as
 test('深色主题保留类型深链接和前进后退，切换时清空课程勾选', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('color-scheme', 'dark'));
   await setup(page);
-  await page.goto(`${path}?kind=lesson-plan&semester=1&teacher=T700&keyword=测试`);
+  await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1&teacher=T700&keyword=测试`);
   await page
     .getByRole('row', { name: /测试课程甲/ })
     .getByRole('checkbox')
     .check();
   await expect(page.getByText('已选 1 门课程')).toBeVisible();
-  await page.getByRole('tab', { name: '作业检查', exact: true }).click();
+  await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page).toHaveURL(/kind=assignment/);
   await expect(page.getByText('已选 1 门课程')).toHaveCount(0);
   await page.goBack();
-  await expect(page.getByRole('tab', { name: '教案检查', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('tab', { name: '检查时间', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   );
   await expect(page.getByRole('searchbox', { name: '搜索课程' })).toHaveValue('测试');
   await page.goForward();
-  await expect(page.getByRole('tab', { name: '作业检查', exact: true })).toHaveAttribute(
+  await expect(page.getByRole('tab', { name: '学生作业', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   );
@@ -696,6 +712,27 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
         }),
       });
     }
+    if (body.query.includes('RefreshTeachingInspectionStatus')) {
+      const resource = fixture.resource('1:a');
+      resource.schedule.version = currentVersion;
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              schedule: resource.schedule,
+              status: {
+                ...resource.status,
+                state: 'TRUSTED',
+                observationVersion: 1,
+                rounds: resource.status.rounds.map((round) => ({ ...round, dateEditable: true })),
+              },
+              upstreamSessionToken: 'refreshed',
+            },
+          },
+        }),
+      });
+    }
     if (!body.query.includes('SaveTeachingInspectionSchedule')) return route.fallback();
     saveCalls++;
     if (saveCalls === 1) {
@@ -711,12 +748,12 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
     expect(body.variables?.input.changes[0].dates[0]).toBe('2026-09-12');
     return route.fallback();
   });
-  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1`);
   await page
     .getByRole('row', { name: /测试课程甲/ })
     .getByRole('checkbox')
     .check();
-  await page.getByRole('button', { name: '批量安排日期' }).click();
+  await page.getByRole('button', { name: '确认所选课程时间' }).click();
   const date = page.getByLabel('测试课程甲第1轮日期');
   await page.getByRole('button', { name: '预览日期', exact: true }).click();
   await expect(page.getByRole('button', { name: '确认保存日期' })).toBeEnabled();
@@ -912,7 +949,7 @@ test('关闭未执行请求若查到 UNKNOWN，仍保留原请求并阻止直接
   expect(fixture.operations.get('late-save-request')?.state).toBe('UNKNOWN');
 });
 
-test('先保存第3轮时按证据覆盖，数量增长只补空轮次且下降不释放覆盖', async ({ page }) => {
+test('作业数量增长补空轮次，低于确定成功时保留记录并阻止新准备', async ({ page }) => {
   const fixture = await setup(page);
   await page.goto(`${path}?kind=assignment&semester=1`);
   await page.getByRole('button', { name: '查看检查' }).first().click();
@@ -934,7 +971,7 @@ test('先保存第3轮时按证据覆盖，数量增长只补空轮次且下降�
   await expect(page.getByText('第 2 轮：未覆盖', { exact: true })).toBeVisible();
   await expect(
     page
-      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByRole('dialog', { name: '学生作业 · 查看检查' })
       .getByText('有效覆盖 1 / 3 轮', { exact: true }),
   ).toBeVisible();
   fixture.setCount(2);
@@ -943,20 +980,21 @@ test('先保存第3轮时按证据覆盖，数量增长只补空轮次且下降�
   await expect(page.getByText('第 2 轮：未覆盖', { exact: true })).toBeVisible();
   await expect(
     page
-      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByRole('dialog', { name: '学生作业 · 查看检查' })
       .getByText('有效覆盖 2 / 3 轮', { exact: true }),
   ).toBeVisible();
   fixture.setCount(0);
   await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
   await expect(
     page
-      .getByRole('dialog', { name: '作业检查 · 查看检查' })
+      .getByRole('dialog', { name: '学生作业 · 查看检查' })
       .getByText('有效覆盖 2 / 3 轮', { exact: true }),
   ).toBeVisible();
   await page.getByRole('radio', { name: '第 1 轮', exact: true }).check();
   await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
   await page.getByRole('radio', { name: '第 2 轮', exact: true }).check();
-  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+  await expect(page.getByText(/上游数量少于本地确定成功记录/)).toBeVisible();
 });
 
 for (const stage of ['PREPARE', 'SAVE'] as const)
@@ -996,3 +1034,204 @@ for (const stage of ['PREPARE', 'SAVE'] as const)
       fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
     ).toHaveLength(sent);
   });
+
+test('进入工作台自动同步数量并使用滚动凭据，切换类型重新同步', async ({ page }) => {
+  const fixture = await setup(page);
+  fixture.setCount(1);
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await expect(page.getByText('已同步上游', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('有效覆盖 1 / 3 轮', { exact: true })).toHaveCount(2);
+  const reads = fixture.requests.filter((item) =>
+    item.query.includes('RefreshTeachingInspectionStatus'),
+  );
+  expect(reads.map((item) => item.input.resourceKey)).toEqual(['1:a', '1:b']);
+  expect((reads[1].input as Input & { upstreamSessionToken: string }).upstreamSessionToken).toBe(
+    'rolled-token',
+  );
+  expect(
+    fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
+  ).toHaveLength(0);
+  await page.getByRole('tab', { name: '学生作业' }).click();
+  await expect(page.getByText('已同步上游', { exact: true })).toHaveCount(2);
+  await expect
+    .poll(
+      () =>
+        fixture.requests.filter(
+          (item) =>
+            item.query.includes('RefreshTeachingInspectionStatus') &&
+            item.input.kind === 'ASSIGNMENT',
+        ).length,
+    )
+    .toBe(2);
+});
+
+test('自动同步失败标明旧记录，重新读取可恢复且不自动准备保存', async ({ page }) => {
+  const fixture = await setup(page);
+  fixture.setTrusted();
+  let fail = true;
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string };
+    if (!fail || !body.query.includes('RefreshTeachingInspectionStatus')) return route.fallback();
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        errors: [{ message: '读取失败', extensions: { code: 'INTERNAL_SERVER_ERROR' } }],
+      }),
+    });
+  });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await expect(page.getByText('同步未完成，以下为上次记录', { exact: true })).toHaveCount(2);
+  await page.getByRole('button', { name: '查看检查' }).first().click();
+  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  fail = false;
+  fixture.setCount(1);
+  await page.getByRole('button', { name: '重新读取工作区' }).click();
+  await expect(page.getByText('已同步上游', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('有效覆盖 1 / 3 轮', { exact: true })).toHaveCount(2);
+  expect(
+    fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
+  ).toHaveLength(0);
+});
+
+test('新入口默认独立检查时间，按课程确认而不触发生成保存', async ({ page }) => {
+  const fixture = await setup(page, { assigned: false });
+  await page.goto(`${path}?semester=1`);
+  await expect(page.getByRole('tab', { name: '检查时间', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await page.getByRole('button', { name: '确认检查时间', exact: true }).first().click();
+  await page.getByRole('button', { name: '预览日期', exact: true }).click();
+  await page.getByRole('button', { name: '确认保存日期', exact: true }).click();
+  const saved = fixture.requests.find((item) =>
+    item.query.includes('SaveTeachingInspectionSchedule'),
+  )!;
+  expect(saved.input.changes).toHaveLength(1);
+  expect(saved.input.changes[0]).toMatchObject({
+    expectedVersion: 0,
+    expectedSourceVersion: 'source-1',
+    expectedObservationVersion: 1,
+  });
+  expect(
+    fixture.requests.filter((item) =>
+      /mutation (Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(item.query),
+    ),
+  ).toHaveLength(0);
+});
+
+test('进度检查时间展示上游实际日期并锁定已提交轮次', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string; variables: { input: Input } };
+    if (!body.query.includes('RefreshTeachingInspectionStatus')) return route.fallback();
+    const resource = fixture.resource(body.variables.input.resourceKey);
+    const record = {
+      recordKey: 'progress-1',
+      checkDate: '2026-09-08',
+      score: 100,
+      plannedProgress: 22,
+      actualProgress: 22,
+      deviation: 0,
+    };
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            schedule: { ...resource.schedule, records: [record], historyState: 'VERIFIED' },
+            status: {
+              ...resource.status,
+              state: 'TRUSTED',
+              upstreamCount: 1,
+              observationVersion: 2,
+              rounds: resource.status.rounds.map((round) => ({
+                ...round,
+                dateEditable: round.round !== 1,
+              })),
+            },
+            upstreamSessionToken: 'observed',
+            expiresAt: null,
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?view=dates&kind=progress&semester=1`);
+  await page.getByRole('button', { name: '确认检查时间', exact: true }).first().click();
+  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-08');
+  await expect(page.getByLabel('测试课程甲第1轮日期')).toBeDisabled();
+  await expect(page.getByLabel('测试课程甲第2轮日期')).toBeEnabled();
+  await expect(page.getByText('上游实际检查：2026-09-08 · 100分')).toBeVisible();
+});
+
+test('教案历史冲突可明确关联并留原因，不发送上游保存', async ({ page }) => {
+  const fixture = await setup(page);
+  let resolved: Record<string, unknown> | undefined;
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string; variables: { input: Input } };
+    if (body.query.includes('ResolveTeachingInspectionHistory')) {
+      resolved = body.variables.input as unknown as Record<string, unknown>;
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: { result: { upstreamSessionToken: 'resolved', expiresAt: null } },
+        }),
+      });
+    }
+    if (!body.query.includes('RefreshTeachingInspectionStatus')) return route.fallback();
+    const resource = fixture.resource(body.variables.input.resourceKey);
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            schedule: {
+              ...resource.schedule,
+              records: [
+                {
+                  recordKey: 'lesson-existing',
+                  checkDate: '2026-09-15',
+                  score: 99,
+                  chapter: '测试章节',
+                },
+              ],
+              historyState: 'CONFLICT',
+            },
+            status: {
+              ...resource.status,
+              state: 'TRUSTED',
+              upstreamCount: 1,
+              observationVersion: 2,
+              rounds: resource.status.rounds.map((round) => ({
+                ...round,
+                canPrepare: false,
+                blockers: ['HISTORY_CONFLICT'],
+              })),
+            },
+            upstreamSessionToken: 'observed',
+            expiresAt: null,
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('button', { name: '查看检查' }).first().click();
+  await page.getByRole('combobox', { name: '第1轮历史记录' }).click();
+  await page.getByText('2026-09-15 · 99分 · 测试章节', { exact: true }).click();
+  await page.getByLabel('历史核对原因').fill('已核对原始检查，关联第一轮');
+  await page.getByRole('button', { name: '确认历史关联', exact: true }).click();
+  await expect
+    .poll(() => resolved)
+    .toMatchObject({
+      recordKeys: ['lesson-existing', null, null],
+      ignoredRecordKeys: [],
+      reason: '已核对原始检查，关联第一轮',
+    });
+  expect(
+    fixture.requests.filter((item) =>
+      /mutation (Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(item.query),
+    ),
+  ).toHaveLength(0);
+});

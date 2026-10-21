@@ -1,6 +1,18 @@
 // src/labs/teaching-inspection/ui/inspection-detail.tsx
 import { useEffect, useRef, useState } from 'react';
-import { Alert, App, Button, Card, Checkbox, Divider, Radio, Space, Tag } from 'antd';
+import {
+  Alert,
+  App,
+  Button,
+  Card,
+  Checkbox,
+  Divider,
+  Input,
+  Radio,
+  Select,
+  Space,
+  Tag,
+} from 'antd';
 
 import type {
   UpstreamAccountIdentity,
@@ -18,6 +30,7 @@ import {
   removeRecovery,
 } from '../infrastructure/recovery';
 import {
+  type Audit,
   basisText,
   blockerText,
   isSaved,
@@ -25,9 +38,11 @@ import {
   operationText,
   type Prepared,
   type Resource,
+  type Status,
   statusText,
   type Target,
 } from '../model';
+import { type InspectionSyncState, syncText } from '../use-workspace';
 
 import { MaterialView } from './material';
 type SessionController = ReturnType<typeof useUpstreamLoginModalController<never>>;
@@ -48,6 +63,9 @@ function initialRecovery(accountId: number, target: Target) {
 }
 export function InspectionDetail({
   resource,
+  syncing,
+  syncState,
+  onSynced,
   target,
   account,
   session,
@@ -56,6 +74,9 @@ export function InspectionDetail({
   onArrange,
 }: {
   resource: Resource;
+  syncing: boolean;
+  syncState: InspectionSyncState;
+  onSynced: (status: Status) => void;
   target: Target;
   account: UpstreamAccountIdentity;
   session: SessionController;
@@ -68,7 +89,12 @@ export function InspectionDetail({
   const [entries, setEntries] = useState(initial.entries);
   const [operations, setOperations] = useState<Record<string, Operation>>({});
   const [storageError, setStorageError] = useState(initial.error);
+  const [audit, setAudit] = useState<Audit | null>(null);
   const [error, setError] = useState('');
+  const [recordKeys, setRecordKeys] = useState<(string | null)[]>(
+    [0, 1, 2].map((index) => resource.schedule.rounds[index]?.recordKey ?? null),
+  );
+  const [resolveReason, setResolveReason] = useState('');
   const [result, setResult] = useState<Operation | null>(null);
   const [prepared, setPrepared] = useState<Prepared | null>(null);
   const [prepareEntry, setPrepareEntry] = useState<RecoveryEntry | null>(null);
@@ -243,6 +269,10 @@ export function InspectionDetail({
   );
   // Once an operation is known, retry admission belongs to the current server round status.
   // Unresolved requests (including NOT_FOUND) must keep blocking new request IDs.
+  const resolvedKeys = [0, 1, 2].map((index) => {
+    const key = resource.schedule.rounds[index]?.recordKey ?? recordKeys[index];
+    return resource.schedule.records.some((record) => record.recordKey === key) ? key : null;
+  });
   const unresolved = entries.some((entry) => !operations[entry.clientRequestId]);
   const preview = prepared?.preview;
   const stale = Boolean(
@@ -277,6 +307,122 @@ export function InspectionDetail({
       </div>
       {storageError && <Alert type="error" title={storageError} showIcon />}
       {error && <Alert type="warning" title={error} showIcon />}
+      <span>{syncText(syncState)}</span>
+      {resource.schedule.records?.length > 0 && (
+        <Card size="small" title="上游当前检查历史">
+          {resource.schedule.records.map((record) => (
+            <p key={record.recordKey}>
+              {record.checkDate} · {record.score}分 ·{' '}
+              {record.chapter ??
+                `计划 ${record.plannedProgress} / 实际 ${record.actualProgress} / 误差 ${record.deviation}`}{' '}
+              · {record.updatedBy}
+            </p>
+          ))}
+        </Card>
+      )}
+      {target.kind === 'ASSIGNMENT' && (
+        <Alert type="info" title="上游仅提供检查数量；本地提交日期和材料未通过上游历史明细核实。" />
+      )}
+      {target.kind === 'LESSON_PLAN' && resource.schedule.historyState === 'CONFLICT' && (
+        <Card size="small" title="核对教案历史关联">
+          <Alert
+            type="warning"
+            title="历史日期无法唯一匹配轮次。请为每条记录指定轮次；未选择的记录将明确排除，须填写原因。"
+          />
+          {[0, 1, 2].map((index) => (
+            <div key={index}>
+              第 {index + 1} 轮
+              <Select
+                aria-label={`第${index + 1}轮历史记录`}
+                style={{ width: '100%' }}
+                allowClear
+                value={resolvedKeys[index]}
+                disabled={busy || syncing || Boolean(resource.schedule.rounds[index]?.recordKey)}
+                options={resource.schedule.records.map((record) => ({
+                  value: record.recordKey,
+                  label: `${record.checkDate} · ${record.score}分 · ${record.chapter ?? ''}`,
+                }))}
+                onChange={(value: string | undefined) =>
+                  setRecordKeys((old) => old.map((key, i) => (i === index ? (value ?? null) : key)))
+                }
+              />
+            </div>
+          ))}
+          <Input
+            aria-label="历史核对原因"
+            placeholder="说明关联或排除原因"
+            value={resolveReason}
+            onChange={(event) => setResolveReason(event.target.value)}
+          />
+          <Button
+            disabled={busy || syncing || !resolveReason.trim()}
+            onClick={() =>
+              void run(async () => {
+                const current = currentSession();
+                if (!current) return;
+                const result = await api.resolveHistory(
+                  {
+                    ...target,
+                    expectedVersion: resource.schedule.version,
+                    recordKeys: resolvedKeys,
+                    ignoredRecordKeys: resource.schedule.records
+                      .filter((record) => !resolvedKeys.includes(record.recordKey))
+                      .map((record) => record.recordKey),
+                    reason: resolveReason,
+                  },
+                  current.upstreamSessionToken,
+                );
+                session.persistSessionFromResult(current, result);
+                await onRefresh();
+              })
+            }
+          >
+            确认历史关联
+          </Button>
+        </Card>
+      )}
+      <Button
+        disabled={busy || syncing}
+        onClick={() =>
+          void run(async () => {
+            setAudit(await api.audit(target));
+          })
+        }
+      >
+        查看本地提交与核对历史
+      </Button>
+      {audit && (
+        <Card size="small" title="最近100条本地记录（不代表上游当前状态）">
+          {audit.operations.map((operation) => (
+            <p key={operation.id}>
+              {operation.checkDate} · 第{operation.round}轮 · {operation.action} ·{' '}
+              {operationText(operation.state)}
+            </p>
+          ))}
+          {audit.events.map((event) => (
+            <div key={event.id}>
+              <p>
+                {new Date(event.createdAt).toLocaleString()} · {event.reason}
+              </p>
+              <p>
+                上游数量：{event.beforeCount ?? '未知'} → {event.afterCount ?? '未知'}
+              </p>
+              <p>
+                原历史：
+                {event.before?.records
+                  .map((record) => `${record.checkDate} ${record.score}分`)
+                  .join('；') || '无明细'}
+              </p>
+              <p>
+                新历史：
+                {event.after?.records
+                  .map((record) => `${record.checkDate} ${record.score}分`)
+                  .join('；') || '无明细'}
+              </p>
+            </div>
+          ))}
+        </Card>
+      )}
       <Space wrap>
         <Tag>{statusText(resource.status)}</Tag>
         <span>有效覆盖 {resource.status.effectiveCoveredCount} / 3 轮</span>
@@ -289,13 +435,21 @@ export function InspectionDetail({
       </span>
       <Space wrap>
         <Button
-          disabled={busy}
+          disabled={busy || syncing}
           onClick={() =>
             void run(async () => {
               const current = currentSession();
               if (!current) return;
-              const data = await api.refreshStatus(target, current.upstreamSessionToken);
-              if (alive.current) session.persistSessionFromResult(current, data);
+              const data = await api
+                .refreshStatus(target, current.upstreamSessionToken)
+                .catch((cause: unknown) => {
+                  if (alive.current) onSynced({ ...resource.status, state: 'UNKNOWN' });
+                  throw cause;
+                });
+              if (alive.current) {
+                session.persistSessionFromResult(current, data);
+                onSynced(data.status);
+              }
               setChecked(false);
               await updateWorkspace();
             })
@@ -303,14 +457,14 @@ export function InspectionDetail({
         >
           刷新检查状态
         </Button>
-        <Button disabled={busy} onClick={onArrange}>
-          安排日期
+        <Button disabled={busy || syncing} onClick={onArrange}>
+          前往检查时间
         </Button>
       </Space>
       <Divider titlePlacement="start">安排与轮次</Divider>
       <Radio.Group
         value={round}
-        disabled={busy}
+        disabled={busy || syncing}
         onChange={(event) => {
           setRound(event.target.value as number);
           setAcknowledged(null);
@@ -345,7 +499,7 @@ export function InspectionDetail({
             <Button
               type="link"
               size="small"
-              disabled={busy}
+              disabled={busy || syncing}
               onClick={() =>
                 void run(async () => {
                   const op = await api.operation({
@@ -371,7 +525,7 @@ export function InspectionDetail({
       {retryId && !status.covered && (
         <Checkbox
           checked={acknowledged === retryId}
-          disabled={busy}
+          disabled={busy || syncing}
           onChange={(event) => setAcknowledged(event.target.checked ? retryId : null)}
         >
           上次结果未确认，继续可能重复；我确认承担本次重试风险
@@ -395,12 +549,15 @@ export function InspectionDetail({
                       <Alert type="info" title="请切回原检查人后恢复材料；操作结果仍可查询。" />
                     )}
                   <Space wrap>
-                    <Button disabled={busy} onClick={() => void run(() => queryEntry(entry))}>
+                    <Button
+                      disabled={busy || syncing}
+                      onClick={() => void run(() => queryEntry(entry))}
+                    >
                       查询操作结果
                     </Button>
                     {!op && closureDetails(entry, entries) && (
                       <Button
-                        disabled={busy}
+                        disabled={busy || syncing}
                         onClick={() =>
                           modal.confirm({
                             title: '核对并关闭未执行请求？',
@@ -429,7 +586,7 @@ export function InspectionDetail({
                           恢复材料
                         </Button>
                         <Button
-                          disabled={busy}
+                          disabled={busy || syncing}
                           onClick={() =>
                             modal.confirm({
                               title: '放弃这份未提交的预览？',
@@ -460,6 +617,8 @@ export function InspectionDetail({
         type="primary"
         disabled={
           busy ||
+          syncing ||
+          syncState !== 'synced' ||
           Boolean(storageError) ||
           blockers.length > 0 ||
           unresolved ||
@@ -536,7 +695,7 @@ export function InspectionDetail({
           </Checkbox>
           <Button
             type="primary"
-            disabled={busy || !ready || Boolean(storageError)}
+            disabled={busy || syncing || syncState !== 'synced' || !ready || Boolean(storageError)}
             loading={busy}
             onClick={() =>
               void run(async () => {
@@ -574,6 +733,10 @@ export function InspectionDetail({
                   forget([entry.clientRequestId, prepareEntry.clientRequestId]);
                 else track({ ...entry, operationId: data.operation.id });
                 await updateWorkspace();
+                if (alive.current && data.syncWarning) {
+                  onSynced({ ...resource.status, state: 'UNKNOWN' });
+                  setError(`已保留提交结果；${data.syncWarning}`);
+                }
               })
             }
           >

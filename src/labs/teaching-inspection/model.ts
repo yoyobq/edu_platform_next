@@ -18,18 +18,46 @@ export type Operation = {
   state: string;
   previewId: string | null;
 };
+export type HistoryRecord = {
+  recordKey: string;
+  checkDate: string;
+  score: number | null;
+  chapter?: string | null;
+  updatedBy?: string | null;
+  actualProgress?: number | null;
+  plannedProgress?: number | null;
+  deviation?: number | null;
+};
+export type Audit = {
+  operations: Operation[];
+  events: {
+    id: number;
+    reason: string;
+    createdAt: string;
+    beforeCount: number | null;
+    afterCount: number | null;
+    before: Schedule | null;
+    after: Schedule | null;
+  }[];
+};
 export type Schedule = {
+  records: HistoryRecord[];
+  historyState: string;
   version: number;
   dates: string[];
   rounds: {
     round: number;
     date: string;
+    actualDate: string | null;
+    recordKey: string | null;
     operationId: string | null;
     operationState: string | null;
     savedOperationId: string | null;
   }[];
 };
 export type RoundStatus = {
+  dateEditable: boolean;
+  dateBlockers: string[];
   round: number;
   covered: boolean;
   coverageBasis: string[];
@@ -101,6 +129,7 @@ export type Prepared = SessionResult & {
   blockers: string[];
 };
 export type DateChange = {
+  expectedObservationVersion: number;
   resourceKey: string;
   expectedVersion: number;
   expectedSourceVersion: string;
@@ -109,10 +138,11 @@ export type DateChange = {
 export const kinds: { key: string; kind: InspectionKind; label: string }[] = [
   { key: 'lesson-plan', kind: 'LESSON_PLAN', label: '教案检查' },
   { key: 'progress', kind: 'PROGRESS', label: '教学进度' },
-  { key: 'assignment', kind: 'ASSIGNMENT', label: '作业检查' },
+  { key: 'assignment', kind: 'ASSIGNMENT', label: '学生作业' },
 ];
 const blockerLabels: Record<string, string> = {
-  STATUS_UNKNOWN: '请刷新检查状态',
+  STATUS_UNKNOWN: '请先同步上游检查状态',
+  NEXT_ROUND_REQUIRED: '请按顺序执行下一轮教学进度',
   SCHEDULE_REQUIRED: '请先保存三轮日期',
   FUTURE_DATE: '检查日期尚未到达',
   COMPLETED: '本轮已覆盖',

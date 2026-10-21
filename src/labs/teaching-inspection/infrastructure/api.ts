@@ -5,6 +5,7 @@ import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 import { executeGraphQL } from '@/shared/graphql';
 
 import type {
+  Audit,
   DateChange,
   InspectionKind,
   Operation,
@@ -16,8 +17,9 @@ import type {
   Target,
   Workspace,
 } from '../model';
-const scheduleFields = `version dates rounds { round date operationId operationState savedOperationId }`;
-const statusFields = `state upstreamCount observedAt observationVersion effectiveCoveredCount rounds { round covered coverageBasis canPrepare blockers retryAfter retryWarningOperationId }`;
+const recordFields = `recordKey checkDate score chapter updatedBy actualProgress plannedProgress deviation`;
+const scheduleFields = `version dates historyState records { ${recordFields} } rounds { round date actualDate recordKey operationId operationState savedOperationId }`;
+const statusFields = `state upstreamCount observedAt observationVersion effectiveCoveredCount rounds { round dateEditable dateBlockers covered coverageBasis canPrepare blockers retryAfter retryWarningOperationId }`;
 const operationFields = `id accountId requestId action round checkDate state previewId`;
 const materialFields = `lesson { chapter scores scoreItems { name description maximum } } progress { actualProgress plannedProgress deviation } assignment { assignedBook assignmentQuantity knowledgeCoverage allMarkingStatus markingErrors markingCorrections markingAndDateDetails studentCompletionStatus studentCorrectionStatus checkerOpinion }`;
 const prepareFields = `preview { id round checkDate scheduleVersion observationVersion expiresAt } operation { ${operationFields} } material { ${materialFields} } blockers upstreamSessionToken expiresAt`;
@@ -35,7 +37,7 @@ const prepareDocuments = Object.fromEntries(
 const saveDocuments = Object.fromEntries(
   Object.entries(names).map(([kind, name]) => [
     kind,
-    `mutation Save${name}Inspection($input: InspectionSaveInputDTO!) { result: save${name}Inspection(input: $input) { operation { ${operationFields} } upstreamSessionToken expiresAt } }`,
+    `mutation Save${name}Inspection($input: InspectionSaveInputDTO!) { result: save${name}Inspection(input: $input) { operation { ${operationFields} } syncWarning upstreamSessionToken expiresAt } }`,
   ]),
 ) as Record<InspectionKind, string>;
 export async function loadSemesters() {
@@ -114,7 +116,7 @@ export async function save(
 ) {
   return (
     await executeUpstreamSessionGraphQL<
-      { result: SessionResult & { operation: Operation } },
+      { result: SessionResult & { operation: Operation; syncWarning?: string | null } },
       { input: typeof input & { upstreamSessionToken: string } }
     >(
       saveDocuments[input.kind],
@@ -145,6 +147,37 @@ export async function closeUnstartedRequest(
     await executeGraphQL<{ result: Operation }, { input: typeof input }>(
       `mutation CloseUnstartedTeachingInspectionRequest($input: InspectionCloseRequestInput!) { result: closeUnstartedTeachingInspectionRequest(input: $input) { ${operationFields} } }`,
       { input },
+      { allowAuthRetry: false },
+    )
+  ).result;
+}
+
+export async function audit(input: Target) {
+  return (
+    await executeGraphQL<{ result: Audit }, { input: Target }>(
+      `query TeachingInspectionAudit($input: InspectionAuditInput!) { result: teachingInspectionAudit(input: $input) {
+      operations { ${operationFields} } events { id reason createdAt beforeCount afterCount before { ${scheduleFields} } after { ${scheduleFields} } }
+    } }`,
+      { input },
+    )
+  ).result;
+}
+export async function resolveHistory(
+  input: Target & {
+    expectedVersion: number;
+    recordKeys: (string | null)[];
+    ignoredRecordKeys: string[];
+    reason: string;
+  },
+  upstreamSessionToken: string,
+) {
+  return (
+    await executeUpstreamSessionGraphQL<
+      { result: SessionResult },
+      { input: typeof input & { upstreamSessionToken: string } }
+    >(
+      `mutation ResolveTeachingInspectionHistory($input: InspectionResolveInput!) { result: resolveTeachingInspectionHistory(input: $input) { upstreamSessionToken expiresAt } }`,
+      { input: { ...input, upstreamSessionToken } },
       { allowAuthRetry: false },
     )
   ).result;

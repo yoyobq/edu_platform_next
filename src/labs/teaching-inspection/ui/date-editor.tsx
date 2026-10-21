@@ -1,11 +1,11 @@
 // src/labs/teaching-inspection/ui/date-editor.tsx
 import { useRef, useState } from 'react';
-import { Alert, Button, Card, Input, Modal, Space } from 'antd';
+import { Alert, Button, Card, Input, Space } from 'antd';
 
 import * as api from '../infrastructure/api';
 import type { DateChange, InspectionKind, Resource } from '../model';
 export function DateEditor({
-  resources,
+  resources: initialResources,
   semesterId,
   kind,
   onClose,
@@ -21,12 +21,19 @@ export function DateEditor({
   onRefresh: () => Promise<Resource[]>;
   onDirty: (value: boolean) => void;
 }) {
+  const [resources, setResources] = useState(initialResources);
   const initial = resources.map((resource) => ({
     resourceKey: resource.resourceKey,
     expectedVersion: resource.schedule.version,
+    expectedObservationVersion: resource.status.observationVersion,
     expectedSourceVersion: resource.sourceVersion,
     dates: [
-      ...(resource.schedule.dates.length === 3 ? resource.schedule.dates : resource.suggestedDates),
+      ...(resource.schedule.dates.length === 3
+        ? resource.schedule.dates
+        : resource.suggestedDates
+      ).map((date, index) =>
+        kind === 'PROGRESS' ? (resource.schedule.records?.[index]?.checkDate ?? date) : date,
+      ),
     ],
   }));
   const [changes, setChanges] = useState<DateChange[]>(initial);
@@ -58,13 +65,13 @@ export function DateEditor({
     }
   }
   return (
-    <Modal
-      open
-      title={`安排检查日期 · ${resources.length} 门课程`}
-      width={820}
-      onCancel={() => !busy && onCancel()}
-      footer={null}
-      mask={{ closable: false }}
+    <Card
+      title={`确认检查时间 · ${resources.length} 门课程`}
+      extra={
+        <Button disabled={busy} onClick={onCancel}>
+          取消编辑
+        </Button>
+      }
     >
       <div className="flex flex-col gap-4">
         <p>仅调整本次所选课程。预览后核对修改前后日期，再确认保存。</p>
@@ -87,7 +94,19 @@ export function DateEditor({
           ))}
           <Button
             disabled={busy || common.some((date) => !date)}
-            onClick={() => edit(changes.map((change) => ({ ...change, dates: [...common] })))}
+            onClick={() =>
+              edit(
+                changes.map((change, index) => ({
+                  ...change,
+                  dates: common.map((date, round) =>
+                    resources[index].status.rounds[round]?.dateEditable &&
+                    !(kind === 'PROGRESS' && resources[index].schedule.records?.[round])
+                      ? date
+                      : change.dates[round],
+                  ),
+                })),
+              )
+            }
           >
             应用到所选课程
           </Button>
@@ -96,6 +115,22 @@ export function DateEditor({
           <Card size="small" key={change.resourceKey} title={resources[index].courseName}>
             <div className="flex flex-col gap-2">
               <span>原安排：{before[index].join(' / ') || '尚未保存'}</span>
+              {resources[index].schedule.records?.map((record) => (
+                <span key={record.recordKey}>
+                  上游实际检查：{record.checkDate} · {record.score}分
+                </span>
+              ))}
+              {kind === 'ASSIGNMENT' &&
+                resources[index].schedule.rounds
+                  .filter((round) => round.savedOperationId)
+                  .map((round) => (
+                    <span key={round.round}>
+                      第 {round.round} 轮本地提交：{round.date}（上游日期未核实）
+                    </span>
+                  ))}
+              {kind === 'ASSIGNMENT' && (
+                <span>上游未提供可核实的历史日期；这里确认的是本地提交日期。</span>
+              )}
               <Space wrap>
                 {[0, 1, 2].map((round) => (
                   <label key={round}>
@@ -106,7 +141,11 @@ export function DateEditor({
                       min={resources[index].earliestDate ?? undefined}
                       max={resources[index].latestDate ?? undefined}
                       value={change.dates[round] ?? ''}
-                      disabled={busy}
+                      disabled={
+                        busy ||
+                        !resources[index].status.rounds[round]?.dateEditable ||
+                        Boolean(kind === 'PROGRESS' && resources[index].schedule.records?.[round])
+                      }
                       onChange={(event) =>
                         edit(
                           changes.map((old, i) =>
@@ -140,7 +179,15 @@ export function DateEditor({
                   if (!resource) throw new Error('所选课程已不在当前范围，请关闭后重新选择。');
                   return {
                     ...change,
+                    dates: change.dates.map((date, index) =>
+                      kind === 'PROGRESS' && resource.schedule.records[index]
+                        ? resource.schedule.records[index].checkDate
+                        : !resource.status.rounds[index]?.dateEditable
+                          ? (resource.schedule.dates[index] ?? date)
+                          : date,
+                    ),
                     expectedVersion: resource.schedule.version,
+                    expectedObservationVersion: resource.status.observationVersion,
                     expectedSourceVersion: resource.sourceVersion,
                   };
                 });
@@ -148,6 +195,11 @@ export function DateEditor({
                   changes.map(
                     (change) =>
                       fresh.find((item) => item.resourceKey === change.resourceKey)!.schedule.dates,
+                  ),
+                );
+                setResources(
+                  changes.map(
+                    (change) => fresh.find((item) => item.resourceKey === change.resourceKey)!,
                   ),
                 );
                 setChanges(next);
@@ -193,6 +245,6 @@ export function DateEditor({
           </Button>
         </Space>
       </div>
-    </Modal>
+    </Card>
   );
 }

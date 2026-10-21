@@ -35,7 +35,8 @@ import * as api from './infrastructure/api';
 import { readLocation, writeLocation } from './infrastructure/location';
 import { DateEditor } from './ui/date-editor';
 import { InspectionDetail } from './ui/inspection-detail';
-import { blockerText, kinds, type Resource, statusText, type Workspace } from './model';
+import { blockerText, kinds, type Resource, statusText } from './model';
+import { syncText, useInspectionWorkspace } from './use-workspace';
 type LoaderData = {
   currentAccount: UpstreamAccountIdentity;
   lockedUpstreamLoginUserId: string | null;
@@ -110,14 +111,47 @@ function InspectionPage({ data }: { data: LoaderData }) {
         />
       )}
       <Tabs
-        activeKey={location.type.key}
-        items={kinds.map((item) => ({ key: item.key, label: item.label }))}
+        activeKey={location.section === 'dates' ? 'dates' : location.type.key}
+        items={[
+          { key: 'dates', label: '检查时间' },
+          ...kinds.map((item) => ({ key: item.key, label: item.label })),
+        ]}
         onChange={(key) =>
           setParams(
-            writeLocation({ ...location, type: kinds.find((item) => item.key === key)!, page: 1 }),
+            writeLocation({
+              ...location,
+              section: key === 'dates' ? 'dates' : 'checks',
+              type: kinds.find((item) => item.key === key) ?? location.type,
+              resourceKey: undefined,
+              page: 1,
+            }),
           )
         }
       />
+      {location.section === 'dates' && (
+        <>
+          <Alert
+            type="info"
+            showIcon
+            title="先核对上游实际日期，再确认尚未执行的检查安排。三类检查分别安排时间。"
+          />
+          <Select
+            aria-label="日期检查类型"
+            value={location.type.key}
+            options={kinds.map((kind) => ({ value: kind.key, label: kind.label }))}
+            onChange={(key) =>
+              setParams(
+                writeLocation({
+                  ...location,
+                  type: kinds.find((kind) => kind.key === key)!,
+                  resourceKey: undefined,
+                  page: 1,
+                }),
+              )
+            }
+          />
+        </>
+      )}
       <AcademicSemesterSelect
         aria-label="检查学期"
         records={semesters}
@@ -155,17 +189,18 @@ function Workbench({
   onLocation: (value: ReturnType<typeof readLocation>) => void;
 }) {
   const { modal } = App.useApp();
-  const [workspace, setWorkspace] = useState<Workspace | null>(null);
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<string[]>([]);
+  const { workspace, error, loading, refresh, syncStates, markSynced } = useInspectionWorkspace(
+    location,
+    session,
+  );
+  const [selected, setSelected] = useState<string[]>(
+    location.resourceKey ? [location.resourceKey] : [],
+  );
   const [detailKey, setDetailKey] = useState<string | null>(null);
   const [dateResources, setDateResources] = useState<Resource[] | null>(null);
   const [dateDirty, setDateDirty] = useState(false);
   const [materialDirty, setMaterialDirty] = useState(false);
-  const alive = useRef(true),
-    serial = useRef(0),
-    container = useRef<HTMLDivElement>(null);
+  const container = useRef<HTMLDivElement>(null);
   const { band } = useWidthBand(container, [{ max: 767, value: 'compact' }], 'wide');
   const compact = band === 'compact';
   const dirty = dateDirty || materialDirty;
@@ -181,37 +216,6 @@ function Workbench({
       [dirty],
     ),
   );
-  const refresh = useCallback(async () => {
-    const id = ++serial.current;
-    if (alive.current) {
-      setLoading(true);
-      setError('');
-    }
-    try {
-      const result = await api.loadWorkspace({
-        semesterId: location.semesterId!,
-        kind: location.type.kind,
-        page: location.page,
-        teacherId: location.teacherId,
-        keyword: location.keyword,
-      });
-      if (alive.current && id === serial.current) setWorkspace(result);
-      return result.resources;
-    } catch (cause) {
-      if (alive.current && id === serial.current)
-        setError(cause instanceof Error ? cause.message : '工作区读取失败');
-      throw cause;
-    } finally {
-      if (alive.current && id === serial.current) setLoading(false);
-    }
-  }, [location]);
-  useEffect(() => {
-    alive.current = true;
-    void refresh().catch(() => undefined);
-    return () => {
-      alive.current = false;
-    };
-  }, [refresh]);
   function closeDetail() {
     const close = () => {
       setDetailKey(null);
@@ -261,15 +265,23 @@ function Workbench({
           }
           style={{ width: compact ? 240 : 280 }}
         />
-        <Button disabled={loading} onClick={() => void refresh().catch(() => undefined)}>
+        <Button disabled={loading} onClick={() => void refresh(true).catch(() => undefined)}>
           重新读取工作区
         </Button>
       </Space>
       {error && <Alert type="error" showIcon title={error} />}
-      {selected.length > 0 && (
+      {!session.session && (
+        <Alert
+          type="info"
+          showIcon
+          title="尚未连接校园网，当前显示本地记录；连接后自动同步上游检查状态。"
+        />
+      )}
+      {location.section === 'dates' && selected.length > 0 && (
         <Space wrap>
           <span>已选 {selected.length} 门课程</span>
           <Button
+            disabled={loading || selected.some((key) => syncStates[key] !== 'synced')}
             onClick={() => {
               setDateResources(
                 workspace!.resources.filter((resource) => selected.includes(resource.resourceKey)),
@@ -277,7 +289,7 @@ function Workbench({
               setDateDirty(true);
             }}
           >
-            批量安排日期
+            确认所选课程时间
           </Button>
           <Button onClick={() => setSelected([])}>取消选择</Button>
         </Space>
@@ -291,10 +303,14 @@ function Workbench({
           size="middle"
           loading={loading}
           dataSource={workspace?.resources ?? []}
-          rowSelection={{
-            selectedRowKeys: selected,
-            onChange: (keys) => setSelected(keys.map(String)),
-          }}
+          rowSelection={
+            location.section === 'dates'
+              ? {
+                  selectedRowKeys: selected,
+                  onChange: (keys) => setSelected(keys.map(String)),
+                }
+              : undefined
+          }
           pagination={{
             current: location.page,
             pageSize: 20,
@@ -323,14 +339,27 @@ function Workbench({
                           : '日期尚未保存'}
                       </span>
                       <span>
+                        {syncText(syncStates[resource.resourceKey] ?? 'pending')} ·{' '}
                         {statusText(resource.status)} · 覆盖 {resource.status.effectiveCoveredCount}
                         /3 轮
                       </span>
                     </>
                   )}
                   {compact && (
-                    <Button type="link" onClick={() => setDetailKey(resource.resourceKey)}>
-                      查看检查
+                    <Button
+                      type="link"
+                      disabled={
+                        loading ||
+                        (location.section === 'dates' &&
+                          syncStates[resource.resourceKey] !== 'synced')
+                      }
+                      onClick={() =>
+                        location.section === 'dates'
+                          ? setDateResources([resource])
+                          : setDetailKey(resource.resourceKey)
+                      }
+                    >
+                      {location.section === 'dates' ? '确认检查时间' : '查看检查'}
                     </Button>
                   )}
                   {resource.blockers.length > 0 && (
@@ -342,23 +371,40 @@ function Workbench({
             ...(!compact
               ? [
                   {
-                    title: '三轮安排',
+                    title: '已确认安排 / 上游实际日期',
                     key: 'dates',
-                    render: (_: unknown, resource: Resource) =>
-                      resource.schedule.version
-                        ? resource.schedule.dates.map((date, i) => (
+                    render: (_: unknown, resource: Resource) => (
+                      <div>
+                        {resource.schedule.version ? (
+                          resource.schedule.dates.map((date, i) => (
                             <div key={date}>
-                              第 {i + 1} 轮 · {date}
+                              第 {i + 1} 轮安排 · {date}
                             </div>
                           ))
-                        : '尚未保存',
+                        ) : (
+                          <div>建议：{resource.suggestedDates.join(' / ')}（待确认）</div>
+                        )}
+                        {resource.schedule.records?.map((record) => (
+                          <div key={record.recordKey}>上游实际 · {record.checkDate}</div>
+                        ))}
+                        {location.type.kind === 'ASSIGNMENT' && (
+                          <small>上游实际日期不可核实；安排和提交日期仅为本地记录</small>
+                        )}
+                      </div>
+                    ),
                   },
                   {
                     title: '覆盖概况',
                     key: 'status',
                     render: (_: unknown, resource: Resource) => (
                       <div>
-                        {statusText(resource.status)}
+                        <span>{syncText(syncStates[resource.resourceKey] ?? 'pending')}</span>
+                        <div>{statusText(resource.status)}</div>
+                        {resource.status.observedAt && (
+                          <small>
+                            最近同步：{new Date(resource.status.observedAt).toLocaleString()}
+                          </small>
+                        )}
                         <p>有效覆盖 {resource.status.effectiveCoveredCount} / 3 轮</p>
                       </div>
                     ),
@@ -372,8 +418,20 @@ function Workbench({
                     key: 'action',
                     width: 120,
                     render: (_: unknown, resource: Resource) => (
-                      <Button type="link" onClick={() => setDetailKey(resource.resourceKey)}>
-                        查看检查
+                      <Button
+                        type="link"
+                        disabled={
+                          loading ||
+                          (location.section === 'dates' &&
+                            syncStates[resource.resourceKey] !== 'synced')
+                        }
+                        onClick={() =>
+                          location.section === 'dates'
+                            ? setDateResources([resource])
+                            : setDetailKey(resource.resourceKey)
+                        }
+                      >
+                        {location.section === 'dates' ? '确认检查时间' : '查看检查'}
                       </Button>
                     ),
                   },
@@ -393,6 +451,9 @@ function Workbench({
           <InspectionDetail
             key={detail.resourceKey}
             resource={detail}
+            syncing={loading}
+            syncState={syncStates[detail.resourceKey] ?? 'pending'}
+            onSynced={(status) => markSynced(detail.resourceKey, status)}
             target={{
               semesterId: location.semesterId!,
               kind: location.type.kind,
@@ -402,10 +463,9 @@ function Workbench({
             session={session}
             onDirty={setMaterialDirty}
             onRefresh={refresh}
-            onArrange={() => {
-              setDateResources([detail]);
-              setDateDirty(true);
-            }}
+            onArrange={() =>
+              onLocation({ ...location, section: 'dates', resourceKey: detail.resourceKey })
+            }
           />
         ) : (
           <Empty description="课程已不在当前列表，请刷新后重新选择" />
@@ -418,7 +478,7 @@ function Workbench({
           kind={location.type.kind}
           onDirty={setDateDirty}
           onCancel={closeDates}
-          onRefresh={refresh}
+          onRefresh={() => refresh(true)}
           onClose={() => {
             setDateResources(null);
             setDateDirty(false);
