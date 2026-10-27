@@ -4,6 +4,7 @@ import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 
 import { executeGraphQL } from '@/shared/graphql';
 
+import type { TimePlan, TimePlanChange, TimeWorkspace } from '../model';
 import type {
   Audit,
   DateChange,
@@ -178,6 +179,39 @@ export async function resolveHistory(
     >(
       `mutation ResolveTeachingInspectionHistory($input: InspectionResolveInput!) { result: resolveTeachingInspectionHistory(input: $input) { upstreamSessionToken expiresAt } }`,
       { input: { ...input, upstreamSessionToken } },
+      { allowAuthRetry: false },
+    )
+  ).result;
+}
+
+const timePlanFields = `key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate`;
+export async function loadTimeWorkspace(input: {
+  semesterId: number;
+  page: number;
+  teacherId?: string;
+  keyword?: string;
+}) {
+  return (
+    await executeGraphQL<{ result: TimeWorkspace }, { input: typeof input & { limit: number } }>(
+      `query TeachingInspectionTimeWorkspace($input: InspectionTimeWorkspaceInput!) { result: teachingInspectionTimeWorkspace(input: $input) {
+      total teachers { staffId name } semesterTimePlan { ${timePlanFields} }
+      resources { resourceKey courseName teacherNames weeks blockers timePlan { ${timePlanFields} } }
+    } }`,
+      { input: { ...input, limit: 20 } },
+    )
+  ).result;
+}
+export async function timePlans(
+  input: { semesterId: number; changes: TimePlanChange[] },
+  save: boolean,
+) {
+  const document = save
+    ? `mutation SaveTeachingInspectionTimePlans($input: InspectionTimePlansInput!) { result: saveTeachingInspectionTimePlans(input: $input) { ${timePlanFields} } }`
+    : `query TeachingInspectionTimePreview($input: InspectionTimePlansInput!) { result: teachingInspectionTimePreview(input: $input) { ${timePlanFields} } }`;
+  return (
+    await executeGraphQL<{ result: TimePlan[] }, { input: typeof input }>(
+      document,
+      { input },
       { allowAuthRetry: false },
     )
   ).result;

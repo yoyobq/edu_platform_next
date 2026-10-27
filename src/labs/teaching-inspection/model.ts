@@ -143,7 +143,7 @@ export const kinds: { key: string; kind: InspectionKind; label: string }[] = [
 const blockerLabels: Record<string, string> = {
   STATUS_UNKNOWN: '请先同步上游检查状态',
   NEXT_ROUND_REQUIRED: '请按顺序执行下一轮教学进度',
-  SCHEDULE_REQUIRED: '请先保存三轮日期',
+  SCHEDULE_REQUIRED: '请前往检查时间确认或调整三轮日期',
   FUTURE_DATE: '检查日期尚未到达',
   COMPLETED: '本轮已覆盖',
   STALE_PREVIEW: '依据已变化，请重新准备',
@@ -177,3 +177,36 @@ export const basisText = (basis: string) =>
   ({ COUNT: '数量推定', RECORD: '记录关联', SAVED: '已知保存成功' })[basis] ?? '待核对';
 export const isSaved = (op: Operation | null | undefined) =>
   op?.state === 'SAVED' || op?.state === 'VERIFIED';
+
+export type TimePlan = {
+  key: string;
+  version: number;
+  dates: string[];
+  suggestedDates: string[];
+  sourceVersion: string;
+  confirmed: boolean;
+  fullSemester: boolean;
+  canEdit: boolean;
+  earliestDate: string | null;
+  latestDate: string | null;
+};
+export type TimePlanChange = {
+  key: string;
+  resourceKey?: string;
+  expectedVersion: number;
+  expectedSourceVersion: string;
+  dates: string[];
+};
+export type TimeWorkspace = {
+  semesterTimePlan: TimePlan;
+  total: number;
+  teachers: { staffId: string; name: string }[];
+  resources: {
+    resourceKey: string;
+    courseName: string;
+    teacherNames: string[];
+    weeks: number[];
+    blockers: string[];
+    timePlan: TimePlan;
+  }[];
+};

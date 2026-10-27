@@ -44,6 +44,7 @@ import {
 } from '../model';
 import { type InspectionSyncState, syncText } from '../use-workspace';
 
+import { DateEditor } from './date-editor';
 import { MaterialView } from './material';
 type SessionController = ReturnType<typeof useUpstreamLoginModalController<never>>;
 function initialRecovery(accountId: number, target: Target) {
@@ -89,6 +90,7 @@ export function InspectionDetail({
   const [entries, setEntries] = useState(initial.entries);
   const [operations, setOperations] = useState<Record<string, Operation>>({});
   const [storageError, setStorageError] = useState(initial.error);
+  const [adjustingDate, setAdjustingDate] = useState(false);
   const [audit, setAudit] = useState<Audit | null>(null);
   const [error, setError] = useState('');
   const [recordKeys, setRecordKeys] = useState<(string | null)[]>(
@@ -461,6 +463,39 @@ export function InspectionDetail({
           前往检查时间
         </Button>
       </Space>
+      {target.kind === 'PROGRESS' && (
+        <Button
+          disabled={busy || syncing || syncState !== 'synced'}
+          onClick={() => setAdjustingDate(true)}
+        >
+          调整进度执行日期
+        </Button>
+      )}
+      {adjustingDate && (
+        <DateEditor
+          title="调整进度执行日期（不修改共用时间计划）"
+          resources={[resource]}
+          semesterId={target.semesterId}
+          kind="PROGRESS"
+          onDirty={onDirty}
+          onRefresh={onRefresh}
+          onResolve={() => undefined}
+          onClose={() => {
+            setAdjustingDate(false);
+            onDirty(false);
+          }}
+          onCancel={() =>
+            modal.confirm({
+              title: '关闭执行日期调整？',
+              content: '未保存的日期修改将丢弃。',
+              onOk: () => {
+                setAdjustingDate(false);
+                onDirty(false);
+              },
+            })
+          }
+        />
+      )}
       <Divider titlePlacement="start">安排与轮次</Divider>
       <Radio.Group
         value={round}

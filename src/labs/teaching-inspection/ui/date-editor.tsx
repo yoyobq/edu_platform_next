@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react';
 import { Alert, Button, Card, Input, Space } from 'antd';
 
+import { dateGuidance, inspectionDateProblem, suggestedInspectionDates } from '../date-policy';
 import * as api from '../infrastructure/api';
 import type { DateChange, InspectionKind, Resource } from '../model';
 export function DateEditor({
@@ -12,6 +13,8 @@ export function DateEditor({
   onCancel,
   onRefresh,
   onDirty,
+  onResolve,
+  title,
 }: {
   resources: Resource[];
   semesterId: number;
@@ -20,6 +23,8 @@ export function DateEditor({
   onCancel: () => void;
   onRefresh: () => Promise<Resource[]>;
   onDirty: (value: boolean) => void;
+  onResolve: (resourceKey: string) => void;
+  title?: string;
 }) {
   const [resources, setResources] = useState(initialResources);
   const initial = resources.map((resource) => ({
@@ -37,6 +42,9 @@ export function DateEditor({
     ],
   }));
   const [changes, setChanges] = useState<DateChange[]>(initial);
+  const dateProblems = changes.map((change, index) =>
+    inspectionDateProblem(change.dates, resources[index], kind),
+  );
   const [before, setBefore] = useState(resources.map((resource) => resource.schedule.dates));
   const [common, setCommon] = useState(['', '', '']);
   const [confirmed, setConfirmed] = useState<DateChange[] | null>(null);
@@ -66,7 +74,7 @@ export function DateEditor({
   }
   return (
     <Card
-      title={`确认检查时间 · ${resources.length} 门课程`}
+      title={title ?? `确认检查时间 · ${resources.length} 门课程`}
       extra={
         <Button disabled={busy} onClick={onCancel}>
           取消编辑
@@ -75,6 +83,7 @@ export function DateEditor({
     >
       <div className="flex flex-col gap-4">
         <p>仅调整本次所选课程。预览后核对修改前后日期，再确认保存。</p>
+        <Alert type="info" showIcon title={dateGuidance[kind]} />
         {error && <Alert type="error" showIcon title={error} />}
         {uncertain && (
           <Alert type="warning" title="上次保存结果未确认，请先刷新安排，再核对是否已经保存。" />
@@ -114,7 +123,40 @@ export function DateEditor({
         {changes.map((change, index) => (
           <Card size="small" key={change.resourceKey} title={resources[index].courseName}>
             <div className="flex flex-col gap-2">
-              <span>原安排：{before[index].join(' / ') || '尚未保存'}</span>
+              <span>
+                原安排：{resources[index].schedule.version ? before[index].join(' / ') : '尚未保存'}
+              </span>
+              <span>
+                建议日期（1/3、2/3、末次授课周，优先周三）：
+                {resources[index].suggestedDates.join(' / ') || '暂无建议'}
+              </span>
+              <Button
+                disabled={busy || resources[index].suggestedDates.length !== 3}
+                onClick={() =>
+                  edit(
+                    changes.map((old, i) =>
+                      i === index
+                        ? { ...old, dates: suggestedInspectionDates(resources[index], kind) }
+                        : old,
+                    ),
+                  )
+                }
+              >
+                可调整轮次采用建议日期
+              </Button>
+              {dateProblems[index] && <Alert type="warning" showIcon title={dateProblems[index]} />}
+              {kind === 'LESSON_PLAN' && resources[index].schedule.historyState === 'CONFLICT' && (
+                <Alert
+                  type="warning"
+                  showIcon
+                  title="上游历史与安排存在关联冲突，请核对轮次"
+                  action={
+                    <Button disabled={busy} onClick={() => onResolve(change.resourceKey)}>
+                      前往历史核对
+                    </Button>
+                  }
+                />
+              )}
               {resources[index].schedule.records?.map((record) => (
                 <span key={record.recordKey}>
                   上游实际检查：{record.checkDate} · {record.score}分
@@ -135,6 +177,25 @@ export function DateEditor({
                 {[0, 1, 2].map((round) => (
                   <label key={round}>
                     第 {round + 1} 轮
+                    <div>建议：{resources[index].suggestedDates[round] ?? '暂无'}</div>
+                    <div>
+                      已确认：
+                      {resources[index].schedule.version
+                        ? (before[index][round] ?? '未安排')
+                        : '未确认'}
+                    </div>
+                    <div>
+                      上游实际：
+                      {kind === 'ASSIGNMENT'
+                        ? '不可核实'
+                        : ((kind === 'PROGRESS'
+                            ? resources[index].schedule.records[round]?.checkDate
+                            : resources[index].schedule.records.find(
+                                (record) =>
+                                  record.recordKey ===
+                                  resources[index].schedule.rounds[round]?.recordKey,
+                              )?.checkDate) ?? '暂无关联记录')}
+                    </div>
                     <Input
                       type="date"
                       aria-label={`${resources[index].courseName}第${round + 1}轮日期`}
@@ -211,7 +272,7 @@ export function DateEditor({
             刷新依据并重新核对
           </Button>
           <Button
-            disabled={busy || uncertain}
+            disabled={busy || uncertain || dateProblems.some(Boolean)}
             onClick={() =>
               void run(async () => {
                 const snapshot = structuredClone(changes);
@@ -224,7 +285,7 @@ export function DateEditor({
           </Button>
           <Button
             type="primary"
-            disabled={!confirmed || busy || uncertain}
+            disabled={!confirmed || busy || uncertain || dateProblems.some(Boolean)}
             loading={busy}
             onClick={() =>
               void run(async () => {

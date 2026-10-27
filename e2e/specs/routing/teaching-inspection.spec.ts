@@ -155,6 +155,18 @@ async function setup(
       })),
     },
   });
+  const timePlan = (key = 'SEMESTER:1') => ({
+    key,
+    version,
+    confirmed: version > 0,
+    dates: version ? dates : [],
+    suggestedDates: dates,
+    sourceVersion: 'source-1',
+    fullSemester: key === 'SEMESTER:1',
+    canEdit: true,
+    earliestDate: '2026-09-01',
+    latestDate: '2026-12-31',
+  });
   await page.route('**/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: { input: Input } };
     const query = body.query,
@@ -179,6 +191,29 @@ async function setup(
     )
       return route.fallback();
     requests.push({ query, input });
+    if (query.includes('TeachingInspectionTimeWorkspace'))
+      return reply({
+        result: {
+          total: 2,
+          teachers: [{ staffId: 'T700', name: '测试教师' }],
+          semesterTimePlan: timePlan(),
+          resources: ['1:a', '1:b'].map((key) => ({
+            ...resource(key),
+            weeks: key === '1:a' ? [1, 17] : [1, 2, 3],
+            timePlan: timePlan(key === '1:a' ? 'SEMESTER:1' : 'COURSE:1:b'),
+          })),
+        },
+      });
+    if (query.includes('TeachingInspectionTimePreview'))
+      return reply({
+        result: input.changes.map((change) => ({ ...timePlan(), dates: change.dates })),
+      });
+    if (query.includes('SaveTeachingInspectionTimePlans')) {
+      version++;
+      return reply({
+        result: input.changes.map((change) => ({ ...timePlan(), dates: change.dates })),
+      });
+    }
     if (query.includes('TeachingInspectionWorkspace'))
       return reply({
         result: {
@@ -465,19 +500,15 @@ test('保存认证失败时不自动重发，重载后可查询 UNKNOWN', async 
 test('日期预览与保存复用相同集合、原版本和来源指纹', async ({ page }) => {
   const fixture = await setup(page, { assigned: false });
   await page.goto(`${path}?view=dates&kind=assignment&semester=1`);
-  await page
-    .getByRole('row', { name: /测试课程甲/ })
-    .getByRole('checkbox')
-    .check();
-  await page.getByRole('button', { name: '确认所选课程时间' }).click();
+  await page.getByRole('button', { name: '确认全学期时间' }).click();
   await page.getByRole('button', { name: '预览日期', exact: true }).click();
   await page.getByRole('button', { name: '确认保存日期' }).click();
   await expect(page.getByRole('dialog', { name: /安排检查日期/ })).toHaveCount(0);
   const preview = fixture.requests.find((item) =>
-    item.query.includes('TeachingInspectionDatePreview'),
+    item.query.includes('TeachingInspectionTimePreview'),
   )!.input;
   const save = fixture.requests.find((item) =>
-    item.query.includes('SaveTeachingInspectionSchedule'),
+    item.query.includes('SaveTeachingInspectionTimePlans'),
   )!.input;
   expect(save).toEqual(preview);
   expect(save.changes).toHaveLength(1);
@@ -669,11 +700,8 @@ test('深色主题保留类型深链接和前进后退，切换时清空课程�
   await page.addInitScript(() => localStorage.setItem('color-scheme', 'dark'));
   await setup(page);
   await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1&teacher=T700&keyword=测试`);
-  await page
-    .getByRole('row', { name: /测试课程甲/ })
-    .getByRole('checkbox')
-    .check();
-  await expect(page.getByText('已选 1 门课程')).toBeVisible();
+  await expect(page.getByText('全学期共用检查时间', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('日期检查类型')).toHaveCount(0);
   await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page).toHaveURL(/kind=assignment/);
   await expect(page.getByText('已选 1 门课程')).toHaveCount(0);
@@ -702,38 +730,34 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
     currentVersion = 1;
   await page.route('**/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: { input: Input } };
-    if (body.query.includes('TeachingInspectionWorkspace')) {
-      const resource = fixture.resource('1:a');
-      resource.schedule.version = currentVersion;
-      return route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: { result: { today: '2026-10-18', total: 1, teachers: [], resources: [resource] } },
-        }),
-      });
-    }
-    if (body.query.includes('RefreshTeachingInspectionStatus')) {
-      const resource = fixture.resource('1:a');
-      resource.schedule.version = currentVersion;
+    if (body.query.includes('TeachingInspectionTimeWorkspace')) {
+      const plan = {
+        key: 'SEMESTER:1',
+        version: currentVersion,
+        confirmed: true,
+        dates,
+        suggestedDates: dates,
+        sourceVersion: 'source-1',
+        fullSemester: true,
+        canEdit: true,
+        earliestDate: '2026-09-01',
+        latestDate: '2026-12-31',
+      };
       return route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           data: {
             result: {
-              schedule: resource.schedule,
-              status: {
-                ...resource.status,
-                state: 'TRUSTED',
-                observationVersion: 1,
-                rounds: resource.status.rounds.map((round) => ({ ...round, dateEditable: true })),
-              },
-              upstreamSessionToken: 'refreshed',
+              total: 1,
+              teachers: [],
+              semesterTimePlan: plan,
+              resources: [{ ...fixture.resource('1:a'), weeks: [1, 17], timePlan: plan }],
             },
           },
         }),
       });
     }
-    if (!body.query.includes('SaveTeachingInspectionSchedule')) return route.fallback();
+    if (!body.query.includes('SaveTeachingInspectionTimePlans')) return route.fallback();
     saveCalls++;
     if (saveCalls === 1) {
       currentVersion = 2;
@@ -749,12 +773,8 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
     return route.fallback();
   });
   await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1`);
-  await page
-    .getByRole('row', { name: /测试课程甲/ })
-    .getByRole('checkbox')
-    .check();
-  await page.getByRole('button', { name: '确认所选课程时间' }).click();
-  const date = page.getByLabel('测试课程甲第1轮日期');
+  await page.getByRole('button', { name: '确认全学期时间' }).click();
+  const date = page.getByLabel('第1次检查时间');
   await page.getByRole('button', { name: '预览日期', exact: true }).click();
   await expect(page.getByRole('button', { name: '确认保存日期' })).toBeEnabled();
   await date.fill('2026-09-12');
@@ -1095,23 +1115,28 @@ test('自动同步失败标明旧记录，重新读取可恢复且不自动准�
 });
 
 test('新入口默认独立检查时间，按课程确认而不触发生成保存', async ({ page }) => {
-  const fixture = await setup(page, { assigned: false });
+  const fixture = await setup(page, { assigned: false, noSession: true });
   await page.goto(`${path}?semester=1`);
   await expect(page.getByRole('tab', { name: '检查时间', exact: true })).toHaveAttribute(
     'aria-selected',
     'true',
   );
-  await page.getByRole('button', { name: '确认检查时间', exact: true }).first().click();
+  await page.getByRole('button', { name: '确认全学期时间', exact: true }).click();
   await page.getByRole('button', { name: '预览日期', exact: true }).click();
   await page.getByRole('button', { name: '确认保存日期', exact: true }).click();
   const saved = fixture.requests.find((item) =>
-    item.query.includes('SaveTeachingInspectionSchedule'),
+    item.query.includes('SaveTeachingInspectionTimePlans'),
   )!;
   expect(saved.input.changes).toHaveLength(1);
+  expect(saved.input).not.toHaveProperty('kind');
+  expect(
+    fixture.requests.some((item) => item.query.includes('RefreshTeachingInspectionStatus')),
+  ).toBe(false);
+  await expect(page.getByLabel('日期检查类型')).toHaveCount(0);
   expect(saved.input.changes[0]).toMatchObject({
     expectedVersion: 0,
     expectedSourceVersion: 'source-1',
-    expectedObservationVersion: 1,
+    key: 'SEMESTER:1',
   });
   expect(
     fixture.requests.filter((item) =>
@@ -1128,7 +1153,7 @@ test('进度检查时间展示上游实际日期并锁定已提交轮次', async
     const resource = fixture.resource(body.variables.input.resourceKey);
     const record = {
       recordKey: 'progress-1',
-      checkDate: '2026-09-08',
+      checkDate: '2026-09-20',
       score: 100,
       plannedProgress: 22,
       actualProgress: 22,
@@ -1157,12 +1182,22 @@ test('进度检查时间展示上游实际日期并锁定已提交轮次', async
       }),
     });
   });
-  await page.goto(`${path}?view=dates&kind=progress&semester=1`);
-  await page.getByRole('button', { name: '确认检查时间', exact: true }).first().click();
-  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-08');
+  await page.goto(`${path}?kind=progress&semester=1`);
+  await page.getByRole('button', { name: '查看检查', exact: true }).first().click();
+  await page.getByRole('button', { name: '调整进度执行日期' }).click();
+  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-20');
   await expect(page.getByLabel('测试课程甲第1轮日期')).toBeDisabled();
   await expect(page.getByLabel('测试课程甲第2轮日期')).toBeEnabled();
-  await expect(page.getByText('上游实际检查：2026-09-08 · 100分')).toBeVisible();
+  await expect(page.getByText('上游实际检查：2026-09-20 · 100分')).toBeVisible();
+  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
+  await expect(
+    page.getByText('后续检查日期必须晚于上游已提交日期，且三轮日期严格递增，请调整后重新预览。'),
+  ).toBeVisible();
+  await page.getByLabel('测试课程甲第2轮日期').fill('2026-09-21');
+  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '可调整轮次采用建议日期' }).click();
+  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-20');
+  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
 });
 
 test('教案历史冲突可明确关联并留原因，不发送上游保存', async ({ page }) => {
@@ -1235,3 +1270,63 @@ test('教案历史冲突可明确关联并留原因，不发送上游保存', as
     ),
   ).toHaveLength(0);
 });
+
+test('短课单独确认时间，接口不携带检查类型且不改全学期规则', async ({ page }) => {
+  const fixture = await setup(page, { noSession: true, assigned: false });
+  await page.goto(`${path}?semester=1`);
+  await page
+    .getByRole('row', { name: /测试课程乙/ })
+    .getByRole('button', { name: '设置课程时间' })
+    .click();
+  await page.getByLabel('第1次检查时间').fill('2026-09-11');
+  await page.getByRole('button', { name: '预览日期', exact: true }).click();
+  await page.getByRole('button', { name: '确认保存日期' }).click();
+  const saved = fixture.requests.find((item) =>
+    item.query.includes('SaveTeachingInspectionTimePlans'),
+  )!;
+  expect(saved.input).not.toHaveProperty('kind');
+  expect(saved.input.changes).toEqual([
+    expect.objectContaining({
+      key: 'COURSE:1:b',
+      resourceKey: '1:b',
+      dates: ['2026-09-11', dates[1], dates[2]],
+    }),
+  ]);
+  expect(
+    fixture.requests.some((item) => item.query.includes('RefreshTeachingInspectionStatus')),
+  ).toBe(false);
+});
+
+for (const operation of [
+  'TeachingInspectionTimeWorkspace',
+  'TeachingInspectionTimePreview',
+  'SaveTeachingInspectionTimePlans',
+]) {
+  test(`检查时间 ${operation} 失败显示中文提示且隐藏技术错误`, async ({ page }) => {
+    await setup(page, { noSession: true });
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() as { query?: string };
+      if (!body.query?.includes(operation)) return route.fallback();
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          errors: [
+            {
+              message: 'private transport implementation detail',
+              extensions: { code: 'INTERNAL_SERVER_ERROR' },
+            },
+          ],
+        }),
+      });
+    });
+    await page.goto(`${path}?view=dates&semester=1`);
+    if (operation !== 'TeachingInspectionTimeWorkspace') {
+      await page.getByRole('button', { name: '确认全学期时间', exact: true }).click();
+      await page.getByRole('button', { name: '预览日期', exact: true }).click();
+      if (operation === 'SaveTeachingInspectionTimePlans')
+        await page.getByRole('button', { name: '确认保存日期', exact: true }).click();
+    }
+    await expect(page.getByText('请求处理失败，请稍后重试。', { exact: true })).toBeVisible();
+    await expect(page.getByText('private transport implementation detail')).toHaveCount(0);
+  });
+}

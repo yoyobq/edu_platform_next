@@ -33,8 +33,8 @@ import { useWidthBand } from '@/shared/ui/responsive-layout';
 
 import * as api from './infrastructure/api';
 import { readLocation, writeLocation } from './infrastructure/location';
-import { DateEditor } from './ui/date-editor';
 import { InspectionDetail } from './ui/inspection-detail';
+import { TimePlanWorkbench } from './ui/time-plan-workbench';
 import { blockerText, kinds, type Resource, statusText } from './model';
 import { syncText, useInspectionWorkspace } from './use-workspace';
 type LoaderData = {
@@ -128,30 +128,6 @@ function InspectionPage({ data }: { data: LoaderData }) {
           )
         }
       />
-      {location.section === 'dates' && (
-        <>
-          <Alert
-            type="info"
-            showIcon
-            title="先核对上游实际日期，再确认尚未执行的检查安排。三类检查分别安排时间。"
-          />
-          <Select
-            aria-label="日期检查类型"
-            value={location.type.key}
-            options={kinds.map((kind) => ({ value: kind.key, label: kind.label }))}
-            onChange={(key) =>
-              setParams(
-                writeLocation({
-                  ...location,
-                  type: kinds.find((kind) => kind.key === key)!,
-                  resourceKey: undefined,
-                  page: 1,
-                }),
-              )
-            }
-          />
-        </>
-      )}
       <AcademicSemesterSelect
         aria-label="检查学期"
         records={semesters}
@@ -163,13 +139,21 @@ function InspectionPage({ data }: { data: LoaderData }) {
         }
       />
       {location.semesterId ? (
-        <Workbench
-          key={`${data.currentAccount.accountId}:${session.session?.upstreamLoginId ?? 'unconnected'}:${params.toString()}`}
-          data={data}
-          location={location}
-          session={session}
-          onLocation={(value) => setParams(writeLocation(value))}
-        />
+        location.section === 'dates' ? (
+          <TimePlanWorkbench
+            key={`${data.currentAccount.accountId}:${params.toString()}`}
+            location={location}
+            onLocation={(value) => setParams(writeLocation(value))}
+          />
+        ) : (
+          <Workbench
+            key={`${data.currentAccount.accountId}:${session.session?.upstreamLoginId ?? 'unconnected'}:${params.toString()}`}
+            data={data}
+            location={location}
+            session={session}
+            onLocation={(value) => setParams(writeLocation(value))}
+          />
+        )
       ) : (
         !error && <Empty description="暂无可用学期" />
       )}
@@ -193,17 +177,12 @@ function Workbench({
     location,
     session,
   );
-  const [selected, setSelected] = useState<string[]>(
-    location.resourceKey ? [location.resourceKey] : [],
-  );
-  const [detailKey, setDetailKey] = useState<string | null>(null);
-  const [dateResources, setDateResources] = useState<Resource[] | null>(null);
-  const [dateDirty, setDateDirty] = useState(false);
+  const [detailKey, setDetailKey] = useState<string | null>(location.resourceKey ?? null);
   const [materialDirty, setMaterialDirty] = useState(false);
   const container = useRef<HTMLDivElement>(null);
   const { band } = useWidthBand(container, [{ max: 767, value: 'compact' }], 'wide');
   const compact = band === 'compact';
-  const dirty = dateDirty || materialDirty;
+  const dirty = materialDirty;
   const blocker = useBlocker(dirty);
   useBeforeUnload(
     useCallback(
@@ -227,14 +206,6 @@ function Workbench({
         content: '未保存评分会丢弃。准备请求的恢复入口会保留，之后可恢复原材料。',
         onOk: close,
       });
-    else close();
-  }
-  function closeDates() {
-    const close = () => {
-      setDateResources(null);
-      setDateDirty(false);
-    };
-    if (dateDirty) modal.confirm({ title: '放弃尚未保存的日期草稿？', onOk: close });
     else close();
   }
   const detail = workspace?.resources.find((resource) => resource.resourceKey === detailKey);
@@ -277,23 +248,6 @@ function Workbench({
           title="尚未连接校园网，当前显示本地记录；连接后自动同步上游检查状态。"
         />
       )}
-      {location.section === 'dates' && selected.length > 0 && (
-        <Space wrap>
-          <span>已选 {selected.length} 门课程</span>
-          <Button
-            disabled={loading || selected.some((key) => syncStates[key] !== 'synced')}
-            onClick={() => {
-              setDateResources(
-                workspace!.resources.filter((resource) => selected.includes(resource.resourceKey)),
-              );
-              setDateDirty(true);
-            }}
-          >
-            确认所选课程时间
-          </Button>
-          <Button onClick={() => setSelected([])}>取消选择</Button>
-        </Space>
-      )}
       <Card
         title={`${location.type.label} · 课程清单`}
         styles={{ body: { padding: compact ? 0 : 16 } }}
@@ -303,14 +257,6 @@ function Workbench({
           size="middle"
           loading={loading}
           dataSource={workspace?.resources ?? []}
-          rowSelection={
-            location.section === 'dates'
-              ? {
-                  selectedRowKeys: selected,
-                  onChange: (keys) => setSelected(keys.map(String)),
-                }
-              : undefined
-          }
           pagination={{
             current: location.page,
             pageSize: 20,
@@ -348,18 +294,10 @@ function Workbench({
                   {compact && (
                     <Button
                       type="link"
-                      disabled={
-                        loading ||
-                        (location.section === 'dates' &&
-                          syncStates[resource.resourceKey] !== 'synced')
-                      }
-                      onClick={() =>
-                        location.section === 'dates'
-                          ? setDateResources([resource])
-                          : setDetailKey(resource.resourceKey)
-                      }
+                      disabled={loading}
+                      onClick={() => setDetailKey(resource.resourceKey)}
                     >
-                      {location.section === 'dates' ? '确认检查时间' : '查看检查'}
+                      查看检查
                     </Button>
                   )}
                   {resource.blockers.length > 0 && (
@@ -371,22 +309,37 @@ function Workbench({
             ...(!compact
               ? [
                   {
-                    title: '已确认安排 / 上游实际日期',
+                    title: '三轮检查时间',
                     key: 'dates',
                     render: (_: unknown, resource: Resource) => (
                       <div>
-                        {resource.schedule.version ? (
-                          resource.schedule.dates.map((date, i) => (
-                            <div key={date}>
-                              第 {i + 1} 轮安排 · {date}
+                        {[0, 1, 2].map((index) => {
+                          const actual =
+                            location.type.kind === 'PROGRESS'
+                              ? resource.schedule.records[index]?.checkDate
+                              : resource.schedule.records.find(
+                                  (record) =>
+                                    record.recordKey === resource.schedule.rounds[index]?.recordKey,
+                                )?.checkDate;
+                          return (
+                            <div key={index} className="mb-2">
+                              <strong>第 {index + 1} 轮</strong>
+                              <div>建议 · {resource.suggestedDates[index] ?? '暂无'}</div>
+                              <div>
+                                已确认 ·{' '}
+                                {resource.schedule.version
+                                  ? (resource.schedule.dates[index] ?? '未安排')
+                                  : '待确认'}
+                              </div>
+                              <div>
+                                上游实际 ·{' '}
+                                {location.type.kind === 'ASSIGNMENT'
+                                  ? '不可核实'
+                                  : (actual ?? '暂无关联记录')}
+                              </div>
                             </div>
-                          ))
-                        ) : (
-                          <div>建议：{resource.suggestedDates.join(' / ')}（待确认）</div>
-                        )}
-                        {resource.schedule.records?.map((record) => (
-                          <div key={record.recordKey}>上游实际 · {record.checkDate}</div>
-                        ))}
+                          );
+                        })}
                         {location.type.kind === 'ASSIGNMENT' && (
                           <small>上游实际日期不可核实；安排和提交日期仅为本地记录</small>
                         )}
@@ -420,18 +373,10 @@ function Workbench({
                     render: (_: unknown, resource: Resource) => (
                       <Button
                         type="link"
-                        disabled={
-                          loading ||
-                          (location.section === 'dates' &&
-                            syncStates[resource.resourceKey] !== 'synced')
-                        }
-                        onClick={() =>
-                          location.section === 'dates'
-                            ? setDateResources([resource])
-                            : setDetailKey(resource.resourceKey)
-                        }
+                        disabled={loading}
+                        onClick={() => setDetailKey(resource.resourceKey)}
                       >
-                        {location.section === 'dates' ? '确认检查时间' : '查看检查'}
+                        查看检查
                       </Button>
                     ),
                   },
@@ -471,20 +416,6 @@ function Workbench({
           <Empty description="课程已不在当前列表，请刷新后重新选择" />
         )}
       </Drawer>
-      {dateResources && (
-        <DateEditor
-          resources={dateResources}
-          semesterId={location.semesterId!}
-          kind={location.type.kind}
-          onDirty={setDateDirty}
-          onCancel={closeDates}
-          onRefresh={() => refresh(true)}
-          onClose={() => {
-            setDateResources(null);
-            setDateDirty(false);
-          }}
-        />
-      )}
       <Modal
         open={blocker.state === 'blocked'}
         title="离开当前检查？"

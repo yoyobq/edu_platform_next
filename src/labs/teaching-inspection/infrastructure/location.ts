@@ -17,8 +17,9 @@ export function readLocation(params: URLSearchParams) {
   };
 }
 export function writeLocation(value: ReturnType<typeof readLocation>) {
-  const params = new URLSearchParams({ kind: value.type.key });
-  if (value.section === 'dates') params.set('view', 'dates');
+  const params = new URLSearchParams(
+    value.section === 'dates' ? { view: 'dates' } : { kind: value.type.key },
+  );
   if (value.resourceKey) params.set('resource', value.resourceKey);
   if (value.semesterId) params.set('semester', String(value.semesterId));
   if (value.teacherId) params.set('teacher', value.teacherId);

@@ -33,3 +33,4 @@ blob-report
 *.sw?
 .trae/*
 .codex
+.workbuddy

@@ -9,7 +9,12 @@ describe('教学检查链接', () => {
     const dates = readLocation(
       new URLSearchParams('view=dates&kind=progress&semester=2&resource=2:course'),
     );
-    expect(readLocation(writeLocation(dates))).toEqual(dates);
+    expect(readLocation(writeLocation(dates))).toMatchObject({
+      section: 'dates',
+      semesterId: 2,
+      resourceKey: '2:course',
+    });
+    expect(writeLocation(dates).has('kind')).toBe(false);
   });
   it('非法类型和分页回归缺省，移除非筛选字段', () => {
     const value = readLocation(
