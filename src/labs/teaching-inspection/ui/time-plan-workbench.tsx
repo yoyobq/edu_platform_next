@@ -8,6 +8,9 @@ import { isGraphQLIngressError } from '@/shared/graphql';
 import * as api from '../infrastructure/api';
 import type { readLocation } from '../infrastructure/location';
 import { blockerText, type TimePlan, type TimePlanChange, type TimeWorkspace } from '../model';
+import { groupNames } from '../model';
+
+import { GroupingPanel } from './grouping-panel';
 
 type Location = ReturnType<typeof readLocation>;
 export function TimePlanWorkbench({
@@ -31,18 +34,19 @@ export function TimePlanWorkbench({
   const [saving, setSaving] = useState(false);
   const [needsRefresh, setNeedsRefresh] = useState(false);
   const [dirty, setDirty] = useState(false);
+  const [groupDirty, setGroupDirty] = useState(false);
   const gate = useRef(false);
   const serial = useRef(0);
-  const blocker = useBlocker(dirty);
+  const blocker = useBlocker(dirty || groupDirty);
   useBeforeUnload(
     useCallback(
       (event) => {
-        if (dirty) {
+        if (dirty || groupDirty) {
           event.preventDefault();
           event.returnValue = '';
         }
       },
-      [dirty],
+      [dirty, groupDirty],
     ),
   );
   const refresh = useCallback(async () => {
@@ -136,16 +140,49 @@ export function TimePlanWorkbench({
       <Alert
         type="info"
         showIcon
-        title="全学期课程共用一套检查时间，非全学期课程单独设置"
-        description="时间计划不分教师和检查类型。默认在授课周期的 1/3、2/3、末次授课周选择周三；上游实际记录在各类检查中核对。确定时间无需连接校园网。"
+        title="全学期、前半学期、后半学期分别共用检查时间"
+        description="三组时间不分教师和检查类型；特殊课程保留独立例外。三次日期选在各组周期的 1/3、2/3、末次教学周，优先周三。"
       />
       {error && <Alert type="error" showIcon title={error} />}
+      {workspace?.grouping && (
+        <GroupingPanel
+          workspace={workspace}
+          semesterId={location.semesterId!}
+          onRefresh={refresh}
+          onDirty={setGroupDirty}
+          disabled={busy || loading || editing !== null}
+        />
+      )}
+      {workspace?.groupPlans
+        ?.filter((plan) => plan.group === 'FIRST' || plan.group === 'SECOND')
+        .map((plan) => (
+          <Card
+            key={plan.key}
+            title={`${groupNames[plan.group!]}共用检查时间`}
+            extra={
+              <Button
+                disabled={
+                  busy || loading || groupDirty || !plan.canEdit || !workspace.grouping?.confirmed
+                }
+                onClick={() => start(plan, `${groupNames[plan.group!]}共用检查时间`)}
+              >
+                确认{groupNames[plan.group!]}时间
+              </Button>
+            }
+          >
+            <p>
+              {plan.confirmed ? '已确认' : '待确认'} · {plan.earliestDate} 至 {plan.latestDate}
+            </p>
+            <p>建议：{plan.suggestedDates.join(' / ')}</p>
+            <p>已确认：{plan.dates.join(' / ') || '未确认'}</p>
+          </Card>
+        ))}
       {common && (
         <Card
           title="全学期共用检查时间"
           extra={
             <Button
-              disabled={busy || loading || !common.canEdit}
+              disabled={busy || loading || groupDirty || !common.canEdit}
               onClick={() => start(common, '全学期共用检查时间')}
             >
               确认全学期时间
@@ -222,7 +259,13 @@ export function TimePlanWorkbench({
             title: '时间规则',
             key: 'scope',
             render: (_, row) => (
-              <Tag>{row.timePlan.fullSemester ? '全学期共用' : '课程单独设置'}</Tag>
+              <Tag>
+                {row.timePlan.group
+                  ? groupNames[row.timePlan.group]
+                  : row.timePlan.fullSemester
+                    ? '全学期共用'
+                    : '课程单独设置'}
+              </Tag>
             ),
           },
           {
@@ -245,8 +288,9 @@ export function TimePlanWorkbench({
             title: '操作',
             key: 'action',
             render: (_, row) =>
-              row.timePlan.fullSemester ? (
-                '使用全学期共用时间'
+              row.timePlan.fullSemester ||
+              (row.timePlan.group && row.timePlan.group !== 'CUSTOM') ? (
+                '使用共用时间组'
               ) : (
                 <div>
                   <Button
@@ -254,6 +298,7 @@ export function TimePlanWorkbench({
                     disabled={
                       busy ||
                       loading ||
+                      groupDirty ||
                       !row.timePlan.canEdit ||
                       row.blockers.some((code) => code !== 'SHORT_COURSE')
                     }
@@ -278,8 +323,8 @@ export function TimePlanWorkbench({
         >
           <div className="flex flex-col gap-3">
             <p>
-              {editing.plan.fullSemester
-                ? '本次保存适用于所有教师的全学期课程。'
+              {editing.plan.fullSemester || (editing.plan.group && editing.plan.group !== 'CUSTOM')
+                ? '本次保存适用于该时间组内所有教师的课程。'
                 : '本次保存仅适用于该课程。'}
               教案、教学进度、学生作业共用此计划。
             </p>
@@ -327,7 +372,8 @@ export function TimePlanWorkbench({
                       ? fresh.resources.find(
                           (row) => row.resourceKey === editing.change.resourceKey,
                         )?.timePlan
-                      : fresh.semesterTimePlan;
+                      : (fresh.groupPlans?.find((plan) => plan.key === editing.plan.key) ??
+                        fresh.semesterTimePlan);
                     if (!plan || plan.key !== editing.plan.key) {
                       setPreview(null);
                       setNeedsRefresh(true);

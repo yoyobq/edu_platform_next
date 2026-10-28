@@ -4,7 +4,13 @@ import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 
 import { executeGraphQL } from '@/shared/graphql';
 
-import type { TimePlan, TimePlanChange, TimeWorkspace } from '../model';
+import type {
+  GroupingInput,
+  GroupingResult,
+  TimePlan,
+  TimePlanChange,
+  TimeWorkspace,
+} from '../model';
 import type {
   Audit,
   DateChange,
@@ -184,7 +190,7 @@ export async function resolveHistory(
   ).result;
 }
 
-const timePlanFields = `key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate`;
+const timePlanFields = `group key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate`;
 export async function loadTimeWorkspace(input: {
   semesterId: number;
   page: number;
@@ -195,7 +201,9 @@ export async function loadTimeWorkspace(input: {
     await executeGraphQL<{ result: TimeWorkspace }, { input: typeof input & { limit: number } }>(
       `query TeachingInspectionTimeWorkspace($input: InspectionTimeWorkspaceInput!) { result: teachingInspectionTimeWorkspace(input: $input) {
       total teachers { staffId name } semesterTimePlan { ${timePlanFields} }
-      resources { resourceKey courseName teacherNames weeks blockers timePlan { ${timePlanFields} } }
+      grouping { version confirmed canEdit weeks split recommendedSplit sourceVersion counts { group count } }
+      groupPlans { ${timePlanFields} }
+      resources { resourceKey sourceVersion courseName teacherNames weeks blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { ${timePlanFields} } }
     } }`,
       { input: { ...input, limit: 20 } },
     )
@@ -210,6 +218,18 @@ export async function timePlans(
     : `query TeachingInspectionTimePreview($input: InspectionTimePlansInput!) { result: teachingInspectionTimePreview(input: $input) { ${timePlanFields} } }`;
   return (
     await executeGraphQL<{ result: TimePlan[] }, { input: typeof input }>(
+      document,
+      { input },
+      { allowAuthRetry: false },
+    )
+  ).result;
+}
+
+export async function grouping(input: GroupingInput, save: boolean) {
+  const name = save ? 'saveTeachingInspectionGrouping' : 'teachingInspectionGroupingPreview';
+  const document = `${save ? 'mutation' : 'query'} InspectionGrouping($input:InspectionGroupingInputDTO!){result:${name}(input:$input){version split weeks changes{resourceKey courseName group beforeDates afterDates}}}`;
+  return (
+    await executeGraphQL<{ result: GroupingResult }, { input: GroupingInput }>(
       document,
       { input },
       { allowAuthRetry: false },

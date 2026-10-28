@@ -178,7 +178,9 @@ export const basisText = (basis: string) =>
 export const isSaved = (op: Operation | null | undefined) =>
   op?.state === 'SAVED' || op?.state === 'VERIFIED';
 
+export type TimeGroup = 'FULL' | 'FIRST' | 'SECOND' | 'CUSTOM';
 export type TimePlan = {
+  group?: TimeGroup;
   key: string;
   version: number;
   dates: string[];
@@ -197,7 +199,48 @@ export type TimePlanChange = {
   expectedSourceVersion: string;
   dates: string[];
 };
+export type GroupingStatus = {
+  counts?: { group: TimeGroup; count: number }[];
+  version: number;
+  confirmed: boolean;
+  canEdit: boolean;
+  weeks: number;
+  split: number;
+  recommendedSplit: number;
+  sourceVersion: string;
+};
+export type CourseGrouping = {
+  group: TimeGroup | null;
+  suggestedGroup: TimeGroup | null;
+  start: number | null;
+  end: number | null;
+  needsReview: boolean;
+  reason: string;
+  preserved: boolean;
+};
+export type GroupingInput = {
+  semesterId: number;
+  expectedVersion: number;
+  expectedSourceVersion: string;
+  split?: number;
+  confirmSuggested?: boolean;
+  changes?: { resourceKey: string; group: TimeGroup; expectedSourceVersion: string }[];
+};
+export type GroupingResult = {
+  version: number;
+  split: number;
+  weeks: number;
+  changes: {
+    resourceKey: string;
+    courseName: string;
+    group: TimeGroup;
+    beforeDates: string[];
+    afterDates: string[];
+  }[];
+};
 export type TimeWorkspace = {
+  grouping?: GroupingStatus;
+  groupPlans?: TimePlan[];
   semesterTimePlan: TimePlan;
   total: number;
   teachers: { staffId: string; name: string }[];
@@ -206,7 +249,16 @@ export type TimeWorkspace = {
     courseName: string;
     teacherNames: string[];
     weeks: number[];
+    sourceVersion: string;
+    grouping?: CourseGrouping;
     blockers: string[];
     timePlan: TimePlan;
   }[];
+};
+
+export const groupNames: Record<TimeGroup, string> = {
+  FULL: '全学期',
+  FIRST: '前半学期',
+  SECOND: '后半学期',
+  CUSTOM: '独立例外',
 };

@@ -1330,3 +1330,116 @@ for (const operation of [
     await expect(page.getByText('private transport implementation detail')).toHaveCount(0);
   });
 }
+
+test('三组时间先预览再确认，保留旧计划并显示课程日期差异', async ({ page }) => {
+  const fixture = await setup(page, { noSession: true });
+  let version = 0;
+  let saves = 0;
+  const groupPlan = (group: string, key: string) => ({
+    group,
+    key,
+    version: 1,
+    confirmed: true,
+    dates,
+    suggestedDates: dates,
+    sourceVersion: 'source-1',
+    fullSemester: group === 'FULL',
+    canEdit: true,
+    earliestDate: '2026-09-01',
+    latestDate: '2026-12-31',
+  });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as {
+      query: string;
+      variables?: {
+        input: { split?: number; confirmSuggested?: boolean; expectedVersion: number };
+      };
+    };
+    if (body.query.includes('TeachingInspectionTimeWorkspace'))
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              total: 1,
+              teachers: [],
+              semesterTimePlan: groupPlan('FULL', 'SEMESTER:1'),
+              groupPlans: [
+                groupPlan('FULL', 'SEMESTER:1'),
+                groupPlan('FIRST', 'FIRST:1'),
+                groupPlan('SECOND', 'SECOND:1'),
+              ],
+              grouping: {
+                version,
+                confirmed: version > 0,
+                canEdit: true,
+                weeks: 17,
+                split: 9,
+                recommendedSplit: 9,
+                sourceVersion: 'group-source',
+              },
+              resources: [
+                {
+                  ...fixture.resource('1:a'),
+                  sourceVersion: 'source-1',
+                  weeks: [1, 9],
+                  timePlan: groupPlan('FIRST', 'FIRST:1'),
+                  grouping: {
+                    group: null,
+                    suggestedGroup: 'FIRST',
+                    start: 1,
+                    end: 9,
+                    needsReview: true,
+                    reason: '请确认建议归组',
+                    preserved: false,
+                  },
+                },
+              ],
+            },
+          },
+        }),
+      });
+    if (!body.query.includes('InspectionGrouping(')) return route.fallback();
+    if (body.query.startsWith('mutation')) {
+      expect(body.variables?.input.expectedVersion).toBe(version);
+      version++;
+      saves++;
+    }
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            version,
+            split: 9,
+            weeks: 17,
+            changes: body.variables?.input.confirmSuggested
+              ? [
+                  {
+                    resourceKey: '1:a',
+                    courseName: '待归组课程',
+                    group: 'FIRST',
+                    beforeDates: [],
+                    afterDates: dates,
+                  },
+                ]
+              : [],
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?view=dates&semester=1`);
+  await expect(page.getByText('前半学期共用检查时间', { exact: true })).toBeVisible();
+  await expect(page.getByText('后半学期共用检查时间', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '预览学期分界', exact: true }).click();
+  await expect(page.getByRole('button', { name: '确认保存归组', exact: true })).toBeVisible();
+  expect(saves).toBe(0);
+  await page.getByRole('button', { name: '确认保存归组', exact: true }).click();
+  await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '预览待归组课程', exact: true }).click();
+  await expect(page.getByText('待归组课程', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '确认保存归组', exact: true }).click();
+  await expect.poll(() => saves).toBe(2);
+});
