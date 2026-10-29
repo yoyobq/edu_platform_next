@@ -219,6 +219,7 @@ export type CourseGrouping = {
   preserved: boolean;
 };
 export type GroupingInput = {
+  previewToken?: string;
   semesterId: number;
   expectedVersion: number;
   expectedSourceVersion: string;
@@ -227,6 +228,8 @@ export type GroupingInput = {
   changes?: { resourceKey: string; group: TimeGroup; expectedSourceVersion: string }[];
 };
 export type GroupingResult = {
+  previewToken: string;
+  skipped: { resourceKey: string; courseName: string; reason: string }[];
   version: number;
   split: number;
   weeks: number;

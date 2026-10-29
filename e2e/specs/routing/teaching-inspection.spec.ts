@@ -1352,7 +1352,12 @@ test('三组时间先预览再确认，保留旧计划并显示课程日期差�
     const body = route.request().postDataJSON() as {
       query: string;
       variables?: {
-        input: { split?: number; confirmSuggested?: boolean; expectedVersion: number };
+        input: {
+          split?: number;
+          confirmSuggested?: boolean;
+          expectedVersion: number;
+          previewToken?: string;
+        };
       };
     };
     if (body.query.includes('TeachingInspectionTimeWorkspace'))
@@ -1402,6 +1407,7 @@ test('三组时间先预览再确认，保留旧计划并显示课程日期差�
     if (!body.query.includes('InspectionGrouping(')) return route.fallback();
     if (body.query.startsWith('mutation')) {
       expect(body.variables?.input.expectedVersion).toBe(version);
+      expect(body.variables?.input.previewToken).toBe('preview-token');
       version++;
       saves++;
     }
@@ -1413,6 +1419,10 @@ test('三组时间先预览再确认，保留旧计划并显示课程日期差�
             version,
             split: 9,
             weeks: 17,
+            previewToken: 'preview-token',
+            skipped: [
+              { resourceKey: 'skip', courseName: '需独立设置课程', reason: '日期超出课程周期' },
+            ],
             changes: body.variables?.input.confirmSuggested
               ? [
                   {
@@ -1440,6 +1450,119 @@ test('三组时间先预览再确认，保留旧计划并显示课程日期差�
   await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: '预览待归组课程', exact: true }).click();
   await expect(page.getByText('待归组课程', { exact: true })).toBeVisible();
+  await expect(page.getByText('日期超出课程周期', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '确认保存归组', exact: true }).click();
   await expect.poll(() => saves).toBe(2);
+});
+
+test('未保存归组时全学期课程显示共用建议日期而非独立设置', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string };
+    if (!body.query.includes('TeachingInspectionTimeWorkspace')) return route.fallback();
+    const plan = {
+      key: 'SEMESTER:1',
+      group: 'FULL',
+      version: 0,
+      confirmed: false,
+      dates: [],
+      suggestedDates: ['2026-10-14', '2026-11-25', '2026-12-30'],
+      sourceVersion: 'calendar',
+      fullSemester: true,
+      canEdit: true,
+      earliestDate: '2026-09-07',
+      latestDate: '2027-01-03',
+    };
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            total: 1,
+            teachers: [],
+            semesterTimePlan: plan,
+            resources: [
+              {
+                ...fixture.resource('1:a'),
+                courseName: '1031165G动画概论',
+                teacherNames: ['金正'],
+                weeks: [2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+                timePlan: plan,
+                grouping: {
+                  group: 'FULL',
+                  suggestedGroup: 'FULL',
+                  start: 2,
+                  end: 17,
+                  needsReview: true,
+                  preserved: false,
+                  reason: '请管理员确认全学期共用检查时间',
+                },
+              },
+            ],
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?view=dates&semester=1`);
+  await expect(page.getByText('建议第 1 次 · 2026-10-14')).toBeVisible();
+  await expect(page.getByText('建议第 3 次 · 2026-12-30')).toBeVisible();
+  await expect(page.getByText('请管理员确认全学期共用检查时间')).toBeVisible();
+  await expect(page.getByRole('button', { name: '设置课程时间', exact: true })).toHaveCount(0);
+});
+
+test('共用规则已确认时仍展示课程待复核原因', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string };
+    if (!body.query.includes('TeachingInspectionTimeWorkspace')) return route.fallback();
+    const plan = {
+      key: 'SEMESTER:1',
+      group: 'FULL',
+      version: 1,
+      confirmed: true,
+      dates: [],
+      suggestedDates: ['2026-10-14', '2026-11-25', '2026-12-30'],
+      sourceVersion: 'calendar',
+      fullSemester: true,
+      canEdit: true,
+      earliestDate: '2026-09-07',
+      latestDate: '2027-01-03',
+    };
+    return route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            total: 1,
+            teachers: [],
+            semesterTimePlan: plan,
+            resources: [
+              {
+                ...fixture.resource('1:a'),
+                courseName: '1031165G动画概论',
+                teacherNames: ['金正'],
+                weeks: [2, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17],
+                timePlan: plan,
+                grouping: {
+                  group: 'FULL',
+                  suggestedGroup: 'FULL',
+                  start: 2,
+                  end: 17,
+                  needsReview: true,
+                  preserved: false,
+                  reason: '未执行的检查日期超出课程原定周期',
+                },
+              },
+            ],
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?view=dates&semester=1`);
+  await expect(page.getByText('建议第 1 次 · 2026-10-14')).toBeVisible();
+  await expect(page.getByText('建议第 3 次 · 2026-12-30')).toBeVisible();
+  await expect(page.getByText('未执行的检查日期超出课程原定周期')).toBeVisible();
+  await expect(page.getByRole('button', { name: '设置课程时间', exact: true })).toHaveCount(0);
 });

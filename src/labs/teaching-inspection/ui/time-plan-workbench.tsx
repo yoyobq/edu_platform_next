@@ -279,8 +279,21 @@ export function TimePlanWorkbench({
                         第 {index + 1} 次 · {date}
                       </div>
                     ))
-                  : '尚未确认'}
-                {!row.timePlan.confirmed && <div>请确认当前授课依据下的时间</div>}
+                  : row.timePlan.suggestedDates.length
+                    ? row.timePlan.suggestedDates.map((date, index) => (
+                        <div key={index}>
+                          建议第 {index + 1} 次 · {date}
+                        </div>
+                      ))
+                    : '暂无建议日期'}
+                {(!row.timePlan.confirmed || row.grouping?.needsReview) && (
+                  <div>
+                    {row.grouping?.reason ||
+                      (row.timePlan.group && row.timePlan.group !== 'CUSTOM'
+                        ? '等待统一确认共用检查时间'
+                        : '请确认当前授课依据下的时间')}
+                  </div>
+                )}
               </div>
             ),
           },

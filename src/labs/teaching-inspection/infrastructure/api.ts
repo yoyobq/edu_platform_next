@@ -227,7 +227,7 @@ export async function timePlans(
 
 export async function grouping(input: GroupingInput, save: boolean) {
   const name = save ? 'saveTeachingInspectionGrouping' : 'teachingInspectionGroupingPreview';
-  const document = `${save ? 'mutation' : 'query'} InspectionGrouping($input:InspectionGroupingInputDTO!){result:${name}(input:$input){version split weeks changes{resourceKey courseName group beforeDates afterDates}}}`;
+  const document = `${save ? 'mutation' : 'query'} InspectionGrouping($input:InspectionGroupingInputDTO!){result:${name}(input:$input){version split weeks previewToken skipped{resourceKey courseName reason} changes{resourceKey courseName group beforeDates afterDates}}}`;
   return (
     await executeGraphQL<{ result: GroupingResult }, { input: GroupingInput }>(
       document,

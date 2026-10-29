@@ -254,16 +254,32 @@ export function GroupingPanel({
                 },
               ]}
             />
+            {!!pending.result.skipped?.length && (
+              <Table
+                rowKey="resourceKey"
+                pagination={{ pageSize: 10 }}
+                dataSource={pending.result.skipped}
+                columns={[
+                  { title: '待处理课程（本次不保存）', dataIndex: 'courseName' },
+                  { title: '原因', dataIndex: 'reason' },
+                ]}
+              />
+            )}
             <Button
               type="primary"
               loading={busy}
-              disabled={busy || disabled || uncertain}
+              disabled={
+                busy ||
+                disabled ||
+                uncertain ||
+                (pending.input.split === undefined && !pending.result.changes.length)
+              }
               onClick={() => {
                 if (gate.current) return;
                 gate.current = true;
                 setBusy(true);
                 void api
-                  .grouping(pending.input, true)
+                  .grouping({ ...pending.input, previewToken: pending.result.previewToken }, true)
                   .then(async () => {
                     setPending(null);
                     onDirty(false);
