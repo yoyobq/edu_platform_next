@@ -194,6 +194,7 @@ const timePlanFields = `group key version dates suggestedDates sourceVersion con
 export async function loadTimeWorkspace(input: {
   semesterId: number;
   page: number;
+  limit?: number;
   teacherId?: string;
   keyword?: string;
 }) {
@@ -203,9 +204,9 @@ export async function loadTimeWorkspace(input: {
       total teachers { staffId name } semesterTimePlan { ${timePlanFields} }
       grouping { version confirmed canEdit weeks split recommendedSplit sourceVersion counts { group count } }
       groupPlans { ${timePlanFields} }
-      resources { resourceKey sourceVersion courseName teacherNames weeks blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { ${timePlanFields} } }
+      resources { resourceKey sourceVersion courseName teacherIds teacherNames weeks blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { ${timePlanFields} } }
     } }`,
-      { input: { ...input, limit: 20 } },
+      { input: { ...input, limit: input.limit ?? 20 } },
     )
   ).result;
 }
@@ -235,4 +236,31 @@ export async function grouping(input: GroupingInput, save: boolean) {
       { allowAuthRetry: false },
     )
   ).result;
+}
+
+// Aggregate authorized pages so exception counts and course filters cover the whole semester.
+export async function loadTimeOverview(semesterId: number): Promise<TimeWorkspace> {
+  const limit = 100;
+  const first = await loadTimeWorkspace({ semesterId, page: 1, limit });
+  const signature = (work: TimeWorkspace) =>
+    JSON.stringify([
+      work.total,
+      work.grouping?.version,
+      work.grouping?.sourceVersion,
+      [work.semesterTimePlan, ...(work.groupPlans ?? [])].map((plan) => [
+        plan.key,
+        plan.version,
+        plan.sourceVersion,
+      ]),
+    ]);
+  const resources = [...first.resources];
+  for (let page = 2; page <= Math.ceil(first.total / limit); page++) {
+    const next = await loadTimeWorkspace({ semesterId, page, limit });
+    if (signature(next) !== signature(first))
+      throw new Error('检查安排在读取期间发生变化，请重新读取');
+    resources.push(...next.resources);
+  }
+  if (new Set(resources.map((row) => row.resourceKey)).size !== first.total)
+    throw new Error('课程列表在读取期间发生变化，请重新读取');
+  return { ...first, resources };
 }

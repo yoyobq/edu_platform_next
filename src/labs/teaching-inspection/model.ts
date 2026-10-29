@@ -251,6 +251,7 @@ export type TimeWorkspace = {
     resourceKey: string;
     courseName: string;
     teacherNames: string[];
+    teacherIds?: string[];
     weeks: number[];
     sourceVersion: string;
     grouping?: CourseGrouping;

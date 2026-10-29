@@ -47,6 +47,7 @@ export function TeachingInspectionPage() {
 }
 function InspectionPage({ data }: { data: LoaderData }) {
   const [params, setParams] = useSearchParams();
+  const [promptedSemesters, setPromptedSemesters] = useState<Record<number, boolean>>({});
   const [semesters, setSemesters] = useState<AcademicSemesterSelectRecord[]>([]);
   const [error, setError] = useState('');
   const [attempt, setAttempt] = useState(0);
@@ -141,8 +142,12 @@ function InspectionPage({ data }: { data: LoaderData }) {
       {location.semesterId ? (
         location.section === 'dates' ? (
           <TimePlanWorkbench
-            key={`${data.currentAccount.accountId}:${params.toString()}`}
+            key={`${data.currentAccount.accountId}:${location.semesterId}`}
             location={location}
+            splitPromptDismissed={!!promptedSemesters[location.semesterId]}
+            onDismissSplitPrompt={() =>
+              setPromptedSemesters((current) => ({ ...current, [location.semesterId!]: true }))
+            }
             onLocation={(value) => setParams(writeLocation(value))}
           />
         ) : (

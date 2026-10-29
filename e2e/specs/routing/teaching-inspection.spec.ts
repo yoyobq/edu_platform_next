@@ -500,10 +500,17 @@ test('保存认证失败时不自动重发，重载后可查询 UNKNOWN', async 
 test('日期预览与保存复用相同集合、原版本和来源指纹', async ({ page }) => {
   const fixture = await setup(page, { assigned: false });
   await page.goto(`${path}?view=dates&kind=assignment&semester=1`);
-  await page.getByRole('button', { name: '确认全学期时间' }).click();
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await page.getByRole('button', { name: '确认保存日期' }).click();
+  await page
+    .getByRole('row')
+    .filter({ hasText: '全学期课程' })
+    .getByRole('button', { name: '确认日期', exact: true })
+    .click();
   await expect(page.getByRole('dialog', { name: /安排检查日期/ })).toHaveCount(0);
+  await expect
+    .poll(() =>
+      fixture.requests.some((item) => item.query.includes('SaveTeachingInspectionTimePlans')),
+    )
+    .toBe(true);
   const preview = fixture.requests.find((item) =>
     item.query.includes('TeachingInspectionTimePreview'),
   )!.input;
@@ -700,7 +707,7 @@ test('深色主题保留类型深链接和前进后退，切换时清空课程�
   await page.addInitScript(() => localStorage.setItem('color-scheme', 'dark'));
   await setup(page);
   await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1&teacher=T700&keyword=测试`);
-  await expect(page.getByText('全学期共用检查时间', { exact: true })).toBeVisible();
+  await expect(page.getByText('本学期检查安排', { exact: true })).toBeVisible();
   await expect(page.getByLabel('日期检查类型')).toHaveCount(0);
   await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page).toHaveURL(/kind=assignment/);
@@ -773,22 +780,15 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
     return route.fallback();
   });
   await page.goto(`${path}?view=dates&kind=lesson-plan&semester=1`);
-  await page.getByRole('button', { name: '确认全学期时间' }).click();
-  const date = page.getByLabel('第1次检查时间');
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await expect(page.getByRole('button', { name: '确认保存日期' })).toBeEnabled();
+  const date = page.getByLabel('全学期第1次检查日期');
   await date.fill('2026-09-12');
-  await expect(page.getByRole('button', { name: '确认保存日期' })).toBeDisabled();
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await page.getByRole('button', { name: '确认保存日期' }).click();
-  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新读取并核对日期', exact: true })).toBeVisible();
   expect(saveCalls).toBe(1);
-  await page.getByRole('button', { name: '刷新依据并重新核对' }).click();
+  await page.getByRole('button', { name: '重新读取并核对日期', exact: true }).click();
   await expect(date).toHaveValue('2026-09-12');
-  await expect(page.getByRole('button', { name: '确认保存日期' })).toBeDisabled();
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await page.getByRole('button', { name: '确认保存日期' }).click();
-  await expect(page.getByRole('dialog', { name: /安排检查日期/ })).toHaveCount(0);
+  await page.getByRole('button', { name: '保存修改', exact: true }).click();
+  await expect.poll(() => saveCalls).toBe(2);
   expect(saveCalls).toBe(2);
 });
 
@@ -1121,9 +1121,16 @@ test('新入口默认独立检查时间，按课程确认而不触发生成保�
     'aria-selected',
     'true',
   );
-  await page.getByRole('button', { name: '确认全学期时间', exact: true }).click();
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await page.getByRole('button', { name: '确认保存日期', exact: true }).click();
+  await page
+    .getByRole('row')
+    .filter({ hasText: '全学期课程' })
+    .getByRole('button', { name: '确认日期', exact: true })
+    .click();
+  await expect
+    .poll(() =>
+      fixture.requests.some((item) => item.query.includes('SaveTeachingInspectionTimePlans')),
+    )
+    .toBe(true);
   const saved = fixture.requests.find((item) =>
     item.query.includes('SaveTeachingInspectionTimePlans'),
   )!;
@@ -1276,11 +1283,16 @@ test('短课单独确认时间，接口不携带检查类型且不改全学期�
   await page.goto(`${path}?semester=1`);
   await page
     .getByRole('row', { name: /测试课程乙/ })
-    .getByRole('button', { name: '设置课程时间' })
+    .getByRole('button', { name: '处理例外' })
     .click();
+  await page.getByRole('button', { name: '设置课程时间', exact: true }).click();
   await page.getByLabel('第1次检查时间').fill('2026-09-11');
-  await page.getByRole('button', { name: '预览日期', exact: true }).click();
-  await page.getByRole('button', { name: '确认保存日期' }).click();
+  await page.getByRole('button', { name: '保存课程日期', exact: true }).click();
+  await expect
+    .poll(() =>
+      fixture.requests.some((item) => item.query.includes('SaveTeachingInspectionTimePlans')),
+    )
+    .toBe(true);
   const saved = fixture.requests.find((item) =>
     item.query.includes('SaveTeachingInspectionTimePlans'),
   )!;
@@ -1321,10 +1333,8 @@ for (const operation of [
     });
     await page.goto(`${path}?view=dates&semester=1`);
     if (operation !== 'TeachingInspectionTimeWorkspace') {
-      await page.getByRole('button', { name: '确认全学期时间', exact: true }).click();
-      await page.getByRole('button', { name: '预览日期', exact: true }).click();
-      if (operation === 'SaveTeachingInspectionTimePlans')
-        await page.getByRole('button', { name: '确认保存日期', exact: true }).click();
+      await page.getByLabel('全学期第1次检查日期').fill('2026-09-12');
+      await page.getByRole('button', { name: '保存修改', exact: true }).click();
     }
     await expect(page.getByText('请求处理失败，请稍后重试。', { exact: true })).toBeVisible();
     await expect(page.getByText('private transport implementation detail')).toHaveCount(0);
@@ -1440,19 +1450,18 @@ test('三组时间先预览再确认，保留旧计划并显示课程日期差�
     });
   });
   await page.goto(`${path}?view=dates&semester=1`);
-  await expect(page.getByText('前半学期共用检查时间', { exact: true })).toBeVisible();
-  await expect(page.getByText('后半学期共用检查时间', { exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '预览学期分界', exact: true }).click();
-  await expect(page.getByRole('button', { name: '确认保存归组', exact: true })).toBeVisible();
+  await expect(page.getByText('本学期检查安排', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('前半学期第1次检查日期')).toBeDisabled();
+  await expect(page.getByRole('dialog', { name: '确认本学期教学分段', exact: true })).toBeVisible();
   expect(saves).toBe(0);
-  await page.getByRole('button', { name: '确认保存归组', exact: true }).click();
-  await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: '预览待归组课程', exact: true }).click();
-  await expect(page.getByText('待归组课程', { exact: true })).toBeVisible();
-  await expect(page.getByText('日期超出课程周期', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '确认保存归组', exact: true }).click();
-  await expect.poll(() => saves).toBe(2);
+  await page.getByRole('button', { name: '采用推荐分段', exact: true }).click();
+  await expect.poll(() => saves).toBe(1);
+  await expect(page.getByRole('dialog', { name: '确认本学期教学分段', exact: true })).toHaveCount(
+    0,
+  );
+  await expect(page.getByLabel('前半学期第1次检查日期')).toBeEnabled();
+  // Ordinary courses require no per-course grouping confirmation.
+  await expect(page.getByRole('button', { name: '预览待归组课程', exact: true })).toHaveCount(0);
 });
 
 test('未保存归组时全学期课程显示共用建议日期而非独立设置', async ({ page }) => {
@@ -1505,9 +1514,9 @@ test('未保存归组时全学期课程显示共用建议日期而非独立设�
     });
   });
   await page.goto(`${path}?view=dates&semester=1`);
-  await expect(page.getByText('建议第 1 次 · 2026-10-14')).toBeVisible();
-  await expect(page.getByText('建议第 3 次 · 2026-12-30')).toBeVisible();
-  await expect(page.getByText('请管理员确认全学期共用检查时间')).toBeVisible();
+  await expect(page.getByLabel('全学期第1次检查日期')).toHaveValue('2026-10-14');
+  await expect(page.getByLabel('全学期第3次检查日期')).toHaveValue('2026-12-30');
+  await expect(page.getByText('普通课程等待统一安排，无需逐门确认')).toBeVisible();
   await expect(page.getByRole('button', { name: '设置课程时间', exact: true })).toHaveCount(0);
 });
 
@@ -1561,8 +1570,267 @@ test('共用规则已确认时仍展示课程待复核原因', async ({ page }) 
     });
   });
   await page.goto(`${path}?view=dates&semester=1`);
-  await expect(page.getByText('建议第 1 次 · 2026-10-14')).toBeVisible();
-  await expect(page.getByText('建议第 3 次 · 2026-12-30')).toBeVisible();
+  await expect(page.getByText('需要处理（1）', { exact: true })).toBeVisible();
   await expect(page.getByText('未执行的检查日期超出课程原定周期')).toBeVisible();
+  await page.getByRole('button', { name: '处理例外', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('金正');
   await expect(page.getByRole('button', { name: '设置课程时间', exact: true })).toHaveCount(0);
+});
+
+test('检查安排产品流程：原位编辑一次保存、自动校验和草稿保护', async ({ page }) => {
+  const warnings: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes('Warning:'))
+      warnings.push(message.text());
+  });
+  const fixture = await setup(page, { noSession: true });
+  let saved = false;
+  let previewInput: object | undefined;
+  let writes = 0;
+  const suggested = ['2026-10-14', '2026-11-25', '2026-12-30'];
+  const plan = (group: string) => ({
+    key: `${group === 'FULL' ? 'SEMESTER' : group}:1`,
+    group,
+    version: saved ? 1 : 0,
+    confirmed: saved,
+    dates: saved ? suggested : [],
+    suggestedDates: suggested,
+    sourceVersion: 'source',
+    fullSemester: group === 'FULL',
+    canEdit: true,
+    earliestDate: '2026-09-07',
+    latestDate: '2027-01-03',
+  });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as {
+      query: string;
+      variables?: { input: { changes: object[] } };
+    };
+    const reply = (result: object) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { result } }),
+      });
+    if (body.query.includes('TeachingInspectionTimeWorkspace'))
+      return reply({
+        total: 21,
+        teachers: [],
+        semesterTimePlan: plan('FULL'),
+        groupPlans: ['FULL', 'FIRST', 'SECOND'].map(plan),
+        grouping: {
+          version: 1,
+          confirmed: true,
+          canEdit: true,
+          weeks: 17,
+          split: 9,
+          recommendedSplit: 9,
+          sourceVersion: 'source',
+        },
+        resources: Array.from({ length: 21 }, (_, i) => ({
+          ...fixture.resource(`1:${i}`),
+          courseName: i === 20 ? '分页末尾独立课程' : `普通课程${i}`,
+          timePlan:
+            i === 20 ? { ...plan('CUSTOM'), confirmed: false, fullSemester: false } : plan('FULL'),
+          grouping: {
+            group: i === 20 ? 'CUSTOM' : 'FULL',
+            suggestedGroup: 'FULL',
+            start: 1,
+            end: 17,
+            needsReview: i === 20,
+            reason: i === 20 ? '请设置独立时间' : '',
+            preserved: false,
+          },
+        })),
+      });
+    if (body.query.includes('TeachingInspectionTimePreview')) {
+      previewInput = body.variables?.input;
+      return reply(['FULL', 'FIRST', 'SECOND'].map(plan));
+    }
+    if (body.query.includes('SaveTeachingInspectionTimePlans')) {
+      expect(body.variables?.input).toEqual(previewInput);
+      expect(body.variables?.input.changes).toHaveLength(3);
+      saved = true;
+      writes++;
+      return reply(['FULL', 'FIRST', 'SECOND'].map(plan));
+    }
+    return route.fallback();
+  });
+  await page.goto(`${path}?view=dates&semester=1`);
+  await expect(page.getByText('需要处理（1）', { exact: true })).toBeVisible();
+  await expect(page.getByText('分页末尾独立课程', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByLabel('全学期第1次检查日期').fill('2026-10-15');
+  await page.getByRole('tab', { name: '教案检查', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: '放弃尚未保存的检查时间？' })).toBeVisible();
+  await page.getByRole('button', { name: '继续编辑', exact: true }).click();
+  await expect(page.getByLabel('全学期第1次检查日期')).toHaveValue('2026-10-15');
+  await page.getByRole('button', { name: '保存全部待确认日期', exact: true }).click();
+  await expect(page.getByText('安排已确认', { exact: true })).toBeVisible();
+  expect(writes).toBe(1);
+  await page.mouse.move(1200, 100);
+  await page.getByText('本学期检查安排', { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '/tmp/inspection-product-desktop.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+    .toBe(true);
+  await expect(page.getByRole('combobox', { name: '课程范围' })).toBeVisible();
+  expect(warnings).toEqual([]);
+  await page.mouse.move(380, 100);
+  await page.getByText('本学期检查安排', { exact: true }).scrollIntoViewIfNeeded();
+  await page.screenshot({ path: '/tmp/inspection-product-mobile.png', fullPage: true });
+});
+
+async function mockSplitPrompt(
+  page: Page,
+  options: { confirmed?: boolean; canEdit?: boolean; failSave?: boolean } = {},
+) {
+  const fixture = await setup(page, { noSession: true });
+  let confirmed = options.confirmed ?? false;
+  let version = confirmed ? 1 : 0;
+  let writes = 0;
+  const canEdit = options.canEdit ?? true;
+  const plan = (group: string) => ({
+    key: `${group === 'FULL' ? 'SEMESTER' : group}:1`,
+    group,
+    version: 0,
+    confirmed: false,
+    dates: [],
+    suggestedDates: dates,
+    sourceVersion: 'source',
+    fullSemester: group === 'FULL',
+    canEdit,
+    earliestDate: '2026-09-01',
+    latestDate: '2027-01-03',
+  });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as {
+      query: string;
+      variables?: { input: { split?: number; expectedVersion?: number } };
+    };
+    const reply = (result: object) =>
+      route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({ data: { result } }),
+      });
+    if (body.query.includes('TeachingInspectionTimeWorkspace'))
+      return reply({
+        total: 1,
+        teachers: [],
+        semesterTimePlan: plan('FULL'),
+        groupPlans: ['FULL', 'FIRST', 'SECOND'].map(plan),
+        grouping: {
+          version,
+          confirmed,
+          canEdit,
+          weeks: 17,
+          split: 9,
+          recommendedSplit: 9,
+          sourceVersion: 'source',
+        },
+        resources: [
+          {
+            ...fixture.resource('1:a'),
+            timePlan: plan('FULL'),
+            grouping: {
+              group: 'FULL',
+              suggestedGroup: 'FULL',
+              start: 1,
+              end: 17,
+              needsReview: true,
+              reason: '等待统一确认',
+              preserved: false,
+            },
+          },
+        ],
+      });
+    if (body.query.includes('InspectionGrouping(')) {
+      if (body.query.startsWith('mutation')) {
+        writes++;
+        if (options.failSave)
+          return route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify({
+              errors: [{ message: '安排已变化，请重新核对', extensions: { code: 'CONFLICT' } }],
+            }),
+          });
+        confirmed = true;
+        version++;
+      }
+      return reply({
+        version,
+        split: body.variables?.input.split ?? 9,
+        weeks: 17,
+        previewToken: 'preview',
+        changes: [],
+        skipped: [],
+      });
+    }
+    return route.fallback();
+  });
+  return { writes: () => writes, requests: fixture.requests };
+}
+
+test('分段弹窗：稍后处理不重复打扰，页面保留入口且可以调整', async ({ page }) => {
+  const fixture = await mockSplitPrompt(page);
+  await page.goto(`${path}?view=dates&semester=1`);
+  const prompt = page.getByRole('dialog', { name: '确认本学期教学分段', exact: true });
+  await expect(prompt).toBeVisible();
+  await expect(prompt).toContainText('前半学期 1–9 周');
+  await page.getByRole('button', { name: '稍后处理', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '确认教学分段', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '重新读取检查时间', exact: true }).click();
+  await expect(page.getByLabel('全学期第1次检查日期')).toBeEnabled();
+  await expect(prompt).toHaveCount(0);
+  await page.getByRole('tab', { name: '教案检查', exact: true }).click();
+  await page.getByRole('tab', { name: '检查时间', exact: true }).click();
+  await expect(page.getByLabel('全学期第1次检查日期')).toBeEnabled();
+  await expect(prompt).toHaveCount(0);
+  await page.getByRole('button', { name: '确认教学分段', exact: true }).click();
+  await page.getByRole('button', { name: '调整分段', exact: true }).click();
+  await page.getByRole('spinbutton', { name: '前半学期结束周', exact: true }).fill('8');
+  await expect(prompt).toContainText('后半学期：9–17 周');
+  expect(fixture.writes()).toBe(0);
+  await prompt.getByRole('button', { name: '确认教学分段', exact: true }).click();
+  await expect(prompt).toHaveCount(0);
+  await expect(
+    page.getByText('教学分段已确认，接下来确认三次检查日期', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByLabel('后半学期第1次检查日期')).toBeEnabled();
+  expect(fixture.writes()).toBe(1);
+});
+
+for (const options of [
+  { confirmed: true, canEdit: true },
+  { confirmed: false, canEdit: false },
+]) {
+  test(`分段弹窗：confirmed=${options.confirmed} canEdit=${options.canEdit} 不自动弹出`, async ({
+    page,
+  }) => {
+    const fixture = await mockSplitPrompt(page, options);
+    await page.goto(`${path}?view=dates&semester=1`);
+    await expect(page.getByText('本学期检查安排', { exact: true })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: '确认本学期教学分段', exact: true })).toHaveCount(
+      0,
+    );
+    if (!options.canEdit) {
+      await expect(page.getByText('等待管理员确认教学分段', { exact: true })).toBeVisible();
+      await expect(page.getByRole('button', { name: '确认教学分段', exact: true })).toHaveCount(0);
+    }
+    expect(fixture.writes()).toBe(0);
+  });
+}
+
+test('分段弹窗：保存冲突后不自动重试，必须重新读取', async ({ page }) => {
+  const fixture = await mockSplitPrompt(page, { failSave: true });
+  await page.goto(`${path}?view=dates&semester=1`);
+  await page.getByRole('button', { name: '采用推荐分段', exact: true }).click();
+  await expect(page.getByRole('button', { name: '重新读取学期安排', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '采用推荐分段', exact: true })).toBeDisabled();
+  expect(fixture.writes()).toBe(1);
+  await page.getByRole('button', { name: '重新读取学期安排', exact: true }).click();
+  await expect(page.getByRole('button', { name: '采用推荐分段', exact: true })).toBeEnabled();
+  expect(fixture.writes()).toBe(1);
 });
