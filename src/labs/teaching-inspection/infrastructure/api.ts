@@ -28,8 +28,8 @@ const recordFields = `recordKey checkDate score chapter updatedBy actualProgress
 export const scheduleFields = `version dates historyState records { ${recordFields} } rounds { round date actualDate recordKey operationId operationState savedOperationId }`;
 export const statusFields = `state upstreamCount observedAt observationVersion effectiveCoveredCount rounds { round dateEditable dateBlockers covered coverageBasis canPrepare blockers retryAfter retryWarningOperationId }`;
 const operationFields = `id accountId requestId action round checkDate state previewId`;
-const materialFields = `lesson { chapter scores scoreItems { name description maximum } } progress { actualProgress plannedProgress deviation } assignment { assignedBook assignmentQuantity knowledgeCoverage allMarkingStatus markingErrors markingCorrections markingAndDateDetails studentCompletionStatus studentCorrectionStatus checkerOpinion }`;
-const prepareFields = `preview { id round checkDate scheduleVersion observationVersion expiresAt } operation { ${operationFields} } material { ${materialFields} } blockers upstreamSessionToken expiresAt`;
+const materialFields = `lesson { sourceDate chapter scores scoreItems { name description maximum } } progress { actualProgress plannedProgress deviation } assignment { assignedBook assignmentQuantity knowledgeCoverage allMarkingStatus markingErrors markingCorrections markingAndDateDetails studentCompletionStatus studentCorrectionStatus checkerOpinion }`;
+export const prepareFields = `preview { id round checkDate scheduleVersion observationVersion expiresAt } operation { ${operationFields} } material { ${materialFields} } blockers upstreamSessionToken expiresAt`;
 const names: Record<InspectionKind, string> = {
   LESSON_PLAN: 'LessonPlan',
   PROGRESS: 'Progress',

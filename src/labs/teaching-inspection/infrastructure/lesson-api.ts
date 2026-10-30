@@ -5,6 +5,8 @@ import { executeGraphQL } from '@/shared/graphql';
 
 import type {
   CourseGrouping,
+  Prepared,
+  PrepareInput,
   Resource,
   Schedule,
   SessionResult,
@@ -12,7 +14,7 @@ import type {
   Workspace,
 } from '../model';
 
-import { scheduleFields, statusFields } from './api';
+import { prepareFields, scheduleFields, statusFields } from './api';
 export type LessonResource = Resource & {
   teacherIds: string[];
   grouping?: CourseGrouping;
@@ -64,6 +66,23 @@ export async function syncCounts(
     >(
       `mutation SyncLessonPlanInspectionCounts($input: LessonInspectionCountsInput!) { result: syncLessonPlanInspectionCounts(input: $input) { counts { resourceKey count } observedAt upstreamSessionToken expiresAt } }`,
       { input: { semesterId, departmentId, kind: 'LESSON_PLAN', upstreamSessionToken } },
+    )
+  ).result;
+}
+
+export async function prepareBatch(items: PrepareInput[], upstreamSessionToken: string) {
+  return (
+    await executeUpstreamSessionGraphQL<
+      {
+        result: SessionResult & {
+          items: { resourceKey: string; round: number; failed: boolean; result: Prepared | null }[];
+        };
+      },
+      { input: object }
+    >(
+      `mutation PrepareLessonPlanInspectionBatch($input: LessonInspectionBatchPrepareInput!) { result: prepareLessonPlanInspectionBatch(input: $input) { items { resourceKey round failed result { ${prepareFields} } } upstreamSessionToken expiresAt } }`,
+      { input: { items: items.map((item) => ({ ...item, upstreamSessionToken })) } },
+      { allowAuthRetry: false },
     )
   ).result;
 }

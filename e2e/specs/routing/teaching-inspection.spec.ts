@@ -336,6 +336,58 @@ async function setup(
             }),
           });
     }
+    if (query.includes('PrepareLessonPlanInspectionBatch')) {
+      const batchInput = input as unknown as { items: Input[] };
+      return reply({
+        result: {
+          upstreamSessionToken: 'batch-token',
+          expiresAt: '2030-01-01T00:00:00Z',
+          items: batchInput.items.map((item) => {
+            const operation = {
+              id: `op-${operations.size}`,
+              accountId: 700,
+              requestId: item.clientRequestId,
+              action: 'PREPARE',
+              round: item.round,
+              checkDate: item.checkDate,
+              state: 'PREPARED',
+              previewId: `preview-${operations.size}`,
+            };
+            operations.set(item.clientRequestId, operation);
+            const result = {
+              operation,
+              preview: {
+                id: operation.previewId,
+                round: item.round,
+                checkDate: item.checkDate,
+                scheduleVersion: version,
+                observationVersion: 1,
+                expiresAt: '2026-10-18T04:30:00Z',
+              },
+              blockers: [],
+              upstreamSessionToken: 'batch-token',
+              expiresAt: '2030-01-01T00:00:00Z',
+              material: {
+                lesson: {
+                  sourceDate: '2026-10-01',
+                  chapter: '批量匹配章节',
+                  scores: [4, 15, 25, 15, 10, 10, 10, 5, 5],
+                  scoreItems: [5, 15, 25, 15, 10, 10, 10, 5, 5].map((maximum, i) => ({
+                    name: `评分${i + 1}`,
+                    description: '',
+                    maximum,
+                  })),
+                },
+                progress: null,
+                assignment: null,
+              },
+            };
+            preparations.set(item.clientRequestId, result);
+            return { resourceKey: item.resourceKey, round: item.round, failed: false, result };
+          }),
+        },
+      });
+    }
     if (/mutation Prepare/.test(query)) {
       if (preparations.has(input.clientRequestId))
         return reply({ result: preparations.get(input.clientRequestId) });
@@ -474,7 +526,7 @@ async function openAndPrepare(page: Page, kind: string) {
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
   await expect(page.getByText('预填材料，请核对后提交')).toBeVisible();
 }
-for (const kind of ['lesson-plan', 'progress', 'assignment'])
+for (const kind of ['progress', 'assignment'])
   test(`${kind} 核对后单条保存，成功不额外刷新上游`, async ({ page }) => {
     const fixture = await setup(page);
     await openAndPrepare(page, kind);
@@ -494,25 +546,6 @@ for (const kind of ['lesson-plan', 'progress', 'assignment'])
     );
     expect(JSON.parse(recovery!)).toEqual([]);
   });
-test('未连接上游时标明本地记录，非法类型规范化，窄屏可浏览与键盘进入检查', async ({ page }) => {
-  await page.setViewportSize({ width: 390, height: 844 });
-  const fixture = await setup(page, { noSession: true });
-  await page.goto(`${path}?kind=invalid&semester=1`);
-  await expect(page.getByRole('heading', { name: '教学检查' })).toBeVisible();
-  await expect(page).toHaveURL(/kind=lesson-plan/);
-  await expect(page.getByText('尚未读取', { exact: false }).first()).toBeVisible();
-  expect(
-    fixture.requests.every((item) => item.query.includes('LessonPlanInspectionOverview')),
-  ).toBe(true);
-  await page.getByRole('button', { name: '查看检查' }).first().focus();
-  await page.keyboard.press('Enter');
-  await expect(page.getByRole('button', { name: '刷新检查状态', exact: true })).toBeVisible();
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
-    true,
-  );
-  await expect.poll(async () => (await page.getByRole('dialog').boundingBox())?.x).toBe(0);
-  await page.screenshot({ path: '/tmp/teaching-inspection-mobile.png', fullPage: true });
-});
 test('刷新后按原输入恢复进度材料，原版本不被当前版本替换', async ({ page }) => {
   const fixture = await setup(page);
   await openAndPrepare(page, 'progress');
@@ -651,7 +684,7 @@ test('明确 operation:null 的阻断清除本次恢复跟踪', async ({ page })
       }),
     });
   });
-  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.goto(`${path}?kind=progress&semester=1`);
   await page.getByRole('button', { name: '查看检查' }).first().click();
   await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
@@ -705,8 +738,8 @@ test('切换类型后，迟到工作区读取不覆盖当前课程', async ({ pa
   await page.route('**/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: { input: Input } };
     if (
-      !body.query.includes('LessonPlanInspectionOverview') ||
-      body.variables?.input.kind !== 'LESSON_PLAN'
+      !body.query.includes('TeachingInspectionWorkspace') ||
+      body.variables?.input.kind !== 'PROGRESS'
     )
       return route.fallback();
     start();
@@ -725,7 +758,7 @@ test('切换类型后，迟到工作区读取不覆盖当前课程', async ({ pa
       }),
     });
   });
-  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.goto(`${path}?kind=progress&semester=1`);
   await started;
   await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page.getByText('测试课程甲')).toBeVisible();
@@ -1253,83 +1286,45 @@ test('进度检查时间展示上游实际日期并锁定已提交轮次', async
   await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
 });
 
-test('教案历史冲突可明确关联并留原因，不发送上游保存', async ({ page }) => {
+test('教案历史冲突在准备阶段显示阻断且不提交', async ({ page }) => {
   const fixture = await setup(page);
-  let resolved: Record<string, unknown> | undefined;
   await page.route('**/graphql', async (route) => {
-    const body = route.request().postDataJSON() as { query: string; variables: { input: Input } };
-    if (body.query.includes('ResolveTeachingInspectionHistory')) {
-      resolved = body.variables.input as unknown as Record<string, unknown>;
-      return route.fulfill({
-        contentType: 'application/json',
-        body: JSON.stringify({
-          data: { result: { upstreamSessionToken: 'resolved', expiresAt: null } },
-        }),
-      });
-    }
-    if (
-      !body.query.includes('RefreshTeachingInspectionStatus') &&
-      !body.query.includes('LessonPlanInspectionDetail')
-    )
-      return route.fallback();
-    const resource = fixture.resource(body.variables.input.resourceKey);
-    return route.fulfill({
+    const { query, variables } = route.request().postDataJSON() as {
+      query: string;
+      variables: { input: { items: Input[] } };
+    };
+    if (!query.includes('PrepareLessonPlanInspectionBatch')) return route.fallback();
+    await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
         data: {
           result: {
-            ...resource,
-            teacherIds: ['T700'],
-            grouping: { group: 'FULL' },
-            timePlan: { group: 'FULL', dates, confirmed: true },
-            schedule: {
-              ...resource.schedule,
-              records: [
-                {
-                  recordKey: 'lesson-existing',
-                  checkDate: '2026-09-15',
-                  score: 99,
-                  chapter: '测试章节',
-                },
-              ],
-              historyState: 'CONFLICT',
-            },
-            status: {
-              ...resource.status,
-              state: 'TRUSTED',
-              upstreamCount: 1,
-              observationVersion: 2,
-              rounds: resource.status.rounds.map((round) => ({
-                ...round,
-                canPrepare: false,
-                blockers: ['HISTORY_CONFLICT'],
-              })),
-            },
-            upstreamSessionToken: 'observed',
+            upstreamSessionToken: 'token',
             expiresAt: null,
+            items: variables.input.items.map((item) => ({
+              resourceKey: item.resourceKey,
+              round: item.round,
+              failed: false,
+              result: {
+                preview: null,
+                operation: null,
+                material: { lesson: null, progress: null, assignment: null },
+                blockers: ['HISTORY_CONFLICT'],
+                upstreamSessionToken: 'token',
+                expiresAt: null,
+              },
+            })),
           },
         },
       }),
     });
   });
   await page.goto(`${path}?kind=lesson-plan&semester=1`);
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await page.getByRole('combobox', { name: '第1轮历史记录' }).click();
-  await page.getByText('2026-09-15 · 99分 · 测试章节', { exact: true }).click();
-  await page.getByLabel('历史核对原因').fill('已核对原始检查，关联第一轮');
-  await page.getByRole('button', { name: '确认历史关联', exact: true }).click();
-  await expect
-    .poll(() => resolved)
-    .toMatchObject({
-      recordKeys: ['lesson-existing', null, null],
-      ignoredRecordKeys: [],
-      reason: '已核对原始检查，关联第一轮',
-    });
-  expect(
-    fixture.requests.filter((item) =>
-      /mutation (Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(item.query),
-    ),
-  ).toHaveLength(0);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('历史关联有冲突', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '确认提交选中项' })).toBeDisabled();
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
 });
 
 test('短课单独确认时间，接口不携带检查类型且不改全学期规则', async ({ page }) => {
@@ -1939,8 +1934,8 @@ test('检查组织：教研组长固定本地所属系，没有跨系选择入�
 test('教案批次首屏仅本地，标签切换不读取，完整组员无课者在后', async ({ page }) => {
   const fixture = await setup(page);
   await page.goto(`${path}?kind=lesson-plan&semester=1`);
-  await expect(page.getByText('测试教研组', { exact: true })).toBeVisible();
-  const rows = page.locator('tbody tr');
+  await expect(page.getByText('测试教研组', { exact: true }).first()).toBeVisible();
+  const rows = page.locator('tbody tr[data-row-key]');
   await expect(rows.first()).toContainText('测试教师');
   await expect(rows.last()).toContainText('无课教师');
   await expect(page.getByRole('tab', { name: '第3次 · 2026-10-01', exact: true })).toHaveAttribute(
@@ -1963,107 +1958,298 @@ test('教案批次首屏仅本地，标签切换不读取，完整组员无课�
   expect(
     fixture.requests.filter((row) => row.query.includes('LessonPlanInspectionOverview')),
   ).toHaveLength(1);
-  await page.getByRole('button', { name: '同步上游数量', exact: true }).click();
-  await expect(page.getByText(/数量同步时间/)).toBeVisible();
-  expect(
-    fixture.requests.filter((row) => row.query.includes('SyncLessonPlanInspectionCounts')),
-  ).toHaveLength(1);
-  expect(
-    fixture.requests.some((row) => row.query.includes('RefreshTeachingInspectionStatus')),
-  ).toBe(false);
 });
 
-test('教案组织：默认系切到全校重置筛选并隔离旧数量响应', async ({ page }) => {
-  await setup(page);
-  let started!: () => void, release!: () => void;
-  const entered = new Promise<void>((resolve) => {
-    started = resolve;
+test('教案两阶段：先准备展示99分，人工点击后才串行提交', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('99', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('批量匹配章节', { exact: true })).toHaveCount(2);
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('spinbutton')).toHaveCount(0);
+  const times: number[] = [];
+  await page.route('**/graphql', async (route) => {
+    const { query } = route.request().postDataJSON() as { query: string };
+    if (query.includes('SaveLessonPlanInspection')) times.push(Date.now());
+    await route.fallback();
   });
-  const released = new Promise<void>((resolve) => {
+  await page.getByRole('button', { name: '确认提交选中项' }).click();
+  await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
+  expect(times).toHaveLength(2);
+  expect(times[1] - times[0]).toBeGreaterThanOrEqual(500);
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(2);
+});
+test('教案过期材料必须重新准备，不在确认提交时自动生成', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await page.clock.setFixedTime(new Date('2026-10-18T05:00:00Z'));
+  await page.getByRole('button', { name: '确认提交选中项' }).click();
+  await expect(page.getByText('材料已过期，请重新准备并确认', { exact: true })).toHaveCount(2);
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
+  expect(
+    fixture.requests.filter((r) => r.query.includes('PrepareLessonPlanInspectionBatch')),
+  ).toHaveLength(1);
+});
+test('教案停止后续提交，仅完成当前请求', async ({ page }) => {
+  await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
     release = resolve;
   });
+  let saves = 0;
   await page.route('**/graphql', async (route) => {
-    const body = route.request().postDataJSON() as { query: string };
-    if (!body.query.includes('SyncLessonPlanInspectionCounts')) return route.fallback();
-    started();
-    await released;
+    const { query } = route.request().postDataJSON() as { query: string };
+    if (query.includes('SaveLessonPlanInspection')) {
+      saves++;
+      await gate;
+    }
+    await route.fallback();
+  });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await page.getByRole('button', { name: '确认提交选中项' }).click();
+  await expect.poll(() => saves).toBe(1);
+  await page.getByRole('button', { name: '停止后续处理' }).click();
+  release();
+  await expect(page.getByText(/已停止后续处理/)).toBeVisible();
+  expect(saves).toBe(1);
+});
+
+test('教案未知提交保留原请求，刷新不自动重发', async ({ page }) => {
+  const fixture = await setup(page, { unknownSave: true });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await page.getByRole('button', { name: '确认提交选中项' }).click();
+  await expect(page.getByText('结果未确认', { exact: true })).toHaveCount(1);
+  await expect(page.getByText('提交成功', { exact: true })).toHaveCount(1);
+  const before = fixture.requests.filter((r) => /mutation Save/.test(r.query)).length;
+  await page.reload();
+  await expect(page.getByRole('button', { name: '查询／恢复原请求' }).first()).toBeVisible();
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(before);
+});
+
+test('教案窄屏仍原位准备与核对，无抽屉及页面横向溢出', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await setup(page);
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).press('Space');
+  await page.getByRole('button', { name: '读取并准备选中项' }).press('Enter');
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(
+    true,
+  );
+});
+
+test('教案准备失败直接重来，不遗留阻断记录', async ({ page }) => {
+  const fixture = await setup(page);
+  let first = true;
+  await page.route('**/graphql', async (route) => {
+    const { query } = route.request().postDataJSON() as { query: string };
+    if (!query.includes('PrepareLessonPlanInspectionBatch') || !first) return route.fallback();
+    first = false;
     await route.fulfill({
       contentType: 'application/json',
       body: JSON.stringify({
-        data: {
-          result: {
-            counts: [{ resourceKey: '1:a', count: 3 }],
-            observedAt: '2026-10-18T04:00:00Z',
-            upstreamSessionToken: 'late-old-scope',
-            expiresAt: null,
-          },
-        },
+        errors: [{ message: '读取失败', extensions: { code: 'INTERNAL_SERVER_ERROR' } }],
       }),
     });
   });
   await page.goto(`${path}?kind=lesson-plan&semester=1`);
-  await page.getByLabel('筛选组员').click();
-  await page.getByText('测试教师', { exact: true }).last().click();
-  await expect(page.locator('tbody tr')).toHaveCount(1);
-  await page.getByRole('button', { name: '同步上游数量', exact: true }).click();
-  await entered;
-  try {
-    await page.getByLabel('检查所属系').click();
-    await page.getByText('全校（全部系）', { exact: true }).last().click();
-    await expect(page).toHaveURL(/department=all/);
-    await expect(page.locator('tbody tr')).toHaveCount(2);
-    const response = page.waitForResponse(
-      (value) => value.request().postData()?.includes('SyncLessonPlanInspectionCounts') ?? false,
-    );
-    release();
-    await response;
-    await page.getByRole('tab', { name: '前半学期', exact: true }).click();
-    await expect(page).toHaveURL(/timeGroup=FIRST/);
-    await expect(page.getByText(/数量同步时间/)).toHaveCount(0);
-    expect(
-      await page.evaluate(() => localStorage.getItem('aigc-friendly-frontend.upstream.session.v2')),
-    ).not.toContain('late-old-scope');
-  } finally {
-    release();
-  }
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByRole('button', { name: '读取并准备选中项' })).toBeEnabled();
+  await expect(page.getByText('准备失败，请重新准备', { exact: true })).toHaveCount(2);
+  expect(
+    JSON.parse(
+      (await page.evaluate(() => sessionStorage.getItem('teaching-inspection.recovery.v1.700')))!,
+    ),
+  ).toEqual([]);
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
 });
 
-for (const firstResult of ['error', 'unknown'] as const) {
-  test(`教案同步：首次${firstResult}后手动核对可恢复准备及保存`, async ({ page }) => {
-    const fixture = await setup(page);
-    fixture.setTrusted();
-    let attempts = 0;
-    await page.route('**/graphql', async (route) => {
-      const body = route.request().postDataJSON() as { query: string };
-      if (!body.query.includes('RefreshTeachingInspectionStatus') || ++attempts > 1)
-        return route.fallback();
-      const resource = fixture.resource('1:a');
-      const response =
-        firstResult === 'error'
-          ? { errors: [{ message: '首次核对失败', extensions: { code: 'INTERNAL_SERVER_ERROR' } }] }
-          : {
-              data: {
+test('教案收集课程时停止准备，未发送项可以直接重来', async ({ page }) => {
+  const fixture = await setup(page);
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let details = 0;
+  await page.route('**/graphql', async (route) => {
+    const { query } = route.request().postDataJSON() as { query: string };
+    if (query.includes('LessonPlanInspectionDetail') && ++details === 2) await gate;
+    await route.fallback();
+  });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect.poll(() => details).toBe(2);
+  await page.getByRole('button', { name: '停止后续处理' }).click();
+  release();
+  await expect(page.getByRole('button', { name: '读取并准备选中项' })).toBeEnabled();
+  expect(
+    fixture.requests.filter((r) => r.query.includes('PrepareLessonPlanInspectionBatch')),
+  ).toHaveLength(0);
+  expect(
+    JSON.parse(
+      (await page.evaluate(() => sessionStorage.getItem('teaching-inspection.recovery.v1.700')))!,
+    ),
+  ).toEqual([]);
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+});
+
+test('教案恢复期间切换检查人，迟到结果报错且不会写回旧会话', async ({ page }) => {
+  await setup(page, { noStaff: true });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+  await page.reload();
+  let release!: () => void;
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered = false;
+  await page.route('**/graphql', async (route) => {
+    const { query } = route.request().postDataJSON() as { query: string };
+    if (query.includes('query TeachingInspectionOperation')) {
+      entered = true;
+      await gate;
+    }
+    if (query.includes('mutation LoginUpstreamSession'))
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            loginUpstreamSession: {
+              expiresAt: '2030-01-01T00:00:00Z',
+              upstreamSessionToken: 'new-inspector-token',
+            },
+          },
+        }),
+      });
+    await route.fallback();
+  });
+  await page.getByRole('button', { name: '查询／恢复原请求' }).first().click();
+  await expect.poll(() => entered).toBe(true);
+  await page.getByRole('button', { name: '切换校园网教职工' }).click();
+  await page.getByRole('textbox', { name: /工号|学号|账号/ }).fill('T701');
+  await page.getByPlaceholder('校园网登录密码').fill('synthetic-password');
+  await page.getByRole('button', { name: '授权并继续' }).click();
+  await expect(page.getByText(/检查人：T701/)).toBeVisible();
+  release();
+  await expect(
+    page.getByText('检查人不一致，材料已清理，请重新查询。', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(0);
+  expect(
+    await page.evaluate(() => localStorage.getItem('aigc-friendly-frontend.upstream.session.v2')),
+  ).toContain('new-inspector-token');
+});
+
+test('教案准备同步了两条历史，即使材料阻断也自动刷新本地完成轮次', async ({ page }) => {
+  const fixture = await setup(page);
+  let updated = false,
+    overviews = 0;
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as {
+      query: string;
+      variables: { input: { items: Input[] } };
+    };
+    if (body.query.includes('PrepareLessonPlanInspectionBatch')) {
+      updated = true;
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              upstreamSessionToken: 'synced-token',
+              expiresAt: null,
+              items: body.variables.input.items.map((item) => ({
+                resourceKey: item.resourceKey,
+                round: item.round,
+                failed: false,
                 result: {
-                  schedule: resource.schedule,
-                  status: { ...resource.status, state: 'UNKNOWN' },
-                  upstreamSessionToken: 'unknown-token',
+                  preview: null,
+                  operation: null,
+                  blockers: ['STALE_PREVIEW'],
+                  material: { lesson: null, progress: null, assignment: null },
+                  upstreamSessionToken: 'synced-token',
                   expiresAt: null,
                 },
+              })),
+            },
+          },
+        }),
+      });
+    }
+    if (body.query.includes('LessonPlanInspectionOverview')) {
+      overviews++;
+      if (updated) {
+        const resources = ['1:a', '1:b'].map((key) => {
+          const original = fixture.resource(key);
+          return {
+            ...original,
+            teacherIds: ['T700'],
+            grouping: { group: 'FULL' },
+            timePlan: { group: 'FULL', dates, confirmed: true },
+            schedule: { ...original.schedule, version: 2 },
+            status: {
+              ...original.status,
+              state: 'TRUSTED',
+              upstreamCount: 2,
+              rounds: original.status.rounds.map((r) => ({
+                ...r,
+                covered: r.round <= 2,
+                blockers: r.round <= 2 ? ['COMPLETED'] : [],
+              })),
+            },
+          };
+        });
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              result: {
+                today: '2026-10-18',
+                departmentId: 'ORG0302',
+                canSelectDepartment: true,
+                departments: [{ id: 'ORG0302', name: '信息工程系' }],
+                roster: [
+                  { staffId: 'T700', name: '测试教师', groupId: 'G1', groupName: '测试教研组' },
+                ],
+                groupPlans: [{ group: 'FULL', dates, confirmed: true }],
+                resources,
               },
-            };
-      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(response) });
-    });
-    await page.goto(`${path}?kind=lesson-plan&semester=1`);
-    await page.getByRole('button', { name: '查看检查', exact: true }).first().click();
-    const prepare = page.getByRole('button', { name: '准备材料', exact: true });
-    await expect(prepare).toBeDisabled();
-    await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
-    await expect(prepare).toBeEnabled();
-    await prepare.click();
-    await expect(page.getByText('预填材料，请核对后提交')).toBeVisible();
-    await page.getByRole('checkbox', { name: '我已核对课程、日期及上述材料' }).check();
-    await expect(
-      page.getByRole('button', { name: '确认并保存本条检查', exact: true }),
-    ).toBeEnabled();
+            },
+          }),
+        });
+      }
+    }
+    await route.fallback();
   });
-}
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '读取并准备选中项' }).click();
+  await expect.poll(() => overviews).toBe(2);
+  await expect(page.getByRole('button', { name: '读取并准备选中项' })).toBeEnabled();
+  await page.getByRole('tab', { name: '第1次 · 2026-09-10', exact: true }).click();
+  await expect(page.getByText('本轮已完成', { exact: true })).toHaveCount(2);
+  expect(
+    fixture.requests.filter((r) => r.query.includes('RefreshTeachingInspectionStatus')),
+  ).toHaveLength(0);
+});

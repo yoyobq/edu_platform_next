@@ -1,7 +1,20 @@
 // src/labs/teaching-inspection/ui/lesson-workbench.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Button, Card, Drawer, Empty, Input, Select, Space, Table, Tabs, Tag } from 'antd';
-import { Modal } from 'antd';
+import {
+  Alert,
+  Button,
+  Card,
+  Checkbox,
+  Empty,
+  Input,
+  Progress,
+  Select,
+  Space,
+  Table,
+  Tabs,
+  Tag,
+  Tooltip,
+} from 'antd';
 import { useBeforeUnload, useBlocker } from 'react-router';
 
 import type {
@@ -15,12 +28,31 @@ import { useWidthBand } from '@/shared/ui/responsive-layout';
 import * as flow from '../infrastructure/api';
 import * as api from '../infrastructure/lesson-api';
 import type { readLocation } from '../infrastructure/location';
+import type { RecoveryEntry } from '../infrastructure/recovery';
+import {
+  closureDetails,
+  putRecovery,
+  readRecovery,
+  removeRecovery,
+} from '../infrastructure/recovery';
 import { dueRound } from '../lesson-policy';
-import type { TimeGroup } from '../model';
-import { blockerText, groupNames } from '../model';
-
-import { InspectionDetail } from './inspection-detail';
+import type { Prepared, PrepareInput, TimeGroup } from '../model';
+import { blockerText, groupNames, operationText } from '../model';
 type Controller = ReturnType<typeof useUpstreamLoginModalController<never>>;
+type Draft = {
+  prepared?: Prepared;
+  request?: RecoveryEntry;
+  message: string;
+  state: 'ready' | 'error' | 'unknown' | 'saved' | 'busy';
+};
+type Row = {
+  key: string;
+  name: string;
+  group: string;
+  course?: api.LessonSummary;
+  round: number;
+  date?: string;
+};
 export function LessonWorkbench({
   location,
   onLocation,
@@ -32,175 +64,528 @@ export function LessonWorkbench({
   account: UpstreamAccountIdentity;
   session: Controller;
 }) {
-  const container = useRef<HTMLDivElement>(null);
-  const { band } = useWidthBand(container, [{ max: 767, value: 'compact' }], 'wide');
   const [work, setWork] = useState<api.LessonOverview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [counts, setCounts] = useState<Record<string, number | null>>({});
-  const [countTime, setCountTime] = useState('');
-  const group = (location.timeGroup ?? 'FULL') as TimeGroup;
-  const [rounds, setRounds] = useState<Partial<Record<TimeGroup, number>>>({});
+  const [selected, setSelected] = useState<string[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [teacher, setTeacher] = useState('');
+  const [keyword, setKeyword] = useState('');
   const [customRounds, setCustomRounds] = useState<Record<string, number>>({});
-  const [teacher, setTeacher] = useState(location.teacherId ?? '');
-  const [keyword, setKeyword] = useState(location.keyword ?? '');
-  const [selected, setSelected] = useState<string | null>(location.resourceKey ?? null);
-  const [resource, setResource] = useState<api.LessonResource | null>(null);
-  const [initialRound, setInitialRound] = useState<number>();
-  const [dirty, setDirty] = useState(false);
-  const [historySynced, setHistorySynced] = useState(false);
-  const blocker = useBlocker(dirty);
-  const serial = useRef(0);
-  const countSerial = useRef(0);
-  const [closePending, setClosePending] = useState(false);
-  const liveSession = useRef(session);
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState({
+    done: 0,
+    total: 0,
+    label: '',
+    success: 0,
+    failed: 0,
+    unknown: 0,
+  });
+  const [entries, setEntries] = useState<RecoveryEntry[]>([]);
+  const stop = useRef(false);
+  const running = useRef(false);
+  const alive = useRef(true);
+  const latestSession = useRef(session);
+  const epoch = useRef(0);
+  const container = useRef<HTMLDivElement>(null);
+  const { band } = useWidthBand(container, [{ max: 767, value: 'compact' }], 'wide');
   useEffect(() => {
-    liveSession.current = session;
+    latestSession.current = session;
   }, [session]);
-  useBeforeUnload(
-    useCallback(
-      (event) => {
-        if (dirty) {
-          event.preventDefault();
-          event.returnValue = '';
-        }
-      },
-      [dirty],
-    ),
-  );
   const semesterId = location.semesterId!;
+  const group = (location.timeGroup ?? 'FULL') as TimeGroup;
+  const blocker = useBlocker(busy);
+  useEffect(() => {
+    alive.current = true;
+    const counter = epoch;
+    return () => {
+      alive.current = false;
+      stop.current = true;
+      counter.current++;
+    };
+  }, []);
+  useBeforeUnload(
+    useCallback((event) => {
+      if (running.current) {
+        event.preventDefault();
+        event.returnValue = '';
+      }
+    }, []),
+  );
+  useEffect(() => {
+    if (blocker.state === 'blocked') {
+      stop.current = true;
+      blocker.reset();
+      setError('已停止后续处理，请等待当前请求返回后再离开。');
+    }
+  }, [blocker]);
+  const recoveries = useCallback(() => {
+    const values = readRecovery(account.accountId);
+    setEntries(
+      values.filter(
+        (e) =>
+          e.kind === 'LESSON_PLAN' &&
+          e.semesterId === semesterId &&
+          (!e.upstreamLoginId ||
+            e.upstreamLoginId === latestSession.current.session?.upstreamLoginId),
+      ),
+    );
+    return values;
+  }, [account.accountId, semesterId]);
   const reload = useCallback(async () => {
-    const id = ++serial.current;
+    const id = ++epoch.current;
     setLoading(true);
-    setError('');
     try {
       const result = await api.overview(semesterId, location.departmentId);
-      if (id === serial.current) setWork(result);
+      if (alive.current && id === epoch.current) {
+        setWork(result);
+        setDrafts((old) => {
+          const next = { ...old };
+          for (const resource of result.resources) {
+            for (const status of resource.status.rounds) {
+              const key = `${resource.resourceKey}:${status.round}`;
+              const draft = next[key];
+              if (!draft || draft.state === 'saved' || draft.state === 'unknown') continue;
+              if (status.covered) delete next[key];
+              else if (
+                draft.state === 'ready' &&
+                (status.blockers.includes('NEXT_ROUND_REQUIRED') ||
+                  draft.prepared?.preview?.scheduleVersion !== resource.schedule.version)
+              )
+                next[key] = {
+                  ...draft,
+                  state: 'error',
+                  message: '本地检查状态已更新，请重新准备并确认',
+                };
+            }
+          }
+          return next;
+        });
+      }
     } catch (cause) {
-      if (id === serial.current)
-        setError(cause instanceof Error ? cause.message : '本地总览读取失败');
+      if (alive.current) setError(cause instanceof Error ? cause.message : '读取失败');
     } finally {
-      if (id === serial.current) setLoading(false);
+      if (alive.current && id === epoch.current) setLoading(false);
     }
   }, [semesterId, location.departmentId]);
   useEffect(() => {
     void reload();
-    const counter = serial;
-    return () => {
-      counter.current++;
-    };
   }, [reload]);
   useEffect(() => {
-    countSerial.current++;
-    setCounts({});
-    setCountTime('');
-    setSyncing(false);
-    setResource(null);
-    setDirty(false);
-    const counter = countSerial;
-    return () => {
-      counter.current++;
-    };
-  }, [session.session?.upstreamLoginId, location.departmentId]);
-  const patch = useCallback((next: api.LessonResource) => {
-    setResource(next);
-    setWork((old) =>
-      old
-        ? {
-            ...old,
-            resources: old.resources.map((row) =>
-              row.resourceKey === next.resourceKey ? next : row,
-            ),
-          }
-        : old,
+    if (running.current) {
+      stop.current = true;
+      setError('检查人或检查范围已变化，材料已清理，请重新查询。');
+    }
+    setDrafts({});
+    setSelected([]);
+    try {
+      recoveries();
+    } catch (cause) {
+      setError(String(cause));
+    }
+  }, [
+    account.accountId,
+    semesterId,
+    session.session?.upstreamLoginId,
+    location.departmentId,
+    recoveries,
+  ]);
+  const plan = work?.groupPlans.find((p) => p.group === group);
+  const round = location.round ?? dueRound(plan?.dates ?? [], work?.today ?? '');
+  const rows: Row[] = [];
+  const seen = new Set<string>();
+  for (const member of work?.roster ?? []) {
+    if (teacher && member.staffId !== teacher) continue;
+    const courses = work!.resources.filter(
+      (c) =>
+        c.teacherIds.includes(member.staffId) &&
+        (c.grouping?.group ?? 'CUSTOM') === group &&
+        (!keyword || c.courseName.includes(keyword)),
     );
-  }, []);
-  useEffect(() => {
-    let active = true;
-    if (!selected) {
-      setResource(null);
+    for (const course of courses) {
+      const r =
+        group === 'CUSTOM'
+          ? (customRounds[course.resourceKey] ?? dueRound(course.schedule.dates, work!.today))
+          : round;
+      const key = `${course.resourceKey}:${r}`;
+      if (!seen.has(key)) {
+        rows.push({
+          key,
+          name: course.teacherNames.join('、'),
+          group: member.groupName,
+          course,
+          round: r,
+          date: course.schedule.dates[r - 1],
+        });
+        seen.add(key);
+      }
+    }
+    if (!courses.length && !keyword)
+      rows.push({
+        key: `staff:${member.staffId}`,
+        name: member.name,
+        group: member.groupName,
+        round,
+      });
+  }
+  rows.sort(
+    (a, b) =>
+      Number(Boolean(b.course)) - Number(Boolean(a.course)) ||
+      a.group.localeCompare(b.group) ||
+      a.name.localeCompare(b.name),
+  );
+  const chosen = rows.filter((row) => selected.includes(row.key) && row.course);
+  function track(entry: RecoveryEntry) {
+    putRecovery(entry);
+    recoveries();
+  }
+  function forget(ids: string[]) {
+    removeRecovery(account.accountId, ids);
+    recoveries();
+  }
+  function patch(key: string, value: Draft) {
+    if (alive.current) setDrafts((old) => ({ ...old, [key]: value }));
+  }
+  function hasPending(row: Row) {
+    return entries.some(
+      (e) =>
+        e.action === 'SAVE' &&
+        e.resourceKey === row.course?.resourceKey &&
+        (e.prepare?.round ?? e.round) === row.round,
+    );
+  }
+  function eligible(row: Row) {
+    return Boolean(
+      row.course &&
+      row.date &&
+      row.date <= (work?.today ?? '') &&
+      !row.course.status.rounds[row.round - 1]?.covered &&
+      drafts[row.key]?.state !== 'saved',
+    );
+  }
+  async function run(submit: boolean) {
+    if (running.current) return;
+    const controller = latestSession.current;
+    let current = controller.session;
+    if (!current) {
+      controller.openLoginModal();
       return;
     }
-    setLoading(true);
+    const upstreamIdentity = current.upstreamLoginId;
+    const sameIdentity = () => latestSession.current.session?.upstreamLoginId === upstreamIdentity;
+    const publish = (key: string, value: Draft) => {
+      if (sameIdentity()) patch(key, value);
+    };
+    const queue = chosen.filter(
+      (row) => eligible(row) && !hasPending(row) && (!submit || drafts[row.key]?.state === 'ready'),
+    );
+    if (!queue.length) return;
+    running.current = true;
+    stop.current = false;
+    setBusy(true);
     setError('');
-    setHistorySynced(false);
-    const controller = liveSession.current;
-    void (async () => {
-      try {
-        const current = controller.session;
-        if (current) {
-          try {
-            const observed = await flow.refreshStatus(
-              { semesterId, kind: 'LESSON_PLAN', resourceKey: selected },
-              current.upstreamSessionToken,
-            );
-            if (!active) return;
-            controller.persistSessionFromResult(current, observed);
-            setHistorySynced(observed.status.state === 'TRUSTED');
-          } catch (cause) {
-            if (!active) return;
-            setError(cause instanceof Error ? cause.message : '历史核对失败，以下为本地记录');
-            if (hasGraphQLCategory(cause, 'UNAUTHENTICATED'))
-              controller.openLoginModalForExpiredSession({
-                session: current,
-                loginError: '校园网会话已失效，请重新连接后核对',
+    const unfinishedPreparations = new Set<string>();
+    let touched = false;
+    let done = 0,
+      success = 0,
+      failed = 0,
+      unknown = 0;
+    const update = (label: string) => {
+      if (alive.current)
+        setProgress({ done, total: queue.length, success, failed, unknown, label });
+    };
+    // Rolling credentials belong to this queue; never read a stale render between requests.
+    const persist = (result: { upstreamSessionToken: string | null; expiresAt: string | null }) => {
+      if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请重新查询。');
+      controller.persistSessionFromResult(current!, result);
+      if (result.upstreamSessionToken)
+        current = {
+          ...current!,
+          upstreamSessionToken: result.upstreamSessionToken,
+          expiresAt: result.expiresAt ?? current!.expiresAt,
+        };
+    };
+    try {
+      if (!submit)
+        forget(
+          entries
+            .filter(
+              (entry) =>
+                entry.action === 'PREPARE' &&
+                queue.some(
+                  (row) =>
+                    row.course!.resourceKey === entry.resourceKey &&
+                    row.round === (entry.prepare?.round ?? entry.round),
+                ),
+            )
+            .map((entry) => entry.clientRequestId),
+        );
+      update(submit ? '开始提交' : '开始准备');
+      if (!submit) {
+        for (let offset = 0; offset < queue.length && !stop.current; offset += 10) {
+          const batch = queue.slice(offset, offset + 10);
+          const requests: { row: Row; entry: RecoveryEntry; input: PrepareInput }[] = [];
+          for (const row of batch) {
+            if (stop.current || !sameIdentity()) break;
+            const detail = await api.detail(semesterId, row.course!.resourceKey);
+            if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请重新查询。');
+            const checkDate = detail.schedule.dates[row.round - 1];
+            if (checkDate !== row.date) {
+              publish(row.key, { state: 'error', message: '检查日期已变化，请重新读取列表' });
+              failed++;
+              done++;
+              continue;
+            }
+            const input: PrepareInput = {
+              semesterId,
+              kind: 'LESSON_PLAN',
+              resourceKey: detail.resourceKey,
+              round: row.round,
+              checkDate,
+              scheduleVersion: detail.schedule.version,
+              clientRequestId: crypto.randomUUID(),
+            };
+            const previous = drafts[row.key]?.request;
+            if (previous) forget([previous.clientRequestId]);
+            const entry: RecoveryEntry = {
+              ...input,
+              action: 'PREPARE',
+              accountId: account.accountId,
+              upstreamLoginId: current!.upstreamLoginId,
+              prepare: input,
+            };
+            track(entry);
+            unfinishedPreparations.add(entry.clientRequestId);
+            requests.push({ row, entry, input });
+            publish(row.key, { state: 'busy', message: '正在准备' });
+          }
+          if (stop.current || !sameIdentity()) break;
+          if (!requests.length) continue;
+          update(`正在准备 ${requests[0].row.name} 等 ${requests.length} 项`);
+          touched = true;
+          const response = await api.prepareBatch(
+            requests.map((r) => r.input),
+            current!.upstreamSessionToken,
+          );
+          persist(response);
+          for (const request of requests) {
+            const result = response.items.find(
+              (item) =>
+                item.resourceKey === request.input.resourceKey &&
+                item.round === request.input.round,
+            )?.result;
+            if (result?.preview && !result.blockers.length) {
+              track({ ...request.entry, operationId: result.operation?.id });
+              publish(request.row.key, {
+                state: 'ready',
+                message: '已准备，待确认',
+                prepared: result,
+                request: request.entry,
               });
+              unfinishedPreparations.delete(request.entry.clientRequestId);
+              success++;
+            } else {
+              if (result) forget([request.entry.clientRequestId]);
+              publish(request.row.key, {
+                state: 'error',
+                message: result
+                  ? result.blockers.map(blockerText).join('；') || '材料无法准备'
+                  : '准备失败，请重新准备',
+              });
+              failed++;
+            }
+            done++;
+            update('准备数据中');
           }
         }
-        const result = await api.detail(semesterId, selected);
-        if (active) patch(result);
-      } catch (cause) {
-        if (active) setError(cause instanceof Error ? cause.message : '课程读取失败');
-      } finally {
-        if (active) setLoading(false);
+      } else {
+        for (const row of queue) {
+          if (stop.current || !sameIdentity()) break;
+          const draft = drafts[row.key];
+          const prepared = draft.prepared!;
+          const preview = prepared.preview!;
+          if (Date.parse(preview.expiresAt) <= Date.now()) {
+            publish(row.key, { ...draft, state: 'error', message: '材料已过期，请重新准备并确认' });
+            failed++;
+            done++;
+            update('需要重新准备');
+            continue;
+          }
+          const input = {
+            semesterId,
+            kind: 'LESSON_PLAN' as const,
+            resourceKey: row.course!.resourceKey,
+            previewId: preview.id,
+            clientRequestId: crypto.randomUUID(),
+            scores: prepared.material.lesson!.scores,
+          };
+          const entry: RecoveryEntry = {
+            ...input,
+            action: 'SAVE',
+            accountId: account.accountId,
+            upstreamLoginId: current!.upstreamLoginId,
+            parentRequestId: draft.request?.clientRequestId,
+            round: row.round,
+            checkDate: preview.checkDate,
+          };
+          track(entry);
+          publish(row.key, { ...draft, state: 'busy', message: '正在提交' });
+          update(`正在提交 ${row.name} · ${row.course!.courseName}`);
+          try {
+            touched = true;
+            const response = await flow.save(input, current!.upstreamSessionToken);
+            persist(response);
+            if (['SAVED', 'VERIFIED'].includes(response.operation.state)) {
+              forget([
+                entry.clientRequestId,
+                ...(entry.parentRequestId ? [entry.parentRequestId] : []),
+              ]);
+              publish(row.key, {
+                state: 'saved',
+                message: response.syncWarning ? `提交成功；${response.syncWarning}` : '提交成功',
+                prepared,
+              });
+              success++;
+            } else {
+              publish(row.key, {
+                ...draft,
+                state: 'unknown',
+                message: operationText(response.operation.state),
+              });
+              unknown++;
+            }
+          } catch (cause) {
+            publish(row.key, {
+              ...draft,
+              state: 'unknown',
+              message: '提交未完成，请查询原请求，勿重复提交',
+            });
+            unknown++;
+            if (hasGraphQLCategory(cause, 'UNAUTHENTICATED')) throw cause;
+          }
+          done++;
+          update('等待下一项');
+          if (done < queue.length && !stop.current)
+            await new Promise<void>((resolve) =>
+              window.setTimeout(resolve, 500 + Math.floor(Math.random() * 1501)),
+            );
+        }
       }
-    })();
-    return () => {
-      active = false;
-    };
-  }, [selected, semesterId, patch, session.session?.upstreamLoginId]);
-  async function refreshCourse() {
-    if (!selected) return [];
-    const result = await api.detail(semesterId, selected);
-    patch(result);
-    setCounts((old) => {
-      const next = { ...old };
-      delete next[selected];
-      return next;
-    });
-    return [result];
-  }
-  async function sync() {
-    const current = session.session;
-    if (!current) {
-      session.openLoginModal();
-      return;
-    }
-    if (!work) return;
-    const id = countSerial.current;
-    setSyncing(true);
-    setError('');
-    try {
-      const result = await api.syncCounts(
-        semesterId,
-        work.departmentId,
-        current.upstreamSessionToken,
-      );
-      if (id !== countSerial.current) return;
-      session.persistSessionFromResult(current, result);
-      setCounts(Object.fromEntries(result.counts.map((row) => [row.resourceKey, row.count])));
-      setCountTime(result.observedAt);
+      update(stop.current ? '已停止后续处理' : '本次处理结束');
     } catch (cause) {
-      if (id !== countSerial.current) return;
-      setError(cause instanceof Error ? cause.message : '数量同步失败，保留原记录');
+      setError(cause instanceof Error ? cause.message : '处理未完成，请核对原请求');
+      if (sameIdentity())
+        setDrafts((old) =>
+          Object.fromEntries(
+            Object.entries(old).map(([key, draft]) => [
+              key,
+              draft.state === 'busy'
+                ? {
+                    ...draft,
+                    state: (submit ? 'unknown' : 'error') as Draft['state'],
+                    message: submit ? '请求未完成，请查询原请求' : '准备失败，请重新准备',
+                  }
+                : draft,
+            ]),
+          ),
+        );
+      update('已暂停，请核对原请求');
+
       if (hasGraphQLCategory(cause, 'UNAUTHENTICATED'))
-        session.openLoginModalForExpiredSession({
-          session: current,
-          loginError: '校园网会话已失效，请重新连接',
+        controller.openLoginModalForExpiredSession({
+          session: current!,
+          loginError: '会话已失效，重新连接后请主动继续；不会自动提交。',
         });
     } finally {
-      if (id === countSerial.current) setSyncing(false);
+      if (!submit && unfinishedPreparations.size) {
+        try {
+          forget([...unfinishedPreparations]);
+        } catch {
+          setError('恢复记录清理失败，请重新查询后再操作。');
+        }
+        if (sameIdentity())
+          setDrafts((old) =>
+            Object.fromEntries(
+              Object.entries(old).map(([key, draft]) => [
+                key,
+                draft.state === 'busy'
+                  ? { state: 'error' as const, message: '准备已停止或失败，请重新准备' }
+                  : draft,
+              ]),
+            ),
+          );
+      }
+      if (touched && alive.current && sameIdentity()) await reload();
+      running.current = false;
+      if (alive.current) {
+        setBusy(false);
+        recoveries();
+      }
+    }
+  }
+  async function recover(entry: RecoveryEntry, close = false) {
+    if (running.current) return;
+    const identity = session.session?.upstreamLoginId;
+    const assertIdentity = () => {
+      if (
+        identity !== latestSession.current.session?.upstreamLoginId ||
+        (entry.upstreamLoginId && identity !== entry.upstreamLoginId)
+      ) {
+        setDrafts({});
+        setSelected([]);
+        throw new Error('检查人不一致，材料已清理，请重新查询。');
+      }
+    };
+    running.current = true;
+    setBusy(true);
+    setError('');
+    try {
+      assertIdentity();
+      const details = closureDetails(entry, readRecovery(account.accountId));
+      const op =
+        close && details
+          ? await flow.closeUnstartedRequest({ ...entry, ...details })
+          : await flow.operation(entry);
+      assertIdentity();
+      if (['SAVED', 'VERIFIED', 'REJECTED'].includes(op.state)) {
+        forget([
+          entry.clientRequestId,
+          ...(['SAVED', 'VERIFIED'].includes(op.state) && entry.parentRequestId
+            ? [entry.parentRequestId]
+            : []),
+        ]);
+        const key = `${entry.resourceKey}:${op.round}`;
+        patch(key, {
+          state: ['SAVED', 'VERIFIED'].includes(op.state) ? 'saved' : 'error',
+          message: operationText(op.state),
+        });
+      } else if (entry.action === 'PREPARE' && op.state === 'PREPARED' && entry.prepare) {
+        const current = session.session;
+        if (!current) {
+          session.openLoginModal();
+          return;
+        }
+        const result = await flow.prepare(entry.prepare, current.upstreamSessionToken);
+        assertIdentity();
+        latestSession.current.persistSessionFromResult(current, result);
+        if (result.preview && !result.blockers.length)
+          patch(`${entry.resourceKey}:${op.round}`, {
+            state: 'ready',
+            message: '已恢复材料，待确认',
+            prepared: result,
+            request: entry,
+          });
+        else {
+          forget([entry.clientRequestId]);
+          setError('原材料已失效，请重新准备并确认。');
+        }
+      } else setError(`${operationText(op.state)}；暂不重新发送。`);
+      await reload();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : '恢复失败');
+    } finally {
+      running.current = false;
+      setBusy(false);
     }
   }
   if (!work)
@@ -218,236 +603,350 @@ export function LessonWorkbench({
         </Space>
       </div>
     );
-  const plan = work.groupPlans.find((item) => item.group === group);
-  const round = location.round ?? rounds[group] ?? dueRound(plan?.dates ?? [], work.today);
-  const classified = work.resources.filter((row) => (row.grouping?.group ?? 'CUSTOM') === group);
-  const groups = [...new Map(work.roster.map((member) => [member.groupId, member.groupName]))];
-  const coursesFor = (staffId: string) =>
-    classified.filter(
-      (row) => row.teacherIds.includes(staffId) && (!keyword || row.courseName.includes(keyword)),
-    );
-  function course(row: api.LessonSummary) {
-    const activeRound =
-      group === 'CUSTOM'
-        ? (customRounds[row.resourceKey] ?? dueRound(row.schedule.dates, work!.today))
-        : round;
-    const date = row.schedule.dates[activeRound - 1];
-    const status = row.status.rounds[activeRound - 1];
-    return (
-      <div key={row.resourceKey} className="flex flex-col gap-2 py-2">
-        <strong>{row.courseName}</strong>
-        {!row.timePlan.confirmed && <Tag>时间待确认</Tag>}
-        {row.grouping?.needsReview && <small>{row.grouping.reason}</small>}
-        {group === 'CUSTOM' && (
-          <Tabs
-            size="small"
-            activeKey={String(activeRound)}
-            onChange={(key) =>
-              setCustomRounds((old) => ({ ...old, [row.resourceKey]: Number(key) }))
-            }
-            items={[1, 2, 3].map((value) => ({
-              key: String(value),
-              label: `第${value}次 · ${row.schedule.dates[value - 1] ?? '未确认'}`,
-            }))}
-          />
-        )}
-        <Space wrap>
-          <span>
-            第{activeRound}次 · {date ?? '日期未确认'}
-          </span>
-          <Tag>
-            {!date || date > work!.today ? '未到期' : status?.covered ? '本地已覆盖' : '待核对'}
-          </Tag>
-          <Button
-            type="link"
-            disabled={loading || dirty}
-            onClick={() => {
-              setInitialRound(activeRound);
-              setResource(null);
-              setSelected(row.resourceKey);
-            }}
-          >
-            查看检查
-          </Button>
-        </Space>
-        <small>
-          数量：
-          {Object.hasOwn(counts, row.resourceKey)
-            ? (counts[row.resourceKey] ?? '未知')
-            : (row.status.upstreamCount ?? '尚未读取')}{' '}
-          · 历史核对：
-          {row.status.observedAt ? new Date(row.status.observedAt).toLocaleString() : '尚未核对'}
-        </small>
-        {row.status.rounds.some((item) => item.round < activeRound && !item.covered) && (
-          <small>较早轮次仍需核对</small>
-        )}
-        {row.blockers.length > 0 && <small>{row.blockers.map(blockerText).join('；')}</small>}
-      </div>
-    );
-  }
   return (
     <div ref={container} className="flex flex-col gap-4">
       <Space wrap>
         <Select
           aria-label="检查所属系"
-          disabled={!work.canSelectDepartment || dirty}
+          disabled={busy || !work.canSelectDepartment}
           value={work.departmentId ?? 'all'}
           style={{ width: 200 }}
           options={[
             ...(work.canSelectDepartment ? [{ value: 'all', label: '全校（全部系）' }] : []),
-            ...work.departments.map((row) => ({ value: row.id, label: row.name })),
+            ...work.departments.map((d) => ({ value: d.id, label: d.name })),
           ]}
           onChange={(value) =>
             onLocation({
               ...location,
               departmentId: value === 'all' ? null : value,
               resourceKey: undefined,
-              teacherId: undefined,
-              timeGroup: undefined,
-              round: undefined,
-              page: 1,
             })
           }
         />
-        <Button loading={loading} disabled={dirty || syncing} onClick={() => void reload()}>
+        <Button disabled={busy} loading={loading} onClick={() => void reload()}>
           重新读取本地数据
         </Button>
-        <Button loading={syncing} disabled={dirty || loading} onClick={() => void sync()}>
-          同步上游数量
-        </Button>
       </Space>
-      <small>
-        首屏为本地记录；数量同步不代表详细历史已核验。
-        {countTime && ` 数量同步时间：${new Date(countTime).toLocaleString()}`}
-      </small>
-      {error && <Alert type="error" title={error} />}
+      {error && <Alert type="warning" title={error} />}
       <Tabs
         activeKey={group}
-        onChange={(key) => {
-          if (!dirty) onLocation({ ...location, timeGroup: key, round: undefined });
+        onChange={(value) => {
+          if (!busy) {
+            setSelected([]);
+            onLocation({ ...location, timeGroup: value, round: undefined, resourceKey: undefined });
+          }
         }}
         items={(['FULL', 'FIRST', 'SECOND', 'CUSTOM'] as const).map((value) => ({
           key: value,
           label: value === 'CUSTOM' ? '单独处理' : groupNames[value],
+          disabled: busy,
         }))}
       />
       {group !== 'CUSTOM' && (
         <Tabs
           activeKey={String(round)}
-          onChange={(key) => {
-            if (!dirty) {
-              setRounds((old) => ({ ...old, [group]: Number(key) }));
-              onLocation({ ...location, round: Number(key) });
-            }
+          onChange={(value) => {
+            setSelected([]);
+            onLocation({ ...location, round: Number(value) });
           }}
           items={[1, 2, 3].map((value) => ({
             key: String(value),
             label: `第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`,
+            disabled: busy,
           }))}
         />
       )}
       <Space wrap>
         <Select
           aria-label="筛选组员"
+          disabled={busy}
           allowClear
           showSearch
           optionFilterProp="label"
           placeholder="全部组员"
           style={{ width: 200 }}
           value={teacher || undefined}
-          options={work.roster.map((member) => ({ value: member.staffId, label: member.name }))}
+          options={work.roster.map((m) => ({ value: m.staffId, label: m.name }))}
           onChange={(value) => setTeacher(value ?? '')}
         />
         <Input.Search
           aria-label="搜索教案课程"
+          disabled={busy}
           placeholder="搜索课程"
           allowClear
           onSearch={setKeyword}
         />
       </Space>
-      {groups.map(([id, name]) => (
-        <Card key={id} title={name}>
-          <Table
-            rowKey="staffId"
-            size="small"
-            pagination={{ pageSize: 20 }}
-            dataSource={work.roster
-              .filter((member) => member.groupId === id && (!teacher || teacher === member.staffId))
-              .sort(
-                (a, b) =>
-                  Number(coursesFor(b.staffId).length > 0) -
-                    Number(coursesFor(a.staffId).length > 0) || a.name.localeCompare(b.name),
-              )}
-            columns={[
-              { title: '组员', dataIndex: 'name', width: 120 },
-              {
-                title: '本批课程',
-                render: (_, member) => {
-                  const rows = coursesFor(member.staffId);
-                  return rows.length ? rows.map(course) : <span>本批无课程</span>;
+      <Table<Row>
+        size="small"
+        rowKey="key"
+        dataSource={rows}
+        pagination={{ pageSize: 20 }}
+        scroll={band === 'compact' ? undefined : { x: 900 }}
+        rowSelection={{
+          selectedRowKeys: selected,
+          onChange: (keys) => setSelected(keys.map(String)),
+          getCheckboxProps: (row) => ({ disabled: busy || !eligible(row) || hasPending(row) }),
+        }}
+        columns={
+          band === 'compact'
+            ? [
+                {
+                  title: '教案检查',
+                  render: (_, row) => (
+                    <Space orientation="vertical">
+                      <small>{row.group}</small>
+                      <strong>
+                        {row.name} · {row.course?.courseName ?? '本批无课程'}
+                      </strong>
+                      <span>
+                        第{row.round}次 · {row.date ?? '待确认'}
+                      </span>
+                      {group === 'CUSTOM' && row.course && (
+                        <Select
+                          aria-label={`${row.course.courseName}轮次`}
+                          disabled={busy}
+                          value={row.round}
+                          options={[1, 2, 3].map((value) => ({ value, label: `第${value}次` }))}
+                          onChange={(value) => {
+                            setSelected([]);
+                            setCustomRounds((old) => ({
+                              ...old,
+                              [row.course!.resourceKey]: value,
+                            }));
+                          }}
+                        />
+                      )}
+                      <small>
+                        材料来源：
+                        {drafts[row.key]?.prepared?.material.lesson?.sourceDate ?? '尚未准备'}
+                      </small>
+                      <div className="whitespace-pre-wrap break-words">
+                        {drafts[row.key]?.prepared?.material.lesson?.chapter}
+                      </div>
+                      {drafts[row.key]?.prepared?.material.lesson && (
+                        <Tooltip
+                          title={drafts[row.key]
+                            .prepared!.material.lesson!.scoreItems.map((item, i) =>
+                              drafts[row.key].prepared!.material.lesson!.scores[i] < item.maximum
+                                ? `${item.name}扣1分`
+                                : '',
+                            )
+                            .filter(Boolean)
+                            .join('；')}
+                        >
+                          <span>
+                            {drafts[row.key].prepared!.material.lesson!.scores.reduce(
+                              (a, b) => a + b,
+                              0,
+                            )}{' '}
+                            分
+                          </span>
+                        </Tooltip>
+                      )}
+                      <Tag>{drafts[row.key]?.message ?? (row.course ? '未准备' : '无课程')}</Tag>
+                      {entries
+                        .filter(
+                          (e) =>
+                            e.resourceKey === row.course?.resourceKey &&
+                            (e.prepare?.round ?? e.round) === row.round &&
+                            (drafts[row.key]?.request?.clientRequestId !== e.clientRequestId ||
+                              drafts[row.key]?.state !== 'ready'),
+                        )
+                        .map((e) => (
+                          <Space key={e.clientRequestId} wrap>
+                            <Button disabled={busy} onClick={() => void recover(e)}>
+                              查询／恢复原请求
+                            </Button>
+                            <Button disabled={busy} onClick={() => void recover(e, true)}>
+                              关闭未发送请求
+                            </Button>
+                          </Space>
+                        ))}
+                    </Space>
+                  ),
                 },
-              },
-            ]}
-          />
-        </Card>
-      ))}
-      {!groups.length && <Empty description="本学期暂无教研组组员" />}
-      <Drawer
-        title="教案检查 · 材料核对"
-        open={Boolean(selected)}
-        size={band === 'compact' ? '100%' : 640}
-        destroyOnHidden
-        onClose={() => {
-          if (dirty) setClosePending(true);
-          else setSelected(null);
-        }}
-      >
-        {resource && selected ? (
-          <InspectionDetail
-            key={`${resource.resourceKey}:${session.session?.upstreamLoginId ?? ''}`}
-            initialRound={initialRound ?? dueRound(resource.schedule.dates, work.today)}
-            resource={resource}
-            syncing={loading}
-            syncState={historySynced ? 'synced' : session.session ? 'failed' : 'unconnected'}
-            onSynced={(status) => {
-              setHistorySynced(status.state === 'TRUSTED');
-              if (status.state === 'TRUSTED') setError('');
-            }}
-            target={{ semesterId, kind: 'LESSON_PLAN', resourceKey: selected }}
-            account={account}
-            session={session}
-            onDirty={setDirty}
-            onRefresh={refreshCourse}
-            onArrange={() => onLocation({ ...location, section: 'dates', resourceKey: selected })}
-          />
-        ) : (
-          <Empty description={loading ? '正在核对课程' : '课程读取未完成，请关闭后重试'} />
+              ]
+            : [
+                {
+                  title: '老师／课程',
+                  width: 220,
+                  render: (_, row) => (
+                    <Space orientation="vertical" size={0}>
+                      <small>{row.group}</small>
+                      <strong>{row.name}</strong>
+                      <span>{row.course?.courseName ?? '本批无课程'}</span>
+                    </Space>
+                  ),
+                },
+                {
+                  title: '检查日期',
+                  width: 155,
+                  render: (_, row) =>
+                    row.course && (
+                      <>
+                        <span>
+                          第{row.round}次 · {row.date ?? '待确认'}
+                        </span>
+                        {group === 'CUSTOM' && (
+                          <Select
+                            aria-label={`${row.course.courseName}轮次`}
+                            disabled={busy}
+                            value={row.round}
+                            options={[1, 2, 3].map((value) => ({ value, label: `第${value}次` }))}
+                            onChange={(value) => {
+                              setSelected([]);
+                              setCustomRounds((old) => ({
+                                ...old,
+                                [row.course!.resourceKey]: value,
+                              }));
+                            }}
+                          />
+                        )}
+                      </>
+                    ),
+                },
+                {
+                  title: '教学计划内容',
+                  render: (_, row) => {
+                    const lesson = drafts[row.key]?.prepared?.material.lesson;
+                    return lesson ? (
+                      <>
+                        <small>材料来源：{lesson.sourceDate ?? '原准备快照未记录日期'}</small>
+                        <div className="whitespace-pre-wrap break-words">
+                          {lesson.chapter.length > 120 ? (
+                            <details>
+                              <summary>{lesson.chapter.slice(0, 120)}… 展开全文</summary>
+                              {lesson.chapter}
+                            </details>
+                          ) : (
+                            lesson.chapter
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <span>{row.course ? '点击“读取并准备选中项”获取材料' : '—'}</span>
+                    );
+                  },
+                },
+                {
+                  title: '评分',
+                  width: 75,
+                  render: (_, row) => {
+                    const lesson = drafts[row.key]?.prepared?.material.lesson;
+                    return lesson ? (
+                      <Tooltip
+                        title={lesson.scoreItems
+                          .map((item, i) =>
+                            lesson.scores[i] < item.maximum
+                              ? `${item.name}：${lesson.scores[i]}/${item.maximum}，扣${item.maximum - lesson.scores[i]}分`
+                              : '',
+                          )
+                          .filter(Boolean)
+                          .join('；')}
+                      >
+                        <span>{lesson.scores.reduce((a, b) => a + b, 0)}</span>
+                      </Tooltip>
+                    ) : (
+                      '—'
+                    );
+                  },
+                },
+                {
+                  title: '状态',
+                  width: 200,
+                  render: (_, row) => (
+                    <Space orientation="vertical">
+                      <Tag>
+                        {drafts[row.key]?.message ??
+                          (row.course?.status.rounds[row.round - 1]?.covered
+                            ? '本轮已完成'
+                            : row.course
+                              ? '未准备'
+                              : '无课程')}
+                      </Tag>
+                      {entries
+                        .filter(
+                          (e) =>
+                            e.resourceKey === row.course?.resourceKey &&
+                            (e.prepare?.round ?? e.round) === row.round,
+                        )
+                        .filter(
+                          (e) =>
+                            drafts[row.key]?.request?.clientRequestId !== e.clientRequestId ||
+                            drafts[row.key]?.state !== 'ready',
+                        )
+                        .map((e) => (
+                          <Space key={e.clientRequestId} wrap>
+                            <Button size="small" disabled={busy} onClick={() => void recover(e)}>
+                              查询／恢复原请求
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={busy}
+                              onClick={() => void recover(e, true)}
+                            >
+                              关闭未发送请求
+                            </Button>
+                          </Space>
+                        ))}
+                    </Space>
+                  ),
+                },
+              ]
+        }
+      />
+      <Card style={{ position: 'sticky', bottom: 0 }} size="small">
+        <Space wrap>
+          <Checkbox
+            disabled={busy}
+            checked={
+              rows.filter(eligible).length > 0 &&
+              rows.filter(eligible).every((r) => selected.includes(r.key))
+            }
+            onChange={(event) =>
+              setSelected(
+                event.target.checked
+                  ? rows.filter((r) => eligible(r) && !hasPending(r)).map((r) => r.key)
+                  : [],
+              )
+            }
+          >
+            全选当前筛选范围（全部分页）
+          </Checkbox>
+          <span>已选 {chosen.length} 项</span>
+          <Button disabled={busy || !chosen.length} onClick={() => void run(false)}>
+            读取并准备选中项
+          </Button>
+          <Button
+            type="primary"
+            disabled={
+              busy || !chosen.some((r) => drafts[r.key]?.state === 'ready' && !hasPending(r))
+            }
+            onClick={() => void run(true)}
+          >
+            确认提交选中项
+          </Button>
+          {busy && (
+            <Button
+              onClick={() => {
+                stop.current = true;
+              }}
+            >
+              停止后续处理
+            </Button>
+          )}
+        </Space>
+        {progress.total > 0 && (
+          <>
+            <Progress percent={Math.round((progress.done / progress.total) * 100)} />
+            <span>
+              {progress.label} · 已处理 {progress.done} / {progress.total} · 成功 {progress.success}{' '}
+              · 失败 {progress.failed} · 待核对 {progress.unknown}
+            </span>
+          </>
         )}
-      </Drawer>
-      <Modal
-        open={closePending}
-        title="离开材料核对？"
-        onCancel={() => setClosePending(false)}
-        onOk={() => {
-          setClosePending(false);
-          setDirty(false);
-          setSelected(null);
-        }}
-      >
-        未保存评分会丢弃，准备请求的恢复入口会保留。
-      </Modal>
-      <Modal
-        open={blocker.state === 'blocked'}
-        title="离开当前检查？"
-        onCancel={() => {
-          if (blocker.state === 'blocked') blocker.reset();
-        }}
-        onOk={() => {
-          if (blocker.state === 'blocked') blocker.proceed();
-        }}
-      >
-        未保存评分会丢弃，操作恢复记录会保留。
-      </Modal>
+      </Card>
     </div>
   );
 }

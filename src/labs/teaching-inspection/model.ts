@@ -109,6 +109,7 @@ export type Assignment = {
 };
 export type Material = {
   lesson: {
+    sourceDate?: string | null;
     chapter: string;
     scores: number[];
     scoreItems: { name: string; description: string; maximum: number }[];
@@ -145,7 +146,7 @@ export const kinds: { key: string; kind: InspectionKind; label: string }[] = [
 ];
 const blockerLabels: Record<string, string> = {
   STATUS_UNKNOWN: '请先同步上游检查状态',
-  NEXT_ROUND_REQUIRED: '请按顺序执行下一轮教学进度',
+  NEXT_ROUND_REQUIRED: '请按顺序完成前一轮检查',
   SCHEDULE_REQUIRED: '请前往检查时间确认或调整三轮日期',
   FUTURE_DATE: '检查日期尚未到达',
   COMPLETED: '本轮已覆盖',
