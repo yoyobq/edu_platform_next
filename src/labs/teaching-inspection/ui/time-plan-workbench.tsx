@@ -39,7 +39,11 @@ export function TimePlanWorkbench({
   onLocation,
   splitPromptDismissed,
   onDismissSplitPrompt,
+  departmentId,
+  onBusyChange,
 }: {
+  departmentId?: string | null;
+  onBusyChange?: (busy: boolean) => void;
   splitPromptDismissed: boolean;
   onDismissSplitPrompt: () => void;
   location: Location;
@@ -66,6 +70,10 @@ export function TimePlanWorkbench({
   const [courseFilter, setCourseFilter] = useState('attention');
   const [splitOpen, setSplitOpen] = useState(false);
   const [splitNotice, setSplitNotice] = useState(false);
+  useEffect(() => {
+    onBusyChange?.(busy || saving || groupBusy);
+    return () => onBusyChange?.(false);
+  }, [busy, saving, dirty, groupDirty, groupBusy, onBusyChange]);
   const datesSection = useRef<HTMLDivElement>(null);
   const gate = useRef(false);
   const serial = useRef(0);
@@ -212,10 +220,14 @@ export function TimePlanWorkbench({
     plans.length > 0 &&
     plans.every((plan) => plan.confirmed) &&
     (!workspace?.grouping || workspace.grouping.confirmed);
-  const attention =
-    workspace?.resources.filter((row) => needsCourseAttention(row, workspace)) ?? [];
+  const scopedResources = (workspace?.resources ?? []).filter(
+    (row) => departmentId == null || row.departmentId === departmentId,
+  );
+  const attention = scopedResources.filter(
+    (row) => workspace && needsCourseAttention(row, workspace),
+  );
   const selectedCourse = workspace?.resources.find((row) => row.resourceKey === manage);
-  const filtered = (workspace?.resources ?? []).filter((row) => {
+  const filtered = scopedResources.filter((row) => {
     const teacherName = workspace?.teachers.find(
       (teacher) => teacher.staffId === location.teacherId,
     )?.name;
@@ -359,6 +371,7 @@ export function TimePlanWorkbench({
         </Space>
       </Card>
       <Card title="课程检查时间">
+        <p>下方课程按顶部系部筛选；公共检查安排由学校统一管理。</p>
         <Space orientation="vertical" style={{ width: '100%' }}>
           {band === 'compact' ? (
             <Select
@@ -372,7 +385,7 @@ export function TimePlanWorkbench({
               }}
               options={[
                 { label: `需要处理（${attention.length}）`, value: 'attention' },
-                { label: `全部课程（${workspace?.total ?? 0}）`, value: 'all' },
+                { label: `全部课程（${scopedResources.length}）`, value: 'all' },
                 { label: '独立安排', value: 'custom' },
               ]}
             />
@@ -387,7 +400,7 @@ export function TimePlanWorkbench({
               }}
               options={[
                 { label: `需要处理（${attention.length}）`, value: 'attention' },
-                { label: `全部课程（${workspace?.total ?? 0}）`, value: 'all' },
+                { label: `全部课程（${scopedResources.length}）`, value: 'all' },
                 { label: '独立安排', value: 'custom' },
               ]}
             />

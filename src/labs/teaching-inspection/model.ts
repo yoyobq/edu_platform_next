@@ -239,6 +239,7 @@ export type GroupingResult = {
   weeks: number;
   changes: {
     resourceKey: string;
+    departmentId?: string | null;
     courseName: string;
     group: TimeGroup;
     beforeDates: string[];
@@ -253,6 +254,7 @@ export type TimeWorkspace = {
   teachers: { staffId: string; name: string }[];
   resources: {
     resourceKey: string;
+    departmentId?: string | null;
     courseName: string;
     teacherNames: string[];
     teacherIds?: string[];

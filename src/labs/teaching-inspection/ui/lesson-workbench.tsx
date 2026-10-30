@@ -10,9 +10,11 @@ import {
   Progress,
   Select,
   Space,
+  Steps,
   Table,
   Tabs,
   Tag,
+  theme,
   Tooltip,
 } from 'antd';
 import { useBeforeUnload, useBlocker } from 'react-router';
@@ -37,6 +39,7 @@ import { blockerText, groupNames, operationText } from '../model';
 type Controller = ReturnType<typeof useUpstreamLoginModalController<never>>;
 type Draft = {
   prepared?: Prepared;
+  editedChapter?: string;
   message: string;
   state: 'ready' | 'error' | 'unknown' | 'saved' | 'busy';
 };
@@ -53,12 +56,15 @@ export function LessonWorkbench({
   onLocation,
   account,
   session,
+  onBusyChange,
 }: {
+  onBusyChange?: (busy: boolean) => void;
   location: ReturnType<typeof readLocation>;
   onLocation: (value: ReturnType<typeof readLocation>) => void;
   account: UpstreamAccountIdentity;
   session: Controller;
 }) {
+  const { token } = theme.useToken();
   const [work, setWork] = useState<api.LessonOverview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -87,6 +93,10 @@ export function LessonWorkbench({
   useEffect(() => {
     latestSession.current = session;
   }, [session]);
+  useEffect(() => {
+    onBusyChange?.(busy);
+    return () => onBusyChange?.(false);
+  }, [busy, onBusyChange]);
   const semesterId = location.semesterId!;
   const group = (location.timeGroup ?? 'FULL') as TimeGroup;
   const blocker = useBlocker(busy);
@@ -361,18 +371,44 @@ export function LessonWorkbench({
       ? row.course.schedule.records?.[row.round - 1]
       : undefined;
   }
-  function renderChapter(row: Row) {
+  function renderChapter(row: Row, source = false) {
     const record = completedRecord(row);
     const lesson = drafts[row.key]?.prepared?.material.lesson;
-    const chapter = record ? record.chapter : lesson?.chapter;
-    if (!record && !lesson && row.course?.status.rounds[row.round - 1]?.covered)
-      return (
-        <Space orientation="vertical" size="small">
-          <span>已完成检查，历史章节尚未同步</span>
-        </Space>
+    if (source)
+      return lesson ? (
+        <>
+          <small>授课日期 · {lesson.sourceDate ?? '未记录'}</small>
+          <div className="whitespace-pre-wrap break-words">{lesson.chapter}</div>
+        </>
+      ) : (
+        <span>{record ? '未留存计划章节' : '—'}</span>
       );
+    if (!record && drafts[row.key]?.state === 'ready' && lesson)
+      return (
+        <>
+          <Input.TextArea
+            aria-label={`${row.course?.courseName}检查章节`}
+            disabled={busy}
+            autoSize={{ minRows: 2, maxRows: 5 }}
+            status={(drafts[row.key].editedChapter ?? lesson.chapter).trim() ? '' : 'error'}
+            value={drafts[row.key].editedChapter ?? lesson.chapter}
+            onChange={(event) =>
+              setDrafts((old) => ({
+                ...old,
+                [row.key]: { ...old[row.key], editedChapter: event.target.value },
+              }))
+            }
+          />
+          {!(drafts[row.key].editedChapter ?? lesson.chapter).trim() && <div>检查章节不能为空</div>}
+          {drafts[row.key].editedChapter !== undefined &&
+            drafts[row.key].editedChapter !== lesson.chapter && <Tag>已调整</Tag>}
+        </>
+      );
+    const chapter = record ? record.chapter : (drafts[row.key]?.editedChapter ?? lesson?.chapter);
     if (!record && !lesson)
-      return <span>{row.course ? '点击“读取并准备选中项”获取材料' : '—'}</span>;
+      return (
+        <span>{row.course?.status.rounds[row.round - 1]?.covered ? '历史章节待同步' : '—'}</span>
+      );
     return (
       <>
         <small>
@@ -444,8 +480,17 @@ export function LessonWorkbench({
       drafts[row.key]?.state !== 'saved',
     );
   }
+  const hasEmptyChapter = chosen.some(
+    (row) =>
+      drafts[row.key]?.state === 'ready' &&
+      !(
+        drafts[row.key].editedChapter ??
+        drafts[row.key].prepared?.material.lesson?.chapter ??
+        ''
+      ).trim(),
+  );
   async function run(submit: boolean) {
-    if (running.current) return;
+    if (running.current || (submit && hasEmptyChapter)) return;
     const controller = latestSession.current;
     let current = controller.session;
     if (!current) {
@@ -458,7 +503,16 @@ export function LessonWorkbench({
       if (sameIdentity()) patch(key, value);
     };
     const queue = chosen.filter(
-      (row) => eligible(row) && !hasPending(row) && (!submit || drafts[row.key]?.state === 'ready'),
+      (row) =>
+        eligible(row) &&
+        !hasPending(row) &&
+        (!submit ||
+          (drafts[row.key]?.state === 'ready' &&
+            (
+              drafts[row.key].editedChapter ??
+              drafts[row.key].prepared?.material.lesson?.chapter ??
+              ''
+            ).trim().length > 0)),
     );
     if (!queue.length) return;
     running.current = true;
@@ -555,7 +609,7 @@ export function LessonWorkbench({
           const draft = drafts[row.key];
           const prepared = draft.prepared!;
           const preview = prepared.preview!;
-          if (Date.parse(preview.expiresAt) <= Date.now()) {
+          if (api.previewHasExpired(preview.expiresAt)) {
             publish(row.key, { ...draft, state: 'error', message: '材料已过期，请重新准备并确认' });
             failed++;
             done++;
@@ -569,6 +623,7 @@ export function LessonWorkbench({
             previewId: preview.id,
             clientRequestId: crypto.randomUUID(),
             scores: prepared.material.lesson!.scores,
+            chapter: draft.editedChapter ?? prepared.material.lesson!.chapter,
           };
           const entry: RecoveryEntry = {
             ...input,
@@ -594,6 +649,7 @@ export function LessonWorkbench({
                 state: 'saved',
                 message: response.syncWarning ? `提交成功；${response.syncWarning}` : '提交成功',
                 prepared,
+                editedChapter: input.chapter,
               });
               success++;
             } else {
@@ -683,148 +739,211 @@ export function LessonWorkbench({
     );
   return (
     <div ref={container} className="flex flex-col gap-4">
-      <Space wrap>
-        <Select
-          aria-label="检查所属系"
-          disabled={busy || !work.canSelectDepartment}
-          value={work.departmentId ?? 'all'}
-          style={{ width: 200 }}
-          options={[
-            ...(work.canSelectDepartment ? [{ value: 'all', label: '全校（全部系）' }] : []),
-            ...work.departments.map((d) => ({ value: d.id, label: d.name })),
-          ]}
-          onChange={(value) =>
-            onLocation({
-              ...location,
-              departmentId: value === 'all' ? null : value,
-              resourceKey: undefined,
-            })
-          }
-        />
-        <Button disabled={busy} loading={loading} onClick={() => void reload()}>
-          重新读取本地数据
-        </Button>
-      </Space>
-      {error && <Alert type="warning" title={error} />}
-      <Tabs
-        activeKey={group}
-        onChange={(value) => {
-          if (!busy) {
-            setSelected([]);
-            onLocation({ ...location, timeGroup: value, round: undefined, resourceKey: undefined });
-          }
+      <section
+        aria-label="检查批次筛选"
+        className="flex min-w-0 flex-col items-end gap-2 p-4"
+        style={{
+          background: token.colorPrimaryBg,
+          borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`,
+          borderBottom: `1px solid ${token.colorPrimaryBorder}`,
         }}
-        items={(['FULL', 'FIRST', 'SECOND', 'CUSTOM'] as const).map((value) => ({
-          key: value,
-          label: value === 'CUSTOM' ? '单独处理' : groupNames[value],
-          disabled: busy,
-        }))}
-      />
-      {group !== 'CUSTOM' && (
-        <Tabs
-          activeKey={String(round)}
-          onChange={(value) => {
-            setSelected([]);
-            onLocation({ ...location, round: Number(value) });
-          }}
-          items={[1, 2, 3].map((value) => ({
-            key: String(value),
-            label: `第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`,
-            disabled: busy,
-          }))}
-        />
-      )}
-      <Space wrap>
-        <Select
-          aria-label="筛选组员"
-          disabled={busy}
-          allowClear
-          showSearch
-          optionFilterProp="label"
-          placeholder="全部组员"
-          style={{ width: 200 }}
-          value={teacher || undefined}
-          options={work.roster.map((m) => ({ value: m.staffId, label: m.name }))}
-          onChange={(value) => setTeacher(value ?? '')}
-        />
-        <Input.Search
-          aria-label="搜索教案课程"
-          disabled={busy}
-          placeholder="搜索课程"
-          allowClear
-          onSearch={setKeyword}
-        />
-      </Space>
-      <Table<Row>
+      >
+        {error && <Alert type="warning" title={error} />}
+        <div className="min-w-0 max-w-full">
+          <Tabs
+            aria-label="学期分段"
+            size="small"
+            styles={{ header: { margin: 0 } }}
+            activeKey={group}
+            onChange={(value) => {
+              if (!busy) {
+                setSelected([]);
+                onLocation({
+                  ...location,
+                  timeGroup: value,
+                  round: undefined,
+                  resourceKey: undefined,
+                });
+              }
+            }}
+            items={(['FULL', 'FIRST', 'SECOND', 'CUSTOM'] as const).map((value) => ({
+              key: value,
+              label: value === 'CUSTOM' ? '单独处理' : groupNames[value],
+              disabled: busy,
+            }))}
+          />
+        </div>
+        {group !== 'CUSTOM' && (
+          <div className="min-w-0 max-w-full">
+            <Tabs
+              aria-label="检查轮次"
+              size="small"
+              styles={{ header: { margin: 0 } }}
+              activeKey={String(round)}
+              onChange={(value) => {
+                setSelected([]);
+                onLocation({ ...location, round: Number(value) });
+              }}
+              items={[1, 2, 3].map((value) => ({
+                key: String(value),
+                label: (
+                  <span
+                    className="flex flex-col items-end"
+                    aria-label={`第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`}
+                  >
+                    <span>第{value}次</span>
+                    <small>{plan?.dates[value - 1] ?? '未确认'}</small>
+                  </span>
+                ),
+                disabled: busy,
+              }))}
+            />
+          </div>
+        )}
+      </section>
+      <Card
+        title="教案核对清单"
         size="small"
-        rowKey="key"
-        dataSource={rows}
-        pagination={{ pageSize: 20 }}
-        scroll={band === 'compact' ? undefined : { x: 900 }}
-        rowSelection={{
-          selectedRowKeys: selected,
-          onChange: (keys) => setSelected(keys.map(String)),
-          getCheckboxProps: (row) => ({ disabled: busy || !eligible(row) || hasPending(row) }),
-        }}
-        columns={
-          band === 'compact'
-            ? [
-                {
-                  title: '教案检查',
-                  render: (_, row) => (
-                    <Space orientation="vertical">
-                      <small>{row.group}</small>
-                      <strong>
-                        {row.name} · {row.course?.courseName ?? '本批无课程'}
-                      </strong>
-                      <span>
-                        第{row.round}次 · {row.date ?? '待确认'}
-                      </span>
-                      {group === 'CUSTOM' && row.course && (
-                        <Select
-                          aria-label={`${row.course.courseName}轮次`}
-                          disabled={busy}
-                          value={row.round}
-                          options={[1, 2, 3].map((value) => ({ value, label: `第${value}次` }))}
-                          onChange={(value) => {
-                            setSelected([]);
-                            setCustomRounds((old) => ({
-                              ...old,
-                              [row.course!.resourceKey]: value,
-                            }));
-                          }}
-                        />
-                      )}
-                      {renderChapter(row)}
-                      {renderScore(row)}
-                      <Tag>{rowStatus(row)}</Tag>
-                      {renderReread(row)}
-                    </Space>
-                  ),
-                },
-              ]
-            : [
-                {
-                  title: '老师／课程',
-                  width: 220,
-                  render: (_, row) => (
-                    <Space orientation="vertical" size={0}>
-                      <small>{row.group}</small>
-                      <strong>{row.name}</strong>
-                      <span>{row.course?.courseName ?? '本批无课程'}</span>
-                    </Space>
-                  ),
-                },
-                {
-                  title: '检查日期',
-                  width: 155,
-                  render: (_, row) =>
-                    row.course && (
-                      <>
+        extra={
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <span>
+              共 {rows.filter((row) => row.course).length} 门课程 · 已完成{' '}
+              {rows.filter((row) => row.course?.status.rounds[row.round - 1]?.covered).length} ·
+              待确认 {rows.filter((row) => drafts[row.key]?.state === 'ready').length}
+            </span>
+            <Button disabled={busy} loading={loading} onClick={() => void reload()}>
+              刷新列表
+            </Button>
+          </div>
+        }
+      >
+        <Steps
+          size="small"
+          current={rows.some((row) => drafts[row.key]?.state === 'ready') ? 1 : 0}
+          items={[
+            { title: '准备材料', content: '勾选课程，读取本轮计划' },
+            { title: '核对并提交', content: '比对章节，确认后统一提交' },
+          ]}
+        />
+        <div className="mt-3 mb-3">
+          <Space wrap>
+            <Select
+              aria-label="筛选组员"
+              disabled={busy}
+              allowClear
+              showSearch
+              optionFilterProp="label"
+              placeholder="全部组员"
+              style={{ width: 200 }}
+              value={teacher || undefined}
+              options={work.roster.map((m) => ({ value: m.staffId, label: m.name }))}
+              onChange={(value) => setTeacher(value ?? '')}
+            />
+            <Input.Search
+              aria-label="搜索教案课程"
+              disabled={busy}
+              placeholder="搜索课程"
+              allowClear
+              onSearch={setKeyword}
+            />
+          </Space>
+        </div>
+        <Card size="small">
+          <Space wrap>
+            <Checkbox
+              disabled={busy}
+              checked={
+                rows.filter(eligible).length > 0 &&
+                rows.filter(eligible).every((r) => selected.includes(r.key))
+              }
+              onChange={(event) =>
+                setSelected(
+                  event.target.checked
+                    ? rows.filter((r) => eligible(r) && !hasPending(r)).map((r) => r.key)
+                    : [],
+                )
+              }
+            >
+              全选当前筛选范围（全部分页）
+            </Checkbox>
+            <span>已选 {chosen.length} 项</span>
+            <Button
+              type={
+                chosen.some((row) => drafts[row.key]?.state === 'ready') ? 'default' : 'primary'
+              }
+              disabled={busy || !chosen.length}
+              onClick={() => void run(false)}
+            >
+              读取并准备选中项
+            </Button>
+            <Button
+              type="primary"
+              disabled={
+                busy ||
+                hasEmptyChapter ||
+                !chosen.some(
+                  (r) =>
+                    drafts[r.key]?.state === 'ready' &&
+                    (
+                      drafts[r.key].editedChapter ??
+                      drafts[r.key].prepared?.material.lesson?.chapter ??
+                      ''
+                    ).trim().length > 0 &&
+                    !hasPending(r),
+                )
+              }
+              onClick={() => void run(true)}
+            >
+              确认提交选中项
+            </Button>
+            {busy && (
+              <Button
+                onClick={() => {
+                  stop.current = true;
+                }}
+              >
+                停止后续处理
+              </Button>
+            )}
+          </Space>
+          {progress.total > 0 && (
+            <>
+              <Progress percent={Math.round((progress.done / progress.total) * 100)} />
+              <span>
+                {progress.label} · 已处理 {progress.done} / {progress.total} · 成功{' '}
+                {progress.success} · 失败 {progress.failed} · 待核对 {progress.unknown}
+              </span>
+            </>
+          )}
+        </Card>
+        <Table<Row>
+          size="middle"
+          rowKey="key"
+          dataSource={rows}
+          pagination={{ pageSize: 20 }}
+          scroll={band === 'compact' ? undefined : { x: 1050 }}
+          rowSelection={{
+            selectedRowKeys: selected,
+            onChange: (keys) => setSelected(keys.map(String)),
+            getCheckboxProps: (row) => ({ disabled: busy || !eligible(row) || hasPending(row) }),
+          }}
+          columns={
+            band === 'compact'
+              ? [
+                  {
+                    title: '教案检查',
+                    render: (_, row) => (
+                      <Space orientation="vertical">
+                        <small>{row.group}</small>
+                        <strong>
+                          {row.name} · {row.course?.courseName ?? '本批无课程'}
+                        </strong>
                         <span>
-                          第{row.round}次 · {row.date ?? '待确认'}
+                          <strong>第{row.round}次检查</strong>
+                          <br />
+                          {row.date ?? '待确认'}
                         </span>
-                        {group === 'CUSTOM' && (
+                        {group === 'CUSTOM' && row.course && (
                           <Select
                             aria-label={`${row.course.courseName}轮次`}
                             disabled={busy}
@@ -839,81 +958,86 @@ export function LessonWorkbench({
                             }}
                           />
                         )}
-                      </>
+                        <small>授课计划章节</small>
+                        {renderChapter(row, true)}
+                        <small>检查章节</small>
+                        {renderChapter(row)}
+                        {renderScore(row)}
+                        <Tag>{rowStatus(row)}</Tag>
+                        {renderReread(row)}
+                      </Space>
                     ),
-                },
-                {
-                  title: '教学章节',
-                  render: (_, row) => renderChapter(row),
-                },
-                {
-                  title: '评分',
-                  width: 75,
-                  render: (_, row) => renderScore(row),
-                },
-                {
-                  title: '状态',
-                  width: 200,
-                  render: (_, row) => (
-                    <Space orientation="vertical">
-                      <Tag>{rowStatus(row)}</Tag>
-                      {renderReread(row)}
-                    </Space>
-                  ),
-                },
-              ]
-        }
-      />
-      <Card style={{ position: 'sticky', bottom: 0 }} size="small">
-        <Space wrap>
-          <Checkbox
-            disabled={busy}
-            checked={
-              rows.filter(eligible).length > 0 &&
-              rows.filter(eligible).every((r) => selected.includes(r.key))
-            }
-            onChange={(event) =>
-              setSelected(
-                event.target.checked
-                  ? rows.filter((r) => eligible(r) && !hasPending(r)).map((r) => r.key)
-                  : [],
-              )
-            }
-          >
-            全选当前筛选范围（全部分页）
-          </Checkbox>
-          <span>已选 {chosen.length} 项</span>
-          <Button disabled={busy || !chosen.length} onClick={() => void run(false)}>
-            读取并准备选中项
-          </Button>
-          <Button
-            type="primary"
-            disabled={
-              busy || !chosen.some((r) => drafts[r.key]?.state === 'ready' && !hasPending(r))
-            }
-            onClick={() => void run(true)}
-          >
-            确认提交选中项
-          </Button>
-          {busy && (
-            <Button
-              onClick={() => {
-                stop.current = true;
-              }}
-            >
-              停止后续处理
-            </Button>
-          )}
-        </Space>
-        {progress.total > 0 && (
-          <>
-            <Progress percent={Math.round((progress.done / progress.total) * 100)} />
-            <span>
-              {progress.label} · 已处理 {progress.done} / {progress.total} · 成功 {progress.success}{' '}
-              · 失败 {progress.failed} · 待核对 {progress.unknown}
-            </span>
-          </>
-        )}
+                  },
+                ]
+              : [
+                  {
+                    title: '老师／课程',
+                    width: 195,
+                    render: (_, row) => (
+                      <Space orientation="vertical" size={0}>
+                        <small>{row.group}</small>
+                        <strong>{row.name}</strong>
+                        <span>{row.course?.courseName ?? '本批无课程'}</span>
+                      </Space>
+                    ),
+                  },
+                  {
+                    title: '检查日期',
+                    width: 120,
+                    render: (_, row) =>
+                      row.course && (
+                        <>
+                          <span>
+                            <strong>第{row.round}次检查</strong>
+                            <br />
+                            {row.date ?? '待确认'}
+                          </span>
+                          {group === 'CUSTOM' && (
+                            <Select
+                              aria-label={`${row.course.courseName}轮次`}
+                              disabled={busy}
+                              value={row.round}
+                              options={[1, 2, 3].map((value) => ({ value, label: `第${value}次` }))}
+                              onChange={(value) => {
+                                setSelected([]);
+                                setCustomRounds((old) => ({
+                                  ...old,
+                                  [row.course!.resourceKey]: value,
+                                }));
+                              }}
+                            />
+                          )}
+                        </>
+                      ),
+                  },
+                  {
+                    title: '授课计划章节',
+                    width: 240,
+                    render: (_, row) => renderChapter(row, true),
+                  },
+                  {
+                    title: '检查章节',
+                    width: 240,
+                    render: (_, row) => renderChapter(row),
+                  },
+                  {
+                    title: '评分',
+                    width: 75,
+                    render: (_, row) => renderScore(row),
+                  },
+                  {
+                    title: '状态',
+                    width: 150,
+                    render: (_, row) => (
+                      <Space orientation="vertical">
+                        <Tag>{rowStatus(row)}</Tag>
+                        {renderReread(row)}
+                      </Space>
+                    ),
+                  },
+                ]
+          }
+        />
       </Card>
     </div>
   );

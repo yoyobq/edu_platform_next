@@ -118,6 +118,7 @@ export async function save(
     previewId: string;
     clientRequestId: string;
     scores?: number[];
+    chapter?: string;
     retryOfOperationId?: string;
   },
   upstreamSessionToken: string,
@@ -205,7 +206,7 @@ export async function loadTimeWorkspace(input: {
       total teachers { staffId name } semesterTimePlan { ${timePlanFields} }
       grouping { version confirmed canEdit weeks split recommendedSplit sourceVersion counts { group count } }
       groupPlans { ${timePlanFields} }
-      resources { resourceKey sourceVersion courseName teacherIds teacherNames weeks blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { ${timePlanFields} } }
+      resources { resourceKey departmentId sourceVersion courseName teacherIds teacherNames weeks blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { ${timePlanFields} } }
     } }`,
       { input: { ...input, limit: input.limit ?? 20 } },
     )
@@ -264,4 +265,18 @@ export async function loadTimeOverview(semesterId: number): Promise<TimeWorkspac
   if (new Set(resources.map((row) => row.resourceKey)).size !== first.total)
     throw new Error('课程列表在读取期间发生变化，请重新读取');
   return { ...first, resources };
+}
+
+export type InspectionScope = {
+  departmentId: string | null;
+  canSelectDepartment: boolean;
+  departments: { id: string; name: string }[];
+};
+export async function loadScope(semesterId: number, departmentId?: string | null) {
+  return (
+    await executeGraphQL<{ result: InspectionScope }, { input: object }>(
+      `query TeachingInspectionScope($input:InspectionWorkspaceInput!){result:teachingInspectionScope(input:$input){departmentId canSelectDepartment departments{id name}}}`,
+      { input: { semesterId, departmentId, kind: 'LESSON_PLAN' } },
+    )
+  ).result;
 }

@@ -86,3 +86,8 @@ export async function prepareBatch(items: PrepareInput[], upstreamSessionToken: 
     )
   ).result;
 }
+
+/** Runtime clock access stays outside rendering and pure presentation policies. */
+export function previewHasExpired(expiresAt: string) {
+  return Date.parse(expiresAt) <= Date.now();
+}
