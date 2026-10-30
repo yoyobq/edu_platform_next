@@ -92,10 +92,12 @@ export async function dates(
 export async function refreshStatus(input: Target, upstreamSessionToken: string) {
   return (
     await executeUpstreamSessionGraphQL<
-      { result: SessionResult & { schedule: Schedule; status: Status } },
+      {
+        result: SessionResult & { schedule: Schedule; status: Status; syncWarning?: string | null };
+      },
       { input: Target & { upstreamSessionToken: string } }
     >(
-      `mutation RefreshTeachingInspectionStatus($input: InspectionTargetInput!) { result: refreshTeachingInspectionStatus(input: $input) { schedule { ${scheduleFields} } status { ${statusFields} } upstreamSessionToken expiresAt } }`,
+      `mutation RefreshTeachingInspectionStatus($input: InspectionTargetInput!) { result: refreshTeachingInspectionStatus(input: $input) { syncWarning schedule { ${scheduleFields} } status { ${statusFields} } upstreamSessionToken expiresAt } }`,
       { input: { ...input, upstreamSessionToken } },
       { allowAuthRetry: false },
     )

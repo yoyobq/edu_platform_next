@@ -12,6 +12,7 @@ import {
   Select,
   Space,
   Steps,
+  Switch,
   Table,
   Tabs,
   Tag,
@@ -75,6 +76,8 @@ export function LessonWorkbench({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [teacher, setTeacher] = useState('');
   const [keyword, setKeyword] = useState('');
+  const [hideCompleted, setHideCompleted] = useState(false);
+  const [onlyDifferent, setOnlyDifferent] = useState(false);
   const [customRounds, setCustomRounds] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState<
@@ -203,7 +206,7 @@ export function LessonWorkbench({
   ]);
   const plan = work?.groupPlans.find((p) => p.group === group);
   const round = location.round ?? dueRound(plan?.dates ?? [], work?.today ?? '');
-  const rows: Row[] = [];
+  const batchRows: Row[] = [];
   const seen = new Set<string>();
   for (const member of work?.roster ?? []) {
     if (teacher && member.staffId !== teacher) continue;
@@ -220,7 +223,7 @@ export function LessonWorkbench({
           : round;
       const key = `${course.resourceKey}:${r}`;
       if (!seen.has(key)) {
-        rows.push({
+        batchRows.push({
           key,
           name: course.teacherNames.join('、'),
           staffId: course.teacherIds.join('、'),
@@ -233,7 +236,7 @@ export function LessonWorkbench({
       }
     }
     if (!courses.length && !keyword)
-      rows.push({
+      batchRows.push({
         key: `staff:${member.staffId}`,
         name: member.name,
         staffId: member.staffId,
@@ -241,11 +244,14 @@ export function LessonWorkbench({
         round,
       });
   }
-  rows.sort(
+  batchRows.sort(
     (a, b) =>
       Number(Boolean(b.course)) - Number(Boolean(a.course)) ||
       a.group.localeCompare(b.group) ||
       a.name.localeCompare(b.name),
+  );
+  const rows = batchRows.filter(
+    (row) => (!hideCompleted || !rowCompleted(row)) && (!onlyDifferent || chaptersDiffer(row)),
   );
   const chosen = rows.filter((row) => selected.includes(row.key) && row.course);
   function track(entry: RecoveryEntry) {
@@ -311,6 +317,7 @@ export function LessonWorkbench({
         return;
       }
       if (status?.covered) {
+        if (observed.syncWarning) setError(observed.syncWarning);
         patch(row.key, { state: 'error', message: '本轮已完成' });
         return;
       }
@@ -411,6 +418,27 @@ export function LessonWorkbench({
       ? row.course.schedule.records?.[row.round - 1]
       : undefined;
   }
+  function rowCompleted(row: Row) {
+    return Boolean(
+      row.course?.status.rounds[row.round - 1]?.covered || drafts[row.key]?.state === 'saved',
+    );
+  }
+  function chaptersDiffer(row: Row) {
+    const record = completedRecord(row);
+    const draft = drafts[row.key];
+    const plan =
+      draft?.prepared?.material.lesson ??
+      row.course?.lessonPlanSources?.find((item) => item.round === row.round);
+    const chapter = record
+      ? record.chapter
+      : (draft?.editedChapter ?? draft?.prepared?.material.lesson?.chapter);
+    return Boolean(
+      (record || draft?.state === 'saved') &&
+      plan?.chapter.trim() &&
+      chapter?.trim() &&
+      plan.chapter.trim() !== chapter.trim(),
+    );
+  }
   function renderChapter(row: Row, source = false) {
     const record = completedRecord(row);
     const lesson = drafts[row.key]?.prepared?.material.lesson;
@@ -454,6 +482,7 @@ export function LessonWorkbench({
       return (
         <span>{row.course?.status.rounds[row.round - 1]?.covered ? '历史章节待同步' : '—'}</span>
       );
+    const differs = chaptersDiffer(row);
     return (
       <>
         <small>
@@ -461,20 +490,25 @@ export function LessonWorkbench({
             ? `已完成检查 · ${record.checkDate}`
             : `材料来源：${lesson?.sourceDate ?? '原准备快照未记录日期'}`}
         </small>
-        <div className="whitespace-pre-wrap break-words">
-          {chapter ? (
-            chapter.length > 120 ? (
-              <details>
-                <summary>{chapter.slice(0, 120)}… 展开全文</summary>
-                {chapter}
-              </details>
+        <Tooltip title={differs ? '与授课计划章节名称不一致' : undefined}>
+          <div
+            className="whitespace-pre-wrap break-words"
+            style={{ color: differs ? token.colorWarningText : undefined }}
+          >
+            {chapter ? (
+              chapter.length > 120 ? (
+                <details>
+                  <summary>{chapter.slice(0, 120)}… 展开全文</summary>
+                  {chapter}
+                </details>
+              ) : (
+                chapter
+              )
             ) : (
-              chapter
-            )
-          ) : (
-            '未记录教学章节'
-          )}
-        </div>
+              '未记录教学章节'
+            )}
+          </div>
+        </Tooltip>
       </>
     );
   }
@@ -878,15 +912,18 @@ export function LessonWorkbench({
               }}
               items={[1, 2, 3].map((value) => ({
                 key: String(value),
-                label: (
-                  <span
-                    className="flex flex-col items-end"
-                    aria-label={`第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`}
-                  >
-                    <span>第{value}次</span>
-                    <small>{plan?.dates[value - 1] ?? '未确认'}</small>
-                  </span>
-                ),
+                label:
+                  band === 'compact' ? (
+                    <span
+                      className="flex flex-col items-end"
+                      aria-label={`第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`}
+                    >
+                      <span>第{value}次</span>
+                      <small>{plan?.dates[value - 1] ?? '未确认'}</small>
+                    </span>
+                  ) : (
+                    `第${value}次 · ${plan?.dates[value - 1] ?? '未确认'}`
+                  ),
                 disabled: busy,
               }))}
             />
@@ -938,6 +975,33 @@ export function LessonWorkbench({
               allowClear
               onSearch={setKeyword}
             />
+            <Space size="small">
+              <Switch
+                aria-label="隐藏已完成"
+                size="small"
+                checked={hideCompleted}
+                disabled={busy}
+                onChange={(value) => {
+                  setHideCompleted(value);
+                  setSelected([]);
+                }}
+              />
+              <span>隐藏已完成</span>
+            </Space>
+            <Space size="small">
+              <Switch
+                aria-label="只看不一致"
+                size="small"
+                checked={onlyDifferent}
+                disabled={busy}
+                onChange={(value) => {
+                  setOnlyDifferent(value);
+                  if (value) setHideCompleted(false);
+                  setSelected([]);
+                }}
+              />
+              <span>只看不一致</span>
+            </Space>
           </Space>
         </div>
         <Card size="small">
@@ -1007,6 +1071,18 @@ export function LessonWorkbench({
           tableLayout="fixed"
           rowKey="key"
           dataSource={rows}
+          locale={{
+            emptyText: (
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description={
+                  hideCompleted && onlyDifferent
+                    ? '不一致筛选只包含已完成记录，请关闭“隐藏已完成”查看'
+                    : '当前筛选范围内没有记录'
+                }
+              />
+            ),
+          }}
           pagination={{ pageSize: 20 }}
           scroll={band === 'compact' ? undefined : { x: 1064 }}
           rowSelection={{
@@ -1057,7 +1133,7 @@ export function LessonWorkbench({
               : [
                   {
                     title: '教师',
-                    width: 130,
+                    width: 91,
                     render: (_, row) => renderTeacher(row),
                   },
                   {

@@ -2732,3 +2732,211 @@ for (const compact of [false, true]) {
     await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
   });
 }
+
+for (const compact of [false, true]) {
+  test(`上游已完成教案同步补齐计划章节，刷新只读本地且不生成提交 compact=${compact}`, async ({
+    page,
+  }) => {
+    if (compact) await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await setup(page);
+    const planDates = ['2026-10-14', '2026-11-14', '2026-12-14'];
+    let cached = false;
+    let synchronizations = 0;
+    await page.route('**/graphql', async (route) => {
+      const { query } = route.request().postDataJSON() as { query: string };
+      if (
+        !query.includes('LessonPlanInspectionOverview') &&
+        !query.includes('RefreshTeachingInspectionStatus')
+      )
+        return route.fallback();
+      if (query.includes('RefreshTeachingInspectionStatus')) {
+        cached = true;
+        synchronizations++;
+      }
+      const original = fixture.resource('1:a');
+      const resource = {
+        ...original,
+        teacherIds: ['T700'],
+        grouping: { group: 'FULL' },
+        timePlan: { group: 'FULL', key: 'FULL:1', dates: planDates, confirmed: true },
+        lessonPlanSources: cached
+          ? [
+              {
+                round: 1,
+                checkDate: '2026-10-13',
+                sourceDate: '2026-10-13',
+                chapter: '授课计划UDP协议',
+              },
+            ]
+          : [],
+        schedule: {
+          ...original.schedule,
+          dates: planDates,
+          records: [
+            {
+              recordKey: 'remote-first',
+              checkDate: '2026-10-13',
+              chapter: 'UDP协议练习',
+              score: 99,
+            },
+          ],
+          rounds: original.schedule.rounds.map((round) => ({
+            ...round,
+            date: planDates[round.round - 1],
+            recordKey: round.round === 1 ? 'remote-first' : null,
+            actualDate: round.round === 1 ? '2026-10-13' : null,
+          })),
+        },
+        status: {
+          ...original.status,
+          state: 'TRUSTED',
+          rounds: original.status.rounds.map((round) => ({
+            ...round,
+            covered: round.round === 1,
+            canPrepare: round.round !== 1,
+          })),
+        },
+      };
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: query.includes('RefreshTeachingInspectionStatus')
+              ? {
+                  schedule: resource.schedule,
+                  status: resource.status,
+                  upstreamSessionToken: 'synced',
+                  expiresAt: null,
+                }
+              : {
+                  today: '2026-10-30',
+                  total: 1,
+                  departmentId: 'ORG0302',
+                  canSelectDepartment: true,
+                  departments: [{ id: 'ORG0302', name: '信息工程系' }],
+                  roster: [
+                    { staffId: 'T700', name: '测试教师', groupId: 'G1', groupName: '测试教研组' },
+                  ],
+                  groupPlans: [resource.timePlan],
+                  resources: [resource],
+                },
+          },
+        }),
+      });
+    });
+    await page.goto(`${path}?kind=lesson-plan&semester=1&round=1`);
+    await expect(page.getByText('UDP协议练习', { exact: true })).toBeVisible();
+    await expect(page.getByText('授课计划UDP协议', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '同步数据', exact: true }).click();
+    await expect(page.getByText('授课计划UDP协议', { exact: true })).toBeVisible();
+    await expect(page.getByText('UDP协议练习', { exact: true })).toBeVisible();
+    await expect(page.getByText('本轮已完成', { exact: true })).toBeVisible();
+    await expect(page.getByText('99', { exact: true })).toBeVisible();
+    await page.reload();
+    await expect(page.getByText('授课计划UDP协议', { exact: true })).toBeVisible();
+    expect(synchronizations).toBe(1);
+    expect(
+      fixture.requests.filter((request) => /mutation (Prepare|Save)/.test(request.query)),
+    ).toHaveLength(0);
+  });
+}
+
+for (const compact of [false, true]) {
+  test(`教案本地筛选开关：完成、差异和缺失分别处理且不触发请求 compact=${compact}`, async ({
+    page,
+  }) => {
+    if (compact) await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await setup(page);
+    let queries = 0;
+    await page.route('**/graphql', async (route) => {
+      queries++;
+      const { query } = route.request().postDataJSON() as { query: string };
+      if (!query.includes('LessonPlanInspectionOverview')) return route.fallback();
+      const resources = ['甲', '乙', '丙', '丁'].map((name, index) => {
+        const original = fixture.resource(index === 0 ? '1:a' : '1:b');
+        const covered = index !== 2;
+        const chapter = `检查章节${name}`;
+        return {
+          ...original,
+          resourceKey: `1:${index}`,
+          courseName: `筛选课程${name}`,
+          teacherIds: ['T700'],
+          grouping: { group: 'FULL' },
+          timePlan: { group: 'FULL', dates, confirmed: true },
+          lessonPlanSources:
+            index === 3
+              ? []
+              : [
+                  {
+                    round: 1,
+                    checkDate: dates[0],
+                    sourceDate: dates[0],
+                    chapter: index === 0 ? `  ${chapter}  ` : `计划章节${name}`,
+                  },
+                ],
+          schedule: {
+            ...original.schedule,
+            records: covered
+              ? [{ recordKey: `record-${index}`, checkDate: dates[0], chapter, score: 99 }]
+              : [],
+          },
+          status: {
+            ...original.status,
+            rounds: original.status.rounds.map((round) => ({
+              ...round,
+              covered: covered && round.round === 1,
+            })),
+          },
+        };
+      });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              today: '2026-10-30',
+              total: 4,
+              departmentId: 'ORG0302',
+              canSelectDepartment: true,
+              departments: [{ id: 'ORG0302', name: '信息工程系' }],
+              roster: [
+                { staffId: 'T700', name: '测试教师', groupId: 'G1', groupName: '测试教研组' },
+              ],
+              groupPlans: [{ group: 'FULL', key: 'FULL:1', dates, confirmed: true }],
+              resources,
+            },
+          },
+        }),
+      });
+    });
+    await page.goto(`${path}?kind=lesson-plan&semester=1&round=1`);
+    const rows = page.locator('tbody tr[data-row-key]');
+    await expect(rows).toHaveCount(4);
+    await expect(page.getByText('信息工程系', { exact: true })).toBeVisible();
+    const before = queries;
+    const hide = page.getByRole('switch', { name: '隐藏已完成', exact: true });
+    const different = page.getByRole('switch', { name: '只看不一致', exact: true });
+    await hide.check();
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText('筛选课程丙');
+    await different.check();
+    await expect(hide).not.toBeChecked();
+    await expect(rows).toHaveCount(1);
+    await expect(rows).toContainText('筛选课程乙');
+    await hide.check();
+    await expect(rows).toHaveCount(0);
+    await expect(
+      page.getByText('不一致筛选只包含已完成记录，请关闭“隐藏已完成”查看', { exact: true }),
+    ).toBeVisible();
+    await different.uncheck();
+    await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+    await expect(page.getByText('已选 1 项', { exact: true })).toBeVisible();
+    await hide.uncheck();
+    await expect(rows).toHaveCount(4);
+    await expect(page.getByText('已选 0 项', { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: '读取并准备选中项', exact: true }),
+    ).toBeDisabled();
+    expect(queries).toBe(before);
+  });
+}
