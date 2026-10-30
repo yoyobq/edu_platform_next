@@ -115,3 +115,24 @@ export function removeRecovery(
     ),
   );
 }
+
+/** Lesson preparations can be read again; preserve legacy SAVE metadata before removing parents. */
+export function discardLessonPreparations(
+  accountId: number,
+  storage: Storage = window.sessionStorage,
+) {
+  const entries = readRecovery(accountId, storage);
+  for (const entry of entries) {
+    if (entry.kind !== 'LESSON_PLAN' || entry.action !== 'SAVE') continue;
+    const details = closureDetails(entry, entries);
+    if (details) putRecovery({ ...entry, ...details }, storage);
+  }
+  removeRecovery(
+    accountId,
+    entries
+      .filter((entry) => entry.kind === 'LESSON_PLAN' && entry.action === 'PREPARE')
+      .map((entry) => entry.clientRequestId),
+    storage,
+  );
+  return readRecovery(accountId, storage);
+}

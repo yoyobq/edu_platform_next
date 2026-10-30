@@ -27,21 +27,16 @@ import { useWidthBand } from '@/shared/ui/responsive-layout';
 
 import * as flow from '../infrastructure/api';
 import * as api from '../infrastructure/lesson-api';
+import { reconcileLessonSaves } from '../infrastructure/lesson-reread';
 import type { readLocation } from '../infrastructure/location';
 import type { RecoveryEntry } from '../infrastructure/recovery';
-import {
-  closureDetails,
-  putRecovery,
-  readRecovery,
-  removeRecovery,
-} from '../infrastructure/recovery';
+import { discardLessonPreparations, putRecovery, removeRecovery } from '../infrastructure/recovery';
 import { dueRound } from '../lesson-policy';
 import type { Prepared, PrepareInput, TimeGroup } from '../model';
 import { blockerText, groupNames, operationText } from '../model';
 type Controller = ReturnType<typeof useUpstreamLoginModalController<never>>;
 type Draft = {
   prepared?: Prepared;
-  request?: RecoveryEntry;
   message: string;
   state: 'ready' | 'error' | 'unknown' | 'saved' | 'busy';
 };
@@ -120,7 +115,7 @@ export function LessonWorkbench({
     }
   }, [blocker]);
   const recoveries = useCallback(() => {
-    const values = readRecovery(account.accountId);
+    const values = discardLessonPreparations(account.accountId);
     setEntries(
       values.filter(
         (e) =>
@@ -174,7 +169,7 @@ export function LessonWorkbench({
   useEffect(() => {
     if (running.current) {
       stop.current = true;
-      setError('检查人或检查范围已变化，材料已清理，请重新查询。');
+      setError('检查人或检查范围已变化，材料已清理，请同步数据。');
     }
     setDrafts({});
     setSelected([]);
@@ -246,12 +241,198 @@ export function LessonWorkbench({
   function patch(key: string, value: Draft) {
     if (alive.current) setDrafts((old) => ({ ...old, [key]: value }));
   }
+  async function reread(row: Row) {
+    if (running.current || !row.course) return;
+    const controller = latestSession.current;
+    let current = controller.session;
+    if (!current) {
+      controller.openLoginModal();
+      return;
+    }
+    const identity = current.upstreamLoginId;
+    const sameIdentity = () => latestSession.current.session?.upstreamLoginId === identity;
+    const assertCurrent = () => {
+      if (!alive.current || !sameIdentity())
+        throw new Error('检查人不一致，材料已清理，请同步数据。');
+    };
+    const persist = (result: { upstreamSessionToken: string | null; expiresAt: string | null }) => {
+      assertCurrent();
+      controller.persistSessionFromResult(current!, result);
+      if (result.upstreamSessionToken)
+        current = {
+          ...current!,
+          upstreamSessionToken: result.upstreamSessionToken,
+          expiresAt: result.expiresAt ?? current!.expiresAt,
+        };
+    };
+    running.current = true;
+    setBusy(true);
+    setError('');
+    setSelected((old) => old.filter((key) => key !== row.key));
+    patch(row.key, { state: 'busy', message: '正在同步数据' });
+    try {
+      const pending = await reconcileLessonSaves(
+        account.accountId,
+        row.course.resourceKey,
+        identity,
+        assertCurrent,
+      );
+      const observed = await flow.refreshStatus(
+        { semesterId, kind: 'LESSON_PLAN', resourceKey: row.course.resourceKey },
+        current.upstreamSessionToken,
+      );
+      persist(observed);
+      const status = observed.status.rounds[row.round - 1];
+      if (
+        pending ||
+        observed.status.rounds.some((item) => item.blockers.includes('PENDING_OPERATION'))
+      ) {
+        patch(row.key, { state: 'unknown', message: '提交结果待确认，暂不能继续' });
+        return;
+      }
+      if (status?.covered) {
+        patch(row.key, { state: 'error', message: '本轮已完成' });
+        return;
+      }
+      if (observed.status.state !== 'TRUSTED' || !status?.canPrepare) {
+        patch(row.key, {
+          state: 'error',
+          message:
+            status?.blockers.map(blockerText).join('；') || '检查状态尚未核实，请稍后同步数据',
+        });
+        return;
+      }
+      const checkDate = observed.schedule.dates[row.round - 1];
+      if (checkDate !== row.date) {
+        patch(row.key, { state: 'error', message: '检查日期已变化，请核对日期后同步数据' });
+        return;
+      }
+      const input: PrepareInput = {
+        semesterId,
+        kind: 'LESSON_PLAN',
+        resourceKey: row.course.resourceKey,
+        round: row.round,
+        checkDate,
+        scheduleVersion: observed.schedule.version,
+        clientRequestId: crypto.randomUUID(),
+      };
+      const result = await flow.prepare(input, current.upstreamSessionToken);
+      persist(result);
+      patch(
+        row.key,
+        result.preview && !result.blockers.length
+          ? { state: 'ready', message: '已准备，待确认', prepared: result }
+          : {
+              state: 'error',
+              message: result.blockers.map(blockerText).join('；') || '准备失败，请同步数据',
+            },
+      );
+    } catch (cause) {
+      if (alive.current) {
+        setError(cause instanceof Error ? cause.message : '数据同步失败');
+        if (sameIdentity())
+          patch(row.key, { state: 'error', message: '同步未完成，请点击“同步数据”' });
+      }
+      if (sameIdentity() && hasGraphQLCategory(cause, 'UNAUTHENTICATED'))
+        controller.openLoginModalForExpiredSession({
+          session: current,
+          loginError: '校园网会话已失效，请重新连接后同步数据。',
+        });
+    } finally {
+      if (alive.current && sameIdentity()) await reload();
+      running.current = false;
+      if (alive.current) {
+        setBusy(false);
+        recoveries();
+      }
+    }
+  }
+  function renderReread(row: Row) {
+    return (
+      row.course && (
+        <Button size="small" disabled={busy || loading} onClick={() => void reread(row)}>
+          同步数据
+        </Button>
+      )
+    );
+  }
+  function completedRecord(row: Row) {
+    return row.course?.status.rounds[row.round - 1]?.covered
+      ? row.course.schedule.records?.[row.round - 1]
+      : undefined;
+  }
+  function renderChapter(row: Row) {
+    const record = completedRecord(row);
+    const lesson = drafts[row.key]?.prepared?.material.lesson;
+    const chapter = record ? record.chapter : lesson?.chapter;
+    if (!record && !lesson && row.course?.status.rounds[row.round - 1]?.covered)
+      return (
+        <Space orientation="vertical" size="small">
+          <span>已完成检查，历史章节尚未同步</span>
+        </Space>
+      );
+    if (!record && !lesson)
+      return <span>{row.course ? '点击“读取并准备选中项”获取材料' : '—'}</span>;
+    return (
+      <>
+        <small>
+          {record
+            ? `已完成检查 · ${record.checkDate}`
+            : `材料来源：${lesson?.sourceDate ?? '原准备快照未记录日期'}`}
+        </small>
+        <div className="whitespace-pre-wrap break-words">
+          {chapter ? (
+            chapter.length > 120 ? (
+              <details>
+                <summary>{chapter.slice(0, 120)}… 展开全文</summary>
+                {chapter}
+              </details>
+            ) : (
+              chapter
+            )
+          ) : (
+            '未记录教学章节'
+          )}
+        </div>
+      </>
+    );
+  }
+  function renderScore(row: Row) {
+    const record = completedRecord(row);
+    if (record) return <span>{record.score ?? '—'}</span>;
+    const lesson = drafts[row.key]?.prepared?.material.lesson;
+    return lesson ? (
+      <Tooltip
+        title={lesson.scoreItems
+          .map((item, i) =>
+            lesson.scores[i] < item.maximum
+              ? `${item.name}：${lesson.scores[i]}/${item.maximum}，扣${item.maximum - lesson.scores[i]}分`
+              : '',
+          )
+          .filter(Boolean)
+          .join('；')}
+      >
+        <span>{lesson.scores.reduce((a, b) => a + b, 0)}</span>
+      </Tooltip>
+    ) : (
+      '—'
+    );
+  }
   function hasPending(row: Row) {
     return entries.some(
-      (e) =>
-        e.action === 'SAVE' &&
-        e.resourceKey === row.course?.resourceKey &&
-        (e.prepare?.round ?? e.round) === row.round,
+      (entry) => entry.action === 'SAVE' && entry.resourceKey === row.course?.resourceKey,
+    );
+  }
+  function rowStatus(row: Row) {
+    return (
+      drafts[row.key]?.message ??
+      (hasPending(row)
+        ? '提交结果待确认'
+        : row.course?.status.rounds[row.round - 1]?.covered
+          ? '本轮已完成'
+          : row.course
+            ? '未准备'
+            : '无课程')
     );
   }
   function eligible(row: Row) {
@@ -284,7 +465,6 @@ export function LessonWorkbench({
     stop.current = false;
     setBusy(true);
     setError('');
-    const unfinishedPreparations = new Set<string>();
     let touched = false;
     let done = 0,
       success = 0,
@@ -296,7 +476,7 @@ export function LessonWorkbench({
     };
     // Rolling credentials belong to this queue; never read a stale render between requests.
     const persist = (result: { upstreamSessionToken: string | null; expiresAt: string | null }) => {
-      if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请重新查询。');
+      if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
       controller.persistSessionFromResult(current!, result);
       if (result.upstreamSessionToken)
         current = {
@@ -306,32 +486,18 @@ export function LessonWorkbench({
         };
     };
     try {
-      if (!submit)
-        forget(
-          entries
-            .filter(
-              (entry) =>
-                entry.action === 'PREPARE' &&
-                queue.some(
-                  (row) =>
-                    row.course!.resourceKey === entry.resourceKey &&
-                    row.round === (entry.prepare?.round ?? entry.round),
-                ),
-            )
-            .map((entry) => entry.clientRequestId),
-        );
       update(submit ? '开始提交' : '开始准备');
       if (!submit) {
         for (let offset = 0; offset < queue.length && !stop.current; offset += 10) {
           const batch = queue.slice(offset, offset + 10);
-          const requests: { row: Row; entry: RecoveryEntry; input: PrepareInput }[] = [];
+          const requests: { row: Row; input: PrepareInput }[] = [];
           for (const row of batch) {
             if (stop.current || !sameIdentity()) break;
             const detail = await api.detail(semesterId, row.course!.resourceKey);
-            if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请重新查询。');
+            if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
             const checkDate = detail.schedule.dates[row.round - 1];
             if (checkDate !== row.date) {
-              publish(row.key, { state: 'error', message: '检查日期已变化，请重新读取列表' });
+              publish(row.key, { state: 'error', message: '检查日期已变化，请刷新列表' });
               failed++;
               done++;
               continue;
@@ -345,18 +511,7 @@ export function LessonWorkbench({
               scheduleVersion: detail.schedule.version,
               clientRequestId: crypto.randomUUID(),
             };
-            const previous = drafts[row.key]?.request;
-            if (previous) forget([previous.clientRequestId]);
-            const entry: RecoveryEntry = {
-              ...input,
-              action: 'PREPARE',
-              accountId: account.accountId,
-              upstreamLoginId: current!.upstreamLoginId,
-              prepare: input,
-            };
-            track(entry);
-            unfinishedPreparations.add(entry.clientRequestId);
-            requests.push({ row, entry, input });
+            requests.push({ row, input });
             publish(row.key, { state: 'busy', message: '正在准备' });
           }
           if (stop.current || !sameIdentity()) break;
@@ -375,22 +530,18 @@ export function LessonWorkbench({
                 item.round === request.input.round,
             )?.result;
             if (result?.preview && !result.blockers.length) {
-              track({ ...request.entry, operationId: result.operation?.id });
               publish(request.row.key, {
                 state: 'ready',
                 message: '已准备，待确认',
                 prepared: result,
-                request: request.entry,
               });
-              unfinishedPreparations.delete(request.entry.clientRequestId);
               success++;
             } else {
-              if (result) forget([request.entry.clientRequestId]);
               publish(request.row.key, {
                 state: 'error',
                 message: result
                   ? result.blockers.map(blockerText).join('；') || '材料无法准备'
-                  : '准备失败，请重新准备',
+                  : '准备失败，请同步数据',
               });
               failed++;
             }
@@ -424,7 +575,6 @@ export function LessonWorkbench({
             action: 'SAVE',
             accountId: account.accountId,
             upstreamLoginId: current!.upstreamLoginId,
-            parentRequestId: draft.request?.clientRequestId,
             round: row.round,
             checkDate: preview.checkDate,
           };
@@ -458,7 +608,7 @@ export function LessonWorkbench({
             publish(row.key, {
               ...draft,
               state: 'unknown',
-              message: '提交未完成，请查询原请求，勿重复提交',
+              message: '提交结果待确认，请同步数据',
             });
             unknown++;
             if (hasGraphQLCategory(cause, 'UNAUTHENTICATED')) throw cause;
@@ -473,7 +623,7 @@ export function LessonWorkbench({
       }
       update(stop.current ? '已停止后续处理' : '本次处理结束');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '处理未完成，请核对原请求');
+      setError(cause instanceof Error ? cause.message : '处理未完成，请同步数据');
       if (sameIdentity())
         setDrafts((old) =>
           Object.fromEntries(
@@ -483,13 +633,13 @@ export function LessonWorkbench({
                 ? {
                     ...draft,
                     state: (submit ? 'unknown' : 'error') as Draft['state'],
-                    message: submit ? '请求未完成，请查询原请求' : '准备失败，请重新准备',
+                    message: submit ? '提交结果待确认，请同步数据' : '准备失败，请同步数据',
                   }
                 : draft,
             ]),
           ),
         );
-      update('已暂停，请核对原请求');
+      update('已暂停，请同步数据');
 
       if (hasGraphQLCategory(cause, 'UNAUTHENTICATED'))
         controller.openLoginModalForExpiredSession({
@@ -497,95 +647,23 @@ export function LessonWorkbench({
           loginError: '会话已失效，重新连接后请主动继续；不会自动提交。',
         });
     } finally {
-      if (!submit && unfinishedPreparations.size) {
-        try {
-          forget([...unfinishedPreparations]);
-        } catch {
-          setError('恢复记录清理失败，请重新查询后再操作。');
-        }
-        if (sameIdentity())
-          setDrafts((old) =>
-            Object.fromEntries(
-              Object.entries(old).map(([key, draft]) => [
-                key,
-                draft.state === 'busy'
-                  ? { state: 'error' as const, message: '准备已停止或失败，请重新准备' }
-                  : draft,
-              ]),
-            ),
-          );
-      }
+      if (!submit && sameIdentity())
+        setDrafts((old) =>
+          Object.fromEntries(
+            Object.entries(old).map(([key, draft]) => [
+              key,
+              draft.state === 'busy'
+                ? { state: 'error' as const, message: '准备已停止或失败，请同步数据' }
+                : draft,
+            ]),
+          ),
+        );
       if (touched && alive.current && sameIdentity()) await reload();
       running.current = false;
       if (alive.current) {
         setBusy(false);
         recoveries();
       }
-    }
-  }
-  async function recover(entry: RecoveryEntry, close = false) {
-    if (running.current) return;
-    const identity = session.session?.upstreamLoginId;
-    const assertIdentity = () => {
-      if (
-        identity !== latestSession.current.session?.upstreamLoginId ||
-        (entry.upstreamLoginId && identity !== entry.upstreamLoginId)
-      ) {
-        setDrafts({});
-        setSelected([]);
-        throw new Error('检查人不一致，材料已清理，请重新查询。');
-      }
-    };
-    running.current = true;
-    setBusy(true);
-    setError('');
-    try {
-      assertIdentity();
-      const details = closureDetails(entry, readRecovery(account.accountId));
-      const op =
-        close && details
-          ? await flow.closeUnstartedRequest({ ...entry, ...details })
-          : await flow.operation(entry);
-      assertIdentity();
-      if (['SAVED', 'VERIFIED', 'REJECTED'].includes(op.state)) {
-        forget([
-          entry.clientRequestId,
-          ...(['SAVED', 'VERIFIED'].includes(op.state) && entry.parentRequestId
-            ? [entry.parentRequestId]
-            : []),
-        ]);
-        const key = `${entry.resourceKey}:${op.round}`;
-        patch(key, {
-          state: ['SAVED', 'VERIFIED'].includes(op.state) ? 'saved' : 'error',
-          message: operationText(op.state),
-        });
-      } else if (entry.action === 'PREPARE' && op.state === 'PREPARED' && entry.prepare) {
-        const current = session.session;
-        if (!current) {
-          session.openLoginModal();
-          return;
-        }
-        const result = await flow.prepare(entry.prepare, current.upstreamSessionToken);
-        assertIdentity();
-        latestSession.current.persistSessionFromResult(current, result);
-        if (result.preview && !result.blockers.length)
-          patch(`${entry.resourceKey}:${op.round}`, {
-            state: 'ready',
-            message: '已恢复材料，待确认',
-            prepared: result,
-            request: entry,
-          });
-        else {
-          forget([entry.clientRequestId]);
-          setError('原材料已失效，请重新准备并确认。');
-        }
-      } else setError(`${operationText(op.state)}；暂不重新发送。`);
-      await reload();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : '恢复失败');
-    } finally {
-      running.current = false;
-      setBusy(false);
     }
   }
   if (!work)
@@ -717,52 +795,10 @@ export function LessonWorkbench({
                           }}
                         />
                       )}
-                      <small>
-                        材料来源：
-                        {drafts[row.key]?.prepared?.material.lesson?.sourceDate ?? '尚未准备'}
-                      </small>
-                      <div className="whitespace-pre-wrap break-words">
-                        {drafts[row.key]?.prepared?.material.lesson?.chapter}
-                      </div>
-                      {drafts[row.key]?.prepared?.material.lesson && (
-                        <Tooltip
-                          title={drafts[row.key]
-                            .prepared!.material.lesson!.scoreItems.map((item, i) =>
-                              drafts[row.key].prepared!.material.lesson!.scores[i] < item.maximum
-                                ? `${item.name}扣1分`
-                                : '',
-                            )
-                            .filter(Boolean)
-                            .join('；')}
-                        >
-                          <span>
-                            {drafts[row.key].prepared!.material.lesson!.scores.reduce(
-                              (a, b) => a + b,
-                              0,
-                            )}{' '}
-                            分
-                          </span>
-                        </Tooltip>
-                      )}
-                      <Tag>{drafts[row.key]?.message ?? (row.course ? '未准备' : '无课程')}</Tag>
-                      {entries
-                        .filter(
-                          (e) =>
-                            e.resourceKey === row.course?.resourceKey &&
-                            (e.prepare?.round ?? e.round) === row.round &&
-                            (drafts[row.key]?.request?.clientRequestId !== e.clientRequestId ||
-                              drafts[row.key]?.state !== 'ready'),
-                        )
-                        .map((e) => (
-                          <Space key={e.clientRequestId} wrap>
-                            <Button disabled={busy} onClick={() => void recover(e)}>
-                              查询／恢复原请求
-                            </Button>
-                            <Button disabled={busy} onClick={() => void recover(e, true)}>
-                              关闭未发送请求
-                            </Button>
-                          </Space>
-                        ))}
+                      {renderChapter(row)}
+                      {renderScore(row)}
+                      <Tag>{rowStatus(row)}</Tag>
+                      {renderReread(row)}
                     </Space>
                   ),
                 },
@@ -807,89 +843,21 @@ export function LessonWorkbench({
                     ),
                 },
                 {
-                  title: '教学计划内容',
-                  render: (_, row) => {
-                    const lesson = drafts[row.key]?.prepared?.material.lesson;
-                    return lesson ? (
-                      <>
-                        <small>材料来源：{lesson.sourceDate ?? '原准备快照未记录日期'}</small>
-                        <div className="whitespace-pre-wrap break-words">
-                          {lesson.chapter.length > 120 ? (
-                            <details>
-                              <summary>{lesson.chapter.slice(0, 120)}… 展开全文</summary>
-                              {lesson.chapter}
-                            </details>
-                          ) : (
-                            lesson.chapter
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <span>{row.course ? '点击“读取并准备选中项”获取材料' : '—'}</span>
-                    );
-                  },
+                  title: '教学章节',
+                  render: (_, row) => renderChapter(row),
                 },
                 {
                   title: '评分',
                   width: 75,
-                  render: (_, row) => {
-                    const lesson = drafts[row.key]?.prepared?.material.lesson;
-                    return lesson ? (
-                      <Tooltip
-                        title={lesson.scoreItems
-                          .map((item, i) =>
-                            lesson.scores[i] < item.maximum
-                              ? `${item.name}：${lesson.scores[i]}/${item.maximum}，扣${item.maximum - lesson.scores[i]}分`
-                              : '',
-                          )
-                          .filter(Boolean)
-                          .join('；')}
-                      >
-                        <span>{lesson.scores.reduce((a, b) => a + b, 0)}</span>
-                      </Tooltip>
-                    ) : (
-                      '—'
-                    );
-                  },
+                  render: (_, row) => renderScore(row),
                 },
                 {
                   title: '状态',
                   width: 200,
                   render: (_, row) => (
                     <Space orientation="vertical">
-                      <Tag>
-                        {drafts[row.key]?.message ??
-                          (row.course?.status.rounds[row.round - 1]?.covered
-                            ? '本轮已完成'
-                            : row.course
-                              ? '未准备'
-                              : '无课程')}
-                      </Tag>
-                      {entries
-                        .filter(
-                          (e) =>
-                            e.resourceKey === row.course?.resourceKey &&
-                            (e.prepare?.round ?? e.round) === row.round,
-                        )
-                        .filter(
-                          (e) =>
-                            drafts[row.key]?.request?.clientRequestId !== e.clientRequestId ||
-                            drafts[row.key]?.state !== 'ready',
-                        )
-                        .map((e) => (
-                          <Space key={e.clientRequestId} wrap>
-                            <Button size="small" disabled={busy} onClick={() => void recover(e)}>
-                              查询／恢复原请求
-                            </Button>
-                            <Button
-                              size="small"
-                              disabled={busy}
-                              onClick={() => void recover(e, true)}
-                            >
-                              关闭未发送请求
-                            </Button>
-                          </Space>
-                        ))}
+                      <Tag>{rowStatus(row)}</Tag>
+                      {renderReread(row)}
                     </Space>
                   ),
                 },

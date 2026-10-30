@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   closureDetails,
+  discardLessonPreparations,
   putRecovery,
   readRecovery,
   type RecoveryEntry,
@@ -94,4 +95,33 @@ describe('检查恢复存储', () => {
     };
     expect(() => putRecovery(entry, storage)).toThrow('quota');
   });
+});
+
+it('教案旧PREPARE清理前补齐SAVE轮次日期，其他检查类型保持不变', () => {
+  const storage = memory();
+  const lesson: RecoveryEntry = {
+    ...entry,
+    kind: 'LESSON_PLAN',
+    clientRequestId: 'lesson-prep',
+    prepare: { ...entry.prepare!, kind: 'LESSON_PLAN', clientRequestId: 'lesson-prep' },
+  };
+  putRecovery(lesson, storage);
+  putRecovery(
+    {
+      ...lesson,
+      action: 'SAVE',
+      clientRequestId: 'lesson-save',
+      prepare: undefined,
+      parentRequestId: 'lesson-prep',
+    },
+    storage,
+  );
+  putRecovery(entry, storage);
+  const result = discardLessonPreparations(1, storage);
+  expect(result.find((row) => row.clientRequestId === 'lesson-prep')).toBeUndefined();
+  expect(result.find((row) => row.clientRequestId === 'lesson-save')).toMatchObject({
+    round: 2,
+    checkDate: '2026-10-01',
+  });
+  expect(result.find((row) => row.clientRequestId === entry.clientRequestId)).toEqual(entry);
 });

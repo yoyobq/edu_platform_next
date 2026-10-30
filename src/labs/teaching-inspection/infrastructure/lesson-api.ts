@@ -21,7 +21,7 @@ export type LessonResource = Resource & {
   timePlan: TimePlan;
 };
 export type LessonSummary = Omit<LessonResource, 'schedule'> & {
-  schedule: Pick<Schedule, 'version' | 'dates' | 'rounds'>;
+  schedule: Pick<Schedule, 'version' | 'dates' | 'rounds' | 'records'>;
 };
 export type LessonOverview = Omit<Workspace, 'resources'> & {
   roster: { groupId: string; groupName: string; staffId: string; name: string }[];
@@ -31,7 +31,7 @@ export type LessonOverview = Omit<Workspace, 'resources'> & {
 const resourceFields = `resourceKey sourceVersion courseName teacherIds teacherNames suggestedDates earliestDate latestDate blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { group key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate } schedule { ${scheduleFields} } status { ${statusFields} }`;
 const overviewFields = resourceFields.replace(
   scheduleFields,
-  'version dates rounds { round date actualDate recordKey operationId operationState savedOperationId }',
+  'version dates records { recordKey checkDate chapter score } rounds { round date actualDate recordKey operationId operationState savedOperationId }',
 );
 export async function overview(semesterId: number, departmentId?: string | null) {
   return (
