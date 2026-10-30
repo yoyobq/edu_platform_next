@@ -1,5 +1,6 @@
 // src/labs/teaching-inspection/ui/lesson-workbench.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { LoadingOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
@@ -16,6 +17,7 @@ import {
   Tag,
   theme,
   Tooltip,
+  Typography,
 } from 'antd';
 import { useBeforeUnload, useBlocker } from 'react-router';
 
@@ -46,6 +48,7 @@ type Draft = {
 type Row = {
   key: string;
   name: string;
+  staffId: string;
   group: string;
   course?: api.LessonSummary;
   round: number;
@@ -74,6 +77,9 @@ export function LessonWorkbench({
   const [keyword, setKeyword] = useState('');
   const [customRounds, setCustomRounds] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
+  const [activity, setActivity] = useState<
+    { kind: 'sync'; key: string } | { kind: 'prepare' } | { kind: 'submit'; key?: string } | null
+  >(null);
   const [progress, setProgress] = useState({
     done: 0,
     total: 0,
@@ -217,6 +223,7 @@ export function LessonWorkbench({
         rows.push({
           key,
           name: course.teacherNames.join('、'),
+          staffId: course.teacherIds.join('、'),
           group: member.groupName,
           course,
           round: r,
@@ -229,6 +236,7 @@ export function LessonWorkbench({
       rows.push({
         key: `staff:${member.staffId}`,
         name: member.name,
+        staffId: member.staffId,
         group: member.groupName,
         round,
       });
@@ -277,6 +285,8 @@ export function LessonWorkbench({
     };
     running.current = true;
     setBusy(true);
+    setActivity({ kind: 'sync', key: row.key });
+    setProgress({ done: 0, total: 0, success: 0, failed: 0, unknown: 0, label: '' });
     setError('');
     setSelected((old) => old.filter((key) => key !== row.key));
     patch(row.key, { state: 'busy', message: '正在同步数据' });
@@ -353,14 +363,44 @@ export function LessonWorkbench({
       running.current = false;
       if (alive.current) {
         setBusy(false);
+        setActivity(null);
         recoveries();
       }
     }
   }
+  function renderTeacher(row: Row, inline = false) {
+    return (
+      <div className={inline ? 'flex flex-wrap items-baseline gap-x-2' : 'flex flex-col gap-1'}>
+        <Tooltip title={row.group}>
+          <strong>{row.name}</strong>
+        </Tooltip>
+        <small style={{ color: token.colorTextTertiary }}>{row.staffId}</small>
+      </div>
+    );
+  }
+  function renderCourse(row: Row) {
+    const courseName = row.course?.courseName ?? '本批无课程';
+    return (
+      <Typography.Paragraph
+        type="secondary"
+        ellipsis={{ rows: 2, tooltip: courseName }}
+        style={{ margin: 0, overflowWrap: 'anywhere' }}
+      >
+        {courseName}
+      </Typography.Paragraph>
+    );
+  }
   function renderReread(row: Row) {
     return (
       row.course && (
-        <Button size="small" disabled={busy || loading} onClick={() => void reread(row)}>
+        <Button
+          size="small"
+          aria-label="同步数据"
+          aria-busy={activity?.kind === 'sync' && activity.key === row.key}
+          loading={activity?.kind === 'sync' && activity.key === row.key}
+          disabled={busy || loading}
+          onClick={() => void reread(row)}
+        >
           同步数据
         </Button>
       )
@@ -374,22 +414,27 @@ export function LessonWorkbench({
   function renderChapter(row: Row, source = false) {
     const record = completedRecord(row);
     const lesson = drafts[row.key]?.prepared?.material.lesson;
+    const planSource =
+      lesson ?? row.course?.lessonPlanSources?.find((item) => item.round === row.round);
     if (source)
-      return lesson ? (
+      return planSource ? (
         <>
-          <small>授课日期 · {lesson.sourceDate ?? '未记录'}</small>
-          <div className="whitespace-pre-wrap break-words">{lesson.chapter}</div>
+          <small>授课日期 · {planSource.sourceDate ?? '未记录'}</small>
+          <div className="whitespace-pre-wrap break-words">{planSource.chapter}</div>
         </>
       ) : (
-        <span>{record ? '未留存计划章节' : '—'}</span>
+        <span>—</span>
       );
     if (!record && drafts[row.key]?.state === 'ready' && lesson)
       return (
         <>
+          {drafts[row.key].editedChapter !== undefined &&
+            drafts[row.key].editedChapter !== lesson.chapter && <Tag>已调整</Tag>}
           <Input.TextArea
-            aria-label={`${row.course?.courseName}检查章节`}
+            aria-label={`${row.course?.courseName}检查时授课章节`}
             disabled={busy}
-            autoSize={{ minRows: 2, maxRows: 5 }}
+            autoSize={{ minRows: 1, maxRows: 5 }}
+            styles={{ textarea: { paddingBlock: 0 } }}
             status={(drafts[row.key].editedChapter ?? lesson.chapter).trim() ? '' : 'error'}
             value={drafts[row.key].editedChapter ?? lesson.chapter}
             onChange={(event) =>
@@ -399,9 +444,9 @@ export function LessonWorkbench({
               }))
             }
           />
-          {!(drafts[row.key].editedChapter ?? lesson.chapter).trim() && <div>检查章节不能为空</div>}
-          {drafts[row.key].editedChapter !== undefined &&
-            drafts[row.key].editedChapter !== lesson.chapter && <Tag>已调整</Tag>}
+          {!(drafts[row.key].editedChapter ?? lesson.chapter).trim() && (
+            <div>检查时授课章节不能为空</div>
+          )}
         </>
       );
     const chapter = record ? record.chapter : (drafts[row.key]?.editedChapter ?? lesson?.chapter);
@@ -459,16 +504,39 @@ export function LessonWorkbench({
       (entry) => entry.action === 'SAVE' && entry.resourceKey === row.course?.resourceKey,
     );
   }
-  function rowStatus(row: Row) {
-    return (
-      drafts[row.key]?.message ??
-      (hasPending(row)
+  function renderStatus(row: Row) {
+    const draft = drafts[row.key];
+    const pending = hasPending(row);
+    const label =
+      draft?.message ??
+      (pending
         ? '提交结果待确认'
         : row.course?.status.rounds[row.round - 1]?.covered
           ? '本轮已完成'
           : row.course
             ? '未准备'
-            : '无课程')
+            : '无课程');
+    const color =
+      label === '本轮已完成' || draft?.state === 'saved'
+        ? 'success'
+        : draft?.state === 'busy'
+          ? 'processing'
+          : draft?.state === 'unknown' || (!draft && pending)
+            ? 'warning'
+            : draft?.state === 'ready'
+              ? 'blue'
+              : draft?.state === 'error'
+                ? 'error'
+                : 'default';
+    return (
+      <Tag
+        color={color}
+        role="status"
+        aria-busy={draft?.state === 'busy'}
+        icon={draft?.state === 'busy' ? <LoadingOutlined aria-hidden /> : undefined}
+      >
+        {label}
+      </Tag>
     );
   }
   function eligible(row: Row) {
@@ -480,17 +548,46 @@ export function LessonWorkbench({
       drafts[row.key]?.state !== 'saved',
     );
   }
-  const hasEmptyChapter = chosen.some(
-    (row) =>
+  function emptyChapter(row: Row) {
+    return (
       drafts[row.key]?.state === 'ready' &&
       !(
         drafts[row.key].editedChapter ??
         drafts[row.key].prepared?.material.lesson?.chapter ??
         ''
-      ).trim(),
-  );
-  async function run(submit: boolean) {
-    if (running.current || (submit && hasEmptyChapter)) return;
+      ).trim()
+    );
+  }
+  function canSubmit(row: Row) {
+    return (
+      eligible(row) &&
+      drafts[row.key]?.state === 'ready' &&
+      Boolean(drafts[row.key].prepared?.preview) &&
+      !emptyChapter(row) &&
+      !hasPending(row)
+    );
+  }
+  function renderRowAction(row: Row) {
+    const submitting = activity?.kind === 'submit' && activity.key === row.key;
+    if (!submitting && drafts[row.key]?.state !== 'ready') return renderReread(row);
+    return (
+      <Button
+        size="small"
+        type="primary"
+        aria-label={`确认提交${row.course?.courseName ?? ''}`}
+        aria-busy={submitting}
+        loading={submitting}
+        disabled={busy || loading || !canSubmit(row)}
+        onClick={() => void run(true, row)}
+      >
+        确认提交
+      </Button>
+    );
+  }
+  const hasEmptyChapter = chosen.some(emptyChapter);
+  async function run(submit: boolean, target?: Row) {
+    const targets = target ? [target] : chosen;
+    if (running.current || (submit && targets.some(emptyChapter))) return;
     const controller = latestSession.current;
     let current = controller.session;
     if (!current) {
@@ -502,22 +599,14 @@ export function LessonWorkbench({
     const publish = (key: string, value: Draft) => {
       if (sameIdentity()) patch(key, value);
     };
-    const queue = chosen.filter(
-      (row) =>
-        eligible(row) &&
-        !hasPending(row) &&
-        (!submit ||
-          (drafts[row.key]?.state === 'ready' &&
-            (
-              drafts[row.key].editedChapter ??
-              drafts[row.key].prepared?.material.lesson?.chapter ??
-              ''
-            ).trim().length > 0)),
+    const queue = targets.filter(
+      (row) => eligible(row) && !hasPending(row) && (!submit || canSubmit(row)),
     );
     if (!queue.length) return;
     running.current = true;
     stop.current = false;
     setBusy(true);
+    setActivity(submit ? { kind: 'submit', key: target?.key } : { kind: 'prepare' });
     setError('');
     let touched = false;
     let done = 0,
@@ -547,6 +636,8 @@ export function LessonWorkbench({
           const requests: { row: Row; input: PrepareInput }[] = [];
           for (const row of batch) {
             if (stop.current || !sameIdentity()) break;
+            publish(row.key, { state: 'busy', message: '正在读取课程' });
+            update(`正在读取 ${row.name} · ${row.course!.courseName}`);
             const detail = await api.detail(semesterId, row.course!.resourceKey);
             if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
             const checkDate = detail.schedule.dates[row.round - 1];
@@ -718,6 +809,7 @@ export function LessonWorkbench({
       running.current = false;
       if (alive.current) {
         setBusy(false);
+        setActivity(null);
         recoveries();
       }
     }
@@ -871,6 +963,9 @@ export function LessonWorkbench({
               type={
                 chosen.some((row) => drafts[row.key]?.state === 'ready') ? 'default' : 'primary'
               }
+              aria-label="读取并准备选中项"
+              aria-busy={activity?.kind === 'prepare'}
+              loading={activity?.kind === 'prepare'}
               disabled={busy || !chosen.length}
               onClick={() => void run(false)}
             >
@@ -878,33 +973,24 @@ export function LessonWorkbench({
             </Button>
             <Button
               type="primary"
-              disabled={
-                busy ||
-                hasEmptyChapter ||
-                !chosen.some(
-                  (r) =>
-                    drafts[r.key]?.state === 'ready' &&
-                    (
-                      drafts[r.key].editedChapter ??
-                      drafts[r.key].prepared?.material.lesson?.chapter ??
-                      ''
-                    ).trim().length > 0 &&
-                    !hasPending(r),
-                )
-              }
+              aria-label="确认提交选中项"
+              aria-busy={activity?.kind === 'submit' && !activity.key}
+              loading={activity?.kind === 'submit' && !activity.key}
+              disabled={busy || hasEmptyChapter || !chosen.some(canSubmit)}
               onClick={() => void run(true)}
             >
               确认提交选中项
             </Button>
-            {busy && (
-              <Button
-                onClick={() => {
-                  stop.current = true;
-                }}
-              >
-                停止后续处理
-              </Button>
-            )}
+            {busy &&
+              (activity?.kind === 'prepare' || (activity?.kind === 'submit' && !activity.key)) && (
+                <Button
+                  onClick={() => {
+                    stop.current = true;
+                  }}
+                >
+                  停止后续处理
+                </Button>
+              )}
           </Space>
           {progress.total > 0 && (
             <>
@@ -918,10 +1004,11 @@ export function LessonWorkbench({
         </Card>
         <Table<Row>
           size="middle"
+          tableLayout="fixed"
           rowKey="key"
           dataSource={rows}
           pagination={{ pageSize: 20 }}
-          scroll={band === 'compact' ? undefined : { x: 1050 }}
+          scroll={band === 'compact' ? undefined : { x: 1064 }}
           rowSelection={{
             selectedRowKeys: selected,
             onChange: (keys) => setSelected(keys.map(String)),
@@ -934,10 +1021,8 @@ export function LessonWorkbench({
                     title: '教案检查',
                     render: (_, row) => (
                       <Space orientation="vertical">
-                        <small>{row.group}</small>
-                        <strong>
-                          {row.name} · {row.course?.courseName ?? '本批无课程'}
-                        </strong>
+                        {renderTeacher(row, true)}
+                        {renderCourse(row)}
                         <span>
                           <strong>第{row.round}次检查</strong>
                           <br />
@@ -960,26 +1045,25 @@ export function LessonWorkbench({
                         )}
                         <small>授课计划章节</small>
                         {renderChapter(row, true)}
-                        <small>检查章节</small>
+                        <small>检查时授课章节</small>
                         {renderChapter(row)}
                         {renderScore(row)}
-                        <Tag>{rowStatus(row)}</Tag>
-                        {renderReread(row)}
+                        {renderStatus(row)}
+                        {renderRowAction(row)}
                       </Space>
                     ),
                   },
                 ]
               : [
                   {
-                    title: '老师／课程',
-                    width: 195,
-                    render: (_, row) => (
-                      <Space orientation="vertical" size={0}>
-                        <small>{row.group}</small>
-                        <strong>{row.name}</strong>
-                        <span>{row.course?.courseName ?? '本批无课程'}</span>
-                      </Space>
-                    ),
+                    title: '教师',
+                    width: 130,
+                    render: (_, row) => renderTeacher(row),
+                  },
+                  {
+                    title: '课程',
+                    width: '11%',
+                    render: (_, row) => renderCourse(row),
                   },
                   {
                     title: '检查日期',
@@ -1012,12 +1096,12 @@ export function LessonWorkbench({
                   },
                   {
                     title: '授课计划章节',
-                    width: 240,
+                    onCell: () => ({ style: { verticalAlign: 'bottom' } }),
                     render: (_, row) => renderChapter(row, true),
                   },
                   {
-                    title: '检查章节',
-                    width: 240,
+                    title: '检查时授课章节',
+                    onCell: () => ({ style: { verticalAlign: 'bottom' } }),
                     render: (_, row) => renderChapter(row),
                   },
                   {
@@ -1030,8 +1114,8 @@ export function LessonWorkbench({
                     width: 150,
                     render: (_, row) => (
                       <Space orientation="vertical">
-                        <Tag>{rowStatus(row)}</Tag>
-                        {renderReread(row)}
+                        {renderStatus(row)}
+                        {renderRowAction(row)}
                       </Space>
                     ),
                   },

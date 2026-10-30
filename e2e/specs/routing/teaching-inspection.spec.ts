@@ -1946,7 +1946,7 @@ test('检查组织：教研组长固定本地所属系，没有跨系选择入�
 test('教案批次首屏仅本地，标签切换不读取，完整组员无课者在后', async ({ page }) => {
   const fixture = await setup(page);
   await page.goto(`${path}?kind=lesson-plan&semester=1`);
-  await expect(page.getByText('测试教研组', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('T700', { exact: true }).first()).toBeVisible();
   const rows = page.locator('tbody tr[data-row-key]');
   await expect(rows.first()).toContainText('测试教师');
   await expect(rows.last()).toContainText('无课教师');
@@ -2032,10 +2032,22 @@ test('教案停止后续提交，仅完成当前请求', async ({ page }) => {
   await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: '确认提交选中项' }).click();
   await expect.poll(() => saves).toBe(1);
+  await expect(page.getByRole('button', { name: '确认提交选中项', exact: true })).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+  await expect(page.getByRole('status').filter({ hasText: /^正在提交$/ })).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
   await page.getByRole('button', { name: '停止后续处理' }).click();
   release();
   await expect(page.getByText(/已停止后续处理/)).toBeVisible();
   expect(saves).toBe(1);
+  await expect(page.getByRole('button', { name: '确认提交选中项', exact: true })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
 });
 
 test('教案未知提交保留原请求，刷新不自动重发', async ({ page }) => {
@@ -2111,9 +2123,21 @@ test('教案收集课程时停止准备，未发送项可以直接重来', async
   await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
   await page.getByRole('button', { name: '读取并准备选中项' }).click();
   await expect.poll(() => details).toBe(2);
+  await expect(page.getByRole('button', { name: '读取并准备选中项', exact: true })).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+  await expect(page.getByRole('status').filter({ hasText: /^正在读取课程$/ })).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
   await page.getByRole('button', { name: '停止后续处理' }).click();
   release();
   await expect(page.getByRole('button', { name: '读取并准备选中项' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '读取并准备选中项', exact: true })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
   expect(
     fixture.requests.filter((r) => r.query.includes('PrepareLessonPlanInspectionBatch')),
   ).toHaveLength(0);
@@ -2162,10 +2186,22 @@ test('教案同步期间锁定全局范围和检查人，完成后恢复操作',
   });
   await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
   await expect.poll(() => entered).toBe(true);
+  const syncButtons = page.getByRole('button', { name: '同步数据', exact: true });
+  await expect(syncButtons.first()).toHaveAttribute('aria-busy', 'true');
+  await expect(syncButtons.nth(1)).toHaveAttribute('aria-busy', 'false');
+  await expect(page.getByRole('status').filter({ hasText: /^正在同步数据$/ })).toHaveAttribute(
+    'aria-busy',
+    'true',
+  );
+  await expect(page.getByRole('button', { name: '读取并准备选中项', exact: true })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  );
   await expect(page.getByRole('button', { name: '切换校园网教职工' })).toBeDisabled();
   await expect(page.getByLabel('检查学期')).toBeDisabled();
   release();
   await expect(page.getByRole('button', { name: '切换校园网教职工' })).toBeEnabled();
+  await expect(syncButtons.first()).toHaveAttribute('aria-busy', 'false');
   expect(
     await page.evaluate(() => localStorage.getItem('aigc-friendly-frontend.upstream.session.v2')),
   ).not.toContain('new-inspector-token');
@@ -2275,6 +2311,20 @@ for (const compact of [false, true]) {
         const original = fixture.resource(key);
         return {
           ...original,
+          lessonPlanSources: [
+            {
+              round: 1,
+              checkDate: dates[0],
+              chapter: `原计划章节${key}`,
+              sourceDate: '2026-09-08',
+            },
+            {
+              round: 2,
+              checkDate: dates[1],
+              chapter: `待检查计划${key}`,
+              sourceDate: '2026-09-18',
+            },
+          ],
           teacherIds: ['T700'],
           grouping: { group: 'FULL' },
           timePlan: { group: 'FULL', dates, confirmed: true },
@@ -2321,12 +2371,18 @@ for (const compact of [false, true]) {
       });
     });
     await page.goto(`${path}?kind=lesson-plan&semester=1&round=1`);
+    await expect(page.getByText('原计划章节1:a', { exact: true })).toBeVisible();
+    await expect(page.getByText('原计划章节1:b', { exact: true })).toBeVisible();
+    await expect(page.getByText('未留存计划章节', { exact: true })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText('原计划章节1:a', { exact: true })).toBeVisible();
     await expect(page.getByText('本地章节1:a', { exact: true })).toBeVisible();
     await expect(page.getByText('本地章节1:b', { exact: true })).toBeVisible();
     await expect(page.getByText('97', { exact: true })).toHaveCount(2);
     await expect(page.getByText('已完成检查 · 2026-09-09', { exact: true })).toHaveCount(2);
     await expect(page.getByText('本轮已完成', { exact: true })).toHaveCount(2);
-    if (!compact) await expect(page.getByRole('columnheader', { name: '检查章节' })).toBeVisible();
+    if (!compact)
+      await expect(page.getByRole('columnheader', { name: '检查时授课章节' })).toBeVisible();
     expect(
       fixture.requests.some((r) =>
         /RefreshTeachingInspectionStatus|mutation (Prepare|Save)/.test(r.query),
@@ -2334,6 +2390,11 @@ for (const compact of [false, true]) {
     ).toBe(false);
     await page.getByRole('tab', { name: '第2次 · 2026-09-20', exact: true }).press('Enter');
     await expect(page.getByText('本地章节1:a', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('原计划章节1:a', { exact: true })).toHaveCount(0);
+    await expect(page.getByText('待检查计划1:a', { exact: true })).toBeVisible();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(0);
+    await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+    await expect(page.getByRole('button', { name: '确认提交选中项' })).toBeDisabled();
   });
 }
 
@@ -2488,9 +2549,9 @@ test('教案产品工作台：全局范围在导航前，章节对照可编辑�
   await page.getByRole('button', { name: '读取并准备选中项' }).click();
   await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
   await expect(page.getByRole('columnheader', { name: '授课计划章节' })).toBeVisible();
-  const input = page.getByRole('textbox', { name: '测试课程甲检查章节' });
+  const input = page.getByRole('textbox', { name: '测试课程甲检查时授课章节' });
   await input.fill('   ');
-  await expect(page.getByText('检查章节不能为空', { exact: true })).toBeVisible();
+  await expect(page.getByText('检查时授课章节不能为空', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '确认提交选中项' })).toBeDisabled();
   await input.fill('检查者调整后的章节');
   await expect(page.getByText('已调整', { exact: true })).toBeVisible();
@@ -2584,3 +2645,90 @@ test('检查导航分组：时间入口靠左，业务和两层筛选靠右并�
   await expect(datesEntry).toHaveAttribute('aria-pressed', 'true');
   await expect(filters).toHaveCount(0);
 });
+
+for (const compact of [false, true]) {
+  test(`教案单行确认提交只处理当前行，复用校验与加载反馈 compact=${compact}`, async ({ page }) => {
+    if (compact) await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await setup(page);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered = false;
+    let secondSaved = false;
+    const lessonResource = (key: string) => ({
+      ...fixture.resource(key),
+      teacherIds: ['T700'],
+      grouping: { group: 'FULL' },
+      timePlan: { group: 'FULL', key: 'FULL:1', dates, confirmed: true },
+    });
+    const unchangedSecond = lessonResource('1:b');
+    await page.route('**/graphql', async (route) => {
+      const { query, variables } = route.request().postDataJSON() as {
+        query: string;
+        variables?: { input: { resourceKey?: string } };
+      };
+      if (query.includes('LessonPlanInspectionOverview'))
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              result: {
+                today: '2026-10-18',
+                total: 2,
+                departmentId: 'ORG0302',
+                canSelectDepartment: true,
+                departments: [{ id: 'ORG0302', name: '信息工程系' }],
+                roster: [
+                  { staffId: 'T700', name: '测试教师', groupId: 'G1', groupName: '测试教研组' },
+                ],
+                groupPlans: [{ group: 'FULL', key: 'FULL:1', dates, confirmed: true }],
+                resources: [
+                  lessonResource('1:a'),
+                  secondSaved ? lessonResource('1:b') : unchangedSecond,
+                ],
+              },
+            },
+          }),
+        });
+      if (query.includes('SaveLessonPlanInspection')) {
+        entered = true;
+        await gate;
+        if (variables?.input.resourceKey === '1:b') secondSaved = true;
+      }
+      await route.fallback();
+    });
+    await page.goto(`${path}?kind=lesson-plan&semester=1`);
+    await page.getByRole('checkbox', { name: '全选当前筛选范围（全部分页）' }).check();
+    await page.getByRole('button', { name: '读取并准备选中项' }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+    await expect(page.getByRole('button', { name: '同步数据', exact: true })).toHaveCount(0);
+    await page.getByRole('textbox', { name: '测试课程乙检查时授课章节' }).fill('   ');
+    await page.getByRole('textbox', { name: '测试课程甲检查时授课章节' }).fill('单行确认章节');
+    const first = page.getByRole('button', { name: '确认提交测试课程甲', exact: true });
+    const second = page.getByRole('button', { name: '确认提交测试课程乙', exact: true });
+    await expect(second).toBeDisabled();
+    await expect(page.getByRole('button', { name: '确认提交选中项', exact: true })).toBeDisabled();
+    await expect(first).toBeEnabled();
+    await first.click();
+    await expect.poll(() => entered).toBe(true);
+    await expect(first).toHaveAttribute('aria-busy', 'true');
+    await expect(page.getByRole('button', { name: '确认提交选中项', exact: true })).toHaveAttribute(
+      'aria-busy',
+      'false',
+    );
+    release();
+    await expect(page.getByText('提交成功', { exact: true })).toHaveCount(1);
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(1);
+    const saves = fixture.requests.filter((request) =>
+      request.query.includes('mutation SaveLessonPlanInspection'),
+    );
+    expect(saves).toHaveLength(1);
+    expect(saves[0].input).toMatchObject({ resourceKey: '1:a', chapter: '单行确认章节' });
+    await expect(first).toHaveCount(0);
+    await page.getByRole('textbox', { name: '测试课程乙检查时授课章节' }).fill('另一行确认章节');
+    await expect(second).toBeEnabled();
+    await second.click();
+    await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
+  });
+}

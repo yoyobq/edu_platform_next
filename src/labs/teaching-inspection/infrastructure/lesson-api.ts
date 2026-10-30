@@ -16,6 +16,9 @@ import type {
 
 import { prepareFields, scheduleFields, statusFields } from './api';
 export type LessonResource = Resource & {
+  lessonPlanSources?:
+    | { round: number; checkDate: string; chapter: string; sourceDate: string | null }[]
+    | null;
   teacherIds: string[];
   grouping?: CourseGrouping;
   timePlan: TimePlan;
@@ -28,7 +31,7 @@ export type LessonOverview = Omit<Workspace, 'resources'> & {
   groupPlans: TimePlan[];
   resources: LessonSummary[];
 };
-const resourceFields = `resourceKey sourceVersion courseName teacherIds teacherNames suggestedDates earliestDate latestDate blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { group key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate } schedule { ${scheduleFields} } status { ${statusFields} }`;
+const resourceFields = `lessonPlanSources { round checkDate chapter sourceDate } resourceKey sourceVersion courseName teacherIds teacherNames suggestedDates earliestDate latestDate blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { group key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate } schedule { ${scheduleFields} } status { ${statusFields} }`;
 const overviewFields = resourceFields.replace(
   scheduleFields,
   'version dates records { recordKey checkDate chapter score } rounds { round date actualDate recordKey operationId operationState savedOperationId }',
