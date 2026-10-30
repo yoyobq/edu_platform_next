@@ -34,6 +34,7 @@ import { useWidthBand } from '@/shared/ui/responsive-layout';
 import * as api from './infrastructure/api';
 import { readLocation, writeLocation } from './infrastructure/location';
 import { InspectionDetail } from './ui/inspection-detail';
+import { LessonWorkbench } from './ui/lesson-workbench';
 import { TimePlanWorkbench } from './ui/time-plan-workbench';
 import { blockerText, kinds, type Resource, statusText } from './model';
 import { syncText, useInspectionWorkspace } from './use-workspace';
@@ -150,6 +151,14 @@ function InspectionPage({ data }: { data: LoaderData }) {
             }
             onLocation={(value) => setParams(writeLocation(value))}
           />
+        ) : location.type.kind === 'LESSON_PLAN' ? (
+          <LessonWorkbench
+            key={`${data.currentAccount.accountId}:${location.semesterId}:${location.departmentId ?? 'default'}`}
+            location={location}
+            onLocation={(value) => setParams(writeLocation(value))}
+            account={data.currentAccount}
+            session={session}
+          />
         ) : (
           <Workbench
             key={`${data.currentAccount.accountId}:${session.session?.upstreamLoginId ?? 'unconnected'}:${params.toString()}`}
@@ -217,6 +226,32 @@ function Workbench({
   return (
     <div ref={container} className="flex min-w-0 flex-col gap-4">
       <Space wrap>
+        {workspace?.departments && (
+          <Select
+            aria-label="检查所属系"
+            style={{ width: 200 }}
+            showSearch
+            optionFilterProp="label"
+            disabled={!workspace.canSelectDepartment}
+            value={workspace.departmentId ?? 'all'}
+            options={[
+              ...(workspace.canSelectDepartment ? [{ value: 'all', label: '全校（全部系）' }] : []),
+              ...workspace.departments.map((department) => ({
+                value: department.id,
+                label: department.name,
+              })),
+            ]}
+            onChange={(value) =>
+              onLocation({
+                ...location,
+                departmentId: value === 'all' ? null : value,
+                teacherId: undefined,
+                resourceKey: undefined,
+                page: 1,
+              })
+            }
+          />
+        )}
         <Select
           aria-label="筛选教师"
           allowClear

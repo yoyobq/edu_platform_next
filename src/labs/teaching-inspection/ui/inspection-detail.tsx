@@ -63,6 +63,7 @@ function initialRecovery(accountId: number, target: Target) {
   }
 }
 export function InspectionDetail({
+  initialRound,
   resource,
   syncing,
   syncState,
@@ -74,6 +75,7 @@ export function InspectionDetail({
   onDirty,
   onArrange,
 }: {
+  initialRound?: number;
   resource: Resource;
   syncing: boolean;
   syncState: InspectionSyncState;
@@ -115,8 +117,10 @@ export function InspectionDetail({
   const [acknowledged, setAcknowledged] = useState<string | null>(null);
   const [round, setRound] = useState(
     () =>
+      initialRound ??
       resource.status.rounds.find((item) => item.canPrepare || item.retryWarningOperationId)
-        ?.round ?? 1,
+        ?.round ??
+      1,
   );
   const [busy, setBusy] = useState(false);
   const gate = useRef(false);
@@ -213,6 +217,7 @@ export function InspectionDetail({
   async function executePrepare(entry: RecoveryEntry) {
     const current = currentSession();
     if (!current || !entry.prepare) return;
+    setRound(entry.prepare.round);
     track(entry); // Must finish synchronously before sending.
     const data = await api.prepare(entry.prepare, current.upstreamSessionToken);
     if (alive.current) session.persistSessionFromResult(current, data);

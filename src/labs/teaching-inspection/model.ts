@@ -87,6 +87,9 @@ export type Resource = {
   status: Status;
 };
 export type Workspace = {
+  departmentId: string | null;
+  canSelectDepartment: boolean;
+  departments: { id: string; name: string }[];
   resources: Resource[];
   teachers: { staffId: string; name: string }[];
   total: number;

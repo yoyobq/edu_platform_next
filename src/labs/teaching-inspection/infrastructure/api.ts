@@ -25,8 +25,8 @@ import type {
   Workspace,
 } from '../model';
 const recordFields = `recordKey checkDate score chapter updatedBy actualProgress plannedProgress deviation`;
-const scheduleFields = `version dates historyState records { ${recordFields} } rounds { round date actualDate recordKey operationId operationState savedOperationId }`;
-const statusFields = `state upstreamCount observedAt observationVersion effectiveCoveredCount rounds { round dateEditable dateBlockers covered coverageBasis canPrepare blockers retryAfter retryWarningOperationId }`;
+export const scheduleFields = `version dates historyState records { ${recordFields} } rounds { round date actualDate recordKey operationId operationState savedOperationId }`;
+export const statusFields = `state upstreamCount observedAt observationVersion effectiveCoveredCount rounds { round dateEditable dateBlockers covered coverageBasis canPrepare blockers retryAfter retryWarningOperationId }`;
 const operationFields = `id accountId requestId action round checkDate state previewId`;
 const materialFields = `lesson { chapter scores scoreItems { name description maximum } } progress { actualProgress plannedProgress deviation } assignment { assignedBook assignmentQuantity knowledgeCoverage allMarkingStatus markingErrors markingCorrections markingAndDateDetails studentCompletionStatus studentCorrectionStatus checkerOpinion }`;
 const prepareFields = `preview { id round checkDate scheduleVersion observationVersion expiresAt } operation { ${operationFields} } material { ${materialFields} } blockers upstreamSessionToken expiresAt`;
@@ -58,6 +58,7 @@ export async function loadSemesters() {
   return result.academicSemesters;
 }
 export async function loadWorkspace(input: {
+  departmentId?: string | null;
   semesterId: number;
   kind: InspectionKind;
   page: number;
@@ -68,7 +69,7 @@ export async function loadWorkspace(input: {
     { result: Workspace },
     { input: typeof input & { limit: number } }
   >(
-    `query TeachingInspectionWorkspace($input: InspectionWorkspaceInput!) { result: teachingInspectionWorkspace(input: $input) { today total teachers { staffId name } resources { resourceKey sourceVersion courseName teacherNames suggestedDates earliestDate latestDate blockers schedule { ${scheduleFields} } status { ${statusFields} } } } }`,
+    `query TeachingInspectionWorkspace($input: InspectionWorkspaceInput!) { result: teachingInspectionWorkspace(input: $input) { departmentId canSelectDepartment departments { id name } today total teachers { staffId name } resources { resourceKey sourceVersion courseName teacherNames suggestedDates earliestDate latestDate blockers schedule { ${scheduleFields} } status { ${statusFields} } } } }`,
     { input: { ...input, limit: 20 } },
   );
   return data.result;

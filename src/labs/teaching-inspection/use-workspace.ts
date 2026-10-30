@@ -47,6 +47,7 @@ export function useInspectionWorkspace(
       setError('');
       try {
         let result = await api.loadWorkspace({
+          departmentId: location.departmentId,
           semesterId: location.semesterId!,
           kind: location.type.kind,
           page: location.page,

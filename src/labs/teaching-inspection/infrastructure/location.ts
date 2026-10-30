@@ -12,6 +12,14 @@ export function readLocation(params: URLSearchParams) {
     resourceKey: params.get('resource') || undefined,
     semesterId: positive(params.get('semester')),
     page: positive(params.get('page')) ?? 1,
+    departmentId:
+      params.get('department') === 'all' ? null : params.get('department')?.trim() || undefined,
+    timeGroup: ['FULL', 'FIRST', 'SECOND', 'CUSTOM'].includes(params.get('timeGroup') ?? '')
+      ? params.get('timeGroup')!
+      : undefined,
+    round: [1, 2, 3].includes(Number(params.get('round')))
+      ? Number(params.get('round'))
+      : undefined,
     teacherId: params.get('teacher')?.trim() || undefined,
     keyword: params.get('keyword')?.trim() || undefined,
   };
@@ -22,6 +30,9 @@ export function writeLocation(value: ReturnType<typeof readLocation>) {
   );
   if (value.resourceKey) params.set('resource', value.resourceKey);
   if (value.semesterId) params.set('semester', String(value.semesterId));
+  if (value.departmentId !== undefined) params.set('department', value.departmentId ?? 'all');
+  if (value.timeGroup) params.set('timeGroup', value.timeGroup);
+  if (value.round) params.set('round', String(value.round));
   if (value.teacherId) params.set('teacher', value.teacherId);
   if (value.keyword) params.set('keyword', value.keyword);
   if (value.page > 1) params.set('page', String(value.page));
