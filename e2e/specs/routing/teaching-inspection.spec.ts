@@ -1972,3 +1972,98 @@ test('教案批次首屏仅本地，标签切换不读取，完整组员无课�
     fixture.requests.some((row) => row.query.includes('RefreshTeachingInspectionStatus')),
   ).toBe(false);
 });
+
+test('教案组织：默认系切到全校重置筛选并隔离旧数量响应', async ({ page }) => {
+  await setup(page);
+  let started!: () => void, release!: () => void;
+  const entered = new Promise<void>((resolve) => {
+    started = resolve;
+  });
+  const released = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route('**/graphql', async (route) => {
+    const body = route.request().postDataJSON() as { query: string };
+    if (!body.query.includes('SyncLessonPlanInspectionCounts')) return route.fallback();
+    started();
+    await released;
+    await route.fulfill({
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          result: {
+            counts: [{ resourceKey: '1:a', count: 3 }],
+            observedAt: '2026-10-18T04:00:00Z',
+            upstreamSessionToken: 'late-old-scope',
+            expiresAt: null,
+          },
+        },
+      }),
+    });
+  });
+  await page.goto(`${path}?kind=lesson-plan&semester=1`);
+  await page.getByLabel('筛选组员').click();
+  await page.getByText('测试教师', { exact: true }).last().click();
+  await expect(page.locator('tbody tr')).toHaveCount(1);
+  await page.getByRole('button', { name: '同步上游数量', exact: true }).click();
+  await entered;
+  try {
+    await page.getByLabel('检查所属系').click();
+    await page.getByText('全校（全部系）', { exact: true }).last().click();
+    await expect(page).toHaveURL(/department=all/);
+    await expect(page.locator('tbody tr')).toHaveCount(2);
+    const response = page.waitForResponse(
+      (value) => value.request().postData()?.includes('SyncLessonPlanInspectionCounts') ?? false,
+    );
+    release();
+    await response;
+    await page.getByRole('tab', { name: '前半学期', exact: true }).click();
+    await expect(page).toHaveURL(/timeGroup=FIRST/);
+    await expect(page.getByText(/数量同步时间/)).toHaveCount(0);
+    expect(
+      await page.evaluate(() => localStorage.getItem('aigc-friendly-frontend.upstream.session.v2')),
+    ).not.toContain('late-old-scope');
+  } finally {
+    release();
+  }
+});
+
+for (const firstResult of ['error', 'unknown'] as const) {
+  test(`教案同步：首次${firstResult}后手动核对可恢复准备及保存`, async ({ page }) => {
+    const fixture = await setup(page);
+    fixture.setTrusted();
+    let attempts = 0;
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() as { query: string };
+      if (!body.query.includes('RefreshTeachingInspectionStatus') || ++attempts > 1)
+        return route.fallback();
+      const resource = fixture.resource('1:a');
+      const response =
+        firstResult === 'error'
+          ? { errors: [{ message: '首次核对失败', extensions: { code: 'INTERNAL_SERVER_ERROR' } }] }
+          : {
+              data: {
+                result: {
+                  schedule: resource.schedule,
+                  status: { ...resource.status, state: 'UNKNOWN' },
+                  upstreamSessionToken: 'unknown-token',
+                  expiresAt: null,
+                },
+              },
+            };
+      await route.fulfill({ contentType: 'application/json', body: JSON.stringify(response) });
+    });
+    await page.goto(`${path}?kind=lesson-plan&semester=1`);
+    await page.getByRole('button', { name: '查看检查', exact: true }).first().click();
+    const prepare = page.getByRole('button', { name: '准备材料', exact: true });
+    await expect(prepare).toBeDisabled();
+    await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+    await expect(prepare).toBeEnabled();
+    await prepare.click();
+    await expect(page.getByText('预填材料，请核对后提交')).toBeVisible();
+    await page.getByRole('checkbox', { name: '我已核对课程、日期及上述材料' }).check();
+    await expect(
+      page.getByRole('button', { name: '确认并保存本条检查', exact: true }),
+    ).toBeEnabled();
+  });
+}

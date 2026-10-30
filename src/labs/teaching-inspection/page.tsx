@@ -153,7 +153,11 @@ function InspectionPage({ data }: { data: LoaderData }) {
           />
         ) : location.type.kind === 'LESSON_PLAN' ? (
           <LessonWorkbench
-            key={`${data.currentAccount.accountId}:${location.semesterId}:${location.departmentId ?? 'default'}`}
+            key={JSON.stringify([
+              data.currentAccount.accountId,
+              location.semesterId,
+              location.departmentId === undefined ? ['default'] : location.departmentId,
+            ])}
             location={location}
             onLocation={(value) => setParams(writeLocation(value))}
             account={data.currentAccount}

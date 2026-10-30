@@ -102,7 +102,7 @@ export function LessonWorkbench({
     return () => {
       counter.current++;
     };
-  }, [session.session?.upstreamLoginId]);
+  }, [session.session?.upstreamLoginId, location.departmentId]);
   const patch = useCallback((next: api.LessonResource) => {
     setResource(next);
     setWork((old) =>
@@ -137,7 +137,7 @@ export function LessonWorkbench({
             );
             if (!active) return;
             controller.persistSessionFromResult(current, observed);
-            setHistorySynced(true);
+            setHistorySynced(observed.status.state === 'TRUSTED');
           } catch (cause) {
             if (!active) return;
             setError(cause instanceof Error ? cause.message : '历史核对失败，以下为本地记录');
@@ -409,7 +409,10 @@ export function LessonWorkbench({
             resource={resource}
             syncing={loading}
             syncState={historySynced ? 'synced' : session.session ? 'failed' : 'unconnected'}
-            onSynced={() => undefined}
+            onSynced={(status) => {
+              setHistorySynced(status.state === 'TRUSTED');
+              if (status.state === 'TRUSTED') setError('');
+            }}
             target={{ semesterId, kind: 'LESSON_PLAN', resourceKey: selected }}
             account={account}
             session={session}
