@@ -229,7 +229,7 @@ function InspectionPage({ data }: { data: LoaderData }) {
         </div>
         <div
           className={
-            location.section === 'checks' && location.type.kind === 'LESSON_PLAN'
+            location.section === 'checks' && location.type.kind !== 'ASSIGNMENT'
               ? 'min-w-0'
               : 'min-w-0 pt-4'
           }
@@ -247,10 +247,12 @@ function InspectionPage({ data }: { data: LoaderData }) {
                 }
                 onLocation={(value) => setParams(writeLocation(value))}
               />
-            ) : location.type.kind === 'LESSON_PLAN' ? (
+            ) : location.type.kind !== 'ASSIGNMENT' ? (
               <LessonWorkbench
+                kind={location.type.kind as 'LESSON_PLAN' | 'PROGRESS'}
                 key={JSON.stringify([
                   data.currentAccount.accountId,
+                  location.type.kind,
                   location.semesterId,
                   location.departmentId === undefined ? ['default'] : location.departmentId,
                 ])}

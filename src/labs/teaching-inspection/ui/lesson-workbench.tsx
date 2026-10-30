@@ -32,11 +32,14 @@ import * as flow from '../infrastructure/api';
 import * as api from '../infrastructure/lesson-api';
 import { reconcileLessonSaves } from '../infrastructure/lesson-reread';
 import type { readLocation } from '../infrastructure/location';
+import { reconcileProgress } from '../infrastructure/progress-recovery';
 import type { RecoveryEntry } from '../infrastructure/recovery';
 import { discardLessonPreparations, putRecovery, removeRecovery } from '../infrastructure/recovery';
+import { readRecovery } from '../infrastructure/recovery';
 import { dueRound } from '../lesson-policy';
 import type { Prepared, PrepareInput, TimeGroup } from '../model';
 import { blockerText, groupNames, operationText } from '../model';
+
 type Controller = ReturnType<typeof useUpstreamLoginModalController<never>>;
 type Draft = {
   prepared?: Prepared;
@@ -55,11 +58,13 @@ type Row = {
 };
 export function LessonWorkbench({
   location,
+  kind = 'LESSON_PLAN',
   onLocation,
   account,
   session,
   onBusyChange,
 }: {
+  kind?: 'LESSON_PLAN' | 'PROGRESS';
   onBusyChange?: (busy: boolean) => void;
   location: ReturnType<typeof readLocation>;
   onLocation: (value: ReturnType<typeof readLocation>) => void;
@@ -67,6 +72,7 @@ export function LessonWorkbench({
   session: Controller;
 }) {
   const { token } = theme.useToken();
+  const isProgress = kind === 'PROGRESS';
   const [work, setWork] = useState<api.LessonOverview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -133,23 +139,25 @@ export function LessonWorkbench({
     }
   }, [blocker]);
   const recoveries = useCallback(() => {
-    const values = discardLessonPreparations(account.accountId);
+    const values = isProgress
+      ? readRecovery(account.accountId)
+      : discardLessonPreparations(account.accountId);
     setEntries(
       values.filter(
         (e) =>
-          e.kind === 'LESSON_PLAN' &&
+          e.kind === kind &&
           e.semesterId === semesterId &&
           (!e.upstreamLoginId ||
             e.upstreamLoginId === latestSession.current.session?.upstreamLoginId),
       ),
     );
     return values;
-  }, [account.accountId, semesterId]);
+  }, [account.accountId, semesterId, kind, isProgress]);
   const reload = useCallback(async () => {
     const id = ++epoch.current;
     setLoading(true);
     try {
-      const result = await api.overview(semesterId, location.departmentId);
+      const result = await api.overview(semesterId, location.departmentId, kind);
       if (alive.current && id === epoch.current) {
         setWork(result);
         setDrafts((old) => {
@@ -180,7 +188,7 @@ export function LessonWorkbench({
     } finally {
       if (alive.current && id === epoch.current) setLoading(false);
     }
-  }, [semesterId, location.departmentId]);
+  }, [semesterId, location.departmentId, kind]);
   useEffect(() => {
     void reload();
   }, [reload]);
@@ -311,14 +319,26 @@ export function LessonWorkbench({
     setSelected((old) => old.filter((key) => key !== row.key));
     patch(row.key, { state: 'busy', message: '正在同步数据' });
     try {
-      const pending = await reconcileLessonSaves(
-        account.accountId,
-        row.course.resourceKey,
-        identity,
-        assertCurrent,
-      );
+      const recovered = isProgress
+        ? await reconcileProgress(
+            account.accountId,
+            row.course.resourceKey,
+            identity,
+            current.upstreamSessionToken,
+            assertCurrent,
+            persist,
+          )
+        : null;
+      const pending = recovered
+        ? recovered.pending
+        : await reconcileLessonSaves(
+            account.accountId,
+            row.course.resourceKey,
+            identity,
+            assertCurrent,
+          );
       const observed = await flow.refreshStatus(
-        { semesterId, kind: 'LESSON_PLAN', resourceKey: row.course.resourceKey },
+        { semesterId, kind, resourceKey: row.course.resourceKey },
         current.upstreamSessionToken,
       );
       persist(observed);
@@ -343,6 +363,10 @@ export function LessonWorkbench({
         });
         return;
       }
+      if (recovered?.prepared && recovered.prepared.preview?.round === row.round) {
+        patch(row.key, { state: 'ready', message: '已准备，待确认', prepared: recovered.prepared });
+        return;
+      }
       const checkDate = observed.schedule.dates[row.round - 1];
       if (checkDate !== row.date) {
         patch(row.key, { state: 'error', message: '检查日期已变化，请核对日期后同步数据' });
@@ -350,14 +374,23 @@ export function LessonWorkbench({
       }
       const input: PrepareInput = {
         semesterId,
-        kind: 'LESSON_PLAN',
+        kind,
         resourceKey: row.course.resourceKey,
         round: row.round,
         checkDate,
         scheduleVersion: observed.schedule.version,
         clientRequestId: crypto.randomUUID(),
       };
+      if (isProgress)
+        track({
+          ...input,
+          accountId: account.accountId,
+          upstreamLoginId: identity,
+          action: 'PREPARE',
+          prepare: input,
+        });
       const result = await flow.prepare(input, current.upstreamSessionToken);
+      if (isProgress && !result.operation) forget([input.clientRequestId]);
       persist(result);
       patch(
         row.key,
@@ -365,6 +398,7 @@ export function LessonWorkbench({
           ? { state: 'ready', message: '已准备，待确认', prepared: result }
           : {
               state: 'error',
+              prepared: result,
               message: result.blockers.map(blockerText).join('；') || '准备失败，请同步数据',
             },
       );
@@ -437,7 +471,14 @@ export function LessonWorkbench({
       row.course?.status.rounds[row.round - 1]?.covered || drafts[row.key]?.state === 'saved',
     );
   }
+  function progressMaterial(row: Row) {
+    return completedRecord(row) ?? drafts[row.key]?.prepared?.material.progress;
+  }
   function chaptersDiffer(row: Row) {
+    if (isProgress) {
+      const value = progressMaterial(row)?.deviation;
+      return typeof value === 'number' && value !== 0;
+    }
     const record = completedRecord(row);
     const draft = drafts[row.key];
     const plan =
@@ -454,6 +495,10 @@ export function LessonWorkbench({
     );
   }
   function renderChapter(row: Row, source = false) {
+    if (isProgress)
+      return (
+        <span>{progressMaterial(row)?.[source ? 'plannedProgress' : 'actualProgress'] ?? '—'}</span>
+      );
     const record = completedRecord(row);
     const lesson = drafts[row.key]?.prepared?.material.lesson;
     const planSource =
@@ -527,6 +572,12 @@ export function LessonWorkbench({
     );
   }
   function renderScore(row: Row) {
+    if (isProgress)
+      return (
+        <span style={{ color: chaptersDiffer(row) ? token.colorWarningText : undefined }}>
+          {progressMaterial(row)?.deviation ?? '—'}
+        </span>
+      );
     const record = completedRecord(row);
     if (record) return <span>{record.score ?? '—'}</span>;
     const lesson = drafts[row.key]?.prepared?.material.lesson;
@@ -549,7 +600,11 @@ export function LessonWorkbench({
   }
   function hasPending(row: Row) {
     return entries.some(
-      (entry) => entry.action === 'SAVE' && entry.resourceKey === row.course?.resourceKey,
+      (entry) =>
+        (entry.action === 'SAVE' ||
+          (isProgress &&
+            drafts[row.key]?.prepared?.operation?.requestId !== entry.clientRequestId)) &&
+        entry.resourceKey === row.course?.resourceKey,
     );
   }
   function renderStatus(row: Row) {
@@ -597,6 +652,7 @@ export function LessonWorkbench({
     );
   }
   function emptyChapter(row: Row) {
+    if (isProgress) return false;
     return (
       drafts[row.key]?.state === 'ready' &&
       !(
@@ -607,13 +663,24 @@ export function LessonWorkbench({
     );
   }
   function canPrepare(row: Row) {
-    return eligible(row) && !hasPending(row) && drafts[row.key]?.state !== 'ready';
+    return (
+      eligible(row) &&
+      !hasPending(row) &&
+      drafts[row.key]?.state !== 'ready' &&
+      !(
+        isProgress &&
+        entries.some(
+          (entry) => entry.action === 'PREPARE' && entry.resourceKey === row.course?.resourceKey,
+        )
+      )
+    );
   }
   function canSubmit(row: Row) {
     return (
       eligible(row) &&
       drafts[row.key]?.state === 'ready' &&
       Boolean(drafts[row.key].prepared?.preview) &&
+      (!isProgress || drafts[row.key].prepared?.material.progress?.deviation === 0) &&
       !emptyChapter(row) &&
       !hasPending(row)
     );
@@ -687,14 +754,18 @@ export function LessonWorkbench({
     try {
       update(submit ? '开始提交' : '开始准备');
       if (!submit) {
-        for (let offset = 0; offset < queue.length && !stop.current; offset += 10) {
-          const batch = queue.slice(offset, offset + 10);
+        for (
+          let offset = 0;
+          offset < queue.length && !stop.current;
+          offset += isProgress ? 1 : 10
+        ) {
+          const batch = queue.slice(offset, offset + (isProgress ? 1 : 10));
           const requests: { row: Row; input: PrepareInput }[] = [];
           for (const row of batch) {
             if (stop.current || !sameIdentity()) break;
             publish(row.key, { state: 'busy', message: '正在读取课程' });
             update(`正在读取 ${row.name} · ${row.course!.courseName}`);
-            const detail = await api.detail(semesterId, row.course!.resourceKey);
+            const detail = await api.detail(semesterId, row.course!.resourceKey, kind);
             if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
             const checkDate = detail.schedule.dates[row.round - 1];
             if (checkDate !== row.date) {
@@ -705,7 +776,7 @@ export function LessonWorkbench({
             }
             const input: PrepareInput = {
               semesterId,
-              kind: 'LESSON_PLAN',
+              kind,
               resourceKey: detail.resourceKey,
               round: row.round,
               checkDate,
@@ -719,10 +790,34 @@ export function LessonWorkbench({
           if (!requests.length) continue;
           update(`正在准备 ${requests[0].row.name} 等 ${requests.length} 项`);
           touched = true;
-          const response = await api.prepareBatch(
-            requests.map((r) => r.input),
-            current!.upstreamSessionToken,
-          );
+          if (isProgress)
+            track({
+              ...requests[0].input,
+              accountId: account.accountId,
+              upstreamLoginId: upstreamIdentity,
+              action: 'PREPARE',
+              prepare: requests[0].input,
+            });
+          const generated = isProgress
+            ? await flow.prepare(requests[0].input, current!.upstreamSessionToken)
+            : null;
+          if (isProgress && generated && !generated.operation)
+            forget([requests[0].input.clientRequestId]);
+          const response = generated
+            ? {
+                ...generated,
+                items: [
+                  {
+                    resourceKey: requests[0].input.resourceKey,
+                    round: requests[0].input.round,
+                    result: generated,
+                  },
+                ],
+              }
+            : await api.prepareBatch(
+                requests.map((r) => r.input),
+                current!.upstreamSessionToken,
+              );
           persist(response);
           for (const request of requests) {
             const result = response.items.find(
@@ -740,6 +835,7 @@ export function LessonWorkbench({
             } else {
               publish(request.row.key, {
                 state: 'error',
+                prepared: result ?? undefined,
                 message: result
                   ? result.blockers.map(blockerText).join('；') || '材料无法准备'
                   : '准备失败，请同步数据',
@@ -765,16 +861,21 @@ export function LessonWorkbench({
           }
           const input = {
             semesterId,
-            kind: 'LESSON_PLAN' as const,
+            kind,
             resourceKey: row.course!.resourceKey,
             previewId: preview.id,
             clientRequestId: crypto.randomUUID(),
-            scores: prepared.material.lesson!.scores,
-            chapter: draft.editedChapter ?? prepared.material.lesson!.chapter,
+            ...(isProgress
+              ? {}
+              : {
+                  scores: prepared.material.lesson!.scores,
+                  chapter: draft.editedChapter ?? prepared.material.lesson!.chapter,
+                }),
           };
           const entry: RecoveryEntry = {
             ...input,
             action: 'SAVE',
+            parentRequestId: isProgress ? prepared.operation?.requestId : undefined,
             accountId: account.accountId,
             upstreamLoginId: current!.upstreamLoginId,
             round: row.round,
@@ -1006,7 +1107,7 @@ export function LessonWorkbench({
               onChange={(value) => setTeacher(value ?? '')}
             />
             <Input.Search
-              aria-label="搜索教案课程"
+              aria-label={isProgress ? '搜索进度课程' : '搜索教案课程'}
               disabled={busy}
               placeholder="搜索课程"
               style={{ width: band === 'compact' ? '100%' : 224 }}
@@ -1030,7 +1131,7 @@ export function LessonWorkbench({
             </Space>
             <Space size="small">
               <Switch
-                aria-label="只看不一致"
+                aria-label={isProgress ? '只看有偏差' : '只看不一致'}
                 size="small"
                 checked={onlyDifferent}
                 disabled={busy}
@@ -1040,7 +1141,7 @@ export function LessonWorkbench({
                   setSelected([]);
                 }}
               />
-              <span>只看不一致</span>
+              <span>{isProgress ? '只看有偏差' : '只看不一致'}</span>
             </Space>
             <Button
               type="text"
@@ -1097,7 +1198,13 @@ export function LessonWorkbench({
                 停止后续处理
               </Button>
             )}
-            <Tooltip title="读取选中课程的上游材料，保留已准备内容供核对">
+            <Tooltip
+              title={
+                isProgress
+                  ? '生成选中课程的进度材料，保留已准备内容供核对'
+                  : '读取选中课程的上游材料，保留已准备内容供核对'
+              }
+            >
               <Button
                 type={submitCount ? 'default' : 'primary'}
                 aria-label="准备材料"
@@ -1114,7 +1221,9 @@ export function LessonWorkbench({
               title={
                 hasEmptyChapter
                   ? '请补全选中课程的检查时授课章节'
-                  : '核对章节后，逐项提交已准备的检查结果'
+                  : isProgress
+                    ? '核对进度后，逐项提交零偏差的检查结果'
+                    : '核对章节后，逐项提交已准备的检查结果'
               }
             >
               <Button
@@ -1160,7 +1269,9 @@ export function LessonWorkbench({
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   hideCompleted && onlyDifferent
-                    ? '不一致筛选只包含已完成记录，请关闭“隐藏已完成”查看'
+                    ? isProgress
+                      ? '当前没有未完成且有偏差的记录'
+                      : '不一致筛选只包含已完成记录，请关闭“隐藏已完成”查看'
                     : '当前筛选范围内没有记录'
                 }
               />
@@ -1177,7 +1288,7 @@ export function LessonWorkbench({
             band === 'compact'
               ? [
                   {
-                    title: '教案检查',
+                    title: isProgress ? '教学进度' : '教案检查',
                     render: (_, row) => (
                       <Space orientation="vertical">
                         {renderTeacher(row, true)}
@@ -1202,9 +1313,9 @@ export function LessonWorkbench({
                             }}
                           />
                         )}
-                        <small>授课计划章节</small>
+                        <small>{isProgress ? '计划进度' : '授课计划章节'}</small>
                         {renderChapter(row, true)}
-                        <small>检查时授课章节</small>
+                        <small>{isProgress ? '实际进度' : '检查时授课章节'}</small>
                         {renderChapter(row)}
                         {renderScore(row)}
                         {renderStatus(row)}
@@ -1254,17 +1365,17 @@ export function LessonWorkbench({
                       ),
                   },
                   {
-                    title: '授课计划章节',
+                    title: isProgress ? '计划进度' : '授课计划章节',
                     onCell: () => ({ style: { verticalAlign: 'bottom' } }),
                     render: (_, row) => renderChapter(row, true),
                   },
                   {
-                    title: '检查时授课章节',
+                    title: isProgress ? '实际进度' : '检查时授课章节',
                     onCell: () => ({ style: { verticalAlign: 'bottom' } }),
                     render: (_, row) => renderChapter(row),
                   },
                   {
-                    title: '评分',
+                    title: isProgress ? '偏差' : '评分',
                     width: 75,
                     render: (_, row) => renderScore(row),
                   },

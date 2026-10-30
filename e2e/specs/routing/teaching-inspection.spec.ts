@@ -33,6 +33,7 @@ type Input = {
 async function setup(
   page: Page,
   options: {
+    progressWorkspace?: boolean;
     assigned?: boolean;
     noStaff?: boolean;
     groupLeader?: boolean;
@@ -101,6 +102,7 @@ async function setup(
     }
     return covered;
   };
+  const progressVersions = new Map<string, number>();
   const resource = (key: string) => ({
     resourceKey: key,
     sourceVersion: 'source-1',
@@ -114,7 +116,7 @@ async function setup(
     schedule: {
       records: [],
       historyState: 'VERIFIED',
-      version,
+      version: options.progressWorkspace ? (progressVersions.get(key) ?? 1) : version,
       dates: version ? dates : [],
       rounds: version
         ? dates.map((date, index) => ({
@@ -200,7 +202,7 @@ async function setup(
         ],
       });
     if (
-      !/TeachingInspection|LessonPlanInspection|SyncLessonPlan|(?:Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(
+      !/TeachingInspection|LessonPlanInspection|ProgressInspection|SyncLessonPlan|(?:Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(
         query,
       )
     )
@@ -212,7 +214,10 @@ async function setup(
       grouping: { group: 'FULL' },
       timePlan: { ...timePlan(), group: 'FULL' },
     });
-    if (query.includes('LessonPlanInspectionOverview'))
+    if (
+      query.includes('LessonPlanInspectionOverview') ||
+      query.includes('ProgressInspectionOverview')
+    )
       return reply({
         result: {
           today: '2026-10-18',
@@ -233,7 +238,7 @@ async function setup(
           resources: [lessonResource('1:a'), lessonResource('1:b')],
         },
       });
-    if (query.includes('LessonPlanInspectionDetail'))
+    if (query.includes('LessonPlanInspectionDetail') || query.includes('ProgressInspectionDetail'))
       return reply({ result: lessonResource(input.resourceKey) });
     if (query.includes('SyncLessonPlanInspectionCounts'))
       return reply({
@@ -404,7 +409,14 @@ async function setup(
     if (/mutation Prepare/.test(query)) {
       if (preparations.has(input.clientRequestId))
         return reply({ result: preparations.get(input.clientRequestId) });
-      if (input.kind === 'PROGRESS') version += 2;
+      if (input.kind === 'PROGRESS') {
+        if (options.progressWorkspace)
+          progressVersions.set(
+            input.resourceKey,
+            (progressVersions.get(input.resourceKey) ?? 1) + 2,
+          );
+        else version += 2;
+      }
       const operation = {
         id: `op-${operations.size}`,
         accountId: 700,
@@ -430,7 +442,7 @@ async function setup(
           id: operation.previewId,
           round: input.round,
           checkDate: input.checkDate,
-          scheduleVersion: version,
+          scheduleVersion: resource(input.resourceKey).schedule.version,
           observationVersion: 1,
           expiresAt: '2026-10-18T04:30:00Z',
         },
@@ -539,7 +551,7 @@ async function openAndPrepare(page: Page, kind: string) {
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
   await expect(page.getByText('预填材料，请核对后提交')).toBeVisible();
 }
-for (const kind of ['progress', 'assignment'])
+for (const kind of ['assignment'])
   test(`${kind} 核对后单条保存，成功不额外刷新上游`, async ({ page }) => {
     const fixture = await setup(page);
     await openAndPrepare(page, kind);
@@ -561,13 +573,15 @@ for (const kind of ['progress', 'assignment'])
   });
 test('刷新后按原输入恢复进度材料，原版本不被当前版本替换', async ({ page }) => {
   const fixture = await setup(page);
-  await openAndPrepare(page, 'progress');
+  await page.goto(`${path}?kind=progress&semester=1`);
+  await page.locator('tbody tr[data-row-key]').first().getByRole('checkbox').check();
+  await page.getByRole('button', { name: '准备材料', exact: true }).click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(1);
   const original = fixture.requests.find((item) => /mutation Prepare/.test(item.query))!.input;
   page.once('dialog', (dialog) => dialog.accept());
   await page.reload();
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await page.getByRole('button', { name: '恢复材料', exact: true }).click();
-  await expect(page.getByText('预填材料，请核对后提交')).toBeVisible();
+  await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
+  await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(1);
   const prepares = fixture.requests.filter((item) => /mutation Prepare/.test(item.query));
   expect(prepares).toHaveLength(2);
   expect(prepares[1].input.clientRequestId).toBe(original.clientRequestId);
@@ -623,10 +637,9 @@ test('恢复存储写入失败时不发送准备请求', async ({ page }) => {
     };
   });
   await page.goto(`${path}?kind=progress&semester=1`);
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await page.locator('tbody tr[data-row-key]').first().getByRole('checkbox').check();
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
-  await expect(page.getByText('无法保存恢复标识，已停止新操作。请保留本标签页。')).toBeVisible();
+  await expect(page.getByText('quota', { exact: true })).toBeVisible();
   expect(fixture.requests.filter((item) => /mutation Prepare/.test(item.query))).toHaveLength(0);
 });
 for (const slotGroup of [[], ['ACADEMIC_OFFICER']])
@@ -698,8 +711,7 @@ test('明确 operation:null 的阻断清除本次恢复跟踪', async ({ page })
     });
   });
   await page.goto(`${path}?kind=progress&semester=1`);
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
+  await page.locator('tbody tr[data-row-key]').first().getByRole('checkbox').check();
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
   await expect(page.getByText('当前材料无法核验，暂不能提交')).toBeVisible();
   expect(
@@ -729,12 +741,8 @@ test('操作暂未查到时保留原请求，禁止另建请求直接重试', as
     ),
   );
   await page.goto(`${path}?kind=progress&semester=1`);
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await expect(
-    page.getByText('部分操作暂未查到结果，请继续查询；查不到不代表没有提交。'),
-  ).toBeVisible();
-  await page.getByRole('button', { name: '刷新检查状态', exact: true }).click();
-  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
+  await expect(page.getByText('提交结果待确认，暂不能继续', { exact: true })).toBeVisible();
   expect(
     fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
   ).toHaveLength(0);
@@ -750,11 +758,7 @@ test('切换类型后，迟到工作区读取不覆盖当前课程', async ({ pa
   });
   await page.route('**/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: { input: Input } };
-    if (
-      !body.query.includes('TeachingInspectionWorkspace') ||
-      body.variables?.input.kind !== 'PROGRESS'
-    )
-      return route.fallback();
+    if (!body.query.includes('ProgressInspectionOverview')) return route.fallback();
     start();
     await released;
     await route.fulfill({
@@ -1032,10 +1036,6 @@ test('关闭未执行请求若查到 UNKNOWN，仍保留原请求并阻止直接
     ),
   );
   await page.goto(`${path}?kind=progress&semester=1`);
-  await page.getByRole('button', { name: '查看检查' }).first().click();
-  await expect(
-    page.getByText('部分操作暂未查到结果，请继续查询；查不到不代表没有提交。'),
-  ).toBeVisible();
   fixture.operations.set('late-save-request', {
     id: 'late-save',
     accountId: 700,
@@ -1046,12 +1046,8 @@ test('关闭未执行请求若查到 UNKNOWN，仍保留原请求并阻止直接
     state: 'UNKNOWN',
     previewId: null,
   });
-  await page.getByRole('button', { name: '核对并关闭未执行请求', exact: true }).click();
-  await page.getByRole('button', { name: /确.*定/ }).click();
-  await expect(
-    page.getByText('操作结果与数量覆盖分别保留。请查询核对，不要自动重复提交。'),
-  ).toBeVisible();
-  await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
+  await expect(page.getByText('提交结果待确认，暂不能继续', { exact: true })).toBeVisible();
   expect(
     await page.evaluate(
       () =>
@@ -1109,7 +1105,7 @@ test('作业数量增长补空轮次，低于确定成功时保留记录并阻�
   await expect(page.getByText(/上游数量少于本地确定成功记录/)).toBeVisible();
 });
 
-for (const stage of ['PREPARE', 'SAVE'] as const)
+for (const stage of ['SAVE'] as const)
   test(`${stage} 认证失败且结果未落库时，应保留 DISPATCHING 并禁止自动重发`, async ({ page }) => {
     const fixture = await setup(page, { dispatchingAuthFailure: stage });
     if (stage === 'SAVE') {
@@ -1147,34 +1143,21 @@ for (const stage of ['PREPARE', 'SAVE'] as const)
     ).toHaveLength(sent);
   });
 
-test('进入工作台自动同步数量并使用滚动凭据，切换类型重新同步', async ({ page }) => {
+test('进度首屏不访问上游，切换作业仍沿用自动同步', async ({ page }) => {
   const fixture = await setup(page);
-  fixture.setCount(1);
   await page.goto(`${path}?kind=progress&semester=1`);
-  await expect(page.getByText('已同步上游', { exact: true })).toHaveCount(2);
-  await expect(page.getByText('有效覆盖 1 / 3 轮', { exact: true })).toHaveCount(2);
-  const reads = fixture.requests.filter((item) =>
-    item.query.includes('RefreshTeachingInspectionStatus'),
-  );
-  expect(reads.map((item) => item.input.resourceKey)).toEqual(['1:a', '1:b']);
-  expect((reads[1].input as Input & { upstreamSessionToken: string }).upstreamSessionToken).toBe(
-    'rolled-token',
-  );
+  await expect(page.locator('tbody tr[data-row-key]')).toHaveCount(3);
   expect(
-    fixture.requests.filter((item) => /mutation (Prepare|Save)/.test(item.query)),
+    fixture.requests.filter((item) => item.query.includes('RefreshTeachingInspectionStatus')),
   ).toHaveLength(0);
-  await page.getByRole('tab', { name: '学生作业' }).click();
+  await page.getByRole('tab', { name: '学生作业', exact: true }).click();
   await expect(page.getByText('已同步上游', { exact: true })).toHaveCount(2);
-  await expect
-    .poll(
-      () =>
-        fixture.requests.filter(
-          (item) =>
-            item.query.includes('RefreshTeachingInspectionStatus') &&
-            item.input.kind === 'ASSIGNMENT',
-        ).length,
-    )
-    .toBe(2);
+  expect(
+    fixture.requests.filter(
+      (item) =>
+        item.query.includes('RefreshTeachingInspectionStatus') && item.input.kind === 'ASSIGNMENT',
+    ),
+  ).toHaveLength(2);
 });
 
 test('自动同步失败标明旧记录，重新读取可恢复且不自动准备保存', async ({ page }) => {
@@ -1191,7 +1174,7 @@ test('自动同步失败标明旧记录，重新读取可恢复且不自动准�
       }),
     });
   });
-  await page.goto(`${path}?kind=progress&semester=1`);
+  await page.goto(`${path}?kind=assignment&semester=1`);
   await expect(page.getByText('同步未完成，以下为上次记录', { exact: true })).toHaveCount(2);
   await page.getByRole('button', { name: '查看检查' }).first().click();
   await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeDisabled();
@@ -1242,61 +1225,6 @@ test('新入口默认独立检查时间，按课程确认而不触发生成保�
       /mutation (Prepare|Save)(?:Progress|LessonPlan|Assignment)Inspection/.test(item.query),
     ),
   ).toHaveLength(0);
-});
-
-test('进度检查时间展示上游实际日期并锁定已提交轮次', async ({ page }) => {
-  const fixture = await setup(page);
-  await page.route('**/graphql', async (route) => {
-    const body = route.request().postDataJSON() as { query: string; variables: { input: Input } };
-    if (!body.query.includes('RefreshTeachingInspectionStatus')) return route.fallback();
-    const resource = fixture.resource(body.variables.input.resourceKey);
-    const record = {
-      recordKey: 'progress-1',
-      checkDate: '2026-09-20',
-      score: 100,
-      plannedProgress: 22,
-      actualProgress: 22,
-      deviation: 0,
-    };
-    return route.fulfill({
-      contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          result: {
-            schedule: { ...resource.schedule, records: [record], historyState: 'VERIFIED' },
-            status: {
-              ...resource.status,
-              state: 'TRUSTED',
-              upstreamCount: 1,
-              observationVersion: 2,
-              rounds: resource.status.rounds.map((round) => ({
-                ...round,
-                dateEditable: round.round !== 1,
-              })),
-            },
-            upstreamSessionToken: 'observed',
-            expiresAt: null,
-          },
-        },
-      }),
-    });
-  });
-  await page.goto(`${path}?kind=progress&semester=1`);
-  await page.getByRole('button', { name: '查看检查', exact: true }).first().click();
-  await page.getByRole('button', { name: '调整进度执行日期' }).click();
-  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-20');
-  await expect(page.getByLabel('测试课程甲第1轮日期')).toBeDisabled();
-  await expect(page.getByLabel('测试课程甲第2轮日期')).toBeEnabled();
-  await expect(page.getByText('上游实际检查：2026-09-20 · 100分')).toBeVisible();
-  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
-  await expect(
-    page.getByText('后续检查日期必须晚于上游已提交日期，且三轮日期严格递增，请调整后重新预览。'),
-  ).toBeVisible();
-  await page.getByLabel('测试课程甲第2轮日期').fill('2026-09-21');
-  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: '可调整轮次采用建议日期' }).click();
-  await expect(page.getByLabel('测试课程甲第1轮日期')).toHaveValue('2026-09-20');
-  await expect(page.getByRole('button', { name: '预览日期', exact: true })).toBeDisabled();
 });
 
 test('教案历史冲突在准备阶段显示阻断且不提交', async ({ page }) => {
@@ -1899,7 +1827,7 @@ test('分段弹窗：保存冲突后不自动重试，必须重新读取', async
 
 test('检查组织：管理员默认信息工程系，切换系或全校时重置教师和分页', async ({ page }) => {
   const fixture = await setup(page, { noSession: true });
-  await page.goto(`${path}?kind=progress&semester=1&teacher=T700&page=2`);
+  await page.goto(`${path}?kind=assignment&semester=1&teacher=T700&page=2`);
   const select = page.getByLabel('检查所属系');
   await expect(select).toBeEnabled();
   await expect(page.getByText('信息工程系', { exact: true })).toBeVisible();
@@ -3099,3 +3027,125 @@ for (const role of ['admin', 'leader', 'missing-group'] as const) {
     expect(requests).toBe(before);
   });
 }
+
+for (const compact of [false, true])
+  test(`进度批次工作台两阶段串行执行 compact=${compact}`, async ({ page }) => {
+    if (compact) await page.setViewportSize({ width: 390, height: 844 });
+    const fixture = await setup(page, { progressWorkspace: true });
+    await page.goto(`${path}?kind=progress&semester=1`);
+    await expect(page.getByRole('tab', { name: '第3次 · 2026-10-01', exact: true })).toBeVisible();
+    expect(
+      fixture.requests.filter((r) =>
+        /RefreshTeachingInspectionStatus|mutation Prepare/.test(r.query),
+      ),
+    ).toHaveLength(0);
+    await page.getByRole('checkbox', { name: '全选当前范围（全部分页）' }).check();
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '确认提交选中项' })).toBeEnabled();
+    expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
+    const times: number[] = [];
+    await page.route('**/graphql', async (route) => {
+      const { query } = route.request().postDataJSON() as { query: string };
+      if (query.includes('SaveProgressInspection')) times.push(Date.now());
+      await route.fallback();
+    });
+    await page.getByRole('button', { name: '确认提交选中项' }).click();
+    await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
+    expect(times).toHaveLength(2);
+    expect(times[1] - times[0]).toBeGreaterThanOrEqual(500);
+  });
+
+test('进度未知准备刷新后只核实原请求，不重复生成', async ({ page }) => {
+  const fixture = await setup(page, { progressWorkspace: true, dispatchingAuthFailure: 'PREPARE' });
+  await page.goto(`${path}?kind=progress&semester=1`);
+  await page.getByRole('checkbox', { name: '全选当前范围（全部分页）' }).check();
+  await page.getByRole('button', { name: '准备材料', exact: true }).click();
+  await expect
+    .poll(() => fixture.requests.filter((r) => r.query.includes('mutation PrepareProgress')).length)
+    .toBe(1);
+  await page.reload();
+  await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
+  await expect(page.getByText('提交结果待确认，暂不能继续', { exact: true })).toBeVisible();
+  expect(fixture.requests.filter((r) => r.query.includes('mutation PrepareProgress'))).toHaveLength(
+    1,
+  );
+  expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
+});
+
+for (const deviation of [1, -1, null, '0'])
+  test(`进度偏差必须为数值零 deviation=${deviation}`, async ({ page }) => {
+    const fixture = await setup(page, { progressWorkspace: true });
+    await page.route('**/graphql', async (route) => {
+      const { query, variables } = route.request().postDataJSON() as {
+        query: string;
+        variables: { input: Input };
+      };
+      if (!query.includes('mutation PrepareProgress')) return route.fallback();
+      const input = variables.input;
+      fixture.operations.set(input.clientRequestId, {
+        id: `op-${input.resourceKey}`,
+        accountId: 700,
+        requestId: input.clientRequestId,
+        action: 'PREPARE',
+        round: input.round,
+        checkDate: input.checkDate,
+        state: 'PREPARED',
+        previewId: 'preview',
+      });
+      await route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              operation: {
+                id: 'op',
+                accountId: 700,
+                requestId: input.clientRequestId,
+                action: 'PREPARE',
+                round: input.round,
+                checkDate: input.checkDate,
+                state: 'PREPARED',
+                previewId: 'preview',
+              },
+              preview: {
+                id: 'preview',
+                round: input.round,
+                checkDate: input.checkDate,
+                scheduleVersion: 1,
+                observationVersion: 1,
+                expiresAt: '2026-10-18T04:30:00Z',
+              },
+              material: {
+                lesson: null,
+                assignment: null,
+                progress: {
+                  plannedProgress: 12,
+                  actualProgress: 11,
+                  deviation: input.resourceKey === '1:a' ? deviation : 0,
+                },
+              },
+              blockers: [],
+              upstreamSessionToken: 'token',
+              expiresAt: '2030-01-01T00:00:00Z',
+            },
+          },
+        }),
+      });
+    });
+    await page.goto(`${path}?kind=progress&semester=1`);
+    await expect(page.getByRole('button', { name: '调整日期', exact: true })).toHaveCount(0);
+    await page.getByRole('checkbox', { name: '全选当前范围（全部分页）' }).check();
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByRole('button', { name: '确认提交选中项' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: '确认提交选中项' })).toHaveText('确认提交 1 项');
+    await expect(
+      page.getByRole('button', { name: '确认提交测试课程甲', exact: true }),
+    ).toBeDisabled();
+    await page.getByRole('button', { name: '确认提交选中项' }).click();
+    await expect(page.getByText('提交成功', { exact: true })).toHaveCount(1);
+    const saves = fixture.requests.filter((r) => r.query.includes('mutation SaveProgress'));
+    expect(saves).toHaveLength(1);
+    expect(saves[0].input.resourceKey).toBe('1:b');
+  });

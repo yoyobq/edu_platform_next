@@ -35,21 +35,29 @@ export type LessonOverview = Omit<Workspace, 'resources'> & {
 const resourceFields = `lessonPlanSources { round checkDate chapter sourceDate } resourceKey sourceVersion courseName teacherIds teacherNames suggestedDates earliestDate latestDate blockers grouping { group suggestedGroup start end needsReview reason preserved } timePlan { group key version dates suggestedDates sourceVersion confirmed fullSemester canEdit earliestDate latestDate } schedule { ${scheduleFields} } status { ${statusFields} }`;
 const overviewFields = resourceFields.replace(
   scheduleFields,
-  'version dates records { recordKey checkDate chapter score } rounds { round date actualDate recordKey operationId operationState savedOperationId }',
+  'version dates records { recordKey checkDate chapter score actualProgress plannedProgress deviation } rounds { round date actualDate recordKey operationId operationState savedOperationId }',
 );
-export async function overview(semesterId: number, departmentId?: string | null) {
+export async function overview(
+  semesterId: number,
+  departmentId?: string | null,
+  kind: 'LESSON_PLAN' | 'PROGRESS' = 'LESSON_PLAN',
+) {
   return (
     await executeGraphQL<{ result: LessonOverview }, { input: object }>(
-      `query LessonPlanInspectionOverview($input: InspectionWorkspaceInput!) { result: lessonPlanInspectionOverview(input: $input) { today total departmentId canSelectDepartment teachingGroupIds departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${overviewFields} } } }`,
-      { input: { semesterId, departmentId, kind: 'LESSON_PLAN' } },
+      `query ${kind === 'PROGRESS' ? 'ProgressInspectionOverview' : 'LessonPlanInspectionOverview'}($input: InspectionWorkspaceInput!) { result: ${kind === 'PROGRESS' ? 'progressInspectionOverview' : 'lessonPlanInspectionOverview'}(input: $input) { today total departmentId canSelectDepartment teachingGroupIds departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${overviewFields} } } }`,
+      { input: { semesterId, departmentId, kind } },
     )
   ).result;
 }
-export async function detail(semesterId: number, resourceKey: string) {
+export async function detail(
+  semesterId: number,
+  resourceKey: string,
+  kind: 'LESSON_PLAN' | 'PROGRESS' = 'LESSON_PLAN',
+) {
   return (
     await executeGraphQL<{ result: LessonResource }, { input: object }>(
-      `query LessonPlanInspectionDetail($input: InspectionOperationInput!) { result: lessonPlanInspectionDetail(input: $input) { ${resourceFields} } }`,
-      { input: { semesterId, resourceKey, kind: 'LESSON_PLAN' } },
+      `query ${kind === 'PROGRESS' ? 'ProgressInspectionDetail' : 'LessonPlanInspectionDetail'}($input: InspectionOperationInput!) { result: ${kind === 'PROGRESS' ? 'progressInspectionDetail' : 'lessonPlanInspectionDetail'}(input: $input) { ${resourceFields} } }`,
+      { input: { semesterId, resourceKey, kind } },
     )
   ).result;
 }
