@@ -1,17 +1,15 @@
 // src/labs/teaching-inspection/ui/lesson-workbench.tsx
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LoadingOutlined } from '@ant-design/icons';
+import { LoadingOutlined, ReloadOutlined } from '@ant-design/icons';
 import {
   Alert,
   Button,
-  Card,
   Checkbox,
   Empty,
   Input,
   Progress,
   Select,
   Space,
-  Steps,
   Switch,
   Table,
   Tabs,
@@ -74,6 +72,7 @@ export function LessonWorkbench({
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [teachingGroup, setTeachingGroup] = useState('');
   const [teacher, setTeacher] = useState('');
   const [keyword, setKeyword] = useState('');
   const [hideCompleted, setHideCompleted] = useState(false);
@@ -206,9 +205,24 @@ export function LessonWorkbench({
   ]);
   const plan = work?.groupPlans.find((p) => p.group === group);
   const round = location.round ?? dueRound(plan?.dates ?? [], work?.today ?? '');
+  const ownTeachingGroups = work?.teachingGroupIds ?? [];
+  const availableRoster = (work?.roster ?? []).filter(
+    (member) => work?.canSelectDepartment || ownTeachingGroups.includes(member.groupId),
+  );
+  const teachingGroups = [
+    ...new Map(
+      availableRoster.map((member) => [
+        member.groupId,
+        { value: member.groupId, label: member.groupName },
+      ]),
+    ).values(),
+  ].sort((a, b) => a.label.localeCompare(b.label));
+  const visibleRoster = availableRoster.filter(
+    (member) => !work?.canSelectDepartment || !teachingGroup || member.groupId === teachingGroup,
+  );
   const batchRows: Row[] = [];
   const seen = new Set<string>();
-  for (const member of work?.roster ?? []) {
+  for (const member of visibleRoster) {
     if (teacher && member.staffId !== teacher) continue;
     const courses = work!.resources.filter(
       (c) =>
@@ -592,6 +606,9 @@ export function LessonWorkbench({
       ).trim()
     );
   }
+  function canPrepare(row: Row) {
+    return eligible(row) && !hasPending(row) && drafts[row.key]?.state !== 'ready';
+  }
   function canSubmit(row: Row) {
     return (
       eligible(row) &&
@@ -619,6 +636,13 @@ export function LessonWorkbench({
     );
   }
   const hasEmptyChapter = chosen.some(emptyChapter);
+  const selectable = rows.filter((row) => eligible(row) && !hasPending(row));
+  const selectedCount = selectable.filter((row) => selected.includes(row.key)).length;
+  const prepareCount = chosen.filter(canPrepare).length;
+  const submitCount = chosen.filter(canSubmit).length;
+  const processingQueue = activity?.kind === 'prepare' || activity?.kind === 'submit';
+  const processingBatch =
+    activity?.kind === 'prepare' || (activity?.kind === 'submit' && !activity.key);
   async function run(submit: boolean, target?: Row) {
     const targets = target ? [target] : chosen;
     if (running.current || (submit && targets.some(emptyChapter))) return;
@@ -633,9 +657,7 @@ export function LessonWorkbench({
     const publish = (key: string, value: Draft) => {
       if (sameIdentity()) patch(key, value);
     };
-    const queue = targets.filter(
-      (row) => eligible(row) && !hasPending(row) && (!submit || canSubmit(row)),
-    );
+    const queue = targets.filter(submit ? canSubmit : canPrepare);
     if (!queue.length) return;
     running.current = true;
     stop.current = false;
@@ -864,13 +886,21 @@ export function LessonWorkbench({
       </div>
     );
   return (
-    <div ref={container} className="flex flex-col gap-4">
+    <div
+      ref={container}
+      className="flex min-w-0 flex-col"
+      style={{
+        background: token.colorBgContainer,
+        borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`,
+        border: `1px solid ${token.colorBorderSecondary}`,
+        borderTop: 0,
+      }}
+    >
       <section
         aria-label="检查批次筛选"
         className="flex min-w-0 flex-col items-end gap-2 p-4"
         style={{
           background: token.colorPrimaryBg,
-          borderRadius: `0 0 ${token.borderRadiusLG}px ${token.borderRadiusLG}px`,
           borderBottom: `1px solid ${token.colorPrimaryBorder}`,
         }}
       >
@@ -930,32 +960,39 @@ export function LessonWorkbench({
           </div>
         )}
       </section>
-      <Card
-        title="教案核对清单"
-        size="small"
-        extra={
-          <div className="flex flex-wrap items-center justify-end gap-3">
-            <span>
-              共 {rows.filter((row) => row.course).length} 门课程 · 已完成{' '}
-              {rows.filter((row) => row.course?.status.rounds[row.round - 1]?.covered).length} ·
-              待确认 {rows.filter((row) => drafts[row.key]?.state === 'ready').length}
-            </span>
-            <Button disabled={busy} loading={loading} onClick={() => void reload()}>
-              刷新列表
-            </Button>
-          </div>
-        }
-      >
-        <Steps
-          size="small"
-          current={rows.some((row) => drafts[row.key]?.state === 'ready') ? 1 : 0}
-          items={[
-            { title: '准备材料', content: '勾选课程，读取本轮计划' },
-            { title: '核对并提交', content: '比对章节，确认后统一提交' },
-          ]}
-        />
-        <div className="mt-3 mb-3">
-          <Space wrap>
+      <section aria-label="教案列表操作" className="flex flex-col gap-3 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div
+            className={band === 'compact' ? 'flex w-full flex-wrap gap-2' : 'flex flex-wrap gap-2'}
+          >
+            <Select
+              aria-label="筛选教研组"
+              disabled={busy || !work.canSelectDepartment}
+              allowClear={work.canSelectDepartment}
+              showSearch
+              optionFilterProp="label"
+              placeholder={work.canSelectDepartment ? '全部教研组' : '未关联教研组'}
+              style={{ width: band === 'compact' ? '100%' : 184 }}
+              value={
+                work.canSelectDepartment
+                  ? teachingGroup || undefined
+                  : teachingGroups.length
+                    ? 'own'
+                    : undefined
+              }
+              options={
+                work.canSelectDepartment
+                  ? teachingGroups
+                  : teachingGroups.length
+                    ? [{ value: 'own', label: teachingGroups.map((item) => item.label).join('、') }]
+                    : []
+              }
+              onChange={(value) => {
+                setTeachingGroup(value ?? '');
+                setTeacher('');
+                setSelected([]);
+              }}
+            />
             <Select
               aria-label="筛选组员"
               disabled={busy}
@@ -963,18 +1000,21 @@ export function LessonWorkbench({
               showSearch
               optionFilterProp="label"
               placeholder="全部组员"
-              style={{ width: 200 }}
+              style={{ width: band === 'compact' ? '100%' : 168 }}
               value={teacher || undefined}
-              options={work.roster.map((m) => ({ value: m.staffId, label: m.name }))}
+              options={visibleRoster.map((m) => ({ value: m.staffId, label: m.name }))}
               onChange={(value) => setTeacher(value ?? '')}
             />
             <Input.Search
               aria-label="搜索教案课程"
               disabled={busy}
               placeholder="搜索课程"
+              style={{ width: band === 'compact' ? '100%' : 224 }}
               allowClear
               onSearch={setKeyword}
             />
+          </div>
+          <div className="ml-auto flex flex-wrap items-center justify-end gap-4">
             <Space size="small">
               <Switch
                 aria-label="隐藏已完成"
@@ -1002,70 +1042,113 @@ export function LessonWorkbench({
               />
               <span>只看不一致</span>
             </Space>
-          </Space>
-        </div>
-        <Card size="small">
-          <Space wrap>
-            <Checkbox
+            <Button
+              type="text"
+              aria-label="刷新列表"
+              icon={<ReloadOutlined aria-hidden />}
               disabled={busy}
-              checked={
-                rows.filter(eligible).length > 0 &&
-                rows.filter(eligible).every((r) => selected.includes(r.key))
-              }
-              onChange={(event) =>
-                setSelected(
-                  event.target.checked
-                    ? rows.filter((r) => eligible(r) && !hasPending(r)).map((r) => r.key)
-                    : [],
-                )
-              }
+              loading={loading}
+              onClick={() => void reload()}
             >
-              全选当前筛选范围（全部分页）
-            </Checkbox>
-            <span>已选 {chosen.length} 项</span>
-            <Button
-              type={
-                chosen.some((row) => drafts[row.key]?.state === 'ready') ? 'default' : 'primary'
-              }
-              aria-label="读取并准备选中项"
-              aria-busy={activity?.kind === 'prepare'}
-              loading={activity?.kind === 'prepare'}
-              disabled={busy || !chosen.length}
-              onClick={() => void run(false)}
-            >
-              读取并准备选中项
+              刷新
             </Button>
-            <Button
-              type="primary"
-              aria-label="确认提交选中项"
-              aria-busy={activity?.kind === 'submit' && !activity.key}
-              loading={activity?.kind === 'submit' && !activity.key}
-              disabled={busy || hasEmptyChapter || !chosen.some(canSubmit)}
-              onClick={() => void run(true)}
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            <Tooltip title="选中当前筛选范围内可操作的课程，包含全部分页">
+              <Checkbox
+                aria-label="全选当前范围（全部分页）"
+                disabled={busy || loading || !selectable.length}
+                checked={selectable.length > 0 && selectedCount === selectable.length}
+                indeterminate={selectedCount > 0 && selectedCount < selectable.length}
+                onChange={(event) =>
+                  setSelected(event.target.checked ? selectable.map((row) => row.key) : [])
+                }
+              >
+                全选当前范围
+              </Checkbox>
+            </Tooltip>
+            <span
+              style={{ color: chosen.length ? token.colorPrimaryText : token.colorTextSecondary }}
             >
-              确认提交选中项
-            </Button>
-            {busy &&
-              (activity?.kind === 'prepare' || (activity?.kind === 'submit' && !activity.key)) && (
-                <Button
-                  onClick={() => {
-                    stop.current = true;
-                  }}
-                >
-                  停止后续处理
-                </Button>
-              )}
-          </Space>
-          {progress.total > 0 && (
-            <>
-              <Progress percent={Math.round((progress.done / progress.total) * 100)} />
-              <span>
-                {progress.label} · 已处理 {progress.done} / {progress.total} · 成功{' '}
-                {progress.success} · 失败 {progress.failed} · 待核对 {progress.unknown}
-              </span>
-            </>
-          )}
-        </Card>
+              已选 {chosen.length} 项
+            </span>
+            <span style={{ color: token.colorTextSecondary, fontSize: token.fontSizeSM }}>
+              共 {rows.filter((row) => row.course).length} 门 · 已完成{' '}
+              {rows.filter(rowCompleted).length} · 待确认{' '}
+              {rows.filter((row) => drafts[row.key]?.state === 'ready').length}
+            </span>
+          </div>
+          <div
+            className={
+              band === 'compact'
+                ? 'grid w-full grid-cols-2 gap-2'
+                : 'ml-auto flex flex-wrap items-center justify-end gap-2'
+            }
+          >
+            {busy && processingBatch && (
+              <Button
+                style={band === 'compact' ? { gridColumn: '1 / -1' } : undefined}
+                onClick={() => {
+                  stop.current = true;
+                }}
+              >
+                停止后续处理
+              </Button>
+            )}
+            <Tooltip title="读取选中课程的上游材料，保留已准备内容供核对">
+              <Button
+                type={submitCount ? 'default' : 'primary'}
+                aria-label="准备材料"
+                block={band === 'compact'}
+                aria-busy={activity?.kind === 'prepare'}
+                loading={activity?.kind === 'prepare'}
+                disabled={busy || loading || !prepareCount}
+                onClick={() => void run(false)}
+              >
+                准备材料{prepareCount > 0 ? ` ${prepareCount} 项` : ''}
+              </Button>
+            </Tooltip>
+            <Tooltip
+              title={
+                hasEmptyChapter
+                  ? '请补全选中课程的检查时授课章节'
+                  : '核对章节后，逐项提交已准备的检查结果'
+              }
+            >
+              <Button
+                type={submitCount ? 'primary' : 'default'}
+                aria-label="确认提交选中项"
+                block={band === 'compact'}
+                aria-busy={activity?.kind === 'submit' && !activity.key}
+                loading={activity?.kind === 'submit' && !activity.key}
+                disabled={busy || loading || hasEmptyChapter || !submitCount}
+                onClick={() => void run(true)}
+              >
+                确认提交{submitCount > 0 ? ` ${submitCount} 项` : ''}
+              </Button>
+            </Tooltip>
+          </div>
+        </div>
+        {progress.total > 0 && (
+          <div
+            aria-label="本次处理结果"
+            className="flex flex-col gap-1"
+            style={{ color: token.colorTextSecondary, fontSize: token.fontSizeSM }}
+          >
+            {busy && processingQueue && (
+              <Progress size="small" percent={Math.round((progress.done / progress.total) * 100)} />
+            )}
+            <span>
+              {progress.label} · 已处理 {progress.done} / {progress.total} · 成功 {progress.success}{' '}
+              {progress.failed > 0 && ` · 失败 ${progress.failed}`}
+              {progress.unknown > 0 && ` · 待核对 ${progress.unknown}`}
+            </span>
+          </div>
+        )}
+      </section>
+      <div className="min-w-0">
         <Table<Row>
           size="middle"
           tableLayout="fixed"
@@ -1198,7 +1281,7 @@ export function LessonWorkbench({
                 ]
           }
         />
-      </Card>
+      </div>
     </div>
   );
 }

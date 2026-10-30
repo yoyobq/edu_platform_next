@@ -27,6 +27,7 @@ export type LessonSummary = Omit<LessonResource, 'schedule'> & {
   schedule: Pick<Schedule, 'version' | 'dates' | 'rounds' | 'records'>;
 };
 export type LessonOverview = Omit<Workspace, 'resources'> & {
+  teachingGroupIds: string[];
   roster: { groupId: string; groupName: string; staffId: string; name: string }[];
   groupPlans: TimePlan[];
   resources: LessonSummary[];
@@ -39,7 +40,7 @@ const overviewFields = resourceFields.replace(
 export async function overview(semesterId: number, departmentId?: string | null) {
   return (
     await executeGraphQL<{ result: LessonOverview }, { input: object }>(
-      `query LessonPlanInspectionOverview($input: InspectionWorkspaceInput!) { result: lessonPlanInspectionOverview(input: $input) { today total departmentId canSelectDepartment departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${overviewFields} } } }`,
+      `query LessonPlanInspectionOverview($input: InspectionWorkspaceInput!) { result: lessonPlanInspectionOverview(input: $input) { today total departmentId canSelectDepartment teachingGroupIds departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${overviewFields} } } }`,
       { input: { semesterId, departmentId, kind: 'LESSON_PLAN' } },
     )
   ).result;
