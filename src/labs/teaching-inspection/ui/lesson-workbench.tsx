@@ -64,7 +64,7 @@ export function LessonWorkbench({
   session,
   onBusyChange,
 }: {
-  kind?: 'LESSON_PLAN' | 'PROGRESS';
+  kind?: 'LESSON_PLAN' | 'PROGRESS' | 'ASSIGNMENT';
   onBusyChange?: (busy: boolean) => void;
   location: ReturnType<typeof readLocation>;
   onLocation: (value: ReturnType<typeof readLocation>) => void;
@@ -73,6 +73,8 @@ export function LessonWorkbench({
 }) {
   const { token } = theme.useToken();
   const isProgress = kind === 'PROGRESS';
+  const isAssignment = kind === 'ASSIGNMENT';
+  const isIndividual = kind !== 'LESSON_PLAN';
   const [work, setWork] = useState<api.LessonOverview | null>(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -139,7 +141,7 @@ export function LessonWorkbench({
     }
   }, [blocker]);
   const recoveries = useCallback(() => {
-    const values = isProgress
+    const values = isIndividual
       ? readRecovery(account.accountId)
       : discardLessonPreparations(account.accountId);
     setEntries(
@@ -152,7 +154,7 @@ export function LessonWorkbench({
       ),
     );
     return values;
-  }, [account.accountId, semesterId, kind, isProgress]);
+  }, [account.accountId, semesterId, kind, isIndividual]);
   const reload = useCallback(async () => {
     const id = ++epoch.current;
     setLoading(true);
@@ -319,7 +321,7 @@ export function LessonWorkbench({
     setSelected((old) => old.filter((key) => key !== row.key));
     patch(row.key, { state: 'busy', message: '正在同步数据' });
     try {
-      const recovered = isProgress
+      const recovered = isIndividual
         ? await reconcileProgress(
             account.accountId,
             row.course.resourceKey,
@@ -327,6 +329,7 @@ export function LessonWorkbench({
             current.upstreamSessionToken,
             assertCurrent,
             persist,
+            kind as 'PROGRESS' | 'ASSIGNMENT',
           )
         : null;
       const pending = recovered
@@ -381,7 +384,7 @@ export function LessonWorkbench({
         scheduleVersion: observed.schedule.version,
         clientRequestId: crypto.randomUUID(),
       };
-      if (isProgress)
+      if (isIndividual)
         track({
           ...input,
           accountId: account.accountId,
@@ -390,7 +393,7 @@ export function LessonWorkbench({
           prepare: input,
         });
       const result = await flow.prepare(input, current.upstreamSessionToken);
-      if (isProgress && !result.operation) forget([input.clientRequestId]);
+      if (isIndividual && !result.operation) forget([input.clientRequestId]);
       persist(result);
       patch(
         row.key,
@@ -461,6 +464,31 @@ export function LessonWorkbench({
       )
     );
   }
+  function renderCheckDate(row: Row) {
+    const submittedDate = isAssignment
+      ? row.course?.schedule.rounds[row.round - 1]?.actualDate
+      : undefined;
+    if (isAssignment)
+      return (
+        <span className="inline-flex flex-col gap-1">
+          <Tooltip title={`第${row.round}次检查`}>
+            <strong
+              style={{ color: submittedDate ? token.colorSuccessText : token.colorTextSecondary }}
+            >
+              {submittedDate ? '本地提交' : '提醒检查时间'}
+            </strong>
+          </Tooltip>
+          <span>{submittedDate ?? row.date ?? '待确认'}</span>
+        </span>
+      );
+    return (
+      <span>
+        <strong>第{row.round}次检查</strong>
+        <br />
+        {row.date ?? '待确认'}
+      </span>
+    );
+  }
   function completedRecord(row: Row) {
     return row.course?.status.rounds[row.round - 1]?.covered
       ? row.course.schedule.records?.[row.round - 1]
@@ -506,7 +534,127 @@ export function LessonWorkbench({
       plan.chapter.trim() !== chapter.trim(),
     );
   }
+  function assignmentMaterial(row: Row) {
+    return (
+      row.course?.assignmentSources?.find((source) => source.round === row.round)?.material ??
+      drafts[row.key]?.prepared?.material.assignment
+    );
+  }
+  function assignmentText(row: Row) {
+    const material = assignmentMaterial(row);
+    if (!material)
+      return rowCompleted(row) ? (
+        <Tooltip title="本地只有完成次数，未留存该轮作业检查材料">未留存材料</Tooltip>
+      ) : (
+        '—'
+      );
+    const fields = [
+      ['次数', material.assignedBook],
+      ['作业量', material.assignmentQuantity],
+      ['知识覆盖', material.knowledgeCoverage],
+      ['批改', material.allMarkingStatus],
+      ['错误标注', material.markingErrors],
+      ['订正批改', material.markingCorrections],
+      ['批改与日期', material.markingAndDateDetails],
+      ['完成', material.studentCompletionStatus],
+      ['订正', material.studentCorrectionStatus],
+    ];
+    const details = fields.map(([label, value]) => `${label}：${value}`).join('；');
+    const opinion =
+      material.checkerOpinion.length > 14
+        ? `${material.checkerOpinion.slice(0, 14)}...`
+        : material.checkerOpinion;
+    const opinionPreview = (
+      <Tooltip title={material.checkerOpinion}>
+        <span
+          aria-label="查看完整检查意见"
+          tabIndex={0}
+          className="min-w-0 truncate"
+          style={{ cursor: 'help', color: token.colorTextSecondary }}
+        >
+          {opinion}
+        </span>
+      </Tooltip>
+    );
+    const renderInline = (items: string[][]) =>
+      items.map(([label, value], index) => (
+        <span key={label}>
+          {index > 0 && <span style={{ color: token.colorTextQuaternary }}> · </span>}
+          <strong>{label}：</strong>
+          {value}
+        </span>
+      ));
+    if (band === 'compact')
+      return (
+        <div
+          aria-label={details}
+          className="flex min-w-0 flex-col gap-1"
+          style={{ fontSize: token.fontSizeSM }}
+        >
+          <Typography.Paragraph
+            ellipsis={{ rows: 1, tooltip: details }}
+            style={{ margin: 0, fontSize: token.fontSizeSM }}
+          >
+            {renderInline(fields.slice(0, 5))}
+          </Typography.Paragraph>
+          <div className="flex min-w-0 items-baseline gap-3">
+            <Typography.Paragraph
+              ellipsis={{ rows: 1, tooltip: details }}
+              style={{ margin: 0, minWidth: 0, flex: 1, fontSize: token.fontSizeSM }}
+            >
+              {renderInline(fields.slice(5))}
+            </Typography.Paragraph>
+            <span className="flex min-w-0 items-baseline" style={{ maxWidth: '55%' }}>
+              <strong>意见：</strong>
+              {opinionPreview}
+            </span>
+          </div>
+        </div>
+      );
+    return (
+      <div
+        aria-label={details}
+        className="grid min-w-0 gap-x-3 gap-y-1"
+        style={{
+          fontSize: token.fontSizeSM,
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr)) minmax(0, 1.35fr)',
+        }}
+      >
+        {fields.map(([label, value], index) => (
+          <div
+            key={label}
+            className="flex min-w-0 items-baseline gap-1"
+            style={{
+              borderInlineStart:
+                index % 5 === 0 ? undefined : `1px solid ${token.colorBorderSecondary}`,
+              paddingInlineStart: index % 5 === 0 ? undefined : token.paddingXS,
+            }}
+          >
+            <strong className="shrink-0" style={{ color: token.colorTextSecondary }}>
+              {label}：
+            </strong>
+            <Tooltip title={`${label}：${value}`}>
+              <span className="min-w-0 truncate">{value}</span>
+            </Tooltip>
+          </div>
+        ))}
+        <div
+          className="flex min-w-0 items-baseline gap-1"
+          style={{
+            borderInlineStart: `1px solid ${token.colorBorderSecondary}`,
+            paddingInlineStart: token.paddingXS,
+          }}
+        >
+          <strong className="shrink-0" style={{ color: token.colorTextSecondary }}>
+            意见：
+          </strong>
+          {opinionPreview}
+        </div>
+      </div>
+    );
+  }
   function renderChapter(row: Row, source = false) {
+    if (isAssignment) return assignmentText(row);
     if (isProgress)
       return <span>{renderProgressValue(row, source ? 'plannedProgress' : 'actualProgress')}</span>;
     const record = completedRecord(row);
@@ -582,6 +730,7 @@ export function LessonWorkbench({
     );
   }
   function renderScore(row: Row) {
+    if (isAssignment) return assignmentText(row);
     if (isProgress)
       return (
         <span style={{ color: chaptersDiffer(row) ? token.colorWarningText : undefined }}>
@@ -612,14 +761,14 @@ export function LessonWorkbench({
     return entries.some(
       (entry) =>
         (entry.action === 'SAVE' ||
-          (isProgress &&
+          (isIndividual &&
             drafts[row.key]?.prepared?.operation?.requestId !== entry.clientRequestId)) &&
         entry.resourceKey === row.course?.resourceKey,
     );
   }
   function needsProgressSync(row: Row) {
     return (
-      isProgress &&
+      isIndividual &&
       (hasPending(row) ||
         drafts[row.key]?.state === 'unknown' ||
         row.course?.status.rounds.some((round) => round.blockers.includes('PENDING_OPERATION')))
@@ -638,12 +787,12 @@ export function LessonWorkbench({
           : row.course?.status.rounds[row.round - 1]?.covered
             ? '本轮已完成'
             : row.course
-              ? isProgress
+              ? isIndividual
                 ? '待同步'
                 : '未准备'
               : '无课程'));
     const color =
-      isProgress && label === '待同步'
+      isIndividual && label === '待同步'
         ? 'default'
         : label === '本轮已完成' || draft?.state === 'saved'
           ? 'success'
@@ -671,13 +820,13 @@ export function LessonWorkbench({
     return Boolean(
       row.course &&
       row.date &&
-      row.date <= (work?.today ?? '') &&
+      (isAssignment || row.date <= (work?.today ?? '')) &&
       !row.course.status.rounds[row.round - 1]?.covered &&
       drafts[row.key]?.state !== 'saved',
     );
   }
   function emptyChapter(row: Row) {
-    if (isProgress) return false;
+    if (isIndividual) return false;
     return (
       drafts[row.key]?.state === 'ready' &&
       !(
@@ -693,7 +842,7 @@ export function LessonWorkbench({
       !hasPending(row) &&
       drafts[row.key]?.state !== 'ready' &&
       !(
-        isProgress &&
+        isIndividual &&
         entries.some(
           (entry) => entry.action === 'PREPARE' && entry.resourceKey === row.course?.resourceKey,
         )
@@ -783,9 +932,9 @@ export function LessonWorkbench({
         for (
           let offset = 0;
           offset < queue.length && !stop.current;
-          offset += isProgress ? 1 : 10
+          offset += isIndividual ? 1 : 10
         ) {
-          const batch = queue.slice(offset, offset + (isProgress ? 1 : 10));
+          const batch = queue.slice(offset, offset + (isIndividual ? 1 : 10));
           const requests: { row: Row; input: PrepareInput }[] = [];
           for (const row of batch) {
             if (stop.current || !sameIdentity()) break;
@@ -816,7 +965,7 @@ export function LessonWorkbench({
           if (!requests.length) continue;
           update(`正在准备 ${requests[0].row.name} 等 ${requests.length} 项`);
           touched = true;
-          if (isProgress)
+          if (isIndividual)
             track({
               ...requests[0].input,
               accountId: account.accountId,
@@ -824,10 +973,10 @@ export function LessonWorkbench({
               action: 'PREPARE',
               prepare: requests[0].input,
             });
-          const generated = isProgress
+          const generated = isIndividual
             ? await flow.prepare(requests[0].input, current!.upstreamSessionToken)
             : null;
-          if (isProgress && generated && !generated.operation)
+          if (isIndividual && generated && !generated.operation)
             forget([requests[0].input.clientRequestId]);
           const response = generated
             ? {
@@ -891,7 +1040,7 @@ export function LessonWorkbench({
             resourceKey: row.course!.resourceKey,
             previewId: preview.id,
             clientRequestId: crypto.randomUUID(),
-            ...(isProgress
+            ...(isIndividual
               ? {}
               : {
                   scores: prepared.material.lesson!.scores,
@@ -901,7 +1050,7 @@ export function LessonWorkbench({
           const entry: RecoveryEntry = {
             ...input,
             action: 'SAVE',
-            parentRequestId: isProgress ? prepared.operation?.requestId : undefined,
+            parentRequestId: isIndividual ? prepared.operation?.requestId : undefined,
             accountId: account.accountId,
             upstreamLoginId: current!.upstreamLoginId,
             round: row.round,
@@ -1007,7 +1156,15 @@ export function LessonWorkbench({
           {error ? (
             <Alert type="error" title={error} />
           ) : (
-            <Empty description="正在读取本地教案总览" />
+            <Empty
+              description={
+                isAssignment
+                  ? '正在读取本地作业总览'
+                  : isProgress
+                    ? '正在读取本地进度总览'
+                    : '正在读取本地教案总览'
+              }
+            />
           )}
         </Space>
       </div>
@@ -1087,7 +1244,17 @@ export function LessonWorkbench({
           </div>
         )}
       </section>
-      <section aria-label="教案列表操作" className="flex flex-col gap-3 p-4">
+      {isAssignment && (
+        <div className="px-4 pt-3">
+          <Typography.Text type="secondary">
+            预设日期仅作提醒，可提前或逾期检查；提交日期由后端按当天系统日期记录。
+          </Typography.Text>
+        </div>
+      )}
+      <section
+        aria-label={isAssignment ? '作业列表操作' : isProgress ? '进度列表操作' : '教案列表操作'}
+        className="flex flex-col gap-3 p-4"
+      >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div
             className={band === 'compact' ? 'flex w-full flex-wrap gap-2' : 'flex flex-wrap gap-2'}
@@ -1133,7 +1300,9 @@ export function LessonWorkbench({
               onChange={(value) => setTeacher(value ?? '')}
             />
             <Input.Search
-              aria-label={isProgress ? '搜索进度课程' : '搜索教案课程'}
+              aria-label={
+                isAssignment ? '搜索作业课程' : isProgress ? '搜索进度课程' : '搜索教案课程'
+              }
               disabled={busy}
               placeholder="搜索课程"
               style={{ width: band === 'compact' ? '100%' : 224 }}
@@ -1155,20 +1324,22 @@ export function LessonWorkbench({
               />
               <span>隐藏已完成</span>
             </Space>
-            <Space size="small">
-              <Switch
-                aria-label={isProgress ? '只看有偏差' : '只看不一致'}
-                size="small"
-                checked={onlyDifferent}
-                disabled={busy}
-                onChange={(value) => {
-                  setOnlyDifferent(value);
-                  if (value) setHideCompleted(false);
-                  setSelected([]);
-                }}
-              />
-              <span>{isProgress ? '只看有偏差' : '只看不一致'}</span>
-            </Space>
+            {!isAssignment && (
+              <Space size="small">
+                <Switch
+                  aria-label={isProgress ? '只看有偏差' : '只看不一致'}
+                  size="small"
+                  checked={onlyDifferent}
+                  disabled={busy}
+                  onChange={(value) => {
+                    setOnlyDifferent(value);
+                    if (value) setHideCompleted(false);
+                    setSelected([]);
+                  }}
+                />
+                <span>{isProgress ? '只看有偏差' : '只看不一致'}</span>
+              </Space>
+            )}
             <Button
               type="text"
               aria-label="刷新列表"
@@ -1320,16 +1491,12 @@ export function LessonWorkbench({
             band === 'compact'
               ? [
                   {
-                    title: isProgress ? '教学进度' : '教案检查',
+                    title: isAssignment ? '学生作业' : isProgress ? '教学进度' : '教案检查',
                     render: (_, row) => (
                       <Space orientation="vertical">
                         {renderTeacher(row, true)}
                         {renderCourse(row)}
-                        <span>
-                          <strong>第{row.round}次检查</strong>
-                          <br />
-                          {row.date ?? '待确认'}
-                        </span>
+                        {renderCheckDate(row)}
                         {group === 'CUSTOM' && row.course && (
                           <Select
                             aria-label={`${row.course.courseName}轮次`}
@@ -1345,11 +1512,17 @@ export function LessonWorkbench({
                             }}
                           />
                         )}
-                        <small>{isProgress ? '计划进度' : '授课计划章节'}</small>
+                        <small>
+                          {isAssignment ? '检查材料' : isProgress ? '计划进度' : '授课计划章节'}
+                        </small>
                         {renderChapter(row, true)}
-                        <small>{isProgress ? '实际进度' : '检查时授课章节'}</small>
-                        {renderChapter(row)}
-                        {renderScore(row)}
+                        {!isAssignment && (
+                          <>
+                            <small>{isProgress ? '实际进度' : '检查时授课章节'}</small>
+                            {renderChapter(row)}
+                            {renderScore(row)}
+                          </>
+                        )}
                         {renderStatus(row)}
                         {renderRowAction(row)}
                       </Space>
@@ -1364,7 +1537,7 @@ export function LessonWorkbench({
                   },
                   {
                     title: '课程',
-                    width: isProgress ? '24%' : '11%',
+                    width: isAssignment ? '18%' : isProgress ? '24%' : '11%',
                     render: (_, row) => renderCourse(row),
                   },
                   {
@@ -1373,11 +1546,7 @@ export function LessonWorkbench({
                     render: (_, row) =>
                       row.course && (
                         <>
-                          <span>
-                            <strong>第{row.round}次检查</strong>
-                            <br />
-                            {row.date ?? '待确认'}
-                          </span>
+                          {renderCheckDate(row)}
                           {group === 'CUSTOM' && (
                             <Select
                               aria-label={`${row.course.courseName}轮次`}
@@ -1397,22 +1566,30 @@ export function LessonWorkbench({
                       ),
                   },
                   {
-                    title: isProgress ? '计划进度' : '授课计划章节',
+                    title: isAssignment ? '检查材料' : isProgress ? '计划进度' : '授课计划章节',
                     width: isProgress ? 100 : undefined,
-                    onCell: () => ({ style: { verticalAlign: isProgress ? 'middle' : 'bottom' } }),
+                    onCell: () => ({
+                      style: { verticalAlign: isIndividual ? 'middle' : 'bottom' },
+                    }),
                     render: (_, row) => renderChapter(row, true),
                   },
-                  {
-                    title: isProgress ? '实际进度' : '检查时授课章节',
-                    width: isProgress ? 100 : undefined,
-                    onCell: () => ({ style: { verticalAlign: isProgress ? 'middle' : 'bottom' } }),
-                    render: (_, row) => renderChapter(row),
-                  },
-                  {
-                    title: isProgress ? '偏差' : '评分',
-                    width: 75,
-                    render: (_, row) => renderScore(row),
-                  },
+                  ...(!isAssignment
+                    ? [
+                        {
+                          title: isProgress ? '实际进度' : '检查时授课章节',
+                          width: isProgress ? 100 : undefined,
+                          onCell: () => ({
+                            style: { verticalAlign: isIndividual ? 'middle' : 'bottom' },
+                          }),
+                          render: (_: unknown, row: Row) => renderChapter(row),
+                        },
+                        {
+                          title: isProgress ? '偏差' : '评分',
+                          width: 75,
+                          render: (_: unknown, row: Row) => renderScore(row),
+                        },
+                      ]
+                    : []),
                   {
                     title: '状态',
                     width: 150,

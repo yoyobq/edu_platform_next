@@ -4,6 +4,7 @@ import { executeUpstreamSessionGraphQL } from '@/entities/upstream-session';
 import { executeGraphQL } from '@/shared/graphql';
 
 import type {
+  Assignment,
   CourseGrouping,
   Prepared,
   PrepareInput,
@@ -16,6 +17,7 @@ import type {
 
 import { prepareFields, scheduleFields, statusFields } from './api';
 export type LessonResource = Resource & {
+  assignmentSources?: { round: number; checkDate: string; material: Assignment }[];
   lessonPlanSources?:
     | { round: number; checkDate: string; chapter: string; sourceDate: string | null }[]
     | null;
@@ -40,11 +42,11 @@ const overviewFields = resourceFields.replace(
 export async function overview(
   semesterId: number,
   departmentId?: string | null,
-  kind: 'LESSON_PLAN' | 'PROGRESS' = 'LESSON_PLAN',
+  kind: 'LESSON_PLAN' | 'PROGRESS' | 'ASSIGNMENT' = 'LESSON_PLAN',
 ) {
   return (
     await executeGraphQL<{ result: LessonOverview }, { input: object }>(
-      `query ${kind === 'PROGRESS' ? 'ProgressInspectionOverview' : 'LessonPlanInspectionOverview'}($input: InspectionWorkspaceInput!) { result: ${kind === 'PROGRESS' ? 'progressInspectionOverview' : 'lessonPlanInspectionOverview'}(input: $input) { today total departmentId canSelectDepartment teachingGroupIds departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${overviewFields} } } }`,
+      `query ${kind === 'ASSIGNMENT' ? 'AssignmentInspectionOverview' : kind === 'PROGRESS' ? 'ProgressInspectionOverview' : 'LessonPlanInspectionOverview'}($input: InspectionWorkspaceInput!) { result: ${kind === 'ASSIGNMENT' ? 'assignmentInspectionOverview' : kind === 'PROGRESS' ? 'progressInspectionOverview' : 'lessonPlanInspectionOverview'}(input: $input) { today total departmentId canSelectDepartment teachingGroupIds departments { id name } teachers { staffId name } roster { groupId groupName staffId name } groupPlans { group key dates confirmed } resources { ${kind === 'ASSIGNMENT' ? `assignmentSources { round checkDate material { assignedBook assignmentQuantity knowledgeCoverage allMarkingStatus markingErrors markingCorrections markingAndDateDetails studentCompletionStatus studentCorrectionStatus checkerOpinion } }` : ''} ${overviewFields} } } }`,
       { input: { semesterId, departmentId, kind } },
     )
   ).result;
@@ -52,11 +54,11 @@ export async function overview(
 export async function detail(
   semesterId: number,
   resourceKey: string,
-  kind: 'LESSON_PLAN' | 'PROGRESS' = 'LESSON_PLAN',
+  kind: 'LESSON_PLAN' | 'PROGRESS' | 'ASSIGNMENT' = 'LESSON_PLAN',
 ) {
   return (
     await executeGraphQL<{ result: LessonResource }, { input: object }>(
-      `query ${kind === 'PROGRESS' ? 'ProgressInspectionDetail' : 'LessonPlanInspectionDetail'}($input: InspectionOperationInput!) { result: ${kind === 'PROGRESS' ? 'progressInspectionDetail' : 'lessonPlanInspectionDetail'}(input: $input) { ${resourceFields} } }`,
+      `query ${kind === 'ASSIGNMENT' ? 'AssignmentInspectionDetail' : kind === 'PROGRESS' ? 'ProgressInspectionDetail' : 'LessonPlanInspectionDetail'}($input: InspectionOperationInput!) { result: ${kind === 'ASSIGNMENT' ? 'assignmentInspectionDetail' : kind === 'PROGRESS' ? 'progressInspectionDetail' : 'lessonPlanInspectionDetail'}(input: $input) { ${resourceFields} } }`,
       { input: { semesterId, resourceKey, kind } },
     )
   ).result;

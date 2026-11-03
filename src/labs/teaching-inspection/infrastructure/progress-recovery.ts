@@ -12,6 +12,7 @@ export async function reconcileProgress(
   token: string,
   assertCurrent: () => void,
   persist: (result: SessionResult) => void,
+  kind: 'PROGRESS' | 'ASSIGNMENT' = 'PROGRESS',
 ) {
   const entries = readRecovery(accountId);
   let currentToken = token;
@@ -19,7 +20,7 @@ export async function reconcileProgress(
   let pending = false;
   for (const entry of entries.filter(
     (item) =>
-      item.kind === 'PROGRESS' &&
+      item.kind === kind &&
       item.resourceKey === resourceKey &&
       (!item.upstreamLoginId || item.upstreamLoginId === identity),
   )) {

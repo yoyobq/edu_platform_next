@@ -702,8 +702,11 @@ export function InspectionDetail({
           <Divider titlePlacement="start">材料核对</Divider>
           {preview && (
             <p>
-              第 {preview.round} 轮 · {preview.checkDate} · 有效至{' '}
-              {new Date(preview.expiresAt).toLocaleString()}
+              第 {preview.round} 轮 ·{' '}
+              {target.kind === 'ASSIGNMENT'
+                ? `提醒日期 ${preview.checkDate}；提交日期使用后端当天日期`
+                : preview.checkDate}{' '}
+              · 有效至 {new Date(preview.expiresAt).toLocaleString()}
             </p>
           )}
           {(stale || prepared.blockers.length > 0) && (
