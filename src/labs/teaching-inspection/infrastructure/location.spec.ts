@@ -37,3 +37,13 @@ describe('教学检查链接', () => {
     expect(readLocation(writeLocation(readLocation(params)))).toEqual(readLocation(params));
   });
 });
+
+it('分页大小仅允许30、60、100并随链接保留', () => {
+  for (const pageSize of [30, 60, 100]) {
+    const value = readLocation(new URLSearchParams(`kind=assignment&pageSize=${pageSize}`));
+    expect(readLocation(writeLocation(value)).pageSize).toBe(pageSize);
+  }
+  for (const pageSize of ['', '20', '-1', 'Infinity']) {
+    expect(readLocation(new URLSearchParams(`pageSize=${pageSize}`)).pageSize).toBe(30);
+  }
+});

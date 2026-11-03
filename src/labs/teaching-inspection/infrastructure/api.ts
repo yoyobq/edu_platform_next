@@ -62,6 +62,7 @@ export async function loadWorkspace(input: {
   semesterId: number;
   kind: InspectionKind;
   page: number;
+  limit?: number;
   teacherId?: string;
   keyword?: string;
 }) {
@@ -70,7 +71,7 @@ export async function loadWorkspace(input: {
     { input: typeof input & { limit: number } }
   >(
     `query TeachingInspectionWorkspace($input: InspectionWorkspaceInput!) { result: teachingInspectionWorkspace(input: $input) { departmentId canSelectDepartment departments { id name } today total teachers { staffId name } resources { resourceKey sourceVersion courseName teacherNames suggestedDates earliestDate latestDate blockers schedule { ${scheduleFields} } status { ${statusFields} } } } }`,
-    { input: { ...input, limit: 20 } },
+    { input: { ...input, limit: input.limit ?? 30 } },
   );
   return data.result;
 }

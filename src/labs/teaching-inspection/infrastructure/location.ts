@@ -12,6 +12,9 @@ export function readLocation(params: URLSearchParams) {
     resourceKey: params.get('resource') || undefined,
     semesterId: positive(params.get('semester')),
     page: positive(params.get('page')) ?? 1,
+    pageSize: [30, 60, 100].includes(Number(params.get('pageSize')))
+      ? Number(params.get('pageSize'))
+      : 30,
     departmentId:
       params.get('department') === 'all' ? null : params.get('department')?.trim() || undefined,
     timeGroup: ['FULL', 'FIRST', 'SECOND', 'CUSTOM'].includes(params.get('timeGroup') ?? '')
@@ -35,6 +38,7 @@ export function writeLocation(value: ReturnType<typeof readLocation>) {
   if (value.round) params.set('round', String(value.round));
   if (value.teacherId) params.set('teacher', value.teacherId);
   if (value.keyword) params.set('keyword', value.keyword);
+  if (value.pageSize !== 30) params.set('pageSize', String(value.pageSize));
   if (value.page > 1) params.set('page', String(value.page));
   return params;
 }

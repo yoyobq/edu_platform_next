@@ -51,6 +51,7 @@ export function useInspectionWorkspace(
           semesterId: location.semesterId!,
           kind: location.type.kind,
           page: location.page,
+          limit: location.pageSize,
           teacherId: location.teacherId,
           keyword: location.keyword,
         });

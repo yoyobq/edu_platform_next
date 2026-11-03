@@ -471,6 +471,18 @@ export function LessonWorkbench({
       row.course?.status.rounds[row.round - 1]?.covered || drafts[row.key]?.state === 'saved',
     );
   }
+  function renderProgressValue(
+    row: Row,
+    field: 'plannedProgress' | 'actualProgress' | 'deviation',
+  ) {
+    const value = progressMaterial(row)?.[field];
+    if (typeof value === 'number' && Number.isFinite(value)) return value;
+    return rowCompleted(row) ? (
+      <Tooltip title="本地已记录完成状态，但缺少该项历史数值；点击同步数据补齐">待同步</Tooltip>
+    ) : (
+      '—'
+    );
+  }
   function progressMaterial(row: Row) {
     return completedRecord(row) ?? drafts[row.key]?.prepared?.material.progress;
   }
@@ -496,9 +508,7 @@ export function LessonWorkbench({
   }
   function renderChapter(row: Row, source = false) {
     if (isProgress)
-      return (
-        <span>{progressMaterial(row)?.[source ? 'plannedProgress' : 'actualProgress'] ?? '—'}</span>
-      );
+      return <span>{renderProgressValue(row, source ? 'plannedProgress' : 'actualProgress')}</span>;
     const record = completedRecord(row);
     const lesson = drafts[row.key]?.prepared?.material.lesson;
     const planSource =
@@ -575,7 +585,7 @@ export function LessonWorkbench({
     if (isProgress)
       return (
         <span style={{ color: chaptersDiffer(row) ? token.colorWarningText : undefined }}>
-          {progressMaterial(row)?.deviation ?? '—'}
+          {renderProgressValue(row, 'deviation')}
         </span>
       );
     const record = completedRecord(row);
@@ -607,30 +617,45 @@ export function LessonWorkbench({
         entry.resourceKey === row.course?.resourceKey,
     );
   }
+  function needsProgressSync(row: Row) {
+    return (
+      isProgress &&
+      (hasPending(row) ||
+        drafts[row.key]?.state === 'unknown' ||
+        row.course?.status.rounds.some((round) => round.blockers.includes('PENDING_OPERATION')))
+    );
+  }
   function renderStatus(row: Row) {
     const draft = drafts[row.key];
     const pending = hasPending(row);
-    const label =
-      draft?.message ??
-      (pending
-        ? '提交结果待确认'
-        : row.course?.status.rounds[row.round - 1]?.covered
-          ? '本轮已完成'
-          : row.course
-            ? '未准备'
-            : '无课程');
+    const awaitingSync =
+      needsProgressSync(row) && draft?.state !== 'busy' && draft?.state !== 'saved';
+    const label = awaitingSync
+      ? '待同步'
+      : (draft?.message ??
+        (pending
+          ? '提交结果待确认'
+          : row.course?.status.rounds[row.round - 1]?.covered
+            ? '本轮已完成'
+            : row.course
+              ? isProgress
+                ? '待同步'
+                : '未准备'
+              : '无课程'));
     const color =
-      label === '本轮已完成' || draft?.state === 'saved'
-        ? 'success'
-        : draft?.state === 'busy'
-          ? 'processing'
-          : draft?.state === 'unknown' || (!draft && pending)
-            ? 'warning'
-            : draft?.state === 'ready'
-              ? 'blue'
-              : draft?.state === 'error'
-                ? 'error'
-                : 'default';
+      isProgress && label === '待同步'
+        ? 'default'
+        : label === '本轮已完成' || draft?.state === 'saved'
+          ? 'success'
+          : draft?.state === 'busy'
+            ? 'processing'
+            : awaitingSync || draft?.state === 'unknown' || (!draft && pending)
+              ? 'warning'
+              : draft?.state === 'ready'
+                ? 'blue'
+                : draft?.state === 'error'
+                  ? 'error'
+                  : 'default';
     return (
       <Tag
         color={color}
@@ -687,7 +712,8 @@ export function LessonWorkbench({
   }
   function renderRowAction(row: Row) {
     const submitting = activity?.kind === 'submit' && activity.key === row.key;
-    if (!submitting && drafts[row.key]?.state !== 'ready') return renderReread(row);
+    if (!submitting && (needsProgressSync(row) || drafts[row.key]?.state !== 'ready'))
+      return renderReread(row);
     return (
       <Button
         size="small"
@@ -1159,7 +1185,7 @@ export function LessonWorkbench({
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             <Tooltip title="选中当前筛选范围内可操作的课程，包含全部分页">
               <Checkbox
-                aria-label="全选当前范围（全部分页）"
+                aria-label="全选所有待处理项（跨页）"
                 disabled={busy || loading || !selectable.length}
                 checked={selectable.length > 0 && selectedCount === selectable.length}
                 indeterminate={selectedCount > 0 && selectedCount < selectable.length}
@@ -1167,7 +1193,7 @@ export function LessonWorkbench({
                   setSelected(event.target.checked ? selectable.map((row) => row.key) : [])
                 }
               >
-                全选当前范围
+                全选所有待处理项（跨页）
               </Checkbox>
             </Tooltip>
             <span
@@ -1252,7 +1278,7 @@ export function LessonWorkbench({
             <span>
               {progress.label} · 已处理 {progress.done} / {progress.total} · 成功 {progress.success}{' '}
               {progress.failed > 0 && ` · 失败 ${progress.failed}`}
-              {progress.unknown > 0 && ` · 待核对 ${progress.unknown}`}
+              {progress.unknown > 0 && ` · ${isProgress ? '待同步' : '待核对'} ${progress.unknown}`}
             </span>
           </div>
         )}
@@ -1277,9 +1303,15 @@ export function LessonWorkbench({
               />
             ),
           }}
-          pagination={{ pageSize: 20 }}
+          pagination={{
+            defaultPageSize: 30,
+            pageSizeOptions: [30, 60, 100],
+            showSizeChanger: true,
+            disabled: busy,
+          }}
           scroll={band === 'compact' ? undefined : { x: 1064 }}
           rowSelection={{
+            columnTitle: (checkbox) => <Tooltip title="全选当前页">{checkbox}</Tooltip>,
             selectedRowKeys: selected,
             onChange: (keys) => setSelected(keys.map(String)),
             getCheckboxProps: (row) => ({ disabled: busy || !eligible(row) || hasPending(row) }),
@@ -1332,7 +1364,7 @@ export function LessonWorkbench({
                   },
                   {
                     title: '课程',
-                    width: '11%',
+                    width: isProgress ? '24%' : '11%',
                     render: (_, row) => renderCourse(row),
                   },
                   {
@@ -1366,12 +1398,14 @@ export function LessonWorkbench({
                   },
                   {
                     title: isProgress ? '计划进度' : '授课计划章节',
-                    onCell: () => ({ style: { verticalAlign: 'bottom' } }),
+                    width: isProgress ? 100 : undefined,
+                    onCell: () => ({ style: { verticalAlign: isProgress ? 'middle' : 'bottom' } }),
                     render: (_, row) => renderChapter(row, true),
                   },
                   {
                     title: isProgress ? '实际进度' : '检查时授课章节',
-                    onCell: () => ({ style: { verticalAlign: 'bottom' } }),
+                    width: isProgress ? 100 : undefined,
+                    onCell: () => ({ style: { verticalAlign: isProgress ? 'middle' : 'bottom' } }),
                     render: (_, row) => renderChapter(row),
                   },
                   {

@@ -382,7 +382,12 @@ function Workbench({
             total: workspace?.total ?? 0,
             showSizeChanger: false,
             simple: compact,
-            onChange: (page) => onLocation({ ...location, page }),
+            onChange: (page, pageSize) =>
+              onLocation({
+                ...location,
+                page: pageSize === location.pageSize ? page : 1,
+                pageSize,
+              }),
           }}
           columns={[
             {
