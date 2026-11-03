@@ -99,6 +99,7 @@ export function LessonWorkbench({
     unknown: 0,
   });
   const [entries, setEntries] = useState<RecoveryEntry[]>([]);
+  const [confirmedPreparations, setConfirmedPreparations] = useState<string[]>([]);
   const stop = useRef(false);
   const running = useRef(false);
   const alive = useRef(true);
@@ -200,6 +201,7 @@ export function LessonWorkbench({
       setError('检查人或检查范围已变化，材料已清理，请同步数据。');
     }
     setDrafts({});
+    setConfirmedPreparations([]);
     setSelected([]);
     try {
       recoveries();
@@ -278,6 +280,25 @@ export function LessonWorkbench({
     (row) => (!hideCompleted || !rowCompleted(row)) && (!onlyDifferent || chaptersDiffer(row)),
   );
   const chosen = rows.filter((row) => selected.includes(row.key) && row.course);
+  function confirmPreparation(requestId: string) {
+    setConfirmedPreparations((old) => (old.includes(requestId) ? old : [...old, requestId]));
+  }
+  function rememberPreparation(result: Prepared) {
+    if (result.operation?.state === 'PREPARED') confirmPreparation(result.operation.requestId);
+  }
+  function retirePreparationTracking(row: Row) {
+    // Only retire preparations proven PREPARED by the server. Unknown sends remain tracked.
+    const ids = entries
+      .filter(
+        (entry) =>
+          entry.action === 'PREPARE' &&
+          entry.resourceKey === row.course?.resourceKey &&
+          entry.prepare?.round === row.round &&
+          confirmedPreparations.includes(entry.clientRequestId),
+      )
+      .map((entry) => entry.clientRequestId);
+    if (ids.length) forget(ids);
+  }
   function track(entry: RecoveryEntry) {
     putRecovery(entry);
     recoveries();
@@ -330,6 +351,8 @@ export function LessonWorkbench({
             assertCurrent,
             persist,
             kind as 'PROGRESS' | 'ASSIGNMENT',
+            row.round,
+            confirmPreparation,
           )
         : null;
       const pending = recovered
@@ -384,7 +407,8 @@ export function LessonWorkbench({
         scheduleVersion: observed.schedule.version,
         clientRequestId: crypto.randomUUID(),
       };
-      if (isIndividual)
+      if (isIndividual) {
+        retirePreparationTracking(row);
         track({
           ...input,
           accountId: account.accountId,
@@ -392,9 +416,11 @@ export function LessonWorkbench({
           action: 'PREPARE',
           prepare: input,
         });
+      }
       const result = await flow.prepare(input, current.upstreamSessionToken);
       if (isIndividual && !result.operation) forget([input.clientRequestId]);
       persist(result);
+      if (isIndividual) rememberPreparation(result);
       patch(
         row.key,
         result.preview && !result.blockers.length
@@ -761,8 +787,7 @@ export function LessonWorkbench({
     return entries.some(
       (entry) =>
         (entry.action === 'SAVE' ||
-          (isIndividual &&
-            drafts[row.key]?.prepared?.operation?.requestId !== entry.clientRequestId)) &&
+          (isIndividual && !confirmedPreparations.includes(entry.clientRequestId))) &&
         entry.resourceKey === row.course?.resourceKey,
     );
   }
@@ -837,17 +862,7 @@ export function LessonWorkbench({
     );
   }
   function canPrepare(row: Row) {
-    return (
-      eligible(row) &&
-      !hasPending(row) &&
-      drafts[row.key]?.state !== 'ready' &&
-      !(
-        isIndividual &&
-        entries.some(
-          (entry) => entry.action === 'PREPARE' && entry.resourceKey === row.course?.resourceKey,
-        )
-      )
-    );
+    return eligible(row) && !hasPending(row) && drafts[row.key]?.state !== 'ready';
   }
   function canSubmit(row: Row) {
     return (
@@ -965,7 +980,8 @@ export function LessonWorkbench({
           if (!requests.length) continue;
           update(`正在准备 ${requests[0].row.name} 等 ${requests.length} 项`);
           touched = true;
-          if (isIndividual)
+          if (isIndividual) {
+            retirePreparationTracking(requests[0].row);
             track({
               ...requests[0].input,
               accountId: account.accountId,
@@ -973,6 +989,7 @@ export function LessonWorkbench({
               action: 'PREPARE',
               prepare: requests[0].input,
             });
+          }
           const generated = isIndividual
             ? await flow.prepare(requests[0].input, current!.upstreamSessionToken)
             : null;
@@ -994,6 +1011,7 @@ export function LessonWorkbench({
                 current!.upstreamSessionToken,
               );
           persist(response);
+          if (generated) rememberPreparation(generated);
           for (const request of requests) {
             const result = response.items.find(
               (item) =>

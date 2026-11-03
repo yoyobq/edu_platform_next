@@ -12,7 +12,9 @@ export async function reconcileProgress(
   token: string,
   assertCurrent: () => void,
   persist: (result: SessionResult) => void,
-  kind: 'PROGRESS' | 'ASSIGNMENT' = 'PROGRESS',
+  kind: 'PROGRESS' | 'ASSIGNMENT',
+  round: number,
+  onPreparedConfirmed: (requestId: string) => void,
 ) {
   const entries = readRecovery(accountId);
   let currentToken = token;
@@ -51,6 +53,7 @@ export async function reconcileProgress(
         ...(entry.parentRequestId ? [entry.parentRequestId] : []),
       ]);
     else if (operation.state === 'PREPARED' && entry.prepare) {
+      onPreparedConfirmed(entry.clientRequestId);
       const result = await api.prepare(entry.prepare, currentToken);
       assertCurrent();
       persist(result);
@@ -59,9 +62,9 @@ export async function reconcileProgress(
         result.preview &&
         Date.parse(result.preview.expiresAt) > Date.now() &&
         !result.blockers.length
-      )
-        prepared = result;
-      else removeRecovery(accountId, [entry.clientRequestId]);
+      ) {
+        if (result.preview.round === round) prepared = result;
+      } else removeRecovery(accountId, [entry.clientRequestId]);
     } else pending = true;
   }
   return { pending, prepared };

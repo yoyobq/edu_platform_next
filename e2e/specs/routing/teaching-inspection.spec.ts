@@ -68,6 +68,7 @@ async function setup(
       );
     });
   const requests: { query: string; input: Input }[] = [];
+  let preparationExpiry = '2026-10-18T04:30:00Z';
   let retryReady = false,
     count = 0,
     saveAttempts = 0;
@@ -400,7 +401,7 @@ async function setup(
                 checkDate: item.checkDate,
                 scheduleVersion: version,
                 observationVersion: 1,
-                expiresAt: '2026-10-18T04:30:00Z',
+                expiresAt: preparationExpiry,
               },
               blockers: [],
               upstreamSessionToken: 'batch-token',
@@ -464,7 +465,7 @@ async function setup(
           checkDate: input.checkDate,
           scheduleVersion: resource(input.resourceKey).schedule.version,
           observationVersion: 1,
-          expiresAt: '2026-10-18T04:30:00Z',
+          expiresAt: preparationExpiry,
         },
         blockers: [],
         upstreamSessionToken: 'prepared-token',
@@ -554,6 +555,9 @@ async function setup(
     requests,
     operations,
     resource,
+    setPreparationExpiry: (value: string) => {
+      preparationExpiry = value;
+    },
     releaseRetry: () => {
       retryReady = true;
     },
@@ -3283,3 +3287,60 @@ test('作业未来提醒日期允许准备，已提交材料来自本地，次�
     ),
   ).toHaveLength(0);
 });
+
+test('作业已准备材料按轮次隔离，刷新恢复指定轮次后仍能提交', async ({ page }) => {
+  const fixture = await setup(page);
+  await page.goto(`${path}?kind=assignment&semester=1&round=1`);
+  const row = page.locator('tbody tr[data-row-key]').first();
+  await row.getByRole('checkbox').check();
+  await page.getByRole('button', { name: '准备材料', exact: true }).click();
+  await expect(row.getByRole('status')).toHaveText('已准备，待确认');
+  const first = [...fixture.operations.values()].find((op) => op.round === 1)!;
+  await page.getByRole('tab', { name: '第2次 · 2026-09-20', exact: true }).click();
+  await row.getByRole('button', { name: '同步数据', exact: true }).click();
+  await expect(row.getByRole('status')).toHaveText('已准备，待确认');
+  await expect(row.getByRole('button', { name: '确认提交测试课程甲', exact: true })).toBeEnabled();
+  await page.reload();
+  await row.getByRole('button', { name: '同步数据', exact: true }).click();
+  await expect(row.getByRole('status')).toHaveText('已准备，待确认');
+  await page.getByRole('tab', { name: '第1次 · 2026-09-10', exact: true }).click();
+  await row.getByRole('button', { name: '同步数据', exact: true }).click();
+  await expect(row.getByRole('status')).toHaveText('已准备，待确认');
+  await row.getByRole('button', { name: '确认提交测试课程甲', exact: true }).click();
+  await expect(row.getByRole('status')).toHaveText('提交成功');
+  const saved = fixture.requests.filter((request) =>
+    request.query.includes('mutation SaveAssignment'),
+  );
+  expect(saved).toHaveLength(1);
+  expect(saved[0].input.previewId).toBe(first.previewId);
+  expect([...fixture.operations.values()].filter((op) => op.action === 'PREPARE')).toHaveLength(2);
+});
+for (const kind of ['progress', 'assignment'])
+  test(`已确认材料过期后可以批量重新准备并人工提交 kind=${kind}`, async ({ page }) => {
+    const fixture = await setup(page, { progressWorkspace: true });
+    await page.goto(`${path}?kind=${kind}&semester=1&round=1`);
+    await page.getByRole('checkbox', { name: '全选所有待处理项（跨页）' }).check();
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+    const old = [...fixture.operations.values()].map((op) => op.requestId);
+    await page.clock.setFixedTime(new Date('2026-10-18T05:00:00Z'));
+    await page.getByRole('button', { name: '确认提交选中项' }).click();
+    await expect(page.getByText('材料已过期，请重新准备并确认', { exact: true })).toHaveCount(2);
+    await expect(page.getByRole('button', { name: '准备材料', exact: true })).toBeEnabled();
+    fixture.setPreparationExpiry('2026-10-18T05:30:00Z');
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+    const entries = await page.evaluate(
+      () =>
+        JSON.parse(sessionStorage.getItem('teaching-inspection.recovery.v1.700') || '[]') as {
+          clientRequestId: string;
+        }[],
+    );
+    expect(entries).toHaveLength(2);
+    expect(entries.every((entry) => !old.includes(entry.clientRequestId))).toBe(true);
+    expect(fixture.requests.filter((request) => /mutation Save/.test(request.query))).toHaveLength(
+      0,
+    );
+    await page.getByRole('button', { name: '确认提交选中项' }).click();
+    await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
+  });
