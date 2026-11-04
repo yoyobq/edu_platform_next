@@ -16,6 +16,7 @@ type Input = {
   kind: string;
   semesterId: number;
   resourceKey: string;
+  resourceKeys: string[];
   clientRequestId: string;
   previewId: string;
   scheduleVersion: number;
@@ -117,7 +118,7 @@ async function setup(
     schedule: {
       records: [],
       historyState: 'VERIFIED',
-      version: options.progressWorkspace ? (progressVersions.get(key) ?? 1) : version,
+      version: progressVersions.get(key) ?? (options.progressWorkspace ? 1 : version),
       dates: version ? dates : [],
       rounds: version
         ? dates.map((date, index) => ({
@@ -172,6 +173,76 @@ async function setup(
     earliestDate: '2026-09-01',
     latestDate: '2026-12-31',
   });
+  function createPreparation(input: Input, batch = false) {
+    if (preparations.has(input.clientRequestId)) return preparations.get(input.clientRequestId)!;
+    if (input.kind === 'PROGRESS') {
+      if (batch || options.progressWorkspace)
+        progressVersions.set(input.resourceKey, (progressVersions.get(input.resourceKey) ?? 1) + 2);
+      else version += 2;
+    }
+    const operation = {
+      id: `op-${operations.size}`,
+      accountId: 700,
+      requestId: input.clientRequestId,
+      action: 'PREPARE',
+      round: input.round,
+      checkDate: input.checkDate,
+      state: 'PREPARED',
+      previewId: `preview-${operations.size}`,
+    };
+    if (options.dispatchingAuthFailure === 'PREPARE') operation.state = 'DISPATCHING';
+    operations.set(input.clientRequestId, operation);
+    if (options.dispatchingAuthFailure === 'PREPARE') return null;
+    const result = {
+      operation,
+      preview: {
+        id: operation.previewId,
+        round: input.round,
+        checkDate: input.checkDate,
+        scheduleVersion: resource(input.resourceKey).schedule.version,
+        observationVersion: 1,
+        expiresAt: preparationExpiry,
+      },
+      blockers: [],
+      upstreamSessionToken: 'prepared-token',
+      expiresAt: '2030-01-01T00:00:00Z',
+      material: {
+        lesson:
+          input.kind === 'LESSON_PLAN'
+            ? {
+                chapter: '测试章节',
+                scores: [4, 95],
+                scoreItems: [
+                  { name: '格式', description: '测试格式说明', maximum: 5 },
+                  { name: '教学内容', description: '测试内容说明', maximum: 95 },
+                ],
+              }
+            : null,
+        progress:
+          input.kind === 'PROGRESS'
+            ? { actualProgress: 12, plannedProgress: 12, deviation: 0 }
+            : null,
+        assignment:
+          input.kind === 'ASSIGNMENT'
+            ? {
+                assignedBook: '适中',
+                assignmentQuantity: '适量',
+                knowledgeCoverage: '全面',
+                allMarkingStatus: '全部',
+                markingErrors: '有',
+                markingCorrections: '有',
+                markingAndDateDetails: '有',
+                studentCompletionStatus: '完成',
+                studentCorrectionStatus: '正常',
+                checkerOpinion:
+                  '作业次数适用，作业量及覆盖全面，老师认真批改，学生能认真完成并进行订正。',
+              }
+            : null,
+      },
+    };
+    preparations.set(input.clientRequestId, result);
+    return result;
+  }
   await page.route('**/graphql', async (route) => {
     const body = route.request().postDataJSON() as { query: string; variables?: { input: Input } };
     if (body.query.includes('mutation LoginUpstreamSession')) {
@@ -270,6 +341,16 @@ async function setup(
           expiresAt: null,
         },
       });
+    if (query.includes('SyncTeachingInspectionData')) {
+      trusted = true;
+      return reply({
+        result: {
+          items: input.resourceKeys.map((resourceKey) => ({ resourceKey, failed: false })),
+          upstreamSessionToken: 'batch-synced-token',
+          expiresAt: null,
+        },
+      });
+    }
     if (query.includes('TeachingInspectionTimeWorkspace'))
       return reply({
         result: {
@@ -427,84 +508,33 @@ async function setup(
         },
       });
     }
-    if (/mutation Prepare/.test(query)) {
-      if (preparations.has(input.clientRequestId))
-        return reply({ result: preparations.get(input.clientRequestId) });
-      if (input.kind === 'PROGRESS') {
-        if (options.progressWorkspace)
-          progressVersions.set(
-            input.resourceKey,
-            (progressVersions.get(input.resourceKey) ?? 1) + 2,
-          );
-        else version += 2;
+    if (query.includes('PrepareTeachingInspectionBatch')) {
+      const batchInput = input as unknown as { items: Input[] };
+      const items = [];
+      for (const item of batchInput.items) {
+        const result = createPreparation(item, true);
+        if (!result)
+          return route.fulfill({
+            contentType: 'application/json',
+            body: JSON.stringify({
+              errors: [{ message: '上游认证失败', extensions: { code: 'UNAUTHENTICATED' } }],
+            }),
+          });
+        items.push({ resourceKey: item.resourceKey, round: item.round, failed: false, result });
       }
-      const operation = {
-        id: `op-${operations.size}`,
-        accountId: 700,
-        requestId: input.clientRequestId,
-        action: 'PREPARE',
-        round: input.round,
-        checkDate: input.checkDate,
-        state: 'PREPARED',
-        previewId: `preview-${operations.size}`,
-      };
-      if (options.dispatchingAuthFailure === 'PREPARE') operation.state = 'DISPATCHING';
-      operations.set(input.clientRequestId, operation);
-      if (options.dispatchingAuthFailure === 'PREPARE')
+      return reply({
+        result: { items, upstreamSessionToken: 'batch-token', expiresAt: '2030-01-01T00:00:00Z' },
+      });
+    }
+    if (/mutation Prepare/.test(query)) {
+      const result = createPreparation(input);
+      if (!result)
         return route.fulfill({
           contentType: 'application/json',
           body: JSON.stringify({
             errors: [{ message: '上游认证失败', extensions: { code: 'UNAUTHENTICATED' } }],
           }),
         });
-      const result = {
-        operation,
-        preview: {
-          id: operation.previewId,
-          round: input.round,
-          checkDate: input.checkDate,
-          scheduleVersion: resource(input.resourceKey).schedule.version,
-          observationVersion: 1,
-          expiresAt: preparationExpiry,
-        },
-        blockers: [],
-        upstreamSessionToken: 'prepared-token',
-        expiresAt: '2030-01-01T00:00:00Z',
-        material: {
-          lesson:
-            input.kind === 'LESSON_PLAN'
-              ? {
-                  chapter: '测试章节',
-                  scores: [4, 95],
-                  scoreItems: [
-                    { name: '格式', description: '测试格式说明', maximum: 5 },
-                    { name: '教学内容', description: '测试内容说明', maximum: 95 },
-                  ],
-                }
-              : null,
-          progress:
-            input.kind === 'PROGRESS'
-              ? { actualProgress: 12, plannedProgress: 12, deviation: 0 }
-              : null,
-          assignment:
-            input.kind === 'ASSIGNMENT'
-              ? {
-                  assignedBook: '适中',
-                  assignmentQuantity: '适量',
-                  knowledgeCoverage: '全面',
-                  allMarkingStatus: '全部',
-                  markingErrors: '有',
-                  markingCorrections: '有',
-                  markingAndDateDetails: '有',
-                  studentCompletionStatus: '完成',
-                  studentCorrectionStatus: '正常',
-                  checkerOpinion:
-                    '作业次数适用，作业量及覆盖全面，老师认真批改，学生能认真完成并进行订正。',
-                }
-              : null,
-        },
-      };
-      preparations.set(input.clientRequestId, result);
       return reply({ result });
     }
     if (/mutation Save/.test(query)) {
@@ -2928,7 +2958,11 @@ test('进度未知准备刷新后只核实原请求，不重复生成', async ({
   await page.getByRole('checkbox', { name: '全选所有待处理项（跨页）' }).check();
   await page.getByRole('button', { name: '准备材料', exact: true }).click();
   await expect
-    .poll(() => fixture.requests.filter((r) => r.query.includes('mutation PrepareProgress')).length)
+    .poll(
+      () =>
+        fixture.requests.filter((r) => r.query.includes('mutation PrepareTeachingInspectionBatch'))
+          .length,
+    )
     .toBe(1);
   await page.reload();
   await page.getByRole('button', { name: '同步数据', exact: true }).first().click();
@@ -2939,9 +2973,9 @@ test('进度未知准备刷新后只核实原请求，不重复生成', async ({
   await expect(page.locator('tbody tr[data-row-key]').first().getByRole('status')).toHaveText(
     '待同步',
   );
-  expect(fixture.requests.filter((r) => r.query.includes('mutation PrepareProgress'))).toHaveLength(
-    1,
-  );
+  expect(
+    fixture.requests.filter((r) => r.query.includes('mutation PrepareTeachingInspectionBatch')),
+  ).toHaveLength(1);
   expect(fixture.requests.filter((r) => /mutation Save/.test(r.query))).toHaveLength(0);
 });
 
@@ -2953,54 +2987,54 @@ for (const deviation of [1, -1, null, '0'])
         query: string;
         variables: { input: Input };
       };
-      if (!query.includes('mutation PrepareProgress')) return route.fallback();
-      const input = variables.input;
-      fixture.operations.set(input.clientRequestId, {
-        id: `op-${input.resourceKey}`,
-        accountId: 700,
-        requestId: input.clientRequestId,
-        action: 'PREPARE',
-        round: input.round,
-        checkDate: input.checkDate,
-        state: 'PREPARED',
-        previewId: 'preview',
+      if (!query.includes('mutation PrepareTeachingInspectionBatch')) return route.fallback();
+      const inputs = (variables.input as unknown as { items: Input[] }).items;
+      const items = inputs.map((input) => {
+        const operation = {
+          id: `op-${input.resourceKey}`,
+          accountId: 700,
+          requestId: input.clientRequestId,
+          action: 'PREPARE',
+          round: input.round,
+          checkDate: input.checkDate,
+          state: 'PREPARED',
+          previewId: `preview-${input.resourceKey}`,
+        };
+        fixture.operations.set(input.clientRequestId, operation);
+        return {
+          resourceKey: input.resourceKey,
+          round: input.round,
+          failed: false,
+          result: {
+            operation,
+            preview: {
+              id: operation.previewId,
+              round: input.round,
+              checkDate: input.checkDate,
+              scheduleVersion: 1,
+              observationVersion: 1,
+              expiresAt: '2026-10-18T04:30:00Z',
+            },
+            material: {
+              lesson: null,
+              assignment: null,
+              progress: {
+                plannedProgress: 12,
+                actualProgress: 11,
+                deviation: input.resourceKey === '1:a' ? deviation : 0,
+              },
+            },
+            blockers: [],
+            upstreamSessionToken: 'token',
+            expiresAt: '2030-01-01T00:00:00Z',
+          },
+        };
       });
       await route.fulfill({
         contentType: 'application/json',
         body: JSON.stringify({
           data: {
-            result: {
-              operation: {
-                id: 'op',
-                accountId: 700,
-                requestId: input.clientRequestId,
-                action: 'PREPARE',
-                round: input.round,
-                checkDate: input.checkDate,
-                state: 'PREPARED',
-                previewId: 'preview',
-              },
-              preview: {
-                id: 'preview',
-                round: input.round,
-                checkDate: input.checkDate,
-                scheduleVersion: 1,
-                observationVersion: 1,
-                expiresAt: '2026-10-18T04:30:00Z',
-              },
-              material: {
-                lesson: null,
-                assignment: null,
-                progress: {
-                  plannedProgress: 12,
-                  actualProgress: 11,
-                  deviation: input.resourceKey === '1:a' ? deviation : 0,
-                },
-              },
-              blockers: [],
-              upstreamSessionToken: 'token',
-              expiresAt: '2030-01-01T00:00:00Z',
-            },
+            result: { items, upstreamSessionToken: 'token', expiresAt: '2030-01-01T00:00:00Z' },
           },
         }),
       });
@@ -3287,6 +3321,170 @@ test('作业未来提醒日期允许准备，已提交材料来自本地，次�
     ),
   ).toHaveLength(0);
 });
+
+for (const kind of ['lesson', 'progress', 'assignment'])
+  test(`${kind} 按筛选列表批量同步，跨页读取一次且翻页不重抓`, async ({ page }) => {
+    const fixture = await setup(page);
+    const resourceKeys = Array.from({ length: 61 }, (_, index) => `1:scope-${index}`);
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() as { query: string };
+      if (!body.query.includes('InspectionOverview')) return route.fallback();
+      return route.fulfill({
+        contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            result: {
+              today: '2026-10-18',
+              total: resourceKeys.length,
+              canSelectDepartment: true,
+              departmentId: 'ORG0302',
+              teachingGroupIds: [],
+              departments: [],
+              teachers: [],
+              roster: [
+                { groupId: 'G1', groupName: '测试组', staffId: 'T700', name: '测试教师' },
+                { groupId: 'G1', groupName: '测试组', staffId: 'T800', name: '另一教师' },
+              ],
+              groupPlans: [{ group: 'FULL', dates, confirmed: true }],
+              resources: resourceKeys.map((key, index) => ({
+                ...fixture.resource(key),
+                teacherIds: [index === 60 ? 'T800' : 'T700'],
+                teacherNames: [index === 60 ? '另一教师' : '测试教师'],
+                grouping: { group: 'FULL' },
+                timePlan: { group: 'FULL', dates, confirmed: true },
+              })),
+            },
+          },
+        }),
+      });
+    });
+    await page.goto(`${path}?kind=${kind}&semester=1&round=1`);
+    await expect(page.locator('tbody tr[data-row-key]')).toHaveCount(30);
+    await page.getByRole('button', { name: '批量同步数据' }).click();
+    await expect(page.getByText(/数据同步完成 · 已处理 61 \/ 61/)).toBeVisible();
+    const syncs = () =>
+      fixture.requests.filter((request) => request.query.includes('SyncTeachingInspectionData'));
+    expect(syncs()).toHaveLength(1);
+    expect([...syncs()[0].input.resourceKeys].sort()).toEqual([...resourceKeys].sort());
+    await page.getByTitle('2', { exact: true }).click();
+    await expect(page.getByTitle('2', { exact: true })).toHaveClass(/ant-pagination-item-active/);
+    expect(syncs()).toHaveLength(1);
+    await page.getByRole('combobox', { name: '筛选组员' }).click();
+    await page.locator('.ant-select-dropdown').getByText('另一教师', { exact: true }).click();
+    await page.getByRole('button', { name: '批量同步数据' }).click();
+    await expect(page.getByText(/数据同步完成 · 已处理 1 \/ 1/)).toBeVisible();
+    expect(syncs()).toHaveLength(2);
+    expect(syncs()[1].input.resourceKeys).toEqual(['1:scope-60']);
+    expect(
+      fixture.requests.filter((request) => /mutation (Prepare|Save)/.test(request.query)),
+    ).toHaveLength(0);
+  });
+
+for (const kind of ['lesson', 'progress', 'assignment'])
+  test(`${kind} 整次选择31门跨页课程只发一次准备请求`, async ({ page }) => {
+    const fixture = await setup(page, { progressWorkspace: true });
+    const resourceKeys = Array.from({ length: 31 }, (_, index) => `1:all-${index}`);
+    let sent: Input[] = [];
+    let tracked: string[] = [];
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() as {
+        query: string;
+        variables: { input: { items: Input[] } };
+      };
+      if (body.query.includes('InspectionOverview'))
+        return route.fulfill({
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              result: {
+                today: '2026-10-18',
+                total: resourceKeys.length,
+                canSelectDepartment: true,
+                departmentId: 'ORG0302',
+                teachingGroupIds: [],
+                departments: [],
+                teachers: [],
+                roster: [{ groupId: 'G1', groupName: '测试组', staffId: 'T700', name: '测试教师' }],
+                groupPlans: [{ group: 'FULL', dates, confirmed: true }],
+                resources: resourceKeys.map((key) => ({
+                  ...fixture.resource(key),
+                  teacherIds: ['T700'],
+                  grouping: { group: 'FULL' },
+                  timePlan: { group: 'FULL', dates, confirmed: true },
+                })),
+              },
+            },
+          }),
+        });
+      if (body.query.includes('InspectionBatch') && /mutation Prepare/.test(body.query)) {
+        sent = body.variables.input.items;
+        tracked = await page.evaluate(() => {
+          const entries = JSON.parse(
+            sessionStorage.getItem('teaching-inspection.recovery.v1.700') ?? '[]',
+          ) as { clientRequestId: string }[];
+          return entries.map((entry) => entry.clientRequestId);
+        });
+      }
+      return route.fallback();
+    });
+    await page.goto(`${path}?kind=${kind}&semester=1&round=1`);
+    await expect(page.locator('tbody tr[data-row-key]')).toHaveCount(30);
+    await page.getByRole('checkbox', { name: '全选所有待处理项（跨页）' }).check();
+    await expect(page.getByRole('button', { name: '准备材料', exact: true })).toHaveText(
+      '准备材料 31 项',
+    );
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByText(/本次处理结束 · 已处理 31 \/ 31 · 成功 31/)).toBeVisible();
+    expect(sent).toHaveLength(31);
+    expect(sent.map((item) => item.resourceKey).sort()).toEqual([...resourceKeys].sort());
+    expect(
+      fixture.requests.filter((request) => /mutation Prepare/.test(request.query)),
+    ).toHaveLength(1);
+    if (kind !== 'lesson')
+      expect(tracked.sort()).toEqual(sent.map((item) => item.clientRequestId).sort());
+    await page.getByTitle('2', { exact: true }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(1);
+    expect(
+      fixture.requests.filter((request) => /mutation Prepare/.test(request.query)),
+    ).toHaveLength(1);
+    expect(fixture.requests.filter((request) => /mutation Save/.test(request.query))).toHaveLength(
+      0,
+    );
+  });
+
+for (const kind of ['progress', 'assignment'])
+  test(`${kind} 批量准备只发一个批次请求，并在发送前记录全部恢复标识`, async ({ page }) => {
+    const fixture = await setup(page, { progressWorkspace: true });
+    let originals: string[] = [];
+    let tracked: string[] = [];
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() as {
+        query: string;
+        variables: { input: { items: Input[] } };
+      };
+      if (!body.query.includes('PrepareTeachingInspectionBatch')) return route.fallback();
+      originals = body.variables.input.items.map((item) => item.clientRequestId);
+      tracked = await page.evaluate(() => {
+        const entries = JSON.parse(
+          sessionStorage.getItem('teaching-inspection.recovery.v1.700') ?? '[]',
+        ) as { clientRequestId: string }[];
+        return entries.map((entry) => entry.clientRequestId);
+      });
+      return route.fallback();
+    });
+    await page.goto(`${path}?kind=${kind}&semester=1&round=1`);
+    await page.getByRole('checkbox', { name: '全选所有待处理项（跨页）' }).check();
+    await page.getByRole('button', { name: '准备材料', exact: true }).click();
+    await expect(page.getByText('已准备，待确认', { exact: true })).toHaveCount(2);
+    expect(originals).toHaveLength(2);
+    expect(tracked.sort()).toEqual(originals.sort());
+    const requests = fixture.requests.filter((request) => /mutation Prepare/.test(request.query));
+    expect(requests).toHaveLength(1);
+    expect(requests[0].query).toContain('PrepareTeachingInspectionBatch');
+    expect(fixture.requests.filter((request) => /mutation Save/.test(request.query))).toHaveLength(
+      0,
+    );
+  });
 
 test('作业已准备材料按轮次隔离，刷新恢复指定轮次后仍能提交', async ({ page }) => {
   const fixture = await setup(page);

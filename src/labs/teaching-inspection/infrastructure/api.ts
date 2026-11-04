@@ -104,6 +104,26 @@ export async function refreshStatus(input: Target, upstreamSessionToken: string)
     )
   ).result;
 }
+export async function syncData(
+  input: {
+    semesterId: number;
+    kind: InspectionKind;
+    departmentId?: string | null;
+    resourceKeys: string[];
+  },
+  upstreamSessionToken: string,
+) {
+  return (
+    await executeUpstreamSessionGraphQL<
+      { result: SessionResult & { items: { resourceKey: string; failed: boolean }[] } },
+      { input: typeof input & { upstreamSessionToken: string } }
+    >(
+      `mutation SyncTeachingInspectionData($input: InspectionSyncInput!) { result: syncTeachingInspectionData(input: $input) { items { resourceKey failed } upstreamSessionToken expiresAt } }`,
+      { input: { ...input, upstreamSessionToken } },
+      { allowAuthRetry: false },
+    )
+  ).result;
+}
 export async function prepare(input: PrepareInput, upstreamSessionToken: string) {
   return (
     await executeUpstreamSessionGraphQL<

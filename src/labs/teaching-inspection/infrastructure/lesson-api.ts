@@ -84,7 +84,12 @@ export async function syncCounts(
   ).result;
 }
 
-export async function prepareBatch(items: PrepareInput[], upstreamSessionToken: string) {
+export async function prepareBatch(
+  items: PrepareInput[],
+  upstreamSessionToken: string,
+  kind: 'LESSON_PLAN' | 'PROGRESS' | 'ASSIGNMENT' = 'LESSON_PLAN',
+) {
+  const lesson = kind === 'LESSON_PLAN';
   return (
     await executeUpstreamSessionGraphQL<
       {
@@ -94,7 +99,7 @@ export async function prepareBatch(items: PrepareInput[], upstreamSessionToken: 
       },
       { input: object }
     >(
-      `mutation PrepareLessonPlanInspectionBatch($input: LessonInspectionBatchPrepareInput!) { result: prepareLessonPlanInspectionBatch(input: $input) { items { resourceKey round failed result { ${prepareFields} } } upstreamSessionToken expiresAt } }`,
+      `mutation ${lesson ? 'PrepareLessonPlanInspectionBatch' : 'PrepareTeachingInspectionBatch'}($input: ${lesson ? 'LessonInspectionBatchPrepareInput' : 'InspectionBatchPrepareInput'}!) { result: ${lesson ? 'prepareLessonPlanInspectionBatch' : 'prepareTeachingInspectionBatch'}(input: $input) { items { resourceKey round failed result { ${prepareFields} } } upstreamSessionToken expiresAt } }`,
       { input: { items: items.map((item) => ({ ...item, upstreamSessionToken })) } },
       { allowAuthRetry: false },
     )

@@ -88,7 +88,11 @@ export function LessonWorkbench({
   const [customRounds, setCustomRounds] = useState<Record<string, number>>({});
   const [busy, setBusy] = useState(false);
   const [activity, setActivity] = useState<
-    { kind: 'sync'; key: string } | { kind: 'prepare' } | { kind: 'submit'; key?: string } | null
+    | { kind: 'sync'; key: string }
+    | { kind: 'batch-sync' }
+    | { kind: 'prepare'; dispatched?: boolean }
+    | { kind: 'submit'; key?: string }
+    | null
   >(null);
   const [progress, setProgress] = useState({
     done: 0,
@@ -309,6 +313,68 @@ export function LessonWorkbench({
   }
   function patch(key: string, value: Draft) {
     if (alive.current) setDrafts((old) => ({ ...old, [key]: value }));
+  }
+  async function syncVisible() {
+    if (running.current) return;
+    const resourceKeys = rows.flatMap((row) => (row.course ? [row.course.resourceKey] : []));
+    if (!resourceKeys.length) return;
+    const controller = latestSession.current;
+    const current = controller.session;
+    if (!current) {
+      controller.openLoginModal();
+      return;
+    }
+    const sameIdentity = () =>
+      alive.current && latestSession.current.session?.upstreamLoginId === current.upstreamLoginId;
+    running.current = true;
+    setBusy(true);
+    setActivity({ kind: 'batch-sync' });
+    setError('');
+    setProgress({
+      done: 0,
+      total: resourceKeys.length,
+      success: 0,
+      failed: 0,
+      unknown: 0,
+      label: '正在同步数据',
+    });
+    setSelected([]);
+    setDrafts({});
+    try {
+      const result = await flow.syncData(
+        { semesterId, kind, departmentId: location.departmentId, resourceKeys },
+        current.upstreamSessionToken,
+      );
+      if (!sameIdentity()) return;
+      controller.persistSessionFromResult(current, result);
+      const failed = result.items.filter((item) => item.failed).length;
+      setProgress({
+        done: result.items.length,
+        total: resourceKeys.length,
+        success: result.items.length - failed,
+        failed,
+        unknown: 0,
+        label: '数据同步完成',
+      });
+      if (failed) setError(`${failed} 门课程尚未完成同步，请逐行同步核对。`);
+    } catch (cause) {
+      if (sameIdentity()) {
+        setError(cause instanceof Error ? cause.message : '批量同步失败，请重新同步数据');
+        if (hasGraphQLCategory(cause, 'UNAUTHENTICATED'))
+          controller.openLoginModalForExpiredSession({
+            session: current,
+            loginError: '校园网会话已失效，请重新连接后同步数据。',
+          });
+      }
+    } finally {
+      if (sameIdentity()) await reload();
+      running.current = false;
+      if (alive.current) {
+        setBusy(false);
+        setActivity(null);
+        recoveries();
+      }
+    }
   }
   async function reread(row: Row) {
     if (running.current || !row.course) return;
@@ -899,7 +965,8 @@ export function LessonWorkbench({
   const submitCount = chosen.filter(canSubmit).length;
   const processingQueue = activity?.kind === 'prepare' || activity?.kind === 'submit';
   const processingBatch =
-    activity?.kind === 'prepare' || (activity?.kind === 'submit' && !activity.key);
+    (activity?.kind === 'prepare' && !activity.dispatched) ||
+    (activity?.kind === 'submit' && !activity.key);
   async function run(submit: boolean, target?: Row) {
     const targets = target ? [target] : chosen;
     if (running.current || (submit && targets.some(emptyChapter))) return;
@@ -944,57 +1011,53 @@ export function LessonWorkbench({
     try {
       update(submit ? '开始提交' : '开始准备');
       if (!submit) {
-        for (
-          let offset = 0;
-          offset < queue.length && !stop.current;
-          offset += isIndividual ? 1 : 10
-        ) {
-          const batch = queue.slice(offset, offset + (isIndividual ? 1 : 10));
-          const requests: { row: Row; input: PrepareInput }[] = [];
-          for (const row of batch) {
-            if (stop.current || !sameIdentity()) break;
-            publish(row.key, { state: 'busy', message: '正在读取课程' });
-            update(`正在读取 ${row.name} · ${row.course!.courseName}`);
-            const detail = await api.detail(semesterId, row.course!.resourceKey, kind);
-            if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
-            const checkDate = detail.schedule.dates[row.round - 1];
-            if (checkDate !== row.date) {
-              publish(row.key, { state: 'error', message: '检查日期已变化，请刷新列表' });
-              failed++;
-              done++;
-              continue;
-            }
-            const input: PrepareInput = {
-              semesterId,
-              kind,
-              resourceKey: detail.resourceKey,
-              round: row.round,
-              checkDate,
-              scheduleVersion: detail.schedule.version,
-              clientRequestId: crypto.randomUUID(),
-            };
-            requests.push({ row, input });
-            publish(row.key, { state: 'busy', message: '正在准备' });
-          }
+        const requests: { row: Row; input: PrepareInput }[] = [];
+        for (const row of queue) {
           if (stop.current || !sameIdentity()) break;
-          if (!requests.length) continue;
+          publish(row.key, { state: 'busy', message: '正在读取课程' });
+          update(`正在读取 ${row.name} · ${row.course!.courseName}`);
+          const detail = await api.detail(semesterId, row.course!.resourceKey, kind);
+          if (!sameIdentity()) throw new Error('检查人不一致，材料已清理，请同步数据。');
+          const checkDate = detail.schedule.dates[row.round - 1];
+          if (checkDate !== row.date) {
+            publish(row.key, { state: 'error', message: '检查日期已变化，请刷新列表' });
+            failed++;
+            done++;
+            continue;
+          }
+          const input: PrepareInput = {
+            semesterId,
+            kind,
+            resourceKey: detail.resourceKey,
+            round: row.round,
+            checkDate,
+            scheduleVersion: detail.schedule.version,
+            clientRequestId: crypto.randomUUID(),
+          };
+          requests.push({ row, input });
+          publish(row.key, { state: 'busy', message: '正在准备' });
+        }
+        if (!stop.current && sameIdentity() && requests.length) {
           update(`正在准备 ${requests[0].row.name} 等 ${requests.length} 项`);
           touched = true;
+          setActivity({ kind: 'prepare', dispatched: true });
           if (isIndividual) {
-            retirePreparationTracking(requests[0].row);
-            track({
-              ...requests[0].input,
-              accountId: account.accountId,
-              upstreamLoginId: upstreamIdentity,
-              action: 'PREPARE',
-              prepare: requests[0].input,
-            });
+            // Every original request is durable before any batch generation can start.
+            for (const request of requests) {
+              retirePreparationTracking(request.row);
+              track({
+                ...request.input,
+                accountId: account.accountId,
+                upstreamLoginId: upstreamIdentity,
+                action: 'PREPARE',
+                prepare: request.input,
+              });
+            }
           }
-          const generated = isIndividual
-            ? await flow.prepare(requests[0].input, current!.upstreamSessionToken)
-            : null;
-          if (isIndividual && generated && !generated.operation)
-            forget([requests[0].input.clientRequestId]);
+          const generated =
+            isIndividual && requests.length === 1
+              ? await flow.prepare(requests[0].input, current!.upstreamSessionToken)
+              : null;
           const response = generated
             ? {
                 ...generated,
@@ -1007,17 +1070,21 @@ export function LessonWorkbench({
                 ],
               }
             : await api.prepareBatch(
-                requests.map((r) => r.input),
+                requests.map((request) => request.input),
                 current!.upstreamSessionToken,
+                kind,
               );
           persist(response);
-          if (generated) rememberPreparation(generated);
           for (const request of requests) {
             const result = response.items.find(
               (item) =>
                 item.resourceKey === request.input.resourceKey &&
                 item.round === request.input.round,
             )?.result;
+            if (isIndividual && result) {
+              if (!result.operation) forget([request.input.clientRequestId]);
+              rememberPreparation(result);
+            }
             if (result?.preview && !result.blockers.length) {
               publish(request.row.key, {
                 state: 'ready',
@@ -1358,6 +1425,14 @@ export function LessonWorkbench({
                 <span>{isProgress ? '只看有偏差' : '只看不一致'}</span>
               </Space>
             )}
+            <Button
+              aria-label="批量同步数据"
+              disabled={busy || loading || !rows.some((row) => row.course)}
+              loading={activity?.kind === 'batch-sync'}
+              onClick={() => void syncVisible()}
+            >
+              {teacher ? '同步该教师数据' : '同步列表数据'}
+            </Button>
             <Button
               type="text"
               aria-label="刷新列表"
