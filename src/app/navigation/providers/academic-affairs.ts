@@ -15,6 +15,7 @@ import {
   hasStudentEvaluationCommentAccess,
   hasStudentProfileFilingAccess,
   hasStudentRosterMembershipReconciliationAccess,
+  hasTeachingInspectionAccess,
 } from '@/entities/auth-access';
 
 import type { NavigationItemsProvider } from '../types';
@@ -29,6 +30,20 @@ function canExposeAcademicAffairsManagementItems(filter: Parameters<NavigationIt
 
 export const getAcademicAffairsNavigationItems: NavigationItemsProvider = (filter) => {
   const academicAffairsChildren: NavigationLeafItem[] = [
+    ...(hasTeachingInspectionAccess(filter)
+      ? [
+          {
+            allowedAccessGroups: ['ADMIN', 'STAFF'] as const,
+            iconKey: 'FileSearchOutlined',
+            key: '/academic-affairs/teaching-inspection',
+            label: '教学检查',
+            navMode: 'rail' as const,
+            path: '/academic-affairs/teaching-inspection',
+            primaryAccessGroup: 'ADMIN' as const,
+            slotGroup: null,
+          },
+        ]
+      : []),
     ...(canExposeAcademicAffairsManagementItems(filter)
       ? [
           {

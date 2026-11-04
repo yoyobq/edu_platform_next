@@ -29,7 +29,7 @@ function findGroup(items: NavigationMetaItem[], key: string): NavigationGroupIte
 
 describe('navigation catalog', () => {
   it('教学检查向全部管理员及绑定教职工的教研组长显示', () => {
-    const path = '/labs/teaching-inspection';
+    const path = '/academic-affairs/teaching-inspection';
     for (const appEnv of ['dev', 'test', 'prod'] as const) {
       for (const scenario of [
         { accessGroup: ['ADMIN'] as const, slotGroup: [], staffId: 'T700', allowed: true },
@@ -61,6 +61,17 @@ describe('navigation catalog', () => {
           primaryAccessGroup: scenario.accessGroup[0],
         });
         expect(canAccessNavigationPath(path, filter)).toBe(scenario.allowed);
+        expect(canAccessNavigationPath('/labs/teaching-inspection', filter)).toBe(false);
+        expect(
+          findGroup(getNavigationItems(filter), 'labs')?.children.some(
+            (item) => item.path === path,
+          ) ?? false,
+        ).toBe(false);
+        expect(
+          findGroup(getNavigationItems(filter), 'academic-affairs')?.children.some(
+            (item) => item.path === path,
+          ) ?? false,
+        ).toBe(scenario.allowed);
         expect(getNavigationLeafItems(filter).some((item) => item.path === path)).toBe(
           scenario.allowed,
         );
@@ -117,6 +128,7 @@ describe('navigation catalog', () => {
       'system-management',
     ]);
     expect(findGroup(items, 'academic-affairs')?.children.map((item) => item.key)).toEqual([
+      '/academic-affairs/teaching-inspection',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/split-joint-teaching-confirmation',
       '/academic-affairs/staff-semester-profiles',
@@ -165,7 +177,6 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/semester-course-schedule-sync',
     ]);
     expect(findGroup(items, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
@@ -192,6 +203,7 @@ describe('navigation catalog', () => {
 
     expect(findGroup(prodAdminItems, 'academic-affairs')?.children.map((item) => item.key)).toEqual(
       [
+        '/academic-affairs/teaching-inspection',
         '/academic-affairs/academic-calendar',
         '/academic-affairs/split-joint-teaching-confirmation',
         '/academic-affairs/staff-semester-profiles',
@@ -234,7 +246,6 @@ describe('navigation catalog', () => {
       '/class-affairs/course-results-summary',
     ]);
     expect(findGroup(prodAdminItems, 'labs')?.children.map((item) => item.key)).toEqual([
-      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',
@@ -903,6 +914,7 @@ describe('navigation catalog', () => {
       '/class-affairs/student-conduct-alignment',
       '/class-affairs/course-results-summary',
       '/student-affairs/class-adviser-governance',
+      '/academic-affairs/teaching-inspection',
       '/academic-affairs/academic-calendar',
       '/academic-affairs/split-joint-teaching-confirmation',
       '/academic-affairs/staff-semester-profiles',
@@ -912,7 +924,6 @@ describe('navigation catalog', () => {
       '/upstream-data-sync/major-sync',
       '/upstream-data-sync/class-sync',
       '/upstream-data-sync/semester-course-schedule-sync',
-      '/labs/teaching-inspection',
       '/labs/student-registration-cards',
       '/labs/upstream-session-reference',
       '/labs/upstream-session-demo',

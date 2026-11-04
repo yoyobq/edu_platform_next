@@ -3,7 +3,7 @@ import type { Page } from '@playwright/test';
 
 import { mockApiHealth, mockAuthGraphQL, seedAuthSession } from '../../helpers/app';
 import { expect, test } from '../../test';
-const path = '/labs/teaching-inspection';
+const path = '/academic-affairs/teaching-inspection';
 const dates = ['2026-09-10', '2026-09-20', '2026-10-01'];
 const account = {
   accountId: 700,
@@ -915,12 +915,12 @@ test('日期编辑使预览失效，保存冲突须刷新依据再确认且保�
   expect(saveCalls).toBe(2);
 });
 
-test('未绑定教职工的管理员可从 Labs 菜单打开教学检查', async ({ page }) => {
+test('未绑定教职工的管理员可从教务管理菜单打开教学检查', async ({ page }) => {
   await setup(page, { noSession: true, noStaff: true });
   await page.goto('/');
-  await page.getByRole('menuitem', { name: /Labs$/ }).click();
+  await page.getByRole('menuitem', { name: /教务管理$/ }).click();
   await page.getByRole('menuitem', { name: /教学检查$/ }).click();
-  await expect(page).toHaveURL(/\/labs\/teaching-inspection/);
+  await expect(page).toHaveURL(/\/academic-affairs\/teaching-inspection/);
   await expect(page.getByRole('heading', { name: '教学检查', exact: true })).toBeVisible();
 });
 
@@ -3360,7 +3360,7 @@ for (const kind of ['lesson', 'progress', 'assignment'])
     });
     await page.goto(`${path}?kind=${kind}&semester=1&round=1`);
     await expect(page.locator('tbody tr[data-row-key]')).toHaveCount(30);
-    await page.getByRole('button', { name: '批量同步数据' }).click();
+    await page.getByRole('button', { name: '同步上游数据' }).click();
     await expect(page.getByText(/数据同步完成 · 已处理 61 \/ 61/)).toBeVisible();
     const syncs = () =>
       fixture.requests.filter((request) => request.query.includes('SyncTeachingInspectionData'));
@@ -3371,7 +3371,7 @@ for (const kind of ['lesson', 'progress', 'assignment'])
     expect(syncs()).toHaveLength(1);
     await page.getByRole('combobox', { name: '筛选组员' }).click();
     await page.locator('.ant-select-dropdown').getByText('另一教师', { exact: true }).click();
-    await page.getByRole('button', { name: '批量同步数据' }).click();
+    await page.getByRole('button', { name: '同步上游数据' }).click();
     await expect(page.getByText(/数据同步完成 · 已处理 1 \/ 1/)).toBeVisible();
     expect(syncs()).toHaveLength(2);
     expect(syncs()[1].input.resourceKeys).toEqual(['1:scope-60']);
@@ -3542,3 +3542,18 @@ for (const kind of ['progress', 'assignment'])
     await page.getByRole('button', { name: '确认提交选中项' }).click();
     await expect(page.getByText('提交成功', { exact: true })).toHaveCount(2);
   });
+
+test('旧教学检查实验地址退役，直接访问返回404且不跳转正式入口', async ({ page }) => {
+  await setup(page);
+  await page.goto('/labs/teaching-inspection?kind=progress&semester=1');
+  await expect(page).toHaveURL(/\/labs\/teaching-inspection/);
+  await expect(page.getByText('404', { exact: true }).first()).toBeVisible();
+});
+
+test('未登录访问正式教学检查时跳转登录并保留查询参数', async ({ page }) => {
+  const target = `${path}?kind=progress&semester=1&round=2`;
+  await page.goto(target);
+  await expect(page).toHaveURL(/\/login\?redirect=/);
+  expect(new URL(page.url()).searchParams.get('redirect')).toBe(target);
+  await expect(page.getByRole('heading', { name: '账号登录' })).toBeVisible();
+});

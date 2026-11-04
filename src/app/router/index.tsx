@@ -80,10 +80,6 @@ import {
   studentRegistrationCardsLabAccess,
 } from '@/labs/student-registration-cards';
 import {
-  loadTeachingInspectionLabRouteModule,
-  teachingInspectionLabAccess,
-} from '@/labs/teaching-inspection';
-import {
   loadUpstreamSessionDemoLabRouteModule,
   upstreamSessionDemoLabAccess,
 } from '@/labs/upstream-session-demo';
@@ -772,24 +768,28 @@ async function upstreamSessionDemoLabLoader({ request }: LoaderFunctionArgs) {
   });
 }
 
-async function teachingInspectionLabLoader({ request }: LoaderFunctionArgs) {
-  return loadLabRoute({
-    access: teachingInspectionLabAccess,
-    canAccess: (snapshot) =>
-      hasTeachingInspectionAccess({
-        accessGroup: snapshot.userInfo.accessGroup,
-        slotGroup: snapshot.slotGroup,
-        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
-      }),
-    getData: (snapshot) => ({
-      currentAccount: { accountId: snapshot.accountId, displayName: snapshot.displayName },
-      lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
-        accessGroup: snapshot.userInfo.accessGroup,
-        staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
-      }),
+async function teachingInspectionPageLoader({ request }: LoaderFunctionArgs) {
+  const snapshot = await ensureAuthenticatedSession(request);
+  if (!snapshot) return null;
+  if (
+    !hasTeachingInspectionAccess({
+      accessGroup: snapshot.userInfo.accessGroup,
+      slotGroup: snapshot.slotGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
+    })
+  )
+    return { isForbidden: true };
+  return {
+    currentAccount: { accountId: snapshot.accountId, displayName: snapshot.displayName },
+    lockedUpstreamLoginUserId: resolveUpstreamLoginLockedUserId({
+      accessGroup: snapshot.userInfo.accessGroup,
+      staffId: snapshot.identity?.kind === 'STAFF' ? snapshot.identity.id : null,
     }),
-    request,
-  });
+  };
+}
+async function loadTeachingInspectionRouteModule() {
+  const { TeachingInspectionPage } = await import('@/pages/teaching-inspection');
+  return { Component: TeachingInspectionPage };
 }
 
 async function upstreamSessionReferenceLabLoader({ request }: LoaderFunctionArgs) {
@@ -1597,6 +1597,11 @@ const router = createBrowserRouter([
         lazy: loadErrorPreviewRouteModule,
       },
       {
+        path: '/academic-affairs/teaching-inspection',
+        loader: teachingInspectionPageLoader,
+        lazy: loadTeachingInspectionRouteModule,
+      },
+      {
         path: '/academic-affairs/academic-calendar',
         loader: academicCalendarPageLoader,
         lazy: loadAcademicCalendarRouteModule,
@@ -1727,11 +1732,6 @@ const router = createBrowserRouter([
       {
         path: '/labs',
         children: [
-          {
-            path: 'teaching-inspection',
-            loader: teachingInspectionLabLoader,
-            lazy: loadTeachingInspectionLabRouteModule,
-          },
           {
             path: 'academic-adjusted-workload-report',
             loader: () => redirect('/academic-affairs/external-teacher-compensation'),

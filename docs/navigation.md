@@ -42,6 +42,7 @@
 - `home`：首页 `/`，当前对 `ADMIN / STAFF / STUDENT` 等登录身份开放
 - `student`：纯 `STUDENT` 账号的独立业务入口，当前贡献 `/calendar-schedule/semester-calendar`；首页仍由 `home` provider 贡献
 - `academic-affairs`：
+  - `教务管理`：`/academic-affairs/teaching-inspection`（教学检查），全部管理员或绑定身份的有效教研组长可见；旧实验地址退役。
   - `校历课表`：`/calendar-schedule/semester-calendar`、`/calendar-schedule/weekly-timetable`、`/calendar-schedule/semester-timetable`
   - `教务助手`：`/academic-affairs/my-teaching-logs`、`/academic-affairs/my-curriculum-plan-homepage`、`/academic-affairs/my-teaching-plan`、`/academic-affairs/integrated-plan-corrections`、`/academic-assistant/academic-workload`
   - `班务管理`：`/academic-affairs/student-roster-membership-reconciliation`、`/class-affairs/student-profile-filing`、`/class-affairs/student-evaluation-comments`、`/class-affairs/student-conduct-alignment`、`/class-affairs/course-results-summary`
@@ -52,7 +53,6 @@
 - `admin`：贡献到最后一个一级分组 `系统管理`，当前包含 `/admin/users`、`/admin/verification-issuance`、`/system/payload-crypto`
 - `errors`：贡献到最后一个一级分组 `系统管理`，当前包含 `/errors/preview`
 - `labs`：
-  - 全部管理员或绑定本人教职工身份的有效教研组长：`/labs/teaching-inspection`（教学检查）
   - admin，以及具备教务员／班主任／辅导员岗位的 staff：`/labs/student-registration-cards`（学籍卡材料与出卡）
   - admin：`/labs/upstream-session-reference`、`/labs/upstream-session-demo`、`/labs/student-private-profile`
   - admin / staff：`/labs/zquiz-activity-builder`、`/labs/zquiz-exam-teacher-gradebook`

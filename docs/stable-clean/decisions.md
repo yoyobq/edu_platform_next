@@ -115,3 +115,7 @@
 
 - 等出现稳定协作用例后，再评估是否抽为 `features/<slice>/`。
 - `labs -> stable` 迁移时，先规划 `feature` 边界，再决定是否进入第二维。
+
+## 2026-11-04 教学检查迁入正式区
+
+用户确认正式入口置于教务管理，旧实验路由直接退役。该功能含批量异步执行、会话与请求恢复，采用 feature application / infrastructure / ui 分层；稳定检查模型和纯轮次规则归 entity/domain。页面只组合公开 feature。队列编排和恢复通过注入适配器执行，执行活动及进度由 reducer 管理，筛选和弹窗继续使用 UI 局部状态。无新增状态库，无后端接口或 Capability 变更。
