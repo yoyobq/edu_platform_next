@@ -490,6 +490,28 @@ describe('student profile filing api', () => {
     );
   });
 
+  it('复制家长电话仅发送来源行标识，工作单位留空发送字符串 null', () => {
+    const result = normalizeStudentProfileFilingFamilySupplementInput({
+      expectedSectionBaselineToken: 'family-baseline-1',
+      member: {
+        name: '母亲',
+        relationshipCode: '2',
+        phoneSourceItemKey: ' father-row ',
+        workplace: 'null',
+      },
+      studentId: 'S1',
+      upstreamSessionToken: 'session',
+    });
+    expect(result.members[0]).toEqual({
+      action: 'CREATE',
+      name: '母亲',
+      relationshipCode: '2',
+      phone: undefined,
+      phoneSourceItemKey: 'father-row',
+      workplace: 'null',
+    });
+  });
+
   it('writes focused family and education supplements through upstream session graphql', async () => {
     const familyResult = {
       action: 'CREATE',
@@ -559,7 +581,7 @@ describe('student profile filing api', () => {
             name: '张三父亲',
             phone: undefined,
             relationshipCode: '1',
-            workplace: undefined,
+            workplace: 'null',
           },
         ],
         studentId: 'S001',

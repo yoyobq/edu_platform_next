@@ -1,10 +1,12 @@
 // src/features/student-profile-filing/ui/student-graduation-info-form.tsx
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, App, Button, Form, Input, Select, Space, Spin, Tag } from 'antd';
+import { Alert, App, Button, DatePicker, Form, Input, Select, Space, Spin, Tag } from 'antd';
+import dayjs, { type Dayjs } from 'dayjs';
 import { useBeforeUnload } from 'react-router';
 
 import { hasGraphQLCategory } from '@/shared/graphql';
 
+import { buildStudentGraduationInfoFormValues } from '../application/student-graduation-info-form-values';
 import {
   type GraduationInfo,
   type GraduationPatch,
@@ -37,6 +39,7 @@ export function StudentGraduationInfoForm({
   const { message, modal } = App.useApp();
   const [form] = Form.useForm<Record<string, string>>();
   const [info, setInfo] = useState<GraduationInfo | null>(null);
+  const [prefillYear, setPrefillYear] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -59,8 +62,9 @@ export function StudentGraduationInfoForm({
     onBusyChange(saving);
   }, [saving, onBusyChange]);
 
-  const accept = useCallback((next: GraduationInfo) => {
+  const accept = useCallback((next: GraduationInfo, prefill = true) => {
     setInfo(next);
+    setPrefillYear(prefill ? dayjs().year() : null);
     setDirty(false);
     setError(null);
   }, []);
@@ -68,11 +72,11 @@ export function StudentGraduationInfoForm({
   // Wait for the conditional Form to mount before synchronizing a newly accepted view.
   useEffect(() => {
     if (!info) return;
+    const values = buildStudentGraduationInfoFormValues(info, prefillYear);
     form.resetFields();
-    form.setFieldsValue(
-      Object.fromEntries(info.fields.map((field) => [field.field, field.localValue ?? ''])),
-    );
-  }, [form, info]);
+    form.setFieldsValue(values);
+    setDirty(info.fields.some((field) => values[field.field] !== (field.localValue ?? '')));
+  }, [form, info, prefillYear]);
 
   useEffect(() => {
     let active = true;
@@ -125,7 +129,10 @@ export function StudentGraduationInfoForm({
     setSaving(true);
     setError(null);
     try {
-      accept(await patchGraduationInfo({ studentId, expectedRevision: info.revision, fields }));
+      accept(
+        await patchGraduationInfo({ studentId, expectedRevision: info.revision, fields }),
+        false,
+      );
       message.success('毕业信息已本地保存');
     } catch (failure) {
       setError(
@@ -145,7 +152,7 @@ export function StudentGraduationInfoForm({
           type="info"
           showIcon
           title="毕业信息独立治理，不计入基础建档六项进度。"
-          description="本地保存不需要上游登录；上游已有值优先。技术等级只填写技能工种，不填写证书号码。"
+          description="本地保存不需要上游登录；上游已有值优先。职业技能类型按班级培养层次预填，可核对修改；证书号码单独填写。"
         />
         {error ? <Alert type="error" showIcon title={error} /> : null}
         <Button
@@ -181,8 +188,28 @@ export function StudentGraduationInfoForm({
                       {LABELS[field.field]}：{field.value ?? '上游值无法识别，需在上游更正'}
                     </div>
                   ) : null}
-                  <Form.Item name={field.field} label={LABELS[field.field] ?? field.field}>
-                    {field.field === 'DESTINATION' ? (
+                  <Form.Item
+                    name={field.field}
+                    label={LABELS[field.field] ?? field.field}
+                    {...(field.field.endsWith('_DATE')
+                      ? {
+                          getValueProps: (value: string | undefined) => ({
+                            value: value ? dayjs(value) : null,
+                          }),
+                          getValueFromEvent: (value: Dayjs | null) =>
+                            value?.format('YYYY-MM-DD') ?? '',
+                        }
+                      : {})}
+                  >
+                    {field.field.endsWith('_DATE') ? (
+                      <DatePicker
+                        inputReadOnly
+                        format="YYYY-MM-DD"
+                        disabled={!info.canEdit || !field.canSet || saving}
+                        placeholder="请选择日期"
+                        style={{ width: '100%' }}
+                      />
+                    ) : field.field === 'DESTINATION' ? (
                       <Select
                         allowClear
                         disabled={!info.canEdit || !field.canSet || saving}
@@ -195,7 +222,7 @@ export function StudentGraduationInfoForm({
                         autoSize={{ minRows: 1, maxRows: 4 }}
                         maxLength={2000}
                         disabled={!info.canEdit || !field.canSet || saving}
-                        placeholder={field.field.endsWith('_DATE') ? 'YYYY-MM-DD' : '缺失可暂留空'}
+                        placeholder="缺失可暂留空"
                       />
                     )}
                   </Form.Item>

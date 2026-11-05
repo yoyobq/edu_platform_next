@@ -14,12 +14,13 @@ export type GraduationInfo = {
   revision: string;
   fields: GraduationField[];
   expectedGraduationYear: number | null;
+  trainingLevel: string | null;
   updatedAt: string | null;
   canEdit: boolean;
   mainSnapshotPresent: boolean;
 };
 export type GraduationPatch = { field: string; action: 'SET' | 'CLEAR'; value?: string };
-const FIELDS = `studentId revision expectedGraduationYear updatedAt canEdit mainSnapshotPresent
+const FIELDS = `studentId revision expectedGraduationYear trainingLevel updatedAt canEdit mainSnapshotPresent
   fields { field value localValue source canSet warningCodes }`;
 
 export async function readGraduationInfo(studentId: string): Promise<GraduationInfo> {

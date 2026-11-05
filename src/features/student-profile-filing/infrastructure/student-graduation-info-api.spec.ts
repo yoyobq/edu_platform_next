@@ -15,6 +15,7 @@ describe('毕业信息请求契约', () => {
     const view = {
       studentId: 'S1',
       revision: 'ABSENT',
+      trainingLevel: '技师',
       mainSnapshotPresent: false,
       canEdit: false,
       fields: [],
@@ -42,5 +43,6 @@ describe('毕业信息请求契约', () => {
       { input },
     );
     expect(request.mock.calls[0]?.[0]).not.toContain('upstreamSessionToken');
+    expect(request.mock.calls[0]?.[0]).toContain('trainingLevel');
   });
 });

@@ -75,6 +75,10 @@ import {
   writeStudentProfileFilingFamilySupplement,
 } from '../infrastructure/student-profile-filing-api';
 
+import {
+  type FamilySupplementFormValues,
+  StudentFamilySupplementPhoneField,
+} from './student-family-supplement-phone-field';
 import { StudentGraduationInfoForm } from './student-graduation-info-form';
 
 import './student-profile-filing-page-content.css';
@@ -95,13 +99,6 @@ export type StudentProfileFilingPageContentProps = {
 type StudentProfileFilingSupplementSection = 'education' | 'family';
 
 type StudentProfileFilingSupplementSummarySection = 'education' | 'family';
-
-type FamilySupplementFormValues = {
-  name: string;
-  phone?: string;
-  relationshipCode: string;
-  workplace?: string;
-};
 
 type EducationSupplementFormValues = {
   endDate?: Dayjs | null;
@@ -717,6 +714,7 @@ export function StudentProfileFilingPageContent({
   const [graduationSaving, setGraduationSaving] = useState(false);
   const [familySupplementForm] = Form.useForm<FamilySupplementFormValues>();
   const [educationSupplementForm] = Form.useForm<EducationSupplementFormValues>();
+  const familyDefaultsAppliedRef = useRef<string | null>(null);
   const [classOptions, setClassOptions] = useState<StudentProfileFilingClassOption[]>([]);
   const [selectedClassId, setSelectedClassId] = useState<string | null>(null);
   const [overview, setOverview] = useState<StudentProfileFilingClassOverview | null>(null);
@@ -1390,13 +1388,7 @@ export function StudentProfileFilingPageContent({
         return;
       }
 
-      familySupplementForm.setFieldsValue({
-        name: undefined,
-        phone: undefined,
-        relationshipCode: '1',
-        workplace: undefined,
-      });
-      educationSupplementForm.resetFields();
+      familyDefaultsAppliedRef.current = null;
       setSupplementDrafts({ family: false, education: false });
       educationDefaultsAppliedRef.current = null;
       setSupplementFeedback(null);
@@ -1414,10 +1406,6 @@ export function StudentProfileFilingPageContent({
           studentId: student.studentId,
         });
 
-        familySupplementForm.setFieldValue(
-          'relationshipCode',
-          resolveDefaultFamilyRelationshipCode(nextSummary),
-        );
         setSupplementDrawerState((current) =>
           current?.student.studentId === student.studentId
             ? {
@@ -1434,7 +1422,7 @@ export function StudentProfileFilingPageContent({
         setSupplementStudentId(null);
       }
     },
-    [educationSupplementForm, familySupplementForm, message],
+    [message],
   );
 
   const closeSupplementDrawer = useCallback(async () => {
@@ -1453,21 +1441,8 @@ export function StudentProfileFilingPageContent({
     setSupplementDrawerState(null);
     setSupplementFeedback(null);
     educationDefaultsAppliedRef.current = null;
-    if (!graduationStudent) {
-      familySupplementForm.resetFields();
-      educationSupplementForm.resetFields();
-    }
     setSupplementDrafts({ family: false, education: false });
-  }, [
-    educationSupplementForm,
-    familySupplementForm,
-    graduationDirty,
-    graduationSaving,
-    graduationStudent,
-    supplementDirty,
-    isSubmittingSupplement,
-    modal,
-  ]);
+  }, [graduationDirty, graduationSaving, supplementDirty, isSubmittingSupplement, modal]);
 
   const handleSupplementSectionChange = useCallback(
     (section: StudentProfileFilingSupplementSection) => {
@@ -1484,10 +1459,35 @@ export function StudentProfileFilingPageContent({
   );
 
   useEffect(() => {
+    if (
+      supplementDrawerState?.activeSection !== 'family' ||
+      !supplementDrawerState.summary ||
+      familyDefaultsAppliedRef.current === supplementDrawerState.student.studentId
+    )
+      return;
+    familySupplementForm.setFieldsValue({
+      name: undefined,
+      phone: undefined,
+      phoneSourceItemKey: undefined,
+      relationshipCode: resolveDefaultFamilyRelationshipCode(supplementDrawerState.summary),
+      workplace: 'null',
+    });
+    familyDefaultsAppliedRef.current = supplementDrawerState.student.studentId;
+  }, [familySupplementForm, supplementDrawerState]);
+
+  useEffect(() => {
     if (supplementDrawerState?.activeSection !== 'education' || !supplementDrawerState.student) {
       return;
     }
 
+    if (!educationDefaultsAppliedRef.current) {
+      educationSupplementForm.setFieldsValue({
+        startDate: undefined,
+        endDate: undefined,
+        organization: undefined,
+        reference: undefined,
+      });
+    }
     const currentValues = educationSupplementForm.getFieldsValue(['startDate', 'endDate']);
 
     if (
@@ -2142,9 +2142,12 @@ export function StudentProfileFilingPageContent({
 
                   <Form<FamilySupplementFormValues>
                     form={familySupplementForm}
-                    onValuesChange={() =>
-                      setSupplementDrafts((current) => ({ ...current, family: true }))
-                    }
+                    initialValues={{ workplace: 'null' }}
+                    onValuesChange={(changed) => {
+                      if ('phone' in changed)
+                        familySupplementForm.setFieldValue('phoneSourceItemKey', undefined);
+                      setSupplementDrafts((current) => ({ ...current, family: true }));
+                    }}
                     layout="vertical"
                     requiredMark={false}
                     onFinish={() => {
@@ -2178,11 +2181,38 @@ export function StudentProfileFilingPageContent({
                     >
                       <Input autoComplete="off" />
                     </Form.Item>
-                    <Form.Item label="电话" name="phone">
-                      <Input autoComplete="off" />
-                    </Form.Item>
-                    <Form.Item label="工作单位" name="workplace">
-                      <Input autoComplete="off" />
+                    <StudentFamilySupplementPhoneField
+                      members={supplementDrawerState?.summary?.familyMembers ?? []}
+                      disabled={isSubmittingSupplement}
+                      onChange={() =>
+                        setSupplementDrafts((current) => ({ ...current, family: true }))
+                      }
+                    />
+                    <Form.Item label="工作单位" htmlFor="family-supplement-workplace">
+                      <Space.Compact style={{ width: '100%' }}>
+                        <Form.Item
+                          name="workplace"
+                          noStyle
+                          getValueProps={(value: string | null | undefined) => ({
+                            value: value ?? '',
+                          })}
+                        >
+                          <Input
+                            id="family-supplement-workplace"
+                            autoComplete="off"
+                            disabled={isSubmittingSupplement}
+                          />
+                        </Form.Item>
+                        <Button
+                          disabled={isSubmittingSupplement}
+                          onClick={() => {
+                            familySupplementForm.setFieldValue('workplace', 'null');
+                            setSupplementDrafts((current) => ({ ...current, family: true }));
+                          }}
+                        >
+                          留空
+                        </Button>
+                      </Space.Compact>
                     </Form.Item>
                     <div className="student-profile-filing-supplement-drawer-actions">
                       <Button onClick={closeSupplementDrawer}>取消</Button>

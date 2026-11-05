@@ -56,7 +56,20 @@ const student = {
   sourceObservedAt: null,
 };
 
-async function setup(page: Page) {
+type GraduationField = {
+  field: string;
+  value: string | null;
+  localValue: string | null;
+  canSet: boolean;
+  source: string;
+  warningCodes: string[];
+};
+
+async function setup(
+  page: Page,
+  additionalFields: GraduationField[] = [],
+  trainingLevel: string | null = null,
+) {
   const formWarnings: string[] = [];
   page.on('console', (message) => {
     if (message.text().includes('useForm') && message.text().includes('not connected')) {
@@ -77,6 +90,7 @@ async function setup(page: Page) {
     studentId: 'S1',
     revision,
     expectedGraduationYear: 2027,
+    trainingLevel,
     updatedAt: null,
     canEdit: true,
     mainSnapshotPresent: true,
@@ -89,6 +103,7 @@ async function setup(page: Page) {
         source: 'LOCAL',
         warningCodes: [],
       },
+      ...additionalFields,
     ],
   });
   await page.route('**/graphql', async (route) => {
@@ -134,7 +149,18 @@ async function setup(page: Page) {
       }
       field = 'patchStudentPrivateProfileGraduationInfo';
       revision = '1:upstream:local-3';
-      content = input.fields[0]?.value ?? '';
+      for (const patch of input.fields) {
+        if (patch.field === 'GRADUATION_CERTIFICATE_NO') {
+          content = patch.value ?? '';
+        } else {
+          const target = additionalFields.find((field) => field.field === patch.field);
+          if (target) {
+            target.value = patch.value ?? null;
+            target.localValue = patch.value ?? null;
+            target.source = patch.action === 'SET' ? 'LOCAL' : 'MISSING';
+          }
+        }
+      }
       result = view();
     } else if (query.includes('studentPrivateProfileGraduationInfo')) {
       field = 'studentPrivateProfileGraduationInfo';
@@ -199,5 +225,70 @@ test('毕业抽屉未保存关闭需确认，继续编辑保留输入，放弃�
   expect(scenario.writes).toHaveLength(0);
   await page.getByRole('button', { name: '毕业信息', exact: true }).click();
   await expect(page.getByLabel('毕业证书编号')).toHaveValue('原证书');
+  expect(scenario.formWarnings).toEqual([]);
+});
+
+test('毕业日期使用日历选择，默认日期和就业只在显式保存后按日期字符串提交', async ({ page }) => {
+  await page.clock.setFixedTime(new Date('2026-11-04T04:00:00Z'));
+  const scenario = await setup(
+    page,
+    [
+      'ACTUAL_GRADUATION_DATE',
+      'INTERNSHIP_START_DATE',
+      'INTERNSHIP_END_DATE',
+      'DESTINATION',
+      'VOCATIONAL_SKILL_TYPE',
+    ].map((field) => ({
+      field,
+      value: null,
+      localValue: null,
+      canSet: true,
+      source: 'MISSING',
+      warningCodes: ['GRADUATION_FIELD_MISSING'],
+    })),
+    '高级',
+  );
+
+  const graduation = page.getByLabel('实际毕业日期', { exact: true });
+  const internshipStart = page.getByLabel('实习开始日期', { exact: true });
+  const internshipEnd = page.getByLabel('实习结束日期', { exact: true });
+  await expect(graduation).toHaveValue('2026-06-30');
+  await expect(internshipStart).toHaveValue('2026-01-16');
+  await expect(internshipEnd).toHaveValue('2026-06-30');
+  await expect(page.getByLabel('职业技能工种 / 类型', { exact: true })).toHaveValue('高级工');
+  for (const picker of [graduation, internshipStart, internshipEnd]) {
+    await expect(picker).toHaveAttribute('readonly', '');
+  }
+  await expect(page.locator('.ant-form-item').filter({ hasText: '毕业去向' })).toContainText(
+    '就业',
+  );
+  await expect(page.getByRole('button', { name: '本地保存毕业信息' })).toBeEnabled();
+  expect(scenario.writes).toHaveLength(0);
+
+  await graduation.click();
+  await page.locator('.ant-picker-dropdown:visible td[title="2026-06-29"]').click();
+  await expect(graduation).toHaveValue('2026-06-29');
+  await page.getByRole('button', { name: '本地保存毕业信息' }).click();
+  await expect(page.getByText('毕业信息已本地保存')).toBeVisible();
+  expect(scenario.writes).toHaveLength(1);
+  expect(scenario.writes[0]?.fields).toEqual([
+    { field: 'ACTUAL_GRADUATION_DATE', action: 'SET', value: '2026-06-29' },
+    { field: 'INTERNSHIP_START_DATE', action: 'SET', value: '2026-01-16' },
+    { field: 'INTERNSHIP_END_DATE', action: 'SET', value: '2026-06-30' },
+    { field: 'DESTINATION', action: 'SET', value: '就业' },
+    { field: 'VOCATIONAL_SKILL_TYPE', action: 'SET', value: '高级工' },
+  ]);
+  await expect(page.getByRole('button', { name: '本地保存毕业信息' })).toBeDisabled();
+  const graduationItem = page.locator('.ant-form-item').filter({ has: graduation });
+  await graduationItem.locator('.ant-picker').hover();
+  await graduationItem.getByRole('button', { name: '清除', exact: true }).click();
+  await expect(graduation).toHaveValue('');
+  await page.getByRole('button', { name: '本地保存毕业信息' }).click();
+  await expect.poll(() => scenario.writes.length).toBe(2);
+  expect(scenario.writes[1]?.fields).toEqual([
+    { field: 'ACTUAL_GRADUATION_DATE', action: 'CLEAR' },
+  ]);
+  await expect(page.getByRole('button', { name: '本地保存毕业信息' })).toBeDisabled();
+  await expect(graduation).toHaveValue('');
   expect(scenario.formWarnings).toEqual([]);
 });

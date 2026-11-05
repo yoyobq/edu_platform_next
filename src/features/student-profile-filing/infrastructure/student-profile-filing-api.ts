@@ -221,6 +221,7 @@ export type StudentProfileFilingFamilySupplementInput = {
   member: {
     name: string | null | undefined;
     phone?: string | null | undefined;
+    phoneSourceItemKey?: string | null | undefined;
     relationshipCode: string | null | undefined;
     workplace?: string | null | undefined;
   };
@@ -660,10 +661,17 @@ export function normalizeStudentProfileFilingFamilySupplementInput(
         action: 'CREATE' as const,
         name: normalizeRequiredTextValue(input.member.name, { label: '家庭成员姓名' }),
         phone: normalizeOptionalTextValue(input.member.phone, 'to_undefined'),
+        ...(input.member.phoneSourceItemKey
+          ? {
+              phoneSourceItemKey: normalizeRequiredTextValue(input.member.phoneSourceItemKey, {
+                label: '电话来源家长',
+              }),
+            }
+          : {}),
         relationshipCode: normalizeStudentProfileFilingRelationshipCode(
           input.member.relationshipCode,
         ),
-        workplace: normalizeOptionalTextValue(input.member.workplace, 'to_undefined'),
+        workplace: normalizeOptionalTextValue(input.member.workplace, 'to_null') ?? 'null',
       },
     ],
     studentId: normalizeStudentId(input.studentId),
