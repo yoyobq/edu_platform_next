@@ -46,27 +46,33 @@ describe('毕业信息表单默认值', () => {
     );
   });
 
-  it.each(['LOCAL', 'UPSTREAM'])(
-    '已有 %s 毕业日期时，实习开始默认使用毕业当年的一月十六日',
-    (source) => {
-      const info = missingInfo();
-      info.fields = info.fields.map((field) =>
-        field.field === 'ACTUAL_GRADUATION_DATE'
-          ? {
-              ...field,
-              value: '2025-06-30',
-              localValue: source === 'LOCAL' ? '2025-06-30' : null,
-              source,
-              canSet: source === 'LOCAL',
-            }
-          : field,
-      );
+  it.each([
+    { source: 'LOCAL', year: 2025 },
+    { source: 'UPSTREAM', year: 2025 },
+    { source: 'LOCAL', year: 2027 },
+    { source: 'UPSTREAM', year: 2027 },
+  ])('已有 $source 的 $year 年毕业日期时，实习起止日期均默认使用毕业年份', ({ source, year }) => {
+    const info = missingInfo();
+    const graduationDate = `${year}-06-30`;
+    info.fields = info.fields.map((field) =>
+      field.field === 'ACTUAL_GRADUATION_DATE'
+        ? {
+            ...field,
+            value: graduationDate,
+            localValue: source === 'LOCAL' ? graduationDate : null,
+            source,
+            canSet: source === 'LOCAL',
+          }
+        : field,
+    );
 
-      expect(buildStudentGraduationInfoFormValues(info, 2026).INTERNSHIP_START_DATE).toBe(
-        '2025-01-16',
-      );
-    },
-  );
+    expect(buildStudentGraduationInfoFormValues(info, 2026)).toEqual({
+      ACTUAL_GRADUATION_DATE: source === 'LOCAL' ? graduationDate : '',
+      INTERNSHIP_START_DATE: `${year}-01-16`,
+      INTERNSHIP_END_DATE: `${year}-06-30`,
+      DESTINATION: '就业',
+    });
+  });
 
   it('已有本地日期和毕业去向不被默认值覆盖', () => {
     const info = missingInfo();

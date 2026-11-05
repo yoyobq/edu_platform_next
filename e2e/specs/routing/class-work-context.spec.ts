@@ -271,13 +271,7 @@ test('单班自动选择；学籍卡缺项跳转保留范围，返回自动重�
   const requests = await setup(page, true);
   await page.goto(CARD);
   await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
-  await page.getByRole('combobox', { name: '学籍卡学生' }).click();
-  await page
-    .locator('.ant-select-dropdown:visible')
-    .getByText(/张同学/)
-    .last()
-    .click();
-  await page.getByRole('button', { name: '检查最终材料' }).click();
+  await page.getByRole('button', { name: '张同学', exact: true }).click();
   await page.getByRole('link', { name: '缺失 · 去补齐' }).click();
   await expect(page).toHaveURL(/classId=A.*semesterId=3.*studentId=S1/);
   await expect(page.getByPlaceholder('搜索姓名或学号')).toHaveValue('S1');
@@ -462,9 +456,8 @@ for (const scenario of ['success', 'failure', 'back'] as const) {
       if ((await labsMenu.getAttribute('aria-expanded')) !== 'true') await labsMenu.click();
       await page.getByRole('menuitem', { name: '学籍卡材料与出卡', exact: true }).click();
       await expect(page).toHaveURL(new RegExp(`${CARD}$`));
-      await chooseClassOption(page, page.getByRole('combobox', { name: '学籍卡学生' }), /张同学/);
-      await page.getByRole('button', { name: '检查最终材料', exact: true }).click();
-      await page.getByRole('button', { name: '生成本学生 DOCX', exact: true }).click();
+      await page.getByRole('button', { name: '张同学', exact: true }).click();
+      await page.getByRole('button', { name: '生成并下载', exact: true }).click();
       await expect.poll(() => generationCount).toBe(1);
       if (scenario === 'success') {
         const unloadPrompt = page.waitForEvent('dialog');
@@ -482,8 +475,9 @@ for (const scenario of ['success', 'failure', 'back'] as const) {
       await expect(waiting.getByRole('button', { name: '继续离开', exact: true })).toBeDisabled();
       await expect(page).toHaveURL(new RegExp(`${CARD}$`));
       await expect(page.locator('.class-work-scope-picker')).toContainText('护理一班');
-      await expect(page.getByRole('combobox', { name: '学籍卡学生' }).locator('..')).toContainText(
-        '张同学',
+      await expect(page.getByRole('button', { name: '张同学', exact: true })).toHaveAttribute(
+        'aria-pressed',
+        'true',
       );
       expect(await page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('A');
       expect(generationCount).toBe(1);
@@ -503,13 +497,13 @@ for (const scenario of ['success', 'failure', 'back'] as const) {
       await finished.getByRole('button', { name: '留在当前页', exact: true }).click();
       if (scenario === 'failure') {
         await expect(
-          page.getByText('文档生成失败，请重新预检后重试。', { exact: true }),
+          page.getByText('文档生成失败，请重试或重新检查材料。', { exact: true }),
         ).toBeVisible();
-        await page.getByRole('button', { name: '生成本学生 DOCX', exact: true }).click();
+        await page.getByRole('button', { name: '生成并下载', exact: true }).click();
         await expect.poll(() => generationCount).toBe(2);
       }
       const download = page.waitForEvent('download');
-      await page.getByRole('button', { name: '下载学籍卡 DOCX', exact: true }).click();
+      await page.getByRole('button', { name: '重新下载', exact: true }).click();
       expect((await download).suggestedFilename()).toBe('student-card.docx');
       await setWorkClass(page, '护理二班');
       await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), KEY)).toBe('B');

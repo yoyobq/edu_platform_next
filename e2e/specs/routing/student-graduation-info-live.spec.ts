@@ -63,10 +63,9 @@ test('真实业务接口完成毕业本地保存、学籍卡预检、生成和�
   await page.locator('.ant-drawer-close').click();
   await page.getByRole('button', { name: /返回学籍卡检查/ }).click();
   await expect(page).toHaveURL(new RegExp(`student-registration-cards.*studentId=${studentId}`));
-  await page.getByRole('button', { name: '生成本学生 DOCX', exact: true }).click();
-  expect(preflightRequests).toBeGreaterThanOrEqual(2);
   const downloaded = page.waitForEvent('download');
-  await page.getByRole('button', { name: '下载学籍卡 DOCX', exact: true }).click();
+  await page.getByRole('button', { name: '生成并下载', exact: true }).click();
+  expect(preflightRequests).toBeGreaterThanOrEqual(2);
   const download = await downloaded;
   expect(download.suggestedFilename()).toMatch(/\.docx$/);
   const file = testInfo.outputPath('student-registration-card.docx');
@@ -74,7 +73,7 @@ test('真实业务接口完成毕业本地保存、学籍卡预检、生成和�
   const bytes = await readFile(file);
   expect(bytes.subarray(0, 2).toString()).toBe('PK');
   expect(bytes.byteLength).toBeGreaterThan(1000);
-  await expect(page.getByRole('button', { name: '下载学籍卡 DOCX', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '重新下载', exact: true })).toBeEnabled();
   await page.screenshot({
     path: testInfo.outputPath('registration-card-live.png'),
     fullPage: true,

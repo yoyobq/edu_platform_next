@@ -14,7 +14,7 @@ export function buildStudentGraduationInfoFormValues(
       : {
           ACTUAL_GRADUATION_DATE: `${currentYear}-06-30`,
           INTERNSHIP_START_DATE: `${graduationYear}-01-16`,
-          INTERNSHIP_END_DATE: `${currentYear}-06-30`,
+          INTERNSHIP_END_DATE: `${graduationYear}-06-30`,
           DESTINATION: '就业',
           VOCATIONAL_SKILL_TYPE: vocationalSkillTypeFromTrainingLevel(info.trainingLevel),
         };
