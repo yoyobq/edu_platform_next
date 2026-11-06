@@ -62,6 +62,7 @@ import {
   hasStudentEvaluationCommentAccess,
   hasStudentGraduationInfoGovernanceAccess,
   hasStudentProfileFilingAccess,
+  hasStudentRegistrationCardGenerationAccess,
   hasStudentRegistrationCardReadinessAccess,
   hasStudentRosterMembershipReconciliationAccess,
   resolveClassAdviserGovernanceDepartmentScope,
@@ -893,6 +894,12 @@ async function studentPrivateProfileLabLoader({ request }: LoaderFunctionArgs) {
 async function studentRegistrationCardsLabLoader({ request }: LoaderFunctionArgs) {
   return loadLabRoute({
     access: studentRegistrationCardsLabAccess,
+    getData: (snapshot) => ({
+      canBatchExport: hasStudentRegistrationCardGenerationAccess({
+        accessGroup: snapshot.userInfo.accessGroup,
+        slotGroup: snapshot.slotGroup,
+      }),
+    }),
     canAccess: (snapshot) =>
       hasStudentRegistrationCardReadinessAccess({
         accessGroup: snapshot.userInfo.accessGroup,

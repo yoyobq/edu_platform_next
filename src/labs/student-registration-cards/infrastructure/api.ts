@@ -74,7 +74,9 @@ export async function generateCard(studentId: string) {
   );
   return data.generateStudentRegistrationCardDocument;
 }
-export async function downloadCard(card: GeneratedCard) {
+export class CardSessionExpiredError extends Error {}
+
+export async function fetchCard(card: { downloadToken: string | null }): Promise<Uint8Array> {
   if (!card.downloadToken) throw new Error('文档不可下载');
   const url = new URL(
     `/student-private-profile/registration-card-documents/${encodeURIComponent(card.downloadToken)}`,
@@ -92,17 +94,29 @@ export async function downloadCard(card: GeneratedCard) {
       response = await request();
     } catch {
       runtime.onAuthFailure?.();
-      throw new Error('登录已失效');
+      throw new CardSessionExpiredError('登录已失效');
     }
   }
-  if (response.status === 401) runtime.onAuthFailure?.();
+  if (response.status === 401) {
+    runtime.onAuthFailure?.();
+    throw new CardSessionExpiredError('登录已失效');
+  }
   if (!response.ok) throw new Error('文档已失效或无权下载，请重新预检并生成');
-  const objectUrl = URL.createObjectURL(await response.blob());
+  return new Uint8Array(await response.arrayBuffer());
+}
+
+export function saveCardBlob(blob: Blob, fileName: string) {
+  const objectUrl = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = objectUrl;
-  anchor.download = card.fileName ?? '学籍卡.docx';
+  anchor.download = fileName;
   document.body.append(anchor);
   anchor.click();
   anchor.remove();
-  URL.revokeObjectURL(objectUrl);
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+}
+
+export async function downloadCard(card: GeneratedCard) {
+  const bytes = await fetchCard(card);
+  saveCardBlob(new Blob([Uint8Array.from(bytes).buffer]), card.fileName ?? '学籍卡.docx');
 }

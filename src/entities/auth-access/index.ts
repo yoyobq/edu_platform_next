@@ -245,6 +245,17 @@ export function hasStudentProfileFilingAccess(input: {
   );
 }
 
+export function hasStudentRegistrationCardGenerationAccess(input: {
+  accessGroup?: readonly AuthAccessGroup[];
+  slotGroup?: readonly string[];
+}) {
+  return (
+    (input.accessGroup ?? []).includes('ADMIN') ||
+    ((input.accessGroup ?? []).includes('STAFF') &&
+      (input.slotGroup ?? []).includes(ACADEMIC_OFFICER_SLOT_GROUP))
+  );
+}
+
 export function hasStudentRegistrationCardReadinessAccess(input: {
   accessGroup?: readonly AuthAccessGroup[];
   slotGroup?: readonly string[];

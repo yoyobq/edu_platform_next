@@ -1,7 +1,7 @@
 // src/labs/student-registration-cards/ui/page.tsx
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, App, Button, Card, Empty, Input, Space, Table, Tag } from 'antd';
-import { Link, useBeforeUnload, useBlocker } from 'react-router';
+import { Alert, App, Button, Card, Empty, Input, Progress, Space, Table, Tag } from 'antd';
+import { Link, useBeforeUnload, useBlocker, useLoaderData } from 'react-router';
 
 import {
   ClassWorkEntry,
@@ -12,6 +12,7 @@ import {
 
 import { DecoratedPageHeader } from '@/shared/ui/decorated-page-header';
 
+import { BATCH_STATUS } from '../application/card-batch';
 import {
   type CardPreflight,
   type ClassOption,
@@ -23,6 +24,8 @@ import {
   preflightCard,
   type StudentOption,
 } from '../infrastructure/api';
+
+import { useCardBatch } from './use-card-batch';
 
 const LABELS: Record<string, string> = {
   READY: '齐备',
@@ -52,14 +55,27 @@ const LABELS: Record<string, string> = {
 };
 
 export function StudentRegistrationCardsLabPage() {
+  const { canBatchExport } = useLoaderData<{ canBatchExport: boolean }>();
   return (
     <ClassWorkEntry>
-      {({ key, scope }) => <StudentRegistrationCardsContent key={key} initialScope={scope} />}
+      {({ key, scope }) => (
+        <StudentRegistrationCardsContent
+          key={key}
+          initialScope={scope}
+          canBatchExport={canBatchExport}
+        />
+      )}
     </ClassWorkEntry>
   );
 }
 
-function StudentRegistrationCardsContent({ initialScope }: { initialScope: ClassWorkScope }) {
+function StudentRegistrationCardsContent({
+  initialScope,
+  canBatchExport,
+}: {
+  initialScope: ClassWorkScope;
+  canBatchExport: boolean;
+}) {
   const workContext = useClassWorkContext();
   const { message, modal } = App.useApp();
   const [loadingClasses, setLoadingClasses] = useState(true);
@@ -72,35 +88,43 @@ function StudentRegistrationCardsContent({ initialScope }: { initialScope: Class
   const [preflight, setPreflight] = useState<CardPreflight | null>(null);
   const [generated, setGenerated] = useState<GeneratedCard | null>(null);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [singleBusy, setBusy] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<React.Key[]>([]);
+  const batch = useCardBatch(
+    classId,
+    classes.find((item) => item.id === classId)?.className ?? '班级',
+    (code) => LABELS[code] ?? code,
+  );
+  const busy = singleBusy || batch.running;
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
-  const blocker = useBlocker(isGenerating);
+  const exporting = isGenerating || batch.running;
+  const blocker = useBlocker(exporting);
   useBeforeUnload(
     useCallback(
       (event: BeforeUnloadEvent) => {
-        if (!isGenerating) return;
+        if (!exporting) return;
         event.preventDefault();
         event.returnValue = '';
       },
-      [isGenerating],
+      [exporting],
     ),
   );
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
     const dialog = modal.confirm({
-      title: isGenerating ? '正在生成，请稍后离开' : '生成请求已结束，是否继续离开？',
-      content: isGenerating
+      title: exporting ? '正在生成，请稍后离开' : '生成请求已结束，是否继续离开？',
+      content: exporting
         ? '请等待生成结果，切换后将无法在当前页面接收下载入口。'
         : '留在当前页可查看生成结果或错误，也可以继续之前的导航。',
       okText: '继续离开',
       cancelText: '留在当前页',
-      okButtonProps: { disabled: isGenerating },
+      okButtonProps: { disabled: exporting },
       onOk: () => blocker.proceed(),
       onCancel: () => blocker.reset(),
     });
     return () => dialog.destroy();
-  }, [blocker, isGenerating, modal]);
+  }, [blocker, exporting, modal]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let active = true;
@@ -121,6 +145,7 @@ function StudentRegistrationCardsContent({ initialScope }: { initialScope: Class
   useEffect(() => {
     let active = true;
     setStudents([]);
+    setSelectedIds([]);
     setSearch('');
     setStudentId(undefined);
     setPreflight(null);
@@ -259,12 +284,127 @@ function StudentRegistrationCardsContent({ initialScope }: { initialScope: Class
         type="info"
         showIcon
         title="班主任、辅导员可检查本班材料；管理员和教务员负责生成、下载。"
-        description="点击学生自动检查材料，确认后点击“生成并下载”即可出卡。"
+        description="点击学生自动检查材料，可单人生成并下载，也可勾选多人批量导出 ZIP。"
       />
+      {batch.rows.length ? (
+        <Card title="批量导出进度">
+          <Space orientation="vertical" style={{ width: '100%' }}>
+            <span>
+              已处理{' '}
+              {
+                batch.rows.filter((row) => ['success', 'blocked', 'failed'].includes(row.status))
+                  .length
+              }
+              /{batch.rows.length}，成功{' '}
+              {batch.rows.filter((row) => row.status === 'success').length}，阻塞{' '}
+              {batch.rows.filter((row) => row.status === 'blocked').length}，失败{' '}
+              {batch.rows.filter((row) => row.status === 'failed').length}
+            </span>
+            <span>
+              {batch.rows.find((row) => row.status === 'generating' || row.status === 'fetching')
+                ?.studentName ?? (batch.running ? '正在打包' : '本次处理已结束')}
+            </span>
+            <Progress
+              percent={Math.round(
+                (batch.rows.filter((row) => ['success', 'blocked', 'failed'].includes(row.status))
+                  .length /
+                  batch.rows.length) *
+                  100,
+              )}
+            />
+            <Space wrap>
+              {batch.running ? (
+                <Button disabled={batch.stopping} onClick={batch.stop}>
+                  {batch.stopping ? '正在停止' : '停止后续导出'}
+                </Button>
+              ) : (
+                <>
+                  {batch.rows.some((row) => row.status === 'pending') ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        void batch.resume();
+                      }}
+                    >
+                      继续导出
+                    </Button>
+                  ) : null}
+                  {batch.rows.some((row) => row.status === 'failed' || row.status === 'blocked') ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        void batch.retry();
+                      }}
+                    >
+                      重试未完成项
+                    </Button>
+                  ) : null}
+                  {batch.rows.some((row) => row.status === 'success') ? (
+                    <Button
+                      disabled={busy}
+                      onClick={() => {
+                        void batch.download();
+                      }}
+                    >
+                      下载 ZIP
+                    </Button>
+                  ) : null}
+                </>
+              )}
+            </Space>
+            {batch.error ? <Alert type="error" title={batch.error} /> : null}
+            <Table
+              size="small"
+              rowKey="studentId"
+              pagination={false}
+              scroll={{ x: 600, y: 240 }}
+              dataSource={batch.rows}
+              columns={[
+                { title: '学号', dataIndex: 'studentId' },
+                { title: '姓名', dataIndex: 'studentName' },
+                { title: '状态', render: (_, row) => BATCH_STATUS[row.status] },
+                {
+                  title: '材料提醒 / 失败原因',
+                  render: (_, row) =>
+                    [...row.warnings, ...row.reason.split('、')]
+                      .filter(Boolean)
+                      .map((code) => LABELS[code] ?? code)
+                      .join('、') || '—',
+                },
+              ]}
+            />
+            <span>请保持页面打开；刷新或离开后，本次批量结果不会保留。</span>
+          </Space>
+        </Card>
+      ) : null}
       <div className="flex flex-wrap items-start gap-4">
         <section className="min-w-0 flex-1 basis-72 rounded-card bg-bg-container p-4 shadow-card">
           <div className="mb-4 flex flex-col gap-3">
             <span>班级学生 · {students.length} 人</span>
+            {canBatchExport ? (
+              <Space wrap>
+                <Button
+                  disabled={busy || loading || !students.length}
+                  onClick={() => setSelectedIds(students.map((item) => item.studentId))}
+                >
+                  全选当前班级
+                </Button>
+                <Button disabled={busy || !selectedIds.length} onClick={() => setSelectedIds([])}>
+                  清空选择
+                </Button>
+                <Button
+                  type="primary"
+                  disabled={busy || !selectedIds.length}
+                  onClick={() => {
+                    void batch.start(
+                      students.filter((item) => selectedIds.includes(item.studentId)),
+                    );
+                  }}
+                >
+                  批量导出（{selectedIds.length} 人）
+                </Button>
+              </Space>
+            ) : null}
             <Input.Search
               aria-label="搜索学籍卡学生"
               placeholder="搜索姓名或学号"
@@ -275,6 +415,16 @@ function StudentRegistrationCardsContent({ initialScope }: { initialScope: Class
             />
           </div>
           <Table
+            rowSelection={
+              canBatchExport
+                ? {
+                    selectedRowKeys: selectedIds,
+                    preserveSelectedRowKeys: true,
+                    onChange: (keys) => setSelectedIds(keys),
+                    getCheckboxProps: () => ({ disabled: busy }),
+                  }
+                : undefined
+            }
             rowKey="studentId"
             loading={loading}
             pagination={false}
@@ -301,6 +451,18 @@ function StudentRegistrationCardsContent({ initialScope }: { initialScope: Class
                 ),
               },
               { title: '学号', dataIndex: 'studentId' },
+              ...(canBatchExport
+                ? [
+                    {
+                      title: '出卡',
+                      key: 'batch',
+                      render: (_: unknown, student: StudentOption) => {
+                        const row = batch.rows.find((item) => item.studentId === student.studentId);
+                        return row ? BATCH_STATUS[row.status] : '—';
+                      },
+                    },
+                  ]
+                : []),
             ]}
           />
         </section>
